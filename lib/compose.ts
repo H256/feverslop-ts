@@ -403,9 +403,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
                     : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
-                '<Audio 1>: fully_copy - <Audio 1> is reused 1:1 as the target video\'s complete final audio track.',
+                '<Audio 1>: reference - <Audio 1> Use the supplied original song only for beat, rhythm, and dynamic timing continuity without copying the source signal.',
                 // the guide: no (Sx) in retention_analysis
-                ...(performing ? [`<Audio 2>: reference - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))} without copying the signal.`] : []),
+                ...(performing ? [`<Audio 2>: partially copy - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))}.`] : []),
                 '',
                 'detailed_description:',
                 styleOpening(lookBrief),
