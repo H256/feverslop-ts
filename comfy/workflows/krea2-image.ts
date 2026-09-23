@@ -20,7 +20,7 @@ export default function krea2Image(opts: ImageWorkflowOptions & { negative?: str
         seed: opts.seed,
         steps: 12,
         cfg: 1,
-        sampler_name: 'euler',
+        sampler_name: 'er_sde',
         scheduler: 'beta',
         denoise: 1,
         model: model.MODEL,
