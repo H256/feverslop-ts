@@ -1,0 +1,260 @@
+// Sets up the LLM server and the ComfyUI servers - writes the global settings file (see the README, section "Setup").
+// usage: bun run setup [llm | llm-model | comfy | show]
+import * as p from "@clack/prompts";
+import {existsSync} from "node:fs";
+import {listModels} from "../lib/llm.ts";
+import {styles} from "../lib/log.ts";
+import {
+    type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, maskSecret, normalizeUrl,
+    parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source,
+} from "../lib/settings.ts";
+
+const commands = {
+    all: 'everything below, in order',
+    llm: 'the LLM server: URL, API key and model',
+    'llm-model': 'only the model of the configured LLM server',
+    comfy: 'the ComfyUI servers: add, remove, test',
+    show: 'the effective settings and where each comes from',
+}
+const command = (Bun.argv[2] ?? 'all') as keyof typeof commands
+if (!(command in commands)) {
+    console.error(`usage: bun run setup [${Object.keys(commands).filter(c => c !== 'all').join(' | ')}]\n`)
+    for (const [name, what] of Object.entries(commands)) console.error(`  ${(name === 'all' ? '(none)' : name).padEnd(10)} ${what}`)
+    process.exit(1)
+}
+
+if (command === 'show') {
+    await show()
+    process.exit(0)
+}
+if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    printWithoutTerminal()
+    process.exit(1)
+}
+
+const file = await readSettingsFile()
+p.intro(`feverslop-ts setup ${styles.muted(settingsPath())}`)
+if (command === 'all' || command === 'llm') await setupLlm()
+if (command === 'llm-model') await setupModel()
+if (command === 'all' || command === 'comfy') await setupComfy()
+p.outro('Done - see the result with: bun run setup show')
+
+// cancelled with Ctrl+C / Esc: stop without saving the current part
+function answer<T>(value: T): Exclude<T, symbol> {
+    if (p.isCancel(value)) {
+        p.cancel('Cancelled - nothing more saved')
+        process.exit(1)
+    }
+    return value as Exclude<T, symbol>
+}
+
+async function save(what: string) {
+    await saveSettings(file)
+    p.log.success(`Saved ${what} to ${settingsPath()}`)
+}
+
+/** Lists the models - null when the server doesn't answer. */
+async function fetchModels(url: string, apiKey?: string) {
+    const spinner = p.spinner()
+    spinner.start(`Connecting to ${url}`)
+    try {
+        const ids = await listModels(url, apiKey, 15_000)
+        spinner.stop(`${url}: ${ids.length} model(s)`)
+        return ids
+    } catch (e) {
+        spinner.error(`${url}: ${(e as Error).message}`)
+        return null
+    }
+}
+
+async function selectModel(ids: string[], current?: string) {
+    if (!ids.length) {
+        p.log.warn('The server lists no models - load one, then run: bun run setup llm-model')
+        return undefined
+    }
+    return answer(await p.select({
+        message: 'Model',
+        options: ids.map(id => ({value: id, ...(id === current ? {hint: 'current'} : {})})),
+        initialValue: ids.includes(current ?? '') ? current : ids[0],
+        maxItems: 12,
+    }))
+}
+
+async function setupLlm() {
+    p.log.step('LLM server - any OpenAI-compatible server with the Responses API')
+    const url = normalizeUrl(answer(await p.text({
+        message: 'URL (with /v1)',
+        placeholder: 'http://localhost:8080/v1',
+        initialValue: file.llm?.url ?? '',
+        validate: value => {
+            try {
+                normalizeUrl(value ?? '', 'URL')
+            } catch (e) {
+                return (e as Error).message.replace(/^URL: /, '')
+            }
+        },
+    })), 'URL')
+    const current = file.llm?.apiKey
+    const typed = answer(await p.password({
+        message: current ? `API key - empty keeps ${maskSecret(current)}, "-" removes it` : 'API key - empty if the server needs none',
+    })) ?? ''
+    const apiKey = typed === '-' ? undefined : typed || current
+
+    const ids = await fetchModels(url, apiKey)
+    let model = file.llm?.model
+    if (ids) {
+        model = await selectModel(ids, model)
+    } else if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) {
+        return p.log.info('LLM settings unchanged')
+    }
+    file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {})}
+    await save('the LLM server')
+}
+
+async function setupModel() {
+    // the effective server - it may come from an env var
+    const {llm, sources} = await loadSettings()
+    if (!llm.url) {
+        p.log.error('No LLM server configured - run: bun run setup llm')
+        process.exit(1)
+    }
+    if (sources.llmModel === 'env') p.log.warn('FEVERSLOP_LLM_MODEL is set - it overrides the model saved here')
+    const ids = await fetchModels(llm.url, llm.apiKey)
+    if (!ids) process.exit(1)
+    const model = await selectModel(ids, llm.model)
+    if (!model) return
+    file.llm = {...file.llm, model}
+    await save(`the model ${model}`)
+}
+
+async function setupComfy() {
+    p.log.step('ComfyUI servers - pictures and clips are rendered on all of them in parallel')
+    if (process.env.FEVERSLOP_COMFY || process.env.COMFY) p.log.warn('FEVERSLOP_COMFY / COMFY is set - it overrides the servers saved here')
+    while (true) {
+        const entries = file.comfy ?? []
+        const servers = entries.length ? parseComfyEntries(entries, 'comfy') : []
+        await showComfyStatus(servers)
+
+        const action = answer(await p.select({
+            message: 'ComfyUI servers',
+            options: [
+                {value: 'add', label: 'Add a server'},
+                ...(servers.length ? [{value: 'remove', label: 'Remove a server'}] : []),
+                {value: 'test', label: 'Test again'},
+                {value: 'done', label: 'Done'},
+            ],
+            initialValue: servers.length ? 'done' : 'add',
+        }))
+        if (action === 'done') return
+        if (action === 'add') await addComfy(entries)
+        if (action === 'remove') {
+            const index = answer(await p.select({
+                message: 'Remove which server?',
+                options: servers.map((s, i) => ({value: i, label: s.name, hint: s.url})),
+            }))
+            entries.splice(index, 1)
+            if (entries.length) file.comfy = entries
+            else delete file.comfy
+            await save(`the servers (${servers[index]!.name} removed)`)
+        }
+    }
+}
+
+async function showComfyStatus(servers: ComfyServer[]) {
+    if (!servers.length) return p.log.info(`No servers saved - ${defaultComfy} is used`)
+    const spinner = p.spinner()
+    spinner.start(`Testing ${servers.length} server(s)`)
+    const results = await Promise.all(servers.map(s => probeComfy(s).then(describeDevices, (e: Error) => new Error(e.message))))
+    spinner.stop(`${results.filter(r => !(r instanceof Error)).length} of ${servers.length} reachable`)
+    const lines = servers.map((s, i) => {
+        const result = results[i]!
+        const auth = s.credentials ? styles.muted(s.credentials.type === 'basic' ? ' (password)' : ' (token)') : ''
+        return `${result instanceof Error ? '✗' : '✓'} ${s.name}  ${styles.muted(s.url)}${auth}\n    ${result instanceof Error ? `unreachable - ${result.message}` : result}`
+    })
+    p.note(lines.join('\n'), 'Servers')
+}
+
+async function addComfy(entries: ComfyEntry[]) {
+    const url = normalizeUrl(answer(await p.text({
+        message: 'URL',
+        placeholder: defaultComfy,
+        validate: value => {
+            try {
+                normalizeUrl(value ?? '', 'URL')
+            } catch (e) {
+                return (e as Error).message.replace(/^URL: /, '')
+            }
+        },
+    })), 'URL')
+    const host = new URL(url).host
+    const name = answer(await p.text({
+        message: 'Name - shown in the log and used in the client id',
+        placeholder: host,
+        defaultValue: host,
+        validate: value => !value || /^[\w.:-]+$/.test(value) ? undefined : 'only letters, digits, ".", ":", "_" and "-"',
+    })) || host
+    const auth = answer(await p.select({
+        message: 'Authentication',
+        options: [
+            {value: 'none', label: 'None'},
+            {value: 'token', label: 'Bearer token'},
+            {value: 'basic', label: 'Username and password'},
+        ],
+    }))
+    const entry: Exclude<ComfyEntry, string> = {url, ...(name !== host ? {name} : {})}
+    if (auth === 'token') entry.token = answer(await p.password({message: 'Token', validate: v => v ? undefined : 'required'}))
+    if (auth === 'basic') {
+        entry.username = answer(await p.text({message: 'Username', validate: v => v ? undefined : 'required'}))
+        entry.password = answer(await p.password({message: 'Password', validate: v => v ? undefined : 'required'}))
+    }
+
+    const [server] = parseComfyEntries([entry], 'new server')
+    const spinner = p.spinner()
+    spinner.start(`Testing ${url}`)
+    try {
+        spinner.stop(`${server!.name}: ${describeDevices(await probeComfy(server!))}`)
+    } catch (e) {
+        spinner.error(`${server!.name}: ${(e as Error).message}`)
+        if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) return
+    }
+    // a plain URL stays a plain string in the file
+    entries.push(entry.name || entry.token || entry.username ? entry : url)
+    file.comfy = entries
+    await save(`the server ${server!.name}`)
+}
+
+async function show() {
+    const path = settingsPath()
+    const {llm, comfy, sources} = await loadSettings()
+    const source = (s: Source) => styles.muted(`(${s === 'file' ? 'settings file' : s})`)
+    console.log(`Settings file: ${path}${existsSync(path) ? '' : styles.muted(' (none yet - run: bun run setup)')}\n`)
+    console.log('LLM')
+    console.log(`  url      ${llm.url ?? styles.muted('not set')} ${source(sources.llmUrl)}`)
+    console.log(`  api key  ${llm.apiKey ? maskSecret(llm.apiKey) : styles.muted('none')} ${source(sources.llmApiKey)}`)
+    console.log(`  model    ${llm.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.llmModel)}`)
+    console.log(`\nComfyUI ${source(sources.comfy)}`)
+    for (const server of comfy) {
+        const auth = server.credentials?.type === 'bearer_token' ? ` token ${maskSecret(server.credentials.token)}`
+            : server.credentials?.type === 'basic' ? ` user ${server.credentials.username}, password ${maskSecret(server.credentials.password)}` : ''
+        console.log(`  ${server.name.padEnd(20)} ${server.url}${styles.muted(auth)}`)
+    }
+    console.log(styles.muted('\nOverrides, lowest first: settings file → project config.json ("llm": {"model": …}) → env vars → flags'))
+}
+
+function printWithoutTerminal() {
+    const example: SettingsFile = {
+        llm: {url: 'http://localhost:8080/v1', apiKey: '…', model: '<model id>'},
+        comfy: [defaultComfy, {url: 'https://gpu2.lan:8188', name: 'gpu2', token: '…'}],
+    }
+    console.log(`No terminal to ask in - set the values instead:
+
+  env vars:   FEVERSLOP_LLM_URL=http://localhost:8080/v1
+              FEVERSLOP_LLM_API_KEY=…
+              FEVERSLOP_LLM_MODEL=<model id>
+              FEVERSLOP_COMFY=http://localhost:8188,http://gpu2.lan:8188
+
+  per run:    bun index.ts --llm-url=… --llm-model=… --comfy=http://a:8188,http://b:8188
+
+  or write ${settingsPath()}:
+${JSON.stringify(example, null, 2).replace(/^/gm, '    ')}`)
+}

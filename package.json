@@ -1,0 +1,28 @@
+{
+  "name": "feverslop-ts",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "setup": "bun tools/setup.ts",
+    "typecheck": "bun tools/typecheck.ts",
+    "comfy:types": "bun comfy/gen-types.ts",
+    "comfy:convert": "bun comfy/json-to-ts.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1",
+    "@saintno/comfyui-sdk": "^0.3.1",
+    "blipgloss": "^0.4.7",
+    "openai": "^7.21.0",
+    "slugify": "^1.6.9"
+  },
+  "trustedDependencies": [
+    "blipgloss"
+  ]
+}

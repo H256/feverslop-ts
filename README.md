@@ -1,0 +1,383 @@
+# FeverSlop TS
+
+Turns a song (lyrics + audio) into a beat-matched music video plan: a story, characters, locations, a film look,
+Krea 2 image prompts for the reference pictures, and one MiniMax H3 reference-to-video request per clip, covering the
+whole song.
+
+Two modes:
+
+- **Clip mode** (default) - the story is acted out, the song is the soundtrack.
+- **Performance mode** - one or more characters *sing* the lyrics on screen while acting out the story, lip-synced to
+  the real vocals. See [Singing characters](#singing-characters).
+
+## Requirements
+
+- [Bun](https://bun.com)
+- [uv](https://docs.astral.sh/uv/) – runs the song analysis (`tools/analyze_song.py`, installs librosa on first use)
+  and, for singing characters, the stem separation and transcription (`tools/vocals.py`, installs PyTorch with CUDA
+  12.8, demucs and Whisper on first use - runs on the CPU without an NVIDIA GPU, just much slower)
+- [ffmpeg](https://ffmpeg.org) – cuts the song into one audio file per clip
+- An OpenAI-compatible LLM server with the Responses API (llama.cpp, vLLM, LM Studio, …) – see [Setup](#setup)
+- Optional, for rendering: one or more [ComfyUI](https://github.com/comfyanonymous/ComfyUI) servers with the models
+  and nodes of the workflows – see [docs/comfyui.md](docs/comfyui.md#setup)
+
+```bash
+bun install
+bun run setup
+```
+
+| Script                  | What it does                                                                 |
+|-------------------------|------------------------------------------------------------------------------|
+| `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
+| `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
+| `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |
+| `bun run comfy:convert` | turns a ComfyUI workflow (API export) into a draft workflow file             |
+
+## Setup
+
+The servers are machine settings, not project settings - they live in a settings file outside the repo:
+
+- Windows: `%APPDATA%\feverslop-ts\settings.json`
+- elsewhere: `$XDG_CONFIG_HOME/feverslop-ts/settings.json`, or `~/.config/feverslop-ts/settings.json`
+- `FEVERSLOP_SETTINGS=<path>` uses another file
+
+`bun run setup` writes it - it asks for everything, tests every server before saving and lets you pick the model with
+the arrow keys. Each part also works on its own:
+
+| Command                   | What it does                                                                               |
+|---------------------------|--------------------------------------------------------------------------------------------|
+| `bun run setup`           | everything below, in order                                                                 |
+| `bun run setup llm`       | the LLM server: URL → API key (optional) → connects, lists the models → pick one            |
+| `bun run setup llm-model` | only the model: lists the models of the configured server → pick one                       |
+| `bun run setup comfy`     | the ComfyUI servers with their status (GPU, free VRAM) - add, remove, test again           |
+| `bun run setup show`      | the effective settings and where each value comes from, API keys masked                    |
+
+The file, if you'd rather write it yourself:
+
+```json
+{
+  "llm": {"url": "http://localhost:8080/v1", "apiKey": "…", "model": "Muse-Glimmer-30B-GGUF"},
+  "comfy": ["http://localhost:8188", {"url": "https://gpu2.lan:8188", "name": "gpu2", "token": "…"}]
+}
+```
+
+- `llm.apiKey` is optional - local servers usually need none. Without `llm.model`, the server's only model is used;
+  a server with several models needs one picked.
+- `comfy` entries are a URL, or `{"url", "name", "token"}` / `{"url", "name", "username", "password"}` for a server
+  behind a proxy with authentication. `name` (default: the host) shows up in the log. Without `comfy`,
+  `http://localhost:8188` is used. With several servers, pictures and clips are rendered on all of them in parallel -
+  see [docs/comfyui.md](docs/comfyui.md#several-servers).
+
+Everything can be overridden, lowest first: the settings file → the project's `config.json` (only `"llm": {"model":
+…}` - a project may use another model, never another server or key) → env vars → flags (this run only, never saved):
+
+| Env var                                 | Flag              | Value                                             |
+|-----------------------------------------|-------------------|---------------------------------------------------|
+| `FEVERSLOP_LLM_URL`                    | `--llm-url=`      | the LLM server, with `/v1`                        |
+| `FEVERSLOP_LLM_API_KEY`                | `--llm-key=`      | its API key                                       |
+| `FEVERSLOP_LLM_MODEL`                  | `--llm-model=`    | a model id of the server                          |
+| `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
+
+Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
+(CI, scripts), `bun run setup` prints these env vars instead of asking.
+
+The LLM server is only contacted when a step actually needs it, and ComfyUI only when something is rendered - a fully
+cached project runs without either.
+
+## Documentation
+
+- [docs/comfyui.md](docs/comfyui.md) – rendering with ComfyUI: setup, `config.json`, re-rendering, things to know,
+  troubleshooting
+- [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
+
+## Usage
+
+Every song is a project folder:
+
+```
+projects/<project-id>/
+  input/
+    song.wav          required
+    lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ...
+    story-idea.txt    optional
+    style.txt         optional - the film's style, e.g. "dark gothic oil painting, heavy chiaroscuro"
+  config.json         settings: singers, lyrics language, rendering (see config.json)
+  stems/              the song's stems (vocals, drums, bass, guitar, piano, other) - only when lyrics are aligned
+  assets/             reference pictures, rendered or your own - never overwritten;
+                      clips/<clip-id>_ff.png, _lf.png: first and last frame of every rendered clip
+  videos/             rendered clips - never overwritten
+  final.mp4           the assembled music video - rebuilt by --render=final
+  project.json        all generated data, step by step
+  output/             generated H3 requests - rewritten on every run
+```
+
+Run it:
+
+```bash
+bun index.ts                          # default project: well-of-youth-gothic-trio-260920
+bun index.ts <project-id>             # any other project
+bun index.ts --redo=beats             # regenerate a step and everything built on it
+bun index.ts --redo=story,lookBrief   # several at once
+bun index.ts --render=all             # also render with ComfyUI and assemble final.mp4, see below
+```
+
+Finished steps are cached in `project.json` and skipped on the next run - a run that breaks halfway continues where it
+stopped. You can edit `project.json` by hand (a story beat, a look prompt, a section time) and run again; the H3
+requests are always rebuilt from the current data.
+
+Edited inputs are noticed: `project.json` keeps a fingerprint of every input, and a changed one redoes the steps
+built on it (and everything built on those):
+
+| Changed                       | Redoes                              |
+|-------------------------------|-------------------------------------|
+| `song.wav`                    | `music`, `stems`                    |
+| `lyrics.txt`                  | `story`, `transcript`, `singing`    |
+| `story-idea.txt`              | `story`                             |
+| `style.txt`                   | `lookBrief`                         |
+| `singers` in `config.json`    | `singing` (and so `beats`)          |
+| `lyricsLanguage`              | `transcript`                        |
+
+### Style
+
+Without `input/style.txt` the look brief (step 4) picks a format and style that fits the story. With it, the look
+brief keeps your medium, style and named references exactly and only extends them - world, palette, lighting, camera
+language, texture - so every picture and clip prompt stays in your style. A sentence or two is enough:
+
+```
+Dark gothic oil painting in the manner of Caravaggio, heavy chiaroscuro, candlelight only.
+```
+
+The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_SEC` (10 seconds).
+
+## Steps
+
+| # | Step (`--redo=`) | What it does                                                                     | Built on                     |
+|---|------------------|----------------------------------------------------------------------------------|------------------------------|
+| 0  | `music`          | BPM, downbeats, energy per bar, song sections named after the lyrics tags         | –                            |
+| 0a | `stems`          | demucs `htdemucs_6s` → `stems/{vocals,drums,bass,guitar,piano,other}.wav` ¹       | –                            |
+| 0b | `transcript`     | Whisper large-v3 on `vocals.wav`, word timestamps, the lyrics as prompt ¹         | stems                        |
+| 0c | `lyricsTiming`   | The known lyrics aligned to the transcript: start and end of every line and word ¹ | transcript                   |
+| 1  | `story`          | Story from lyrics and/or story idea                                              | –                            |
+| 2  | `summary`        | Short summary                                                                    | story                        |
+| 3  | `cast`           | Characters and locations with ids                                                | story                        |
+| 3b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
+| 4  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
+| 5  | `characterLooks` | Krea 2 prompt per character (reference sheet, plain background)                  | cast, lookBrief              |
+| 5b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
+| 6  | `locationLooks`  | Krea 2 prompt per location (empty establishing shot)                             | cast, lookBrief, summary     |
+| 6b | `locationDescriptions` | The location look without the establishing shot - no camera, "empty" or medium - for the clip prompts | locationLooks |
+| 7  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
+| 8  | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
+| 9  | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
+| 10 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
+
+¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings
+
+Steps 1–7 use the LLM (3b only for `"auto"` or several singers), all others are plain code.
+
+The looks (5, 6) are image prompts for the reference pictures - they put a character on a plain grey background in
+studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
+`<Picture N>` with its description (5b, 6b) instead: only what the character or place looks like. One LLM call per
+character and location, from its look, so it matches the picture. Redoing a look redoes its description; to rewrite
+only the descriptions: `--redo=characterDescriptions,locationDescriptions`.
+
+## Output
+
+`projects/<project-id>/output/`:
+
+- `timeline.json` – BPM, all story beats and every clip with start, end, section, beat and its request file
+- `clips/slot-001.json …` – one H3 reference-to-video request per clip: the prompt, the shots with their cut times, the
+  clip's place on the song's frame grid (`frameStart`, `frames`), and the assets in label order (`<Picture 1>`,
+  `<Picture 2>`, …, `<Audio 1>`, `<Audio 2>`). Every picture lists the character or location it shows (`kind`, `id`,
+  `name`) and the `description` the prompt uses for it. Clips with a singer also list their `vocals`: every sung part with
+  its clip-relative time, text, singer, subject and speaker id
+- `audio/slot-001.wav …` – the clip's slice of the song on the frame grid, used as `<Audio 1>`
+- `audio/slot-001.vocals.wav …` – clips with a singer: the same slice of the vocals stem, used as `<Audio 2>`
+- `assets.json` – the pictures the requests expect, each with the Krea 2 prompt to generate it (`prompt`) and the
+  description the clip prompts use for it (`description`)
+
+The prompts follow the
+[MiniMax H3 full-reference prompt guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md):
+`subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`,
+`non_diegetic_music`. The location is `<Subject 1>`, the characters of the beat are `<Subject 2>` and up, each defined
+by the `<Picture N>` with the same number.
+
+## Rendering with ComfyUI
+
+The reference pictures and the clips can be rendered directly on one or more ComfyUI servers (see [Setup](#setup)) and
+are saved into the project:
+
+```bash
+bun index.ts --render=all                       # missing pictures, missing clips, then final.mp4
+bun index.ts --render=images                    # Krea 2 reference pictures -> assets/
+bun index.ts --render=videos                    # MiniMax H3 clips -> videos/
+bun index.ts --render=final                     # assemble final.mp4 from the rendered clips
+bun index.ts --render=videos --only=slot-001    # just some clips, to try things out
+```
+
+- Existing pictures and clips are never overwritten - delete one to render it again. Your own pictures in `assets/`
+  are used as they are.
+- Every rendered file gets a `.json` next to it with the workflow, seed and resolution it was made with.
+- Clips are skipped until all their pictures exist; the final video needs all clips.
+- With several ComfyUI servers, all pictures - then all clips - are rendered in parallel, one job per server. The
+  status line at the bottom shows every running job and its server.
+
+### The final video
+
+`--render=final` cuts every clip to exactly its frames, joins them and lays the original song under the whole video
+(or the clips' own audio, with `"songAudio": false`). The timing is frame-exact, which matters for lip-sync:
+
+- All clips sit on one 24 fps frame grid for the whole song. Clip boundaries are rounded to it once, so the clips add
+  up to exactly the song's frame count - no drift, however many clips there are.
+- The H3 node only renders 5 + 17·k frames, so each clip is rendered a little longer than it needs (a 10 s slot as
+  10.13 s). The audio given to the model starts exactly on the clip's first frame and covers the whole render.
+- In the final video every clip is cut back to its own frames from frame 0 on. Every frame is then at exactly the
+  moment of the song it was generated for, and the song fits underneath unchanged.
+
+How it works in detail: [docs/comfyui.md](docs/comfyui.md#the-final-video-and-frame-exact-timing).
+
+### config.json
+
+Settings per project, all optional - read at every run and checked field by field:
+
+```json
+{
+  "singers": [],
+  "lyricsLanguage": "en",
+  "seed": -1,
+  "imageResolution": -1,
+  "videoResolution": -1,
+  "imageWorkflow": "krea2-image",
+  "videoWorkflow": "h3-ref2video",
+  "songAudio": true,
+  "llm": {}
+}
+```
+
+| Field                                 | Values                                                                                                    |
+|---------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `llm`                                 | `{"model": "…"}` = another model of the LLM server for this project; default `{}` = the one from the [settings](#setup) |
+| `singers`                             | `[]` = clip mode (default), `["auto"]` = the LLM picks the lead singer, `["Thorin", "brenna"]` = these characters, by name or id - see [Singing characters](#singing-characters) |
+| `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper and the `<d>[English]` lyrics tag |
+| `alignLyrics`                         | `true` = stems, transcript and real lyric timing; default: `true` when someone sings, else `false`. Set it to `true` in clip mode to place the lyric cues at the right moments |
+| `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
+| `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
+| `imageWorkflow`, `videoWorkflow`      | a workflow file in `comfy/workflows/`, without `.ts`                                                      |
+| `songAudio`                           | final video: `true` = the original song replaces the clips' audio (default), `false` = keep the clips' audio |
+
+Characters are always portrait, locations and videos landscape - whichever way round the size is written. Videos are
+always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
+
+### Workflows
+
+The ComfyUI workflows are TypeScript files in `comfy/workflows/`, built with the
+[ComfyUI SDK](https://github.com/comfy-addons/comfyui-sdk) (`@saintno/comfyui-sdk`). Its `WorkflowBuilder` is generated
+from your server (`comfy/nodes.ts`), so `bun run typecheck` catches a missing model, a wrong sampler name or a wrong
+connection before anything is rendered. The same SDK runs the jobs: uploads, progress, downloads, reconnects.
+
+| Workflow        | Kind  | Rebuilt from                                        |
+|-----------------|-------|-----------------------------------------------------|
+| `krea2-image`   | image | `comfy/image_t2i_startframe_krea_v1.json`           |
+| `h3-ref2video`  | video | `comfy/r2v_audio_fullmix_guide_1-pass_turbo.json`   |
+
+### Adding your own workflow
+
+1. Build and test it in ComfyUI. Give the nodes that take a parameter a title starting with `#` (`#PROMPT`, `#SEED`, …).
+2. Export it with **Workflow → Export (API)**.
+3. Generate a draft: `bun run comfy:convert comfy/my-workflow.json my-workflow --kind=image` (or `--kind=video`).
+4. Open `comfy/workflows/my-workflow.ts` and replace the values at the `TODO` comments with `opts` - prompt, seed,
+   size, file name, and for videos the pictures and the audio.
+5. `bun run typecheck`
+6. Set `"imageWorkflow": "my-workflow"` (or `videoWorkflow`) in a project's `config.json` and render.
+
+The full guide, with the options every workflow gets, the helpers and a checklist:
+[docs/custom-workflows.md](docs/custom-workflows.md).
+
+### Things to know
+
+- **Run `bun run comfy:types` after installing nodes or models.** It regenerates `comfy/nodes.ts` with the SDK's
+  `cfli codegen` and fixes custom nodes with duplicate output names on the way.
+- **`comfy/nodes.ts` is generated and large** (about 16 MB). Don't edit it, and keep it out of version control.
+- **Some connections aren't in the types:** node outputs into widgets, autogrow inputs like `ref_images.ref_image_0`,
+  and widgets that depend on another widget. The helpers `widget()` and `withInputs()` cover them.
+- **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped
+  connection changes nothing. If FeverSlop TS stops while ComfyUI is still rendering (Ctrl+C, crash, sleep), the next
+  run picks the job up again via `<file>.pending.json` instead of rendering it twice.
+- **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full 10 s
+  slot renders 10.13 s; the extra frames are cut off in `final.mp4`. Lower `MAX_CLIP_SEC` if your hardware limit is
+  strict - the rounding adds up to 16 frames (0.67 s).
+- **Model names are fixed in the workflow files.** Change them there, or copy a workflow under a new name.
+- **Uploads and results pile up on the server** under `feverslop-ts/<project-id>/` in ComfyUI's `input/` and `output/`.
+- **Several servers need the same models and nodes.** `comfy/nodes.ts` is generated from the first one.
+
+More, and troubleshooting: [docs/comfyui.md](docs/comfyui.md#things-to-know).
+
+## From plan to video
+
+1. Render the pictures with `--render=images` - or generate every picture in `output/assets.json` yourself and save it
+   under the listed name in the project folder (`assets/locations/<id>.png`, `assets/characters/<id>.png`).
+2. Render the clips with `--render=videos` - or send every `output/clips/slot-XXX.json` to MiniMax H3 with the pictures
+   and the audio from `assets`, **in the listed order** - the prompt refers to them by number.
+3. Assemble them with `--render=final` into `final.mp4`. Rendered elsewhere? Save the clips as `videos/slot-XXX.mp4`
+   first - each needs at least the clip's `frames`, starting at the audio of its `frameStart`.
+
+Or all three at once: `bun index.ts --render=all`.
+
+## Singing characters
+
+In performance mode characters sing the lyrics on screen, lip-synced to the real vocals. Turn it on in
+`config.json`:
+
+```json
+{"singers": ["auto"]}
+```
+
+- `["auto"]` - the LLM picks the lead singer from the cast (step 3b), usually one character, a group character like
+  "Miners" if the lyrics are sung by a "we", two or three for a clear duet.
+- `["Thorin"]` - one singer, by name or id. Names are matched loosely: `"thorin"`, `"Thorin"` and `"Thorin
+  Oakenshield"` find `thorin-oakenshield`, `"miner"` finds `miners`. Unknown names are skipped with a warning - the
+  run prints the cast.
+- `["Thorin", "Brenna"]` - several singers; the LLM decides who sings which line, several at once for duet or choir
+  lines.
+
+What happens then:
+
+1. **Stems** (`0a`): demucs `htdemucs_6s` separates the song into `stems/vocals.wav`, `drums`, `bass`, `guitar`,
+   `piano` and `other`.
+2. **Transcript** (`0b`): Whisper large-v3 transcribes `vocals.wav` with word timestamps. The lyrics are given as the
+   prompt, which makes sung words much easier to recognize.
+3. **Lyrics timing** (`0c`): the known lyrics are aligned to the heard words, word by word and in order. Words Whisper
+   missed get times between their neighbours. The run prints every line with its time and a confidence (the share of
+   its words that were found), and warns about lines below 0.5.
+4. **Timeline** (`8`): sections with vocals start at their first sung line (on the downbeat before it, for pickups),
+   the instrumental sections fill the gaps - no more estimated section boundaries. Every clip gets the words sung in
+   it.
+5. **Beats** (`7`): the singers are on screen in beats under sung sections, with their face visible ("sings while
+   forging the blade"). Clips with vocals always get their singers as subjects, even if a beat forgot them.
+6. **Requests**: clips with vocals get the isolated vocals as `<Audio 2>`, the voice-timbre reference for the singer,
+   speaker ids `(S1)`, `(S2)`, and one sentence per sung line at its real time:
+   `At 00:02.300, <Subject 2> (S1) sings <d>[English] To the Well of Youth we march through the fire.</d> while …`.
+   Shots in which a line starts frame the singer (medium shot to close-up, calmer camera); cuts that would fall into
+   a sung word move to the next gap between words. Clips without vocals stay exactly as in clip mode.
+
+`<Audio 1>` stays the full song part: it is the audio guide and the soundtrack, the final video still uses the
+original song.
+
+**Checking and fixing the timing.** Listen to a few line starts in the song and compare them with the table the run
+prints (or `lyricsTiming.lines` in `project.json`). A wrong line can be fixed by hand there - `start`, `end` and the
+words' times - then run with `--redo=timeline`. `--redo=transcript` transcribes again, `--redo=singing` recasts the
+singers.
+
+**First run.** `tools/vocals.py` installs PyTorch (CUDA 12.8 wheels, needed for RTX 50xx cards) and downloads the
+models: demucs ≈ 80 MB, Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separation takes under a minute, the
+transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
+Without CUDA they run on the CPU, much slower.
+
+## Known limits
+
+- Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix
+  `music.sections` in `project.json` if needed, then run with `--redo=timeline`.
+- Without alignment, a section's lyric lines are spread evenly over its clips.
+- The alignment is only as good as Whisper's hearing: growled, heavily layered or very fast vocals are recognized
+  worse. Lines with low confidence have interpolated times - check them.
+- A line that is sung across a clip boundary is split between the two clips word by word.
