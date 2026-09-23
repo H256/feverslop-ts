@@ -36,3 +36,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 projects
 .claude
 
+# generated, ~16 MB (bun run comfy:types)
+comfy/nodes.ts
+
