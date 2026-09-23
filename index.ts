@@ -5,18 +5,18 @@ import {log, styles} from "./lib/log.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
-import {type Character, type Location, ProjectStore, type Singing, type StepName, type StoryBeat} from "./lib/project.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {type Character, type Location, ProjectStore, type PropStem, type Singing, type StepName, type StoryBeat} from "./lib/project.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {buildClipRequests, countShotsPerBeat, pictureAsset, propActivityPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {assembleFinal} from "./lib/assemble.ts";
-import {formatTime, secondsAt} from "./lib/frames.ts";
+import {formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {
     castPrompt, characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt,
-    lookBriefPrompt, songBriefPrompt, storyPrompt, summaryPrompt,
+    lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // hardware limit: the longest clip the video model can generate in one go
@@ -59,6 +59,13 @@ if (project.data.timeline && project.data.timeline.maxClipSec !== maxClipSec) pr
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
 const readInput = async (name: string) => existsSync(project.input(name)) ? (await Bun.file(project.input(name)).text()).trim() : ''
+// true if `value`'s fingerprint differs from the one project.syncInputs() recorded after the previous run - a
+// read-only check, for a step that needs to know this before that call itself has run (and recorded) this run's
+// values; undefined (nothing recorded yet, e.g. the first run) never counts as changed
+const inputChangedSinceLastRun = (name: string, value: string) => {
+    const saved = project.data.inputs?.[name]
+    return saved !== undefined && saved !== Bun.hash(value).toString(16)
+}
 
 /////////// GET LYRICS, STORY IDEA, STYLE AND CONFIG
 log.section(`FEVERSLOP TS · ${project.id}`)
@@ -80,28 +87,55 @@ log.step('LLM', settings.llm.url
 const language = languageName(config.lyricsLanguage)!
 const songFile = project.input('song.wav')
 
-////////// WRITING & GENERATING THE SONG - only with --render=song, and only while there is no song.wav yet
+////////// WRITING & GENERATING THE SONG - only with --render=song
 const idea = await readInput('idea.txt')
 const musicStyleInput = await readInput('music-style.txt')
+const lyricsBeforeSong = await readInput('lyrics.txt')
 if (render.has('song')) {
-    if (existsSync(songFile)) {
-        log.step('Song', styles.muted('input/song.wav already exists - delete it to generate a new one with --render=song'))
-    } else {
-        if (!idea) throw new Error('--render=song needs a song idea in input/idea.txt')
-        const songBrief = await project.step('songBrief', '1 · WRITING THE SONG', () =>
-            askJson<{ style: string, lyrics: string }>(songBriefPrompt(idea, musicStyleInput, language, config.songDuration === -1 ? undefined : config.songDuration)))
-        log.box('Style', songBrief.style)
-        log.box('Lyrics', songBrief.lyrics)
-        if (!existsSync(project.input('lyrics.txt'))) await Bun.write(project.input('lyrics.txt'), songBrief.lyrics)
-        if (!existsSync(project.input('music-style.txt'))) await Bun.write(project.input('music-style.txt'), songBrief.style)
+    if (!idea) throw new Error('--render=song needs a song idea in input/idea.txt')
 
-        log.section('1a · GENERATING THE SONG AUDIO')
+    // A hand-edit (or a deletion) of idea.txt/music-style.txt/lyrics.txt since the last run needs a new style this
+    // run already - read-only, so the fingerprints it compares against are only recorded once, by the main
+    // syncInputs() call further down, once this run's final lyrics.txt content is known.
+    if (inputChangedSinceLastRun('idea.txt', idea) || inputChangedSinceLastRun('music-style.txt', musicStyleInput) || inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong)) {
+        project.invalidate('songStyle')
+    }
+
+    // LYRICS - generated once from idea.txt; once lyrics.txt exists it's a plain input like story-idea.txt, never
+    // auto-rewritten - delete it (or hand-correct it) to get it touched again.
+    const lyricsExisted = existsSync(project.input('lyrics.txt'))
+    if (!lyricsExisted) {
+        log.section('1 · WRITING THE LYRICS')
+        const generatedLyrics = await ask(songLyricsPrompt(idea, language, config.songDuration === -1 ? undefined : config.songDuration))
+        log.box('Lyrics', generatedLyrics)
+        await Bun.write(project.input('lyrics.txt'), generatedLyrics)
+        project.invalidate('songStyle') // fresh lyrics need a style written to match them
+    }
+    const songLyrics = await readInput('lyrics.txt')
+
+    // STYLE - redone whenever the lyrics or music-style.txt changed since the style currently cached was written
+    const styleWasCached = project.data.songStyle !== undefined
+    const songStyle = await project.step('songStyle', '1a · WRITING THE MUSICAL STYLE', () => ask(songStylePrompt(songLyrics, musicStyleInput, language)))
+    log.box('Style', songStyle)
+    if (!existsSync(project.input('music-style.txt'))) await Bun.write(project.input('music-style.txt'), songStyle)
+
+    // AUDIO - only rendered again if the lyrics or the style actually changed this run, or there is none yet
+    if (lyricsExisted && styleWasCached && existsSync(songFile)) {
+        log.step('Song', styles.muted('input/song.wav is up to date - delete lyrics.txt, edit music-style.txt, or --redo=songStyle, to generate a new one'))
+    } else {
+        log.section('1b · GENERATING THE SONG AUDIO')
+        if (existsSync(songFile)) {
+            rmSync(songFile)
+            log.step('Redo', styles.muted('song.wav - the lyrics or style changed'))
+        }
         using songRenderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        await songRenderer.renderSong(songBrief, songFile)
+        await songRenderer.renderSong({style: songStyle, lyrics: songLyrics}, songFile)
     }
 }
 
+// re-read: the song block above may have just written lyrics.txt/music-style.txt for the first time
 const lyrics = await readInput('lyrics.txt')
+const musicStyle = await readInput('music-style.txt')
 const storyIdea = await readInput('story-idea.txt')
 const style = await readInput('style.txt')
 const lyricSections = parseLyricSections(lyrics)
@@ -116,12 +150,12 @@ if (config.alignLyrics && sungLines(lyricSections).length === 0) throw new Error
 
 // an edited input redoes the steps built on it
 await project.syncInputs({
-    // no "assumed" - unlike the other inputs below, these never existed before this feature, so there is no old
-    // project to treat as unchanged; on a real first run "previous" is simply undefined and nothing is invalidated
-    'idea.txt': {value: idea, steps: ['songBrief']},
-    'music-style.txt': {value: musicStyleInput, steps: ['songBrief']},
+    // no "assumed" for these three - unlike the ones below, they never existed before this feature, so there is
+    // no old project to treat as unchanged; on a real first run "previous" is simply undefined and nothing redoes
+    'idea.txt': {value: idea, steps: ['songStyle']},
+    'music-style.txt': {value: musicStyle, steps: ['songStyle']},
     'song.wav': {value: existsSync(songFile) ? await Bun.file(songFile).bytes() : '', steps: ['music', 'stems']},
-    'lyrics.txt': {value: lyrics, steps: ['story', 'transcript', 'singing']},
+    'lyrics.txt': {value: lyrics, steps: ['story', 'transcript', 'singing', 'songStyle']},
     'story-idea.txt': {value: storyIdea, steps: ['story']},
     'style.txt': {value: style, steps: ['lookBrief'], assumed: ''},
     singers: {value: JSON.stringify(config.singers), steps: ['singing'], assumed: '[]'},
@@ -132,6 +166,7 @@ if (project.data.music && lyricSections.length && project.data.music.sections.ma
     project.invalidate('music')
 }
 if (project.data.stems && Object.values(project.data.stems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('stems')
+if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('instrumentStems')
 
 ////////// ANALYZE THE SONG
 if (!existsSync(songFile)) throw new Error(`No song found at ${songFile}${idea ? ' - run with --render=song to generate one from input/idea.txt' : ''}`)
@@ -185,12 +220,12 @@ log.box('Summary', storySummary)
 ////////// EXTRACT LOCATIONS AND CHARACTERS
 const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
     const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase))
-    const stemNames = new Set(['drums', 'bass', 'other'])
+    const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
     return {
         characters: extracted.characters.map(c => ({
             id: toId(c.name), name: c.name, role: c.role,
             ...(c.prop ? {prop: c.prop} : {}),
-            ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as 'drums' | 'bass' | 'other'} : {}),
+            ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
         })),
         locations: extracted.locations.map(l => ({id: toId(l.name), ...l})),
     }
@@ -201,12 +236,25 @@ log.step('Locations', styles.muted(`(${cast.locations.length})`))
 for (const l of cast.locations) console.log(`   ${styles.name(l.id)}`)
 
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
-const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is 'drums' | 'bass' | 'other' => Boolean(s)))]
+const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
+const neededInstrumentStems = neededStems.filter((s): s is 'guitar' | 'piano' => s === 'guitar' || s === 'piano')
+
+// guitar/piano aren't in the htdemucs_ft stems above (folded into "other") - a second, narrower htdemucs_6s pass
+// gets just those, on top of (never overwriting) the cleaner htdemucs_ft vocals/drums/bass/other already on disk
+const instrumentStems = stems && neededInstrumentStems.length ? await project.step('instrumentStems', '5a · SEPARATING GUITAR/PIANO', async () => {
+    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_6s (${neededInstrumentStems.join(', ')} only)`))
+    return separateInstrumentStems(songFile, project.dir, neededInstrumentStems)
+}) : undefined
+if (instrumentStems) log.step('Stems', styles.muted(Object.values(instrumentStems).join(' · ')))
+
+const allStems = {...stems, ...instrumentStems}
 const propActivity = stems && neededStems.length ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
     const result: NonNullable<typeof project.data.propActivity> = {}
     for (const stemName of neededStems) {
-        log.step('Analyzing', styles.muted(stems[stemName]))
-        result[stemName] = await stemActivity(join(project.dir, stems[stemName]))
+        const stemFile = allStems[stemName]
+        if (!stemFile) continue
+        log.step('Analyzing', styles.muted(stemFile))
+        result[stemName] = await stemActivity(join(project.dir, stemFile))
     }
     return result
 }) : undefined
@@ -426,10 +474,12 @@ mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
 for (const clip of clips) {
     await Bun.write(join(outputDir, 'clips', `${clip.id}.json`), JSON.stringify(clip, null, 2))
-    // on the frame grid, like the rendered clips - <Audio 1> from the song, <Audio 2> (singers) from the vocals stem
+    // <Audio 1> is the clip's full frame range, from the song - <Audio 2> (singers), from the vocals stem, is only
+    // the sub-range songStart/songEnd actually cover (see buildClipRequests): trimmed to where the vocals are
+    // audible, on the frame grid like the rendered clips so it still lines up with <Audio 1> and the shot cuts.
     for (const audio of clip.assets.audio) {
         const source = audio.stem ? join(project.dir, stems![audio.stem]) : songFile
-        await cutAudio(source, secondsAt(clip.frameStart), secondsAt(clip.frameStart + clip.frames), join(project.dir, audio.file))
+        await cutAudio(source, secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
     }
 }
 

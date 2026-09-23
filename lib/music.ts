@@ -1,5 +1,5 @@
 import {join} from "node:path";
-import type {Assignment, LyricSection, LyricsTiming, MusicMap, Slot, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
+import type {Assignment, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
 import {refineSections, slotVocals} from "./lyrics.ts";
 import {round} from "./frames.ts";
 import {runProcess} from "./process.ts";
@@ -28,6 +28,14 @@ export async function separateStems(songFile: string, projectDir: string): Promi
     await runVocalsTool(['separate', songFile, join(projectDir, 'stems')], 'Stem separation')
     const names = ['vocals', 'drums', 'bass', 'other'] as const
     return Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as Stems
+}
+
+// htdemucs_6s: guitar/piano only, on top of the htdemucs_ft stems already on disk (never overwritten - see
+// tools/vocals.py) - run only for the instruments a character's propStem actually needs, since htdemucs_ft's
+// "other" stem (used for every other propStem) is too coarse to time a guitar's or piano's own entry against.
+export async function separateInstrumentStems(songFile: string, projectDir: string, names: ('guitar' | 'piano')[]): Promise<InstrumentStems> {
+    await runVocalsTool(['separate', songFile, join(projectDir, 'stems'), 'htdemucs_6s', ...names], 'Instrument stem separation')
+    return Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as InstrumentStems
 }
 
 // Whisper large-v3 on the vocals stem, word timestamps, the lyrics as prompt

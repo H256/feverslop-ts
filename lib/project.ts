@@ -4,8 +4,11 @@ import {log, styles} from "./log.ts";
 
 // prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
 // propStem: only set when the prop is a musical instrument audible in the song - which stem its sound belongs to,
-// so its on-screen use can be grounded in real audio activity instead of playing continuously in every shot
-export type Character = { id: string, name: string, role: string, prop?: string, propStem?: 'drums' | 'bass' | 'other' }
+// so its on-screen use can be grounded in real audio activity instead of playing continuously in every shot.
+// "guitar"/"piano" come from a separate htdemucs_6s pass (lib/music.ts separateInstrumentStems) - htdemucs_ft's
+// main 4-stem separation (cleanest for vocals) folds both into "other", too coarse to time a guitar's own entry
+export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem }
 export type Location = { id: string, name: string }
 
 // A story beat has no timing - it is stretched onto the music later
@@ -56,10 +59,12 @@ export type Timeline = {
 
 // Stems of the song, paths relative to the project folder
 export type Stems = Record<'vocals' | 'drums' | 'bass' | 'other', string>
+// The htdemucs_6s guitar/piano stems - separated on top of Stems above, only for propStems that actually need them
+export type InstrumentStems = Partial<Record<'guitar' | 'piano', string>>
 
 // RMS-energy activity ranges per stem (same method as Transcript.activity, generalized to any stem) - only the
 // stems actually claimed by a character's propStem are analyzed
-export type PropActivity = Partial<Record<'drums' | 'bass' | 'other', { start: number, end: number }[]>>
+export type PropActivity = Partial<Record<PropStem, { start: number, end: number }[]>>
 
 // Whisper's words on the vocals stem
 export type TranscriptWord = { text: string, start: number, end: number, probability: number }
@@ -89,14 +94,15 @@ export type Singing = { singers: string[], lines: { line: number, text: string, 
 
 export type Assignment = { slotId: string, beatId: string }
 
-// Generation-ready input for the YuE2 text-to-music workflow, written from idea.txt (+ optional music-style.txt)
-export type SongBrief = { style: string, lyrics: string }
-
 export type Project = {
     inputs?: Record<string, string>, // fingerprints of the input files and settings - not a step
-    songBrief?: SongBrief,
+    // The YuE2 style/tags prompt written for lyrics.txt (music-style.txt is the optional direction hint for it) -
+    // lyrics.txt itself isn't cached here, it's a plain input file like story-idea.txt, generated once into
+    // existence and then treated as fixed (delete it, or edit it, to get a new one - see index.ts)
+    songStyle?: string,
     music?: MusicMap,
     stems?: Stems,
+    instrumentStems?: InstrumentStems,   // guitar/piano, separated once cast.characters' propStems are known
     transcript?: Transcript,
     lyricsTiming?: LyricsTiming,
     story?: string,
@@ -118,9 +124,10 @@ export type StepName = Exclude<keyof Project, 'inputs'>
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<StepName, StepName[]> = {
-    songBrief: [],
+    songStyle: [],
     music: [],
     stems: [],
+    instrumentStems: ['stems', 'cast'],
     transcript: ['stems'],
     lyricsTiming: ['transcript'],
     story: [],
@@ -135,7 +142,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     beats: ['story', 'cast', 'singing'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
-    propActivity: ['stems', 'cast'],
+    propActivity: ['stems', 'instrumentStems', 'cast'],
     shotMoments: ['beats', 'timeline', 'mapping', 'propActivity'],
 }
 

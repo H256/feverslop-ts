@@ -3,33 +3,52 @@ import type {AskOptions} from "./llm.ts";
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
 
+// Lyrics only - kept separate from the style prompt so lyrics.txt can be hand-corrected and kept fixed while the
+// style (music-style.txt) is redone around it, or vice versa (see songStylePrompt).
 // durationSec: an upper bound (config.json songDuration) - the model decides the actual song length, so this only
 // shapes how many sections/lines the lyrics get, it doesn't force an exact length
-export function songBriefPrompt(idea: string, musicStyle: string, language: string, durationSec?: number): AskOptions {
+export function songLyricsPrompt(idea: string, language: string, durationSec?: number): AskOptions {
     return {
         maxTokens: 4096,
-        input: `Write a song from this idea for a music video, as generation-ready input for the YuE2 text-to-music model.
+        input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
 Idea: ${idea}
-${musicStyle ? `Musical direction: ${musicStyle}\n` : ''}Language: ${language}
+Language: ${language}
 ${durationSec ? `Target length: around ${Math.round(durationSec)} seconds - shape the number and length of sections accordingly.\n` : ''}
-Answer only with JSON in this format: {"style": "", "lyrics": ""}
-
-"style" rules:
-- Comma-separated tags, in this order: genre, instruments, mood, vocal gender, vocal tone. Order matters - earlier tags get more weight.
-- Add a tempo tag (e.g. "88 BPM" or "upbeat") when tempo matters to the song.
-- If ${language} isn't English, add it as its own tag (e.g. "Japanese", "Mandarin", "German").
-- "No <instrument>" tags exclude an instrument that would otherwise be implied.
-- Read like a musician's or producer's description of a playable song, not mood prose.
-
-"lyrics" rules:
+Rules:
 - Section labels in square brackets on their own line: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Interlude], [Outro]. Blank line between sections.
 - Start with a verse or chorus, never a lyric-filled intro.
 - 4-6 lines per section, about 30 seconds of singing each.
 - Write every repeated chorus out in full - never shorthand like "(repeat chorus)".
 - Keep the syllable count identical when a line repeats.
 - Nothing but section tags and sung words - no production notes like "(drums build)", no title, no hyphenated syllable forcing.
-- Written in ${language}.`,
-        instructions: 'You are a songwriter and YuE2 prompt designer. Answer only with JSON.',
+- Written in ${language}.
+
+Answer only with the lyrics.`,
+        instructions: 'You are a songwriter. Answer only with the lyrics, nothing else.',
+    }
+}
+
+// The YuE2 style/tags prompt for a given (fixed) set of lyrics - written or rewritten around whatever is
+// currently in lyrics.txt, so correcting the lyrics by hand and asking for a new style still gets one that fits.
+// musicStyle: the optional direction from music-style.txt - a hint to follow, not the final YuE2 caption itself.
+export function songStylePrompt(lyrics: string, musicStyle: string, language: string): AskOptions {
+    return {
+        maxTokens: 2048,
+        input: `Write a YuE2 style/tags prompt that fits these song lyrics.
+${musicStyle ? `Musical direction to follow: ${musicStyle}\n` : ''}Language: ${language}
+---
+lyrics:
+${lyrics}
+
+Rules:
+- Comma-separated tags, in this order: genre, instruments, mood, vocal gender, vocal tone. Order matters - earlier tags get more weight.
+- Add a tempo tag (e.g. "88 BPM" or "upbeat") when tempo matters to the song.
+- If ${language} isn't English, add it as its own tag (e.g. "Japanese", "Mandarin", "German").
+- "No <instrument>" tags exclude an instrument that would otherwise be implied.
+- Read like a musician's or producer's description of a playable song, not mood prose.
+
+Answer only with the style prompt.`,
+        instructions: 'You are a YuE2 prompt designer. Answer only with the style prompt, nothing else.',
     }
 }
 
@@ -73,7 +92,7 @@ Answer only with JSON in this format:
 The rules for characters are: A character is a person or creature in the story. They have a name and a role. The role is a short description of what the character does in the story.
 Additionally, for every character:
 - "prop": if the character visibly carries or uses one distinctive physical object throughout the story (a weapon, tool, musical instrument, etc.), name it briefly (e.g. "electric guitar", "iron sword", "drum kit"). Every visible member of a band must get their actual instrument here, including drummers and other backing musicians, not just the lead. Leave it an empty string if the character carries nothing distinctive.
-- "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "other" for any other melodic instrument (guitar, piano, keys, synth, etc.). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
+- "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "guitar" for any electric/acoustic guitar, "piano" for piano/keys, "other" for anything else melodic (synth, strings, etc. - only when none of the above fit). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
 The rules for locations are: List them in order of appearance in the story. A location is a place that can be filmed as one set.
 ---
 story:

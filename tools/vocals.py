@@ -13,14 +13,18 @@
 # ///
 """Stem separation and vocal transcription for the lyrics alignment.
 
-usage: uv run tools/vocals.py separate <song.wav> <stems-dir>
+usage: uv run tools/vocals.py separate <song.wav> <stems-dir> [model] [only...]
        uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt>
        uv run tools/vocals.py activity <stem.wav>
 
-separate    demucs htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
+separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
             htdemucs_ft (the fine-tuned 4-source bag of models) gives the cleanest vocal separation of the
             demucs family - instrument bleed (e.g. guitar leaking into the vocals stem) is more common with
-            htdemucs_6s, which spends model capacity splitting out guitar/piano that this project doesn't use.
+            htdemucs_6s, which spends model capacity splitting out a dedicated guitar/piano stem instead.
+            Pass "htdemucs_6s" as [model] with "guitar" and/or "piano" as [only] to separate just those two
+            (on top of the htdemucs_ft stems already on disk, never overwriting them) when a character's prop
+            needs one - htdemucs_ft's "other" stem is too coarse (every non-drum/bass/vocal instrument at
+            once) to time a guitar's or piano's own entry against.
 transcribe  Whisper large-v3, the known lyrics as prompt. Segment-level timing only (word_timestamps=False) -
             whisper's word-level DTW alignment needs Triton kernels that are flaky/slow-to-nonexistent on
             Windows and on very new GPUs (e.g. RTX 50xx); word positions are instead spread evenly across each
@@ -68,14 +72,14 @@ def unload():
         log(f"model unloaded, {torch.cuda.memory_allocated() / 2**20:.0f} MB VRAM still allocated")
 
 
-def separate(song: str, stems_dir: str):
+def separate(song: str, stems_dir: str, model_name: str = "htdemucs_ft", only: list[str] | None = None):
     from demucs.apply import apply_model
     from demucs.pretrained import get_model
     from julius import resample_frac
 
-    model = get_model("htdemucs_ft")
+    model = get_model(model_name)
     model.to(device).eval()
-    log(f"demucs htdemucs_ft on {device}")
+    log(f"demucs {model_name} on {device}")
 
     # read with soundfile instead of torchaudio - newer torchaudio versions dropped their own audio IO
     data, sr = sf.read(song, dtype="float32", always_2d=True)
@@ -102,6 +106,8 @@ def separate(song: str, stems_dir: str):
     out = Path(stems_dir)
     out.mkdir(parents=True, exist_ok=True)
     for name, source in zip(names, sources):
+        if only and name not in only:
+            continue
         target = out / f"{name}.wav"
         sf.write(target, np.clip(source.numpy().T, -1, 1), samplerate, subtype="PCM_16")
         log(f"saved {target}")
@@ -213,8 +219,8 @@ def transcribe(vocals: str, language: str, lyrics_file: str):
 
 if __name__ == "__main__":
     command, *args = sys.argv[1:]
-    if command == "separate" and len(args) == 2:
-        separate(*args)
+    if command == "separate" and len(args) >= 2:
+        separate(args[0], args[1], args[2] if len(args) > 2 else "htdemucs_ft", args[3:] or None)
     elif command == "transcribe" and len(args) == 3:
         transcribe(*args)
     elif command == "activity" and len(args) == 1:

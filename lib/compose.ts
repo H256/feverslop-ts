@@ -1,4 +1,4 @@
-import type {Assignment, Character, Location, MusicMap, PropActivity, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
+import type {Assignment, Character, Location, MusicMap, PropActivity, PropStem, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {formatTimestamp, frameAt, round} from "./frames.ts";
 import {MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 
@@ -167,7 +167,7 @@ export function propActivityPerBeat(
     activity: PropActivity,
 ): Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]> {
     const windows = shotWindowsPerBeat({slots, mapping, beats})
-    const propped = characters.filter((c): c is Character & { prop: string, propStem: 'drums' | 'bass' | 'other' } =>
+    const propped = characters.filter((c): c is Character & { prop: string, propStem: PropStem } =>
         Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
     const result: Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]> = {}
     for (const beat of beats) {
@@ -253,6 +253,16 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         const {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices} = buildSubjects()
 
+        // <Audio 2> must cover only the time actually sung, not the whole clip - the guide warns that a reference
+        // left open over silent/instrumental stretches of the clip reads as the singer performing throughout it.
+        // Padded slightly so the on/offset word isn't clipped, clamped back into the clip's own audio file.
+        const vocalsWindow = performing ? (() => {
+            const pad = 0.2
+            const from = slot.start + Math.min(...vocals.map(v => v.start))
+            const to = slot.start + Math.max(...vocals.map(v => v.end))
+            return {start: round(Math.max(slot.start, from - pad)), end: round(Math.min(slot.end, to + pad))}
+        })() : undefined
+
         // Shots: more cuts with more energy, cut on downbeats
         const duration = round(slot.end - slot.start)
         const shotCount = shotCountFor(slot, beat, opensScene)
@@ -314,6 +324,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
 
+        // A couple of concrete, already-authored visual details from the location's own description (skipping
+        // the first comma segment, which just repeats the name) - repeated whenever a single character fills the
+        // whole frame, since a close/medium shot with nothing else in it and only a location *label* to go on
+        // tends to fall back to that character's reference picture's own plain grey background instead.
+        const locationAnchor = locationSubject
+            ? locationSubject.description.split(',').map(s => s.trim()).filter(Boolean).slice(1, 3).join(', ')
+            : undefined
+
         function buildShotTexts() {
             return shots.map((shot, j) => {
                 const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
@@ -328,7 +346,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // callout tends to fall back to the character reference pictures' plain grey background
                     : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                 const inFrame = shot.focus.length
-                    ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.`
+                    ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? `filling the frame${locationAnchor ? `, ${locationAnchor} still visible behind them` : ''}` : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.`
                     : ''
 
                 if (performing) {
@@ -376,7 +394,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
                     : `${s.label} is ${s.name}, ${s.role}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
                 `<Audio 1> is the ${slot.section} section of the song (${songPosition}) and is reused as the complete final audio track.`,
-                ...(performing ? [`<Audio 2> is the isolated lead vocal of this part of the song, the voice-timbre reference for ${voices}.`] : []),
+                ...(performing ? [`<Audio 2> is the isolated lead vocal from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song, the voice-timbre reference for ${voices} only for that span.`] : []),
                 '',
                 'summary:',
                 `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 1>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
@@ -432,7 +450,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 pictures: subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.id), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 audio: [
                     {label: '<Audio 1>', file: audioAsset(slot.id), songStart: slot.start, songEnd: slot.end},
-                    ...(performing ? [{label: '<Audio 2>', file: vocalsAsset(slot.id), songStart: slot.start, songEnd: slot.end, stem: 'vocals' as const}] : []),
+                    ...(performing ? [{label: '<Audio 2>', file: vocalsAsset(slot.id), songStart: vocalsWindow!.start, songEnd: vocalsWindow!.end, stem: 'vocals' as const}] : []),
                 ],
             },
             prompt,
