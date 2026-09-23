@@ -44,14 +44,15 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
         ...(vocals ? {'ref_audios.ref_audio_1': vocals.AUDIO} : {}),
     })
 
-    const guided = wf.MiniMaxH3AddGuide({
-        frame_idx: 0,
-        positive: references.positive,
-        latent: references.LATENT,
-        audio_vae: audioVae.VAE,
-        audio: audio.AUDIO,
-    })
-    const guider = wf.BasicGuider({model: model.MODEL, conditioning: guided.positive})
+    // this node seemed to be a test to get the full audio as guide always?
+    // const guided = wf.MiniMaxH3AddGuide({
+    //     frame_idx: 0,
+    //     positive: references.positive,
+    //     latent: references.LATENT,
+    //     audio_vae: audioVae.VAE,
+    //     audio: audio.AUDIO,
+    // })
+    const guider = wf.BasicGuider({model: model.MODEL, conditioning: references.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
     const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})

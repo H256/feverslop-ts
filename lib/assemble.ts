@@ -7,6 +7,20 @@ import {captureProcess, runProcess} from "./process.ts";
 
 export type VideoInfo = { frames: number, width: number, height: number, hasAudio: boolean }
 
+// "slot-001, slot-002, slot-004, slot-005, slot-006" -> "slot-001-002, slot-004-006" - a long run of missing
+// clips reads a lot faster as ranges than as one giant comma list
+export function formatSlotRanges(ids: string[]): string {
+    const numbered = ids.map(id => ({id, n: Number(id.match(/\d+/)?.[0])})).filter(({n}) => Number.isFinite(n))
+    const ranges: string[] = []
+    for (let i = 0; i < numbered.length; i++) {
+        let j = i
+        while (j + 1 < numbered.length && numbered[j + 1]!.n === numbered[j]!.n + 1) j++
+        ranges.push(i === j ? numbered[i]!.id : `${numbered[i]!.id}-${numbered[j]!.id.match(/\d+/)![0]}`)
+        i = j
+    }
+    return ranges.join(', ')
+}
+
 export async function probeVideo(file: string): Promise<VideoInfo> {
     const run = async (...args: string[]) => {
         const stdout = await runProcess(['ffprobe', '-v', 'error', '-of', 'json', ...args, file], {errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
@@ -47,7 +61,7 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
 }) {
     const files = clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
-    if (missing.length) throw new Error(`Can't assemble - ${missing.length} clip(s) not rendered yet: ${missing.join(', ')}`)
+    if (missing.length) throw new Error(`Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`)
 
     const infos = await Promise.all(files.map(probeVideo))
     clips.forEach((clip, i) => {

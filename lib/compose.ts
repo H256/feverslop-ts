@@ -310,17 +310,29 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             : sung.filter((_, n) => Math.floor(n * shots.length / sung.length) === j)
         const sings = (v: typeof vocals[number]) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${normalizeLyric(v.text)}</d>`
 
+        // "not playing" / "hands off it" reads as a negation to the video model, which tends to render the
+        // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
+        // position actually stops the miming. Rotated for variety across shots, never the same phrase twice
+        // running. Phrased without assuming human anatomy or clothing (no "pocket", no "hip") - the performer
+        // behind a propStem isn't always a person in a jacket.
+        const idlePropPoses = [
+            (prop: string) => `holds the ${prop} loosely, perfectly still`,
+            (prop: string) => `lets the ${prop} hang motionless at their side`,
+            (prop: string) => `rests the ${prop} against their body, unmoving`,
+            (prop: string) => `keeps the ${prop} still, hands quiet`,
+        ]
+
         // Deterministic fallback for prop activity: step 9b writes one moment sentence per shot and can't know
         // ahead of time who pickFocus ends up putting in frame here - so a focused character's stem-bound prop
         // can go unaddressed even though 9b was given the same activity data. For anyone left unaddressed, state
         // their prop's real audio state plainly, using their own prop name - never a fixed verb per instrument.
-        function propNote(focus: typeof castSubjects, start: number, end: number, moment: string): string {
+        function propNote(focus: typeof castSubjects, start: number, end: number, moment: string, shotIndex: number): string {
             if (!propActivity) return ''
             const notes = focus
                 .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length && !names(s).test(moment))
                 .map(s => `${s.label}, ${s.name}, ${isActive({start, end}, propActivity[s.propStem!]!)
                     ? `is actively using the ${s.prop} right now`
-                    : `is not playing the ${s.prop} right now, hands off it`}.`)
+                    : idlePropPoses[shotIndex % idlePropPoses.length]!(s.prop!)}.`)
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
 
@@ -335,7 +347,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildShotTexts() {
             return shots.map((shot, j) => {
                 const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
-                const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment)
+                const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment, j)
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const opening = j === 0
@@ -377,7 +389,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // reads as the subjects vanishing and popping back in mid-scene. Only the opening clip gets it as-is.
             const sceneClause = opensScene
                 ? withLabels(beat.summary)
-                : `The scene continues directly from the previous clip, with no cut in time or place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} - nobody enters, appears or emerges in this clip.`
+                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
@@ -385,27 +397,31 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // frame 1 already shows everyone. Continuation clips (sceneClause above) already say this explicitly.
             const entranceWords = /\b(emerge[sd]?|emerging|appear(s|ed|ing)?|enter(s|ed|ing)?|arriv(es?|ed|ing)|materiali[sz](es?|ed|ing)|steps? into (the )?frame|walks? into (the )?frame|fades? in|comes? into view)\b/i
             const alreadyPresentNote = opensScene && !entranceWords.test(sceneClause)
-                ? 'Unless a shot below explicitly describes a subject entering, arriving or emerging, every listed subject is already fully visible, in position and mid-action starting from the very first frame - nobody pops or fades into view.'
+                ? 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
                 : undefined
 
             return [
                 'subject_definitions:',
                 ...subjects.map(s => s.kind === 'location'
                     ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
-                    : `${s.label} is ${s.name}, ${s.role}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
+                    // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
+                    // appearance - a subject definition that says a character "plays" something reads as a
+                    // standing trait to the video model, and it keeps them miming that action even in shots
+                    // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
+                    : `${s.label} is ${s.name}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
                 `<Audio 1> is the ${slot.section} section of the song (${songPosition}) and is reused as the complete final audio track.`,
                 ...(performing ? [`<Audio 2> is the isolated lead vocal from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song, the voice-timbre reference for ${voices} only for that span.`] : []),
                 '',
                 'summary:',
-                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 1>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
+                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 2>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
                 '',
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
                     : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
-                '<Audio 1>: reference - <Audio 1> Use the supplied original song only for beat, rhythm, and dynamic timing continuity without copying the source signal.',
+                `<Audio 1>: reference - <Audio 1> only grounds the acting, blocking and cut timing in the song's beat, rhythm and mood.${performing ? ' Mouth and lip movement follow <Audio 2> alone.' : ''}`,
                 // the guide: no (Sx) in retention_analysis
-                ...(performing ? [`<Audio 2>: partially_copy - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))}.`] : []),
+                ...(performing ? [`<Audio 2>: partially_copy - its timbre, phrasing and exact timing are copied into the lip movements of ${joinAnd(singerSubjects.map(s => s.label))} for the span it covers.`] : []),
                 '',
                 'detailed_description:',
                 styleOpening(lookBrief),

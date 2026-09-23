@@ -59,18 +59,26 @@ export const log = {
         print(lines.join('\n'))
     },
     /** A bad --flag/argument: a loud red box with the problem and how to call the script correctly, then exits. */
-    usageError: (message: string, usage: string): never => {
-        clearBoard()
-        const border = style('red')
-        const title = style(['bold', 'white', 'bgRed'])
-        const heading = ' ✗ BAD USAGE '
-        console.error(`\n${border('╭─')}${title(heading)}${border(`${'─'.repeat(Math.max(0, boxWidth - heading.length))}╮`)}`)
-        for (const line of wrap(message.trim(), boxWidth)) console.error(`${border('│')} ${styles.warning(line.padEnd(boxWidth))} ${border('│')}`)
-        console.error(border(`├${'─'.repeat(boxWidth + 2)}┤`))
-        for (const line of wrap(usage.trim(), boxWidth)) console.error(`${border('│')} ${styles.muted(line.padEnd(boxWidth))} ${border('│')}`)
-        console.error(border(`╰${'─'.repeat(boxWidth + 2)}╯\n`))
-        process.exit(1)
-    },
+    usageError: (message: string, usage: string): never => errorBox(' ✗ BAD USAGE ', [
+        {text: message, style: styles.warning},
+        {text: usage, style: styles.muted},
+    ]),
+    /** Any other uncaught runtime failure (a rejected step, a missing file, ...) - the same loud red box, just
+     * without a usage line, instead of Bun's raw stack-trace dump. */
+    fatal: (message: string): never => errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}]),
+}
+
+function errorBox(heading: string, sections: { text: string, style: (s: string) => string }[]): never {
+    clearBoard()
+    const border = style('red')
+    const title = style(['bold', 'white', 'bgRed'])
+    console.error(`\n${border('╭─')}${title(heading)}${border(`${'─'.repeat(Math.max(0, boxWidth - heading.length))}╮`)}`)
+    sections.forEach(({text, style: lineStyle}, i) => {
+        if (i > 0) console.error(border(`├${'─'.repeat(boxWidth + 2)}┤`))
+        for (const line of wrap(text.trim(), boxWidth)) console.error(`${border('│')} ${lineStyle(line.padEnd(boxWidth))} ${border('│')}`)
+    })
+    console.error(border(`╰${'─'.repeat(boxWidth + 2)}╯\n`))
+    process.exit(1)
 }
 
 /**

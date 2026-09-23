@@ -140,10 +140,11 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
 }
 
 /**
- * Times for the unmatched words, in place. A run of unmatched words between two matched ones is split: the
- * words of the previous matched word's section follow it, the rest lead up to the next matched word - so an
- * unheard line before an instrumental gap doesn't get stretched over the whole gap. When `activity` covers part
- * of that gap, the words are further narrowed to the loudest overlapping range instead of spread across the gap.
+ * Times for the unmatched words, in place. When `activity` covers enough of the gap between the two matched
+ * neighbours, the run is spread proportionally across every real activity range in that gap (see
+ * `spreadOverActivity`) - grounded in actual singing/screaming, not guesswork. Otherwise it falls back to a
+ * blind split: the words of the previous matched word's section follow it, the rest lead up to the next
+ * matched word - so an unheard line before an instrumental gap doesn't get stretched over the whole gap.
  */
 function interpolate(words: TimedWord[], sectionOf: number[], activity?: ActivityRange[]) {
     const known = (i: number) => !Number.isNaN(words[i]!.start)
@@ -154,11 +155,17 @@ function interpolate(words: TimedWord[], sectionOf: number[], activity?: Activit
         const count = b - a + 1
         const prev = a > 0 ? a - 1 : undefined
         const next = b + 1 < words.length ? b + 1 : undefined
-        let lo = prev !== undefined ? words[prev]!.end : Math.max(0, words[next!]!.start - count * TYPICAL_WORD_SEC)
-        let hi = next !== undefined ? words[next]!.start : lo + count * TYPICAL_WORD_SEC
-        if (activity?.length) [lo, hi] = clampToActivity(lo, hi, activity, count)
-        const per = Math.max(0, Math.min(TYPICAL_WORD_SEC, (hi - lo) / count))
+        const lo = prev !== undefined ? words[prev]!.end : Math.max(0, words[next!]!.start - count * TYPICAL_WORD_SEC)
+        const hi = next !== undefined ? words[next]!.start : lo + count * TYPICAL_WORD_SEC
 
+        const spread = activity?.length ? spreadOverActivity(lo, hi, count, activity) : undefined
+        if (spread) {
+            for (let i = a; i <= b; i++) Object.assign(words[i]!, spread[i - a])
+            a = b
+            continue
+        }
+
+        const per = Math.max(0, Math.min(TYPICAL_WORD_SEC, (hi - lo) / count))
         let split = a
         if (next === undefined) split = b + 1
         else if (prev !== undefined) while (split <= b && sectionOf[split] === sectionOf[prev]) split++
@@ -168,22 +175,36 @@ function interpolate(words: TimedWord[], sectionOf: number[], activity?: Activit
     }
 }
 
-// Narrows [lo, hi] to the activity range it overlaps most, when that leaves enough room for `count` words -
-// a too-narrow overlap is discarded rather than stacking every word on top of each other
-function clampToActivity(lo: number, hi: number, activity: ActivityRange[], count: number): [number, number] {
-    let best: ActivityRange | undefined
-    let bestOverlap = 0
-    for (const range of activity) {
-        const overlap = Math.min(hi, range.end) - Math.max(lo, range.start)
-        if (overlap > bestOverlap) {
-            bestOverlap = overlap
-            best = range
-        }
+// Spreads `count` words proportionally (by duration) across every activity range that overlaps [lo, hi] - a
+// gap can straddle several separate sung/screamed bursts, and packing every word into just the loudest one
+// (the old behaviour) silently ignored the rest. Falls back to undefined (blind spread) when the real overlap
+// is too thin to place `count` words in without stacking them on top of each other.
+function spreadOverActivity(lo: number, hi: number, count: number, activity: ActivityRange[]): { start: number, end: number }[] | undefined {
+    const segments = activity
+        .map(r => ({start: Math.max(lo, r.start), end: Math.min(hi, r.end)}))
+        .filter(r => r.end > r.start)
+    const total = segments.reduce((sum, s) => sum + (s.end - s.start), 0)
+    if (!segments.length || total < count * 0.15) return undefined
+
+    // words per segment, proportional to its share of the covered duration - largest fractional remainder
+    // first, so the per-segment counts always add up to exactly `count`
+    const raw = segments.map(s => count * (s.end - s.start) / total)
+    const counts = raw.map(Math.floor)
+    let remaining = count - counts.reduce((a, b) => a + b, 0)
+    for (const [, i] of raw.map((r, i) => [r - counts[i]!, i] as const).sort((a, b) => b[0] - a[0])) {
+        if (remaining <= 0) break
+        counts[i]!++
+        remaining--
     }
-    if (!best) return [lo, hi]
-    const clampedLo = Math.max(lo, best.start)
-    const clampedHi = Math.min(hi, best.end)
-    return clampedHi - clampedLo >= count * 0.15 ? [clampedLo, clampedHi] : [lo, hi]
+
+    const words: { start: number, end: number }[] = []
+    segments.forEach((seg, i) => {
+        const n = counts[i]!
+        if (!n) return
+        const per = Math.min(TYPICAL_WORD_SEC, (seg.end - seg.start) / n)
+        for (let w = 0; w < n; w++) words.push({start: round(seg.start + w * per), end: round(seg.start + (w + 1) * per)})
+    })
+    return words.length === count ? words : undefined
 }
 
 /**
@@ -204,9 +225,12 @@ export function refineSections(music: MusicMap, lyricSections: LyricSection[], t
     const snapUp = (t: number) => downbeats.find(d => d >= t - tolerance) ?? music.durationSec
 
     const linesOf = (i: number) => timing.lines.filter(l => l.sectionIndex === i)
+    // a first line with confidence 0 was never actually heard - it's fully interpolated, spread across
+    // whatever activity happened to overlap a (possibly huge) gap between real matches elsewhere in the song,
+    // and isn't grounded enough to anchor where the section itself starts - the acoustic estimate is safer
     const vocalStart = estimated.map((_, i) => {
         const first = linesOf(i)[0]
-        return first ? snapDown(first.start) : undefined
+        return first && first.confidence > 0 ? snapDown(first.start) : undefined
     })
 
     const starts: number[] = []

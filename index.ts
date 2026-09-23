@@ -19,6 +19,11 @@ import {
     lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
+// any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
+// as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
+process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
+process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+
 // hardware limit: the longest clip the video model can generate in one go
 const MAX_CLIP_SEC = 10
 
@@ -333,7 +338,7 @@ Aim for about ${Math.max(6, Math.round(lyricSections.length * 1.5))} beats that 
 
 For every beat give:
 - "summary": what visibly happens, 1-3 sentences, present tense.
-- "moments": 2-6 short sentences, in order, each one visible action that a camera can film (e.g. "Thorin raises his hammer and strikes the sealed gate."). Name characters by their name. These are spread over the video clips of the beat, so together they must tell the whole beat.
+- "moments": 2-6 short sentences, in order, each one visible action that a camera can film. Name characters by their name. These are spread over the video clips of the beat, so together they must tell the whole beat. Describe the mechanics of any contact between two things, not just the outcome - the direction and path of the movement, what it meets and how, and the immediate physical reaction: not "Thorin raises his hammer and strikes the sealed gate." but "Thorin swings his hammer in a wide overhead arc, the head crashing into the gate's iron sigil, which cracks and showers sparks across the steps."
 - "locationId": exactly one of the location ids below.
 - "characterIds": ids of the characters on screen, only from the list below.
 - "intensity": 0.0 (calm, quiet) to 1.0 (climax), used to match the loudness of the music.
@@ -410,13 +415,18 @@ const beatProps = propActivity ? propActivityPerBeat({slots: timeline.slots, map
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
     const extracted = await askJson<{ moments: Record<string, string[]> }>({
-        reasoning: 'medium',
+        reasoning: 'high',
         maxTokens: 16384,
         input: `For every story beat below, expand it into a shot list for a music video: exactly "shotsNeeded" short sentences, in order, one concrete visible action per shot.
 
 Rules:
 - Each shot must show real physical progression from the one before it - never repeat, restate or merely rephrase the previous shot's action, and never describe the camera or a held/static moment.
 - Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, the shots must show a real dramatic encounter across the sequence: fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear) - not characters standing and staring.
+- A shot naming only the outcome of contact between two things ("hits the dragon with a sword", "grabs the ledge") reads as flat and unconvincing on screen - describe the mechanics instead: the direction and path of the movement (a low arc from the left, an overhead swing, a lunge), what it meets and how (deflects off armored scales, cuts into flesh, is caught on a raised shield), and the immediate physical reaction (staggers back, sends sparks flying, the blade skids off and rebounds). Do this for every strike, grab, fall or collision a shot describes, not only in combat.
+  Weak: "Kara hits the dragon with her sword."
+  Strong: "Kara swings her sword in a low arc from the right, the blade skidding off the dragon's armored foreleg scales in a shower of sparks."
+  Weak: "Tom grabs the ledge as he falls."
+  Strong: "Tom's fingers close around the crumbling ledge, his body swinging hard into the cliff face as his grip catches him."
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
 - Name characters by their name (not pronouns), so every shot reads on its own.
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.

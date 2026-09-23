@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.13"
-# dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "openai-whisper>=20250625", "soundfile", "numpy", "librosa>=0.10"]
+# dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "soundfile", "numpy", "librosa>=0.10"]
 #
 # [tool.uv.sources]
 # torch = { index = "pytorch-cu130" }
@@ -16,6 +16,7 @@
 usage: uv run tools/vocals.py separate <song.wav> <stems-dir> [model] [only...]
        uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt>
        uv run tools/vocals.py activity <stem.wav>
+       uv run tools/vocals.py draft <vocals.wav> <language>
 
 separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
             htdemucs_ft (the fine-tuned 4-source bag of models) gives the cleanest vocal separation of the
@@ -25,10 +26,12 @@ separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,ot
             (on top of the htdemucs_ft stems already on disk, never overwriting them) when a character's prop
             needs one - htdemucs_ft's "other" stem is too coarse (every non-drum/bass/vocal instrument at
             once) to time a guitar's or piano's own entry against.
-transcribe  Whisper large-v3, the known lyrics as prompt. Segment-level timing only (word_timestamps=False) -
-            whisper's word-level DTW alignment needs Triton kernels that are flaky/slow-to-nonexistent on
-            Windows and on very new GPUs (e.g. RTX 50xx); word positions are instead spread evenly across each
-            segment, matching how the alignment step already interpolates words it can't pin down exactly.
+transcribe  faster-whisper (CTranslate2) large-v3, the known lyrics as a hotwords hint, word-level timing.
+            faster-whisper's "hotwords" (not "initial_prompt") are re-injected into every ~30s window
+            regardless of condition_on_previous_text, so the known lyrics keep steering the whole song, not
+            just the first window - openai-whisper needed a separate carry_initial_prompt flag for that.
+            A segment that comes back without word timings falls back to spreading its words evenly across it,
+            matching how the alignment step already interpolates words it can't pin down exactly.
             Also runs an RMS-energy vocal activity detection on the same audio (independent of whisper) - for
             growled/screamed vocals whisper often transcribes nothing at all, but the alignment step can still
             place interpolated words inside a real detected-activity window instead of guessing blind.
@@ -37,6 +40,12 @@ activity    The same RMS-energy activity detection, run standalone on any stem (
             other.wav) - used to ground a band member's on-screen instrument use in whether it is actually
             audible at that point in the song, instead of playing continuously through every shot.
             Prints {"activity": [{"start", "end"}]} as JSON.
+draft       For a song whose lyrics are lost (e.g. an old AceStep/Suno generation) - unbiased transcription,
+            no lyrics file, no hotwords hint, so purely what whisper actually hears. Prints one timestamped
+            line per whisper segment to stdout, meant to be read and hand-edited into a proper lyrics.txt
+            (merging/splitting lines, adding [Section] tags) - no tool can reliably guess song structure, but
+            turning a rough transcript into clean lyrics by ear is quick for a human. Run "separate" first to
+            get the vocals stem.
 
 Runs on CUDA if available (PyTorch cu130 wheels - cu128 builds are missing precompiled kernels for RTX 50xx/
 Blackwell (sm_120), which forces slow driver-side PTX JIT compilation on every CUDA call), else on the CPU.
@@ -44,12 +53,17 @@ The models are downloaded on first use: demucs ~80 MB, whisper large-v3 ~3 GB.
 Progress goes to stderr, stdout only carries the result.
 """
 import gc
-import inspect
 import json
 import math
+import os
 import re
 import sys
 from pathlib import Path
+
+# huggingface_hub defaults to symlinking its cache, which needs Developer Mode or admin rights on Windows and
+# otherwise fails the model download outright (WinError 1314) - copy the files instead. Must be set before
+# huggingface_hub (pulled in transitively by faster_whisper) is imported anywhere.
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
 
 import numpy as np
 import soundfile as sf
@@ -162,19 +176,19 @@ def lyrics_prompt(lyrics_file: str) -> str:
 
 
 def transcribe(vocals: str, language: str, lyrics_file: str):
-    import whisper
+    from faster_whisper import WhisperModel
 
-    model = whisper.load_model("large-v3", device=device)
-    log(f"whisper large-v3 on {device}")
-    options = dict(
+    model = WhisperModel("large-v3", device=device, compute_type="float16" if device == "cuda" else "int8")
+    log(f"faster-whisper large-v3 on {device}")
+    segments, _info = model.transcribe(
+        vocals,
         language=language,
-        # word-level timing comes from whisper's DTW cross-attention alignment, which needs Triton kernels -
-        # unavailable on Windows without extra setup, and unreliably slow (JIT recompiles, CPU fallback) on very
-        # new GPUs. Segment-level timing is plenty: growled/screamed vocals rarely get confident per-word matches
-        # anyway, and unmatched words are already interpolated further down the pipeline (lib/lyrics.ts)
-        word_timestamps=False,
+        # word-level timing, straight from faster-whisper - no Triton dependency, no extra flag needed
+        word_timestamps=True,
         condition_on_previous_text=False,
-        initial_prompt=lyrics_prompt(lyrics_file) or None,
+        # hotwords (not initial_prompt) get re-injected into every ~30s window regardless of
+        # condition_on_previous_text - the known lyrics keep steering transcription through the whole song
+        hotwords=lyrics_prompt(lyrics_file) or None,
         hallucination_silence_threshold=2.0,
         # harsh/screamed vocals often don't score as "speech" to whisper's no-speech gate, so it silently skips
         # the whole segment instead of transcribing it - raised (default 0.6) so it still attempts a transcript;
@@ -182,39 +196,75 @@ def transcribe(vocals: str, language: str, lyrics_file: str):
         # for the same problem - stricter than whisper's defaults, guards against repeat-loop hallucinations like
         # "no honor in fire no honor in fire ..." on hard-to-parse screamed vocals)
         no_speech_threshold=0.75,
-        logprob_threshold=-0.5,
+        log_prob_threshold=-0.5,
         compression_ratio_threshold=2.0,
-        temperature=0,
-        fp16=device == "cuda",
-        verbose=False,  # False (not None) shows whisper's own tqdm progress bar on stderr, without a full transcript dump
+        # left at faster-whisper's own default (a temperature fallback ladder, not a fixed value) - pinning
+        # this to 0 disables that ladder, so a bad/looping greedy decode (e.g. "the silence of hell" repeated
+        # ~15x) never gets retried at a higher temperature the way whisper normally would recover from it
     )
-    # newer whisper versions can keep the prompt for every 30 s window, not only the first
-    if "carry_initial_prompt" in inspect.signature(whisper.transcribe).parameters:
-        options["carry_initial_prompt"] = True
-    result = model.transcribe(whisper.load_audio(vocals), **options)
-    del model
-    unload()
 
-    # no per-word timing from whisper (word_timestamps=False) - spread each segment's words evenly across it,
-    # the same way lib/lyrics.ts interpolates words it can't match to the transcript
+    # per-word timing from faster-whisper - falls back to spreading a segment's words evenly across it (same as
+    # lib/lyrics.ts interpolates words it can't match) only if that segment came back without one
     words = []
-    for segment in result["segments"]:
-        text_words = segment["text"].split()
+    for segment in segments:
+        segment_words = segment.words or []
+        if segment_words:
+            words.extend({
+                "text": w.word.strip(),
+                "start": round(w.start, 3),
+                "end": round(w.end, 3),
+                "probability": round(w.probability, 3),
+            } for w in segment_words if w.word.strip())
+            continue
+        text_words = segment.text.split()
         if not text_words:
             continue
-        start, end = float(segment["start"]), float(segment["end"])
+        start, end = segment.start, segment.end
         step = (end - start) / len(text_words)
-        probability = round(math.exp(float(segment.get("avg_logprob", 0.0))), 3)
+        probability = round(math.exp(segment.avg_logprob), 3)
         words.extend({
             "text": w,
             "start": round(start + i * step, 3),
             "end": round(start + (i + 1) * step, 3),
             "probability": probability,
         } for i, w in enumerate(text_words))
+    del model
+    unload()
     log(f"{len(words)} words")
     activity = vocal_activity(vocals)
     log(f"{len(activity)} vocal-activity range(s) from RMS energy")
     print(json.dumps({"words": words, "activity": activity}))
+
+
+def format_time(seconds: float) -> str:
+    m, s = divmod(round(seconds), 60)
+    return f"{m}:{s:02d}"
+
+
+def draft(vocals: str, language: str):
+    from faster_whisper import WhisperModel
+
+    model = WhisperModel("large-v3", device=device, compute_type="float16" if device == "cuda" else "int8")
+    log(f"faster-whisper large-v3 on {device}")
+    # no lyrics file, no hotwords - nothing to bias the decode towards, just whatever whisper actually hears
+    segments, _info = model.transcribe(
+        vocals,
+        language=language,
+        condition_on_previous_text=False,
+        hallucination_silence_threshold=2.0,
+        no_speech_threshold=0.75,
+        log_prob_threshold=-0.5,
+        compression_ratio_threshold=2.0,
+    )
+    n = 0
+    for segment in segments:
+        text = segment.text.strip()
+        if text:
+            n += 1
+            print(f"[{format_time(segment.start)}] {text}")
+    del model
+    unload()
+    log(f"{n} line(s) - silent/unintelligible stretches (screams, growls, instrumentals) print nothing")
 
 
 if __name__ == "__main__":
@@ -225,5 +275,7 @@ if __name__ == "__main__":
         transcribe(*args)
     elif command == "activity" and len(args) == 1:
         print(json.dumps({"activity": vocal_activity(*args)}))
+    elif command == "draft" and len(args) == 2:
+        draft(*args)
     else:
         sys.exit(__doc__)
