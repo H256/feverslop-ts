@@ -6,8 +6,8 @@ import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {type Character, type Location, ProjectStore, type Singing, type StepName, type StoryBeat} from "./lib/project.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateStems, transcribeVocals} from "./lib/music.ts";
-import {buildClipRequests, countShotsPerBeat, pictureAsset} from "./lib/compose.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {buildClipRequests, countShotsPerBeat, pictureAsset, propActivityPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
@@ -24,25 +24,33 @@ const MAX_CLIP_SEC = 10
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
-const {values: args, positionals} = parseArgs({
-    args: Bun.argv.slice(2),
-    allowPositionals: true,
-    options: {
-        redo: {type: 'string', default: ''},
-        render: {type: 'string', default: ''},
-        only: {type: 'string', default: ''},
-        'llm-url': {type: 'string'},
-        'llm-key': {type: 'string'},
-        'llm-model': {type: 'string'},
-        comfy: {type: 'string'},
-        // skips step 9b and spreads/reuses beat.moments across shots the old way - a fallback while 9b is new
-        'legacy-moments': {type: 'boolean', default: false},
-    },
-})
+const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=images,videos,final|all] [--only=slot-001,slot-002]
+             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]`
+const {values: args, positionals} = (() => {
+    try {
+        return parseArgs({
+            args: Bun.argv.slice(2),
+            allowPositionals: true,
+            options: {
+                redo: {type: 'string', default: ''},
+                render: {type: 'string', default: ''},
+                only: {type: 'string', default: ''},
+                'llm-url': {type: 'string'},
+                'llm-key': {type: 'string'},
+                'llm-model': {type: 'string'},
+                comfy: {type: 'string'},
+                // skips step 9b and spreads/reuses beat.moments across shots the old way - a fallback while 9b is new
+                'legacy-moments': {type: 'boolean', default: false},
+            },
+        })
+    } catch (e) {
+        log.usageError(e instanceof Error ? e.message : String(e), usage)
+    }
+})()
 // --render=all is images, videos and the final video, in that order
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
-if (unknownRender.length) throw new Error(`--render: unknown ${unknownRender.join(', ')} - use images, videos, final or all`)
+if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
 const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920')
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
@@ -150,16 +158,34 @@ log.box('Summary', storySummary)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
 const cast = await project.step('cast', '3 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
-    const extracted = await askJson<{ characters: Omit<Character, 'id'>[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase))
+    const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase))
+    const stemNames = new Set(['drums', 'bass', 'other'])
     return {
-        characters: extracted.characters.map(c => ({id: toId(c.name), ...c})),
+        characters: extracted.characters.map(c => ({
+            id: toId(c.name), name: c.name, role: c.role,
+            ...(c.prop ? {prop: c.prop} : {}),
+            ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as 'drums' | 'bass' | 'other'} : {}),
+        })),
         locations: extracted.locations.map(l => ({id: toId(l.name), ...l})),
     }
 })
 log.step('Characters', styles.muted(`(${cast.characters.length})`))
-for (const c of cast.characters) console.log(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}`)
+for (const c of cast.characters) console.log(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}`) : ''}`)
 log.step('Locations', styles.muted(`(${cast.locations.length})`))
 for (const l of cast.locations) console.log(`   ${styles.name(l.id)}`)
+
+////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
+const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is 'drums' | 'bass' | 'other' => Boolean(s)))]
+const propActivity = stems && neededStems.length ? await project.step('propActivity', '3c · DETECTING INSTRUMENT ACTIVITY', async () => {
+    const result: NonNullable<typeof project.data.propActivity> = {}
+    for (const stemName of neededStems) {
+        log.step('Analyzing', styles.muted(stems[stemName]))
+        result[stemName] = await stemActivity(join(project.dir, stems[stemName]))
+    }
+    return result
+}) : undefined
+if (propActivity) for (const [stemName, ranges] of Object.entries(propActivity)) log.step('Activity', styles.muted(`${stemName}: ${ranges!.length} range(s) from RMS energy`))
+else if (neededStems.length) log.warn(`${neededStems.length} character(s) have an audible instrument prop, but stems weren't separated (set "alignLyrics": true in config.json) - instruments will be shown playing throughout`)
 
 ////////// CHOOSING THE SINGERS - performance mode only
 const singing = config.singers.length ? await project.step('singing', '3b · CHOOSING THE SINGERS', () => chooseSingers(config.singers)) : undefined
@@ -306,6 +332,7 @@ for (const slot of timeline.slots) {
 // beat.moments (2-6 sentences) is written before the beat's shot count is known, so a beat can end up covering far
 // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
+const beatProps = propActivity ? propActivityPerBeat({slots: timeline.slots, mapping, beats, characters: cast.characters}, propActivity) : undefined
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '9b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
     const extracted = await askJson<{ moments: Record<string, string[]> }>({
@@ -318,11 +345,16 @@ Rules:
 - Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, the shots must show a real dramatic encounter across the sequence: fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear) - not characters standing and staring.
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
 - Name characters by their name (not pronouns), so every shot reads on its own.
+- A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
 
 Answer only with JSON: {"moments": {"<beatId>": ["shot 1 action", "shot 2 action", ...]}}
 ---
 beats:
-${JSON.stringify(beats.map(b => ({id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId, shotsNeeded: shotCounts[b.id] ?? 1})))}`,
+${JSON.stringify(beats.map(b => ({
+            id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
+            shotsNeeded: shotCounts[b.id] ?? 1,
+            ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
+        })))}`,
         instructions: 'You are a music video director turning story beats into a shot list. Answer only with JSON.',
     })
 

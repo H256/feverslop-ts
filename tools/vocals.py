@@ -15,6 +15,7 @@
 
 usage: uv run tools/vocals.py separate <song.wav> <stems-dir>
        uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt>
+       uv run tools/vocals.py activity <stem.wav>
 
 separate    demucs htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
             htdemucs_ft (the fine-tuned 4-source bag of models) gives the cleanest vocal separation of the
@@ -28,6 +29,10 @@ transcribe  Whisper large-v3, the known lyrics as prompt. Segment-level timing o
             growled/screamed vocals whisper often transcribes nothing at all, but the alignment step can still
             place interpolated words inside a real detected-activity window instead of guessing blind.
             Prints {"words": [{"text", "start", "end", "probability"}], "activity": [{"start", "end"}]} as JSON.
+activity    The same RMS-energy activity detection, run standalone on any stem (e.g. drums.wav, bass.wav,
+            other.wav) - used to ground a band member's on-screen instrument use in whether it is actually
+            audible at that point in the song, instead of playing continuously through every shot.
+            Prints {"activity": [{"start", "end"}]} as JSON.
 
 Runs on CUDA if available (PyTorch cu130 wheels - cu128 builds are missing precompiled kernels for RTX 50xx/
 Blackwell (sm_120), which forces slow driver-side PTX JIT compilation on every CUDA call), else on the CPU.
@@ -212,5 +217,7 @@ if __name__ == "__main__":
         separate(*args)
     elif command == "transcribe" and len(args) == 3:
         transcribe(*args)
+    elif command == "activity" and len(args) == 1:
+        print(json.dumps({"activity": vocal_activity(*args)}))
     else:
         sys.exit(__doc__)

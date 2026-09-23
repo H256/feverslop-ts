@@ -37,10 +37,13 @@ You need to extract all characters and their role in the story.
 Furthermore you need to extract all locations from the story.
 Answer only with JSON in this format:
 {
-    "characters": [{"name": "", "role": ""}],
+    "characters": [{"name": "", "role": "", "prop": "", "propStem": ""}],
     "locations": [{"name": ""}]
 }
 The rules for characters are: A character is a person or creature in the story. They have a name and a role. The role is a short description of what the character does in the story.
+Additionally, for every character:
+- "prop": if the character visibly carries or uses one distinctive physical object throughout the story (a weapon, tool, musical instrument, etc.), name it briefly (e.g. "electric guitar", "iron sword", "drum kit"). Every visible member of a band must get their actual instrument here, including drummers and other backing musicians, not just the lead. Leave it an empty string if the character carries nothing distinctive.
+- "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "other" for any other melodic instrument (guitar, piano, keys, synth, etc.). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
 The rules for locations are: List them in order of appearance in the story. A location is a place that can be filmed as one set.
 ---
 story:

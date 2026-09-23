@@ -58,6 +58,19 @@ export const log = {
         lines.push(border(`╰${'─'.repeat(boxWidth + 2)}╯`))
         print(lines.join('\n'))
     },
+    /** A bad --flag/argument: a loud red box with the problem and how to call the script correctly, then exits. */
+    usageError: (message: string, usage: string): never => {
+        clearBoard()
+        const border = style('red')
+        const title = style(['bold', 'white', 'bgRed'])
+        const heading = ' ✗ BAD USAGE '
+        console.error(`\n${border('╭─')}${title(heading)}${border(`${'─'.repeat(Math.max(0, boxWidth - heading.length))}╮`)}`)
+        for (const line of wrap(message.trim(), boxWidth)) console.error(`${border('│')} ${styles.warning(line.padEnd(boxWidth))} ${border('│')}`)
+        console.error(border(`├${'─'.repeat(boxWidth + 2)}┤`))
+        for (const line of wrap(usage.trim(), boxWidth)) console.error(`${border('│')} ${styles.muted(line.padEnd(boxWidth))} ${border('│')}`)
+        console.error(border(`╰${'─'.repeat(boxWidth + 2)}╯\n`))
+        process.exit(1)
+    },
 }
 
 /**

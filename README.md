@@ -120,6 +120,7 @@ bun index.ts --redo=beats             # regenerate a step and everything built o
 bun index.ts --redo=story,lookBrief   # several at once
 bun index.ts --render=all             # also render with ComfyUI and assemble final.mp4, see below
 bun index.ts --legacy-moments         # skip step 9b, spread beat.moments across shots the old way
+bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity after editing prop/propStem by hand
 ```
 
 Finished steps are cached in `project.json` and skipped on the next run - a run that breaks halfway continues where it
@@ -160,8 +161,9 @@ The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_
 | 0c | `lyricsTiming`   | The known lyrics aligned to the transcript: start and end of every line and word ¹ | transcript                   |
 | 1  | `story`          | Story from lyrics and/or story idea                                              | –                            |
 | 2  | `summary`        | Short summary                                                                    | story                        |
-| 3  | `cast`           | Characters and locations with ids                                                | story                        |
+| 3  | `cast`           | Characters and locations with ids, each character's `prop` and, if it's a heard instrument, its `propStem` ⁴ | story |
 | 3b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
+| 3c | `propActivity`   | RMS-energy activity ranges per instrument stem claimed by a character ¹ ⁴        | stems, cast                  |
 | 4  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
 | 5  | `characterLooks` | Krea 2 prompt per character (reference sheet, plain background)                  | cast, lookBrief              |
 | 5b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
@@ -170,11 +172,13 @@ The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_
 | 7  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
 | 8  | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 9  | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
-| 9b | `shotMoments`    | One distinct, progressing action per shot per beat, replacing `beat.moments` ³   | beats, timeline, mapping     |
+| 9b | `shotMoments`    | One distinct, progressing action per shot per beat, replacing `beat.moments` ³   | beats, timeline, mapping, propActivity |
 | 10 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
 ¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings ·
-³ skipped with `--legacy-moments`, which spreads/reuses `beat.moments` across shots instead (the old behavior)
+³ skipped with `--legacy-moments`, which spreads/reuses `beat.moments` across shots instead (the old behavior) ·
+⁴ only when at least one character's `prop` is a musical instrument actually heard in the song - see
+[Band members and instruments](#band-members-and-instruments)
 
 Steps 1–7 and 9b use the LLM (3b only for `"auto"` or several singers), all others are plain code.
 
@@ -375,6 +379,46 @@ models: demucs ≈ 80 MB, Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separati
 transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
 Without CUDA they run on the CPU, much slower.
 
+## Band members and instruments
+
+When a character's `prop` in `project.json` (step 3, `cast`) is a musical instrument that's actually heard in the
+song, its on-screen use is grounded in whether that instrument is audible at each point in the song, instead of the
+video model showing it played continuously through every shot:
+
+```json
+{ "id": "drummer", "name": "Drummer", "role": "…", "prop": "drum kit", "propStem": "drums" }
+```
+
+- `prop` - any distinctive object a character carries or uses (a weapon, a tool, an instrument, …), named briefly.
+  Set for every visible band member, including backing musicians - step 3 is asked explicitly not to skip the
+  drummer or other non-lead instruments.
+- `propStem` - only for a `prop` that is a musical instrument actually part of the song: `"drums"`, `"bass"`, or
+  `"other"` (guitar, keys, synth and every other melodic instrument - Demucs' 4-stem separation can't split those
+  further, so they share one activity signal). Leave empty for a non-instrument prop, an instrument not heard in the
+  song, or whenever the story isn't a band performing live - the whole feature stays off then.
+
+What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
+[config.json](#configjson) - stems must already be separated):
+
+1. **Instrument activity** (`3c`): the same RMS-energy activity detection used for the vocals stem
+   (`tools/vocals.py activity`) runs on every stem a `propStem` claims (`drums.wav`, `bass.wav`, `other.wav`) -
+   no extra model, just the stems already separated in step `0a`.
+2. **Shots** (`9b`): for every beat, each on-screen character with a `propStem` gets one active/inactive flag per
+   shot, from whether that stem is active over more than half the shot's estimated duration. The LLM is told to show
+   the character actively using the prop only on an active shot - it picks the verb itself (playing, strumming,
+   striking, …), nothing here is a fixed word list - and to have them hold it still, rest it or otherwise occupy
+   their hands on an inactive one.
+
+**Fixing a character's prop by hand.** If step 3 missed an instrument or bundled a costume detail into `prop` (e.g.
+a mask worn alongside a guitar), edit `cast.characters` in `project.json` directly, then:
+
+```bash
+bun index.ts --redo=propActivity,shotMoments
+```
+
+This only re-runs the activity check and the per-shot rewrite - `cast`, `beats` and the character pictures are left
+alone.
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix
@@ -383,3 +427,5 @@ Without CUDA they run on the CPU, much slower.
 - The alignment is only as good as Whisper's hearing: growled, heavily layered or very fast vocals are recognized
   worse. Lines with low confidence have interpolated times - check them.
 - A line that is sung across a clip boundary is split between the two clips word by word.
+- Instrument activity (`propStem: "other"`) is shared by every character on that stem - Demucs' 4-stem separation
+  can't tell two guitarists apart, so a solo handoff between them isn't reflected individually.

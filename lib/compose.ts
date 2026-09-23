@@ -1,4 +1,4 @@
-import type {Assignment, Character, Location, MusicMap, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
+import type {Assignment, Character, Location, MusicMap, PropActivity, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {formatTimestamp, frameAt, round} from "./frames.ts";
 import {MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 
@@ -128,6 +128,58 @@ export function countShotsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' |
         counts[beat.id] = scene.reduce((sum, slot, k) => sum + shotCountFor(slot, beat, k === 0), 0)
     }
     return counts
+}
+
+// Approximate real-time [start, end) window per shot of a beat, in shot order - shots are assumed evenly spread
+// across their slot's duration. buildClip refines the exact cut points later (avoiding mid-word cuts etc.), but
+// this coarse split is already enough to check a shot against detected stem activity before shot timing is final.
+function shotWindowsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Record<string, { start: number, end: number }[]> {
+    const beatById = new Map(beats.map(b => [b.id, b]))
+    const windows: Record<string, { start: number, end: number }[]> = {}
+    for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
+        windows[beat.id] = scene.flatMap((slot, k) => {
+            const shotCount = shotCountFor(slot, beat, k === 0)
+            return Array.from({length: shotCount}, (_, j) => ({
+                start: round(slot.start + (slot.end - slot.start) * j / shotCount),
+                end: round(slot.start + (slot.end - slot.start) * (j + 1) / shotCount),
+            }))
+        })
+    }
+    return windows
+}
+
+// A shot counts as "active" for a stem when more than half its estimated duration overlaps detected activity on
+// that stem - a shot is a window, not a point, so a single onset near its edge shouldn't flip it to active.
+function isActive(window: { start: number, end: number }, ranges: { start: number, end: number }[]): boolean {
+    const duration = window.end - window.start
+    if (duration <= 0) return false
+    const overlap = ranges.reduce((sum, r) => sum + Math.max(0, Math.min(window.end, r.end) - Math.max(window.start, r.start)), 0)
+    return overlap > duration / 2
+}
+
+// Per beat, for every on-screen character whose prop is a musical instrument the song's stems were analyzed for:
+// one active/inactive flag per shot of that beat, in shot order - grounding for step 9b so it only writes a
+// character actively playing/using their prop when that instrument is actually audible at that point in the song.
+// Characters without a stem-bound prop (a non-instrument prop, or no prop at all) never appear here.
+export function propActivityPerBeat(
+    {slots, mapping, beats, characters}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'characters'>,
+    activity: PropActivity,
+): Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]> {
+    const windows = shotWindowsPerBeat({slots, mapping, beats})
+    const propped = characters.filter((c): c is Character & { prop: string, propStem: 'drums' | 'bass' | 'other' } =>
+        Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
+    const result: Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]> = {}
+    for (const beat of beats) {
+        const onScreen = propped.filter(c => beat.characterIds.includes(c.id))
+        if (!onScreen.length) continue
+        const beatWindows = windows[beat.id] ?? []
+        result[beat.id] = onScreen.map(c => ({
+            characterId: c.id,
+            prop: c.prop,
+            activePerShot: beatWindows.map(w => isActive(w, activity[c.propStem]!)),
+        }))
+    }
+    return result
 }
 
 export function buildClipRequests(input: Input): ClipRequest[] {
@@ -285,6 +337,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const songPosition = `${formatTimestamp(slot.start)} to ${formatTimestamp(slot.end)} of the song`
             const seconds = String(Math.round(duration * 10) / 10)
             const score = `the ${slot.section} of the song at ${music.bpm} BPM with ${energyLevel} energy${notes.length ? `, ${notes.join(', ').toLowerCase()}` : ''}`
+            // beat.summary is written once for the whole scene and often describes how it opens (a character
+            // arriving, emerging, appearing) - correct for the first clip of the scene, but repeating it verbatim
+            // in later clips of the same scene tells the model everyone re-enters/re-appears each time, which
+            // reads as the subjects vanishing and popping back in mid-scene. Only the opening clip gets it as-is.
+            const sceneClause = opensScene
+                ? withLabels(beat.summary)
+                : `The scene continues directly from the previous clip, with no cut in time or place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} - nobody enters, appears or emerges in this clip.`
 
             return [
                 'subject_definitions:',
@@ -295,7 +354,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...(performing ? [`<Audio 2> is the isolated lead vocal of this part of the song, the voice-timbre reference for ${voices}.`] : []),
                 '',
                 'summary:',
-                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${withLabels(beat.summary)}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 1>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
+                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 1>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
                 '',
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'

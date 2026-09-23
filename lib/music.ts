@@ -35,6 +35,13 @@ export async function transcribeVocals(vocalsFile: string, language: string, lyr
     return JSON.parse(await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile], 'Transcription'))
 }
 
+// Same RMS-energy activity detection as the vocals transcription uses, run standalone on any stem - grounds a
+// character's on-screen prop use (e.g. a guitarist's playing) in whether that stem is actually audible there
+export async function stemActivity(stemFile: string): Promise<{ start: number, end: number }[]> {
+    const result = JSON.parse(await runVocalsTool(['activity', stemFile], 'Stem activity')) as { activity: { start: number, end: number }[] }
+    return result.activity
+}
+
 // progress (and the model downloads on first use) are shown as they happen, stdout is the result
 async function runVocalsTool(args: string[], what: string) {
     return runProcess(['uv', 'run', 'tools/vocals.py', ...args], {

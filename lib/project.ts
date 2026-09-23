@@ -2,7 +2,10 @@ import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "./log.ts";
 
-export type Character = { id: string, name: string, role: string }
+// prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
+// propStem: only set when the prop is a musical instrument audible in the song - which stem its sound belongs to,
+// so its on-screen use can be grounded in real audio activity instead of playing continuously in every shot
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: 'drums' | 'bass' | 'other' }
 export type Location = { id: string, name: string }
 
 // A story beat has no timing - it is stretched onto the music later
@@ -54,6 +57,10 @@ export type Timeline = {
 // Stems of the song, paths relative to the project folder
 export type Stems = Record<'vocals' | 'drums' | 'bass' | 'other', string>
 
+// RMS-energy activity ranges per stem (same method as Transcript.activity, generalized to any stem) - only the
+// stems actually claimed by a character's propStem are analyzed
+export type PropActivity = Partial<Record<'drums' | 'bass' | 'other', { start: number, end: number }[]>>
+
 // Whisper's words on the vocals stem
 export type TranscriptWord = { text: string, start: number, end: number, probability: number }
 // activity: RMS-energy vocal activity ranges from the vocals stem, independent of whisper - grounds interpolated
@@ -100,6 +107,7 @@ export type Project = {
     beats?: StoryBeat[],
     timeline?: Timeline,
     mapping?: Assignment[],
+    propActivity?: PropActivity,
     shotMoments?: Record<string, string[]>,   // beatId -> one distinct action per shot, replacing beat.moments when not --legacy-moments
 }
 export type StepName = Exclude<keyof Project, 'inputs'>
@@ -122,7 +130,8 @@ const dependsOn: Record<StepName, StepName[]> = {
     beats: ['story', 'cast', 'singing'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
-    shotMoments: ['beats', 'timeline', 'mapping'],
+    propActivity: ['stems', 'cast'],
+    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity'],
 }
 
 export class ProjectStore {
