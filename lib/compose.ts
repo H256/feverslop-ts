@@ -405,7 +405,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
                 '<Audio 1>: reference - <Audio 1> Use the supplied original song only for beat, rhythm, and dynamic timing continuity without copying the source signal.',
                 // the guide: no (Sx) in retention_analysis
-                ...(performing ? [`<Audio 2>: partially copy - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))}.`] : []),
+                ...(performing ? [`<Audio 2>: partially_copy - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))}.`] : []),
                 '',
                 'detailed_description:',
                 styleOpening(lookBrief),
