@@ -49,6 +49,7 @@ type Input = {
     singing?: Singing,          // performance mode
     // beatId -> one distinct, progressing action per shot (step 9b) - replaces the beat.moments spread when given
     shotMoments?: Record<string, string[]>,
+    propActivity?: PropActivity,
 }
 
 // Framings per beat kind, used in order for the shots of a clip
@@ -209,7 +210,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     }
     return requests
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing, propActivity}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -230,7 +231,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildSubjects() {
             const subjects = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
-                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role})),
+                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem})),
             ].map((s, n) => ({
                 ...s,
                 label: `<Subject ${n + 1}>`,
@@ -299,9 +300,24 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             : sung.filter((_, n) => Math.floor(n * shots.length / sung.length) === j)
         const sings = (v: typeof vocals[number]) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${normalizeLyric(v.text)}</d>`
 
+        // Deterministic fallback for prop activity: step 9b writes one moment sentence per shot and can't know
+        // ahead of time who pickFocus ends up putting in frame here - so a focused character's stem-bound prop
+        // can go unaddressed even though 9b was given the same activity data. For anyone left unaddressed, state
+        // their prop's real audio state plainly, using their own prop name - never a fixed verb per instrument.
+        function propNote(focus: typeof castSubjects, start: number, end: number, moment: string): string {
+            if (!propActivity) return ''
+            const notes = focus
+                .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length && !names(s).test(moment))
+                .map(s => `${s.label}, ${s.name}, ${isActive({start, end}, propActivity[s.propStem!]!)
+                    ? `is actively using the ${s.prop} right now`
+                    : `is not playing the ${s.prop} right now, hands off it`}.`)
+            return notes.length ? ` ${notes.join(' ')}` : ''
+        }
+
         function buildShotTexts() {
             return shots.map((shot, j) => {
                 const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
+                const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment)
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const opening = j === 0
@@ -320,13 +336,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
                     const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                    return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}`.trim()
+                    return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
                     ? ` When <Audio 1> reaches the phrase <d>[${language}] ${lines.map(normalizeLyric).join(' ')}</d>, the movement lands on the beat of the music.`
                     : ''
-                return `${opening}${inFrame} ${moment}${lyrics}`.trim()
+                return `${opening}${inFrame} ${moment}${lyrics}${propClause}`.trim()
             })
         }
 
@@ -344,6 +360,15 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const sceneClause = opensScene
                 ? withLabels(beat.summary)
                 : `The scene continues directly from the previous clip, with no cut in time or place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} - nobody enters, appears or emerges in this clip.`
+            // reference-to-video models default to fading/popping subjects in over the first second unless told
+            // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
+            // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
+            // in the same ongoing performance, with no entrance word in the summary, and still need telling that
+            // frame 1 already shows everyone. Continuation clips (sceneClause above) already say this explicitly.
+            const entranceWords = /\b(emerge[sd]?|emerging|appear(s|ed|ing)?|enter(s|ed|ing)?|arriv(es?|ed|ing)|materiali[sz](es?|ed|ing)|steps? into (the )?frame|walks? into (the )?frame|fades? in|comes? into view)\b/i
+            const alreadyPresentNote = opensScene && !entranceWords.test(sceneClause)
+                ? 'Unless a shot below explicitly describes a subject entering, arriving or emerging, every listed subject is already fully visible, in position and mid-action starting from the very first frame - nobody pops or fades into view.'
+                : undefined
 
             return [
                 'subject_definitions:',
@@ -366,6 +391,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 '',
                 'detailed_description:',
                 styleOpening(lookBrief),
+                ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),
                 ...shotTexts,
                 '',

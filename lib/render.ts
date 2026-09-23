@@ -2,12 +2,16 @@ import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, renameSync, rmSync} from "node:fs";
 import {basename, dirname, join} from "node:path";
 import {log, startSpinner, styles} from "./log.ts";
-import {type ImageWorkflow, resolveSeed, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo} from "./assemble.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
+import {runProcess} from "./process.ts";
+
+// the workflow default max_duration (seconds) when songDuration is -1 in config.json
+const DEFAULT_SONG_DURATION = 360
 
 async function loadWorkflow<T extends { default: unknown }>(name: string): Promise<T> {
     const module = await import(join(workflowDir, `${name}.ts`))
@@ -130,6 +134,35 @@ export class Renderer implements Disposable {
         })
         await Bun.write(`${target}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt}, null, 2))
         log.step('Saved', picture.file)
+    }
+
+    // Generates input/song.wav with the configured songWorkflow (YuE2 by default). The workflow only saves mp3/flac
+    // (no wav), so the download is converted with ffmpeg - the rest of the pipeline only ever sees a wav file,
+    // exactly as with a song the user supplied themselves.
+    async renderSong(brief: { style: string, lyrics: string }, songFile: string) {
+        if (existsSync(songFile)) return log.step('Exists', styles.muted('input/song.wav'))
+        const mp3File = songFile.replace(/\.wav$/, '.mp3')
+
+        const {seed, duration} = await this.render('song', mp3File, '.mp3', async () => {
+            const seed = resolveSeed(this.config.seed)
+            const duration = this.config.songDuration === -1 ? DEFAULT_SONG_DURATION : this.config.songDuration
+            const {default: audioWorkflow} = await loadWorkflow<{ default: AudioWorkflow }>(this.config.songWorkflow)
+            const result = audioWorkflow({
+                style: brief.style,
+                lyrics: brief.lyrics,
+                seed,
+                duration,
+                filenamePrefix: `${this.remoteDir}/song`,
+            })
+            return {result, uploads: [], meta: {seed, duration}}
+        })
+
+        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', mp3File, '-c:a', 'pcm_s16le', songFile], {
+            errorMessage: err => `ffmpeg failed to convert the generated song to wav:\n${err}`,
+        })
+        rmSync(mp3File)
+        await Bun.write(`${songFile}.json`, JSON.stringify({workflow: this.config.songWorkflow, seed, duration, style: brief.style, lyrics: brief.lyrics}, null, 2))
+        log.step('Saved', 'input/song.wav')
     }
 
     // vocalsFile: the isolated vocals of the whole song (stems/vocals.wav) - needed by clips with a singer

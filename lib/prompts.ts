@@ -1,7 +1,37 @@
 import type {AskOptions} from "./llm.ts";
 
-// The LLM prompt templates for the early story/look pipeline steps (index.ts, steps 1-6b) - kept separate from
+// The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
+
+// durationSec: an upper bound (config.json songDuration) - the model decides the actual song length, so this only
+// shapes how many sections/lines the lyrics get, it doesn't force an exact length
+export function songBriefPrompt(idea: string, musicStyle: string, language: string, durationSec?: number): AskOptions {
+    return {
+        maxTokens: 4096,
+        input: `Write a song from this idea for a music video, as generation-ready input for the YuE2 text-to-music model.
+Idea: ${idea}
+${musicStyle ? `Musical direction: ${musicStyle}\n` : ''}Language: ${language}
+${durationSec ? `Target length: around ${Math.round(durationSec)} seconds - shape the number and length of sections accordingly.\n` : ''}
+Answer only with JSON in this format: {"style": "", "lyrics": ""}
+
+"style" rules:
+- Comma-separated tags, in this order: genre, instruments, mood, vocal gender, vocal tone. Order matters - earlier tags get more weight.
+- Add a tempo tag (e.g. "88 BPM" or "upbeat") when tempo matters to the song.
+- If ${language} isn't English, add it as its own tag (e.g. "Japanese", "Mandarin", "German").
+- "No <instrument>" tags exclude an instrument that would otherwise be implied.
+- Read like a musician's or producer's description of a playable song, not mood prose.
+
+"lyrics" rules:
+- Section labels in square brackets on their own line: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Interlude], [Outro]. Blank line between sections.
+- Start with a verse or chorus, never a lyric-filled intro.
+- 4-6 lines per section, about 30 seconds of singing each.
+- Write every repeated chorus out in full - never shorthand like "(repeat chorus)".
+- Keep the syllable count identical when a line repeats.
+- Nothing but section tags and sung words - no production notes like "(drums build)", no title, no hyphenated syllable forcing.
+- Written in ${language}.`,
+        instructions: 'You are a songwriter and YuE2 prompt designer. Answer only with JSON.',
+    }
+}
 
 export function storyPrompt(lyrics: string, storyIdea: string): AskOptions {
     return {

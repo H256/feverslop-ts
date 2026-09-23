@@ -28,6 +28,15 @@ export type ImageWorkflowOptions = {
 }
 export type ImageWorkflow = (opts: ImageWorkflowOptions) => WorkflowResult
 
+export type AudioWorkflowOptions = {
+    style: string,               // musical style/genre/instrumentation caption
+    lyrics: string,               // full lyrics with [Section] tags, sung words only
+    seed: number,
+    duration: number,             // seconds - an upper bound; the model decides the actual song length
+    filenamePrefix: string,
+}
+export type AudioWorkflow = (opts: AudioWorkflowOptions) => WorkflowResult
+
 export type VideoWorkflowOptions = {
     prompt: string,
     pictures: string[],         // ComfyUI input names in <Picture N> order, e.g. "feverslop-ts/<project>/assets/characters/thorin.png"

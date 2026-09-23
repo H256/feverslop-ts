@@ -146,13 +146,49 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     throw new Error('unreachable')
 }
 
+// Local models often put a raw newline/tab inside a JSON string (e.g. multi-line lyrics) instead of the \n escape -
+// technically invalid JSON, so JSON.parse rejects it with "Unterminated string". Escaping control characters found
+// inside string literals (tracking quotes/backslashes so it doesn't touch the JSON's own structural whitespace)
+// fixes that without needing a smarter parser.
+function escapeControlCharsInStrings(text: string): string {
+    let out = ''
+    let inString = false
+    let escaped = false
+    for (const ch of text) {
+        if (!inString) {
+            out += ch
+            if (ch === '"') inString = true
+            continue
+        }
+        if (escaped) {
+            out += ch
+            escaped = false
+        } else if (ch === '\\') {
+            out += ch
+            escaped = true
+        } else if (ch === '"') {
+            out += ch
+            inString = false
+        } else if (ch === '\n') {
+            out += '\\n'
+        } else if (ch === '\r') {
+            out += '\\r'
+        } else if (ch === '\t') {
+            out += '\\t'
+        } else {
+            out += ch
+        }
+    }
+    return out
+}
+
 // Models like to wrap JSON in ```json fences or add a sentence around it
 export async function askJson<T>(options: AskOptions): Promise<T> {
     const answer = await ask(options)
     const start = answer.search(/[{[]/)
     const end = Math.max(answer.lastIndexOf('}'), answer.lastIndexOf(']'))
     try {
-        return JSON.parse(answer.slice(start, end + 1))
+        return JSON.parse(escapeControlCharsInStrings(answer.slice(start, end + 1)))
     } catch (e) {
         log.box('Unparsable answer', answer)
         throw new Error(`LLM did not answer with valid JSON: ${(e as Error).message}`)

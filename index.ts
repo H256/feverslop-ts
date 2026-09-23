@@ -16,15 +16,15 @@ import {formatTime, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {
     castPrompt, characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt,
-    lookBriefPrompt, storyPrompt, summaryPrompt,
+    lookBriefPrompt, songBriefPrompt, storyPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // hardware limit: the longest clip the video model can generate in one go
 const MAX_CLIP_SEC = 10
 
-// bun index.ts [project-id] [--redo=story,beats] [--render=images,videos,final|all] [--only=slot-001,slot-002]
+// bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
-const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=images,videos,final|all] [--only=slot-001,slot-002]
+const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]`
 const {values: args, positionals} = (() => {
     try {
@@ -39,7 +39,7 @@ const {values: args, positionals} = (() => {
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
                 comfy: {type: 'string'},
-                // skips step 9b and spreads/reuses beat.moments across shots the old way - a fallback while 9b is new
+                // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
             },
         })
@@ -47,10 +47,10 @@ const {values: args, positionals} = (() => {
         log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-// --render=all is images, videos and the final video, in that order
+// --render=all is images, videos and the final video, in that order - "song" is never part of "all", it has to be asked for
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
-const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
-if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
+const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
+if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use song, images, videos, final or all`, usage)
 const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920')
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
@@ -77,11 +77,34 @@ const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings'
 log.step('LLM', settings.llm.url
     ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
+const language = languageName(config.lyricsLanguage)!
+const songFile = project.input('song.wav')
+
+////////// WRITING & GENERATING THE SONG - only with --render=song, and only while there is no song.wav yet
+const idea = await readInput('idea.txt')
+const musicStyleInput = await readInput('music-style.txt')
+if (render.has('song')) {
+    if (existsSync(songFile)) {
+        log.step('Song', styles.muted('input/song.wav already exists - delete it to generate a new one with --render=song'))
+    } else {
+        if (!idea) throw new Error('--render=song needs a song idea in input/idea.txt')
+        const songBrief = await project.step('songBrief', '1 · WRITING THE SONG', () =>
+            askJson<{ style: string, lyrics: string }>(songBriefPrompt(idea, musicStyleInput, language, config.songDuration === -1 ? undefined : config.songDuration)))
+        log.box('Style', songBrief.style)
+        log.box('Lyrics', songBrief.lyrics)
+        if (!existsSync(project.input('lyrics.txt'))) await Bun.write(project.input('lyrics.txt'), songBrief.lyrics)
+        if (!existsSync(project.input('music-style.txt'))) await Bun.write(project.input('music-style.txt'), songBrief.style)
+
+        log.section('1a · GENERATING THE SONG AUDIO')
+        using songRenderer = new Renderer(project.id, project.dir, config, settings.comfy)
+        await songRenderer.renderSong(songBrief, songFile)
+    }
+}
+
 const lyrics = await readInput('lyrics.txt')
 const storyIdea = await readInput('story-idea.txt')
 const style = await readInput('style.txt')
 const lyricSections = parseLyricSections(lyrics)
-const language = languageName(config.lyricsLanguage)!
 log.step('Lyrics', lyrics ? styles.muted(`${lyricSections.length} sections: ${lyricSections.map(s => s.label).join(' · ')}`) : styles.muted('(none)'))
 log.step('Story idea', storyIdea || styles.muted('(none)'))
 log.step('Style', style || styles.muted('(none - the look is designed from the story)'))
@@ -92,8 +115,11 @@ log.step('Mode', config.singers.length
 if (config.alignLyrics && sungLines(lyricSections).length === 0) throw new Error('Aligning the lyrics needs sung lines in input/lyrics.txt')
 
 // an edited input redoes the steps built on it
-const songFile = project.input('song.wav')
 await project.syncInputs({
+    // no "assumed" - unlike the other inputs below, these never existed before this feature, so there is no old
+    // project to treat as unchanged; on a real first run "previous" is simply undefined and nothing is invalidated
+    'idea.txt': {value: idea, steps: ['songBrief']},
+    'music-style.txt': {value: musicStyleInput, steps: ['songBrief']},
     'song.wav': {value: existsSync(songFile) ? await Bun.file(songFile).bytes() : '', steps: ['music', 'stems']},
     'lyrics.txt': {value: lyrics, steps: ['story', 'transcript', 'singing']},
     'story-idea.txt': {value: storyIdea, steps: ['story']},
@@ -108,8 +134,8 @@ if (project.data.music && lyricSections.length && project.data.music.sections.ma
 if (project.data.stems && Object.values(project.data.stems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('stems')
 
 ////////// ANALYZE THE SONG
-if (!existsSync(songFile)) throw new Error(`No song found at ${songFile}`)
-const music = await project.step('music', '0 · ANALYZING THE SONG', async () => {
+if (!existsSync(songFile)) throw new Error(`No song found at ${songFile}${idea ? ' - run with --render=song to generate one from input/idea.txt' : ''}`)
+const music = await project.step('music', '2 · ANALYZING THE SONG', async () => {
     log.step('Analyzing', styles.muted(`${songFile} - beats, bars and ${lyricSections.length} sections`))
     return analyzeSong(songFile, lyricSections.map(s => s.label))
 })
@@ -122,13 +148,13 @@ log.step('Sections', styles.muted(config.alignLyrics
     : `estimated from audio - fix them by hand in ${project.file} if they are off, then --redo=timeline`))
 
 ////////// ALIGNING THE LYRICS - only when someone sings, or with "alignLyrics": true
-const stems = config.alignLyrics ? await project.step('stems', '0a · SEPARATING THE STEMS', async () => {
+const stems = config.alignLyrics ? await project.step('stems', '2a · SEPARATING THE STEMS', async () => {
     log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_ft - the first run downloads the model (~320 MB)`))
     return separateStems(songFile, project.dir)
 }) : undefined
 if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
 
-const transcript = stems ? await project.step('transcript', '0b · TRANSCRIBING THE VOCALS', async () => {
+const transcript = stems ? await project.step('transcript', '2b · TRANSCRIBING THE VOCALS', async () => {
     log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
     return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
 }) : undefined
@@ -137,7 +163,7 @@ if (transcript) {
     if (transcript.activity) log.step('Vocal activity', styles.muted(`${transcript.activity.length} range(s) from RMS energy, independent of whisper`))
 }
 
-const lyricsTiming = transcript ? await project.step('lyricsTiming', '0c · ALIGNING THE LYRICS', async () => alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity)) : undefined
+const lyricsTiming = transcript ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity)) : undefined
 if (lyricsTiming) {
     for (const line of lyricsTiming.lines) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))
@@ -148,16 +174,16 @@ if (lyricsTiming) {
 }
 
 ////////// CRAFT A STORY FOR THE LYRICS
-const storyBase = await project.step('story', '1 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea)))
+const storyBase = await project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea)))
 log.box('Story', storyBase)
 if (storyBase === 'NO STORY') throw new Error('Neither lyrics nor a story idea given')
 
 ////////// SUMMARIZE THE STORY
-const storySummary = await project.step('summary', '2 · SUMMARIZING THE STORY', () => ask(summaryPrompt(storyBase)))
+const storySummary = await project.step('summary', '4 · SUMMARIZING THE STORY', () => ask(summaryPrompt(storyBase)))
 log.box('Summary', storySummary)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
-const cast = await project.step('cast', '3 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
+const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
     const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase))
     const stemNames = new Set(['drums', 'bass', 'other'])
     return {
@@ -176,7 +202,7 @@ for (const l of cast.locations) console.log(`   ${styles.name(l.id)}`)
 
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is 'drums' | 'bass' | 'other' => Boolean(s)))]
-const propActivity = stems && neededStems.length ? await project.step('propActivity', '3c · DETECTING INSTRUMENT ACTIVITY', async () => {
+const propActivity = stems && neededStems.length ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
     const result: NonNullable<typeof project.data.propActivity> = {}
     for (const stemName of neededStems) {
         log.step('Analyzing', styles.muted(stems[stemName]))
@@ -188,7 +214,7 @@ if (propActivity) for (const [stemName, ranges] of Object.entries(propActivity))
 else if (neededStems.length) log.warn(`${neededStems.length} character(s) have an audible instrument prop, but stems weren't separated (set "alignLyrics": true in config.json) - instruments will be shown playing throughout`)
 
 ////////// CHOOSING THE SINGERS - performance mode only
-const singing = config.singers.length ? await project.step('singing', '3b · CHOOSING THE SINGERS', () => chooseSingers(config.singers)) : undefined
+const singing = config.singers.length ? await project.step('singing', '5b · CHOOSING THE SINGERS', () => chooseSingers(config.singers)) : undefined
 if (singing) {
     const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
     log.step('Singers', singing.singers.map(id => styles.name(nameOf(id))).join(', '))
@@ -198,11 +224,11 @@ if (singing) {
 }
 
 /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
-const lookBrief = await project.step('lookBrief', '4 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary)))
+const lookBrief = await project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary)))
 log.box('Look brief', lookBrief)
 
 ////////// CRAFTING CHARACTER LOOKS
-const characterLooks = await project.step('characterLooks', '5 · CRAFTING CHARACTER LOOKS', async () => {
+const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARACTER LOOKS', async () => {
     const looks: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
@@ -213,7 +239,7 @@ const characterLooks = await project.step('characterLooks', '5 · CRAFTING CHARA
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
-const characterDescriptions = await project.step('characterDescriptions', '5b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
+const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
     const descriptions: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
@@ -224,7 +250,7 @@ const characterDescriptions = await project.step('characterDescriptions', '5b ·
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 ////////// CRAFTING LOCATION LOOKS
-const locationLooks = await project.step('locationLooks', '6 · CRAFTING LOCATION LOOKS', async () => {
+const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
@@ -235,7 +261,7 @@ const locationLooks = await project.step('locationLooks', '6 · CRAFTING LOCATIO
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 ////////// DESCRIBING THE LOCATIONS - the look prompt without the establishing shot (camera, "empty", medium)
-const locationDescriptions = await project.step('locationDescriptions', '6b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
+const locationDescriptions = await project.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
     const descriptions: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
@@ -246,7 +272,7 @@ const locationDescriptions = await project.step('locationDescriptions', '6b · D
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 ////////// BREAKING THE STORY INTO BEATS
-const beats = await project.step('beats', '7 · BREAKING THE STORY INTO BEATS', async () => {
+const beats = await project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
     const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>({
         reasoning: 'medium',
         // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
@@ -309,7 +335,7 @@ for (const beat of beats) {
 ////////// CUTTING THE SONG INTO CLIPS
 // switched alignLyrics on or off since the timeline was built
 if (project.data.timeline && (project.data.timeline.aligned ?? false) !== Boolean(lyricsTiming)) project.invalidate('timeline')
-const timeline = await project.step('timeline', '8 · CUTTING THE SONG INTO CLIPS', async () => buildTimeline(music, lyricSections, maxClipSec, lyricsTiming))
+const timeline = await project.step('timeline', '10 · CUTTING THE SONG INTO CLIPS', async () => buildTimeline(music, lyricSections, maxClipSec, lyricsTiming))
 log.step('Clips', `${timeline.slots.length} clips of ${timeline.barsPerSlot} bars (${(timeline.barsPerSlot * 240 / music.bpm).toFixed(1)}s) - max ${timeline.maxClipSec}s`)
 if (timeline.aligned) {
     log.step('Sections', styles.muted('from the lyrics timing (estimate from the audio in brackets)'))
@@ -321,7 +347,7 @@ if (timeline.aligned) {
 }
 
 ////////// MATCHING THE STORY TO THE MUSIC
-const mapping = await project.step('mapping', '9 · MATCHING THE STORY TO THE MUSIC', async () => mapBeatsToSlots(beats, timeline.slots))
+const mapping = await project.step('mapping', '11 · MATCHING THE STORY TO THE MUSIC', async () => mapBeatsToSlots(beats, timeline.slots))
 const beatById = new Map(beats.map(b => [b.id, b]))
 for (const slot of timeline.slots) {
     const beat = beatById.get(mapping[slot.index]!.beatId)!
@@ -333,7 +359,7 @@ for (const slot of timeline.slots) {
 // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
 const beatProps = propActivity ? propActivityPerBeat({slots: timeline.slots, mapping, beats, characters: cast.characters}, propActivity) : undefined
-const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '9b · REFINING MOMENTS PER SHOT', async () => {
+const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
     const extracted = await askJson<{ moments: Record<string, string[]> }>({
         reasoning: 'medium',
@@ -376,7 +402,7 @@ if (shotMoments) for (const beat of beats) {
 
 ////////// BUILDING THE MINIMAX H3 REQUESTS
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
-log.section('10 · BUILDING THE MINIMAX H3 REQUESTS')
+log.section('12 · BUILDING THE MINIMAX H3 REQUESTS')
 const clips = buildClipRequests({
     slots: timeline.slots,
     mapping,
@@ -390,6 +416,7 @@ const clips = buildClipRequests({
     language,
     singing,
     shotMoments,
+    propActivity,
 })
 
 const outputDir = join(project.dir, 'output')
@@ -445,7 +472,7 @@ for (const clip of clips) {
 if (render.has('images') || render.has('videos')) {
     const only = new Set(args.only.split(',').filter(Boolean))
     using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-    log.section('11 · RENDERING WITH COMFYUI')
+    log.section('13 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})`))
     log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
 
@@ -464,7 +491,7 @@ if (render.has('images') || render.has('videos')) {
 
 ////////// ASSEMBLING THE FINAL VIDEO
 if (render.has('final')) {
-    log.section('12 · ASSEMBLING THE FINAL VIDEO')
+    log.section('14 · ASSEMBLING THE FINAL VIDEO')
     log.step('Audio', config.songAudio ? 'original song' : styles.muted('the clips\' own audio ("songAudio": false)'))
     const target = join(project.dir, 'final.mp4')
     const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})

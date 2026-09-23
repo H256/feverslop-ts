@@ -89,8 +89,12 @@ export type Singing = { singers: string[], lines: { line: number, text: string, 
 
 export type Assignment = { slotId: string, beatId: string }
 
+// Generation-ready input for the YuE2 text-to-music workflow, written from idea.txt (+ optional music-style.txt)
+export type SongBrief = { style: string, lyrics: string }
+
 export type Project = {
     inputs?: Record<string, string>, // fingerprints of the input files and settings - not a step
+    songBrief?: SongBrief,
     music?: MusicMap,
     stems?: Stems,
     transcript?: Transcript,
@@ -114,6 +118,7 @@ export type StepName = Exclude<keyof Project, 'inputs'>
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<StepName, StepName[]> = {
+    songBrief: [],
     music: [],
     stems: [],
     transcript: ['stems'],

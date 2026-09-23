@@ -1,0 +1,253 @@
+{
+  "10": {
+    "inputs": {
+      "filename_prefix": "audio/YuE2",
+      "format": "flac",
+      "audio": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "SaveAudioAdvanced",
+    "_meta": {
+      "title": "Save Audio (Advanced)"
+    }
+  },
+  "41": {
+    "inputs": {
+      "ckpt_name": "yue2_3b_int8_convrot.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "42": {
+    "inputs": {
+      "style": [
+        "54",
+        0
+      ],
+      "lyrics": [
+        "55",
+        0
+      ],
+      "seed": [
+        "53",
+        0
+      ],
+      "mode": "full",
+      "max_abc_tokens": 8192,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 30,
+      "repetition_penalty": 1.005,
+      "penalty_window": 100,
+      "clip": [
+        "41",
+        1
+      ]
+    },
+    "class_type": "YuE2GenerateABC",
+    "_meta": {
+      "title": "YuE2 Generate ABC"
+    }
+  },
+  "43": {
+    "inputs": {
+      "source": [
+        "44",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview as Text"
+    }
+  },
+  "44": {
+    "inputs": {
+      "switch": [
+        "47",
+        0
+      ],
+      "on_false": [
+        "45",
+        0
+      ],
+      "on_true": [
+        "42",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "If/Else Switch"
+    }
+  },
+  "45": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Text (Empty ABC)"
+    }
+  },
+  "46": {
+    "inputs": {
+      "style": [
+        "54",
+        0
+      ],
+      "lyrics": [
+        "55",
+        0
+      ],
+      "abc": [
+        "43",
+        0
+      ],
+      "seed": [
+        "53",
+        0
+      ],
+      "mode": "full",
+      "max_duration": 360,
+      "temperature": 1,
+      "top_p": 0.95,
+      "top_k": 100,
+      "repetition_penalty": 1.2,
+      "clip": [
+        "41",
+        1
+      ]
+    },
+    "class_type": "YuE2GenerateMusic",
+    "_meta": {
+      "title": "YuE2 Generate Music"
+    }
+  },
+  "47": {
+    "inputs": {
+      "value": true
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Boolean (ABC planning)"
+    }
+  },
+  "48": {
+    "inputs": {
+      "conditioning": [
+        "46",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Conditioning Zero Out"
+    }
+  },
+  "49": {
+    "inputs": {
+      "source": [
+        "46",
+        1
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview as Text"
+    }
+  },
+  "50": {
+    "inputs": {
+      "seed": [
+        "53",
+        0
+      ],
+      "steps": 32,
+      "cfg": 1,
+      "sampler_name": "dpm_2",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "41",
+        0
+      ],
+      "positive": [
+        "46",
+        0
+      ],
+      "negative": [
+        "48",
+        0
+      ],
+      "latent_image": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "51": {
+    "inputs": {
+      "seconds": [
+        "46",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyYuE2LatentAudio",
+    "_meta": {
+      "title": "Empty YuE2 Latent Audio"
+    }
+  },
+  "52": {
+    "inputs": {
+      "samples": [
+        "50",
+        0
+      ],
+      "vae": [
+        "41",
+        2
+      ]
+    },
+    "class_type": "VAEDecodeAudio",
+    "_meta": {
+      "title": "VAE Decode Audio"
+    }
+  },
+  "53": {
+    "inputs": {
+      "seed": 0
+    },
+    "class_type": "SeedNode",
+    "_meta": {
+      "title": "Seed"
+    }
+  },
+  "54": {
+    "inputs": {
+      "value": "pirate shanties style\nFiddles and Violins: Used for dancing and entertainment below deck.Fifes, Flutes, and Tin Whistles: High-pitched woodwinds that cut through ocean wind and noise.Small Drums and Bodhráns: Provided rhythmic accompaniment for work songs and morale.Lutes, Mandolins, and Guitars: Early plucked string instruments found in taverns and ports\n1"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Text (Style)"
+    }
+  },
+  "55": {
+    "inputs": {
+      "value": "[Verse]\nMorning light across the window\nCity waking down below\nI can hear the streets are calling\nFeels like somewhere we should go\n\n[Chorus]\nRun with me into the sunlight\nLeave the shadows far behind\nWe don't need to know tomorrow\nTonight the whole world feels alive\n\n[Verse]\nRadio playing through the open door\nLaughing like we did before\nEvery mile becomes a memory\nAnd I just want a little more\n\n[Chorus]\nRun with me into the sunlight\nLeave the shadows far behind\nWe don't need to know tomorrow\nTonight the whole world feels alive"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Text (Lyrics)"
+    }
+  }
+}

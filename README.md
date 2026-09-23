@@ -97,8 +97,10 @@ Every song is a project folder:
 ```
 projects/<project-id>/
   input/
-    song.wav          required
-    lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ...
+    song.wav          required, unless generated with --render=song (see Generating the song)
+    lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ... - required, unless generated
+    idea.txt          the song idea for --render=song - required for it, otherwise unused
+    music-style.txt   optional - musical direction for --render=song, e.g. genre/instruments/mood
     story-idea.txt    optional
     style.txt         optional - the film's style, e.g. "dark gothic oil painting, heavy chiaroscuro"
   config.json         settings: singers, lyrics language, rendering (see config.json)
@@ -116,10 +118,11 @@ Run it:
 ```bash
 bun index.ts                          # default project: well-of-youth-gothic-trio-260920
 bun index.ts <project-id>             # any other project
+bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
 bun index.ts --render=all             # also render with ComfyUI and assemble final.mp4, see below
-bun index.ts --legacy-moments         # skip step 9b, spread beat.moments across shots the old way
+bun index.ts --legacy-moments         # skip step 11b, spread beat.moments across shots the old way
 bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity after editing prop/propStem by hand
 ```
 
@@ -132,6 +135,8 @@ built on it (and everything built on those):
 
 | Changed                       | Redoes                              |
 |-------------------------------|-------------------------------------|
+| `idea.txt`                    | `songBrief`                         |
+| `music-style.txt`             | `songBrief`                         |
 | `song.wav`                    | `music`, `stems`                    |
 | `lyrics.txt`                  | `story`, `transcript`, `singing`    |
 | `story-idea.txt`              | `story`                             |
@@ -139,9 +144,29 @@ built on it (and everything built on those):
 | `singers` in `config.json`    | `singing` (and so `beats`)          |
 | `lyricsLanguage`              | `transcript`                        |
 
+### Generating the song
+
+Without `input/song.wav` (and `input/lyrics.txt`), `--render=song` writes both from `input/idea.txt` before the rest
+of the pipeline runs:
+
+1. **Song brief** (step `1`, `songBrief`) - an LLM turns `idea.txt` (+ optional `music-style.txt`, the target length
+   from `songDuration` in `config.json`, and `lyricsLanguage`) into a YuE2 `style` prompt (comma-separated genre,
+   instruments, mood, vocal gender, vocal tone) and `lyrics` with section tags. Both are written back to
+   `lyrics.txt` and `music-style.txt` - each only if it doesn't already exist yet, so a hand-written file is never
+   overwritten, and the generated style stays around to read, tweak or reuse (e.g. `--redo=songBrief` after editing
+   it, to keep your own style but get new lyrics for it).
+2. **Song audio** (step `1a`) - renders the song with the YuE2 ComfyUI workflow (`songWorkflow` in `config.json`,
+   default `yue2-song`) and writes `input/song.wav`. `songDuration` (default: the workflow's own, 360s) is only an
+   upper bound - the model decides the actual song length.
+
+`--render=song` is a no-op once `input/song.wav` exists - delete it (and `lyrics.txt`, if it should be rewritten too)
+and run `--render=song` again to generate a new song. `--redo=songBrief` alone rewrites just the brief (style and
+lyrics) without touching an existing `song.wav`. Without `idea.txt`, the pipeline behaves exactly as before:
+`song.wav` and `lyrics.txt` must be supplied by hand.
+
 ### Style
 
-Without `input/style.txt` the look brief (step 4) picks a format and style that fits the story. With it, the look
+Without `input/style.txt` the look brief (step 6) picks a format and style that fits the story. With it, the look
 brief keeps your medium, style and named references exactly and only extends them - world, palette, lighting, camera
 language, texture - so every picture and clip prompt stays in your style. A sentence or two is enough:
 
@@ -155,36 +180,40 @@ The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_
 
 | # | Step (`--redo=`) | What it does                                                                     | Built on                     |
 |---|------------------|----------------------------------------------------------------------------------|------------------------------|
-| 0  | `music`          | BPM, downbeats, energy per bar, song sections named after the lyrics tags         | –                            |
-| 0a | `stems`          | demucs `htdemucs_ft` → `stems/{vocals,drums,bass,other}.wav` ¹                    | –                            |
-| 0b | `transcript`     | Whisper large-v3 on `vocals.wav`, word timestamps, the lyrics as prompt ¹         | stems                        |
-| 0c | `lyricsTiming`   | The known lyrics aligned to the transcript: start and end of every line and word ¹ | transcript                   |
-| 1  | `story`          | Story from lyrics and/or story idea                                              | –                            |
-| 2  | `summary`        | Short summary                                                                    | story                        |
-| 3  | `cast`           | Characters and locations with ids, each character's `prop` and, if it's a heard instrument, its `propStem` ⁴ | story |
-| 3b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
-| 3c | `propActivity`   | RMS-energy activity ranges per instrument stem claimed by a character ¹ ⁴        | stems, cast                  |
-| 4  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
-| 5  | `characterLooks` | Krea 2 prompt per character (reference sheet, plain background)                  | cast, lookBrief              |
-| 5b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
-| 6  | `locationLooks`  | Krea 2 prompt per location (empty establishing shot)                             | cast, lookBrief, summary     |
-| 6b | `locationDescriptions` | The location look without the establishing shot - no camera, "empty" or medium - for the clip prompts | locationLooks |
-| 7  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
-| 8  | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
-| 9  | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
-| 9b | `shotMoments`    | One distinct, progressing action per shot per beat, replacing `beat.moments` ³   | beats, timeline, mapping, propActivity |
-| 10 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
+| 1  | `songBrief`      | YuE2 `style` prompt and `lyrics` from `idea.txt` (+ optional `music-style.txt`) ⁵ | –                            |
+| 1a | –                | Song audio rendered with the YuE2 workflow → `input/song.wav` ⁵                   | songBrief                    |
+| 2  | `music`          | BPM, downbeats, energy per bar, song sections named after the lyrics tags         | –                            |
+| 2a | `stems`          | demucs `htdemucs_ft` → `stems/{vocals,drums,bass,other}.wav` ¹                    | –                            |
+| 2b | `transcript`     | Whisper large-v3 on `vocals.wav`, word timestamps, the lyrics as prompt ¹         | stems                        |
+| 2c | `lyricsTiming`   | The known lyrics aligned to the transcript: start and end of every line and word ¹ | transcript                   |
+| 3  | `story`          | Story from lyrics and/or story idea                                              | –                            |
+| 4  | `summary`        | Short summary                                                                    | story                        |
+| 5  | `cast`           | Characters and locations with ids, each character's `prop` and, if it's a heard instrument, its `propStem` ⁴ | story |
+| 5b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
+| 5c | `propActivity`   | RMS-energy activity ranges per instrument stem claimed by a character ¹ ⁴        | stems, cast                  |
+| 6  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
+| 7  | `characterLooks` | Krea 2 prompt per character (reference sheet, plain background)                  | cast, lookBrief              |
+| 7b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
+| 8  | `locationLooks`  | Krea 2 prompt per location (empty establishing shot)                             | cast, lookBrief, summary     |
+| 8b | `locationDescriptions` | The location look without the establishing shot - no camera, "empty" or medium - for the clip prompts | locationLooks |
+| 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
+| 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
+| 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
+| 11b | `shotMoments`   | One distinct, progressing action per shot per beat, replacing `beat.moments` ³   | beats, timeline, mapping, propActivity |
+| 12 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
 ¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings ·
 ³ skipped with `--legacy-moments`, which spreads/reuses `beat.moments` across shots instead (the old behavior) ·
 ⁴ only when at least one character's `prop` is a musical instrument actually heard in the song - see
-[Band members and instruments](#band-members-and-instruments)
+[Band members and instruments](#band-members-and-instruments) ·
+⁵ only with `--render=song`, and only while `input/song.wav` doesn't exist yet - see
+[Generating the song](#generating-the-song)
 
-Steps 1–7 and 9b use the LLM (3b only for `"auto"` or several singers), all others are plain code.
+Steps 1, 3–9 and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
 
-The looks (5, 6) are image prompts for the reference pictures - they put a character on a plain grey background in
+The looks (7, 8) are image prompts for the reference pictures - they put a character on a plain grey background in
 studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
-`<Picture N>` with its description (5b, 6b) instead: only what the character or place looks like. One LLM call per
+`<Picture N>` with its description (7b, 8b) instead: only what the character or place looks like. One LLM call per
 character and location, from its look, so it matches the picture. Redoing a look redoes its description; to rewrite
 only the descriptions: `--redo=characterDescriptions,locationDescriptions`.
 
@@ -256,6 +285,8 @@ Settings per project, all optional - read at every run and checked field by fiel
   "videoResolution": -1,
   "imageWorkflow": "krea2-image",
   "videoWorkflow": "h3-ref2video",
+  "songWorkflow": "yue2-song",
+  "songDuration": -1,
   "songAudio": true,
   "llm": {}
 }
@@ -265,11 +296,12 @@ Settings per project, all optional - read at every run and checked field by fiel
 |---------------------------------------|-----------------------------------------------------------------------------------------------------------|
 | `llm`                                 | `{"model": "…"}` = another model of the LLM server for this project; default `{}` = the one from the [settings](#setup) |
 | `singers`                             | `[]` = clip mode (default), `["auto"]` = the LLM picks the lead singer, `["Thorin", "brenna"]` = these characters, by name or id - see [Singing characters](#singing-characters) |
-| `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper and the `<d>[English]` lyrics tag |
+| `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper, the `<d>[English]` lyrics tag, and the song brief (`--render=song`) |
 | `alignLyrics`                         | `true` = stems, transcript and real lyric timing; default: `true` when someone sings, else `false`. Set it to `true` in clip mode to place the lyric cues at the right moments |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
-| `imageWorkflow`, `videoWorkflow`      | a workflow file in `comfy/workflows/`, without `.ts`                                                      |
+| `imageWorkflow`, `videoWorkflow`, `songWorkflow` | a workflow file in `comfy/workflows/`, without `.ts`                                              |
+| `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `songAudio`                           | final video: `true` = the original song replaces the clips' audio (default), `false` = keep the clips' audio |
 
 Characters are always portrait, locations and videos landscape - whichever way round the size is written. Videos are
@@ -286,12 +318,13 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 |-----------------|-------|-----------------------------------------------------|
 | `krea2-image`   | image | `comfy/image_t2i_startframe_krea_v1.json`           |
 | `h3-ref2video`  | video | `comfy/r2v_audio_fullmix_guide_1-pass_turbo.json`   |
+| `yue2-song`     | audio | `comfy/audio_yue2_text2music.json`                  |
 
 ### Adding your own workflow
 
 1. Build and test it in ComfyUI. Give the nodes that take a parameter a title starting with `#` (`#PROMPT`, `#SEED`, …).
 2. Export it with **Workflow → Export (API)**.
-3. Generate a draft: `bun run comfy:convert comfy/my-workflow.json my-workflow --kind=image` (or `--kind=video`).
+3. Generate a draft: `bun run comfy:convert comfy/my-workflow.json my-workflow --kind=image` (or `--kind=video`/`--kind=audio`).
 4. Open `comfy/workflows/my-workflow.ts` and replace the values at the `TODO` comments with `opts` - prompt, seed,
    size, file name, and for videos the pictures and the audio.
 5. `bun run typecheck`
@@ -339,7 +372,7 @@ In performance mode characters sing the lyrics on screen, lip-synced to the real
 {"singers": ["auto"]}
 ```
 
-- `["auto"]` - the LLM picks the lead singer from the cast (step 3b), usually one character, a group character like
+- `["auto"]` - the LLM picks the lead singer from the cast (step 5b), usually one character, a group character like
   "Miners" if the lyrics are sung by a "we", two or three for a clear duet.
 - `["Thorin"]` - one singer, by name or id. Names are matched loosely: `"thorin"`, `"Thorin"` and `"Thorin
   Oakenshield"` find `thorin-oakenshield`, `"miner"` finds `miners`. Unknown names are skipped with a warning - the
@@ -349,16 +382,16 @@ In performance mode characters sing the lyrics on screen, lip-synced to the real
 
 What happens then:
 
-1. **Stems** (`0a`): demucs `htdemucs_ft` separates the song into `stems/vocals.wav`, `drums`, `bass` and `other`.
-2. **Transcript** (`0b`): Whisper large-v3 transcribes `vocals.wav` with word timestamps. The lyrics are given as the
+1. **Stems** (`2a`): demucs `htdemucs_ft` separates the song into `stems/vocals.wav`, `drums`, `bass` and `other`.
+2. **Transcript** (`2b`): Whisper large-v3 transcribes `vocals.wav` with word timestamps. The lyrics are given as the
    prompt, which makes sung words much easier to recognize.
-3. **Lyrics timing** (`0c`): the known lyrics are aligned to the heard words, word by word and in order. Words Whisper
+3. **Lyrics timing** (`2c`): the known lyrics are aligned to the heard words, word by word and in order. Words Whisper
    missed get times between their neighbours. The run prints every line with its time and a confidence (the share of
    its words that were found), and warns about lines below 0.5.
-4. **Timeline** (`8`): sections with vocals start at their first sung line (on the downbeat before it, for pickups),
+4. **Timeline** (`10`): sections with vocals start at their first sung line (on the downbeat before it, for pickups),
    the instrumental sections fill the gaps - no more estimated section boundaries. Every clip gets the words sung in
    it.
-5. **Beats** (`7`): the singers are on screen in beats under sung sections, with their face visible ("sings while
+5. **Beats** (`9`): the singers are on screen in beats under sung sections, with their face visible ("sings while
    forging the blade"). Clips with vocals always get their singers as subjects, even if a beat forgot them.
 6. **Requests**: clips with vocals get the isolated vocals as `<Audio 2>`, the voice-timbre reference for the singer,
    speaker ids `(S1)`, `(S2)`, and one sentence per sung line at its real time:
@@ -381,7 +414,7 @@ Without CUDA they run on the CPU, much slower.
 
 ## Band members and instruments
 
-When a character's `prop` in `project.json` (step 3, `cast`) is a musical instrument that's actually heard in the
+When a character's `prop` in `project.json` (step 5, `cast`) is a musical instrument that's actually heard in the
 song, its on-screen use is grounded in whether that instrument is audible at each point in the song, instead of the
 video model showing it played continuously through every shot:
 
@@ -390,7 +423,7 @@ video model showing it played continuously through every shot:
 ```
 
 - `prop` - any distinctive object a character carries or uses (a weapon, a tool, an instrument, …), named briefly.
-  Set for every visible band member, including backing musicians - step 3 is asked explicitly not to skip the
+  Set for every visible band member, including backing musicians - step 5 is asked explicitly not to skip the
   drummer or other non-lead instruments.
 - `propStem` - only for a `prop` that is a musical instrument actually part of the song: `"drums"`, `"bass"`, or
   `"other"` (guitar, keys, synth and every other melodic instrument - Demucs' 4-stem separation can't split those
@@ -400,16 +433,16 @@ video model showing it played continuously through every shot:
 What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
 [config.json](#configjson) - stems must already be separated):
 
-1. **Instrument activity** (`3c`): the same RMS-energy activity detection used for the vocals stem
+1. **Instrument activity** (`5c`): the same RMS-energy activity detection used for the vocals stem
    (`tools/vocals.py activity`) runs on every stem a `propStem` claims (`drums.wav`, `bass.wav`, `other.wav`) -
-   no extra model, just the stems already separated in step `0a`.
-2. **Shots** (`9b`): for every beat, each on-screen character with a `propStem` gets one active/inactive flag per
+   no extra model, just the stems already separated in step `2a`.
+2. **Shots** (`11b`): for every beat, each on-screen character with a `propStem` gets one active/inactive flag per
    shot, from whether that stem is active over more than half the shot's estimated duration. The LLM is told to show
    the character actively using the prop only on an active shot - it picks the verb itself (playing, strumming,
    striking, …), nothing here is a fixed word list - and to have them hold it still, rest it or otherwise occupy
    their hands on an inactive one.
 
-**Fixing a character's prop by hand.** If step 3 missed an instrument or bundled a costume detail into `prop` (e.g.
+**Fixing a character's prop by hand.** If step 5 missed an instrument or bundled a costume detail into `prop` (e.g.
 a mask worn alongside a guitar), edit `cast.characters` in `project.json` directly, then:
 
 ```bash

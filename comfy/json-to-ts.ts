@@ -1,5 +1,5 @@
 // Converts a ComfyUI workflow in API format into a draft workflow file for comfy/workflows/.
-// usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video [--force] [--comfy=http://host:8188]
+// usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video|audio [--force] [--comfy=http://host:8188]
 // See docs/custom-workflows.md for the steps after the conversion.
 //
 // Reads output names and dropdown values from the running server, and the builder method
@@ -14,8 +14,8 @@ const {values: args, positionals: [source, name]} = parseArgs({
     allowPositionals: true,
     options: {kind: {type: 'string', default: 'image'}, force: {type: 'boolean', default: false}, comfy: {type: 'string'}},
 })
-if (!source || !name || !['image', 'video'].includes(args.kind)) {
-    console.error('usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video [--force] [--comfy=http://host:8188]')
+if (!source || !name || !['image', 'video', 'audio'].includes(args.kind)) {
+    console.error('usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video|audio [--force] [--comfy=http://host:8188]')
     process.exit(1)
 }
 const target = join(import.meta.dir, 'workflows', `${name}.ts`)
@@ -116,7 +116,7 @@ function emit(id: string) {
 
 for (const id of Object.keys(graph)) emit(id)
 
-const optionsType = args.kind === 'image' ? 'ImageWorkflowOptions' : 'VideoWorkflowOptions'
+const optionsType = args.kind === 'image' ? 'ImageWorkflowOptions' : args.kind === 'audio' ? 'AudioWorkflowOptions' : 'VideoWorkflowOptions'
 const output = outputNodes.at(-1)
 const code = `// Draft generated from ${source} by comfy/json-to-ts.ts - see docs/custom-workflows.md
 // 1. replace the TODO values with opts, 2. check with: bun run typecheck, 3. set it in a project's config.json

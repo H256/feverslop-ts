@@ -11,6 +11,8 @@ export type RenderConfig = {
     imageWorkflow: string,          // file name in comfy/workflows/, without .ts
     videoWorkflow: string,
     songAudio: boolean,             // final video: the original song replaces the clips' own audio
+    songWorkflow: string,           // file name in comfy/workflows/, without .ts - used by --render=song
+    songDuration: number,           // seconds - an upper bound for a generated song; -1 = the workflow's own default
 }
 
 export type PlanConfig = {
@@ -31,6 +33,8 @@ const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     imageWorkflow: 'krea2-image',
     videoWorkflow: 'h3-ref2video',
     songAudio: true,
+    songWorkflow: 'yue2-song',
+    songDuration: -1,
     singers: [],
     lyricsLanguage: 'en',
     llm: {},
@@ -56,8 +60,11 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         }
     }
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
-    for (const key of ['imageWorkflow', 'videoWorkflow'] as const) {
+    for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
+    }
+    if (!Number.isFinite(config.songDuration) || (config.songDuration !== -1 && config.songDuration <= 0)) {
+        fail(`songDuration must be -1 (the workflow's own default) or a positive number of seconds, got ${JSON.stringify(config.songDuration)}`)
     }
 
     if (!Array.isArray(config.singers) || config.singers.some(s => typeof s !== 'string' || !s.trim())) {
