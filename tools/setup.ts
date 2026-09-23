@@ -53,6 +53,14 @@ async function save(what: string) {
     p.log.success(`Saved ${what} to ${settingsPath()}`)
 }
 
+function validateUrl(value?: string) {
+    try {
+        normalizeUrl(value ?? '', 'URL')
+    } catch (e) {
+        return (e as Error).message.replace(/^URL: /, '')
+    }
+}
+
 /** Lists the models - null when the server doesn't answer. */
 async function fetchModels(url: string, apiKey?: string) {
     const spinner = p.spinner()
@@ -86,13 +94,7 @@ async function setupLlm() {
         message: 'URL (with /v1)',
         placeholder: 'http://localhost:8080/v1',
         initialValue: file.llm?.url ?? '',
-        validate: value => {
-            try {
-                normalizeUrl(value ?? '', 'URL')
-            } catch (e) {
-                return (e as Error).message.replace(/^URL: /, '')
-            }
-        },
+        validate: validateUrl,
     })), 'URL')
     const current = file.llm?.apiKey
     const typed = answer(await p.password({
@@ -178,13 +180,7 @@ async function addComfy(entries: ComfyEntry[]) {
     const url = normalizeUrl(answer(await p.text({
         message: 'URL',
         placeholder: defaultComfy,
-        validate: value => {
-            try {
-                normalizeUrl(value ?? '', 'URL')
-            } catch (e) {
-                return (e as Error).message.replace(/^URL: /, '')
-            }
-        },
+        validate: validateUrl,
     })), 'URL')
     const host = new URL(url).host
     const name = answer(await p.text({

@@ -12,6 +12,9 @@ export {FPS} from "../lib/frames.ts";
 export type Resolution = -1 | number | `${number}x${number}`
 export type Orientation = 'portrait' | 'landscape'
 
+// hardware/model limit: MiniMax H3 accepts at most this many reference images
+export const MAX_REFERENCE_IMAGES = 9
+
 // The contract of a workflow file in comfy/workflows/ - see docs/custom-workflows.md.
 // Its default export takes these options and returns the graph plus the node whose files are downloaded.
 export type WorkflowResult = { workflow: WorkflowBuilder, output: string }

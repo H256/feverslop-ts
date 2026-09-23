@@ -1,6 +1,8 @@
 import {join} from "node:path";
 import type {Assignment, LyricSection, LyricsTiming, MusicMap, Slot, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
 import {refineSections, slotVocals} from "./lyrics.ts";
+import {round} from "./frames.ts";
+import {runProcess} from "./process.ts";
 
 // "[Verse 1]\nline\nline" -> [{label: 'Verse 1', lines: [...]}]
 export function parseLyricSections(lyrics: string): LyricSection[] {
@@ -15,9 +17,7 @@ export function parseLyricSections(lyrics: string): LyricSection[] {
 }
 
 export async function analyzeSong(songFile: string, labels: string[]): Promise<MusicMap> {
-    const proc = Bun.spawn(['uv', 'run', 'tools/analyze_song.py', songFile, JSON.stringify(labels)], {stderr: 'pipe'})
-    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
-    if (exitCode !== 0) throw new Error(`Song analysis failed:\n${stderr}`)
+    const stdout = await runProcess(['uv', 'run', 'tools/analyze_song.py', songFile, JSON.stringify(labels)], {errorMessage: err => `Song analysis failed:\n${err}`})
     return JSON.parse(stdout)
 }
 
@@ -37,17 +37,15 @@ export async function transcribeVocals(vocalsFile: string, language: string, lyr
 
 // progress (and the model downloads on first use) are shown as they happen, stdout is the result
 async function runVocalsTool(args: string[], what: string) {
-    const proc = Bun.spawn(['uv', 'run', 'tools/vocals.py', ...args], {stderr: 'inherit'})
-    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-    if (exitCode !== 0) throw new Error(`${what} failed (tools/vocals.py ${args[0]}) - see the output above`)
-    return stdout
+    return runProcess(['uv', 'run', 'tools/vocals.py', ...args], {
+        stderr: 'inherit',
+        errorMessage: () => `${what} failed (tools/vocals.py ${args[0]}) - see the output above`,
+    })
 }
 
 // Cuts the clip's part out of the song - it becomes the clip's <Audio 1>
 export async function cutAudio(songFile: string, start: number, end: number, outFile: string) {
-    const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {stderr: 'pipe'})
-    const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited])
-    if (exitCode !== 0) throw new Error(`ffmpeg failed for ${outFile}:\n${stderr}`)
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {errorMessage: err => `ffmpeg failed for ${outFile}:\n${err}`})
 }
 
 /**
@@ -107,8 +105,6 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
     })
     return {maxClipSec, barsPerSlot, aligned: Boolean(timing), sections, slots}
 }
-
-const round = (n: number) => Math.round(n * 1000) / 1000
 
 /**
  * Stretches the story beats over the slots, in story order, every beat getting at least one slot.

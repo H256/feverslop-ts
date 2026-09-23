@@ -39,6 +39,12 @@ function print(line: string) {
     drawBoard()
 }
 
+/** Warns about keys in `obj` that aren't in `allowed` - `prefix` is prepended to each reported key, e.g. "llm.". */
+export function warnUnknownKeys(obj: object, allowed: string[], where: string, prefix = '') {
+    const unknown = Object.keys(obj).filter(key => !allowed.includes(key))
+    if (unknown.length) log.warn(`${where}: unknown field(s) ${prefix}${unknown.join(`, ${prefix}`)} - ignored`)
+}
+
 export const log = {
     section: (title: string) => print(`\n${styles.section(`  ${title}  `)}\n`),
     step: (label: string, value: string = '') => print(`${styles.label(`▸ ${label}`)} ${value}`),

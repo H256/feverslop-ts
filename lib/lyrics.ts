@@ -1,7 +1,7 @@
 import type {LyricSection, LyricsTiming, MusicMap, MusicSection, Slot, SlotVocal, TimedLine, TimedWord, TranscriptWord} from "./project.ts";
 
 export type ActivityRange = { start: number, end: number }
-import {frameAt, secondsAt} from "./frames.ts";
+import {frameAt, round, secondsAt} from "./frames.ts";
 
 // Aligns the known lyrics to Whisper's transcript of the vocals stem - plain code, deterministic.
 
@@ -260,5 +260,3 @@ export function slotVocals(slot: Pick<Slot, 'start' | 'end'>, timing: LyricsTimi
 
 // lines worth a look by hand
 export const lowConfidence = (timing: LyricsTiming, below = 0.5): TimedLine[] => timing.lines.filter(l => l.confidence < below)
-
-const round = (n: number) => Math.round(n * 1000) / 1000

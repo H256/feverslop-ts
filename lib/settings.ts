@@ -2,7 +2,7 @@ import {chmodSync, existsSync, mkdirSync, writeFileSync} from "node:fs";
 import {homedir} from "node:os";
 import {dirname, join} from "node:path";
 import type {BasicCredentials, BearerTokenCredentials, SystemStatsResponse} from "@saintno/comfyui-sdk";
-import {log} from "./log.ts";
+import {warnUnknownKeys} from "./log.ts";
 
 // The machine-specific connections: the LLM server and the ComfyUI servers. Stored outside the repo in a global
 // settings file (written by `bun run setup`), overridable per project (llm.model), by env vars and by CLI flags.
@@ -60,13 +60,11 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object')
 
-    const unknown = Object.keys(raw).filter(key => !['llm', 'comfy'].includes(key))
-    if (unknown.length) log.warn(`${file}: unknown field(s) ${unknown.join(', ')} - ignored`)
+    warnUnknownKeys(raw, ['llm', 'comfy'], file)
 
     if (raw.llm !== undefined) {
         if (!raw.llm || typeof raw.llm !== 'object' || Array.isArray(raw.llm)) fail('llm must be an object like {"url": …, "apiKey": …, "model": …}')
-        const unknownLlm = Object.keys(raw.llm).filter(key => !['url', 'apiKey', 'model'].includes(key))
-        if (unknownLlm.length) log.warn(`${file}: unknown field(s) llm.${unknownLlm.join(', llm.')} - ignored`)
+        warnUnknownKeys(raw.llm, ['url', 'apiKey', 'model'], file, 'llm.')
         for (const key of ['url', 'apiKey', 'model'] as const) {
             if (raw.llm[key] !== undefined && typeof raw.llm[key] !== 'string') fail(`llm.${key} must be a string, got ${JSON.stringify(raw.llm[key])}`)
         }
@@ -139,8 +137,7 @@ export function parseComfyEntries(entries: unknown[], where: string): ComfyServe
         }
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return fail(`${at} must be a URL or an object like {"url": …}, got ${JSON.stringify(entry)}`)
         const e = entry as Exclude<ComfyEntry, string>
-        const unknown = Object.keys(e).filter(key => !['url', 'name', 'token', 'username', 'password'].includes(key))
-        if (unknown.length) log.warn(`${where}, ${at}: unknown field(s) ${unknown.join(', ')} - ignored`)
+        warnUnknownKeys(e, ['url', 'name', 'token', 'username', 'password'], `${where}, ${at}`)
         for (const key of ['url', 'name', 'token', 'username', 'password'] as const) {
             if (e[key] !== undefined && typeof e[key] !== 'string') fail(`${at}: ${key} must be a string, got ${JSON.stringify(e[key])}`)
         }
