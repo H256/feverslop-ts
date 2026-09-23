@@ -102,7 +102,7 @@ projects/<project-id>/
     story-idea.txt    optional
     style.txt         optional - the film's style, e.g. "dark gothic oil painting, heavy chiaroscuro"
   config.json         settings: singers, lyrics language, rendering (see config.json)
-  stems/              the song's stems (vocals, drums, bass, guitar, piano, other) - only when lyrics are aligned
+  stems/              the song's stems (vocals, drums, bass, other) - only when lyrics are aligned
   assets/             reference pictures, rendered or your own - never overwritten;
                       clips/<clip-id>_ff.png, _lf.png: first and last frame of every rendered clip
   videos/             rendered clips - never overwritten
@@ -119,6 +119,7 @@ bun index.ts <project-id>             # any other project
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
 bun index.ts --render=all             # also render with ComfyUI and assemble final.mp4, see below
+bun index.ts --legacy-moments         # skip step 9b, spread beat.moments across shots the old way
 ```
 
 Finished steps are cached in `project.json` and skipped on the next run - a run that breaks halfway continues where it
@@ -154,7 +155,7 @@ The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_
 | # | Step (`--redo=`) | What it does                                                                     | Built on                     |
 |---|------------------|----------------------------------------------------------------------------------|------------------------------|
 | 0  | `music`          | BPM, downbeats, energy per bar, song sections named after the lyrics tags         | –                            |
-| 0a | `stems`          | demucs `htdemucs_6s` → `stems/{vocals,drums,bass,guitar,piano,other}.wav` ¹       | –                            |
+| 0a | `stems`          | demucs `htdemucs_ft` → `stems/{vocals,drums,bass,other}.wav` ¹                    | –                            |
 | 0b | `transcript`     | Whisper large-v3 on `vocals.wav`, word timestamps, the lyrics as prompt ¹         | stems                        |
 | 0c | `lyricsTiming`   | The known lyrics aligned to the transcript: start and end of every line and word ¹ | transcript                   |
 | 1  | `story`          | Story from lyrics and/or story idea                                              | –                            |
@@ -169,11 +170,13 @@ The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_
 | 7  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
 | 8  | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 9  | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
+| 9b | `shotMoments`    | One distinct, progressing action per shot per beat, replacing `beat.moments` ³   | beats, timeline, mapping     |
 | 10 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
-¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings
+¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings ·
+³ skipped with `--legacy-moments`, which spreads/reuses `beat.moments` across shots instead (the old behavior)
 
-Steps 1–7 use the LLM (3b only for `"auto"` or several singers), all others are plain code.
+Steps 1–7 and 9b use the LLM (3b only for `"auto"` or several singers), all others are plain code.
 
 The looks (5, 6) are image prompts for the reference pictures - they put a character on a plain grey background in
 studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
@@ -342,8 +345,7 @@ In performance mode characters sing the lyrics on screen, lip-synced to the real
 
 What happens then:
 
-1. **Stems** (`0a`): demucs `htdemucs_6s` separates the song into `stems/vocals.wav`, `drums`, `bass`, `guitar`,
-   `piano` and `other`.
+1. **Stems** (`0a`): demucs `htdemucs_ft` separates the song into `stems/vocals.wav`, `drums`, `bass` and `other`.
 2. **Transcript** (`0b`): Whisper large-v3 transcribes `vocals.wav` with word timestamps. The lyrics are given as the
    prompt, which makes sung words much easier to recognize.
 3. **Lyrics timing** (`0c`): the known lyrics are aligned to the heard words, word by word and in order. Words Whisper

@@ -52,11 +52,13 @@ export type Timeline = {
 }
 
 // Stems of the song, paths relative to the project folder
-export type Stems = Record<'vocals' | 'drums' | 'bass' | 'guitar' | 'piano' | 'other', string>
+export type Stems = Record<'vocals' | 'drums' | 'bass' | 'other', string>
 
 // Whisper's words on the vocals stem
 export type TranscriptWord = { text: string, start: number, end: number, probability: number }
-export type Transcript = { words: TranscriptWord[] }
+// activity: RMS-energy vocal activity ranges from the vocals stem, independent of whisper - grounds interpolated
+// (unheard) word timing in real acoustic evidence instead of spreading them blindly across a whole gap
+export type Transcript = { words: TranscriptWord[], activity?: { start: number, end: number }[] }
 
 export type TimedWord = { text: string, start: number, end: number }
 // One sung line of lyrics.txt with its real timing. `line` numbers the sung lines (performance notes excluded)
@@ -98,6 +100,7 @@ export type Project = {
     beats?: StoryBeat[],
     timeline?: Timeline,
     mapping?: Assignment[],
+    shotMoments?: Record<string, string[]>,   // beatId -> one distinct action per shot, replacing beat.moments when not --legacy-moments
 }
 export type StepName = Exclude<keyof Project, 'inputs'>
 
@@ -119,6 +122,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     beats: ['story', 'cast', 'singing'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
+    shotMoments: ['beats', 'timeline', 'mapping'],
 }
 
 export class ProjectStore {

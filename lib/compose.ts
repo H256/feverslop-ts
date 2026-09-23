@@ -48,6 +48,8 @@ type Input = {
     music: MusicMap,
     language: string,           // for <d>[...], e.g. "English"
     singing?: Singing,          // performance mode
+    // beatId -> one distinct, progressing action per shot (step 9b) - replaces the beat.moments spread when given
+    shotMoments?: Record<string, string[]>,
 }
 
 // Framings per beat kind, used in order for the shots of a clip
@@ -60,37 +62,103 @@ const framings: Record<StoryBeat['kind'], string[]> = {
 // a shot in which a line starts frames the singer's face
 const singingFramings = ['medium shot', 'medium close-up', 'close-up']
 
-// One camera move per shot, faster with more musical energy
+// One camera move per shot, faster with more musical energy. Even "low" energy always keeps a slow, visible drift -
+// a genuinely locked-off static frame reads as a still photo, not a shot, on anything longer than a second or two
 const cameraMoves = {
-    low: ['the camera dollies in slowly over the whole shot', 'the camera holds still on a locked-off frame', 'the camera cranes up slowly', 'the camera drifts sideways at a slow, even pace'],
+    low: ['the camera dollies in slowly over the whole shot', 'the camera creeps almost imperceptibly closer', 'the camera cranes up slowly', 'the camera drifts sideways at a slow, even pace'],
     mid: ['the camera pushes in steadily', 'the camera tracks sideways at walking pace', 'the camera tilts up at a moderate speed', 'the camera arcs slowly around the subjects'],
     high: ['the handheld camera pushes in fast', 'the camera tracks quickly alongside the action', 'the camera cranes down fast toward the subjects', 'the camera arcs quickly around the subjects'],
 }
 
 const positions = ['on the left', 'in the center', 'on the right', 'in the background']
 
-export function buildClipRequests(input: Input): ClipRequest[] {
-    const {slots, mapping, beats, music} = input
-    const beatById = new Map(beats.map(b => [b.id, b]))
-    const requests: ClipRequest[] = []
-    const stateSoFar: string[] = []
+// C: how many castSubjects share a non-establishing shot - mostly a solo face or a two-character interaction,
+// full-group shots stay rare so blocking doesn't default back to "everyone lined up" every shot
+const blockingPattern = ['single', 'single', 'pair', 'group'] as const
 
+// Picks who's in frame for a shot: `required` (e.g. the singers of this shot) always stays in, `named` (a
+// character the story moment calls out by name) takes it alone when nobody must be kept in frame, otherwise a
+// rotating window of `cast` is added around `required` - the window's start and size (see blockingPattern) both
+// advance with `cursor`, a counter shared across the whole song, so the composition keeps changing shot to shot
+// instead of resetting with every clip
+function pickFocus<T>(cast: T[], required: T[], cursor: number, named: T | undefined): T[] {
+    if (!required.length && named) return [named]
+    if (cast.length <= 1) return cast.length ? cast : required
+    const mode = blockingPattern[cursor % blockingPattern.length]!
+    const size = Math.min(cast.length, mode === 'single' ? 1 : mode === 'pair' ? 2 : cast.length)
+    const start = cursor % cast.length
+    const window = Array.from({length: size}, (_, n) => cast[(start + n) % cast.length]!)
+    return [...new Set([...required, ...window])]
+}
+
+// D: rotates through the energy level's camera moves but never repeats the immediately preceding shot's move,
+// even across a slot or beat boundary - `cursor` and `last` are shared across the whole song
+function nextCamera(level: keyof typeof cameraMoves, cursor: Record<keyof typeof cameraMoves, number>, last: string | undefined) {
+    const pool = cameraMoves[level]
+    let move = pool[cursor[level] % pool.length]!
+    if (move === last && pool.length > 1) move = pool[++cursor[level] % pool.length]!
+    cursor[level]++
+    return move
+}
+
+// More cuts with more musical energy - shared by buildClipRequests and the step that sizes the per-shot moment lists
+function shotCountFor(slot: Slot, beat: StoryBeat, opensScene: boolean) {
+    const base = opensScene && beat.kind === 'establish' ? 1 : slot.energy < 0.45 ? 1 : slot.energy < 0.75 ? 2 : 4
+    // a single shot covering 3+ bars runs long enough, at this kind of tempo, to read as a held photo rather than
+    // a shot - cut it at least once even when energy or an establishing beat would otherwise keep it uncut
+    const minShots = slot.bars >= 3 ? 2 : 1
+    return Math.min(slot.bars, Math.max(base, minShots))
+}
+
+// Groups the slots into contiguous scenes (runs of slots mapped to the same beat), in story order
+function* scenesOf(slots: Slot[], mapping: Assignment[], beatById: Map<string, StoryBeat>) {
     for (let i = 0; i < slots.length;) {
         const beat = beatById.get(mapping[i]!.beatId)!
         let sceneEnd = i
         while (sceneEnd < slots.length && mapping[sceneEnd]!.beatId === beat.id) sceneEnd++
-        const scene = slots.slice(i, sceneEnd)
+        yield {beat, scene: slots.slice(i, sceneEnd)}
+        i = sceneEnd
+    }
+}
+
+// How many shots each beat will render in total - used to size the per-shot moment lists (step 9b)
+export function countShotsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Record<string, number> {
+    const beatById = new Map(beats.map(b => [b.id, b]))
+    const counts: Record<string, number> = {}
+    for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
+        counts[beat.id] = scene.reduce((sum, slot, k) => sum + shotCountFor(slot, beat, k === 0), 0)
+    }
+    return counts
+}
+
+export function buildClipRequests(input: Input): ClipRequest[] {
+    const {slots, mapping, beats, music, shotMoments} = input
+    const beatById = new Map(beats.map(b => [b.id, b]))
+    const requests: ClipRequest[] = []
+    const stateSoFar: string[] = []
+    // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
+    let blockingCursor = 0
+    let lastCamera: string | undefined
+    const cameraCursor: Record<keyof typeof cameraMoves, number> = {low: 0, mid: 0, high: 0}
+
+    for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
         const moments = beat.moments?.length ? beat.moments : splitSentences(beat.summary)
+        // step 9b: one distinct action per shot, already sized to the beat's total shot count - sliced out in order
+        const flat = shotMoments?.[beat.id]
+        let shotCursor = 0
 
         scene.forEach((slot, k) => {
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), [...stateSoFar], k === 0, input))
+            const opensScene = k === 0
+            const shotCount = shotCountFor(slot, beat, opensScene)
+            const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
+            shotCursor += shotCount
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, [...stateSoFar], opensScene, input))
         })
         stateSoFar.push(...beat.stateAfter)
-        i = sceneEnd
     }
     return requests
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -130,7 +198,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // Shots: more cuts with more energy, cut on downbeats
         const duration = round(slot.end - slot.start)
-        const shotCount = Math.min(slot.bars, opensScene && beat.kind === 'establish' ? 1 : slot.energy < 0.45 ? 1 : slot.energy < 0.75 ? 2 : 4)
+        const shotCount = shotCountFor(slot, beat, opensScene)
         const bars = music.downbeats.filter(t => t >= slot.start - 0.05 && t < slot.end - 0.05)
         const energyLevel = slot.energy < 0.4 ? 'low' : slot.energy < 0.7 ? 'mid' : 'high'
         const notes = slot.lyrics.filter(l => l.startsWith('(')).map(l => l.replace(/[()]/g, ''))
@@ -146,19 +214,21 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         let singingShots = 0
         const shots = cuts.map((at, j) => {
-            const moment = spread(moments, j, shotCount).join(' ')
-            // first shot shows everyone, later shots single out the character the moment is about
+            const moment = flatShotMoments?.[j] ?? spread(moments, j, shotCount).join(' ')
+            // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
             const named = castSubjects.find(s => names(s).test(moment))
             const starting = vocals.filter(v => inShot(j, v.start))
             const continuing = vocals.filter(v => v.start < at && v.end > at)
-            // while someone sings, the camera is on the singers - the first shot still shows everyone, singers first
+            // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
             const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
-            const focus = j === 0 || castSubjects.length === 0
+            const focus = opensScene && j === 0
                 ? [...new Set([...singersInShot, ...castSubjects])]
-                : singersInShot.length ? singersInShot : [named ?? castSubjects[(j - 1) % castSubjects.length]!]
+                : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
             // a shot with a line start frames the singer, with a calmer camera
             const framing = starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
-            const camera = cameraMoves[starting.length ? energyLevel === 'high' ? 'mid' : 'low' : energyLevel][(slot.index + j) % 4]!
+            const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
+            const camera = nextCamera(cameraLevel, cameraCursor, lastCamera)
+            lastCamera = camera
             return {label: `[Shot ${j + 1}]`, at, framing, camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
         })
 
@@ -177,7 +247,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ? onSinger
                     ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                     : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-                : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}; ${shot.camera}.`
+                // repeats the location on every cut, not just the first shot - otherwise a shot with no location
+                // callout tends to fall back to the character reference pictures' plain grey background
+                : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
             const inFrame = shot.focus.length
                 ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.`
                 : ''

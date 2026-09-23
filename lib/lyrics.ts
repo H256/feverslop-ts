@@ -1,4 +1,6 @@
 import type {LyricSection, LyricsTiming, MusicMap, MusicSection, Slot, SlotVocal, TimedLine, TimedWord, TranscriptWord} from "./project.ts";
+
+export type ActivityRange = { start: number, end: number }
 import {frameAt, secondsAt} from "./frames.ts";
 
 // Aligns the known lyrics to Whisper's transcript of the vocals stem - plain code, deterministic.
@@ -50,10 +52,13 @@ export function similarity(a: string, b: string) {
 /**
  * Start and end of every sung line and word. The lyric words are aligned to the transcript words in order
  * (Needleman-Wunsch), a pair matches when the words are similar enough. Lyric words Whisper didn't hear get
- * interpolated times between their matched neighbours. `sections` (the estimate from the audio) is optional and
- * only breaks ties - e.g. which of three identical choruses a heard chorus belongs to.
+ * interpolated times between their matched neighbours, grounded in `activity` (RMS vocal-activity ranges from the
+ * audio, independent of whisper) when given - growled/screamed vocals whisper can't transcribe still show up
+ * there, so an unheard word lands inside a real singing window instead of spread blindly across a whole gap.
+ * `sections` (the estimate from the audio) is optional and only breaks ties - e.g. which of three identical
+ * choruses a heard chorus belongs to.
  */
-export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord[], sections?: MusicSection[]): LyricsTiming {
+export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord[], sections?: MusicSection[], activity?: ActivityRange[]): LyricsTiming {
     const lines = sungLines(lyricSections)
     const lyric = lines.flatMap(line => line.words.map(text => ({text, norm: normalizeWord(text), line: line.line, sectionIndex: line.sectionIndex})))
     const transcript = heard.map(w => ({...w, norm: normalizeWord(w.text)})).filter(w => w.norm)
@@ -114,7 +119,7 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
             : {text: word.text, start: transcript[j]!.start, end: transcript[j]!.end, sim: similarity(word.norm, transcript[j]!.norm)}
     })
     if (timed.every(w => w.sim === 0)) throw new Error('None of the lyrics were found in the transcript - is lyricsLanguage right, and are there vocals in the song?')
-    interpolate(timed, lyric.map(w => w.sectionIndex))
+    interpolate(timed, lyric.map(w => w.sectionIndex), activity)
 
     let k = 0
     return {
@@ -137,9 +142,10 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
 /**
  * Times for the unmatched words, in place. A run of unmatched words between two matched ones is split: the
  * words of the previous matched word's section follow it, the rest lead up to the next matched word - so an
- * unheard line before an instrumental gap doesn't get stretched over the whole gap.
+ * unheard line before an instrumental gap doesn't get stretched over the whole gap. When `activity` covers part
+ * of that gap, the words are further narrowed to the loudest overlapping range instead of spread across the gap.
  */
-function interpolate(words: TimedWord[], sectionOf: number[]) {
+function interpolate(words: TimedWord[], sectionOf: number[], activity?: ActivityRange[]) {
     const known = (i: number) => !Number.isNaN(words[i]!.start)
     for (let a = 0; a < words.length; a++) {
         if (known(a)) continue
@@ -148,8 +154,9 @@ function interpolate(words: TimedWord[], sectionOf: number[]) {
         const count = b - a + 1
         const prev = a > 0 ? a - 1 : undefined
         const next = b + 1 < words.length ? b + 1 : undefined
-        const lo = prev !== undefined ? words[prev]!.end : Math.max(0, words[next!]!.start - count * TYPICAL_WORD_SEC)
-        const hi = next !== undefined ? words[next]!.start : lo + count * TYPICAL_WORD_SEC
+        let lo = prev !== undefined ? words[prev]!.end : Math.max(0, words[next!]!.start - count * TYPICAL_WORD_SEC)
+        let hi = next !== undefined ? words[next]!.start : lo + count * TYPICAL_WORD_SEC
+        if (activity?.length) [lo, hi] = clampToActivity(lo, hi, activity, count)
         const per = Math.max(0, Math.min(TYPICAL_WORD_SEC, (hi - lo) / count))
 
         let split = a
@@ -159,6 +166,24 @@ function interpolate(words: TimedWord[], sectionOf: number[]) {
         for (let i = split; i <= b; i++) Object.assign(words[i]!, {start: round(hi - (b + 1 - i) * per), end: round(hi - (b - i) * per)})
         a = b
     }
+}
+
+// Narrows [lo, hi] to the activity range it overlaps most, when that leaves enough room for `count` words -
+// a too-narrow overlap is discarded rather than stacking every word on top of each other
+function clampToActivity(lo: number, hi: number, activity: ActivityRange[], count: number): [number, number] {
+    let best: ActivityRange | undefined
+    let bestOverlap = 0
+    for (const range of activity) {
+        const overlap = Math.min(hi, range.end) - Math.max(lo, range.start)
+        if (overlap > bestOverlap) {
+            bestOverlap = overlap
+            best = range
+        }
+    }
+    if (!best) return [lo, hi]
+    const clampedLo = Math.max(lo, best.start)
+    const clampedHi = Math.min(hi, best.end)
+    return clampedHi - clampedLo >= count * 0.15 ? [clampedLo, clampedHi] : [lo, hi]
 }
 
 /**

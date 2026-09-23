@@ -7,7 +7,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {type Character, type Location, ProjectStore, type Singing, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateStems, transcribeVocals} from "./lib/music.ts";
-import {buildClipRequests, pictureAsset} from "./lib/compose.ts";
+import {buildClipRequests, countShotsPerBeat, pictureAsset} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
@@ -19,7 +19,7 @@ import {loadSettings} from "./lib/settings.ts";
 const MAX_CLIP_SEC = 10
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=images,videos,final|all] [--only=slot-001,slot-002]
-//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188]  (this run only)
+//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
 const {values: args, positionals} = parseArgs({
     args: Bun.argv.slice(2),
     allowPositionals: true,
@@ -31,6 +31,8 @@ const {values: args, positionals} = parseArgs({
         'llm-key': {type: 'string'},
         'llm-model': {type: 'string'},
         comfy: {type: 'string'},
+        // skips step 9b and spreads/reuses beat.moments across shots the old way - a fallback while 9b is new
+        'legacy-moments': {type: 'boolean', default: false},
     },
 })
 // --render=all is images, videos and the final video, in that order
@@ -109,7 +111,7 @@ log.step('Sections', styles.muted(config.alignLyrics
 
 ////////// ALIGNING THE LYRICS - only when someone sings, or with "alignLyrics": true
 const stems = config.alignLyrics ? await project.step('stems', '0a · SEPARATING THE STEMS', async () => {
-    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_6s - the first run downloads the model (~80 MB)`))
+    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_ft - the first run downloads the model (~320 MB)`))
     return separateStems(songFile, project.dir)
 }) : undefined
 if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
@@ -118,9 +120,12 @@ const transcript = stems ? await project.step('transcript', '0b · TRANSCRIBING 
     log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
     return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
 }) : undefined
-if (transcript) log.step('Heard', styles.muted(`${transcript.words.length} words: ${transcript.words.slice(0, 12).map(w => w.text).join(' ')} …`))
+if (transcript) {
+    log.step('Heard', styles.muted(`${transcript.words.length} words: ${transcript.words.slice(0, 12).map(w => w.text).join(' ')} …`))
+    if (transcript.activity) log.step('Vocal activity', styles.muted(`${transcript.activity.length} range(s) from RMS energy, independent of whisper`))
+}
 
-const lyricsTiming = transcript ? await project.step('lyricsTiming', '0c · ALIGNING THE LYRICS', async () => alignLyrics(lyricSections, transcript.words, music.sections)) : undefined
+const lyricsTiming = transcript ? await project.step('lyricsTiming', '0c · ALIGNING THE LYRICS', async () => alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity)) : undefined
 if (lyricsTiming) {
     for (const line of lyricsTiming.lines) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))
@@ -199,7 +204,7 @@ if (singing) {
 
 /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
 const lookRules = `Describe in 120-180 words, as plain prose:
-- Format and style: name the medium first and be specific (e.g. "2D anime in the style of 90s cel animation", "live action shot on 35mm film").
+- Format and style: name the medium first and be specific. Pick whichever actually fits the story and the director's brief best, don't default to live-action photography (e.g. "2D anime in the style of 90s cel animation", "live action shot on 35mm film", "hand-painted dark fantasy oil painting", "stop-motion with visible puppet seams", "grainy VHS found-footage horror", "woodcut/engraving line art").
 - World: architecture, landscapes, materials and textures of the world.
 - Color palette and lighting: dominant colors, light sources, contrast, time of day.
 - Camera language: typical shot types, lens feel and camera movement (e.g. slow dolly-ins, low-angle wide shots, handheld close-ups).
@@ -368,6 +373,7 @@ For every beat give:
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
 - "lyricAnchor": the song section label this beat belongs under if the lyrics describe it (e.g. "Chorus"), otherwise omit it.
 - "stateAfter": short facts that are true after this beat and must stay visible later, e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
+Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat.
 ${singing ? performanceRules(singing) : ''}
 Answer only with JSON: {"beats": [...]}
 ---
@@ -428,6 +434,46 @@ for (const slot of timeline.slots) {
     console.log(`   ${styles.muted(`${formatTime(slot.start)}`)} ${slot.section.padEnd(12)} ${energyBar(slot.energy)} ${styles.name(beat.id)} ${styles.muted(energyBar(beat.intensity))}`)
 }
 
+////////// REFINING THE MOMENTS TO ONE PER SHOT
+// beat.moments (2-6 sentences) is written before the beat's shot count is known, so a beat can end up covering far
+// more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
+// still does). This step asks for exactly one distinct, progressing action per shot instead.
+const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '9b · REFINING MOMENTS PER SHOT', async () => {
+    const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
+    const extracted = await askJson<{ moments: Record<string, string[]> }>({
+        reasoning: 'medium',
+        maxTokens: 16384,
+        input: `For every story beat below, expand it into a shot list for a music video: exactly "shotsNeeded" short sentences, in order, one concrete visible action per shot.
+
+Rules:
+- Each shot must show real physical progression from the one before it - never repeat, restate or merely rephrase the previous shot's action, and never describe the camera or a held/static moment.
+- Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, the shots must show a real dramatic encounter across the sequence: fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear) - not characters standing and staring.
+- Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
+- Name characters by their name (not pronouns), so every shot reads on its own.
+
+Answer only with JSON: {"moments": {"<beatId>": ["shot 1 action", "shot 2 action", ...]}}
+---
+beats:
+${JSON.stringify(beats.map(b => ({id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId, shotsNeeded: shotCounts[b.id] ?? 1})))}`,
+        instructions: 'You are a music video director turning story beats into a shot list. Answer only with JSON.',
+    })
+
+    const result: Record<string, string[]> = {}
+    for (const beat of beats) {
+        const needed = shotCounts[beat.id] ?? 1
+        const list = extracted.moments[beat.id]
+        if (!list?.length) continue // falls back to the legacy spread for this beat
+        result[beat.id] = Array.from({length: needed}, (_, j) => list[Math.min(j, list.length - 1)]!)
+    }
+    return result
+})
+if (shotMoments) for (const beat of beats) {
+    const list = shotMoments[beat.id]
+    if (!list) continue
+    console.log(`   ${styles.name(beat.id)} ${styles.muted(`${list.length} shots`)}`)
+    for (const line of list) console.log(styles.muted(`        · ${line}`))
+}
+
 ////////// BUILDING THE MINIMAX H3 REQUESTS
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
 log.section('10 · BUILDING THE MINIMAX H3 REQUESTS')
@@ -443,6 +489,7 @@ const clips = buildClipRequests({
     music,
     language,
     singing,
+    shotMoments,
 })
 
 const outputDir = join(project.dir, 'output')

@@ -21,10 +21,12 @@ export async function analyzeSong(songFile: string, labels: string[]): Promise<M
     return JSON.parse(stdout)
 }
 
-// demucs htdemucs_6s: the song's stems as WAV files in <projectDir>/stems/, paths relative to the project
+// demucs htdemucs_ft: the song's stems as WAV files in <projectDir>/stems/, paths relative to the project.
+// Only the vocals stem is used downstream (lip-sync reference, transcription) - htdemucs_ft gives it the
+// cleanest separation of the demucs family, at the cost of not splitting out guitar/piano/other individually.
 export async function separateStems(songFile: string, projectDir: string): Promise<Stems> {
     await runVocalsTool(['separate', songFile, join(projectDir, 'stems')], 'Stem separation')
-    const names = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'] as const
+    const names = ['vocals', 'drums', 'bass', 'other'] as const
     return Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as Stems
 }
 
