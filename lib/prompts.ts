@@ -91,7 +91,7 @@ export function characterLookPrompt(lookBrief: string, char: { name: string, rol
     return {
         input: `
 Write a Krea 2 image prompt for a character reference sheet of the given character.
-The image must match the film look below exactly - same medium, style, palette and lighting.
+The image must match the film look below - same medium, style, palette and lighting - but it is a clean reference plate, not a film frame: it must be sharp and clearly readable, so leave out anything that would degrade or obscure the detail.
 Consider the character's role in the story when designing the look.
 
 Rules:
@@ -100,6 +100,7 @@ Rules:
 - Describe exactly ONE character, even if the name is plural.
 - Full body, standing, facing the camera, in front of a plain grey neutral background, so the image can be reused as a reference.
 - Describe only visible details: face, age, build, skin, hair, clothing, materials, colors, accessories, and how the light falls on them.
+- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
 - No mood labels without visible evidence, no text or lettering in the image.
 - Answer only with the prompt.
 
@@ -133,7 +134,7 @@ export function locationLookPrompt(lookBrief: string, storySummary: string, loca
     return {
         input: `
 Write a Krea 2 image prompt for an establishing shot of the given location.
-The image must match the film look below exactly - same medium, style, palette and lighting.
+The image must match the film look below - same medium, style, palette and lighting - but it is a clean reference plate, not a film frame: it must be sharp and clearly readable, so leave out anything that would degrade or obscure the detail.
 Use the story summary as a guide to how the location fits into the story.
 
 Rules:
@@ -142,6 +143,7 @@ Rules:
 - The location is empty: no people, creatures or characters.
 - Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
 - Describe only visible details: layout, architecture, terrain, materials, props, time of day, weather, light sources, atmosphere like fog, dust or smoke.
+- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
 - No mood labels without visible evidence, no text or lettering in the image.
 - Answer only with the prompt.
 
