@@ -531,8 +531,9 @@ if (render.has('images') || render.has('videos')) {
         log.step('Pictures', `${pictures.length}`)
         await renderAll(pictures, picture => renderer.renderPicture(picture))
     }
-    // clips need all their pictures, so they start after the pictures
+    // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {
+        if (render.has('images')) await renderer.freeMemory()
         const selected = clips.filter(c => only.size === 0 || only.has(c.id))
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
         await renderAll(selected, clip => renderer.renderClip(clip, songFile, stems && join(project.dir, stems.vocals)))

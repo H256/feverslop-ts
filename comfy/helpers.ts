@@ -5,7 +5,7 @@ export {WorkflowBuilder}
 export {FPS} from "../lib/frames.ts";
 
 /**
- * -1         keep the workflow's own resolution
+ * -1 keep the workflow's own resolution
  * 1.1        megapixels, through a ResolutionSelector node
  * "1920x1088" fixed size, through two PrimitiveInt nodes
  */

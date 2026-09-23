@@ -115,6 +115,21 @@ export class Renderer implements Disposable {
         }
     }
 
+    // Unloads models and frees VRAM on every connected server - call between phases that load different models
+    // (e.g. images -> videos), so the next phase's model has room without ComfyUI swapping it in under pressure.
+    async freeMemory() {
+        if (!this.connected.length) return
+        log.step('✨ Freeing VRAM', styles.muted(this.connected.map(s => s.name).join(', ')))
+        await Promise.all(this.connected.map(async server => {
+            try {
+                const freed = await server.api.freeMemory(true, true)
+                log.step(freed ? '✨ Freed' : '✗ Free failed', styles.muted(`VRAM on ${server.name}`))
+            } catch (e) {
+                log.warn(`${server.name}: failed to free VRAM - ${(e as Error).message}`)
+            }
+        }))
+    }
+
     // Characters are portrait, locations landscape - saved to the placeholder paths the clips reference
     async renderPicture(picture: PictureJob) {
         const target = join(this.projectDir, picture.file)
