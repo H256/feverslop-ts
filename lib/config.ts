@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Resolution} from "../comfy/helpers.ts";
-import {log} from "./log.ts";
+import {warnUnknownKeys} from "./log.ts";
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
@@ -46,8 +46,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         throw new Error(`${file}: ${message}`)
     }
 
-    const unknown = Object.keys(raw).filter(key => !(key in config))
-    if (unknown.length) log.warn(`${file}: unknown field(s) ${unknown.join(', ')} - ignored`)
+    warnUnknownKeys(raw, Object.keys(config), file)
 
     if (!Number.isInteger(config.seed) || config.seed < -1) fail(`seed must be -1 or a whole number >= 0, got ${JSON.stringify(config.seed)}`)
     for (const key of ['imageResolution', 'videoResolution'] as const) {

@@ -218,66 +218,78 @@ export class Renderer implements Disposable {
     private async render<M>(label: string, target: string, extension: string, prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
-        let pending: PendingJob<M> | undefined = existsSync(pendingFile) ? await Bun.file(pendingFile).json() : undefined
-
-        // a queued job only exists on its own server - files from before several servers: the first one
-        let home: Server | undefined
-        if (pending) {
-            const recorded = pending.server ?? this.servers[0]!
-            home = servers.find(s => s.url === recorded.url) ?? servers.find(s => s.name === recorded.name)
-            if (!home) {
-                const why = this.servers.some(s => s.url === recorded.url || s.name === recorded.name) ? 'is unreachable' : 'is no longer configured'
-                log.warn(`${label}: its job was queued on ${recorded.name} (${recorded.url}), which ${why} - rendering again`)
-                pending = undefined
-            }
-        }
+        const initial: PendingJob<M> | undefined = existsSync(pendingFile) ? await Bun.file(pendingFile).json() : undefined
+        const home = initial ? this.homeOf(label, initial, servers) : undefined
 
         const server = await this.acquire(home?.name)
-        const {api} = server
         try {
-            if (pending) {
-                const state = await this.jobState(server, pending.promptId)
-                if (state === 'unknown') {
-                    log.warn(`${label}: the job queued at ${formatClock(pending.queuedAt)} is no longer on ${server.name} - rendering again`)
-                    pending = undefined
-                } else {
-                    log.step('Resuming', `${styles.name(label)} ${styles.muted(`@${server.name}, job ${pending.promptId}, queued at ${formatClock(pending.queuedAt)}, ${state}`)}`)
-                }
-            }
-
-            if (!pending) {
-                log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name}`)}`)
-                const {result: {workflow, output}, uploads, meta} = await prepare()
-                for (const upload of uploads) {
-                    // into ComfyUI's input folder, under the same name the workflow loads
-                    const uploaded = await api.uploadImage(Bun.file(upload.from), basename(upload.to), {subfolder: dirname(upload.to), override: true})
-                    if (!uploaded) throw new Error(`${label}: upload of ${upload.from} to ${server.name} failed`)
-                }
-                const prompt = workflow.build({outputs: {result: output}}).workflow
-                const queued = await api.queuePrompt(null, prompt).catch(async (error: unknown) => {
-                    // ComfyUI answers an invalid graph with 400 and the node errors
-                    const details = error instanceof Response ? await error.text() : String(error)
-                    throw new Error(`${label}: ComfyUI ${server.name} rejected the workflow - ${details}`)
-                })
-                const nodes = Object.fromEntries(Object.entries(prompt).map(([id, node]) => [id, node.class_type]))
-                pending = {promptId: queued.prompt_id, server: {name: server.name, url: server.url}, output, nodes, meta, queuedAt: Date.now()}
-                await Bun.write(pendingFile, JSON.stringify(pending, null, 2))
-            }
-
-            const outputs = await this.waitForJob(label, server, pending)
-
-            // the output node's files, e.g. {images: [...]} for SaveImage, {gifs: [...]} for VHS_VideoCombine
-            const files = Object.values(outputs ?? {}).flat().filter((f): f is ImageInfo => typeof (f as ImageInfo)?.filename === 'string')
-            const file = files.findLast(f => f.filename.endsWith(extension))
-            if (!file) throw new Error(`${label}: the output node saved no ${extension} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
-            // written next to the target first, so an interrupted download never looks like a finished file
-            await Bun.write(`${target}.download`, await api.getImage(file))
-            renameSync(`${target}.download`, target)
-            rmSync(pendingFile, {force: true})
+            const pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare)
+            await this.downloadResult(label, target, extension, server, pending)
             return pending.meta
         } finally {
             this.release(server)
         }
+    }
+
+    // a queued job only exists on its own server - files from before several servers: the first one. undefined
+    // when that server is no longer reachable/configured - the job is then rendered again from scratch.
+    private homeOf<M>(label: string, pending: PendingJob<M>, servers: Server[]): Server | undefined {
+        const recorded = pending.server ?? this.servers[0]!
+        const byUrl = servers.find(s => s.url === recorded.url)
+        const byName = servers.find(s => s.name === recorded.name)
+        const home = byUrl ?? byName
+        // the name matches but the URL doesn't - the name was likely reused for a different machine
+        if (home && !byUrl) log.warn(`${label}: its job was queued on ${recorded.name} (${recorded.url}), which is now configured at ${home.url} - resuming there anyway`)
+        if (!home) {
+            const why = this.servers.some(s => s.url === recorded.url || s.name === recorded.name) ? 'is unreachable' : 'is no longer configured'
+            log.warn(`${label}: its job was queued on ${recorded.name} (${recorded.url}), which ${why} - rendering again`)
+        }
+        return home
+    }
+
+    /** Resumes `pending` if its job is still on `server`, else queues a freshly prepared workflow. */
+    private async resumeOrQueue<M>(label: string, server: Server, pendingFile: string, pending: PendingJob<M> | undefined, prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<PendingJob<M>> {
+        const {api} = server
+        if (pending) {
+            const state = await this.jobState(server, pending.promptId)
+            if (state !== 'unknown') {
+                log.step('Resuming', `${styles.name(label)} ${styles.muted(`@${server.name}, job ${pending.promptId}, queued at ${formatClock(pending.queuedAt)}, ${state}`)}`)
+                return pending
+            }
+            log.warn(`${label}: the job queued at ${formatClock(pending.queuedAt)} is no longer on ${server.name} - rendering again`)
+        }
+
+        log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name}`)}`)
+        const {result: {workflow, output}, uploads, meta} = await prepare()
+        for (const upload of uploads) {
+            // into ComfyUI's input folder, under the same name the workflow loads
+            const uploaded = await api.uploadImage(Bun.file(upload.from), basename(upload.to), {subfolder: dirname(upload.to), override: true})
+            if (!uploaded) throw new Error(`${label}: upload of ${upload.from} to ${server.name} failed`)
+        }
+        const prompt = workflow.build({outputs: {result: output}}).workflow
+        const queued = await api.queuePrompt(null, prompt).catch(async (error: unknown) => {
+            // ComfyUI answers an invalid graph with 400 and the node errors
+            const details = error instanceof Response ? await error.text() : String(error)
+            throw new Error(`${label}: ComfyUI ${server.name} rejected the workflow - ${details}`)
+        })
+        const nodes = Object.fromEntries(Object.entries(prompt).map(([id, node]) => [id, node.class_type]))
+        const queuedJob: PendingJob<M> = {promptId: queued.prompt_id, server: {name: server.name, url: server.url}, output, nodes, meta, queuedAt: Date.now()}
+        await Bun.write(pendingFile, JSON.stringify(queuedJob, null, 2))
+        return queuedJob
+    }
+
+    /** Waits for `pending`'s job to finish, then downloads its result to `target` and clears the pending file. */
+    private async downloadResult<M>(label: string, target: string, extension: string, server: Server, pending: PendingJob<M>) {
+        const outputs = await this.waitForJob(label, server, pending)
+
+        // the output node's files, e.g. {images: [...]} for SaveImage, {gifs: [...]} for VHS_VideoCombine
+        const files = Object.values(outputs ?? {}).flat().filter((f): f is ImageInfo => typeof (f as ImageInfo)?.filename === 'string')
+        const file = files.findLast(f => f.filename.endsWith(extension))
+        if (!file) throw new Error(`${label}: the output node saved no ${extension} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
+        // written next to the target first, so an interrupted download never looks like a finished file
+        await Bun.write(`${target}.download`, await server.api.getImage(file))
+        renameSync(`${target}.download`, target)
+        rmSync(`${target}.pending.json`, {force: true})
     }
 
     private async jobState({api}: Server, promptId: string): Promise<'queued' | 'running' | 'finished' | 'failed' | 'unknown'> {

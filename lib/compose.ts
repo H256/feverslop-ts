@@ -1,10 +1,9 @@
 import type {Assignment, Character, Location, MusicMap, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
-import {frameAt} from "./frames.ts";
+import {formatTimestamp, frameAt, round} from "./frames.ts";
+import {MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
 // Format: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
-
-const MAX_PICTURES = 9
 
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
@@ -173,28 +172,33 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id))]
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
-            .slice(0, MAX_PICTURES - (location ? 1 : 0))
+            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0))
 
         // Subject N is always defined by Picture N
-        const subjects = [
-            ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
-            ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role})),
-        ].map((s, n) => ({
-            ...s,
-            label: `<Subject ${n + 1}>`,
-            picture: `<Picture ${n + 1}>`,
-            description: (s.kind === 'location' ? locationDescriptions : characterDescriptions)[s.id] ?? '',
-        }))
-        const locationSubject = subjects.find(s => s.kind === 'location')
-        const castSubjects = subjects.filter(s => s.kind === 'character')
+        function buildSubjects() {
+            const subjects = [
+                ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
+                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role})),
+            ].map((s, n) => ({
+                ...s,
+                label: `<Subject ${n + 1}>`,
+                picture: `<Picture ${n + 1}>`,
+                description: (s.kind === 'location' ? locationDescriptions : characterDescriptions)[s.id] ?? '',
+            }))
+            const locationSubject = subjects.find(s => s.kind === 'location')
+            const castSubjects = subjects.filter(s => s.kind === 'character')
 
-        // speaker ids (S1), (S2), ... in the order the singers first sing in this clip
-        const singerSubjects = singerIds.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
-        const speakerOf = (id: string) => `(S${singerIds.indexOf(id) + 1})`
-        const voice = (s: { id: string, label: string }) => `${s.label} ${speakerOf(s.id)}`
-        const vocals = performed.map(v => ({...v, singers: singerSubjects.filter(s => v.singerIds.includes(s.id))})).filter(v => v.singers.length)
-        const performing = vocals.length > 0
-        const voices = joinAnd(singerSubjects.map(voice))
+            // speaker ids (S1), (S2), ... in the order the singers first sing in this clip
+            const singerSubjects = singerIds.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
+            const speakerOf = (id: string) => `(S${singerIds.indexOf(id) + 1})`
+            const voice = (s: { id: string, label: string }) => `${s.label} ${speakerOf(s.id)}`
+            const vocals = performed.map(v => ({...v, singers: singerSubjects.filter(s => v.singerIds.includes(s.id))})).filter(v => v.singers.length)
+            const performing = vocals.length > 0
+            const voices = joinAnd(singerSubjects.map(voice))
+            return {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices}
+        }
+
+        const {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices} = buildSubjects()
 
         // Shots: more cuts with more energy, cut on downbeats
         const duration = round(slot.end - slot.start)
@@ -212,25 +216,29 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             vocals.flatMap(v => v.words), 120 / music.bpm, duration)
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
 
-        let singingShots = 0
-        const shots = cuts.map((at, j) => {
-            const moment = flatShotMoments?.[j] ?? spread(moments, j, shotCount).join(' ')
-            // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
-            const named = castSubjects.find(s => names(s).test(moment))
-            const starting = vocals.filter(v => inShot(j, v.start))
-            const continuing = vocals.filter(v => v.start < at && v.end > at)
-            // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
-            const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
-            const focus = opensScene && j === 0
-                ? [...new Set([...singersInShot, ...castSubjects])]
-                : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
-            // a shot with a line start frames the singer, with a calmer camera
-            const framing = starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
-            const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
-            const camera = nextCamera(cameraLevel, cameraCursor, lastCamera)
-            lastCamera = camera
-            return {label: `[Shot ${j + 1}]`, at, framing, camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
-        })
+        function buildShots() {
+            let singingShots = 0
+            return cuts.map((at, j) => {
+                const moment = flatShotMoments?.[j] ?? spread(moments, j, shotCount).join(' ')
+                // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
+                const named = castSubjects.find(s => names(s).test(moment))
+                const starting = vocals.filter(v => inShot(j, v.start))
+                const continuing = vocals.filter(v => v.start < at && v.end > at)
+                // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
+                const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
+                const focus = opensScene && j === 0
+                    ? [...new Set([...singersInShot, ...castSubjects])]
+                    : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
+                // a shot with a line start frames the singer, with a calmer camera
+                const framing = starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
+                const camera = nextCamera(cameraLevel, cameraCursor, lastCamera)
+                lastCamera = camera
+                return {label: `[Shot ${j + 1}]`, at, framing, camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
+            })
+        }
+
+        const shots = buildShots()
 
         // clip mode: the lyrics are a cue in <Audio 1> - with timing in the shot they're sung in, else spread evenly
         const sung = slot.lyrics.filter(l => !l.startsWith('('))
@@ -239,73 +247,81 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             : sung.filter((_, n) => Math.floor(n * shots.length / sung.length) === j)
         const sings = (v: typeof vocals[number]) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${normalizeLyric(v.text)}</d>`
 
-        const shotTexts = shots.map((shot, j) => {
-            const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
-            const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
-            const focusLabels = joinAnd(shot.focus.map(s => s.label))
-            const opening = j === 0
-                ? onSinger
-                    ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-                    : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-                // repeats the location on every cut, not just the first shot - otherwise a shot with no location
-                // callout tends to fall back to the character reference pictures' plain grey background
-                : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-            const inFrame = shot.focus.length
-                ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.`
-                : ''
+        function buildShotTexts() {
+            return shots.map((shot, j) => {
+                const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
+                const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
+                const focusLabels = joinAnd(shot.focus.map(s => s.label))
+                const opening = j === 0
+                    ? onSinger
+                        ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                        : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                    // repeats the location on every cut, not just the first shot - otherwise a shot with no location
+                    // callout tends to fall back to the character reference pictures' plain grey background
+                    : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                const inFrame = shot.focus.length
+                    ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.`
+                    : ''
 
-            if (performing) {
-                const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
-                const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
-                // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
-                const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}`.trim()
-            }
-            const lines = cueLines(j)
-            const lyrics = lines.length
-                ? ` When <Audio 1> reaches the phrase <d>[${language}] ${lines.map(normalizeLyric).join(' ')}</d>, the movement lands on the beat of the music.`
-                : ''
-            return `${opening}${inFrame} ${moment}${lyrics}`.trim()
-        })
+                if (performing) {
+                    const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
+                    const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
+                    // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
+                    const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
+                    return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}`.trim()
+                }
+                const lines = cueLines(j)
+                const lyrics = lines.length
+                    ? ` When <Audio 1> reaches the phrase <d>[${language}] ${lines.map(normalizeLyric).join(' ')}</d>, the movement lands on the beat of the music.`
+                    : ''
+                return `${opening}${inFrame} ${moment}${lyrics}`.trim()
+            })
+        }
 
-        const appearsIn = (label: string) => shots.filter(s => s.subjects.includes(label)).map(s => s.label).join(', ')
-        const songPosition = `${formatTimestamp(slot.start)} to ${formatTimestamp(slot.end)} of the song`
-        const seconds = String(Math.round(duration * 10) / 10)
-        const score = `the ${slot.section} of the song at ${music.bpm} BPM with ${energyLevel} energy${notes.length ? `, ${notes.join(', ').toLowerCase()}` : ''}`
+        const shotTexts = buildShotTexts()
 
-        const prompt = [
-            'subject_definitions:',
-            ...subjects.map(s => s.kind === 'location'
-                ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
-                : `${s.label} is ${s.name}, ${s.role}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
-            `<Audio 1> is the ${slot.section} section of the song (${songPosition}) and is reused as the complete final audio track.`,
-            ...(performing ? [`<Audio 2> is the isolated lead vocal of this part of the song, the voice-timbre reference for ${voices}.`] : []),
-            '',
-            'summary:',
-            `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${withLabels(beat.summary)}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 1>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
-            '',
-            'retention_analysis:',
-            ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
-                ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
-            '<Audio 1>: fully_copy - <Audio 1> is reused 1:1 as the target video\'s complete final audio track.',
-            // the guide: no (Sx) in retention_analysis
-            ...(performing ? [`<Audio 2>: reference - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))} without copying the signal.`] : []),
-            '',
-            'detailed_description:',
-            styleOpening(lookBrief),
-            ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),
-            ...shotTexts,
-            '',
-            'overall_soundscape:',
-            `Low ambience of the ${location?.name ?? 'scene'} sits under the music; footsteps, cloth and prop sounds follow the on-screen action.`,
-            '',
-            'non_diegetic_music:',
-            // the lyrics themselves only go into <d> in detailed_description
-            performing
-                ? `<Audio 1> is directly reused as the complete audience-only score: the instrumental layer of ${score}; its vocals are sung on screen by ${voices}.`
-                : `<Audio 1> is directly reused as the complete audience-only score: ${score}.`,
-        ].join('\n')
+        function buildPromptText() {
+            const appearsIn = (label: string) => shots.filter(s => s.subjects.includes(label)).map(s => s.label).join(', ')
+            const songPosition = `${formatTimestamp(slot.start)} to ${formatTimestamp(slot.end)} of the song`
+            const seconds = String(Math.round(duration * 10) / 10)
+            const score = `the ${slot.section} of the song at ${music.bpm} BPM with ${energyLevel} energy${notes.length ? `, ${notes.join(', ').toLowerCase()}` : ''}`
+
+            return [
+                'subject_definitions:',
+                ...subjects.map(s => s.kind === 'location'
+                    ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+                    : `${s.label} is ${s.name}, ${s.role}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
+                `<Audio 1> is the ${slot.section} section of the song (${songPosition}) and is reused as the complete final audio track.`,
+                ...(performing ? [`<Audio 2> is the isolated lead vocal of this part of the song, the voice-timbre reference for ${voices}.`] : []),
+                '',
+                'summary:',
+                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${withLabels(beat.summary)}${performing ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of <Audio 1>.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of <Audio 1>.`,
+                '',
+                'retention_analysis:',
+                ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
+                    ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
+                    : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
+                '<Audio 1>: fully_copy - <Audio 1> is reused 1:1 as the target video\'s complete final audio track.',
+                // the guide: no (Sx) in retention_analysis
+                ...(performing ? [`<Audio 2>: reference - its timbre, phrasing and timing drive the lip movements of ${joinAnd(singerSubjects.map(s => s.label))} without copying the signal.`] : []),
+                '',
+                'detailed_description:',
+                styleOpening(lookBrief),
+                ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),
+                ...shotTexts,
+                '',
+                'overall_soundscape:',
+                `Low ambience of the ${location?.name ?? 'scene'} sits under the music; footsteps, cloth and prop sounds follow the on-screen action.`,
+                '',
+                'non_diegetic_music:',
+                // the lyrics themselves only go into <d> in detailed_description
+                performing
+                    ? `<Audio 1> is directly reused as the complete audience-only score: the instrumental layer of ${score}; its vocals are sung on screen by ${voices}.`
+                    : `<Audio 1> is directly reused as the complete audience-only score: ${score}.`,
+            ].join('\n')
+        }
+
+        const prompt = buildPromptText()
 
         return {
             id: slot.id,
@@ -356,6 +372,7 @@ function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, durati
         const after = word.end + Math.min(0.1, Math.max(0, (sorted[k + 1]?.start ?? duration) - word.end) / 2)
         const lower = moved[j - 1]! + 0.5
         const upper = (moved[j + 1] ?? duration) - 0.5
+        if (lower >= upper) continue // neighbouring cuts are too close together to leave room for a move
         const options = [before, after].filter(o => Math.abs(o - t) <= maxShift && o > lower && o < upper)
         if (options.length) moved[j] = round(options.reduce((a, b) => Math.abs(a - t) <= Math.abs(b - t) ? a : b))
     }
@@ -390,11 +407,5 @@ function normalizeLyric(line: string) {
     return /[.?!]$/.test(clean) ? clean : `${clean}.`
 }
 
-function formatTimestamp(seconds: number) {
-    const minutes = Math.floor(seconds / 60)
-    return `${String(minutes).padStart(2, '0')}:${(seconds - minutes * 60).toFixed(3).padStart(6, '0')}`
-}
-
 const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
-const round = (n: number) => Math.round(n * 1000) / 1000
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

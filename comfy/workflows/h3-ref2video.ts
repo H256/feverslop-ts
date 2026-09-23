@@ -1,7 +1,5 @@
 // Rebuilt from comfy/r2v_audio_fullmix_guide_1-pass_turbo.json
-import {afterCleanup, dyn, FPS, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
-
-const MAX_REFERENCE_IMAGES = 9
+import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
 export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)

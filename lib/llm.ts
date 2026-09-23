@@ -77,15 +77,14 @@ function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningS
     return adapter ? adapter.apply(prompt, level) : {...prompt, reasoning: {effort: level}}
 }
 
-export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, logOutput: boolean = false, reasoning: ReasoningStrength = 'low') {
+export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low') {
     let thinking = ''
     let answer = ''
     let outputTokens: number | undefined
     let incomplete: string | undefined
     prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId()}, reasoning)
 
-    const stopSpinner = logOutput ? () => {
-    } : startSpinner(() => {
+    const stopSpinner = startSpinner(() => {
         if (answer) return `${styles.answer('writing')} ${styles.muted(`${answer.length} chars`)}`
         if (thinking) return `${styles.thinking('thinking')} ${styles.muted(`${thinking.length} chars`)}`
         return styles.muted('waiting for model')
@@ -96,14 +95,10 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
             switch (event.type) {
                 case 'response.reasoning_text.delta':
                 case 'response.reasoning_summary_text.delta':
-                    if (!thinking && logOutput) process.stdout.write(styles.muted('── thinking ──') + '\n')
                     thinking += event.delta
-                    if (logOutput) process.stdout.write(styles.thinking(event.delta))
                     break
                 case 'response.output_text.delta':
-                    if (!answer && logOutput) process.stdout.write('\n' + styles.answer('── answer ──') + '\n')
                     answer += event.delta
-                    if (logOutput) process.stdout.write(event.delta)
                     break
                 case 'response.completed':
                     outputTokens = event.response.usage?.output_tokens
@@ -119,7 +114,6 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     } finally {
         stopSpinner()
     }
-    if (logOutput) process.stdout.write('\n')
     log.step('Done', styles.muted(`${thinking.length} chars thinking (${reasoning}), ${answer.length} chars answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''}`))
     // llama.cpp reports a cut-off answer as "completed" - all tokens used up means cut off, too
     const limit = prompt.max_output_tokens
@@ -135,13 +129,13 @@ export class TruncatedError extends Error {
     }
 }
 
-type AskOptions = { instructions: string, input: string, maxTokens?: number, reasoning?: ReasoningStrength }
+export type AskOptions = { instructions: string, input: string, maxTokens?: number, reasoning?: ReasoningStrength }
 
 export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low'}: AskOptions) {
     // a cut-off answer is useless (half a JSON) - once more with twice the room, the thinking length varies anyway
     for (const limit of [maxTokens, maxTokens * 2]) {
         try {
-            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input, instructions, stream: true}, false, reasoning)
+            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input, instructions, stream: true}, reasoning)
             if (!answer.trim()) log.warn(`empty answer - the model only thought`)
             return answer.trim()
         } catch (e) {
