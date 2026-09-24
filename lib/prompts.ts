@@ -139,12 +139,19 @@ ${storySummary}`,
     }
 }
 
-export function characterLookPrompt(lookBrief: string, char: { name: string, role: string }): AskOptions {
+// otherLooks: the already-designed reference prompts of the rest of the cast (built earlier in the same loop) -
+// without them, two characters with a similar role/archetype (e.g. "loyal companion") reliably converge on
+// near-identical builds, palettes and wardrobes, which a reference-to-video model then can't tell apart on
+// screen and swaps mid-shot. Forcing a comparison against what already exists is what actually spreads them out;
+// asking each character to be "distinctive" in isolation does not, since every character looks distinctive alone.
+export function characterLookPrompt(lookBrief: string, char: { name: string, role: string }, otherLooks: { name: string, look: string }[] = []): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for a character reference sheet of the given character.
 The image must match the film look below - same medium, style, palette and lighting - but it is a clean reference plate, not a film frame: it must be sharp and clearly readable, so leave out anything that would degrade or obscure the detail.
 Consider the character's role in the story when designing the look.
+${otherLooks.length ? `
+The rest of the cast is already designed (below). A video model has to tell these characters apart from a distance, in motion, and even when a described prop or accessory isn't in frame - so this character must be silhouette-distinct from every one of them at a glance: a clearly different build or height, a different hair color/length/style, and a different dominant silhouette element (a cloak, a headpiece, a very different garment shape), not just a different color accent or a different hand-held prop. Where this character's role is similar to one already listed (e.g. both are companions or both are guards), push the divergence harder, not softer.` : ''}
 
 Rules:
 - Natural language, one paragraph, 50-100 words.
@@ -158,7 +165,9 @@ Rules:
 
 Film look: ${lookBrief}
 Character:
-${JSON.stringify({name: char.name, role: char.role})}`,
+${JSON.stringify({name: char.name, role: char.role})}${otherLooks.length ? `
+Already-designed cast (for silhouette contrast only - do not copy or borrow their specific colors/props):
+${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}` : ''}`,
         instructions: 'You are an expert character designer who writes prompts for the Krea 2 image model. You answer only with the prompt.',
     }
 }

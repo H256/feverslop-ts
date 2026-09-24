@@ -78,7 +78,14 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
             .map((time, index) => ({time, index}))
             .filter(b => b.time >= section.start - 0.05 && b.time < section.end - 0.05)
         const groups: typeof bars[] = []
-        for (let i = 0; i < bars.length; i += barsPerSlot) groups.push(bars.slice(i, i + barsPerSlot))
+        // the section's opening slot starts at section.start, not at its first bar, so it doesn't lose
+        // a pickup/lead-in before the first downbeat - but that lead-in still counts against its time
+        // budget, so the first group gets fewer bars than barsPerSlot whenever there is one, however many
+        // it takes to keep (lead-in + those bars) within maxClipSec
+        let firstSize = barsPerSlot
+        while (firstSize > 1 && bars[firstSize] && bars[firstSize]!.time - section.start > maxClipSec) firstSize--
+        if (bars.length) groups.push(bars.slice(0, firstSize))
+        for (let i = firstSize; i < bars.length; i += barsPerSlot) groups.push(bars.slice(i, i + barsPerSlot))
         if (groups.length === 0) return
 
         // a short leftover is merged into the previous clip if that still fits
