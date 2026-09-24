@@ -97,7 +97,7 @@ Every song is a project folder:
 ```
 projects/<project-id>/
   input/
-    song.wav          required, unless generated with --render=song (see Generating the song)
+    song.wav          required (or song.mp3), unless generated with --render=song (see Generating the song)
     lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ... - required, unless generated
     idea.txt          the song idea for --render=song - required for it, otherwise unused
     music-style.txt   optional - musical direction for --render=song, e.g. genre/instruments/mood
@@ -137,7 +137,7 @@ built on it (and everything built on those):
 |-------------------------------|-------------------------------------|
 | `idea.txt`                    | `songBrief`                         |
 | `music-style.txt`             | `songBrief`                         |
-| `song.wav`                    | `music`, `stems`                    |
+| `song.wav`/`song.mp3`         | `music`, `stems`                    |
 | `lyrics.txt`                  | `story`, `transcript`, `singing`    |
 | `story-idea.txt`              | `story`                             |
 | `style.txt`                   | `lookBrief`                         |

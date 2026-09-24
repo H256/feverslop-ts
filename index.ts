@@ -93,7 +93,8 @@ log.step('LLM', settings.llm.url
     ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
 const language = languageName(config.lyricsLanguage)!
-const songFile = project.input('song.wav')
+// --render=song always writes wav (see Renderer.renderSong); a hand-supplied song can be wav or mp3
+const generatedSongFile = project.input('song.wav')
 
 ////////// WRITING & GENERATING THE SONG - only with --render=song
 const idea = await readInput('idea.txt')
@@ -128,18 +129,23 @@ if (render.has('song')) {
     if (!existsSync(project.input('music-style.txt'))) await Bun.write(project.input('music-style.txt'), songStyle)
 
     // AUDIO - only rendered again if the lyrics or the style actually changed this run, or there is none yet
-    if (lyricsExisted && styleWasCached && existsSync(songFile)) {
+    if (lyricsExisted && styleWasCached && existsSync(generatedSongFile)) {
         log.step('Song', styles.muted('input/song.wav is up to date - delete lyrics.txt, edit music-style.txt, or --redo=songStyle, to generate a new one'))
     } else {
         log.section('1b · GENERATING THE SONG AUDIO')
-        if (existsSync(songFile)) {
-            rmSync(songFile)
+        if (existsSync(generatedSongFile)) {
+            rmSync(generatedSongFile)
             log.step('Redo', styles.muted('song.wav - the lyrics or style changed'))
         }
         using songRenderer = new Renderer(project.id, project.dir, config, settings.comfy)
-        await songRenderer.renderSong({style: songStyle, lyrics: songLyrics}, songFile)
+        await songRenderer.renderSong({style: songStyle, lyrics: songLyrics}, generatedSongFile)
     }
 }
+
+// the song a user supplies by hand can be song.wav or song.mp3 in input/ - a generated one (above) is always wav
+const songFile = existsSync(generatedSongFile) ? generatedSongFile
+    : existsSync(project.input('song.mp3')) ? project.input('song.mp3')
+    : generatedSongFile
 
 // re-read: the song block above may have just written lyrics.txt/music-style.txt for the first time
 const lyrics = await readInput('lyrics.txt')
@@ -177,7 +183,7 @@ if (project.data.stems && Object.values(project.data.stems).some(file => !exists
 if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('instrumentStems')
 
 ////////// ANALYZE THE SONG
-if (!existsSync(songFile)) throw new Error(`No song found at ${songFile}${idea ? ' - run with --render=song to generate one from input/idea.txt' : ''}`)
+if (!existsSync(songFile)) throw new Error(`No song found at ${project.input('song.wav')} or ${project.input('song.mp3')}${idea ? ' - run with --render=song to generate one from input/idea.txt' : ''}`)
 const music = await project.step('music', '2 · ANALYZING THE SONG', async () => {
     log.step('Analyzing', styles.muted(`${songFile} - beats, bars and ${lyricSections.length} sections`))
     return analyzeSong(songFile, lyricSections.map(s => s.label))
@@ -519,7 +525,7 @@ await Bun.write(join(outputDir, 'assets.json'), JSON.stringify(pictures.map(p =>
 })), null, 2))
 
 await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
-    song: project.input('song.wav'),
+    song: songFile,
     bpm: music.bpm,
     durationSec: music.durationSec,
     maxClipSec: timeline.maxClipSec,
