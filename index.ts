@@ -12,7 +12,7 @@ import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {assembleFinal} from "./lib/assemble.ts";
-import {formatTime, frameAt, secondsAt} from "./lib/frames.ts";
+import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {
     castPrompt, characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt,
@@ -24,8 +24,11 @@ import {
 process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
 process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
 
-// hardware limit: the longest clip the video model can generate in one go
-const MAX_CLIP_SEC = 10
+// hardware limit: the longest clip the video model can generate in one go. Set a little below the real
+// limit - the H3 node only renders 5 + 17·k frames, so every clip is rounded up to the next such length at
+// render time (up to 16 extra frames / 0.67s, see docs/comfyui.md) - a clip targeted at exactly the real
+// limit can still render over it.
+const MAX_CLIP_SEC = 10 - 17 / FPS
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
@@ -285,7 +288,8 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
     const looks: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, char))
+        const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
+        looks[char.id] = await ask(characterLookPrompt(lookBrief, char, otherLooks))
     }
     return looks
 })
@@ -338,7 +342,11 @@ Aim for about ${Math.max(6, Math.round(lyricSections.length * 1.5))} beats that 
 
 For every beat give:
 - "summary": what visibly happens, 1-3 sentences, present tense.
-- "moments": 2-6 short sentences, in order, each one visible action that a camera can film. Name characters by their name. These are spread over the video clips of the beat, so together they must tell the whole beat. Describe the mechanics of any contact between two things, not just the outcome - the direction and path of the movement, what it meets and how, and the immediate physical reaction: not "Thorin raises his hammer and strikes the sealed gate." but "Thorin swings his hammer in a wide overhead arc, the head crashing into the gate's iron sigil, which cracks and showers sparks across the steps."
+- "moments": 2-6 short sentences, in order, each one visible action that a camera can film. Name characters by their name, exactly as spelled and capitalized in the character list below (including a collective/group character like "Orcs" acting as one individual member of the group - still call them "Orcs", never a generic singular like "the orc"): that exact string is what later binds the sentence to that character's reference picture, so a paraphrase leaves the action unanchored and the wrong figure on screen ends up doing it. These are spread over the video clips of the beat, so together they must tell the whole beat. Describe the mechanics of any contact between two things, not just the outcome - the direction and path of the movement, what it meets and how, and the immediate physical reaction: not "Thorin raises his hammer and strikes the sealed gate." but "Thorin swings his hammer in a wide overhead arc, the head crashing into the gate's iron sigil, which cracks and showers sparks across the steps."
+  This applies just as much to a gentle or supernatural contact as to a blow - never write a bare "touches" or "reaches for": say exactly which hand or body part makes contact with which part of the other, whether the grip closes and holds or just brushes past, and what the touched character does in direct response to THAT contact (recoils while still held, wrenches free, goes rigid, the touch passes through them) - not a generic, unrelated reaction like being shoved or knocked back unless something actually pushed them.
+  A character's "prop" (if any is listed for them below) is the one weapon/tool/instrument they carry for the whole story - always call it by the same name and kind (a sword stays a sword, never a hammer or axe in a later beat) unless "stateAfter" explicitly says they traded, lost, dropped or picked up a different one.
+  Bodies don't default to facing the camera: name which way a character is turned or moving relative to whoever or whatever they're reacting to (turns to face it, spins away, presses their back to the wall, ducks behind another character) whenever that's part of the action, especially the instant something touches, strikes at, or startles them.
+  Eyes and attention follow the scene, not the lens: say what a character or creature is looking at (the person it's reaching for, the weapon coming at it, the ground as it falls) - never leave it staring into the camera, and never describe a "look" or "stare" without naming its target, since an untargeted one defaults to a straight-into-camera stare that breaks the scene.
 - "locationId": exactly one of the location ids below.
 - "characterIds": ids of the characters on screen, only from the list below.
 - "intensity": 0.0 (calm, quiet) to 1.0 (climax), used to match the loudness of the music.
@@ -346,11 +354,11 @@ For every beat give:
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
 - "lyricAnchor": the song section label this beat belongs under if the lyrics describe it (e.g. "Chorus"), otherwise omit it.
 - "stateAfter": short facts that are true after this beat and must stay visible later, e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
-Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat.
+Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
 ${singing ? performanceRules(singing) : ''}
 Answer only with JSON: {"beats": [...]}
 ---
-characters: ${JSON.stringify(cast.characters.map(c => ({id: c.id, role: c.role})))}
+characters: ${JSON.stringify(cast.characters.map(c => ({id: c.id, role: c.role, ...(c.prop ? {prop: c.prop} : {})})))}
 locations: ${JSON.stringify(cast.locations.map(l => l.id))}
 lyrics:
 ${lyrics}
@@ -427,12 +435,19 @@ Rules:
   Strong: "Kara swings her sword in a low arc from the right, the blade skidding off the dragon's armored foreleg scales in a shower of sparks."
   Weak: "Tom grabs the ledge as he falls."
   Strong: "Tom's fingers close around the crumbling ledge, his body swinging hard into the cliff face as his grip catches him."
+- The same applies to any gentler or non-physical contact (a hand on a shoulder, a ghost or spirit reaching for someone): never write a bare "touches" or "reaches for" - name the exact hand/body part and where it lands, whether the contact holds and grips or only brushes, and let the reaction follow logically from THAT contact (goes rigid under the grip, twists to break free, the hand passes through them like mist) rather than defaulting to an unrelated generic reaction such as being shoved or knocked back - only describe a push or shove when something in the shot actually pushes.
+- "castProps" below lists each character's one fixed prop (weapon, tool or instrument), if they have one. That is the exact object they carry for the entire song - always call it by that same name and kind in every shot it appears in (a character's sword must stay a sword and never become a hammer, axe or spear in a later shot, and vice versa), unless the beat's "summary" or "moments" explicitly says they picked up, dropped, lost or swapped it.
+- Characters don't default to facing the camera. When a shot is a reaction - to a threat, a touch, a strike, a sound - say which way the character's body and gaze turn relative to whatever they're reacting to (spins toward it, recoils with their back to the wall, turns away and shields their face, ducks behind another character) instead of leaving them front-on.
+- Whoever or whatever a shot is about must be looking at something in the scene, never at the lens: name the target of every look or stare (the person they're threatening, the blade coming at them, the ground below) - an eye-line with no named target defaults to a dead-on stare into the camera, especially on a push-in, which reads as breaking the scene rather than being part of it.
+- Every shot is its own short, separately rendered clip - a shot never gets to finish an action in a later shot, even later shots of the same beat. So an action that travels somewhere (a weapon swing, a lunge, a breath or thrown object) must also land and resolve within THAT SAME shot's sentence - never end a shot on a motion that's still only underway ("swings his hammer, the head descending toward X" with no impact described) and leave the impact for the next shot to show, or it renders as the motion stalling and reversing instead of completing. Combine the wind-up and the result in one sentence when they belong together, the way the strong examples above already do.
+- Any effect that crosses space to hit someone - a breath of fire, a thrown weapon, a spray of debris, a spell - must say which way it travels and that it lands on the character's front, and that character must be described as facing (or turning to face) where it came from. Never leave the relative facing of attacker and target unstated for this kind of hazard: unspecified, it can render as hitting the target's back or from an impossible angle.
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
-- Name characters by their name (not pronouns), so every shot reads on its own.
+- Name characters by their name (not pronouns), so every shot reads on its own. Use the character's name exactly as spelled and capitalized in "characterIds"/"castProps" below - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
 
 Answer only with JSON: {"moments": {"<beatId>": ["shot 1 action", "shot 2 action", ...]}}
 ---
+castProps: ${JSON.stringify(Object.fromEntries(cast.characters.filter(c => c.prop).map(c => [c.id, c.prop])))}
 beats:
 ${JSON.stringify(beats.map(b => ({
             id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
@@ -484,12 +499,11 @@ mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
 for (const clip of clips) {
     await Bun.write(join(outputDir, 'clips', `${clip.id}.json`), JSON.stringify(clip, null, 2))
-    // <Audio 1> is the clip's full frame range, from the song - <Audio 2> (singers), from the vocals stem, is only
-    // the sub-range songStart/songEnd actually cover (see buildClipRequests): trimmed to where the vocals are
-    // audible, on the frame grid like the rendered clips so it still lines up with <Audio 1> and the shot cuts.
+    // one debug-listenable file per track, cut from its own stem to this clip's span - not what's actually
+    // uploaded for rendering any more (lib/render.ts uploads and trims the whole stem itself), just handy to
+    // hear exactly what a track covers
     for (const audio of clip.assets.audio) {
-        const source = audio.stem ? join(project.dir, stems![audio.stem]) : songFile
-        await cutAudio(source, secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
+        await cutAudio(join(project.dir, allStems[audio.stem!]!), secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
     }
 }
 
@@ -546,7 +560,8 @@ if (render.has('images') || render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
         const selected = clips.filter(c => only.size === 0 || only.has(c.id))
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
-        await renderAll(selected, clip => renderer.renderClip(clip, songFile, stems && join(project.dir, stems.vocals)))
+        const stemFiles = Object.fromEntries(Object.entries(allStems).map(([stem, file]) => [stem, join(project.dir, file)]))
+        await renderAll(selected, clip => renderer.renderClip(clip, stemFiles))
     }
 }
 

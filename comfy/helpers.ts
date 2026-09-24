@@ -14,6 +14,9 @@ export type Orientation = 'portrait' | 'landscape'
 
 // hardware/model limit: MiniMax H3 accepts at most this many reference images
 export const MAX_REFERENCE_IMAGES = 9
+// model limit: MiniMaxH3ReferenceToVideo's ref_audios autogrow only goes up to ref_audio_3 (comfy_extras/
+// nodes_minimax_h3.py, io.Autogrow min=0 max=3) - a 5th+ track would silently have nowhere to attach to
+export const MAX_REF_AUDIOS = 4
 
 // The contract of a workflow file in comfy/workflows/ - see docs/custom-workflows.md.
 // Its default export takes these options and returns the graph plus the node whose files are downloaded.
@@ -40,9 +43,15 @@ export type AudioWorkflow = (opts: AudioWorkflowOptions) => WorkflowResult
 export type VideoWorkflowOptions = {
     prompt: string,
     pictures: string[],         // ComfyUI input names in <Picture N> order, e.g. "feverslop-ts/<project>/assets/characters/thorin.png"
-    song: string,               // ComfyUI input name of the full song
-    vocals?: string,            // ComfyUI input name of the song's isolated vocals (<Audio 2>) - only for clips with a singer
-    songStart: number,          // seconds - exactly on the clip's first frame, for the song and the vocals
+    // ComfyUI input name of the song's isolated vocals - only for clips with a singer, and only when there's a
+    // vocals entry in `audios` (which of its entries is the vocals stem, given again here so the workflow can
+    // pick it out and lock it into the AV latent - MiniMaxH3AddGuide - not just offer it as a loose ref_audio).
+    vocals?: string,
+    // the ComfyUI input name of each track's *whole* separated stem file, in <Audio N> order (see
+    // lib/compose.ts) - lib/render.ts uploads the full stem, and the workflow trims each one to this clip's
+    // own span itself (TrimAudioDuration), the render length exactly.
+    audios: string[],
+    songStart: number,          // seconds - exactly on the clip's first frame, for every track in `audios`
     frames: number,             // frames to render, already a length the model accepts (see renderFrames)
     duration: number,           // frames / FPS - the audio to trim, covering the whole render
     seed: number,

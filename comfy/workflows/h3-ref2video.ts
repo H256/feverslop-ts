@@ -13,14 +13,20 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const model = wf.LoraLoaderModelOnly({lora_name: 'minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', strength_model: 1, model: unet.MODEL})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
-    // <Audio 1>: the clip's part of the song - reference, guide and final soundtrack
-    const song = wf.LoadAudio({audio: dyn(opts.song)})
-    const audio = wf.TrimAudioDuration({audio: song.AUDIO, start_index: opts.songStart, duration: opts.duration})
-    // <Audio 2>, only for clips with a singer: the same part of the isolated vocals - the voice reference for the lip-sync.
-    // The audio guide and the MP4's soundtrack stay on the full mix.
-    const vocals = opts.vocals
-        ? wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.vocals)}).AUDIO, start_index: opts.songStart, duration: opts.duration})
-        : undefined
+    // Multi-track audio: one <Audio N> per stem actually audible on screen (see lib/compose.ts). opts.audios
+    // names the *whole* stem file for each track (lib/render.ts uploads the full separated stem, not a
+    // per-clip cut) - every track covers the same span, this clip's full length, so all of them trim with the
+    // same start/duration. Not clip.frames: MiniMaxH3ReferenceToVideo only accepts a few frame counts and
+    // rounds up (see renderFrames below) - the ref_audio has to cover the length actually rendered, or the
+    // model runs out of audio before the video ends. No single track is "the" song, so the first one stands in
+    // for the MP4's own soundtrack, which is discarded and replaced with the real song later anyway (see
+    // config.json songAudio).
+    const tracks = (opts.audios ?? []).map(name => wf.TrimAudioDuration({
+        audio: wf.LoadAudio({audio: dyn(name)}).AUDIO,
+        start_index: opts.songStart,
+        duration: opts.duration,
+    }))
+    if (!tracks.length) throw new Error('h3-ref2video: opts.audios is empty - lib/render.ts should always provide at least the drums track')
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
@@ -40,19 +46,25 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     withInputs(wf, references, {
         ...Object.fromEntries(opts.pictures.slice(0, MAX_REFERENCE_IMAGES).map((picture, i) =>
             [`ref_images.ref_image_${i}`, wf.LoadImage({image: dyn(picture)}).IMAGE])),
-        'ref_audios.ref_audio_0': audio.AUDIO,
-        ...(vocals ? {'ref_audios.ref_audio_1': vocals.AUDIO} : {}),
+        ...Object.fromEntries(tracks.map((track, i) => [`ref_audios.ref_audio_${i}`, track.AUDIO])),
     })
+    // Lock the vocals track into the video's own AV latent instead of only offering it as a loose ref_audio
+    // reference - ref_audio alone (still wired above, for MiniMax's own style/rhythm conditioning) reads more
+    // as "sounds like this" than "say exactly this, exactly now": lip movement ended up desynced and on the
+    // wrong words. MiniMaxH3AddGuide anchors audio (encoded through audio_vae) into the conditioning at a
+    // frame - at frame_idx 0 with a track already trimmed to the full render length (see tracks above), that's
+    // the whole clip, the stock-node equivalent of a third-party "audio drive" node.
+    const vocalsIndex = opts.vocals !== undefined ? (opts.audios ?? []).indexOf(opts.vocals) : -1
+    if (opts.vocals !== undefined && vocalsIndex < 0) throw new Error('h3-ref2video: opts.vocals is set but not found in opts.audios')
+    // Confirmed live: the <Audio 1>/<Audio 2> reorder in lib/compose.ts (performance-driving track first, the
+    // always-present drums track last) does most of the work on its own, but AddGuide still measurably
+    // sharpens word-level precision (without it, an extra word leaked in at a clip's tail where the real audio
+    // only has one) - keep both.
+    const guided = vocalsIndex >= 0
+        ? wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, audio_vae: audioVae.VAE, audio: tracks[vocalsIndex]!.AUDIO})
+        : undefined
 
-    // this node seemed to be a test to get the full audio as guide always?
-    // const guided = wf.MiniMaxH3AddGuide({
-    //     frame_idx: 0,
-    //     positive: references.positive,
-    //     latent: references.LATENT,
-    //     audio_vae: audioVae.VAE,
-    //     audio: audio.AUDIO,
-    // })
-    const guider = wf.BasicGuider({model: model.MODEL, conditioning: references.positive})
+    const guider = wf.BasicGuider({model: model.MODEL, conditioning: guided ? guided.positive : references.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
     const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})
@@ -67,7 +79,7 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const decoded = wf.VAEDecode({samples: afterCleanup(wf, sampled.output, {offload_model: true, offload_cache: false}), vae: videoVae.VAE})
     const video = wf.VHS_VideoCombine({
         images: decoded.IMAGE,
-        audio: audio.AUDIO,
+        audio: tracks[0]!.AUDIO,
         frame_rate: FPS,
         loop_count: 0,
         filename_prefix: opts.filenamePrefix,

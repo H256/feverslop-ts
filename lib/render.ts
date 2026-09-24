@@ -180,8 +180,9 @@ export class Renderer implements Disposable {
         log.step('Saved', 'input/song.wav')
     }
 
-    // vocalsFile: the isolated vocals of the whole song (stems/vocals.wav) - needed by clips with a singer
-    async renderClip(clip: ClipRequest, songFile: string, vocalsFile?: string) {
+    // stemFiles: the isolated stems of the whole song (stems/vocals.wav, stems/drums.wav, ...) - vocals is
+    // needed by clips with a singer, others by whichever tracks this clip's prompt references.
+    async renderClip(clip: ClipRequest, stemFiles: Record<string, string>) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
         if (existsSync(target)) {
@@ -193,15 +194,15 @@ export class Renderer implements Disposable {
         const missing = clip.assets.pictures.filter(p => !existsSync(join(this.projectDir, p.file)))
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')}`)
         const withVocals = clip.assets.audio.some(a => a.stem === 'vocals')
-        if (withVocals && !(vocalsFile && existsSync(vocalsFile))) return log.warn(`${clip.id} skipped - it has a singer, but there is no vocals stem`)
+        const missingStems = clip.assets.audio.filter(a => !(a.stem && stemFiles[a.stem] && existsSync(stemFiles[a.stem]!)))
+        if (missingStems.length) return log.warn(`${clip.id} skipped - missing stem file(s) for: ${missingStems.map(a => a.stem).join(', ')}`)
 
         const {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', async () => {
-            // uploaded into ComfyUI's input folder under the same relative names
-            const uploads = [
-                ...clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`})),
-                {from: songFile, to: `${this.remoteDir}/song.wav`},
-                ...(withVocals ? [{from: vocalsFile!, to: `${this.remoteDir}/vocals.wav`}] : []),
-            ]
+            const pictureUploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
+            // Upload the whole separated stem per track (not a per-clip cut) and let the workflow trim it to
+            // this clip's span itself (TrimAudioDuration) - a pre-cut file can't account for the video model
+            // rounding the render length up past clip.frames (see comfy/workflows/h3-ref2video.ts).
+            const uploads = [...pictureUploads, ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${this.remoteDir}/stems/${a.stem}.wav`}))]
             const seed = resolveSeed(this.config.seed)
             const {default: videoWorkflow, renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
 
@@ -213,8 +214,10 @@ export class Renderer implements Disposable {
             const result = videoWorkflow({
                 prompt: clip.prompt,
                 pictures: clip.assets.pictures.map(p => `${this.remoteDir}/${p.file}`),
-                song: `${this.remoteDir}/song.wav`,
-                ...(withVocals ? {vocals: `${this.remoteDir}/vocals.wav`} : {}),
+                audios: clip.assets.audio.map(a => `${this.remoteDir}/stems/${a.stem}.wav`),
+                // which of the audios[] entries is the vocals track, so the workflow can lock it into the AV
+                // latent via MiniMaxH3AddGuide instead of only offering it as a loose ref_audio
+                ...(withVocals ? {vocals: `${this.remoteDir}/stems/vocals.wav`} : {}),
                 songStart: secondsAt(clip.frameStart),
                 frames,
                 duration: secondsAt(frames),
