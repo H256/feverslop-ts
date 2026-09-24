@@ -262,6 +262,12 @@ const instrumentStems = stems && neededInstrumentStems.length ? await project.st
 if (instrumentStems) log.step('Stems', styles.muted(Object.values(instrumentStems).join(' · ')))
 
 const allStems = {...stems, ...instrumentStems}
+// every stem's absolute path, plus a "song" fallback (the whole, unseparated song) for the clip-mode anchor
+// track lib/compose.ts falls back to when stemsAvailable is false (see buildClipRequests below)
+const stemFiles: Record<string, string> = {
+    ...Object.fromEntries(Object.entries(allStems).map(([stem, file]) => [stem, join(project.dir, file)])),
+    song: songFile,
+}
 const propActivity = stems && neededStems.length ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
     const result: NonNullable<typeof project.data.propActivity> = {}
     for (const stemName of neededStems) {
@@ -496,6 +502,7 @@ const clips = buildClipRequests({
     singing,
     shotMoments,
     propActivity,
+    stemsAvailable: Boolean(stems),
 })
 
 const outputDir = join(project.dir, 'output')
@@ -509,7 +516,7 @@ for (const clip of clips) {
     // uploaded for rendering any more (lib/render.ts uploads and trims the whole stem itself), just handy to
     // hear exactly what a track covers
     for (const audio of clip.assets.audio) {
-        await cutAudio(join(project.dir, allStems[audio.stem!]!), secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
+        await cutAudio(stemFiles[audio.stem!]!, secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
     }
 }
 
@@ -566,7 +573,6 @@ if (render.has('images') || render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
         const selected = clips.filter(c => only.size === 0 || only.has(c.id))
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
-        const stemFiles = Object.fromEntries(Object.entries(allStems).map(([stem, file]) => [stem, join(project.dir, file)]))
         await renderAll(selected, clip => renderer.renderClip(clip, stemFiles))
     }
 }

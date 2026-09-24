@@ -30,8 +30,9 @@ export type ClipRequest = {
     assets: {
         // kind, id, name and description: what the prompt says about the picture - for debugging
         pictures: { label: string, file: string, subject: string, kind: 'character' | 'location', id: string, name: string, description: string }[],
-        // stem: which isolated stem this track was cut from (always set - see the Track comment below)
-        audio: { label: string, file: string, songStart: number, songEnd: number, stem?: 'vocals' | PropStem }[],
+        // stem: which isolated stem this track was cut from (always set - see the Track comment below) -
+        // 'song' is the whole, unseparated song, used as the cut/blocking anchor when stems aren't available
+        audio: { label: string, file: string, songStart: number, songEnd: number, stem?: 'vocals' | PropStem | 'song' }[],
     },
     prompt: string,
 }
@@ -51,6 +52,9 @@ export type Input = {
     // beatId -> one distinct, progressing action per shot (step 9b) - replaces the beat.moments spread when given
     shotMoments?: Record<string, string[]>,
     propActivity?: PropActivity,
+    // whether the song's stems were actually separated (config.alignLyrics) - when false, no drums/vocals/prop
+    // stem is available and every clip's anchor track falls back to the whole, unseparated song instead
+    stemsAvailable: boolean,
 }
 
 // Framings per beat kind, used in order for the shots of a clip
@@ -223,7 +227,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     }
     return requests
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing, propActivity}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -295,30 +299,34 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // version that's unambiguously aligned). Drums is always included, purely for cut/blocking timing, even
         // with no drummer on screen - every other stem only appears when a castSubject on that propStem is
         // actually active somewhere in this clip. Subjects sharing a propStem (two guitars, or several
-        // characters lumped onto demucs' "other" stem) share the one track for that stem.
+        // characters lumped onto demucs' "other" stem) share the one track for that stem. Without separated
+        // stems (alignLyrics: false - clip mode, nobody sings) there's no drums stem either, so the anchor
+        // falls back to the whole, unseparated song - same role (cut/blocking timing only), weaker claim.
         // Order matters: whichever track drives an actual visible performance (vocals' lip movement, an active
-        // instrument's playing motion - partially_copy) goes first; the always-present drums track, which only
+        // instrument's playing motion - partially_copy) goes first; the always-present anchor track, which only
         // ever grounds cut/blocking timing (weak_reference, never a performance), goes last. Tested live -
         // drums-first measurably desynced lip movement from the vocals track even though the vocals audio
         // itself was untouched; putting the performance-driving track at <Audio 1> fixed it.
-        type Track = { label: string, stem: 'drums' | PropStem | 'vocals', subjects: typeof castSubjects }
+        type Track = { label: string, stem: 'drums' | PropStem | 'vocals' | 'song', subjects: typeof castSubjects }
         const clipActive = (stem: PropStem) => (propActivity?.[stem] ?? []).some(r => r.end > slot.start && r.start < slot.end)
         const propGroups = new Map<PropStem, typeof castSubjects>()
         for (const s of castSubjects) if (s.propStem) propGroups.set(s.propStem, [...(propGroups.get(s.propStem) ?? []), s])
 
         // MAX_REF_AUDIOS: MiniMaxH3ReferenceToVideo only has 4 ref_audio slots (see comfy/helpers.ts) - if a
         // clip somehow needs more tracks than that, drop the lowest-priority ones off the end (same order as
-        // above: performance-driving tracks first, drums last) rather than erroring or silently overflowing
+        // above: performance-driving tracks first, the anchor last) rather than erroring or silently overflowing
         // the autogrow inputs. A dropped subject keeps whatever idle/active staging text it already gets per
         // shot (see propNote below) - it just loses the audio anchor backing that text up.
         const allTracks: Track[] = [
             ...(performing ? [{label: '', stem: 'vocals' as const, subjects: singerSubjects}] : []),
             ...[...propGroups].filter(([stem]) => stem !== 'drums' && clipActive(stem)).map(([stem, subjects]) => ({label: '', stem, subjects})),
-            {label: '', stem: 'drums', subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []},
+            stemsAvailable
+                ? {label: '', stem: 'drums' as const, subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []}
+                : {label: '', stem: 'song' as const, subjects: []},
         ]
         const tracks = allTracks.slice(0, MAX_REF_AUDIOS)
         tracks.forEach((t, n) => t.label = `<Audio ${n + 1}>`)
-        const drumsTrack = tracks.find(t => t.stem === 'drums')
+        const anchorTrack = tracks.find(t => t.stem === 'drums' || t.stem === 'song')
         const vocalsTrack = performing ? tracks.find(t => t.stem === 'vocals') : undefined
 
         // Shots: more cuts with more energy, cut on downbeats
@@ -457,7 +465,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const appearsIn = (label: string) => shots.filter(s => s.subjects.includes(label)).map(s => s.label).join(', ')
             const songPosition = `${formatTimestamp(slot.start)} to ${formatTimestamp(slot.end)} of the song`
             const seconds = String(Math.round(duration * 10) / 10)
-            const stemName: Record<Track['stem'], string> = {drums: 'drum', vocals: 'vocal', bass: 'bass', guitar: 'guitar', piano: 'piano', other: 'instrumental'}
+            const stemName: Record<Track['stem'], string> = {drums: 'drum', vocals: 'vocal', bass: 'bass', guitar: 'guitar', piano: 'piano', other: 'instrumental', song: 'full mix'}
             // beat.summary is written once for the whole scene and often describes how it opens (a character
             // arriving, emerging, appearing) - correct for the first clip of the scene, but repeating it verbatim
             // in later clips of the same scene tells the model everyone re-enters/re-appears each time, which
@@ -490,23 +498,27 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // subject_definitions line per track: what it is and, for an instrument/vocal track, who it drives
             const trackDefinition = (t: Track) => t.stem === 'drums'
                 ? `${t.label} is the isolated drum layer of the ${slot.section} section (${songPosition})${t.subjects.length ? `, the performance reference for ${joinAnd(t.subjects.map(s => s.label))}'s drumming` : ''} - used to time the cuts and blocking to the beat${t.subjects.length ? ' as well' : ''}.`
-                : t.stem === 'vocals'
-                    ? `${t.label} is the isolated lead vocal of the ${slot.section} section (${songPosition}), the voice-timbre reference for ${voices} - but ${voices} only actually sings from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song; outside that span within ${t.label}, keep lips closed and still.`
-                    : (() => {
-                        const window = instrumentWindow(t.stem as PropStem)
-                        return `${t.label} is the isolated ${stemName[t.stem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${window ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)} of the song; outside that span within ${t.label}, keep the instrument still` : ''}.`
-                    })()
+                : t.stem === 'song'
+                    ? `${t.label} is the ${slot.section} section (${songPosition}) of the song's full mix - used to time the cuts and blocking to the beat.`
+                    : t.stem === 'vocals'
+                        ? `${t.label} is the isolated lead vocal of the ${slot.section} section (${songPosition}), the voice-timbre reference for ${voices} - but ${voices} only actually sings from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song; outside that span within ${t.label}, keep lips closed and still.`
+                        : (() => {
+                            const window = instrumentWindow(t.stem as PropStem)
+                            return `${t.label} is the isolated ${stemName[t.stem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${window ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)} of the song; outside that span within ${t.label}, keep the instrument still` : ''}.`
+                        })()
             // retention_analysis line per track
             const trackRetention = (t: Track) => t.stem === 'drums'
                 ? t.subjects.length
                     ? `${t.label}: partially_copy - its rhythm and hits drive the drumming motion of ${joinAnd(t.subjects.map(s => s.label))}; it also grounds the cut and blocking timing for the whole scene.`
                     : `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
-                : t.stem === 'vocals'
-                    ? `${t.label}: partially_copy - its timbre and phrasing drive the lip movements of ${voices}, confined to ${formatTimestamp(vocalsWindow!.start)}-${formatTimestamp(vocalsWindow!.end)}; elsewhere in the clip ${voices} keeps lips closed and still.`
-                    : (() => {
-                        const window = instrumentWindow(t.stem as PropStem)
-                        return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${window ? `, confined to ${formatTimestamp(window.start)}-${formatTimestamp(window.end)}; elsewhere in the clip ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
-                    })()
+                : t.stem === 'song'
+                    ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
+                    : t.stem === 'vocals'
+                        ? `${t.label}: partially_copy - its timbre and phrasing drive the lip movements of ${voices}, confined to ${formatTimestamp(vocalsWindow!.start)}-${formatTimestamp(vocalsWindow!.end)}; elsewhere in the clip ${voices} keeps lips closed and still.`
+                        : (() => {
+                            const window = instrumentWindow(t.stem as PropStem)
+                            return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${window ? `, confined to ${formatTimestamp(window.start)}-${formatTimestamp(window.end)}; elsewhere in the clip ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
+                        })()
 
             return [
                 'subject_definitions:',
@@ -520,7 +532,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...tracks.map(trackDefinition),
                 '',
                 'summary:',
-                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClauseFull}${vocalsTrack ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of ${vocalsTrack.label}.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of ${drumsTrack ? drumsTrack.label : 'the music'}.`,
+                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClauseFull}${vocalsTrack ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of ${vocalsTrack.label}.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of ${anchorTrack ? anchorTrack.label : 'the music'}.`,
                 '',
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'

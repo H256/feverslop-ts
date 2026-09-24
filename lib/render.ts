@@ -180,8 +180,9 @@ export class Renderer implements Disposable {
         log.step('Saved', 'input/song.wav')
     }
 
-    // stemFiles: the isolated stems of the whole song (stems/vocals.wav, stems/drums.wav, ...) - vocals is
-    // needed by clips with a singer, others by whichever tracks this clip's prompt references.
+    // stemFiles: the isolated stems of the whole song (stems/vocals.wav, stems/drums.wav, ...) plus a "song"
+    // entry for the whole, unseparated song - vocals is needed by clips with a singer, others by whichever
+    // tracks this clip's prompt references ("song" when stems weren't separated at all, see lib/compose.ts).
     async renderClip(clip: ClipRequest, stemFiles: Record<string, string>) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
