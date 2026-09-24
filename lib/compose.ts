@@ -314,8 +314,21 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
         // position actually stops the miming. Rotated for variety across shots, never the same phrase twice
         // running. Phrased without assuming human anatomy or clothing (no "pocket", no "hip") - the performer
-        // behind a propStem isn't always a person in a jacket.
-        const idlePropPoses = [
+        // behind a propStem isn't always a person in a jacket. Split by whether the instrument is carried
+        // (guitar, bass, ...) or stationary (drums, piano - nobody "holds" a drum kit at their side).
+        const idlePropPoses: Partial<Record<PropStem, ((prop: string) => string)[]>> = {
+            drums: [
+                (prop: string) => `sits at the ${prop}, hands resting on the heads, motionless`,
+                (prop: string) => `stands behind the ${prop}, sticks resting on it, still`,
+                (prop: string) => `keeps still at the ${prop}, hands quiet on the rims`,
+            ],
+            piano: [
+                (prop: string) => `sits at the ${prop}, hands resting on the keys, motionless`,
+                (prop: string) => `stands beside the ${prop}, hands resting on its edge, still`,
+                (prop: string) => `keeps still at the ${prop}, hands quiet on the keys`,
+            ],
+        }
+        const idlePropPosesDefault = [
             (prop: string) => `holds the ${prop} loosely, perfectly still`,
             (prop: string) => `lets the ${prop} hang motionless at their side`,
             (prop: string) => `rests the ${prop} against their body, unmoving`,
@@ -330,9 +343,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             if (!propActivity) return ''
             const notes = focus
                 .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length && !names(s).test(moment))
-                .map(s => `${s.label}, ${s.name}, ${isActive({start, end}, propActivity[s.propStem!]!)
-                    ? `is actively using the ${s.prop} right now`
-                    : idlePropPoses[shotIndex % idlePropPoses.length]!(s.prop!)}.`)
+                .map(s => {
+                    if (isActive({start, end}, propActivity[s.propStem!]!)) return `${s.label}, ${s.name}, is actively using the ${s.prop} right now.`
+                    const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
+                    return `${s.label}, ${s.name}, ${poses[shotIndex % poses.length]!(s.prop!)}.`
+                })
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
 
