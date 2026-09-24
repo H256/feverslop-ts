@@ -45,12 +45,16 @@ export type VideoWorkflowOptions = {
     pictures: string[],         // ComfyUI input names in <Picture N> order, e.g. "feverslop-ts/<project>/assets/characters/thorin.png"
     // ComfyUI input name of the song's isolated vocals - only for clips with a singer, and only when there's a
     // vocals entry in `audios` (which of its entries is the vocals stem, given again here so the workflow can
-    // pick it out and lock it into the AV latent - MiniMaxH3AddGuide - not just offer it as a loose ref_audio).
+    // offer it as a loose ref_audio labeled correctly).
     vocals?: string,
     // the ComfyUI input name of each track's *whole* separated stem file, in <Audio N> order (see
     // lib/compose.ts) - lib/render.ts uploads the full stem, and the workflow trims each one to this clip's
     // own span itself (TrimAudioDuration), the render length exactly.
     audios: string[],
+    // ComfyUI input name of the whole, unseparated song - not one of the labeled <Audio N> references, only
+    // locked into the AV latent via MiniMaxH3AddGuide so every instrument (not just the ones with their own
+    // isolated track) has some real audio grounding behind its idle/active prompt text.
+    song: string,
     songStart: number,          // seconds - exactly on the clip's first frame, for every track in `audios`
     frames: number,             // frames to render, already a length the model accepts (see renderFrames)
     duration: number,           // frames / FPS - the audio to trim, covering the whole render

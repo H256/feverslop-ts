@@ -1,6 +1,6 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, renameSync, rmSync} from "node:fs";
-import {basename, dirname, join} from "node:path";
+import {basename, dirname, extname, join} from "node:path";
 import {log, startSpinner, styles} from "./log.ts";
 import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
@@ -197,13 +197,24 @@ export class Renderer implements Disposable {
         const withVocals = clip.assets.audio.some(a => a.stem === 'vocals')
         const missingStems = clip.assets.audio.filter(a => !(a.stem && stemFiles[a.stem] && existsSync(stemFiles[a.stem]!)))
         if (missingStems.length) return log.warn(`${clip.id} skipped - missing stem file(s) for: ${missingStems.map(a => a.stem).join(', ')}`)
+        if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id} skipped - missing the full song (needed for MiniMaxH3AddGuide)`)
 
         const {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', async () => {
             const pictureUploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             // Upload the whole separated stem per track (not a per-clip cut) and let the workflow trim it to
             // this clip's span itself (TrimAudioDuration) - a pre-cut file can't account for the video model
-            // rounding the render length up past clip.frames (see comfy/workflows/h3-ref2video.ts).
-            const uploads = [...pictureUploads, ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${this.remoteDir}/stems/${a.stem}.wav`}))]
+            // rounding the render length up past clip.frames (see comfy/workflows/h3-ref2video.ts). The full,
+            // unseparated song goes up too, always - MiniMaxH3AddGuide locks it into the AV latent so every
+            // instrument gets some real audio grounding, not just the isolated tracks a character's own prop
+            // happens to need (an idle instrument otherwise has no audio backing its idle prompt text at all).
+            // song can be a hand-supplied song.mp3 as well as the usual wav - keep its real extension on upload,
+            // LoadAudio needs it to demux correctly
+            const songRemote = `${this.remoteDir}/stems/song${extname(stemFiles.song!)}`
+            const uploads = [
+                ...pictureUploads,
+                ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${this.remoteDir}/stems/${a.stem}.wav`})),
+                {from: stemFiles.song!, to: songRemote},
+            ]
             const seed = resolveSeed(this.config.seed)
             const {default: videoWorkflow, renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
 
@@ -216,9 +227,9 @@ export class Renderer implements Disposable {
                 prompt: clip.prompt,
                 pictures: clip.assets.pictures.map(p => `${this.remoteDir}/${p.file}`),
                 audios: clip.assets.audio.map(a => `${this.remoteDir}/stems/${a.stem}.wav`),
-                // which of the audios[] entries is the vocals track, so the workflow can lock it into the AV
-                // latent via MiniMaxH3AddGuide instead of only offering it as a loose ref_audio
                 ...(withVocals ? {vocals: `${this.remoteDir}/stems/vocals.wav`} : {}),
+                // the full mix, locked into the AV latent via MiniMaxH3AddGuide - see comfy/workflows/h3-ref2video.ts
+                song: songRemote,
                 songStart: secondsAt(clip.frameStart),
                 frames,
                 duration: secondsAt(frames),
