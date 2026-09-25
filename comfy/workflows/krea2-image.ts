@@ -1,4 +1,4 @@
-// Rebuilt from comfy/image_t2i_startframe_krea_v1.json
+// Originally exported from ComfyUI as image_t2i_startframe_krea_v1.json (see README's "Workflows" section)
 import {afterCleanup, type ImageWorkflowOptions, resolution, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export default function krea2Image(opts: ImageWorkflowOptions & { negative?: string }): WorkflowResult {

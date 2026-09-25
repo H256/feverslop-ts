@@ -1,4 +1,4 @@
-// Rebuilt from comfy/r2v_audio_fullmix_guide_1-pass_turbo.json
+// Originally exported from ComfyUI as r2v_audio_fullmix_guide_1-pass_turbo.json (see README's "Workflows" section)
 import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video

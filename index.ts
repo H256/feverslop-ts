@@ -59,7 +59,7 @@ const {values: args, positionals} = (() => {
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use song, images, videos, final or all`, usage)
-const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920')
+const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920') // author's own current project, pass your own project-id otherwise
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
 for (const step of args.redo.split(',').filter(Boolean)) project.invalidate(step as StepName)
