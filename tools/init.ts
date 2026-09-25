@@ -6,7 +6,7 @@ import {existsSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
 import {defaults, languageName, type ProjectConfig} from "../lib/config.ts";
-import {styles} from "../lib/log.ts";
+import {printBanner, styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -113,18 +113,6 @@ await writeProject(id, {songFile, idea, lyrics, storyIdea, style, musicStyle, co
 
 const render = hasSong ? 'images,videos,final' : 'song,images,videos,final'
 p.outro(`Created - run it with:\n\n  bun index.ts ${id} --render=${render}\n`)
-
-function printBanner() {
-    if (!process.stdout.isTTY) return
-    const logo = [
-        '╔═╗╔═╗╦  ╦╔═╗╦═╗╔═╗╦  ╔═╗╔═╗',
-        '╠╣ ║╣ ╚╗╔╝║╣ ╠╦╝╚═╗║  ║ ║╠═╝',
-        '╚  ╚═╝ ╚╝ ╚═╝╩╚═╚═╝╩═╝╚═╝╩  ',
-    ]
-    console.log()
-    for (const line of logo) console.log(`  ${styles.name(line)}`)
-    console.log(`  ${styles.muted('TS · video cli')}`)
-}
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {

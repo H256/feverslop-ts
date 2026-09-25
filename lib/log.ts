@@ -45,6 +45,19 @@ export function warnUnknownKeys(obj: object, allowed: string[], where: string, p
     if (unknown.length) log.warn(`${where}: unknown field(s) ${prefix}${unknown.join(`, ${prefix}`)} - ignored`)
 }
 
+/** The "FEVERSLOP" ASCII logo, printed once at the start of the interactive CLIs - silent when not in a terminal. */
+export function printBanner() {
+    if (!process.stdout.isTTY) return
+    const logo = [
+        '╔═╗╔═╗╦  ╦╔═╗╦═╗╔═╗╦  ╔═╗╔═╗',
+        '╠╣ ║╣ ╚╗╔╝║╣ ╠╦╝╚═╗║  ║ ║╠═╝',
+        '╚  ╚═╝ ╚╝ ╚═╝╩╚═╚═╝╩═╝╚═╝╩  ',
+    ]
+    console.log()
+    for (const line of logo) console.log(`  ${styles.name(line)}`)
+    console.log(`  ${styles.muted('TS · video cli')}`)
+}
+
 export const log = {
     section: (title: string) => print(`\n${styles.section(`  ${title}  `)}\n`),
     step: (label: string, value: string = '') => print(`${styles.label(`▸ ${label}`)} ${value}`),
