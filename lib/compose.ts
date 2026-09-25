@@ -528,7 +528,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // appearance - a subject definition that says a character "plays" something reads as a
                     // standing trait to the video model, and it keeps them miming that action even in shots
                     // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
-                    : `${s.label} is ${s.name}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
+                    : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
                 ...tracks.map(trackDefinition),
                 '',
                 'summary:',
@@ -537,7 +537,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                    : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
+                    : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
                 '',
