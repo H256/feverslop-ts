@@ -193,13 +193,23 @@ workflows.
 
 ## What happens during a render
 
-**A picture:**
+**A picture**, with `sequenceSheets: false` (see [Reference sheets](#reference-sheets) for the default, on, path):
 
 1. If `assets/<characters|locations>/<id>.png` exists, it is skipped.
 2. The image workflow is built with the picture's Krea 2 prompt (from `output/assets.json`), the seed, the resolution
    and the orientation.
 3. The job is queued on the first free ComfyUI server; the status line shows its progress.
 4. The saved PNG is downloaded to `assets/…/<id>.png`.
+
+With `sequenceSheets: true` (the default), steps 1-4 above still run first, but write to
+`assets/sequence/<characters|locations>/<id>/anchor.png` instead of the final `assets/…/<id>.png` - then:
+
+5. If `assets/sequence/…/<id>/sequence.mp4` doesn't exist yet, the sequence workflow is built from the anchor image
+   (`first_frame`), the deterministic turnaround prompt (`lib/sequenceSheet.ts`), the seed and the resolution, queued
+   and downloaded there.
+6. One frame per beat of that video is extracted with ffmpeg into `assets/sequence/…/<id>/frames/`.
+7. Those frames are composited into the final `assets/…/<id>.png` - the file every clip's `<Picture N>` resolves to -
+   with ffmpeg (`xstack`), no image library.
 
 **A clip:**
 
@@ -296,6 +306,11 @@ projects/<project-id>/
     characters/<id>.png.json   how it was made
     locations/<id>.png         rendered location (landscape)
     locations/<id>.png.json
+    sequence/characters/<id>/  only with sequenceSheets: true (the default) - see Reference sheets
+      anchor.png                 the hero image the turnaround video was made from
+      sequence.mp4                the turnaround video
+      frames/frame_00.png, …      one sampled frame per beat, composited into characters/<id>.png
+    sequence/locations/<id>/   same, for a location
     clips/slot-001_ff.png      the clip's first frame in the final video
     clips/slot-001_lf.png      the clip's last frame in the final video (frame frames-1, not the file's last)
   videos/
@@ -319,7 +334,10 @@ The `.json` next to each clip records how it was made:
 }
 ```
 
-Pictures record the workflow, seed, resolution and prompt.
+With `sequenceSheets: false`, a picture's `.json` records the workflow, seed, resolution and prompt. With
+`sequenceSheets: true` (the default), the anchor and the sequence video each get their own `.json` next to them in
+`assets/sequence/…/<id>/` (same shape as a picture's / a clip's); the final composited sheet's `.json` records the
+sequence workflow, frame count, beat timestamps and the turnaround prompt instead.
 
 Every clip also leaves its **boundary frames** in `assets/clips/`: `<clip-id>_ff.png` (frame 0) and `<clip-id>_lf.png`
 (frame `frames - 1`) - the first and last frame the clip contributes to `final.mp4`, not the padding the model

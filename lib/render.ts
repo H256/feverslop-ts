@@ -173,7 +173,7 @@ export class Renderer implements Disposable {
         const anchorTarget = join(this.projectDir, anchorFile)
 
         if (!existsSync(anchorTarget)) {
-            await this.render(`${picture.kind} ${picture.id} anchor`, anchorTarget, '.png', async () => {
+            const {seed} = await this.render(`${picture.kind} ${picture.id} anchor`, anchorTarget, '.png', async () => {
                 const seed = resolveSeed(this.config.seed)
                 const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
                 const result = imageWorkflow({
@@ -185,6 +185,7 @@ export class Renderer implements Disposable {
                 })
                 return {result, uploads: [], meta: {seed}}
             })
+            await Bun.write(`${anchorTarget}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt}, null, 2))
         }
 
         const {prompt: sequencePrompt, beatTimes} = picture.kind === 'character'
@@ -193,7 +194,7 @@ export class Renderer implements Disposable {
         const videoFile = join(dir, 'sequence.mp4')
         const videoTarget = join(this.projectDir, videoFile)
         if (!existsSync(videoTarget)) {
-            await this.render(`${picture.kind} ${picture.id} sequence`, videoTarget, '.mp4', async () => {
+            const {seed} = await this.render(`${picture.kind} ${picture.id} sequence`, videoTarget, '.mp4', async () => {
                 const seed = resolveSeed(this.config.seed)
                 const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
                 const result = sequenceWorkflow({
@@ -207,6 +208,7 @@ export class Renderer implements Disposable {
                 })
                 return {result, uploads: [{from: anchorTarget, to: `${this.remoteDir}/${anchorFile}`}], meta: {seed}}
             })
+            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt}, null, 2))
         }
 
         const framesDir = join(this.projectDir, dir, 'frames')
