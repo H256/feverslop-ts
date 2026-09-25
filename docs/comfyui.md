@@ -184,6 +184,38 @@ character (see [README → Group characters](../README.md#group-characters)) - e
 Set `"sequenceSheets": false` to fall back to the old single-picture render (cheaper, one render per character/
 location instead of two).
 
+#### Using your own anchor image
+
+Step 1 above is skipped whenever its file already exists - so to reuse an existing character or location instead of
+generating a new one (e.g. carrying a character over from an earlier project, or supplying a face you already have),
+drop your own image at:
+
+```
+projects/<project-id>/assets/sequence/characters/<character-id>/anchor.png
+projects/<project-id>/assets/sequence/locations/<location-id>/anchor.png
+```
+
+A group character's members live at `<character-id>-v0`, `<character-id>-v1`, ... (`characterId-v<N>`, see
+[README → Group characters](../README.md#group-characters)) - supply one `anchor.png` per member you want to fix,
+same path pattern.
+
+Create the `assets/sequence/<kind>s/<id>/` folder yourself if it doesn't exist yet (nothing has rendered for that id
+before), then run `--render=images` as usual: it turns your anchor into the turnaround video and reference sheet
+exactly as it would for a freshly generated one, uploading it to ComfyUI like any other reference image. Skipping
+step 1 this way leaves no `anchor.png.json` next to it (that file only gets written when this project renders the
+anchor itself) - harmless, it's only ever read for the debug record of how a file was made.
+
+One thing to watch: the turnaround video's prompt still describes the character/location from this project's own
+generated text description (`characterDescriptions`/`locationDescriptions` in `project.json`), not from the image
+itself - a supplied anchor that looks very different from what that text says invites the same kind of
+identity-drift the video model shows when its picture and its prompt disagree (see the description-vs-picture fix
+in [PR #8](https://forgejo.elysium.lan/H256/feverslop-ts/pulls/8)). If you're carrying a character over into a
+different story, it's worth checking - and if needed editing by hand - that project's `characterDescriptions` entry
+so it actually matches the image you dropped in, before rendering.
+
+To force a full or partial re-render later, see [Re-rendering](#re-rendering) below - what to delete depends on
+whether you want to keep your anchor or replace it too.
+
 ### Workflows
 
 `imageWorkflow`, `videoWorkflow` and `sequenceWorkflow` pick the workflow file used for rendering. The included ones
@@ -362,7 +394,23 @@ yourself.
 - **After changing the story or beats:** the clip prompts in `output/clips/` change, but existing videos stay - delete
   the clips that should change.
 
-Your own pictures work too: save them under the same names in `assets/` and they are used as they are.
+Your own pictures work too: save them under the same names in `assets/` and they are used as they are (see
+[Using your own anchor image](#using-your-own-anchor-image) to do the same for a sequence sheet's *anchor*
+specifically, one step earlier).
+
+**With `sequenceSheets: true`,** re-rendering a character/location is staged - each step is only redone if its own
+file is missing, so deleting just the final picture reuses everything upstream of it instead of starting over:
+
+| You delete                                                  | What gets redone                                      |
+|---------------------------------------------------------------|--------------------------------------------------------|
+| `assets/<kind>s/<id>.png` only                                 | just recomposited from the existing sampled frames      |
+| … and `assets/sequence/<kind>s/<id>/frames/`                   | frames re-extracted from the existing video, then composited |
+| … and `sequence.mp4` (`.json`)                                 | a new turnaround video, from the existing anchor          |
+| … and the whole `assets/sequence/<kind>s/<id>/` folder          | a new anchor too - full re-render                        |
+
+The final picture (`assets/<kind>s/<id>.png`) is what actually triggers this whole step - deleting only something
+under `assets/sequence/…/<id>/` while leaving the final picture in place does nothing on the next render, since that
+step is skipped entirely once the final picture exists.
 
 ## Node types (`comfy/nodes.ts`)
 
