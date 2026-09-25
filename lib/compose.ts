@@ -8,6 +8,29 @@ import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
 export const pictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+// one reference image per member of a group character, instead of the single shared id - see computeMemberCounts
+export const groupMemberId = (characterId: string, member: number) => `${characterId}-v${member}`
+
+// Cap on how many distinct member images a group character gets, how ever many are visible at once in a beat -
+// each one is a full extra image (and, with sequence sheets on, a full extra reference video) to generate.
+export const MAX_GROUP_MEMBERS = 5
+
+/**
+ * How many distinct reference images a group character (Character.isGroup) needs: the most individuals of it
+ * ever shown on screen together in one beat (beat.groupSize), capped at MAX_GROUP_MEMBERS. A group character with
+ * no groupSize data anywhere still gets 2, so it doesn't silently fall back to the single-shared-image look this
+ * is meant to fix. Non-group characters, and group characters that are only ever shown one at a time, get 1 -
+ * the plain, unsuffixed picture id.
+ */
+export function computeMemberCounts(beats: StoryBeat[], characters: Character[]): Record<string, number> {
+    const counts: Record<string, number> = {}
+    for (const char of characters) {
+        if (!char.isGroup) continue
+        const seen = beats.filter(b => b.characterIds.includes(char.id)).map(b => b.groupSize?.[char.id] ?? 2)
+        counts[char.id] = Math.min(MAX_GROUP_MEMBERS, Math.max(1, ...seen, 2))
+    }
+    return counts
+}
 // the first (ff) and last (lf) frame a rendered clip contributes to the final video - for extending clips later (fflf2va)
 export const boundaryFrameAsset = (clipId: string, which: 'ff' | 'lf') => `assets/clips/${clipId}_${which}.png`
 // one file per stem per clip, e.g. output/audio/slot-006.guitar.wav - a clip can have anywhere from 1 to
@@ -201,8 +224,10 @@ export function propActivityPerBeat(
 }
 
 export function buildClipRequests(input: Input): ClipRequest[] {
-    const {slots, mapping, beats, music, shotMoments} = input
+    const {slots, mapping, beats, characters, music, shotMoments} = input
     const beatById = new Map(beats.map(b => [b.id, b]))
+    // >1 only for a group character (Character.isGroup) - which member image a given clip's subject resolves to
+    const memberCounts = computeMemberCounts(beats, characters)
     const requests: ClipRequest[] = []
     const stateSoFar: string[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
@@ -580,7 +605,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 })),
             } : {}),
             assets: {
-                pictures: subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.id), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                // a group character (memberCounts[s.id] > 1) rotates through its member images by clip index, so
+                // the same group doesn't render from one single shared face for the whole song - see groupMemberId
+                pictures: subjects.map(s => {
+                    const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
+                    const pictureId = members > 1 ? groupMemberId(s.id, slot.index % members) : s.id
+                    return {label: s.picture, file: pictureAsset(s.kind, pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description}
+                }),
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
                 audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem})),
             },

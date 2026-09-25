@@ -8,7 +8,10 @@ import {log, styles} from "./log.ts";
 // "guitar"/"piano" come from a separate htdemucs_6s pass (lib/music.ts separateInstrumentStems) - htdemucs_ft's
 // main 4-stem separation (cleanest for vocals) folds both into "other", too coarse to time a guitar's own entry
 export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
-export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem }
+// isGroup: a collective cast entry acting as one individual member of the group (e.g. "Orcs", "Miners") rather
+// than a single person - see computeMemberCounts in lib/compose.ts for how this turns into several distinct
+// reference images so every member on screen doesn't look identical throughout the video.
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, isGroup?: boolean }
 export type Location = { id: string, name: string }
 
 // A story beat has no timing - it is stretched onto the music later
@@ -24,6 +27,9 @@ export type StoryBeat = {
     kind: 'establish' | 'build' | 'hit' | 'release',
     lyricAnchor?: string,           // song section label this beat should play under
     stateAfter: string[],           // continuity facts that are true after this beat
+    // for a group character (Character.isGroup) in characterIds: how many distinct individuals of that group are
+    // visible together on screen during this beat - drives how many member variant images are worth generating
+    groupSize?: Record<string, number>,
 }
 
 export type LyricSection = { label: string, lines: string[] }
@@ -111,6 +117,9 @@ export type Project = {
     singing?: Singing,
     lookBrief?: string,
     characterLooks?: Record<string, string>,
+    // group characters only (Character.isGroup with more than one member visible at once, see computeMemberCounts):
+    // one look prompt per member, index 0 is always the same text as characterLooks[id]
+    characterLookVariants?: Record<string, string[]>,
     locationLooks?: Record<string, string>,
     characterDescriptions?: Record<string, string>,   // the looks without the picture, for the clip prompts
     locationDescriptions?: Record<string, string>,
@@ -136,6 +145,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     singing: ['cast'],
     lookBrief: ['summary'],
     characterLooks: ['cast', 'lookBrief'],
+    characterLookVariants: ['characterLooks', 'beats'],
     locationLooks: ['cast', 'lookBrief', 'summary'],
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],

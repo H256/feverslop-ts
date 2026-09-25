@@ -7,7 +7,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {type Character, type Location, ProjectStore, type PropStem, type Singing, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
-import {buildClipRequests, countShotsPerBeat, pictureAsset, propActivityPerBeat} from "./lib/compose.ts";
+import {buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
@@ -15,8 +15,8 @@ import {assembleFinal} from "./lib/assemble.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {
-    castPrompt, characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt,
-    lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, summaryPrompt,
+    castPrompt, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
+    locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
@@ -368,11 +368,12 @@ For every beat give:
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
 - "lyricAnchor": the song section label this beat belongs under if the lyrics describe it (e.g. "Chorus"), otherwise omit it.
 - "stateAfter": short facts that are true after this beat and must stay visible later, e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
+- "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
 ${singing ? performanceRules(singing) : ''}
 Answer only with JSON: {"beats": [...]}
 ---
-characters: ${JSON.stringify(cast.characters.map(c => ({id: c.id, role: c.role, ...(c.prop ? {prop: c.prop} : {})})))}
+characters: ${JSON.stringify(cast.characters.map(c => ({id: c.id, role: c.role, ...(c.prop ? {prop: c.prop} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
 locations: ${JSON.stringify(cast.locations.map(l => l.id))}
 lyrics:
 ${lyrics}
@@ -383,21 +384,29 @@ ${storyBase}`,
     })
 
     const characterIds = new Set(cast.characters.map(c => c.id))
+    const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
     const locationIds = cast.locations.map(l => l.id)
     return extracted.beats.map((beat, i) => {
         if (!locationIds.includes(beat.locationId)) {
             log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
         }
+        const beatCharacterIds = beat.characterIds.filter(id => characterIds.has(id))
+        const groupSize = Object.fromEntries(
+            Object.entries(beat.groupSize ?? {})
+                .filter(([id]) => groupIds.has(id) && beatCharacterIds.includes(id))
+                .map(([id, count]) => [id, Math.min(20, Math.max(1, Math.round(Number(count)) || 1))]),
+        )
         return {
             ...beat,
             id: `beat-${String(i + 1).padStart(2, '0')}`,
             order: i + 1,
             locationId: locationIds.includes(beat.locationId) ? beat.locationId : locationIds[0]!,
-            characterIds: beat.characterIds.filter(id => characterIds.has(id)),
+            characterIds: beatCharacterIds,
             moments: beat.moments?.length ? beat.moments : [beat.summary],
             intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
             weight: Math.max(1, Number(beat.weight) || 1),
             stateAfter: beat.stateAfter ?? [],
+            ...(Object.keys(groupSize).length ? {groupSize} : {}),
         }
     })
 })
@@ -406,6 +415,27 @@ for (const beat of beats) {
     console.log(`      ${beat.summary}`)
     for (const moment of beat.moments) console.log(styles.muted(`        · ${moment}`))
 }
+
+////////// GENERATING GROUP MEMBER VARIANT LOOKS
+// group characters (cast.characters[].isGroup) that ever show more than one individual on screen at once (beats
+// groupSize) get one extra look prompt per member here, so they don't all render from the same shared reference
+// picture - see computeMemberCounts/groupMemberId in lib/compose.ts for how a shot picks which member to show.
+const memberCounts = computeMemberCounts(beats, cast.characters)
+const characterLookVariants = await project.step('characterLookVariants', '9c · GENERATING GROUP MEMBER VARIANTS', async () => {
+    const variants: Record<string, string[]> = {}
+    for (const char of cast.characters) {
+        const count = memberCounts[char.id] ?? 1
+        if (count <= 1) continue
+        log.step('Group', `${styles.name(char.id)} ${styles.muted(`${count} members`)}`)
+        const looks = [characterLooks[char.id] ?? '']
+        for (let i = 1; i < count; i++) {
+            log.step(`Member ${i + 1}/${count}`, styles.name(char.id))
+            looks.push(await ask(characterVariantLookPrompt(lookBrief, char, looks)))
+        }
+        variants[char.id] = looks
+    }
+    return variants
+})
 
 ////////// CUTTING THE SONG INTO CLIPS
 // switched alignLyrics on or off since the timeline was built
@@ -523,16 +553,23 @@ for (const clip of clips) {
     }
 }
 
-// the pictures the requests expect, with the Krea 2 prompt to generate each one
+// the pictures the requests expect, with the Krea 2 prompt to generate each one - a group character
+// (memberCounts[c.id] > 1) gets one job per member instead of one shared job, see groupMemberId
 const pictures: PictureJob[] = [
-    ...cast.locations.map(l => ({kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name, prompt: locationLooks[l.id] ?? ''})),
-    ...cast.characters.map(c => ({kind: 'character' as const, id: c.id, file: pictureAsset('character', c.id), name: c.name, prompt: characterLooks[c.id] ?? ''})),
+    ...cast.locations.map(l => ({
+        kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name,
+        prompt: locationLooks[l.id] ?? '', description: locationDescriptions[l.id] ?? '',
+    })),
+    ...cast.characters.flatMap(c => {
+        const count = memberCounts[c.id] ?? 1
+        const looks = characterLookVariants[c.id] ?? [characterLooks[c.id] ?? '']
+        return Array.from({length: count}, (_, i) => {
+            const id = count > 1 ? groupMemberId(c.id, i) : c.id
+            return {kind: 'character' as const, id, file: pictureAsset('character', id), name: c.name, prompt: looks[i] ?? looks[0] ?? '', description: characterDescriptions[c.id] ?? ''}
+        })
+    }),
 ]
-// next to each image prompt the description the clip prompts use for that picture
-await Bun.write(join(outputDir, 'assets.json'), JSON.stringify(pictures.map(p => ({
-    ...p,
-    description: (p.kind === 'location' ? locationDescriptions : characterDescriptions)[p.id] ?? '',
-})), null, 2))
+await Bun.write(join(outputDir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
 await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
     song: songFile,
