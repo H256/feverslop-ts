@@ -13,6 +13,11 @@ export type RenderConfig = {
     songAudio: boolean,             // final video: the original song replaces the clips' own audio
     songWorkflow: string,           // file name in comfy/workflows/, without .ts - used by --render=song
     songDuration: number,           // seconds - an upper bound for a generated song; -1 = the workflow's own default
+    // every character and location gets a multi-angle reference sheet (turnaround video -> sampled frames ->
+    // composited grid) instead of one flat hero image - see lib/sequenceSheet.ts. Off falls back to the plain
+    // hero image (the old renderPicture path) - useful to cut render cost while iterating on a project.
+    sequenceSheets: boolean,
+    sequenceWorkflow: string,       // file name in comfy/workflows/, without .ts
 }
 
 export type PlanConfig = {
@@ -35,6 +40,8 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     songAudio: true,
     songWorkflow: 'yue2-song',
     songDuration: -1,
+    sequenceSheets: true,
+    sequenceWorkflow: 'h3-sequence-to-sheet',
     singers: [],
     lyricsLanguage: 'en',
     llm: {},
@@ -60,7 +67,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         }
     }
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
-    for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow'] as const) {
+    if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
+    for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
     }
     if (!Number.isFinite(config.songDuration) || (config.songDuration !== -1 && config.songDuration <= 0)) {

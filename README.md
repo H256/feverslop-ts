@@ -484,6 +484,34 @@ bun index.ts --redo=propActivity,shotMoments
 This only re-runs the activity check and the per-shot rewrite - `cast`, `beats` and the character pictures are left
 alone.
 
+## Group characters
+
+A cast entry can represent a collective acting as one individual member of a group - "Orcs", "Miners", a band's
+backing dancers - rather than a single named person. Step 5 (`cast`) flags this itself:
+
+```json
+{ "id": "orcs", "name": "Orcs", "role": "…", "isGroup": true }
+```
+
+Without this, a group character still got only one reference image for the whole song, so every individual of it on
+screen - in every shot, from the first appearance to the last - looked exactly the same. With `isGroup` set:
+
+1. **Beats** (`9`): for every beat that puts a group character on screen, the LLM also estimates `groupSize` - how
+   many distinct individuals of it are visible together at once (a lone scout is `1`, a raiding pack might be `4`).
+2. **Member variants** (`9c`): the most simultaneous individuals seen anywhere in the story becomes how many member
+   look prompts get generated (capped at 5, at least 2 for any flagged group) - each one written to look visibly
+   different from the others already designed for that same group (a different build, face, hair or gear detail),
+   the same way the main cast is already pushed apart from each other.
+3. **Shots** (`12`): each clip rotates through a group's member pictures instead of resolving every shot to the same
+   file, so the group doesn't render from one single shared face for the whole video.
+
+**Fixing this by hand.** If step 5 missed that a character is a group, or a beat's estimate is off, edit
+`cast.characters`/`beats` in `project.json` directly, then:
+
+```bash
+bun index.ts --redo=characterLookVariants
+```
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix

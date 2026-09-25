@@ -600,13 +600,13 @@ if (render.has('images') || render.has('videos')) {
     const only = new Set(args.only.split(',').filter(Boolean))
     using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
     log.section('13 · RENDERING WITH COMFYUI')
-    log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})`))
+    log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})${config.sequenceSheets ? `, sequence sheets (${config.sequenceWorkflow})` : ''}`))
     log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
 
     // everything at once - the renderer runs one job per server and queues the rest
     if (render.has('images')) {
-        log.step('Pictures', `${pictures.length}`)
-        await renderAll(pictures, picture => renderer.renderPicture(picture))
+        log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
+        await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
     }
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {

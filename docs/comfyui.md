@@ -40,12 +40,13 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
    pictures and clips are rendered on all of them at once - see [Several servers](#several-servers). **Every server
    needs the same models and custom nodes** (step 2).
 
-2. **The models and custom nodes the workflows use.** The two included workflows need:
+2. **The models and custom nodes the workflows use.** The included workflows need:
 
    | Workflow                          | Models                                                                                                                                                                                                              | Custom nodes                                               |
    |-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
    | `krea2-image` (pictures)          | `krea2_turbo_fp8_scaled.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_image_vae.safetensors`                                                                                                             | `VRAMCleanup`, `ResolutionSelector` (only for megapixels)   |
    | `h3-ref2video` (clips)            | `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
+   | `h3-sequence-to-sheet` (reference sheets) | `minimax_h3_fl2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
 
 3. **Node types for your server.** `comfy/nodes.ts` describes every node and model installed on the server, so
    the workflows are checked against what is really there. It is generated from the first server of the settings (or
@@ -96,6 +97,8 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
   "imageWorkflow": "krea2-image",
   "videoWorkflow": "h3-ref2video",
   "songAudio": true,
+  "sequenceSheets": true,
+  "sequenceWorkflow": "h3-sequence-to-sheet",
   "llm": {}
 }
 ```
@@ -109,6 +112,8 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `imageWorkflow`   | `"krea2-image"`  | a file name in `comfy/workflows/`, without `.ts`                                        |
 | `videoWorkflow`   | `"h3-ref2video"` | a file name in `comfy/workflows/`, without `.ts`                                        |
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
+| `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
+| `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |
 | `singers`         | `[]`             | who sings on screen: `[]` = nobody (clip mode), `["auto"]` = the LLM picks, `["Thorin"]` = names or ids - see [Singing characters](../README.md#singing-characters) |
 | `lyricsLanguage`  | `"en"`           | language code of the lyrics, for Whisper and the `<d>[English]` lyrics tag               |
 | `alignLyrics`     | `true` with singers, else `false` | stems, transcript and real lyric timing                                 |
@@ -161,11 +166,30 @@ Video frame rate is always 24 fps.
 
 Both are frame-exact - see [below](#the-final-video-and-frame-exact-timing).
 
+### Reference sheets
+
+With `sequenceSheets` on (the default), every character and location picture (`assets/characters/*.png`,
+`assets/locations/*.png` - what every clip actually references) is built from several angles instead of one flat
+hero image:
+
+1. The usual look prompt renders a hero image, saved as the "anchor" (`assets/sequence/<kind>s/<id>/anchor.png`).
+2. The anchor is turned into a short silent turnaround video with `sequenceWorkflow` (6 hard-cut views for a
+   character - front, face, left/right profile, rear, an expression change; 5 for a location - front, right, rear,
+   left, wide establishing), saved as `assets/sequence/<kind>s/<id>/sequence.mp4`.
+3. One frame per view is sampled from that video (`assets/sequence/<kind>s/<id>/frames/`) and composited into the
+   final multi-angle reference sheet - the file every clip's `<Picture N>` actually resolves to.
+
+This gives a video model more to draw a shot's framing from than one static establishing shot, and - for a group
+character (see [README → Group characters](../README.md#group-characters)) - each member gets its own such sheet.
+Set `"sequenceSheets": false` to fall back to the old single-picture render (cheaper, one render per character/
+location instead of two).
+
 ### Workflows
 
-`imageWorkflow` and `videoWorkflow` pick the workflow file used for rendering. The included ones are `krea2-image` and
-`h3-ref2video`. Any file in `comfy/workflows/` that follows the workflow contract can be used - see
-[custom-workflows.md](custom-workflows.md). Different projects can use different workflows.
+`imageWorkflow`, `videoWorkflow` and `sequenceWorkflow` pick the workflow file used for rendering. The included ones
+are `krea2-image`, `h3-ref2video` and `h3-sequence-to-sheet`. Any file in `comfy/workflows/` that follows the
+workflow contract can be used - see [custom-workflows.md](custom-workflows.md). Different projects can use different
+workflows.
 
 ## What happens during a render
 
