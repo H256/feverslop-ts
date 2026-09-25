@@ -19,6 +19,7 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
     process.exit(1)
 }
 
+printBanner()
 p.intro('feverslop-ts · new project')
 
 const id = answer(await p.text({
@@ -112,6 +113,18 @@ await writeProject(id, {songFile, idea, lyrics, storyIdea, style, musicStyle, co
 
 const render = hasSong ? 'images,videos,final' : 'song,images,videos,final'
 p.outro(`Created - run it with:\n\n  bun index.ts ${id} --render=${render}\n`)
+
+function printBanner() {
+    if (!process.stdout.isTTY) return
+    const logo = [
+        '╔═╗╔═╗╦  ╦╔═╗╦═╗╔═╗╦  ╔═╗╔═╗',
+        '╠╣ ║╣ ╚╗╔╝║╣ ╠╦╝╚═╗║  ║ ║╠═╝',
+        '╚  ╚═╝ ╚╝ ╚═╝╩╚═╚═╝╩═╝╚═╝╩  ',
+    ]
+    console.log()
+    for (const line of logo) console.log(`  ${styles.name(line)}`)
+    console.log(`  ${styles.muted('TS · video cli')}`)
+}
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {
