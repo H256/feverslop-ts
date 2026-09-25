@@ -120,6 +120,11 @@ export type Project = {
     // group characters only (Character.isGroup with more than one member visible at once, see computeMemberCounts):
     // one look prompt per member, index 0 is always the same text as characterLooks[id]
     characterLookVariants?: Record<string, string[]>,
+    // the characterLookVariants without the reference sheet, one per member (see characterDescriptions) - every
+    // member has its own look, so it needs its own description too: reusing the group's shared characterDescriptions
+    // entry for every member described a different-looking anchor image with the wrong member's text, which read
+    // as the video model fighting itself and drifting the whole member toward whichever member the text described
+    characterDescriptionVariants?: Record<string, string[]>,
     locationLooks?: Record<string, string>,
     characterDescriptions?: Record<string, string>,   // the looks without the picture, for the clip prompts
     locationDescriptions?: Record<string, string>,
@@ -146,6 +151,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     lookBrief: ['summary'],
     characterLooks: ['cast', 'lookBrief'],
     characterLookVariants: ['characterLooks', 'beats'],
+    characterDescriptionVariants: ['characterLookVariants', 'characterDescriptions'],
     locationLooks: ['cast', 'lookBrief', 'summary'],
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],

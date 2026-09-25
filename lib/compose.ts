@@ -67,6 +67,10 @@ export type Input = {
     characters: Character[],
     locations: Location[],
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
+    // group characters only (memberCounts[id] > 1, see computeMemberCounts): one description per member, matching
+    // characterLookVariants - a shot referencing member N's picture must also use member N's own description, or
+    // the clip prompt describes a different-looking member than the one in the picture it's bound to
+    characterDescriptionVariants?: Record<string, string[]>,
     locationDescriptions: Record<string, string>,
     lookBrief: string,
     music: MusicMap,
@@ -252,7 +256,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     }
     return requests
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -269,17 +273,25 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(c => c !== undefined)
             .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0))
 
-        // Subject N is always defined by Picture N
+        // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
+        // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
+        // the description bound to it (from characterDescriptionVariants) always agree on which member this is;
+        // resolving them separately previously let a shot's text describe one member while showing another's
+        // picture, which the video model resolved by drifting the whole shot toward whichever member the text
+        // described.
         function buildSubjects() {
             const subjects = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
                 ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem})),
-            ].map((s, n) => ({
-                ...s,
-                label: `<Subject ${n + 1}>`,
-                picture: `<Picture ${n + 1}>`,
-                description: (s.kind === 'location' ? locationDescriptions : characterDescriptions)[s.id] ?? '',
-            }))
+            ].map((s, n) => {
+                const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
+                const variant = members > 1 ? slot.index % members : 0
+                const pictureId = members > 1 ? groupMemberId(s.id, variant) : s.id
+                const description = s.kind === 'location'
+                    ? locationDescriptions[s.id] ?? ''
+                    : characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? ''
+                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description}
+            })
             const locationSubject = subjects.find(s => s.kind === 'location')
             const castSubjects = subjects.filter(s => s.kind === 'character')
 
@@ -605,13 +617,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 })),
             } : {}),
             assets: {
-                // a group character (memberCounts[s.id] > 1) rotates through its member images by clip index, so
-                // the same group doesn't render from one single shared face for the whole song - see groupMemberId
-                pictures: subjects.map(s => {
-                    const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
-                    const pictureId = members > 1 ? groupMemberId(s.id, slot.index % members) : s.id
-                    return {label: s.picture, file: pictureAsset(s.kind, pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description}
-                }),
+                // pictureId was resolved once in buildSubjects, together with the description bound to it - see the
+                // comment there for why they have to be resolved as one pair, not separately
+                pictures: subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
                 audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem})),
             },

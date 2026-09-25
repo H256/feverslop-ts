@@ -437,6 +437,23 @@ const characterLookVariants = await project.step('characterLookVariants', '9c ·
     return variants
 })
 
+////////// DESCRIBING THE GROUP MEMBER VARIANTS
+// each member has its own look image, so it needs its own description too - reusing the group's shared
+// characterDescriptions entry (derived from member 0's look alone) described every other member's anchor image
+// with member 0's text, which reads as the video model fighting itself and drifting the whole sequence toward
+// whichever member the text actually described.
+const characterDescriptionVariants = await project.step('characterDescriptionVariants', '9d · DESCRIBING THE GROUP MEMBER VARIANTS', async () => {
+    const descriptions: Record<string, string[]> = {}
+    for (const [id, looks] of Object.entries(characterLookVariants)) {
+        log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
+        descriptions[id] = [
+            characterDescriptions[id] ?? '',
+            ...await Promise.all(looks.slice(1).map(look => ask(characterDescriptionPrompt(look)))),
+        ]
+    }
+    return descriptions
+})
+
 ////////// CUTTING THE SONG INTO CLIPS
 // switched alignLyrics on or off since the timeline was built
 if (project.data.timeline && (project.data.timeline.aligned ?? false) !== Boolean(lyricsTiming)) project.invalidate('timeline')
@@ -528,6 +545,7 @@ const clips = buildClipRequests({
     characters: cast.characters,
     locations: cast.locations,
     characterDescriptions,
+    characterDescriptionVariants,
     locationDescriptions,
     lookBrief,
     music,
@@ -563,9 +581,13 @@ const pictures: PictureJob[] = [
     ...cast.characters.flatMap(c => {
         const count = memberCounts[c.id] ?? 1
         const looks = characterLookVariants[c.id] ?? [characterLooks[c.id] ?? '']
+        const descriptions = characterDescriptionVariants[c.id] ?? [characterDescriptions[c.id] ?? '']
         return Array.from({length: count}, (_, i) => {
             const id = count > 1 ? groupMemberId(c.id, i) : c.id
-            return {kind: 'character' as const, id, file: pictureAsset('character', id), name: c.name, prompt: looks[i] ?? looks[0] ?? '', description: characterDescriptions[c.id] ?? ''}
+            return {
+                kind: 'character' as const, id, file: pictureAsset('character', id), name: c.name,
+                prompt: looks[i] ?? looks[0] ?? '', description: descriptions[i] ?? descriptions[0] ?? '',
+            }
         })
     }),
 ]
