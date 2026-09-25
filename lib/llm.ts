@@ -66,9 +66,11 @@ const reasoningAdapters: {
         match: /muse/i,
         apply: (p, level) => ({...p, instructions: `Reasoning strength: ${level}\n\n${p.instructions ?? ''}`})
     },
+    // Qwen 3.8 reads reasoning_effort from chat_template_kwargs, but only while enable_thinking is also true -
+    // thinking is off by default, so reasoning_effort alone is silently ignored (no thinking at all, any level)
     {
-        match: /qwen3.8/i,
-        apply: (p, level) => ({...p, chat_template_kwargs: {reasoning_effort: level}} as ResponseCreateParamsStreaming)
+        match: /qwen3\.8/i,
+        apply: (p, level) => ({...p, chat_template_kwargs: {enable_thinking: true, reasoning_effort: level}} as ResponseCreateParamsStreaming)
     },
 ]
 
