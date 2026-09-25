@@ -116,7 +116,8 @@ projects/<project-id>/
 Run it:
 
 ```bash
-bun index.ts                          # default project: well-of-youth-gothic-trio-260920
+bun index.ts                          # default project: well-of-youth-gothic-trio-260920 (the author's own convenience
+                                       # default in index.ts - pick your own via bun index.ts <project-id> below)
 bun index.ts <project-id>             # any other project
 bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
@@ -174,7 +175,8 @@ language, texture - so every picture and clip prompt stays in your style. A sent
 Dark gothic oil painting in the manner of Caravaggio, heavy chiaroscuro, candlelight only.
 ```
 
-The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_SEC` (10 seconds).
+The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_SEC` (10 seconds - the H3 node
+actually renders such a slot as 10.13 s, see [The final video](#the-final-video)).
 
 ## Steps
 
@@ -189,6 +191,7 @@ The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_
 | 3  | `story`          | Story from lyrics and/or story idea                                              | –                            |
 | 4  | `summary`        | Short summary                                                                    | story                        |
 | 5  | `cast`           | Characters and locations with ids, each character's `prop` and, if it's a heard instrument, its `propStem` ⁴ | story |
+| 5a | `instrumentStems` | Guitar/piano separated from `other` with a second, narrower demucs pass, only for `propStem`s that need it ⁴ | stems, cast |
 | 5b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
 | 5c | `propActivity`   | RMS-energy activity ranges per instrument stem claimed by a character ¹ ⁴        | stems, cast                  |
 | 6  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
@@ -227,8 +230,9 @@ only the descriptions: `--redo=characterDescriptions,locationDescriptions`.
   `<Picture 2>`, …, `<Audio 1>`, `<Audio 2>`). Every picture lists the character or location it shows (`kind`, `id`,
   `name`) and the `description` the prompt uses for it. Clips with a singer also list their `vocals`: every sung part with
   its clip-relative time, text, singer, subject and speaker id
-- `audio/slot-001.wav …` – the clip's slice of the song on the frame grid, used as `<Audio 1>`
-- `audio/slot-001.vocals.wav …` – clips with a singer: the same slice of the vocals stem, used as `<Audio 2>`
+- `audio/slot-001.song.wav …`, `audio/slot-001.vocals.wav …` – debug-listenable slices of each referenced stem, cut
+  to the clip's span on the frame grid. They aren't what's actually rendered with: `lib/render.ts` uploads and trims
+  the whole stem itself, using `<Audio 1>`, `<Audio 2>`, … for whichever stems the clip's assets reference
 - `assets.json` – the pictures the requests expect, each with the Krea 2 prompt to generate it (`prompt`) and the
   description the clip prompts use for it (`description`)
 
@@ -314,11 +318,14 @@ The ComfyUI workflows are TypeScript files in `comfy/workflows/`, built with the
 from your server (`comfy/nodes.ts`), so `bun run typecheck` catches a missing model, a wrong sampler name or a wrong
 connection before anything is rendered. The same SDK runs the jobs: uploads, progress, downloads, reconnects.
 
-| Workflow        | Kind  | Rebuilt from                                        |
+| Workflow        | Kind  | Originally exported from ComfyUI as ¹              |
 |-----------------|-------|-----------------------------------------------------|
-| `krea2-image`   | image | `comfy/image_t2i_startframe_krea_v1.json`           |
-| `h3-ref2video`  | video | `comfy/r2v_audio_fullmix_guide_1-pass_turbo.json`   |
-| `yue2-song`     | audio | `comfy/audio_yue2_text2music.json`                  |
+| `krea2-image`   | image | `image_t2i_startframe_krea_v1.json`                |
+| `h3-ref2video`  | video | `r2v_audio_fullmix_guide_1-pass_turbo.json`        |
+| `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
+
+¹ The export JSON is only a one-time input to `bun run comfy:convert` (see below); it isn't kept in the repo, only
+the generated `.ts` file under `comfy/workflows/` is.
 
 ### Adding your own workflow
 
@@ -337,7 +344,7 @@ The full guide, with the options every workflow gets, the helpers and a checklis
 
 - **Run `bun run comfy:types` after installing nodes or models.** It regenerates `comfy/nodes.ts` with the SDK's
   `cfli codegen` and fixes custom nodes with duplicate output names on the way.
-- **`comfy/nodes.ts` is generated and large** (about 16 MB). Don't edit it, and keep it out of version control.
+- **`comfy/nodes.ts` is generated and large** (about 4.3 MB). Don't edit it, and keep it out of version control.
 - **Some connections aren't in the types:** node outputs into widgets, autogrow inputs like `ref_images.ref_image_0`,
   and widgets that depend on another widget. The helpers `widget()` and `withInputs()` cover them.
 - **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped
@@ -407,7 +414,8 @@ prints (or `lyricsTiming.lines` in `project.json`). A wrong line can be fixed by
 words' times - then run with `--redo=timeline`. `--redo=transcript` transcribes again, `--redo=singing` recasts the
 singers.
 
-**First run.** `tools/vocals.py` installs PyTorch (CUDA 12.8 wheels, needed for RTX 50xx cards) and downloads the
+**First run.** `tools/vocals.py` installs PyTorch (CUDA 13.0 wheels - cu128 builds lack precompiled kernels for
+RTX 50xx/Blackwell `sm_120`, which forces slow driver-side PTX JIT compilation) and downloads the
 models: demucs ≈ 80 MB, Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separation takes under a minute, the
 transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
 Without CUDA they run on the CPU, much slower.
@@ -425,10 +433,11 @@ video model showing it played continuously through every shot:
 - `prop` - any distinctive object a character carries or uses (a weapon, a tool, an instrument, …), named briefly.
   Set for every visible band member, including backing musicians - step 5 is asked explicitly not to skip the
   drummer or other non-lead instruments.
-- `propStem` - only for a `prop` that is a musical instrument actually part of the song: `"drums"`, `"bass"`, or
-  `"other"` (guitar, keys, synth and every other melodic instrument - Demucs' 4-stem separation can't split those
-  further, so they share one activity signal). Leave empty for a non-instrument prop, an instrument not heard in the
-  song, or whenever the story isn't a band performing live - the whole feature stays off then.
+- `propStem` - only for a `prop` that is a musical instrument actually part of the song: `"drums"` or `"bass"`;
+  `"guitar"` or `"piano"` (separated from the `"other"` stem by a second, narrower demucs pass, step `5a`); or
+  `"other"` (synth, strings and every other melodic instrument that pass doesn't cover - they share one activity
+  signal since Demucs can't split them further). Leave empty for a non-instrument prop, an instrument not heard in
+  the song, or whenever the story isn't a band performing live - the whole feature stays off then.
 
 What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
 [config.json](#configjson) - stems must already be separated):

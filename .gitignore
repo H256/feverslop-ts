@@ -13,7 +13,7 @@ coverage
 # logs
 logs
 _.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # dotenv environment variable files
 .env
@@ -30,12 +30,15 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # IntelliJ based IDEs
 .idea
 
+# VS Code
+.vscode
+
 # Finder (MacOS) folder config
 .DS_Store
 
 projects
 .claude
 
-# generated, ~16 MB (bun run comfy:types)
+# generated, ~4.3 MB (bun run comfy:types)
 comfy/nodes.ts
 

@@ -375,7 +375,7 @@ queue and history) is it rendered again. Downloads go to a temporary `.download`
 download never looks like a finished clip.
 
 **`comfy/nodes.ts` is large.**
-It has a method and a few types for every installed node (about 16 MB for ~3,700 nodes). It's generated - never edit
+It has a method and a few types for every installed node (about 4.3 MB for ~2,500 nodes). It's generated - never edit
 it by hand, and leave it out of version control (add it to `.gitignore`); everyone regenerates it against their own
 server.
 

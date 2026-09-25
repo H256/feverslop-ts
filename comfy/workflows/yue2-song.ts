@@ -1,4 +1,5 @@
-// Rebuilt from comfy/audio_yue2_text2music.json - simplified: the ABC-planning toggle and its preview nodes are
+// Originally exported from ComfyUI as audio_yue2_text2music.json (see README's "Workflows" section) - simplified:
+// the ABC-planning toggle and its preview nodes are
 // dropped (ABC planning is always on, "mode": "full"), style/lyrics/seed are wired to opts directly instead of
 // through primitive nodes.
 import {type AudioWorkflowOptions, dyn, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
