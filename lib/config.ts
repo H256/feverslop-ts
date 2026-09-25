@@ -26,7 +26,7 @@ export type LlmConfig = { llm: { model?: string } }
 
 export type ProjectConfig = RenderConfig & PlanConfig & LlmConfig
 
-const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
+export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
