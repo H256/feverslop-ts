@@ -119,11 +119,13 @@ In ComfyUI: **Workflow → Export (API)**. Save the file anywhere, e.g. `comfy/m
 ### 3. Convert it
 
 ```bash
-bun run comfy:convert <workflow-api.json> <name> --kind=image|video
+bun run comfy:convert <workflow-api.json> <name> --kind=image|video|audio|sequence
 ```
 
 - `<name>` becomes the file `comfy/workflows/<name>.ts` and the name you put into `config.json`.
-- `--kind` picks the options type (`ImageWorkflowOptions` or `VideoWorkflowOptions`).
+- `--kind` picks the options type (`ImageWorkflowOptions`, `VideoWorkflowOptions`, `AudioWorkflowOptions` or
+  `SequenceWorkflowOptions` - the last for a reference-sheet workflow, see
+  [comfyui.md → Reference sheets](comfyui.md#reference-sheets)).
 - An existing file is not overwritten unless you add `--force`.
 - ComfyUI must be running - the converter reads output names and dropdown values from the server (the first one of
   the settings, see [README → Setup](../README.md#setup), or `--comfy=http://host:8188`) and the builder's method names

@@ -8,6 +8,29 @@ import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
 export const pictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+// one reference image per member of a group character, instead of the single shared id - see computeMemberCounts
+export const groupMemberId = (characterId: string, member: number) => `${characterId}-v${member}`
+
+// Cap on how many distinct member images a group character gets, how ever many are visible at once in a beat -
+// each one is a full extra image (and, with sequence sheets on, a full extra reference video) to generate.
+export const MAX_GROUP_MEMBERS = 5
+
+/**
+ * How many distinct reference images a group character (Character.isGroup) needs: the most individuals of it
+ * ever shown on screen together in one beat (beat.groupSize), capped at MAX_GROUP_MEMBERS. A group character with
+ * no groupSize data anywhere still gets 2, so it doesn't silently fall back to the single-shared-image look this
+ * is meant to fix. Non-group characters, and group characters that are only ever shown one at a time, get 1 -
+ * the plain, unsuffixed picture id.
+ */
+export function computeMemberCounts(beats: StoryBeat[], characters: Character[]): Record<string, number> {
+    const counts: Record<string, number> = {}
+    for (const char of characters) {
+        if (!char.isGroup) continue
+        const seen = beats.filter(b => b.characterIds.includes(char.id)).map(b => b.groupSize?.[char.id] ?? 2)
+        counts[char.id] = Math.min(MAX_GROUP_MEMBERS, Math.max(1, ...seen, 2))
+    }
+    return counts
+}
 // the first (ff) and last (lf) frame a rendered clip contributes to the final video - for extending clips later (fflf2va)
 export const boundaryFrameAsset = (clipId: string, which: 'ff' | 'lf') => `assets/clips/${clipId}_${which}.png`
 // one file per stem per clip, e.g. output/audio/slot-006.guitar.wav - a clip can have anywhere from 1 to
@@ -44,6 +67,10 @@ export type Input = {
     characters: Character[],
     locations: Location[],
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
+    // group characters only (memberCounts[id] > 1, see computeMemberCounts): one description per member, matching
+    // characterLookVariants - a shot referencing member N's picture must also use member N's own description, or
+    // the clip prompt describes a different-looking member than the one in the picture it's bound to
+    characterDescriptionVariants?: Record<string, string[]>,
     locationDescriptions: Record<string, string>,
     lookBrief: string,
     music: MusicMap,
@@ -201,8 +228,10 @@ export function propActivityPerBeat(
 }
 
 export function buildClipRequests(input: Input): ClipRequest[] {
-    const {slots, mapping, beats, music, shotMoments} = input
+    const {slots, mapping, beats, characters, music, shotMoments} = input
     const beatById = new Map(beats.map(b => [b.id, b]))
+    // >1 only for a group character (Character.isGroup) - which member image a given clip's subject resolves to
+    const memberCounts = computeMemberCounts(beats, characters)
     const requests: ClipRequest[] = []
     const stateSoFar: string[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
@@ -227,7 +256,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     }
     return requests
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -244,17 +273,25 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(c => c !== undefined)
             .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0))
 
-        // Subject N is always defined by Picture N
+        // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
+        // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
+        // the description bound to it (from characterDescriptionVariants) always agree on which member this is;
+        // resolving them separately previously let a shot's text describe one member while showing another's
+        // picture, which the video model resolved by drifting the whole shot toward whichever member the text
+        // described.
         function buildSubjects() {
             const subjects = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
                 ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem})),
-            ].map((s, n) => ({
-                ...s,
-                label: `<Subject ${n + 1}>`,
-                picture: `<Picture ${n + 1}>`,
-                description: (s.kind === 'location' ? locationDescriptions : characterDescriptions)[s.id] ?? '',
-            }))
+            ].map((s, n) => {
+                const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
+                const variant = members > 1 ? slot.index % members : 0
+                const pictureId = members > 1 ? groupMemberId(s.id, variant) : s.id
+                const description = s.kind === 'location'
+                    ? locationDescriptions[s.id] ?? ''
+                    : characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? ''
+                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description}
+            })
             const locationSubject = subjects.find(s => s.kind === 'location')
             const castSubjects = subjects.filter(s => s.kind === 'character')
 
@@ -528,7 +565,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // appearance - a subject definition that says a character "plays" something reads as a
                     // standing trait to the video model, and it keeps them miming that action even in shots
                     // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
-                    : `${s.label} is ${s.name}, the character in ${s.picture}; keep the face, build, hair, costume and colors from the picture: ${s.description}`.trim()),
+                    : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
                 ...tracks.map(trackDefinition),
                 '',
                 'summary:',
@@ -537,7 +574,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                    : `the identity, face, build, hair and costume of ${s.name} are retained.`}`),
+                    : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
                 '',
@@ -580,7 +617,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 })),
             } : {}),
             assets: {
-                pictures: subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.id), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                // pictureId was resolved once in buildSubjects, together with the description bound to it - see the
+                // comment there for why they have to be resolved as one pair, not separately
+                pictures: subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
                 audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem})),
             },

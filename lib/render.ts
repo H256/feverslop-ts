@@ -2,11 +2,12 @@ import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, renameSync, rmSync} from "node:fs";
 import {basename, dirname, extname, join} from "node:path";
 import {log, startSpinner, styles} from "./log.ts";
-import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo} from "./assemble.ts";
+import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 
@@ -19,7 +20,10 @@ async function loadWorkflow<T extends { default: unknown }>(name: string): Promi
     return module
 }
 
-export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string }
+// description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
+// used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
+// subject looks like without the medium/style/pose/background language the image prompt carries.
+export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string }
 
 type Server = ComfyServer & { api: ComfyApi }
 
@@ -148,6 +152,79 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed}}
         })
         await Bun.write(`${target}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt}, null, 2))
+        log.step('Saved', picture.file)
+    }
+
+    /**
+     * Same result file as renderPicture (picture.file - what every clip references), but built from several
+     * angles instead of one flat hero image: renders the hero image as usual (the "anchor"), turns it into a
+     * short silent turnaround video (comfy/workflows/h3-sequence-to-sheet.ts), samples a few of its beats as
+     * frames, and composites them into one multi-angle reference sheet. See lib/sequenceSheet.ts for why this
+     * helps - a single static location/character picture reused in every shot for the whole song reads as
+     * repetitive; several angles give the video model more to draw a shot's framing from.
+     */
+    async renderSequenceSheet(picture: PictureJob) {
+        const target = join(this.projectDir, picture.file)
+        if (existsSync(target)) return log.step('Exists', styles.muted(picture.file))
+
+        const dir = `assets/sequence/${picture.kind}s/${picture.id}`
+        mkdirSync(join(this.projectDir, dir), {recursive: true})
+        const anchorFile = join(dir, 'anchor.png')
+        const anchorTarget = join(this.projectDir, anchorFile)
+
+        if (!existsSync(anchorTarget)) {
+            const {seed} = await this.render(`${picture.kind} ${picture.id} anchor`, anchorTarget, '.png', async () => {
+                const seed = resolveSeed(this.config.seed)
+                const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
+                const result = imageWorkflow({
+                    prompt: picture.prompt,
+                    seed,
+                    resolution: this.config.imageResolution,
+                    orientation: picture.kind === 'character' ? 'portrait' : 'landscape',
+                    filenamePrefix: `${this.remoteDir}/${dir}/anchor`,
+                })
+                return {result, uploads: [], meta: {seed}}
+            })
+            await Bun.write(`${anchorTarget}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt}, null, 2))
+        }
+
+        const {prompt: sequencePrompt, beatTimes} = picture.kind === 'character'
+            ? characterSequencePrompt(picture.description)
+            : locationSequencePrompt(picture.description)
+        const videoFile = join(dir, 'sequence.mp4')
+        const videoTarget = join(this.projectDir, videoFile)
+        if (!existsSync(videoTarget)) {
+            const {seed} = await this.render(`${picture.kind} ${picture.id} sequence`, videoTarget, '.mp4', async () => {
+                const seed = resolveSeed(this.config.seed)
+                const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
+                const result = sequenceWorkflow({
+                    prompt: sequencePrompt,
+                    startFrame: `${this.remoteDir}/${anchorFile}`,
+                    frames: SEQUENCE_FRAMES,
+                    orientation: picture.kind === 'character' ? 'portrait' : 'landscape',
+                    resolution: -1,
+                    seed,
+                    filenamePrefix: `${this.remoteDir}/${dir}/sequence`,
+                })
+                return {result, uploads: [{from: anchorTarget, to: `${this.remoteDir}/${anchorFile}`}], meta: {seed}}
+            })
+            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt}, null, 2))
+        }
+
+        const framesDir = join(this.projectDir, dir, 'frames')
+        mkdirSync(framesDir, {recursive: true})
+        const frameIndices = selectFrameIndices(beatTimes, SEQUENCE_FRAMES)
+        const framePaths = await Promise.all(frameIndices.map(async (frameIndex, i) => {
+            const framePath = join(framesDir, `frame_${String(i).padStart(2, '0')}.png`)
+            if (!existsSync(framePath)) await extractFrame(videoTarget, frameIndex, framePath)
+            return framePath
+        }))
+
+        const {columns, panel} = sheetLayout(picture.kind)
+        await composeSheet(framePaths, target, panel, columns)
+        await Bun.write(`${target}.json`, JSON.stringify({
+            workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt,
+        }, null, 2))
         log.step('Saved', picture.file)
     }
 

@@ -1,0 +1,87 @@
+// The reference-sheet feature: instead of one flat, static hero image as a character's or location's only visual
+// anchor for the whole song, generate a short silent turnaround video from that hero image (see
+// comfy/workflows/h3-sequence-to-sheet.ts), sample a few of its hard-cut "beats" as frames, and composite them
+// into one multi-angle reference sheet - the file every clip actually references (see lib/render.ts
+// renderSequenceSheet). Ported from the predecessor project's fever-slop sequence-to-sheet pipeline, rebuilt on
+// ffmpeg instead of OpenCV/Pillow to stay within this project's stack.
+import {renameSync} from "node:fs";
+import {FPS} from "./frames.ts";
+import {captureProcess} from "./process.ts";
+
+export const SEQUENCE_FRAMES = 124   // ~5.17s @ 24fps - matches the predecessor project's default
+const SHOT_SECONDS = 0.75            // spacing between beats, clamped to fit the render's duration
+
+const EXPRESSIONS = ['frightened', 'neutral', 'joyful', 'angry', 'surprised', 'sad', 'disgusted', 'confused', 'excited', 'contemplative']
+
+function formatTimestamp(seconds: number): string {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${String(m).padStart(2, '0')}:${s.toFixed(3).padStart(6, '0')}`
+}
+
+function beatTimestamps(totalShots: number, frames: number): number[] {
+    const duration = frames / FPS
+    const step = Math.max(0.25, Math.min(SHOT_SECONDS, duration / totalShots))
+    return Array.from({length: totalShots}, (_, i) => i * step)
+}
+
+/**
+ * Six locked-off hard-cut views of one character from its hero image: full-body front, face close-up, left
+ * profile, right profile, rear, and a medium close-up with one random expression change on the last beat (every
+ * other beat holds a neutral expression, so the character's identity/build/wardrobe stay the read - only the
+ * final beat exists to give the reference sheet one non-neutral expression to draw on).
+ */
+export function characterSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+    const beatTimes = beatTimestamps(6, frames)
+    const expression = EXPRESSIONS[Math.floor(Math.random() * EXPRESSIONS.length)]
+    const prompt = `Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ${description}, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At ${formatTimestamp(beatTimes[5]!)}, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now ${expression}: eyes wide and brows raised and drawn together, mouth slightly open. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
+    return {prompt, beatTimes}
+}
+
+/** Five locked-off tripod views of one location from its hero image: front, right side, rear, left side, wide establishing. */
+export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+    const beatTimes = beatTimestamps(5, frames)
+    const duration = frames / FPS
+    const prompt = `The same location throughout: ${description}. Create a ${duration.toFixed(1)}-second reference take with 5 locked-off tripod views joined by hard cuts: front, right side, rear, left side and a wide establishing view. Keep the camera level and static in every shot. Preserve architecture, materials, props, lighting and layout. No people, text, watermark or unrelated structures.`
+    return {prompt, beatTimes}
+}
+
+/**
+ * One frame index per beat, picked 65% into that beat's window (late enough that the hard cut has settled, before
+ * the next one starts) - the beat timestamps are ones this project's own prompt asked the model to cut on, so
+ * there's no need to search/score candidate frames the way the predecessor project did without that guarantee.
+ */
+export function selectFrameIndices(beatTimes: number[], totalFrames: number): number[] {
+    return beatTimes.map((start, i) => {
+        const end = beatTimes[i + 1] ?? totalFrames / FPS
+        const target = start + (end - start) * 0.65
+        return Math.min(totalFrames - 1, Math.max(0, Math.round(target * FPS)))
+    })
+}
+
+/** Grid layout for a reference sheet - character panels are portrait, location panels landscape. */
+export function sheetLayout(kind: 'character' | 'location'): { columns: number, panel: { width: number, height: number } } {
+    return kind === 'character' ? {columns: 2, panel: {width: 288, height: 512}} : {columns: 3, panel: {width: 512, height: 288}}
+}
+
+/**
+ * Composites the given frames into one grid image at `target`: each frame letterboxed (scaled to fit, padded with
+ * black) into a `panel`-sized cell, `columns` wide, row-major. Pure ffmpeg (scale+pad+xstack) - no image library.
+ */
+export async function composeSheet(framePaths: string[], target: string, panel: { width: number, height: number }, columns: number) {
+    if (!framePaths.length) throw new Error('composeSheet: no frames to compose')
+    const scalePad = framePaths.map((_, i) =>
+        `[${i}:v]scale=${panel.width}:${panel.height}:force_original_aspect_ratio=decrease,pad=${panel.width}:${panel.height}:(ow-iw)/2:(oh-ih)/2:color=black[p${i}]`,
+    ).join(';')
+    const layout = framePaths.map((_, i) => `${(i % columns) * panel.width}_${Math.floor(i / columns) * panel.height}`).join('|')
+    const stackInputs = framePaths.map((_, i) => `[p${i}]`).join('')
+    const filter = `${scalePad};${stackInputs}xstack=inputs=${framePaths.length}:layout=${layout}:fill=black[out]`
+
+    const partial = `${target}.partial.png`
+    const {code, stderr} = await captureProcess(
+        ['ffmpeg', '-y', '-v', 'error', ...framePaths.flatMap(f => ['-i', f]), '-filter_complex', filter, '-map', '[out]', '-frames:v', '1', partial],
+        {stdout: 'ignore'},
+    )
+    if (code !== 0) throw new Error(`ffmpeg failed to compose the reference sheet:\n${stderr}`)
+    renameSync(partial, target)
+}

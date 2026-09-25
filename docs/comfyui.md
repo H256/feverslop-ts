@@ -40,12 +40,13 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
    pictures and clips are rendered on all of them at once - see [Several servers](#several-servers). **Every server
    needs the same models and custom nodes** (step 2).
 
-2. **The models and custom nodes the workflows use.** The two included workflows need:
+2. **The models and custom nodes the workflows use.** The included workflows need:
 
    | Workflow                          | Models                                                                                                                                                                                                              | Custom nodes                                               |
    |-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
    | `krea2-image` (pictures)          | `krea2_turbo_fp8_scaled.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_image_vae.safetensors`                                                                                                             | `VRAMCleanup`, `ResolutionSelector` (only for megapixels)   |
    | `h3-ref2video` (clips)            | `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
+   | `h3-sequence-to-sheet` (reference sheets) | `minimax_h3_fl2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
 
 3. **Node types for your server.** `comfy/nodes.ts` describes every node and model installed on the server, so
    the workflows are checked against what is really there. It is generated from the first server of the settings (or
@@ -96,6 +97,8 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
   "imageWorkflow": "krea2-image",
   "videoWorkflow": "h3-ref2video",
   "songAudio": true,
+  "sequenceSheets": true,
+  "sequenceWorkflow": "h3-sequence-to-sheet",
   "llm": {}
 }
 ```
@@ -109,6 +112,8 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `imageWorkflow`   | `"krea2-image"`  | a file name in `comfy/workflows/`, without `.ts`                                        |
 | `videoWorkflow`   | `"h3-ref2video"` | a file name in `comfy/workflows/`, without `.ts`                                        |
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
+| `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
+| `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |
 | `singers`         | `[]`             | who sings on screen: `[]` = nobody (clip mode), `["auto"]` = the LLM picks, `["Thorin"]` = names or ids - see [Singing characters](../README.md#singing-characters) |
 | `lyricsLanguage`  | `"en"`           | language code of the lyrics, for Whisper and the `<d>[English]` lyrics tag               |
 | `alignLyrics`     | `true` with singers, else `false` | stems, transcript and real lyric timing                                 |
@@ -161,21 +166,50 @@ Video frame rate is always 24 fps.
 
 Both are frame-exact - see [below](#the-final-video-and-frame-exact-timing).
 
+### Reference sheets
+
+With `sequenceSheets` on (the default), every character and location picture (`assets/characters/*.png`,
+`assets/locations/*.png` - what every clip actually references) is built from several angles instead of one flat
+hero image:
+
+1. The usual look prompt renders a hero image, saved as the "anchor" (`assets/sequence/<kind>s/<id>/anchor.png`).
+2. The anchor is turned into a short silent turnaround video with `sequenceWorkflow` (6 hard-cut views for a
+   character - front, face, left/right profile, rear, an expression change; 5 for a location - front, right, rear,
+   left, wide establishing), saved as `assets/sequence/<kind>s/<id>/sequence.mp4`.
+3. One frame per view is sampled from that video (`assets/sequence/<kind>s/<id>/frames/`) and composited into the
+   final multi-angle reference sheet - the file every clip's `<Picture N>` actually resolves to.
+
+This gives a video model more to draw a shot's framing from than one static establishing shot, and - for a group
+character (see [README → Group characters](../README.md#group-characters)) - each member gets its own such sheet.
+Set `"sequenceSheets": false` to fall back to the old single-picture render (cheaper, one render per character/
+location instead of two).
+
 ### Workflows
 
-`imageWorkflow` and `videoWorkflow` pick the workflow file used for rendering. The included ones are `krea2-image` and
-`h3-ref2video`. Any file in `comfy/workflows/` that follows the workflow contract can be used - see
-[custom-workflows.md](custom-workflows.md). Different projects can use different workflows.
+`imageWorkflow`, `videoWorkflow` and `sequenceWorkflow` pick the workflow file used for rendering. The included ones
+are `krea2-image`, `h3-ref2video` and `h3-sequence-to-sheet`. Any file in `comfy/workflows/` that follows the
+workflow contract can be used - see [custom-workflows.md](custom-workflows.md). Different projects can use different
+workflows.
 
 ## What happens during a render
 
-**A picture:**
+**A picture**, with `sequenceSheets: false` (see [Reference sheets](#reference-sheets) for the default, on, path):
 
 1. If `assets/<characters|locations>/<id>.png` exists, it is skipped.
 2. The image workflow is built with the picture's Krea 2 prompt (from `output/assets.json`), the seed, the resolution
    and the orientation.
 3. The job is queued on the first free ComfyUI server; the status line shows its progress.
 4. The saved PNG is downloaded to `assets/…/<id>.png`.
+
+With `sequenceSheets: true` (the default), steps 1-4 above still run first, but write to
+`assets/sequence/<characters|locations>/<id>/anchor.png` instead of the final `assets/…/<id>.png` - then:
+
+5. If `assets/sequence/…/<id>/sequence.mp4` doesn't exist yet, the sequence workflow is built from the anchor image
+   (`first_frame`), the deterministic turnaround prompt (`lib/sequenceSheet.ts`), the seed and the resolution, queued
+   and downloaded there.
+6. One frame per beat of that video is extracted with ffmpeg into `assets/sequence/…/<id>/frames/`.
+7. Those frames are composited into the final `assets/…/<id>.png` - the file every clip's `<Picture N>` resolves to -
+   with ffmpeg (`xstack`), no image library.
 
 **A clip:**
 
@@ -272,6 +306,11 @@ projects/<project-id>/
     characters/<id>.png.json   how it was made
     locations/<id>.png         rendered location (landscape)
     locations/<id>.png.json
+    sequence/characters/<id>/  only with sequenceSheets: true (the default) - see Reference sheets
+      anchor.png                 the hero image the turnaround video was made from
+      sequence.mp4                the turnaround video
+      frames/frame_00.png, …      one sampled frame per beat, composited into characters/<id>.png
+    sequence/locations/<id>/   same, for a location
     clips/slot-001_ff.png      the clip's first frame in the final video
     clips/slot-001_lf.png      the clip's last frame in the final video (frame frames-1, not the file's last)
   videos/
@@ -295,7 +334,10 @@ The `.json` next to each clip records how it was made:
 }
 ```
 
-Pictures record the workflow, seed, resolution and prompt.
+With `sequenceSheets: false`, a picture's `.json` records the workflow, seed, resolution and prompt. With
+`sequenceSheets: true` (the default), the anchor and the sequence video each get their own `.json` next to them in
+`assets/sequence/…/<id>/` (same shape as a picture's / a clip's); the final composited sheet's `.json` records the
+sequence workflow, frame count, beat timestamps and the turnaround prompt instead.
 
 Every clip also leaves its **boundary frames** in `assets/clips/`: `<clip-id>_ff.png` (frame 0) and `<clip-id>_lf.png`
 (frame `frames - 1`) - the first and last frame the clip contributes to `final.mp4`, not the padding the model

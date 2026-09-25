@@ -64,6 +64,19 @@ export type VideoWorkflowOptions = {
 }
 export type VideoWorkflow = (opts: VideoWorkflowOptions) => WorkflowResult
 
+// A short, silent turnaround video from one still image - the reference-sheet pipeline's video step (see
+// lib/sequenceSheet.ts). Not a VideoWorkflow: no ref_images/audio, one first_frame image drives the whole clip.
+export type SequenceWorkflowOptions = {
+    prompt: string,
+    startFrame: string,          // ComfyUI input name of the anchor/hero image (first_frame)
+    frames: number,
+    orientation: Orientation,    // characters portrait, locations landscape
+    resolution: Resolution,
+    seed: number,
+    filenamePrefix: string,
+}
+export type SequenceWorkflow = (opts: SequenceWorkflowOptions) => WorkflowResult
+
 /**
  * Optional export of a video workflow: the frame count to render for a clip that needs `frames`.
  * Models that only accept some lengths round up here; the extra frames are cut off when the final

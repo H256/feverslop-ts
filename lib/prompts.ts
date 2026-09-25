@@ -86,13 +86,14 @@ You need to extract all characters and their role in the story.
 Furthermore you need to extract all locations from the story.
 Answer only with JSON in this format:
 {
-    "characters": [{"name": "", "role": "", "prop": "", "propStem": ""}],
+    "characters": [{"name": "", "role": "", "prop": "", "propStem": "", "isGroup": false}],
     "locations": [{"name": ""}]
 }
 The rules for characters are: A character is a person or creature in the story. They have a name and a role. The role is a short description of what the character does in the story.
 Additionally, for every character:
 - "prop": if the character visibly carries or uses one distinctive physical object throughout the story (a weapon, tool, musical instrument, etc.), name it briefly (e.g. "electric guitar", "iron sword", "drum kit"). Every visible member of a band must get their actual instrument here, including drummers and other backing musicians, not just the lead. Leave it an empty string if the character carries nothing distinctive.
 - "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "guitar" for any electric/acoustic guitar, "piano" for piano/keys, "other" for anything else melodic (synth, strings, etc. - only when none of the above fit). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
+- "isGroup": true if this entry is a collective acting as one individual member of a group (e.g. "Orcs", "Miners", a band's backing dancers) rather than a single named person - several distinct-looking individuals of it can appear on screen at once. false for a single person or creature, even a memorable one.
 The rules for locations are: List them in order of appearance in the story. A location is a place that can be filmed as one set.
 ---
 story:
@@ -168,6 +169,36 @@ Character:
 ${JSON.stringify({name: char.name, role: char.role})}${otherLooks.length ? `
 Already-designed cast (for silhouette contrast only - do not copy or borrow their specific colors/props):
 ${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}` : ''}`,
+        instructions: 'You are an expert character designer who writes prompts for the Krea 2 image model. You answer only with the prompt.',
+    }
+}
+
+// For a group character (Character.isGroup) with several members visible on screen at once - a distinct-looking
+// individual belonging to the same group, contrasted against the group's own already-designed members instead of
+// against the rest of the cast (characterLookPrompt's otherLooks). Without this every member renders from the
+// same one reference image and reads as the same person duplicated across a shot.
+export function characterVariantLookPrompt(lookBrief: string, char: { name: string, role: string }, existingMembers: string[]): AskOptions {
+    return {
+        input: `
+Write a Krea 2 image prompt for a character reference sheet of ONE individual member of the group below.
+The image must match the film look below - same medium, style, palette and lighting - but it is a clean reference plate, not a film frame: it must be sharp and clearly readable, so leave out anything that would degrade or obscure the detail.
+
+This group already has ${existingMembers.length} other member(s) designed (below, one per line). This new member must be clearly a different individual at a glance - a different build or height, a different face/skin/hair, and at least one different clothing or gear detail - while still visibly belonging to the same group (same role, same general faction dress/gear language, same film look).
+
+Rules:
+- Natural language, one paragraph, 50-100 words.
+- Start with the medium and style from the film look (e.g. "35mm film photograph of...", "2D anime illustration of...").
+- Describe exactly ONE individual, not the group collectively.
+- Full body, standing, facing the camera, in front of a plain grey neutral background, so the image can be reused as a reference.
+- Describe only visible details: face, age, build, skin, hair, clothing, materials, colors, accessories, and how the light falls on them.
+- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
+- No mood labels without visible evidence, no text or lettering in the image.
+- Answer only with the prompt.
+
+Film look: ${lookBrief}
+Group: ${JSON.stringify({name: char.name, role: char.role})}
+Already-designed members of this same group (for contrast - make this one visibly different from each of them):
+${existingMembers.map((look, i) => `- Member ${i + 1}: ${look}`).join('\n')}`,
         instructions: 'You are an expert character designer who writes prompts for the Krea 2 image model. You answer only with the prompt.',
     }
 }
