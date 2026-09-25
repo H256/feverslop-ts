@@ -88,6 +88,8 @@ cached project runs without either.
 
 ## Documentation
 
+- [docs/project-tutorial.md](docs/project-tutorial.md) – step-by-step walkthrough of `bun run init`/`bun run example`
+  and running the pipeline on the result
 - [docs/comfyui.md](docs/comfyui.md) – rendering with ComfyUI: setup, `config.json`, re-rendering, things to know,
   troubleshooting
 - [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
