@@ -514,6 +514,10 @@ screen - in every shot, from the first appearance to the last - looked exactly t
 bun index.ts --redo=characterLookVariants
 ```
 
+**Fixing one member's picture specifically** (or any character's, group or not) - `bun run replace-character
+<project-id>` walks through swapping in your own image and description interactively; see
+[docs/comfyui.md → replace-character](docs/comfyui.md#replace-character).
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix

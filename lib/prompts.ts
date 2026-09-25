@@ -203,6 +203,28 @@ ${existingMembers.map((look, i) => `- Member ${i + 1}: ${look}`).join('\n')}`,
     }
 }
 
+// For tools/replace-character.ts: describes a character straight from a user-supplied reference image, instead of
+// deriving it from this project's own generated look prompt (characterDescriptionPrompt) - same output shape/rules,
+// so the result drops straight into characterDescriptions/characterDescriptionVariants.
+export function characterImageDescriptionPrompt(imageDataUrl: string, char: { name: string, role: string }): AskOptions {
+    return {
+        input: `
+The attached image is the reference picture of the character below. Describe what they look like, for a video prompt where they act in many different scenes - so only say what they look like, nothing about the picture itself.
+
+Keep: age, gender, build, skin, face and distinctive marks, hair, every piece of clothing with its materials and colors, accessories and any props they carry.
+Leave out: the medium and style (e.g. "35mm film photograph of"), the pose and framing, the background, the lighting, film grain and anything else about the picture rather than the character.
+
+Rules:
+- One or two sentences, 30-60 words, starting with the character (e.g. "a woman in her late 30s with ...").
+- Only details actually visible in the image - do not invent anything not shown.
+- Answer only with the description.
+
+Character: ${JSON.stringify({name: char.name, role: char.role})}`,
+        images: [imageDataUrl],
+        instructions: 'You are an expert editor who writes character descriptions from a reference image. You answer only with the description.',
+    }
+}
+
 export function characterDescriptionPrompt(imagePrompt: string): AskOptions {
     return {
         input: `
