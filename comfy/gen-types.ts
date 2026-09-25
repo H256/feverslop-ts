@@ -46,3 +46,4 @@ await Bun.write(file, code.replace(
     'import { WorkflowBuilder as BaseWorkflowBuilder } from "@saintno/comfyui-sdk";\nimport type { $1 } from "@saintno/comfyui-sdk";',
 ))
 console.log(`Fixed ${fixed} duplicate output/input names`)
+process.exit(0)   // the proxy's fetches to the ComfyUI server leave keep-alive sockets open that would hang the process otherwise
