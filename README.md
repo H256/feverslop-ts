@@ -29,6 +29,8 @@ bun run setup
 | Script                  | What it does                                                                 |
 |-------------------------|------------------------------------------------------------------------------|
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
+| `bun run init`          | creates a new project - see [Creating a project](#creating-a-project)        |
+| `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
 | `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
 | `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |
 | `bun run comfy:convert` | turns a ComfyUI workflow (API export) into a draft workflow file             |
@@ -89,6 +91,27 @@ cached project runs without either.
 - [docs/comfyui.md](docs/comfyui.md) – rendering with ComfyUI: setup, `config.json`, re-rendering, things to know,
   troubleshooting
 - [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
+
+## Creating a project
+
+```bash
+bun run init
+```
+
+An interactive wizard, in the same style as `bun run setup`: it asks whether you already have the song (an audio
+file to copy in) or want one generated from a song idea, whether you have lyrics and/or a story idea, an optional
+visual style, and whether to use the project defaults or customize settings like singers or resolution. It then
+writes `projects/<id>/` and prints the `bun index.ts` command to run.
+
+```bash
+bun run example
+```
+
+Picks one of 10 built-in song ideas at random (with a matching visual style), creates a project with a short
+generated id and a 1-minute `songDuration`, and immediately generates its song (`--render=song`). Use
+`bun run example --no-render` to only create the project files without generating the song yet.
+
+Both write into `projects/<id>/` using the same file layout described below - you can just as well create it by hand.
 
 ## Usage
 

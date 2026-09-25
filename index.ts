@@ -52,7 +52,7 @@ const {values: args, positionals} = (() => {
             },
         })
     } catch (e) {
-        log.usageError(e instanceof Error ? e.message : String(e), usage)
+        return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
 // --render=all is images, videos and the final video, in that order - "song" is never part of "all", it has to be asked for
