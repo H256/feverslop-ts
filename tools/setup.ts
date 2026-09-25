@@ -3,7 +3,7 @@
 import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {listModels} from "../lib/llm.ts";
-import {styles} from "../lib/log.ts";
+import {printBanner, styles} from "../lib/log.ts";
 import {
     type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, maskSecret, normalizeUrl,
     parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source,
@@ -33,6 +33,7 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
 }
 
 const file = await readSettingsFile()
+printBanner()
 p.intro(`feverslop-ts setup ${styles.muted(settingsPath())}`)
 if (command === 'all' || command === 'llm') await setupLlm()
 if (command === 'llm-model') await setupModel()

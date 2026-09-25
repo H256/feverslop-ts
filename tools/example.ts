@@ -1,7 +1,7 @@
 // Creates a random example project - one of 10 built-in ideas - and generates a 1-minute song for it.
 // usage: bun run example [--no-render]
 import slugify from "slugify";
-import {styles} from "../lib/log.ts";
+import {printBanner, styles} from "../lib/log.ts";
 import {projectExists, writeProject} from "../lib/project-setup.ts";
 
 const examples = [
@@ -17,6 +17,7 @@ const examples = [
     {name: 'last harvest', idea: 'A farming family holds a harvest festival for a scarecrow that has started walking the fields at night, and they\'re not sure if it still protects them.', style: 'rural folk horror, autumn gold and shadow', musicStyle: 'acoustic, unsettling minor key'},
 ] as const
 
+printBanner()
 const render = !Bun.argv.includes('--no-render')
 
 const example = examples[Math.floor(Math.random() * examples.length)]!
