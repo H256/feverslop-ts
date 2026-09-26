@@ -4,7 +4,8 @@
 // into one multi-angle reference sheet - the file every clip actually references (see lib/render.ts
 // renderSequenceSheet). Ported from the predecessor project's fever-slop sequence-to-sheet pipeline, rebuilt on
 // ffmpeg instead of OpenCV/Pillow to stay within this project's stack.
-import {renameSync} from "node:fs";
+import {mkdirSync, renameSync} from "node:fs";
+import {dirname} from "node:path";
 import {FPS} from "./frames.ts";
 import {captureProcess} from "./process.ts";
 
@@ -77,7 +78,8 @@ export async function composeSheet(framePaths: string[], target: string, panel: 
     const stackInputs = framePaths.map((_, i) => `[p${i}]`).join('')
     const filter = `${scalePad};${stackInputs}xstack=inputs=${framePaths.length}:layout=${layout}:fill=black[out]`
 
-    const partial = `${target}.partial.png`
+    mkdirSync(dirname(target), {recursive: true})
+    const partial = target.replace(/\.png$/, '.partial.png')
     const {code, stderr} = await captureProcess(
         ['ffmpeg', '-y', '-v', 'error', ...framePaths.flatMap(f => ['-i', f]), '-filter_complex', filter, '-map', '[out]', '-frames:v', '1', partial],
         {stdout: 'ignore'},
