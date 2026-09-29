@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.13"
-# dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "soundfile", "numpy", "librosa>=0.10"]
+# dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "soundfile", "numpy", "librosa>=0.10", "nvidia-cublas-cu12; sys_platform == 'linux'", "nvidia-cudnn-cu12; sys_platform == 'linux'"]
 #
 # [tool.uv.sources]
 # torch = { index = "pytorch-cu130" }
@@ -64,6 +64,29 @@ from pathlib import Path
 # otherwise fails the model download outright (WinError 1314) - copy the files instead. Must be set before
 # huggingface_hub (pulled in transitively by faster_whisper) is imported anywhere.
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
+
+
+def preload_cuda12_libs():
+    # faster-whisper's CTranslate2 is built against CUDA 12 (libcublas.so.12, libcudnn.so.9), but torch is the cu130
+    # build with CUDA 13 libraries - without a system-wide CUDA 12 the loader finds neither. The nvidia-*-cu12 wheels
+    # bring them; loading them by path first makes CTranslate2 pick them up. Linux only, Windows ships its own DLLs.
+    if not sys.platform.startswith("linux"):
+        return
+    import ctypes
+    import importlib.util
+    for package, pattern in (("nvidia.cublas", "libcublas*.so.12"), ("nvidia.cudnn", "libcudnn*.so.9")):
+        spec = importlib.util.find_spec(package)
+        if not spec or not spec.submodule_search_locations:
+            continue
+        # cudnn's libraries depend on each other and on cublas - load in an order that resolves, ignore failures
+        for lib in sorted(Path(list(spec.submodule_search_locations)[0], "lib").glob(pattern)):
+            try:
+                ctypes.CDLL(str(lib), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+
+
+preload_cuda12_libs()
 
 import numpy as np
 import soundfile as sf

@@ -1,7 +1,7 @@
 import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {log, styles} from "./lib/log.ts";
+import {log, printBanner, styles} from "./lib/log.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
@@ -23,6 +23,8 @@ import {
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
 process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
 process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+
+printBanner()
 
 // hardware limit: the longest clip the video model can generate in one go. Set a little below the real
 // limit - the H3 node only renders 5 + 17·k frames, so every clip is rounded up to the next such length at
