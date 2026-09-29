@@ -213,8 +213,39 @@ in [PR #8](https://forgejo.elysium.lan/H256/feverslop-ts/pulls/8)). If you're ca
 different story, it's worth checking - and if needed editing by hand - that project's `characterDescriptions` entry
 so it actually matches the image you dropped in, before rendering.
 
+**`bun run replace-character <project-id>`** does all of this for a character interactively instead of by hand: pick
+the character (and, for a group, which member), point it at your image file, and it copies the image in, clears
+whatever was built from the old one, and offers to update the description from it with a vision-capable LLM (or by
+typing it yourself) - directly addressing the caveat above - before optionally rendering the new sheet right away.
+See [replace-character](#replace-character) below.
+
 To force a full or partial re-render later, see [Re-rendering](#re-rendering) below - what to delete depends on
 whether you want to keep your anchor or replace it too.
+
+#### replace-character
+
+```bash
+bun run replace-character <project-id>
+```
+
+Interactive (needs a terminal - see [Creating a project](../README.md#creating-a-project) for the same style of
+wizard). Walks through:
+
+1. **Character** - pick from the project's cast; a group character (see
+   [README → Group characters](../README.md#group-characters)) also asks which member.
+2. **Image** - a path to any image ffmpeg can read; it's converted to the plain PNG every path here expects and saved
+   as the anchor (`sequenceSheets: true`) or directly as the final picture (`sequenceSheets: false`). Whatever a
+   sequence sheet had already built from the old anchor (`sequence.mp4`, its sampled frames, the composited sheet) is
+   cleared, so it's rebuilt from the new one.
+3. **Description** - three options: generate it from the image with a vision-capable LLM, type it yourself, or leave
+   the current one unchanged. A vision request is downsized to 512px wide first - a full-resolution reference
+   picture (1000px+) made a real local vision model take minutes per request or never return at all; the much
+   smaller request came back in well under a minute in testing. A vision attempt that errors (e.g. the connected
+   model doesn't support images) falls back to asking you to type one instead.
+4. **Already-rendered clips** - any `videos/<clip-id>.mp4` already made with the old picture is listed, not deleted -
+   review and delete the ones you want redone yourself.
+5. **Render now?** (only with `sequenceSheets: true`) - renders the updated sheet immediately, or leaves it for the
+   next `--render=images`.
 
 ### Workflows
 

@@ -141,16 +141,26 @@ async function askText(label: string, options: { required?: boolean } = {}): Pro
     return multiline(label)
 }
 
-/** Clack has no multiline prompt - reads plain lines until an empty one, after the current clack prompt closed. */
+/**
+ * Clack has no multiline prompt - reads plain lines until two in a row are empty, after the current clack prompt
+ * closed. A single empty line doesn't end it: lyrics and stories routinely have blank lines between sections.
+ */
 async function multiline(label: string): Promise<string> {
-    console.log(styles.muted(`  ${label} - end with an empty line:`))
+    console.log(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))
     const rl = createInterface({input: process.stdin})
     const lines: string[] = []
+    let blankStreak = 0
     for await (const line of rl) {
-        if (line === '' && lines.length) break
+        if (line === '') {
+            blankStreak++
+            if (blankStreak >= 2 && lines.length) break
+        } else {
+            blankStreak = 0
+        }
         lines.push(line)
     }
     rl.close()
+    while (lines.length && lines.at(-1) === '') lines.pop()
     return lines.join('\n').trim()
 }
 

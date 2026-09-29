@@ -131,13 +131,23 @@ export class TruncatedError extends Error {
     }
 }
 
-export type AskOptions = { instructions: string, input: string, maxTokens?: number, reasoning?: ReasoningStrength }
+export type AskOptions = {
+    instructions: string,
+    input: string,
+    maxTokens?: number,
+    reasoning?: ReasoningStrength,
+    // data URLs (e.g. "data:image/png;base64,...") - only for a vision-capable model; see tools/replace-character.ts
+    images?: string[],
+}
 
-export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low'}: AskOptions) {
+export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images}: AskOptions) {
+    const requestInput = images?.length
+        ? [{role: 'user' as const, content: [{type: 'input_text' as const, text: input}, ...images.map(image_url => ({type: 'input_image' as const, image_url, detail: 'auto' as const}))]}]
+        : input
     // a cut-off answer is useless (half a JSON) - once more with twice the room, the thinking length varies anyway
     for (const limit of [maxTokens, maxTokens * 2]) {
         try {
-            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input, instructions, stream: true}, reasoning)
+            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions, stream: true}, reasoning)
             if (!answer.trim()) log.warn(`empty answer - the model only thought`)
             return answer.trim()
         } catch (e) {
