@@ -16,6 +16,9 @@ export default function krea2Image(opts: ImageWorkflowOptions & { negative?: str
     const size = resolution(wf, opts.resolution, opts.orientation, '1920x1088')
     const latent = wf.EmptyLatentImage({width: size.width, height: size.height, batch_size: 1})
 
+    // comfy-kitchen attention as the last step before the sampler (untested speedup on Krea2 - its attention is a smaller share of the step)
+    const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
+
     const sampled = wf.KSampler({
         seed: opts.seed,
         steps: 12,
@@ -23,7 +26,7 @@ export default function krea2Image(opts: ImageWorkflowOptions & { negative?: str
         sampler_name: 'er_sde',
         scheduler: 'beta',
         denoise: 1,
-        model: model.MODEL,
+        model: attention.model,
         positive: positive.CONDITIONING,
         negative: negative.CONDITIONING,
         latent_image: latent.LATENT,

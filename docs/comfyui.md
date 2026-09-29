@@ -48,6 +48,11 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
    | `h3-ref2video` (clips)            | `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
    | `h3-sequence-to-sheet` (reference sheets) | `minimax_h3_fl2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
 
+   All three workflows also use ComfyUI's built-in `Model Attention Backend` node set to `comfy kitchen attention`
+   (needs a ComfyUI with the `comfy-kitchen` package). On the Radeon it cuts MiniMax H3 sampling by about 25%;
+   on Krea2 the gain is smaller and untested, and the output changes slightly. To turn it off, set the node's
+   `attention` to `'pytorch attention'` in the workflow file.
+
 3. **Node types for your server.** `comfy/nodes.ts` describes every node and model installed on the server, so
    the workflows are checked against what is really there. It is generated from the first server of the settings (or
    `--comfy=<url>`); after installing nodes or models, regenerate it and check the workflows:
