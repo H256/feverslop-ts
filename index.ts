@@ -1,5 +1,5 @@
 import slugify from "slugify";
-import {existsSync} from "node:fs";
+import {existsSync, readdirSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {log, printBanner, styles} from "./lib/log.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
@@ -16,6 +16,7 @@ import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
+import {projectExists, validProjectId} from "./lib/project-setup.ts";
 import {
     castPrompt, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, summaryPrompt,
@@ -73,7 +74,14 @@ if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.j
 const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
 const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
-const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920') // author's own current project, pass your own project-id otherwise
+const DEFAULT_PROJECT = 'well-of-youth-gothic-trio-260920' // author's own current project, pass your own project-id otherwise
+const projectId = positionals[0] ?? DEFAULT_PROJECT
+if (!validProjectId(projectId)) log.usageError(`"${projectId}" is not a project id - lowercase letters, digits and "-" only (it is the folder name in projects/ and part of the ComfyUI client id)`, usage)
+if (!projectExists(projectId)) {
+    const existing = existsSync('projects') ? readdirSync('projects', {withFileTypes: true}).filter(d => d.isDirectory()).map(d => d.name) : []
+    log.usageError(`${positionals[0] ? `No project "${projectId}" in projects/` : `No project id given, and the author's default project "${DEFAULT_PROJECT}" doesn't exist in projects/`} - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
+}
+const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
 if (args.gallery) {
@@ -259,6 +267,7 @@ const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS'
     return {
         characters: extracted.characters.map(c => ({
             id: toId(c.name), name: c.name, role: c.role,
+            ...(c.isGroup === true ? {isGroup: true} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
         })),

@@ -1,4 +1,4 @@
-import {existsSync} from "node:fs";
+import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "./log.ts";
 
@@ -179,11 +179,20 @@ export class ProjectStore {
     }
 
     async load() {
-        if (existsSync(this.file)) this.data = await Bun.file(this.file).json()
+        if (!existsSync(this.file)) return
+        try {
+            this.data = await Bun.file(this.file).json()
+        } catch (e) {
+            throw new Error(`${this.file} is not valid JSON (${e instanceof Error ? e.message : String(e)}) - fix it by hand, or delete it to start over (every step is generated again)`)
+        }
+        if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) throw new Error(`${this.file} must be a JSON object - fix it by hand, or delete it to start over (every step is generated again)`)
     }
 
+    // written next to the target first, so a crash mid-write never leaves a truncated project.json
     async save() {
-        await Bun.write(this.file, JSON.stringify(this.data, null, 2))
+        const partial = `${this.file}.partial`
+        await Bun.write(partial, JSON.stringify(this.data, null, 2))
+        renameSync(partial, this.file)
     }
 
     invalidate(name: StepName) {
