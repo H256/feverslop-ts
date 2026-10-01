@@ -134,6 +134,7 @@ projects/<project-id>/
                       clips/<clip-id>_ff.png, _lf.png: first and last frame of every rendered clip
   videos/             rendered clips - never overwritten
   final.mp4           the assembled music video - rebuilt by --render=final
+  timeline.mlt / .osp the cut as an editable timeline for Shotcut/Kdenlive / OpenShot - written by --export
   gallery.html        overview page of the generated assets (tabs: cast, storyboard, videos) - written by --gallery
   project.json        all generated data, step by step
   output/             generated H3 requests - rewritten on every run
@@ -149,6 +150,7 @@ bun index.ts --render=song            # write song.wav + lyrics.txt from idea.tx
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
 bun index.ts --render=all             # also render with ComfyUI and assemble final.mp4, see below
+bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
 bun index.ts --legacy-moments         # skip step 11b, spread beat.moments across shots the old way
 bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity after editing prop/propStem by hand
