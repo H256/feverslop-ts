@@ -4,6 +4,7 @@
 // project file, so the project folder can be moved or zipped. Nothing here renders anything.
 import {existsSync} from "node:fs";
 import {join, relative} from "node:path";
+import {log} from "./log.ts";
 import {FPS, formatTimestamp, secondsAt} from "./frames.ts";
 import type {ClipRequest} from "./compose.ts";
 import {formatSlotRanges, probeVideo} from "./assemble.ts";
@@ -33,9 +34,16 @@ export async function exportTimelines({formats, clips, projectDir, projectName, 
         if (infos[i]!.frames < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${infos[i]!.frames} frames, but the clip needs ${clip.frames} - delete it and render again`)
         return {clip, file: files[i]!, frames: clip.frames}
     })
+    // the clips normally tile the song, but a section without a single bar produces no clip - the gap stays a gap
+    // (OpenShot places every clip at its frameStart, MLT gets a blank), so the song stays in sync under both
+    let cursor = 0
+    for (const {clip, frames} of items) {
+        if (clip.frameStart !== cursor) log.warn(`${clip.id} starts at ${formatTimestamp(secondsAt(clip.frameStart))} but the clip before it ends at ${formatTimestamp(secondsAt(cursor))} - the gap is kept in the timeline`)
+        cursor = clip.frameStart + frames
+    }
     const timeline: Timeline = {
         items, width, height, projectName,
-        totalFrames: items.reduce((sum, i) => sum + i.frames, 0),
+        totalFrames: cursor,
         song: songAudio ? songFile : undefined,
         songName: songFile.split('/').at(-1)!,
     }
@@ -67,7 +75,13 @@ ${prop('mlt_service', 'avformat')}
 ${prop('shotcut:caption', clip.id)}
 ${prop('shotcut:comment', clipComment(clip))}
   </chain>`).join('\n')
-    const entries = items.map(({clip, frames}) => `    <entry producer="${clip.id}" in="0" out="${frames - 1}"/>`).join('\n')
+    // a blank for every gap before a clip - the clips sit at their song position, like in the OpenShot project
+    let cursor = 0
+    const entries = items.map(({clip, frames}) => {
+        const gap = clip.frameStart - cursor
+        cursor = clip.frameStart + frames
+        return `${gap > 0 ? `    <blank length="${gap}"/>\n` : ''}    <entry producer="${clip.id}" in="0" out="${frames - 1}"/>`
+    }).join('\n')
     const notes = [
         `Project: ${projectName}`,
         'Pipeline: FeverSlop TS',
