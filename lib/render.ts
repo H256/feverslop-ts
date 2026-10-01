@@ -213,7 +213,11 @@ export class Renderer implements Disposable {
 
         const framesDir = join(this.projectDir, dir, 'frames')
         mkdirSync(framesDir, {recursive: true})
-        const frameIndices = selectFrameIndices(beatTimes, SEQUENCE_FRAMES)
+        // the workflow may render another length than asked for (the video model only takes certain frame counts) -
+        // the frames are picked from the video as it really is, not from the length that was requested
+        const rendered = await probeVideo(videoTarget)
+        if (rendered.frames !== SEQUENCE_FRAMES) log.warn(`${videoFile} has ${rendered.frames} frames, ${SEQUENCE_FRAMES} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
+        const frameIndices = selectFrameIndices(beatTimes, rendered.frames)
         const framePaths = await Promise.all(frameIndices.map(async (frameIndex, i) => {
             const framePath = join(framesDir, `frame_${String(i).padStart(2, '0')}.png`)
             if (!existsSync(framePath)) await extractFrame(videoTarget, frameIndex, framePath)
