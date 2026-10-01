@@ -5,7 +5,7 @@ import {FPS, formatTime, frameAt, secondsAt} from "./frames.ts";
 import type {ClipRequest} from "./compose.ts";
 import {captureProcess, runProcess} from "./process.ts";
 
-export type VideoInfo = { frames: number, width: number, height: number, hasAudio: boolean }
+export type VideoInfo = { frames: number, width: number, height: number, fps: number, hasAudio: boolean }
 
 // "slot-001, slot-002, slot-004, slot-005, slot-006" -> "slot-001-002, slot-004-006" - a long run of missing
 // clips reads a lot faster as ranges than as one giant comma list
@@ -24,9 +24,9 @@ export function formatSlotRanges(ids: string[]): string {
 export async function probeVideo(file: string): Promise<VideoInfo> {
     const run = async (...args: string[]) => {
         const stdout = await runProcess(['ffprobe', '-v', 'error', '-of', 'json', ...args, file], {errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
-        return JSON.parse(stdout) as { streams: { codec_type: string, nb_frames?: string, nb_read_frames?: string, width?: number, height?: number }[] }
+        return JSON.parse(stdout) as { streams: { codec_type: string, nb_frames?: string, nb_read_frames?: string, width?: number, height?: number, r_frame_rate?: string }[] }
     }
-    const {streams} = await run('-show_entries', 'stream=codec_type,nb_frames,width,height')
+    const {streams} = await run('-show_entries', 'stream=codec_type,nb_frames,width,height,r_frame_rate')
     const video = streams.find(s => s.codec_type === 'video')
     if (!video) throw new Error(`${file} has no video stream`)
     let frames = Number(video.nb_frames)
@@ -35,7 +35,10 @@ export async function probeVideo(file: string): Promise<VideoInfo> {
         const counted = await run('-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=codec_type,nb_read_frames')
         frames = Number(counted.streams[0]?.nb_read_frames)
     }
-    return {frames, width: video.width!, height: video.height!, hasAudio: streams.some(s => s.codec_type === 'audio')}
+    // "24/1" -> 24
+    const [num, den] = (video.r_frame_rate ?? '').split('/').map(Number)
+    const fps = num && den ? num / den : FPS
+    return {frames, width: video.width!, height: video.height!, fps, hasAudio: streams.some(s => s.codec_type === 'audio')}
 }
 
 /** The duration of an audio or video file in seconds, from its container. */
@@ -101,8 +104,12 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     const resized = infos.filter(i => i.width !== width || i.height !== height).length
     if (resized) log.warn(`${resized} clip(s) have another size than ${width}x${height} and are scaled`)
 
+    // a clip at another frame rate would play at the wrong speed once its frames are counted on the 24 fps grid
+    const resampled = infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
+    if (resampled) log.warn(`${resampled} clip(s) have another frame rate than ${FPS} fps and are resampled`)
+
     const filters = clips.map((clip, i) => [
-        `[${i}:v]trim=end_frame=${clip.frames},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
+        `[${i}:v]${Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
         ...(songAudio ? [] : [`[${i}:a]atrim=end=${secondsAt(clip.frames)},asetpts=PTS-STARTPTS[a${i}]`]),
     ].join(';'))
     const concatInputs = clips.map((_, i) => songAudio ? `[v${i}]` : `[v${i}][a${i}]`).join('')
