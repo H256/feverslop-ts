@@ -3,8 +3,9 @@
 # dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "soundfile", "numpy", "librosa>=0.10", "nvidia-cublas-cu12; sys_platform == 'linux'", "nvidia-cudnn-cu12; sys_platform == 'linux'"]
 #
 # [tool.uv.sources]
-# torch = { index = "pytorch-cu130" }
-# torchaudio = { index = "pytorch-cu130" }
+# # the CUDA 13.0 wheels only exist for Linux and Windows - macOS takes the regular PyPI build
+# torch = [{ index = "pytorch-cu130", marker = "sys_platform != 'darwin'" }]
+# torchaudio = [{ index = "pytorch-cu130", marker = "sys_platform != 'darwin'" }]
 #
 # [[tool.uv.index]]
 # name = "pytorch-cu130"

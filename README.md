@@ -447,7 +447,8 @@ singers.
 RTX 50xx/Blackwell `sm_120`, which forces slow driver-side PTX JIT compilation) and downloads the
 models: demucs ≈ 80 MB, Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separation takes under a minute, the
 transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
-Without CUDA they run on the CPU, much slower.
+Without CUDA they run on the CPU, much slower. On macOS there are no CUDA wheels - `tools/vocals.py` takes the regular
+PyPI PyTorch there, so the audio pipeline installs and runs on the CPU.
 
 ## Band members and instruments
 
