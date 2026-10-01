@@ -14,6 +14,11 @@ import {runProcess} from "./process.ts";
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
 const DEFAULT_SONG_DURATION = 360
 
+// how long connecting to a server may take, and how long a server that was reachable may stay silent while a job is
+// waited for (a restart takes a while) before the run stops - the queued job is recorded and picked up by the next run
+const CONNECT_TIMEOUT_MS = 60 * 1000
+const SERVER_SILENT_MS = 5 * 60 * 1000
+
 async function loadWorkflow<T extends { default: unknown }>(name: string): Promise<T> {
     const module = await import(join(workflowDir, `${name}.ts`))
     if (typeof module.default !== 'function') throw new Error(`comfy/workflows/${name}.ts has no default export function`)
@@ -83,16 +88,21 @@ export class Renderer implements Disposable {
             ...(server.credentials ? {credentials: server.credentials} : {}),
         })
         return new Promise((resolve, reject) => {
-            // waitForReady() never returns when the connection fails
-            const off = api.on('connection_error', () => {
+            // waitForReady() never returns when the connection fails - nor when the server accepts it but one of the
+            // endpoints the SDK asks while connecting (e.g. /manager/version) never answers
+            const fail = (message: string) => {
+                clearTimeout(timer)
                 off()
                 api.destroy()
-                reject(new Error(`ComfyUI ${server.name} (${server.url}): connection failed`))
-            })
+                reject(new Error(`ComfyUI ${server.name} (${server.url}): ${message}`))
+            }
+            const timer = setTimeout(() => fail(`no connection within ${CONNECT_TIMEOUT_MS / 1000} s - the server answers, but not completely (restarting? stuck custom node?)`), CONNECT_TIMEOUT_MS)
+            const off = api.on('connection_error', () => fail('connection failed'))
             api.init(5, 2000).waitForReady().then(() => {
+                clearTimeout(timer)
                 off()
                 resolve({...server, api})
-            })
+            }, (e: unknown) => fail(e instanceof Error ? e.message : String(e)))
         })
     }
 
@@ -237,9 +247,11 @@ export class Renderer implements Disposable {
     // exactly as with a song the user supplied themselves.
     async renderSong(brief: { style: string, lyrics: string }, songFile: string) {
         if (existsSync(songFile)) return log.step('Exists', styles.muted('input/song.wav'))
-        const mp3File = songFile.replace(/\.wav$/, '.mp3')
+        // not input/song.mp3: that name is where a song the user supplied by hand lives, and the download is
+        // deleted after the conversion. ffmpeg detects mp3 or flac from the content, the extension is irrelevant.
+        const downloaded = songFile.replace(/\.wav$/, '.generated.audio')
 
-        const {seed, duration} = await this.render('song', mp3File, '.mp3', async () => {
+        const {seed, duration} = await this.render('song', downloaded, ['.mp3', '.flac'], async () => {
             const seed = resolveSeed(this.config.seed)
             const duration = this.config.songDuration === -1 ? DEFAULT_SONG_DURATION : this.config.songDuration
             const {default: audioWorkflow} = await loadWorkflow<{ default: AudioWorkflow }>(this.config.songWorkflow)
@@ -253,10 +265,10 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed, duration}}
         })
 
-        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', mp3File, '-c:a', 'pcm_s16le', songFile], {
+        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', downloaded, '-c:a', 'pcm_s16le', songFile], {
             errorMessage: err => `ffmpeg failed to convert the generated song to wav:\n${err}`,
         })
-        rmSync(mp3File)
+        rmSync(downloaded)
         await Bun.write(`${songFile}.json`, JSON.stringify({workflow: this.config.songWorkflow, seed, duration, style: brief.style, lyrics: brief.lyrics}, null, 2))
         log.step('Saved', 'input/song.wav')
     }
@@ -359,7 +371,7 @@ export class Renderer implements Disposable {
      * ComfyUI is still rendering (Ctrl+C, crash, sleep), the next run attaches to that job - or downloads its result
      * if it finished in the meantime - instead of rendering again. Returns the meta of the job that made the file.
      */
-    private async render<M>(label: string, target: string, extension: string, prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
+    private async render<M>(label: string, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
         const initial: PendingJob<M> | undefined = existsSync(pendingFile) ? await Bun.file(pendingFile).json() : undefined
@@ -423,13 +435,14 @@ export class Renderer implements Disposable {
     }
 
     /** Waits for `pending`'s job to finish, then downloads its result to `target` and clears the pending file. */
-    private async downloadResult<M>(label: string, target: string, extension: string, server: Server, pending: PendingJob<M>) {
+    private async downloadResult<M>(label: string, target: string, extension: string | string[], server: Server, pending: PendingJob<M>) {
         const outputs = await this.waitForJob(label, server, pending)
 
         // the output node's files, e.g. {images: [...]} for SaveImage, {gifs: [...]} for VHS_VideoCombine
         const files = Object.values(outputs ?? {}).flat().filter((f): f is ImageInfo => typeof (f as ImageInfo)?.filename === 'string')
-        const file = files.findLast(f => f.filename.endsWith(extension))
-        if (!file) throw new Error(`${label}: the output node saved no ${extension} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
+        const extensions = [extension].flat()
+        const file = files.findLast(f => extensions.some(e => f.filename.endsWith(e)))
+        if (!file) throw new Error(`${label}: the output node saved no ${extensions.join(' or ')} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
         // written next to the target first, so an interrupted download never looks like a finished file
         await Bun.write(`${target}.download`, await server.api.getImage(file))
         renameSync(`${target}.download`, target)
@@ -466,6 +479,7 @@ export class Renderer implements Disposable {
         ]
         const stopSpinner = startSpinner(() => `${styles.name(label)} ${styles.muted(`@${server.name} ${status}`)}`)
         let missing = 0
+        let silentSince: number | undefined
         try {
             while (true) {
                 const entry = await api.getHistory(job.promptId).catch(() => undefined)
@@ -475,7 +489,19 @@ export class Renderer implements Disposable {
                     throw new Error(`${label}: ComfyUI job failed${error ? ` in ${error.node_type ?? 'a node'} - ${error.exception_message ?? ''}` : ''}`)
                 }
                 // not finished - is it still waiting or running? A few misses in a row mean it's gone (server restart)
-                const state = entry ? 'running' : await this.jobState(server, job.promptId).catch(() => 'running' as const)
+                let state: 'queued' | 'running' | 'finished' | 'failed' | 'unknown' = 'running'
+                try {
+                    if (!entry) state = await this.jobState(server, job.promptId)
+                    if (silentSince !== undefined) status = 'queued'
+                    silentSince = undefined
+                } catch {
+                    // the server doesn't answer at all - keep waiting for a restart, but not forever
+                    silentSince ??= Date.now()
+                    status = `${server.name} is not answering`
+                    if (Date.now() - silentSince > SERVER_SILENT_MS) {
+                        throw new Error(`${label}: ComfyUI ${server.name} (${server.url}) has not answered for ${SERVER_SILENT_MS / 60000} minutes - start it again and run again to pick the job up (it stays queued: ${job.promptId})`)
+                    }
+                }
                 if (state === 'queued' && !status.startsWith('running')) {
                     const queue = await api.getQueue().catch(() => undefined)
                     const ahead = queue ? queue.queue_running.length + queue.queue_pending.findIndex(item => item[1] === job.promptId) : 0
