@@ -349,19 +349,19 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const propGroups = new Map<PropStem, typeof castSubjects>()
         for (const s of castSubjects) if (s.propStem) propGroups.set(s.propStem, [...(propGroups.get(s.propStem) ?? []), s])
 
-        // MAX_REF_AUDIOS: MiniMaxH3ReferenceToVideo only has 4 ref_audio slots (see comfy/helpers.ts) - if a
-        // clip somehow needs more tracks than that, drop the lowest-priority ones off the end (same order as
-        // above: performance-driving tracks first, the anchor last) rather than erroring or silently overflowing
-        // the autogrow inputs. A dropped subject keeps whatever idle/active staging text it already gets per
-        // shot (see propNote below) - it just loses the audio anchor backing that text up.
-        const allTracks: Track[] = [
+        // MAX_REF_AUDIOS: MiniMaxH3ReferenceToVideo only has 3 ref_audio slots (see comfy/helpers.ts) - if a
+        // clip needs more tracks than that, drop instrument stems off the end of the performance-driving ones
+        // (vocals first, then instruments) rather than erroring or overflowing the autogrow inputs. The anchor
+        // always stays: it grounds cut/blocking timing. A dropped subject keeps whatever idle/active staging
+        // text it already gets per shot (see propNote below) - it just loses the audio anchor backing it up.
+        const performanceTracks: Track[] = [
             ...(performing ? [{label: '', stem: 'vocals' as const, subjects: singerSubjects}] : []),
             ...[...propGroups].filter(([stem]) => stem !== 'drums' && clipActive(stem)).map(([stem, subjects]) => ({label: '', stem, subjects})),
-            stemsAvailable
-                ? {label: '', stem: 'drums' as const, subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []}
-                : {label: '', stem: 'song' as const, subjects: []},
         ]
-        const tracks = allTracks.slice(0, MAX_REF_AUDIOS)
+        const anchorTrackDef: Track = stemsAvailable
+            ? {label: '', stem: 'drums' as const, subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []}
+            : {label: '', stem: 'song' as const, subjects: []}
+        const tracks = [...performanceTracks.slice(0, MAX_REF_AUDIOS - 1), anchorTrackDef]
         tracks.forEach((t, n) => t.label = `<Audio ${n + 1}>`)
         const anchorTrack = tracks.find(t => t.stem === 'drums' || t.stem === 'song')
         const vocalsTrack = performing ? tracks.find(t => t.stem === 'vocals') : undefined

@@ -14,9 +14,10 @@ export type Orientation = 'portrait' | 'landscape'
 
 // hardware/model limit: MiniMax H3 accepts at most this many reference images
 export const MAX_REFERENCE_IMAGES = 9
-// model limit: MiniMaxH3ReferenceToVideo's ref_audios autogrow only goes up to ref_audio_3 (comfy_extras/
-// nodes_minimax_h3.py, io.Autogrow min=0 max=3) - a 5th+ track would silently have nowhere to attach to
-export const MAX_REF_AUDIOS = 4
+// model limit: MiniMaxH3ReferenceToVideo's ref_audios autogrow has max=3 slots, i.e. ref_audio_0..ref_audio_2
+// (comfy_extras/nodes_minimax_h3.py) - a 4th track is rejected by the node ("unexpected keyword argument
+// 'ref_audios.ref_audio_3'", seen live on clip slot-030)
+export const MAX_REF_AUDIOS = 3
 
 // The contract of a workflow file in comfy/workflows/ - see docs/custom-workflows.md.
 // Its default export takes these options and returns the graph plus the node whose files are downloaded.
