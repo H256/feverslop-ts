@@ -13,6 +13,7 @@ import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {assembleFinal} from "./lib/assemble.ts";
 import {writeGallery} from "./lib/gallery.ts";
+import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {
@@ -37,6 +38,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]
+bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
     try {
@@ -54,6 +56,7 @@ const {values: args, positionals} = (() => {
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
+                export: {type: 'string', default: ''},
             },
         })
     } catch (e) {
@@ -64,6 +67,9 @@ const {values: args, positionals} = (() => {
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use song, images, videos, final or all`, usage)
+const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
+const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
+if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
 const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920') // author's own current project, pass your own project-id otherwise
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
@@ -657,6 +663,13 @@ if (render.has('final')) {
     const target = join(project.dir, 'final.mp4')
     const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
+}
+
+////////// EXPORTING THE TIMELINE FOR A VIDEO EDITOR
+if (exportFormats.length) {
+    log.section('15 · EXPORTING THE TIMELINE')
+    const written = await exportTimelines({formats: exportFormats as ExportFormat[], clips, projectDir: project.dir, projectName: project.id, songFile, songAudio: config.songAudio})
+    for (const [format, file] of Object.entries(written)) log.step(format === 'mlt' ? 'Shotcut / Kdenlive' : 'OpenShot', file)
 }
 
 log.section('✔ DONE')
