@@ -3,7 +3,7 @@ import {join} from "node:path";
 import {log, startSpinner, styles} from "./log.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./frames.ts";
 import type {ClipRequest} from "./compose.ts";
-import {captureProcess, runProcess} from "./process.ts";
+import {captureProcess, runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 
 export type VideoInfo = { frames: number, width: number, height: number, fps: number, hasAudio: boolean }
 
@@ -23,7 +23,7 @@ export function formatSlotRanges(ids: string[]): string {
 
 export async function probeVideo(file: string): Promise<VideoInfo> {
     const run = async (...args: string[]) => {
-        const stdout = await runProcess(['ffprobe', '-v', 'error', '-of', 'json', ...args, file], {errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
+        const stdout = await runProcess(['ffprobe', '-v', 'error', '-of', 'json', ...args, file], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
         return JSON.parse(stdout) as { streams: { codec_type: string, nb_frames?: string, nb_read_frames?: string, width?: number, height?: number, r_frame_rate?: string }[] }
     }
     const {streams} = await run('-show_entries', 'stream=codec_type,nb_frames,width,height,r_frame_rate')
@@ -52,7 +52,7 @@ export async function probeDuration(file: string): Promise<number> {
 /** Saves frame `index` (0-based) of a video as a PNG - written next to the target first, like the downloads. */
 export async function extractFrame(video: string, index: number, target: string) {
     const partial = target.replace(/\.png$/, '.partial.png')
-    const {stderr, code} = await captureProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `select=eq(n\\,${index})`, '-frames:v', '1', partial], {stdout: 'ignore'})
+    const {stderr, code} = await captureProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `select=eq(n\\,${index})`, '-frames:v', '1', partial], {stdout: 'ignore', timeoutMs: SHORT_PROCESS_TIMEOUT_MS})
     if (code !== 0 || !existsSync(partial)) throw new Error(`ffmpeg could not extract frame ${index} of ${video}:\n${stderr}`)
     renameSync(partial, target)
 }

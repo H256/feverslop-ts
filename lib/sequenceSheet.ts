@@ -7,7 +7,7 @@
 import {mkdirSync, renameSync} from "node:fs";
 import {dirname} from "node:path";
 import {FPS} from "./frames.ts";
-import {captureProcess} from "./process.ts";
+import {captureProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 
 export const SEQUENCE_FRAMES = 124   // ~5.17s @ 24fps - matches the predecessor project's default
 const SHOT_SECONDS = 0.75            // spacing between beats, clamped to fit the render's duration
@@ -96,7 +96,7 @@ export async function composeSheet(framePaths: string[], target: string, panel: 
     const partial = target.replace(/\.png$/, '.partial.png')
     const {code, stderr} = await captureProcess(
         ['ffmpeg', '-y', '-v', 'error', ...framePaths.flatMap(f => ['-i', f]), '-filter_complex', filter, '-map', '[out]', '-frames:v', '1', partial],
-        {stdout: 'ignore'},
+        {stdout: 'ignore', timeoutMs: SHORT_PROCESS_TIMEOUT_MS},
     )
     if (code !== 0) throw new Error(`ffmpeg failed to compose the reference sheet:\n${stderr}`)
     renameSync(partial, target)
