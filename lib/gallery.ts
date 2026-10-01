@@ -6,7 +6,7 @@ import {join} from "node:path";
 import type {Project} from "./project.ts";
 import {boundaryFrameAsset} from "./compose.ts";
 
-type Card = { title: string, subtitle?: string, images?: { src: string, label?: string }[], videos?: { src: string, label?: string }[], text?: string }
+type Card = { title: string, subtitle?: string, images?: { src: string, label?: string }[], videos?: { src: string, label?: string }[], text?: string, wide?: boolean }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]!)
 const url = (file: string) => file.split('/').map(encodeURIComponent).join('/')
@@ -35,6 +35,7 @@ function castCards(dir: string, kind: 'character' | 'location', cast: { id: stri
                 subtitle: owner.role,
                 images: [{src: `${folder}/${id}.png`, label: anchor ? 'sheet' : undefined}, ...(anchor ? [{src: anchor, label: 'anchor'}] : [])],
                 videos: video ? [{src: video, label: 'sequence'}] : [],
+                wide: !!(anchor || video),
             }
         })
 }
@@ -65,9 +66,11 @@ function videoCards(dir: string, data: Project): Card[] {
     return [...(final ? [{title: 'Final video', videos: [{src: final}]}] : []), ...clips]
 }
 
-const renderCard = (c: Card) => `<figure class="card">
+// a card with a reference sheet leads with it at full width (it is a wide multi-angle composite), the anchor and the
+// sequence video it was made from sit small below
+const renderCard = (c: Card) => `<figure class="card${c.wide ? ' sheet' : ''}">
 ${(c.images ?? []).map(i => `<a href="${url(i.src)}" target="_blank"><img loading="lazy" src="${url(i.src)}" alt="${esc(i.label ?? c.title)}">${i.label ? `<span>${esc(i.label)}</span>` : ''}</a>`).join('\n')}
-${(c.videos ?? []).map(v => `<video controls preload="metadata" src="${url(v.src)}"></video>${v.label ? `<span>${esc(v.label)}</span>` : ''}`).join('\n')}
+${(c.videos ?? []).map(v => `<div><video controls preload="metadata" src="${url(v.src)}"></video>${v.label ? `<span>${esc(v.label)}</span>` : ''}</div>`).join('\n')}
 <figcaption><b>${esc(c.title)}</b>${c.subtitle ? ` <small>${esc(c.subtitle)}</small>` : ''}${c.text ? `<p>${esc(c.text)}</p>` : ''}</figcaption>
 </figure>`
 
@@ -107,6 +110,9 @@ section[hidden] { display: none; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 0 24px; }
 .card { margin: 0; background: var(--panel); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .card a { position: relative; display: block; }
+.card.sheet { grid-column: span 2; flex-direction: row; flex-wrap: wrap; }
+.card.sheet > a:first-child, .card.sheet figcaption { flex: 1 0 100%; }
+.card.sheet > a, .card.sheet > div { flex: 1 1 0; min-width: 0; }
 .card img, .card video { width: 100%; display: block; border-radius: 4px; background: #000; }
 .card span { color: var(--muted); font-size: 12px; }
 .card a span { position: absolute; left: 6px; top: 6px; background: #000a; color: var(--text); padding: 1px 6px; border-radius: 3px; }
