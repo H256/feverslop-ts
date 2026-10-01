@@ -233,9 +233,11 @@ export class Renderer implements Disposable {
     // exactly as with a song the user supplied themselves.
     async renderSong(brief: { style: string, lyrics: string }, songFile: string) {
         if (existsSync(songFile)) return log.step('Exists', styles.muted('input/song.wav'))
-        const mp3File = songFile.replace(/\.wav$/, '.mp3')
+        // not input/song.mp3: that name is where a song the user supplied by hand lives, and the download is
+        // deleted after the conversion. ffmpeg detects mp3 or flac from the content, the extension is irrelevant.
+        const downloaded = songFile.replace(/\.wav$/, '.generated.audio')
 
-        const {seed, duration} = await this.render('song', mp3File, '.mp3', async () => {
+        const {seed, duration} = await this.render('song', downloaded, ['.mp3', '.flac'], async () => {
             const seed = resolveSeed(this.config.seed)
             const duration = this.config.songDuration === -1 ? DEFAULT_SONG_DURATION : this.config.songDuration
             const {default: audioWorkflow} = await loadWorkflow<{ default: AudioWorkflow }>(this.config.songWorkflow)
@@ -249,10 +251,10 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed, duration}}
         })
 
-        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', mp3File, '-c:a', 'pcm_s16le', songFile], {
+        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', downloaded, '-c:a', 'pcm_s16le', songFile], {
             errorMessage: err => `ffmpeg failed to convert the generated song to wav:\n${err}`,
         })
-        rmSync(mp3File)
+        rmSync(downloaded)
         await Bun.write(`${songFile}.json`, JSON.stringify({workflow: this.config.songWorkflow, seed, duration, style: brief.style, lyrics: brief.lyrics}, null, 2))
         log.step('Saved', 'input/song.wav')
     }
@@ -355,7 +357,7 @@ export class Renderer implements Disposable {
      * ComfyUI is still rendering (Ctrl+C, crash, sleep), the next run attaches to that job - or downloads its result
      * if it finished in the meantime - instead of rendering again. Returns the meta of the job that made the file.
      */
-    private async render<M>(label: string, target: string, extension: string, prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
+    private async render<M>(label: string, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
         const initial: PendingJob<M> | undefined = existsSync(pendingFile) ? await Bun.file(pendingFile).json() : undefined
@@ -419,13 +421,14 @@ export class Renderer implements Disposable {
     }
 
     /** Waits for `pending`'s job to finish, then downloads its result to `target` and clears the pending file. */
-    private async downloadResult<M>(label: string, target: string, extension: string, server: Server, pending: PendingJob<M>) {
+    private async downloadResult<M>(label: string, target: string, extension: string | string[], server: Server, pending: PendingJob<M>) {
         const outputs = await this.waitForJob(label, server, pending)
 
         // the output node's files, e.g. {images: [...]} for SaveImage, {gifs: [...]} for VHS_VideoCombine
         const files = Object.values(outputs ?? {}).flat().filter((f): f is ImageInfo => typeof (f as ImageInfo)?.filename === 'string')
-        const file = files.findLast(f => f.filename.endsWith(extension))
-        if (!file) throw new Error(`${label}: the output node saved no ${extension} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
+        const extensions = [extension].flat()
+        const file = files.findLast(f => extensions.some(e => f.filename.endsWith(e)))
+        if (!file) throw new Error(`${label}: the output node saved no ${extensions.join(' or ')} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
         // written next to the target first, so an interrupted download never looks like a finished file
         await Bun.write(`${target}.download`, await server.api.getImage(file))
         renameSync(`${target}.download`, target)
