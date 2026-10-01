@@ -447,7 +447,8 @@ singers.
 RTX 50xx/Blackwell `sm_120`, which forces slow driver-side PTX JIT compilation) and downloads the
 models: demucs ≈ 80 MB, Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separation takes under a minute, the
 transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
-Without CUDA they run on the CPU, much slower.
+Without CUDA they run on the CPU, much slower. On macOS there are no CUDA wheels - `tools/vocals.py` takes the regular
+PyPI PyTorch there, so the audio pipeline installs and runs on the CPU.
 
 ## Band members and instruments
 
@@ -529,6 +530,11 @@ bun index.ts --redo=characterLookVariants
 - Without alignment, a section's lyric lines are spread evenly over its clips.
 - The alignment is only as good as Whisper's hearing: growled, heavily layered or very fast vocals are recognized
   worse. Lines with low confidence have interpolated times - check them.
+- If not a single lyric word is found in the transcript (a wrong `lyricsLanguage`, vocals that are too distorted, a
+  song without singing), the alignment stops the run with an error instead of falling back to estimated times - with
+  no heard word there is nothing to anchor an estimate to. Check `lyricsLanguage` and listen to `stems/vocals.wav`.
+  In clip mode, `"alignLyrics": false` runs the project without the alignment; in performance mode (`singers`) the
+  lyric timing is required, because the lip-sync needs to know when each line is sung.
 - A line that is sung across a clip boundary is split between the two clips word by word.
 - Instrument activity (`propStem: "other"`) is shared by every character on that stem - Demucs' 4-stem separation
   can't tell two guitarists apart, so a solo handoff between them isn't reflected individually.
