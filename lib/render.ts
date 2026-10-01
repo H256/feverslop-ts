@@ -14,6 +14,11 @@ import {runProcess} from "./process.ts";
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
 const DEFAULT_SONG_DURATION = 360
 
+// how long connecting to a server may take, and how long a server that was reachable may stay silent while a job is
+// waited for (a restart takes a while) before the run stops - the queued job is recorded and picked up by the next run
+const CONNECT_TIMEOUT_MS = 60 * 1000
+const SERVER_SILENT_MS = 5 * 60 * 1000
+
 async function loadWorkflow<T extends { default: unknown }>(name: string): Promise<T> {
     const module = await import(join(workflowDir, `${name}.ts`))
     if (typeof module.default !== 'function') throw new Error(`comfy/workflows/${name}.ts has no default export function`)
@@ -83,16 +88,21 @@ export class Renderer implements Disposable {
             ...(server.credentials ? {credentials: server.credentials} : {}),
         })
         return new Promise((resolve, reject) => {
-            // waitForReady() never returns when the connection fails
-            const off = api.on('connection_error', () => {
+            // waitForReady() never returns when the connection fails - nor when the server accepts it but one of the
+            // endpoints the SDK asks while connecting (e.g. /manager/version) never answers
+            const fail = (message: string) => {
+                clearTimeout(timer)
                 off()
                 api.destroy()
-                reject(new Error(`ComfyUI ${server.name} (${server.url}): connection failed`))
-            })
+                reject(new Error(`ComfyUI ${server.name} (${server.url}): ${message}`))
+            }
+            const timer = setTimeout(() => fail(`no connection within ${CONNECT_TIMEOUT_MS / 1000} s - the server answers, but not completely (restarting? stuck custom node?)`), CONNECT_TIMEOUT_MS)
+            const off = api.on('connection_error', () => fail('connection failed'))
             api.init(5, 2000).waitForReady().then(() => {
+                clearTimeout(timer)
                 off()
                 resolve({...server, api})
-            })
+            }, (e: unknown) => fail(e instanceof Error ? e.message : String(e)))
         })
     }
 
@@ -469,6 +479,7 @@ export class Renderer implements Disposable {
         ]
         const stopSpinner = startSpinner(() => `${styles.name(label)} ${styles.muted(`@${server.name} ${status}`)}`)
         let missing = 0
+        let silentSince: number | undefined
         try {
             while (true) {
                 const entry = await api.getHistory(job.promptId).catch(() => undefined)
@@ -478,7 +489,19 @@ export class Renderer implements Disposable {
                     throw new Error(`${label}: ComfyUI job failed${error ? ` in ${error.node_type ?? 'a node'} - ${error.exception_message ?? ''}` : ''}`)
                 }
                 // not finished - is it still waiting or running? A few misses in a row mean it's gone (server restart)
-                const state = entry ? 'running' : await this.jobState(server, job.promptId).catch(() => 'running' as const)
+                let state: 'queued' | 'running' | 'finished' | 'failed' | 'unknown' = 'running'
+                try {
+                    if (!entry) state = await this.jobState(server, job.promptId)
+                    if (silentSince !== undefined) status = 'queued'
+                    silentSince = undefined
+                } catch {
+                    // the server doesn't answer at all - keep waiting for a restart, but not forever
+                    silentSince ??= Date.now()
+                    status = `${server.name} is not answering`
+                    if (Date.now() - silentSince > SERVER_SILENT_MS) {
+                        throw new Error(`${label}: ComfyUI ${server.name} (${server.url}) has not answered for ${SERVER_SILENT_MS / 60000} minutes - start it again and run again to pick the job up (it stays queued: ${job.promptId})`)
+                    }
+                }
                 if (state === 'queued' && !status.startsWith('running')) {
                     const queue = await api.getQueue().catch(() => undefined)
                     const ahead = queue ? queue.queue_running.length + queue.queue_pending.findIndex(item => item[1] === job.promptId) : 0

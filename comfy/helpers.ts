@@ -102,9 +102,14 @@ export const widget = (ref: NodeRef) => ref as never
  * and widgets that only exist for some settings, like VHS_VideoCombine's crf. Unchecked.
  */
 export function withInputs<N extends { __id: string }>(workflow: WorkflowBuilder, node: N, inputs: Record<string, unknown>): N {
-    // the builder only hands out copies of its nodes - the inputs have to go in before build()
-    const nodes = (workflow as unknown as { _nodes: Record<string, { inputs: Record<string, unknown> }> })._nodes
-    Object.assign(nodes[node.__id]!.inputs, inputs)
+    // The builder has no public way to change a node after it was added, and only hands out copies of its nodes -
+    // so the inputs go into its private _nodes before build(). That field is not part of the SDK's API (package.json
+    // keeps @saintno/comfyui-sdk on 0.3.x, where it exists): fail loudly if an SDK update ever renames it, instead of
+    // silently sending a workflow without these inputs.
+    const nodes = (workflow as unknown as { _nodes?: Record<string, { inputs?: Record<string, unknown> }> })._nodes
+    const target = nodes?.[node.__id]?.inputs
+    if (!target) throw new Error(`withInputs: cannot set ${Object.keys(inputs).join(', ')} on node ${node.__id} - the workflow builder of @saintno/comfyui-sdk no longer keeps its nodes in "_nodes" (SDK updated? see comfy/helpers.ts)`)
+    Object.assign(target, inputs)
     return node
 }
 
