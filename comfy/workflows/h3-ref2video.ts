@@ -59,7 +59,9 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const song = wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song)}).AUDIO, start_index: opts.songStart, duration: opts.duration})
     const guided = wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO})
 
-    const guider = wf.BasicGuider({model: model.MODEL, conditioning: guided.positive})
+    // int8 attention through comfy-kitchen: ~25% faster sampling on the Radeon. Only the guider gets it - the scheduler just needs the sigma schedule
+    const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
+    const guider = wf.BasicGuider({model: attention.model, conditioning: guided.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
     const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})

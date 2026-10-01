@@ -27,7 +27,9 @@ export default function h3SequenceToSheet(opts: SequenceWorkflowOptions): Workfl
         vae: videoVae.VAE,
     })
 
-    const guider = wf.BasicGuider({model: model.MODEL, conditioning: i2v.positive})
+    // int8 attention through comfy-kitchen: ~25% faster sampling on the Radeon. Only the guider gets it - the scheduler just needs the sigma schedule
+    const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
+    const guider = wf.BasicGuider({model: attention.model, conditioning: i2v.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'res_multistep'})
     const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: 8, denoise: 1, model: model.MODEL})
