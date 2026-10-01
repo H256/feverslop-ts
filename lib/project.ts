@@ -162,6 +162,8 @@ const dependsOn: Record<StepName, StepName[]> = {
     shotMoments: ['beats', 'timeline', 'mapping', 'propActivity'],
 }
 
+export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
+
 export class ProjectStore {
     readonly dir: string
     readonly file: string

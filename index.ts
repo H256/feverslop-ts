@@ -5,7 +5,7 @@ import {log, printBanner, styles} from "./lib/log.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
-import {type Character, type Location, ProjectStore, type PropStem, type Singing, type StepName, type StoryBeat} from "./lib/project.ts";
+import {type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
@@ -70,6 +70,9 @@ if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.joi
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
+const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
+const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
+if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
 const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920') // author's own current project, pass your own project-id otherwise
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
@@ -79,7 +82,7 @@ if (args.gallery) {
     log.step('Gallery', `${file} ${styles.muted(Object.entries(counts).map(([tab, n]) => `${tab}: ${n}`).join(' · '))}`)
     process.exit(0)
 }
-for (const step of args.redo.split(',').filter(Boolean)) project.invalidate(step as StepName)
+for (const step of redoSteps) project.invalidate(step)
 if (project.data.timeline && project.data.timeline.maxClipSec !== maxClipSec) project.invalidate('timeline')
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
