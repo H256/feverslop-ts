@@ -12,7 +12,20 @@ import {captureProcess} from "./process.ts";
 export const SEQUENCE_FRAMES = 124   // ~5.17s @ 24fps - matches the predecessor project's default
 const SHOT_SECONDS = 0.75            // spacing between beats, clamped to fit the render's duration
 
-const EXPRESSIONS = ['frightened', 'neutral', 'joyful', 'angry', 'surprised', 'sad', 'disgusted', 'confused', 'excited', 'contemplative']
+// the expression of the last beat is picked at random from these - each with its own facial description, so the
+// prompt never says one expression while describing another
+export const EXPRESSIONS: Record<string, string> = {
+    frightened: 'eyes wide, brows raised and drawn together, mouth slightly open',
+    neutral: 'eyes relaxed, brows level, mouth closed',
+    joyful: 'eyes bright and crinkled at the corners, cheeks lifted, a broad smile',
+    angry: 'brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight',
+    surprised: 'eyes wide, brows raised high, mouth open in a small round shape',
+    sad: 'inner brows raised, eyes lowered and glistening, corners of the mouth turned down',
+    disgusted: 'nose wrinkled, upper lip raised, brows drawn down, eyes narrowed',
+    confused: 'one brow raised and the other lowered, head tilted slightly, lips pursed to one side',
+    excited: 'eyes wide and bright, brows raised, mouth open in an eager grin',
+    contemplative: 'eyes gazing off to the side, brows slightly furrowed, lips closed and relaxed',
+}
 
 function formatTimestamp(seconds: number): string {
     const m = Math.floor(seconds / 60)
@@ -34,8 +47,9 @@ function beatTimestamps(totalShots: number, frames: number): number[] {
  */
 export function characterSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(6, frames)
-    const expression = EXPRESSIONS[Math.floor(Math.random() * EXPRESSIONS.length)]
-    const prompt = `Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ${description}, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At ${formatTimestamp(beatTimes[5]!)}, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now ${expression}: eyes wide and brows raised and drawn together, mouth slightly open. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
+    const names = Object.keys(EXPRESSIONS)
+    const expression = names[Math.floor(Math.random() * names.length)]!
+    const prompt = `Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ${description}, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At ${formatTimestamp(beatTimes[5]!)}, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now ${expression}: ${EXPRESSIONS[expression]}. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
     return {prompt, beatTimes}
 }
 

@@ -1,7 +1,8 @@
 import {join} from "node:path";
 import type {Assignment, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
 import {refineSections, slotVocals} from "./lyrics.ts";
-import {round} from "./frames.ts";
+import {formatTime, round} from "./frames.ts";
+import {log} from "./log.ts";
 import {runProcess} from "./process.ts";
 
 // "[Verse 1]\nline\nline" -> [{label: 'Verse 1', lines: [...]}]
@@ -86,7 +87,11 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         while (firstSize > 1 && bars[firstSize] && bars[firstSize]!.time - section.start > maxClipSec) firstSize--
         if (bars.length) groups.push(bars.slice(0, firstSize))
         for (let i = firstSize; i < bars.length; i += barsPerSlot) groups.push(bars.slice(i, i + barsPerSlot))
-        if (groups.length === 0) return
+        if (groups.length === 0) {
+            // zero length (e.g. the refined last section starts at the very end of the song) or no downbeat inside it
+            log.warn(`section "${section.label}" (${formatTime(section.start, true)} – ${formatTime(section.end, true)}) has no bar of its own and gets no clip - unless it is empty, the video has a gap there. Check the section times (music.sections / lyricsTiming in project.json), then --redo=timeline`)
+            return
+        }
 
         // a short leftover is merged into the previous clip if that still fits
         const last = groups.at(-1)!
