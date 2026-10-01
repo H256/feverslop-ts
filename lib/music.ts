@@ -2,7 +2,7 @@ import {join} from "node:path";
 import type {Assignment, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
 import {refineSections, slotVocals} from "./lyrics.ts";
 import {round} from "./frames.ts";
-import {runProcess} from "./process.ts";
+import {runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 
 // "[Verse 1]\nline\nline" -> [{label: 'Verse 1', lines: [...]}]
 export function parseLyricSections(lyrics: string): LyricSection[] {
@@ -60,7 +60,7 @@ async function runVocalsTool(args: string[], what: string) {
 
 // Cuts the clip's part out of the song - it becomes the clip's <Audio 1>
 export async function cutAudio(songFile: string, start: number, end: number, outFile: string) {
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {errorMessage: err => `ffmpeg failed for ${outFile}:\n${err}`})
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed for ${outFile}:\n${err}`})
 }
 
 /**
