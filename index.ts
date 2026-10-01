@@ -256,6 +256,7 @@ const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS'
     return {
         characters: extracted.characters.map(c => ({
             id: toId(c.name), name: c.name, role: c.role,
+            ...(c.isGroup === true ? {isGroup: true} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
         })),
