@@ -12,6 +12,7 @@ import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {assembleFinal} from "./lib/assemble.ts";
+import {writeGallery} from "./lib/gallery.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {
@@ -35,7 +36,8 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]`
+             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]
+bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
@@ -51,6 +53,7 @@ const {values: args, positionals} = (() => {
                 comfy: {type: 'string'},
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
+                gallery: {type: 'boolean', default: false},
             },
         })
     } catch (e) {
@@ -64,6 +67,12 @@ if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.joi
 const project = new ProjectStore(positionals[0] ?? 'well-of-youth-gothic-trio-260920') // author's own current project, pass your own project-id otherwise
 const maxClipSec = MAX_CLIP_SEC
 await project.load()
+if (args.gallery) {
+    if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
+    const {file, counts} = await writeGallery(project.dir, project.id, project.data)
+    log.step('Gallery', `${file} ${styles.muted(Object.entries(counts).map(([tab, n]) => `${tab}: ${n}`).join(' · '))}`)
+    process.exit(0)
+}
 for (const step of args.redo.split(',').filter(Boolean)) project.invalidate(step as StepName)
 if (project.data.timeline && project.data.timeline.maxClipSec !== maxClipSec) project.invalidate('timeline')
 
