@@ -3,8 +3,9 @@
 # dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "soundfile", "numpy", "librosa>=0.10", "nvidia-cublas-cu12; sys_platform == 'linux'", "nvidia-cudnn-cu12; sys_platform == 'linux'"]
 #
 # [tool.uv.sources]
-# torch = { index = "pytorch-cu130" }
-# torchaudio = { index = "pytorch-cu130" }
+# # the CUDA 13.0 wheels only exist for Linux and Windows - macOS takes the regular PyPI build
+# torch = [{ index = "pytorch-cu130", marker = "sys_platform != 'darwin'" }]
+# torchaudio = [{ index = "pytorch-cu130", marker = "sys_platform != 'darwin'" }]
 #
 # [[tool.uv.index]]
 # name = "pytorch-cu130"
@@ -49,7 +50,7 @@ draft       For a song whose lyrics are lost (e.g. an old AceStep/Suno generatio
 
 Runs on CUDA if available (PyTorch cu130 wheels - cu128 builds are missing precompiled kernels for RTX 50xx/
 Blackwell (sm_120), which forces slow driver-side PTX JIT compilation on every CUDA call), else on the CPU.
-The models are downloaded on first use: demucs ~80 MB, whisper large-v3 ~3 GB.
+The models are downloaded on first use: demucs htdemucs_ft ~320 MB (a bag of four models), whisper large-v3 ~3 GB.
 Progress goes to stderr, stdout only carries the result.
 """
 import gc
