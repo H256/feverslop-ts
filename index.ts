@@ -208,7 +208,7 @@ const music = await project.step('music', '2 · ANALYZING THE SONG', async () =>
 })
 log.step('Tempo', `${music.bpm} BPM, ${music.downbeats.length} bars, ${Math.round(music.durationSec)}s`)
 for (const s of music.sections) {
-    console.log(`   ${styles.name(s.label.padEnd(12))} ${styles.muted(`${formatTime(s.start)} – ${formatTime(s.end)}`)} ${energyBar(s.energy)}`)
+    console.log(`   ${energyBar(s.energy)} ${styles.muted(`${formatTime(s.start)} – ${formatTime(s.end)}`)} ${styles.name(s.label)}`)
 }
 log.step('Sections', styles.muted(config.alignLyrics
     ? 'estimated from audio - refined from the lyrics timing when the song is cut into clips'
