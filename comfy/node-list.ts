@@ -16,7 +16,15 @@ export async function nodeServer(flag?: string): Promise<ComfyServer> {
 }
 
 export async function fetchNodeList(server: ComfyServer): Promise<ObjectInfo> {
-    const response = await fetch(`${server.url}/object_info`, {headers: authHeaders(server)})
+    // the node list of a big install is several MB, so a generous limit - but not forever
+    const timeoutMs = 60_000
+    let response: Response
+    try {
+        response = await fetch(`${server.url}/object_info`, {headers: authHeaders(server), signal: AbortSignal.timeout(timeoutMs)})
+    } catch (e) {
+        const error = e as Error
+        throw new Error(`ComfyUI ${server.name} (${server.url}) is unreachable - ${error.name === 'TimeoutError' ? `no answer within ${timeoutMs / 1000} s` : error.message}. Start it, or pick another server with --comfy=<url>`)
+    }
     if (!response.ok) throw new Error(`${server.url}/object_info: ${response.status} ${response.statusText}`)
     return cleanNodeList(await response.json() as ObjectInfo).objectInfo
 }

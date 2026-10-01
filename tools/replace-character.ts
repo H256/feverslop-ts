@@ -44,6 +44,10 @@ if (!characters.length) {
 printBanner()
 p.intro(`feverslop-ts · replace character · ${id}`)
 
+// what is already changed on disk - a cancel has to say so (see answer())
+const changes: string[] = []
+let sheetCleared = false
+
 const charId = answer(await p.select({
     message: 'Character to replace',
     options: characters.map(c => ({value: c.id, label: `${c.name} ${styles.muted(`(${c.id})${c.isGroup ? ' · group' : ''}`)}`})),
@@ -82,6 +86,7 @@ await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', imagePath, '-frames:v', '
 })
 renameSync(partial, targetFile)
 p.log.success(`Saved ${targetFile}`)
+changes.push(`the new image is saved as ${targetFile}`)
 
 // everything downstream of the anchor was built from the OLD image and is now stale
 if (config.sequenceSheets) {
@@ -94,7 +99,11 @@ if (config.sequenceSheets) {
     ]
     const removed = stale.filter(existsSync)
     for (const f of removed) rmSync(f, {recursive: true, force: true})
-    if (removed.length) p.log.step(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
+    if (removed.length) {
+        p.log.step(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
+        changes.push('the old reference sheet and sequence video were deleted')
+        sheetCleared = true
+    }
 }
 
 const descMode = answer(await p.select({
@@ -150,6 +159,7 @@ if (newDescription) {
     }
     await Bun.write(file, JSON.stringify(data, null, 2))
     p.log.success('Saved the new description to project.json')
+    changes.push('the new description is saved in project.json')
 }
 
 const description = newDescription
@@ -197,7 +207,9 @@ if (config.sequenceSheets) {
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel('Cancelled - nothing further was changed')
+        p.cancel(changes.length
+            ? `Cancelled - already changed: ${changes.join('; ')}.${sheetCleared ? ` Render the new reference sheet with: bun index.ts ${id} --render=images` : ''}`
+            : 'Cancelled - nothing was changed')
         process.exit(1)
     }
     return value as Exclude<T, symbol>
