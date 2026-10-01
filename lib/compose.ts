@@ -27,7 +27,7 @@ export function computeMemberCounts(beats: StoryBeat[], characters: Character[])
     for (const char of characters) {
         if (!char.isGroup) continue
         const seen = beats.filter(b => b.characterIds.includes(char.id)).map(b => b.groupSize?.[char.id] ?? 2)
-        counts[char.id] = Math.min(MAX_GROUP_MEMBERS, Math.max(1, ...seen, 2))
+        counts[char.id] = Math.min(MAX_GROUP_MEMBERS, Math.max(1, ...(seen.length ? seen : [2])))
     }
     return counts
 }
