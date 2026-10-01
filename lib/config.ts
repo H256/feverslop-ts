@@ -50,14 +50,23 @@ export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
 
 export async function loadProjectConfig(projectDir: string): Promise<ProjectConfig> {
     const file = join(projectDir, 'config.json')
-    const raw: Partial<ProjectConfig> = existsSync(file) ? await Bun.file(file).json() : {}
-    const merged = {...defaults, ...raw}
-    const config: ProjectConfig = {...merged, alignLyrics: raw.alignLyrics ?? (Array.isArray(merged.singers) && merged.singers.length > 0)}
-    const fail = (message: string) => {
+    const fail = (message: string): never => {
         throw new Error(`${file}: ${message}`)
     }
+    let raw: Partial<ProjectConfig> = {}
+    if (existsSync(file)) {
+        try {
+            raw = await Bun.file(file).json()
+        } catch (e) {
+            fail(`is not valid JSON (${e instanceof Error ? e.message : String(e)}) - fix it, or delete the file to use the defaults`)
+        }
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object like {"seed": 42}')
+    const merged = {...defaults, ...raw}
+    const config: ProjectConfig = {...merged, alignLyrics: raw.alignLyrics ?? (Array.isArray(merged.singers) && merged.singers.length > 0)}
 
-    warnUnknownKeys(raw, Object.keys(config), file)
+    // the keys of `config` can't be the allowed ones - a typo'd key from `raw` is in there too
+    warnUnknownKeys(raw, [...Object.keys(defaults), 'alignLyrics'], file)
 
     if (!Number.isInteger(config.seed) || config.seed < -1) fail(`seed must be -1 or a whole number >= 0, got ${JSON.stringify(config.seed)}`)
     for (const key of ['imageResolution', 'videoResolution'] as const) {
