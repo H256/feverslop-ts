@@ -7,7 +7,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
-import {buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat} from "./lib/compose.ts";
+import {buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
@@ -531,6 +531,7 @@ for (const slot of timeline.slots) {
 // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
 const beatProps = propActivity ? propActivityPerBeat({slots: timeline.slots, mapping, beats, characters: cast.characters}, propActivity) : undefined
+const beatSinging = singingPerBeat({slots: timeline.slots, mapping, beats, singing})
 // All beats in one call don't fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So
 // the beats are asked in blocks, one after the other. The cut is only ever between two beats - all clips of a scene
 // belong to one beat, so everything that has to stay continuous is in one call - and a block sees the finished shots of
@@ -563,6 +564,7 @@ Rules:
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
 - Name characters by their "name" from "cast" below (not pronouns, and never the "id" that "characterIds"/"castProps" use - it only says who is meant), so every shot reads on its own. Use the name exactly as spelled and capitalized in "cast" - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
+- A beat may list "singing": "singerIds" are the characters whose voice is the song's vocals, and "singingPerShot" gives one true/false flag per shot of that beat for whether a lyric is actually sung at that point. A singer only sings on shots flagged true. On a shot flagged false they make no sound at all - no singing, crying out, calling, humming or "a voice that joins" - even if the beat's "summary" or "moments" say so (the music there is purely instrumental); show them doing something silent instead (listening, breathing, watching, reacting, standing ready). Characters with no "singing" entry are unaffected.
 
 Answer only with JSON: {"moments": {"<beatId>": ["shot 1 action", "shot 2 action", ...]}}
 ---
@@ -577,6 +579,7 @@ ${JSON.stringify(block.map(b => ({
             id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
             shotsNeeded: shotCounts[b.id] ?? 1,
             ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
+            ...(beatSinging[b.id] ? {singing: beatSinging[b.id]} : {}),
         })))}`,
         instructions: 'You are a music video director turning story beats into a shot list. Answer only with JSON.',
     })

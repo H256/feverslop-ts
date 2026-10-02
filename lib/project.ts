@@ -159,7 +159,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
     propActivity: ['stems', 'instrumentStems', 'cast'],
-    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity'],
+    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing'],
 }
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
