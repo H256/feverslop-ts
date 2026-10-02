@@ -213,9 +213,10 @@ function escapeControlCharsInStrings(text: string): string {
     return out
 }
 
-// Long answers sometimes lose a closing bracket - e.g. ..."}} instead of ..."]}} at the end of the last array, with
-// everything before it complete. Closing what is still open, by type, repairs that: a closer that doesn't match the
-// innermost open bracket first closes the ones the model forgot, and at the end the rest is closed. Strings are tracked
+// Long answers sometimes lose or mix up closing brackets - e.g. ..."}} or ..."]]} instead of ..."]}} at the end of the
+// last array, with everything before it complete. Closing what is still open, by type, repairs that: a closer that
+// doesn't match the innermost open bracket first closes the ones the model forgot (or, if that kind isn't open at all,
+// is taken as the innermost one), and at the end the rest is closed. Strings are tracked
 // (as in escapeControlCharsInStrings) so brackets inside text are left alone.
 function closeOpenBrackets(text: string): string {
     const open: string[] = []
@@ -235,6 +236,10 @@ function closeOpenBrackets(text: string): string {
             if (open.includes(ch)) {
                 while (open.at(-1) !== ch) out += open.pop()
                 open.pop()
+            } else if (open.length > 0) {
+                // wrong kind, e.g. ..."]]} instead of ..."]}}: it stands for the innermost open bracket
+                out += open.pop()
+                continue
             }
         }
         out += ch
