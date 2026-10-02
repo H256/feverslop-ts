@@ -140,19 +140,38 @@ export type AskOptions = {
     images?: string[],
 }
 
+/** The model finished every attempt without writing an answer - it only thought. */
+export class EmptyAnswerError extends Error {
+    constructor(readonly attempts: number) {
+        super(`the model gave no answer in ${attempts} attempts, it only thought - try a lower reasoning effort or another model (bun run setup llm-model)`)
+    }
+}
+
+const emptyAnswerNote = '\n\nKeep your thinking short and then write the answer itself - an empty answer is not acceptable.'
+
 export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images}: AskOptions) {
     const requestInput = images?.length
         ? [{role: 'user' as const, content: [{type: 'input_text' as const, text: input}, ...images.map(image_url => ({type: 'input_image' as const, image_url, detail: 'auto' as const}))]}]
         : input
-    // a cut-off answer is useless (half a JSON) - once more with twice the room, the thinking length varies anyway
-    for (const limit of [maxTokens, maxTokens * 2]) {
+    // A cut-off answer is useless (half a JSON), an empty one even more so - the model spent everything on thinking, which
+    // varies a lot from run to run. So: once more with twice the room; after a second empty answer the prompt is rewritten
+    // (think briefly, then answer) with a low reasoning effort, and the last try gets even more room.
+    const attempts = [
+        {limit: maxTokens, level: reasoning, note: ''},
+        {limit: maxTokens * 2, level: reasoning, note: ''},
+        {limit: maxTokens * 2, level: 'low' as ReasoningStrength, note: emptyAnswerNote},
+        {limit: maxTokens * 4, level: 'low' as ReasoningStrength, note: emptyAnswerNote},
+    ]
+    for (const [i, {limit, level, note}] of attempts.entries()) {
         try {
-            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions, stream: true}, reasoning)
-            if (!answer.trim()) log.warn(`empty answer - the model only thought`)
-            return answer.trim()
+            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level)
+            if (answer.trim()) return answer.trim()
+            if (i === attempts.length - 1) throw new EmptyAnswerError(attempts.length)
+            log.warn(`empty answer - the model only thought - asking again with ${attempts[i + 1]!.limit}${attempts[i + 1]!.note ? ' and a shorter-thinking prompt' : ''}`)
         } catch (e) {
-            if (!(e instanceof TruncatedError) || limit !== maxTokens) throw e
-            log.warn(`${e.message} - asking again with ${limit * 2}`)
+            // only the first cut-off gets a second chance - after that the answer is too long for the model, not just unlucky
+            if (!(e instanceof TruncatedError) || i !== 0) throw e
+            log.warn(`${e.message} - asking again with ${attempts[1]!.limit}`)
         }
     }
     throw new Error('unreachable')
@@ -194,15 +213,51 @@ function escapeControlCharsInStrings(text: string): string {
     return out
 }
 
+// Long answers sometimes lose a closing bracket - e.g. ..."}} instead of ..."]}} at the end of the last array, with
+// everything before it complete. Closing what is still open, by type, repairs that: a closer that doesn't match the
+// innermost open bracket first closes the ones the model forgot, and at the end the rest is closed. Strings are tracked
+// (as in escapeControlCharsInStrings) so brackets inside text are left alone.
+function closeOpenBrackets(text: string): string {
+    const open: string[] = []
+    let out = ''
+    let inString = false
+    let escaped = false
+    for (const ch of text) {
+        if (inString) {
+            if (escaped) escaped = false
+            else if (ch === '\\') escaped = true
+            else if (ch === '"') inString = false
+        } else if (ch === '"') {
+            inString = true
+        } else if (ch === '{' || ch === '[') {
+            open.push(ch === '{' ? '}' : ']')
+        } else if (ch === '}' || ch === ']') {
+            if (open.includes(ch)) {
+                while (open.at(-1) !== ch) out += open.pop()
+                open.pop()
+            }
+        }
+        out += ch
+    }
+    return out + (inString ? '"' : '') + open.reverse().join('')
+}
+
 // Models like to wrap JSON in ```json fences or add a sentence around it
 export async function askJson<T>(options: AskOptions): Promise<T> {
     const answer = await ask(options)
     const start = answer.search(/[{[]/)
     const end = Math.max(answer.lastIndexOf('}'), answer.lastIndexOf(']'))
+    const json = escapeControlCharsInStrings(answer.slice(start, end + 1))
     try {
-        return JSON.parse(escapeControlCharsInStrings(answer.slice(start, end + 1)))
+        return JSON.parse(json)
     } catch (e) {
-        log.box('Unparsable answer', answer)
-        throw new Error(`LLM did not answer with valid JSON: ${(e as Error).message}`)
+        try {
+            const repaired = JSON.parse(closeOpenBrackets(json))
+            log.warn('the answer lacked a closing bracket - closed it')
+            return repaired
+        } catch {
+            log.box('Unparsable answer', answer)
+            throw new Error(`LLM did not answer with valid JSON: ${(e as Error).message}`)
+        }
     }
 }
