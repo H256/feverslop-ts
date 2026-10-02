@@ -9,6 +9,7 @@
     "init": "bun tools/init.ts",
     "example": "bun tools/example.ts",
     "replace-character": "bun tools/replace-character.ts",
+    "styles:doc": "bun tools/styles-doc.ts",
     "typecheck": "bun tools/typecheck.ts",
     "comfy:types": "bun comfy/gen-types.ts",
     "comfy:convert": "bun comfy/json-to-ts.ts"

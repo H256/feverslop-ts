@@ -103,8 +103,25 @@ ${storyBase}
     }
 }
 
-const lookRules = `Describe in 120-180 words, as plain prose:
-- Format and style: name the medium first and be specific. Pick whichever actually fits the story and the director's brief best, don't default to live-action photography (e.g. "2D anime in the style of 90s cel animation", "live action shot on 35mm film", "hand-painted dark fantasy oil painting", "stop-motion with visible puppet seams", "grainy VHS found-footage horror", "woodcut/engraving line art").
+// Shortlist, not a single pick: the code then draws one at random, so the LLM's favorites can't decide the look alone.
+export function styleShortlistPrompt(storyText: string, styleList: {id: string, name: string}[], count: number): AskOptions {
+    return {
+        maxTokens: 2048,
+        input: `Choose the ${count} film styles from the list that would suit this story or song best, for a music video generated with AI image and video models.
+Pick ${count} clearly different looks - not variations of one look - spread over at least 3 different kinds of medium (live action, 2D animation, 3D animation, craft/stop-motion, painted/printed). Let the story's genre, era, tone and audience decide; painted or "artistic" styles are only right when the story asks for them.
+Answer only with JSON: {"styles": ["<style id>", ...]}
+
+styles:
+${styleList.map(s => `- ${s.id}: ${s.name}`).join('\n')}
+---
+story or lyrics:
+${storyText}`,
+        instructions: 'You are a film director choosing the visual style of a music video. Answer only with the JSON.',
+    }
+}
+
+const lookRules =`Describe in 120-180 words, as plain prose:
+- Format and style: name the medium first and be specific, in terms of how it is shot, drawn or built (e.g. "live action shot on 35mm film", "2D anime in the style of 90s cel animation", "Studio Ghibli hand-painted anime", "Pixar-style 3D animation", "stop-motion with visible puppet seams", "grainy VHS found-footage horror", "neon-soaked cyberpunk live action", "black ink wash drawing", "hand-painted dark fantasy oil painting").
 - World: architecture, landscapes, materials and textures of the world.
 - Color palette and lighting: dominant colors, light sources, contrast, time of day.
 - Camera language: typical shot types, lens feel and camera movement (e.g. slow dolly-ins, low-angle wide shots, handheld close-ups).
@@ -130,7 +147,8 @@ ${lookRules}
 story:
 ${storySummary}`
             : `Design the visual look for a film of the following story. It will be generated with the MiniMax H3 video model.
-Pick ONE format and style that fits the story best (e.g. photorealistic live action, painterly art film, 2D anime, comic/graphic novel, stop-motion, 3D animation) and commit to it - never mix styles.
+Pick ONE format and style and commit to it - never mix styles.
+Choose it from the story's genre, era, tone and audience, not from what merely looks artistic: a thriller or horror story may call for gritty live action or found footage, a fairy tale for hand-painted or stop-motion, a comedy for 3D or 2D animation, a sci-fi story for sleek live action or neon cyberpunk. Painterly looks are one option among many - only choose one when the story really asks for it. Before answering, weigh at least three different formats (e.g. live action, 2D anime, 3D animation, stop-motion, comic, painting) and pick the best fit.
 
 ${lookRules}
 ---

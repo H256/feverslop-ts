@@ -8,13 +8,14 @@ import type {Resolution} from "../comfy/helpers.ts";
 import {defaults, languageName, type ProjectConfig} from "../lib/config.ts";
 import {printBanner, styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
+import {STYLES} from "../lib/styles.ts";
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.log(`No terminal to ask in - create projects/<id>/input/ by hand instead:
   input/song.wav or song.mp3      a song you already have
   input/idea.txt                  or a song idea, for: bun index.ts <id> --render=song
   input/lyrics.txt and/or input/story-idea.txt   at least one, unless idea.txt writes the lyrics for you
-  input/style.txt                 optional visual style
+  input/style.txt                 optional visual style - see docs/style-examples.md (picked from the list if missing)
   config.json                     optional - see docs/comfyui.md`)
     process.exit(1)
 }
@@ -67,7 +68,7 @@ const lyricsChoice = answer(await p.select({
 }))
 const lyrics = lyricsChoice === 'lyrics' || lyricsChoice === 'both' ? await askText('Lyrics', {required: true}) : undefined
 const storyIdea = lyricsChoice === 'story' || lyricsChoice === 'both' ? await askText('Story idea', {required: true}) : undefined
-const style = await askText('Visual style hint (optional - the look is designed from the story otherwise)')
+const style = await askStyle()
 
 // project settings
 const config: Partial<ProjectConfig> = {}
@@ -139,6 +140,34 @@ async function askText(label: string, options: { required?: boolean } = {}): Pro
         return (await Bun.file(path).text()).trim()
     }
     return multiline(label)
+}
+
+/** The film style for input/style.txt: typed, read from a file, taken from the built-in list - or left to the first run. */
+async function askStyle(): Promise<string | undefined> {
+    const mode = answer(await p.select({
+        message: 'Visual style',
+        options: [
+            {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
+            {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
+            {value: 'type', label: 'Type it now'},
+            {value: 'file', label: 'Read from a file'},
+        ],
+    }))
+    if (mode === 'skip') return undefined
+    if (mode === 'file') {
+        const path = answer(await p.text({message: 'File path', validate: v => v && existsSync(v) ? undefined : 'file not found'}))
+        return (await Bun.file(path).text()).trim()
+    }
+    if (mode === 'type') return multiline('Visual style')
+
+    const groups = [...new Set(STYLES.map(s => s.group))]
+    const group = answer(await p.select({message: 'Kind of style', options: groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`}))}))
+    const picked = answer(await p.select({
+        message: group,
+        maxItems: 12,
+        options: STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})),
+    }))
+    return STYLES.find(s => s.id === picked)!.text
 }
 
 /**

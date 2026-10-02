@@ -196,13 +196,19 @@ lyrics) without touching an existing `song.wav`. Without `idea.txt`, the pipelin
 
 ### Style
 
-Without `input/style.txt` the look brief (step 6) picks a format and style that fits the story. With it, the look
+Without `input/style.txt` the first run has the LLM shortlist 5 fitting styles from [lib/styles.ts](lib/styles.ts) and
+draws one of them at random - so the look fits the story without following the LLM's favorites. It is written to
+`input/style.txt` once; edit or replace the file afterwards (the look brief is then redone). `bun run init` can also
+set the style up front: typed, from a file, or chosen from the list. With the file, the look
 brief keeps your medium, style and named references exactly and only extends them - world, palette, lighting, camera
 language, texture - so every picture and clip prompt stays in your style. A sentence or two is enough:
 
 ```
 Dark gothic oil painting in the manner of Caravaggio, heavy chiaroscuro, candlelight only.
 ```
+
+[docs/style-examples.md](docs/style-examples.md) lists all the built-in styles (classic to modern live action, anime,
+2D/3D animation, stop-motion, painted and found-media looks) to copy into `style.txt`.
 
 The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_SEC` (10 seconds - the H3 node
 actually renders such a slot as 10.13 s, see [The final video](#the-final-video)).
