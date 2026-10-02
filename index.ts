@@ -16,10 +16,11 @@ import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
+import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 import {projectExists, validProjectId} from "./lib/project-setup.ts";
 import {
     castPrompt, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
-    locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, summaryPrompt,
+    locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
@@ -179,7 +180,27 @@ const songFile = existsSync(generatedSongFile) ? generatedSongFile
 const lyrics = await readInput('lyrics.txt')
 const musicStyle = await readInput('music-style.txt')
 const storyIdea = await readInput('story-idea.txt')
-const style = await readInput('style.txt')
+let style = await readInput('style.txt')
+// No style.txt on a project that has no look yet: the LLM shortlists a few styles from the list (lib/styles.ts) that
+// fit the story, one of them is drawn at random - so the look neither follows the LLM's favorites nor ignores the
+// story. It's written out like lyrics.txt/music-style.txt, so it is only picked once and can be edited or swapped.
+// A project whose look is already cached keeps it - writing the file now would redo the look brief.
+if (!style && project.data.lookBrief === undefined) {
+    const storyText = [storyIdea, lyrics, idea].find(Boolean)
+    let candidates: FilmStyle[] = []
+    if (storyText) {
+        try {
+            const shortlist = await askJson<{ styles: string[] }>(styleShortlistPrompt(storyText, shuffledStyles(), 5))
+            candidates = stylesById(shortlist.styles)
+        } catch (e) {
+            log.step('Style', styles.muted(`no shortlist from the LLM (${e instanceof Error ? e.message : e}) - picking from the whole list`))
+        }
+    }
+    const picked = pickStyle(candidates.length ? candidates : undefined)
+    style = picked.text
+    await Bun.write(project.input('style.txt'), style)
+    log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
+}
 const lyricSections = parseLyricSections(lyrics)
 log.step('Lyrics', lyrics ? styles.muted(`${lyricSections.length} sections: ${lyricSections.map(s => s.label).join(' · ')}`) : styles.muted('(none)'))
 log.step('Story idea', storyIdea || styles.muted('(none)'))
