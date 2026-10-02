@@ -510,10 +510,17 @@ for (const slot of timeline.slots) {
 // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
 const beatProps = propActivity ? propActivityPerBeat({slots: timeline.slots, mapping, beats, characters: cast.characters}, propActivity) : undefined
+// All beats in one call don't fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So
+// the beats are asked in blocks, one after the other. The cut is only ever between two beats - all clips of a scene
+// belong to one beat, so everything that has to stay continuous is in one call - and a block sees the finished shots of
+// the beat before it and the summary of the beat after it, so a scene change on a block boundary still connects.
+const MOMENT_BLOCK_BEATS = 8
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
-    const extracted = await askJson<{ moments: Record<string, string[]> }>({
-        reasoning: 'high',
+    type Beat = (typeof beats)[number]
+    const askBlock = (block: Beat[], finished: { beat: Beat, shots: string[] } | undefined, after: Beat | undefined) => askJson<{ moments: Record<string, string[]> }>({
+        reasoning: 'medium',
+        // thinking at medium easily takes 8k tokens on its own, the shots come on top
         maxTokens: 16384,
         input: `For every story beat below, expand it into a shot list for a music video: exactly "shotsNeeded" short sentences, in order, one concrete visible action per shot.
 
@@ -533,14 +540,19 @@ Rules:
 - Every shot is its own short, separately rendered clip - a shot never gets to finish an action in a later shot, even later shots of the same beat. So an action that travels somewhere (a weapon swing, a lunge, a breath or thrown object) must also land and resolve within THAT SAME shot's sentence - never end a shot on a motion that's still only underway ("swings his hammer, the head descending toward X" with no impact described) and leave the impact for the next shot to show, or it renders as the motion stalling and reversing instead of completing. Combine the wind-up and the result in one sentence when they belong together, the way the strong examples above already do.
 - Any effect that crosses space to hit someone - a breath of fire, a thrown weapon, a spray of debris, a spell - must say which way it travels and that it lands on the character's front, and that character must be described as facing (or turning to face) where it came from. Never leave the relative facing of attacker and target unstated for this kind of hazard: unspecified, it can render as hitting the target's back or from an impossible angle.
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
-- Name characters by their name (not pronouns), so every shot reads on its own. Use the character's name exactly as spelled and capitalized in "characterIds"/"castProps" below - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
+- Name characters by their "name" from "cast" below (not pronouns, and never the "id" that "characterIds"/"castProps" use - it only says who is meant), so every shot reads on its own. Use the name exactly as spelled and capitalized in "cast" - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
 
 Answer only with JSON: {"moments": {"<beatId>": ["shot 1 action", "shot 2 action", ...]}}
 ---
 castProps: ${JSON.stringify(Object.fromEntries(cast.characters.filter(c => c.prop).map(c => [c.id, c.prop])))}
-beats:
-${JSON.stringify(beats.map(b => ({
+cast: ${JSON.stringify(cast.characters.map(c => ({id: c.id, name: c.name})))}
+${finished ? `Already written - the finished shots of the beat "${finished.beat.id}", which comes right before the first beat below (do not write them again): ${JSON.stringify(finished.shots)}
+The first beat below follows directly after them: start from the state they end in - where everyone stands, what they hold - unless it opens a new scene.
+` : ''}${after ? `For orientation only - the beat after the last beat below ("${after.id}"): ${after.summary}
+Let the last shot of the last beat below lead toward it, and write nothing for it.
+` : ''}beats (write shots only for these):
+${JSON.stringify(block.map(b => ({
             id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
             shotsNeeded: shotCounts[b.id] ?? 1,
             ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
@@ -548,12 +560,21 @@ ${JSON.stringify(beats.map(b => ({
         instructions: 'You are a music video director turning story beats into a shot list. Answer only with JSON.',
     })
 
+    const blockCount = Math.ceil(beats.length / MOMENT_BLOCK_BEATS)
+    const blockSize = Math.ceil(beats.length / blockCount) // evenly sized - never a last block with a single beat
     const result: Record<string, string[]> = {}
-    for (const beat of beats) {
-        const needed = shotCounts[beat.id] ?? 1
-        const list = extracted.moments[beat.id]
-        if (!list?.length) continue // falls back to the legacy spread for this beat
-        result[beat.id] = Array.from({length: needed}, (_, j) => list[Math.min(j, list.length - 1)]!)
+    for (let from = 0; from < beats.length; from += blockSize) {
+        const block = beats.slice(from, from + blockSize)
+        const before = beats[from - 1]
+        const after = beats[from + blockSize]
+        if (blockCount > 1) log.step(`Beats ${from / blockSize + 1}/${blockCount}`, styles.muted(`${block[0]!.id} - ${block.at(-1)!.id}`))
+        const extracted = await askBlock(block, before && result[before.id] ? {beat: before, shots: result[before.id]!} : undefined, after)
+        for (const beat of block) {
+            const needed = shotCounts[beat.id] ?? 1
+            const list = extracted.moments?.[beat.id]
+            if (!list?.length) continue // falls back to the legacy spread for this beat
+            result[beat.id] = Array.from({length: needed}, (_, j) => list[Math.min(j, list.length - 1)]!)
+        }
     }
     return result
 })
