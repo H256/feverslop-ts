@@ -227,6 +227,27 @@ export function propActivityPerBeat(
     return result
 }
 
+// Per beat: one flag per shot of that beat for whether a lyric is sung during it (slot.vocals, slot-relative times),
+// plus who the singers are - grounding for step 11b so a character only sings, cries out or voices anything on a shot
+// where the song's vocals are actually audible. Without it a beat summary like "the soprano's voice joins" ends up
+// as a rendered singing mouth over an instrumental stretch, since there is no vocals track to contradict it.
+// Beats without singers on screen never appear here.
+export function singingPerBeat(
+    {slots, mapping, beats, singing}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing'>,
+): Record<string, { singerIds: string[], singingPerShot: boolean[] }> {
+    if (!singing) return {}
+    const windows = shotWindowsPerBeat({slots, mapping, beats})
+    const slotById = new Map(slots.map(s => [s.id, s]))
+    const result: Record<string, { singerIds: string[], singingPerShot: boolean[] }> = {}
+    for (const beat of beats) {
+        const singerIds = singing.singers.filter(id => beat.characterIds.includes(id))
+        if (!singerIds.length) continue
+        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => slotById.get(m.slotId)?.vocals?.map(v => ({start: slotById.get(m.slotId)!.start + v.start, end: slotById.get(m.slotId)!.start + v.end})) ?? [])
+        result[beat.id] = {singerIds, singingPerShot: (windows[beat.id] ?? []).map(w => isActive(w, sung))}
+    }
+    return result
+}
+
 export function buildClipRequests(input: Input): ClipRequest[] {
     const {slots, mapping, beats, characters, music, shotMoments} = input
     const beatById = new Map(beats.map(b => [b.id, b]))
@@ -468,6 +489,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             return shots.map((shot, j) => {
                 const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
                 const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment, j)
+                // a singer in frame while nobody sings (an instrumental stretch, or between lines) gets a concrete mouth
+                // position, same reasoning as the idle prop poses - the story text may still say they "cry out". Only the
+                // lip-sync is ruled out, not the emotion: eyes, brows and posture stay free to follow the shot
+                const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
+                const silentClause = silentSingers.length
+                    ? ` ${joinAnd(silentSingers.map(s => `${s.label}, ${s.name},`))} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing the emotion of the moment through the eyes and brows.`
+                    : ''
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const opening = j === 0
@@ -486,13 +514,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
                     const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                    return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}${propClause}`.trim()
+                    return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
                     ? ` When <Audio 1> reaches the phrase <d>[${language}] ${lines.map(normalizeLyric).join(' ')}</d>, the movement lands on the beat of the music.`
                     : ''
-                return `${opening}${inFrame} ${moment}${lyrics}${propClause}`.trim()
+                return `${opening}${inFrame} ${moment}${lyrics}${silentClause}${propClause}`.trim()
             })
         }
 
