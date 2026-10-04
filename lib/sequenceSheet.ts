@@ -56,8 +56,9 @@ export function characterSequencePrompt(description: string, frames = SEQUENCE_F
 /** Five locked-off tripod views of one location from its hero image: front, right side, rear, left side, wide establishing. */
 export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(5, frames)
-    const duration = frames / FPS
-    const prompt = `The same location throughout: ${description}. Create a ${duration.toFixed(1)}-second reference take with 5 locked-off tripod views joined by hard cuts: front, right side, rear, left side and a wide establishing view. Keep the camera level and static in every shot. Preserve architecture, materials, props, lighting and layout. No people, text, watermark or unrelated structures.`
+    // every beat is its own locked-off setup at an explicit cut time - a bare list of views reads as one continuous
+    // camera move around the place instead of separate shots
+    const prompt = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a new locked-off camera position at the right side of the location, looking at it from the right, a completely different viewpoint. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a new locked-off camera position behind the location, looking back across it from the rear. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a new locked-off camera position at the left side of the location, looking at it from the left. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a wide establishing view showing the whole location from a distance. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot. No people, text, watermark or unrelated structures.`
     return {prompt, beatTimes}
 }
 
