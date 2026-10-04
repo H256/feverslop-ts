@@ -133,7 +133,7 @@ projects/<project-id>/
   assets/             reference pictures, rendered or your own - never overwritten;
                       clips/<clip-id>_ff.png, _lf.png: first and last frame of every rendered clip
   videos/             rendered clips - never overwritten
-  final.mp4           the assembled music video - rebuilt by --render=final
+  <project-id>.mp4    the assembled music video - rebuilt by --render=final (projects from before this: final.mp4, left alone)
   timeline.mlt / .osp the cut as an editable timeline for Shotcut/Kdenlive / OpenShot - written by --export
   gallery.html        overview page of the generated assets (tabs: cast, storyboard, videos) - written by --gallery
   project.json        all generated data, step by step
@@ -149,7 +149,7 @@ bun index.ts                          # without an id: the author's own project 
 bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
-bun index.ts --render=all             # also render with ComfyUI and assemble final.mp4, see below
+bun index.ts --render=all             # also render with ComfyUI and assemble <project-id>.mp4, see below
 bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
 bun index.ts --legacy-moments         # skip step 11b, spread beat.moments across shots the old way
@@ -283,10 +283,10 @@ The reference pictures and the clips can be rendered directly on one or more Com
 are saved into the project:
 
 ```bash
-bun index.ts --render=all                       # missing pictures, missing clips, then final.mp4
+bun index.ts --render=all                       # missing pictures, missing clips, then <project-id>.mp4
 bun index.ts --render=images                    # Krea 2 reference pictures -> assets/
 bun index.ts --render=videos                    # MiniMax H3 clips -> videos/
-bun index.ts --render=final                     # assemble final.mp4 from the rendered clips
+bun index.ts --render=final                     # assemble <project-id>.mp4 from the rendered clips
 bun index.ts --render=videos --only=slot-001    # just some clips, to try things out
 ```
 
@@ -386,7 +386,7 @@ The full guide, with the options every workflow gets, the helpers and a checklis
   connection changes nothing. If FeverSlop TS stops while ComfyUI is still rendering (Ctrl+C, crash, sleep), the next
   run picks the job up again via `<file>.pending.json` instead of rendering it twice.
 - **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full 10 s
-  slot renders 10.13 s; the extra frames are cut off in `final.mp4`. Lower `MAX_CLIP_SEC` if your hardware limit is
+  slot renders 10.13 s; the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
   strict - the rounding adds up to 16 frames (0.67 s).
 - **Model names are fixed in the workflow files.** Change them there, or copy a workflow under a new name.
 - **Uploads and results pile up on the server** under `feverslop-ts/<project-id>/` in ComfyUI's `input/` and `output/`.
@@ -400,7 +400,7 @@ More, and troubleshooting: [docs/comfyui.md](docs/comfyui.md#things-to-know).
    under the listed name in the project folder (`assets/locations/<id>.png`, `assets/characters/<id>.png`).
 2. Render the clips with `--render=videos` - or send every `output/clips/slot-XXX.json` to MiniMax H3 with the pictures
    and the audio from `assets`, **in the listed order** - the prompt refers to them by number.
-3. Assemble them with `--render=final` into `final.mp4`. Rendered elsewhere? Save the clips as `videos/slot-XXX.mp4`
+3. Assemble them with `--render=final` into `<project-id>.mp4`. Rendered elsewhere? Save the clips as `videos/slot-XXX.mp4`
    first - each needs at least the clip's `frames`, starting at the audio of its `frameStart`.
 
 Or all three at once: `bun index.ts --render=all`.

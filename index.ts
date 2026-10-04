@@ -718,7 +718,7 @@ if (render.has('images') || render.has('videos')) {
 if (render.has('final')) {
     log.section('14 · ASSEMBLING THE FINAL VIDEO')
     log.step('Audio', config.songAudio ? 'original song' : styles.muted('the clips\' own audio ("songAudio": false)'))
-    const target = join(project.dir, 'final.mp4')
+    const target = join(project.dir, `${project.id}.mp4`)
     const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
 }

@@ -2,7 +2,7 @@
 // files on disk and project.json, written next to them as gallery.html with relative links, so it opens straight
 // from the folder without a server. Only what exists is listed; nothing here renders anything.
 import {existsSync, readdirSync} from "node:fs";
-import {join} from "node:path";
+import {basename, join} from "node:path";
 import type {Project} from "./project.ts";
 import {boundaryFrameAsset} from "./compose.ts";
 
@@ -58,7 +58,8 @@ function storyboardCards(dir: string, data: Project): Card[] {
 }
 
 function videoCards(dir: string, data: Project): Card[] {
-    const final = media(dir, 'final.mp4')
+    // the final video is named after the project - projects rendered before that still have a final.mp4
+    const final = media(dir, `${basename(dir)}.mp4`) ?? media(dir, 'final.mp4')
     const clips = (data.timeline?.slots ?? []).flatMap(slot => {
         const file = media(dir, `videos/${slot.id}.mp4`)
         return file ? [{title: slot.id, subtitle: `${slot.section} · ${slot.start.toFixed(1)}s – ${slot.end.toFixed(1)}s`, videos: [{src: file}]}] : []

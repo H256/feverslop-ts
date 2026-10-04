@@ -65,11 +65,11 @@ Writes `input/lyrics.txt` + `input/song.wav`. Listen to it under `projects/<id>/
 bun index.ts <id> --render=all
 ```
 
-= pictures (Krea 2) + clips (MiniMax H3) + `final.mp4`. Needs a reachable ComfyUI server (`bun run setup comfy`).
+= pictures (Krea 2) + clips (MiniMax H3) + `<project-id>.mp4`. Needs a reachable ComfyUI server (`bun run setup comfy`).
 
 ## 5. Listen to the result
 
-`projects/<id>/final.mp4` - done. To test individual steps:
+`projects/<id>/<id>.mp4` - done. To test individual steps:
 
 ```bash
 bun index.ts <id>                                  # just planning, nothing rendered

@@ -84,7 +84,7 @@ Typical order:
 2. `bun index.ts --render=images` - render the pictures, look at them in `assets/`, delete the ones you don't like
    and run again until the cast looks right.
 3. `bun index.ts --render=videos --only=slot-001,slot-012` - try a few clips.
-4. `bun index.ts --render=all` - render the remaining clips and assemble `final.mp4`.
+4. `bun index.ts --render=all` - render the remaining clips and assemble `<project-id>.mp4`.
 
 Or everything in one go: `bun index.ts --render=all`.
 
@@ -162,7 +162,7 @@ Video frame rate is always 24 fps.
 
 ### Song audio
 
-`songAudio` decides the soundtrack of `final.mp4`:
+`songAudio` decides the soundtrack of the final video:
 
 - `true` (default): the original `song.wav` is laid under the whole video and replaces whatever audio came back
   with the clips. Best quality, and the audio is exactly the song you put in.
@@ -305,7 +305,7 @@ soundtrack stay on the full mix. A clip with a singer is skipped with a warning 
 2. Every clip is cut to exactly its frames, from its first frame on; the extra frames at the end are dropped.
 3. All clips are joined in order, scaled to the size of the first clip if the sizes differ.
 4. The soundtrack is added: the original song (`"songAudio": true`) or the clips' own audio, cut to the same frames.
-5. The result is checked: it must have exactly as many frames as the song, and is saved as `final.mp4`.
+5. The result is checked: it must have exactly as many frames as the song, and is saved as `<project-id>.mp4`.
 
 ### Several servers
 
@@ -384,7 +384,7 @@ projects/<project-id>/
   videos/
     slot-001.mp4               rendered clip, full render length, with its part of the song as audio
     slot-001.mp4.json
-  final.mp4                    the assembled music video
+  <project-id>.mp4             the assembled music video
 ```
 
 The `.json` next to each clip records how it was made:
@@ -408,12 +408,12 @@ With `sequenceSheets: false`, a picture's `.json` records the workflow, seed, re
 sequence workflow, frame count, beat timestamps and the turnaround prompt instead.
 
 Every clip also leaves its **boundary frames** in `assets/clips/`: `<clip-id>_ff.png` (frame 0) and `<clip-id>_lf.png`
-(frame `frames - 1`) - the first and last frame the clip contributes to `final.mp4`, not the padding the model
+(frame `frames - 1`) - the first and last frame the clip contributes to the final video, not the padding the model
 renders past it. They are the preparation for extending or bridging clips later with a first-/last-frame workflow
 (fflf2va). They are saved right after a clip is downloaded; clips rendered before get theirs on the next
 `--render=videos` run. A clip rendered again rewrites its frames.
 
-`final.mp4` is H.264 (CRF 18) at 24 fps with AAC audio at 320 kbit/s. Unlike pictures and clips it is rebuilt every
+`<project-id>.mp4` is H.264 (CRF 18) at 24 fps with AAC audio at 320 kbit/s. Unlike pictures and clips it is rebuilt every
 time `--render=final` runs - it's always made from the current clips.
 
 On the ComfyUI server, under the `feverslop-ts/<project-id>/` subfolder of its `input/` (uploads) and `output/`
@@ -507,7 +507,7 @@ server.
 
 **Clips are rendered slightly longer than their slot.**
 The H3 node only renders 5 + 17·k frames, so the frame count is rounded up: an 8.5 s slot renders 209 frames
-(8.71 s), a full 10 s slot 243 frames (10.13 s). The extra frames are cut off again in `final.mp4` - see
+(8.71 s), a full 10 s slot 243 frames (10.13 s). The extra frames are cut off again in the final video - see
 [frame-exact timing](#the-final-video-and-frame-exact-timing). The files in `videos/` keep the full render length. If
 your hardware can't render more than 10 s, set `MAX_CLIP_SEC` in `index.ts` a little lower - the rounding needs up to
 16 extra frames (0.67 s).
@@ -565,5 +565,5 @@ under the same URL or name. Changing both its URL and its name makes its pending
 | `the job queued at … is no longer on <server> - rendering again` | Same, noticed at the start of a run: the old job is gone, a new one is queued.                                                 |
 | `Can't assemble - N clip(s) not rendered yet`              | Render the missing clips first: `--render=videos` or `--render=all`.                                                                   |
 | `videos/slot-XXX.mp4 has N frames, but the clip needs M`   | The clip was rendered too short (e.g. with an old workflow or changed timeline) - delete it and render it again.                       |
-| Lips are off in `final.mp4`                                 | Check that the clip's `.json` has the same `frameStart` / `frames` as `output/clips/<id>.json` - if the timeline changed after the render, delete and re-render the clip. |
+| Lips are off in the final video                             | Check that the clip's `.json` has the same `frameStart` / `frames` as `output/clips/<id>.json` - if the timeline changed after the render, delete and re-render the clip. |
 | `the output node saved no .png file` (or `.mp4`)           | The workflow's `output` node isn't the node that saves the file, or it saves a different file type - see [custom-workflows.md](custom-workflows.md#the-output-node). |
