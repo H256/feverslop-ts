@@ -622,6 +622,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 '',
                 'detailed_description:',
                 styleOpening(lookBrief),
+                ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, drapes, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),
                 ...shotTexts,
