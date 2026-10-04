@@ -1,6 +1,7 @@
 import type {Assignment, Character, Location, MusicMap, PropActivity, PropStem, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {formatTimestamp, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
+import type {ProjectConfig} from "./config.ts";
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
 // Format: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
@@ -47,12 +48,14 @@ export type ClipRequest = {
     frames: number,             // frames this clip contributes to the final video
     section: string,
     beatId: string,
+    // the clip goes on from the last frame of this clip (`<Picture N>` below, kind 'frame'): it can only be rendered after it
+    startsFrom?: string,
     shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
     // performance mode: what is sung on screen and by whom, times relative to the clip start
     vocals?: { at: number, end: number, line: number, text: string, singers: { id: string, subject: string, speaker: string }[] }[],
     assets: {
         // kind, id, name and description: what the prompt says about the picture - for debugging
-        pictures: { label: string, file: string, subject: string, kind: 'character' | 'location', id: string, name: string, description: string }[],
+        pictures: { label: string, file: string, subject: string, kind: 'character' | 'location' | 'frame', id: string, name: string, description: string }[],
         // stem: which isolated stem this track was cut from (always set - see the Track comment below) -
         // 'song' is the whole, unseparated song, used as the cut/blocking anchor when stems aren't available
         audio: { label: string, file: string, songStart: number, songEnd: number, stem?: 'vocals' | PropStem | 'song' }[],
@@ -82,7 +85,12 @@ export type Input = {
     // whether the song's stems were actually separated (config.alignLyrics) - when false, no drums/vocals/prop
     // stem is available and every clip's anchor track falls back to the whole, unseparated song instead
     stemsAvailable: boolean,
+    continuity?: ProjectConfig['continuity'],   // default 'auto'
 }
+
+// Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
+export const isContinuous = (beat: StoryBeat, mode: ProjectConfig['continuity'] = 'auto') =>
+    mode === 'always' || (mode === 'auto' && beat.continuous === true)
 
 // Framings per beat kind, used in order for the shots of a clip
 const framings: Record<StoryBeat['kind'], string[]> = {
@@ -275,7 +283,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const shotCount = shotCountFor(slot, beat, opensScene)
             const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
             shotCursor += shotCount
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, input))
+            // a clip of a continuous beat starts on the last frame of the clip before it
+            const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input))
         })
         stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
     }
@@ -291,7 +301,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -306,7 +316,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id))]
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
-            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0))
+            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom ? 1 : 0))
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -341,6 +351,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         }
 
         const {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices} = buildSubjects()
+        // the last frame of the previous clip, after the subjects' pictures: a standalone <Picture N>, the first frame of [Shot 1]
+        const framePicture = startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
 
         // The vocals track's audio still covers the whole clip (see tracks below - same "always full clip length"
         // reasoning), but the prompt has to say in words where inside it the singing actually happens, or the
@@ -519,6 +531,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // repeats the location on every cut, not just the first shot - otherwise a shot with no location
                     // callout tends to fall back to the character reference pictures' plain grey background
                     : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
                 const inFrame = shot.focus.length
                     ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.${locationAnchor && smallGroup(shot.focus.length) ? ` ${locationAnchor} still visible behind them.` : ''}`
                     : ''
@@ -528,13 +541,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
                     const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                    return `${opening}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${propClause}`.trim()
+                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
                     ? ` When <Audio 1> reaches the phrase <d>[${language}] ${lines.map(normalizeLyric).join(' ')}</d>, the movement lands on the beat of the music.`
                     : ''
-                return `${opening}${inFrame} ${moment}${lyrics}${silentClause}${propClause}`.trim()
+                return `${opening}${fromFrame}${inFrame} ${moment}${lyrics}${silentClause}${propClause}`.trim()
             })
         }
 
@@ -551,7 +564,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // reads as the subjects vanishing and popping back in mid-scene. Only the opening clip gets it as-is.
             const sceneClause = opensScene
                 ? withLabels(beat.summary)
-                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.`
+                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
@@ -608,15 +621,17 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // standing trait to the video model, and it keeps them miming that action even in shots
                     // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
                     : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
+                ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd([locationSubject, ...castSubjects].filter(s => s !== undefined).map(s => s.label))}.`] : []),
                 ...tracks.map(trackDefinition),
                 '',
                 'summary:',
-                `[reference generation + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClauseFull}${vocalsTrack ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of ${vocalsTrack.label}.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of ${anchorTrack ? anchorTrack.label : 'the music'}.`,
+                `[reference generation${framePicture ? ' + keyframe completion' : ''} + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClauseFull}${vocalsTrack ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of ${vocalsTrack.label}.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of ${anchorTrack ? anchorTrack.label : 'the music'}.`,
                 '',
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
                     : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
+                ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
                 '',
@@ -649,6 +664,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             frames: frameAt(slot.end) - frameAt(slot.start),
             section: slot.section,
             beatId: beat.id,
+            ...(startsFrom ? {startsFrom} : {}),
             shots: shots.map(({focus, singers, moment, starting, continuing, ...shot}) => shot),
             ...(performing ? {
                 vocals: vocals.map(v => ({
@@ -662,7 +678,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             assets: {
                 // pictureId was resolved once in buildSubjects, together with the description bound to it - see the
                 // comment there for why they have to be resolved as one pair, not separately
-                pictures: subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                pictures: [
+                    ...subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                    ...(startsFrom ? [{label: framePicture!, file: boundaryFrameAsset(startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: startsFrom, name: `last frame of ${startsFrom}`, description: ''}] : []),
+                ],
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
                 audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem})),
             },
