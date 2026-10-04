@@ -89,6 +89,7 @@ export type TimedLine = {
     end: number,
     words: TimedWord[],
     confidence: number,             // 0-1, the share of the line's words found in the transcript
+    adlib?: boolean,                // not in lyrics.txt - sung words whisper heard on top of it (confidence: whisper's own)
 }
 export type LyricsTiming = { lines: TimedLine[] }
 
