@@ -173,6 +173,7 @@ built on it (and everything built on those):
 | `style.txt`                   | `lookBrief`                         |
 | `singers` in `config.json`    | `singing` (and so `beats`)          |
 | `lyricsLanguage`              | `transcript`                        |
+| `continuity` in `config.json` | `shotMoments`                       |
 
 ### Generating the song
 
@@ -311,6 +312,23 @@ bun index.ts --render=videos --only=slot-001    # just some clips, to try things
 
 How it works in detail: [docs/comfyui.md](docs/comfyui.md#the-final-video-and-frame-exact-timing).
 
+### Continuous scenes
+
+Every clip is rendered on its own, from the location sheet and the character pictures - so two clips of the same room
+can disagree about where the door is, and every clip boundary is a cut. A beat can be **continuous**: its clips then run
+on without a cut. The beats step (`beats`) may mark a beat `"continuous": true` (one unbroken take: a long walk, a slow
+reveal); `"continuity": "always"` in `config.json` does it for every beat, `"never"` for none.
+
+In a continuous beat each clip but the first gets the last frame of the clip before it (`assets/clips/<id>_lf.png`) as one
+more reference picture, written into the prompt as the first frame of `[Shot 1]` (`keyframe completion`), and the shot
+moments of the beat are written to follow each other without a restart. What follows from that:
+
+- The clips of a beat render **one after the other**, the beats next to each other. A clip whose predecessor isn't
+  rendered yet is skipped with a warning - run `--render=videos` again.
+- Rendering a clip again leaves the clips after it starting on its old last frame; the next run warns about each (delete
+  `videos/<id>.mp4` to render it again).
+- A changed `continuity` redoes `shotMoments`.
+
 ### config.json
 
 Settings per project, all optional - read at every run and checked field by field:
@@ -319,6 +337,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 {
   "singers": [],
   "lyricsLanguage": "en",
+  "continuity": "auto",
   "seed": -1,
   "imageResolution": -1,
   "videoResolution": -1,
@@ -337,6 +356,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `singers`                             | `[]` = clip mode (default), `["auto"]` = the LLM picks the lead singer, `["Thorin", "brenna"]` = these characters, by name or id - see [Singing characters](#singing-characters) |
 | `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper, the `<d>[English]` lyrics tag, and the song brief (`--render=song`) |
 | `alignLyrics`                         | `true` = stems, transcript and real lyric timing; default: `true` when someone sings, else `false`. Set it to `true` in clip mode to place the lyric cues at the right moments |
+| `continuity`                          | `"auto"` (default) = the beats the story planning marked `continuous` run on without a cut, `"always"` = every clip but the first of each beat starts on the last frame of the clip before it, `"never"` = every clip is its own cut - see [Continuous scenes](#continuous-scenes) |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
 | `imageWorkflow`, `videoWorkflow`, `songWorkflow` | a workflow file in `comfy/workflows/`, without `.ts`                                              |

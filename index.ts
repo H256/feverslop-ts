@@ -7,7 +7,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
-import {buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
+import {buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
@@ -224,6 +224,8 @@ await project.syncInputs({
     'style.txt': {value: style, steps: ['lookBrief'], assumed: ''},
     singers: {value: JSON.stringify(config.singers), steps: ['singing'], assumed: '[]'},
     lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
+    // which beats run on without a cut changes what their shots have to tell
+    continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
 })
 // the sections are named after the lyrics tags
 if (project.data.music && lyricSections.length && project.data.music.sections.map(s => s.label).join('|') !== lyricSections.map(s => s.label).join('|')) {
@@ -418,6 +420,7 @@ For every beat give:
 - "intensity": 0.0 (calm, quiet) to 1.0 (climax), used to match the loudness of the music.
 - "weight": 1-5, how much screen time the beat deserves.
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
+- "continuous": true only if the beat is ONE unbroken take that runs through all its video clips without a cut - the camera and the action simply go on from clip to clip (a long walk through a room, a slow reveal, one action that takes many seconds). Use it sparingly: false (also when omitted) for a beat that is better cut together from several shots and angles.
 - "stateAfter": short facts that are true after this beat and must stay visible later, e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
 - "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
@@ -456,6 +459,7 @@ ${storyBase}`,
             moments: beat.moments?.length ? beat.moments : [beat.summary],
             intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
             weight: Math.max(1, Number(beat.weight) || 1),
+            continuous: beat.continuous === true,
             stateAfter: beat.stateAfter ?? [],
             ...(Object.keys(groupSize).length ? {groupSize} : {}),
         }
@@ -562,6 +566,7 @@ Rules:
 - Name the visible facial reaction the shot's action produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace, a flicker of relief) whenever the moment calls for one - a shot with no facial reaction described tends to render with the same flat expression as every other shot of that character.
 - Every shot is its own short, separately rendered clip - a shot never gets to finish an action in a later shot, even later shots of the same beat. So an action that travels somewhere (a weapon swing, a lunge, a breath or thrown object) must also land and resolve within THAT SAME shot's sentence - never end a shot on a motion that's still only underway ("swings his hammer, the head descending toward X" with no impact described) and leave the impact for the next shot to show, or it renders as the motion stalling and reversing instead of completing. Combine the wind-up and the result in one sentence when they belong together, the way the strong examples above already do.
 - Any effect that crosses space to hit someone - a breath of fire, a thrown weapon, a spray of debris, a spell - must say which way it travels and that it lands on the character's front, and that character must be described as facing (or turning to face) where it came from. Never leave the relative facing of attacker and target unstated for this kind of hazard: unspecified, it can render as hitting the target's back or from an impossible angle.
+- A beat with "continuous": true is one unbroken take: its shots follow each other without a cut, and a clip starts exactly on the last frame of the clip before. Every shot goes on from the exact state the one before ends in - same place, same people in the same positions, same camera subject - never a new angle, a new setting or a restart of the action.
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
 - Name characters by their "name" from "cast" below (not pronouns, and never the "id" that "characterIds"/"castProps" use - it only says who is meant), so every shot reads on its own. Use the name exactly as spelled and capitalized in "cast" - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
@@ -578,6 +583,7 @@ Let the last shot of the last beat below lead toward it, and write nothing for i
 ` : ''}beats (write shots only for these):
 ${JSON.stringify(block.map(b => ({
             id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
+            ...(isContinuous(b, config.continuity) ? {continuous: true} : {}),
             shotsNeeded: shotCounts[b.id] ?? 1,
             ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
             ...(beatSinging[b.id] ? {singing: beatSinging[b.id]} : {}),
@@ -629,6 +635,7 @@ const clips = buildClipRequests({
     shotMoments,
     propActivity,
     stemsAvailable: Boolean(stems),
+    continuity: config.continuity,
 })
 
 const outputDir = join(project.dir, 'output')
@@ -710,7 +717,11 @@ if (render.has('images') || render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
         const selected = clips.filter(c => only.size === 0 || only.has(c.id))
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
-        await renderAll(selected, clip => renderer.renderClip(clip, stemFiles))
+        // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
+        // each chain next to the others
+        await renderAll(clipChains(selected), async chain => {
+            for (const clip of chain) await renderer.renderClip(clip, stemFiles)
+        })
     }
 }
 
@@ -736,6 +747,17 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
+
+// Runs of clips where each one starts on the last frame of the one before (ClipRequest.startsFrom), in song order
+function clipChains(clips: ClipRequest[]): ClipRequest[][] {
+    const chains: ClipRequest[][] = []
+    for (const clip of clips) {
+        const chain = clip.startsFrom ? chains.find(c => c.at(-1)!.id === clip.startsFrom) : undefined
+        if (chain) chain.push(clip)
+        else chains.push([clip])
+    }
+    return chains
+}
 
 /**
  * Runs all renders and lets the others finish when one fails - their jobs are on the servers already.

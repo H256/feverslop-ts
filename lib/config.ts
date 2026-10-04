@@ -24,6 +24,9 @@ export type PlanConfig = {
     singers: string[],              // [] = clip mode, ["auto"] = the LLM picks, or character names / ids
     lyricsLanguage: string,         // ISO 639-1 code, for Whisper and the <d>[Language] tag
     alignLyrics: boolean,           // stems + transcript + real lyric timing - default: on when someone sings
+    // clips of one beat that run on without a cut start on the previous clip's last frame: "auto" = the beats the story
+    // planning marked as one continuous take, "always" = every clip but the first of each beat, "never" = every clip is its own cut
+    continuity: 'auto' | 'always' | 'never',
 }
 
 // a project may use another model than the settings - never another server or key
@@ -44,6 +47,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     sequenceWorkflow: 'h3-sequence-to-sheet',
     singers: [],
     lyricsLanguage: 'en',
+    continuity: 'auto',
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
@@ -91,6 +95,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.lyricsLanguage !== 'string' || !languageName(config.lyricsLanguage)) {
         fail(`lyricsLanguage must be a language code like "en" or "de", got ${JSON.stringify(config.lyricsLanguage)}`)
     }
+    if (!['auto', 'always', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "always" or "never", got ${JSON.stringify(config.continuity)}`)
     if (typeof config.alignLyrics !== 'boolean') fail(`alignLyrics must be true or false, got ${JSON.stringify(config.alignLyrics)}`)
     if (config.singers.length && !config.alignLyrics) fail('singers need the lyrics timing - remove "alignLyrics": false')
 

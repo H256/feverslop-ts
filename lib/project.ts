@@ -27,6 +27,9 @@ export type StoryBeat = {
     kind: 'establish' | 'build' | 'hit' | 'release',
     lyricAnchor?: string,           // old projects only - beats follow the song's time, not its sections
     stateAfter: string[],           // continuity facts that are true after this beat
+    // the beat is one unbroken take: each of its clips goes on from the last frame of the one before, with no cut between
+    // them (config.continuity). Without it - the default - every clip of the beat is its own cut
+    continuous?: boolean,
     // for a group character (Character.isGroup) in characterIds: how many distinct individuals of that group are
     // visible together on screen during this beat - drives how many member variant images are worth generating
     groupSize?: Record<string, number>,

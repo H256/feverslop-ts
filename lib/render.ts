@@ -1,5 +1,5 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
-import {existsSync, mkdirSync, renameSync, rmSync} from "node:fs";
+import {existsSync, mkdirSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join} from "node:path";
 import {log, startSpinner, styles} from "./log.ts";
 import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
@@ -281,11 +281,17 @@ export class Renderer implements Disposable {
         const target = join(this.projectDir, file)
         if (existsSync(target)) {
             log.step('Exists', styles.muted(file))
+            // it starts on the last frame of the clip before - rendered again since, that frame is another one
+            const startFrame = clip.startsFrom ? join(this.projectDir, boundaryFrameAsset(clip.startsFrom, 'lf')) : undefined
+            if (startFrame && existsSync(startFrame) && statSync(startFrame).mtimeMs > statSync(target).mtimeMs) {
+                log.warn(`${file} starts on an older version of ${clip.startsFrom}'s last frame - delete it to render it again`)
+            }
             // clips rendered before the boundary frames existed get them now
             return this.saveBoundaryFrames(clip, target)
         }
 
         const missing = clip.assets.pictures.filter(p => !existsSync(join(this.projectDir, p.file)))
+        if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')}`)
         const withVocals = clip.assets.audio.some(a => a.stem === 'vocals')
         const missingStems = clip.assets.audio.filter(a => !(a.stem && stemFiles[a.stem] && existsSync(stemFiles[a.stem]!)))
@@ -339,6 +345,7 @@ export class Renderer implements Disposable {
             workflow: this.config.videoWorkflow,
             seed,
             resolution: this.config.videoResolution,
+            ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final video
             renderedFrames: rendered.frames,
