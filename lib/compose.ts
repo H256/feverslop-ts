@@ -301,7 +301,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(s => s.locationId === beat.locationId || s.beatId === previous?.id)
             .map(s => s.fact)
             // what a mirror shows is never a fact of the room: the video model puts that face in every mirror from then on
-            .filter(fact => !/(mirror|reflection|reflects?|reflected).*(shows?|figure|face|stands?)/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
+            .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
     function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
