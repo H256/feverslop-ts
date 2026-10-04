@@ -122,7 +122,7 @@ ${storyText}`,
 
 const lookRules =`Describe in 120-180 words, as plain prose:
 - Format and style: name the medium first and be specific, in terms of how it is shot, drawn or built (e.g. "live action shot on 35mm film", "2D anime in the style of 90s cel animation", "Studio Ghibli hand-painted anime", "Pixar-style 3D animation", "stop-motion with visible puppet seams", "grainy VHS found-footage horror", "neon-soaked cyberpunk live action", "black ink wash drawing", "hand-painted dark fantasy oil painting").
-- World: architecture, landscapes, materials and textures of the world.
+- World: architecture, landscapes, materials and textures of the world, as a still: what is where and how it looks. No change or process words (fading, shrinking, contracting, pulling inward, cracking open, slowly ...) - the video model would animate them on the background; what changes in the story is told elsewhere.
 - Color palette and lighting: dominant colors, light sources, contrast, time of day.
 - Camera language: typical shot types, lens feel and camera movement (e.g. slow dolly-ins, low-angle wide shots, handheld close-ups).
 - Texture: film grain, line work, shading or rendering quality.
@@ -254,7 +254,7 @@ Leave out: the medium and style (e.g. "35mm film photograph of"), the pose and f
 
 Rules:
 - One or two sentences, 30-60 words, starting with the character (e.g. "a woman in her late 30s with ...").
-- Only details that are in the image prompt - add nothing, change nothing.
+- Only details that are in the image prompt - add nothing, change nothing, except: a state stays, a process goes ("walls leaning inward" stays, "the architecture visibly contracts" and "a name slowly fading" are left out or become "a worn carved name"). The place is a fixed set in a video prompt; anything that reads as a change would be animated on the background.
 - Answer only with the description.
 
 Image prompt: ${imagePrompt}`,
@@ -275,6 +275,7 @@ Rules:
 - The location is empty: no people, creatures or characters.
 - Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
 - Describe only visible details: layout, architecture, terrain, materials, props, time of day, weather, light sources, atmosphere like fog, dust or smoke.
+- Describe the place as it looks in this one frame, a state and not a process: no "slowly fading", "visibly shrinking", "walls closing in" or other change over time.
 - Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
 - No mood labels without visible evidence, no text or lettering in the image.
 - Answer only with the prompt.
