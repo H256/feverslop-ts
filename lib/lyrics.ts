@@ -10,6 +10,13 @@ const SKIP_LYRIC = -0.4         // a lyric word Whisper didn't hear
 const SKIP_HEARD = -0.3         // a word Whisper heard that isn't in the lyrics (ad-lib, hallucination)
 const TYPICAL_WORD_SEC = 0.45   // length of a word that has to be interpolated
 const SECTION_SLACK_SEC = 8     // how far a matched word may lie outside its estimated section without a penalty
+const LOOP_WORDS = 3            // this many words in a row on (nearly) one timestamp are a whisper repeat-loop, not singing
+const LOOP_SPREAD_SEC = 0.1
+const ADLIB_GAP_SEC = 1.2       // heard words further apart than this belong to different ad-lib lines
+const ADLIB_MIN_WORDS = 2
+const ADLIB_MIN_ACTIVE = 0.5    // share of an ad-lib line that has to lie inside vocal activity
+const ADLIB_REPLACES_BELOW = 0.5 // a lyric line that was mostly not heard gives way to ad-libs sung over it
+const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
 
 export type SungLine = { line: number, sectionIndex: number, section: string, text: string, words: string[] }
 
@@ -61,7 +68,7 @@ export function similarity(a: string, b: string) {
 export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord[], sections?: MusicSection[], activity?: ActivityRange[]): LyricsTiming {
     const lines = sungLines(lyricSections)
     const lyric = lines.flatMap(line => line.words.map(text => ({text, norm: normalizeWord(text), line: line.line, sectionIndex: line.sectionIndex})))
-    const transcript = heard.map(w => ({...w, norm: normalizeWord(w.text)})).filter(w => w.norm)
+    const transcript = clampToActivity(dropLoops(heard), activity).map(w => ({...w, norm: normalizeWord(w.text)})).filter(w => w.norm)
     const n = lyric.length
     const m = transcript.length
     if (n === 0) return {lines: []}
@@ -122,21 +129,98 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
     interpolate(timed, lyric.map(w => w.sectionIndex), activity)
 
     let k = 0
-    return {
-        lines: lines.map(line => {
-            const words = timed.slice(k, k += line.words.length)
-            return {
-                line: line.line,
-                sectionIndex: line.sectionIndex,
-                section: line.section,
-                text: line.text,
-                start: words[0]!.start,
-                end: words.at(-1)!.end,
-                words: words.map(({text, start, end}) => ({text, start, end})),
-                confidence: round(words.reduce((sum, w) => sum + w.sim, 0) / words.length),
-            }
-        }),
+    const timedLines: TimedLine[] = lines.map(line => {
+        const words = timed.slice(k, k += line.words.length)
+        return {
+            line: line.line,
+            sectionIndex: line.sectionIndex,
+            section: line.section,
+            text: line.text,
+            start: words[0]!.start,
+            end: words.at(-1)!.end,
+            words: words.map(({text, start, end}) => ({text, start, end})),
+            confidence: round(words.reduce((sum, w) => sum + w.sim, 0) / words.length),
+        }
+    })
+
+    const matched = new Set(matchOf.filter(j => j !== undefined))
+    const adlibs = adlibLines(transcript.flatMap((w, j) => matched.has(j) ? [] : [w]), new Set(lyric.map(w => w.norm)), activity)
+    if (!adlibs.length) return {lines: timedLines}
+
+    // a lyric line that was mostly not heard, with ad-libs sung where its words were guessed, is a wrong guess - it
+    // keeps no words (two lines can't be sung at once)
+    const overlapsAdlib = (line: TimedLine) => adlibs.some(a => Math.min(line.end, a.end) - Math.max(line.start, a.start) > 0.15 || (line.end <= line.start && line.start >= a.start && line.start <= a.end))
+    for (const line of timedLines) if (line.confidence < ADLIB_REPLACES_BELOW && overlapsAdlib(line)) line.words = []
+
+    // each ad-lib line goes right behind the heard lyric line before it, numbered after the lyric lines
+    const out = [...timedLines]
+    adlibs.forEach((adlib, n) => {
+        const before = out.findLastIndex(l => l.confidence > 0 && l.words.length > 0 && l.start <= adlib.start)
+        const anchor = out[before] ?? out[0]!
+        out.splice(before + 1, 0, {...adlib, line: lines.length + n, sectionIndex: anchor.sectionIndex, section: anchor.section})
+    })
+    return {lines: out}
+}
+
+/**
+ * Whisper sometimes loops on a hard stretch and writes the same words over and over on one timestamp. Such a stack
+ * carries no timing at all and drags matching lyric lines to its timestamp - the stack is dropped.
+ */
+export function dropLoops(words: TranscriptWord[]): TranscriptWord[] {
+    const kept: TranscriptWord[] = []
+    for (let i = 0; i < words.length;) {
+        let j = i + 1
+        while (j < words.length && Math.abs(words[j]!.start - words[i]!.start) <= LOOP_SPREAD_SEC) j++
+        if (j - i < LOOP_WORDS) kept.push(...words.slice(i, j))
+        i = j
     }
+    return kept
+}
+
+/**
+ * Whisper stretches a word over the pause after it (a lone "Wo" before a break lasting 4 s) - a word ends when the
+ * vocal activity it starts in ends.
+ */
+export function clampToActivity(words: TranscriptWord[], activity?: ActivityRange[]): TranscriptWord[] {
+    if (!activity?.length) return words
+    return words.map(w => {
+        const range = activity.find(r => w.start >= r.start - 0.15 && w.start < r.end)
+        return range && w.end > range.end + 0.3 ? {...w, end: Math.max(w.start + MIN_WORD_SEC, range.end)} : w
+    })
+}
+
+/**
+ * The words whisper heard that match no lyric word - a singer repeating the hook longer than lyrics.txt says, adlibs.
+ * They are real singing when they sound like the song's own words and sit in vocal activity (whisper's other
+ * inventions like "AAAAAAAA" fail the first test), so they become lines of their own that the singer lip-syncs.
+ */
+function adlibLines(unmatched: (TranscriptWord & { norm: string })[], vocabulary: Set<string>, activity?: ActivityRange[]): TimedLine[] {
+    const real = unmatched.filter(w => w.end > w.start && [...vocabulary].some(v => similarity(v, w.norm) >= MATCH_SIMILARITY))
+    const groups: (typeof real)[] = []
+    for (const word of real) {
+        const group = groups.at(-1)
+        if (group && word.start - group.at(-1)!.end <= ADLIB_GAP_SEC) group.push(word)
+        else groups.push([word])
+    }
+    return groups.filter(g => g.length >= ADLIB_MIN_WORDS).flatMap(group => {
+        const start = group[0]!.start
+        const end = group.at(-1)!.end
+        if (activity?.length) {
+            const active = activity.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0)
+            if (active / (end - start) < ADLIB_MIN_ACTIVE) return []
+        }
+        return [{
+            line: -1,
+            sectionIndex: -1,
+            section: '',
+            text: group.map(w => w.text).join(' '),
+            start,
+            end,
+            words: group.map(({text, start, end}) => ({text, start, end})),
+            confidence: round(group.reduce((sum, w) => sum + w.probability, 0) / group.length),
+            adlib: true,
+        }]
+    })
 }
 
 /**
@@ -275,7 +359,7 @@ export function slotVocals(slot: Pick<Slot, 'start' | 'end'>, timing: LyricsTimi
     const relative = (w: TimedWord) => ({text: w.text, start: round(w.start - origin), end: round(w.end - origin)})
 
     return timing.lines.flatMap(line => {
-        const words = line.words.filter(w => frameAt(w.start) >= first && frameAt(w.start) < last).map(relative)
+        const words = line.words.filter(w => w.end - w.start >= MIN_WORD_SEC && frameAt(w.start) >= first && frameAt(w.start) < last).map(relative)
         return words.length
             ? [{line: line.line, text: words.map(w => w.text).join(' '), start: words[0]!.start, end: words.at(-1)!.end, words}]
             : []
