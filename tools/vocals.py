@@ -33,6 +33,8 @@ transcribe  faster-whisper (CTranslate2) large-v3, the known lyrics as a hotword
             just the first window - openai-whisper needed a separate carry_initial_prompt flag for that.
             A segment that comes back without word timings falls back to spreading its words evenly across it,
             matching how the alignment step already interpolates words it can't pin down exactly.
+            Stretches where the vocals are active but whisper wrote (almost) nothing get a second pass: the same audio
+            cut out and transcribed on its own (whisper can go deaf for half a minute inside a long song).
             Also runs an RMS-energy vocal activity detection on the same audio (independent of whisper) - for
             growled/screamed vocals whisper often transcribes nothing at all, but the alignment step can still
             place interpolated words inside a real detected-activity window instead of guessing blind.
@@ -199,13 +201,9 @@ def lyrics_prompt(lyrics_file: str) -> str:
     return "\n".join(lines)
 
 
-def transcribe(vocals: str, language: str, lyrics_file: str):
-    from faster_whisper import WhisperModel
-
-    model = WhisperModel("large-v3", device=device, compute_type="float16" if device == "cuda" else "int8")
-    log(f"faster-whisper large-v3 on {device}")
+def whisper_words(model, audio, language: str, lyrics_file: str, offset: float = 0.0) -> list[dict]:
     segments, _info = model.transcribe(
-        vocals,
+        audio,
         language=language,
         # word-level timing, straight from faster-whisper - no Triton dependency, no extra flag needed
         word_timestamps=True,
@@ -235,8 +233,8 @@ def transcribe(vocals: str, language: str, lyrics_file: str):
         if segment_words:
             words.extend({
                 "text": w.word.strip(),
-                "start": round(w.start, 3),
-                "end": round(w.end, 3),
+                "start": round(w.start + offset, 3),
+                "end": round(w.end + offset, 3),
                 "probability": round(w.probability, 3),
             } for w in segment_words if w.word.strip())
             continue
@@ -248,14 +246,75 @@ def transcribe(vocals: str, language: str, lyrics_file: str):
         probability = round(math.exp(segment.avg_logprob), 3)
         words.extend({
             "text": w,
-            "start": round(start + i * step, 3),
-            "end": round(start + (i + 1) * step, 3),
+            "start": round(offset + start + i * step, 3),
+            "end": round(offset + start + (i + 1) * step, 3),
             "probability": probability,
         } for i, w in enumerate(text_words))
+    return words
+
+
+def deaf_windows(words: list[dict], activity: list[dict], *, min_active=4.0, join_gap=3.0, pad=1.5, max_window=60.0) -> list[tuple[float, float]]:
+    """Stretches where the vocals stem is clearly active but whisper wrote nothing. Over a whole song whisper sometimes
+    goes deaf for half a minute (a chorus it transcribed fine in a short excerpt) - the same audio cut out and
+    transcribed on its own is heard, so these stretches get a second pass: every gap between two words that
+    holds at least `min_active` seconds of vocal activity."""
+    ordered = sorted(words, key=lambda w: w["start"])
+    found: list[list[float]] = []
+    for gap_start, gap_end in zip([0.0] + [w["end"] for w in ordered], [w["start"] for w in ordered] + [float("inf")]):
+        inside = [(max(r["start"], gap_start), min(r["end"], gap_end)) for r in activity if r["end"] > gap_start and r["start"] < gap_end]
+        inside = [(a, b) for a, b in inside if b > a]
+        if sum(b - a for a, b in inside) >= min_active:
+            found.append([min(a for a, _ in inside), max(b for _, b in inside)])
+    merged: list[list[float]] = []
+    for start, end in found:
+        if merged and start - merged[-1][1] <= join_gap:
+            merged[-1][1] = end
+        else:
+            merged.append([start, end])
+    windows = []
+    for start, end in merged:
+        start, end = max(0.0, start - pad), end + pad
+        while end - start > max_window:
+            windows.append((start, start + max_window))
+            start += max_window
+        windows.append((start, end))
+    return windows
+
+
+def fill_deaf_windows(model, vocals: str, words: list[dict], activity: list[dict], language: str, lyrics_file: str) -> list[dict]:
+    windows = deaf_windows(words, activity)
+    if not windows:
+        return words
+    data, sr = sf.read(vocals, dtype="float32", always_2d=True)
+    for start, end in windows:
+        log(f"second pass on {start:.1f}-{end:.1f}s: vocals are active, whisper heard (almost) nothing there")
+        chunk = data[int(start * sr):int(end * sr)]
+        tmp = Path(vocals).with_name(f"_deaf_{int(start)}.wav")
+        sf.write(tmp, chunk, sr)
+        try:
+            found = whisper_words(model, str(tmp), language, lyrics_file, offset=start)
+        finally:
+            tmp.unlink(missing_ok=True)
+        log(f"  {len(found)} word(s)")
+        # a second pass on a few seconds can hallucinate too (a held vowel becomes "Thug, Thug") - only words it is
+        # somewhat sure of count, and they replace only the first-pass words they overlap in time
+        found = [w for w in found if w["probability"] >= 0.3]
+        if found:
+            words = [w for w in words if not any(w["start"] < f["end"] and f["start"] < w["end"] for f in found)] + found
+    return sorted(words, key=lambda w: w["start"])
+
+
+def transcribe(vocals: str, language: str, lyrics_file: str):
+    from faster_whisper import WhisperModel
+
+    model = WhisperModel("large-v3", device=device, compute_type="float16" if device == "cuda" else "int8")
+    log(f"faster-whisper large-v3 on {device}")
+    words = whisper_words(model, vocals, language, lyrics_file)
+    activity = vocal_activity(vocals)
+    words = fill_deaf_windows(model, vocals, words, activity, language, lyrics_file)
     del model
     unload()
     log(f"{len(words)} words")
-    activity = vocal_activity(vocals)
     log(f"{len(activity)} vocal-activity range(s) from RMS energy")
     print(json.dumps({"words": words, "activity": activity}))
 
