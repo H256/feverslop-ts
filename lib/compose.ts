@@ -117,6 +117,9 @@ const positions = [
 // full-group shots stay rare so blocking doesn't default back to "everyone lined up" every shot
 const blockingPattern = ['single', 'single', 'pair', 'group'] as const
 
+// the most facts a clip's "Continuity from earlier scenes" lists
+const MAX_CONTINUITY_FACTS = 6
+
 // Picks who's in frame for a shot: `required` (e.g. the singers of this shot) always stays in, `named` (a
 // character the story moment calls out by name) takes it alone when nobody must be kept in frame, otherwise a
 // rotating window of `cast` is added around `required` - the window's start and size (see blockingPattern) both
@@ -254,7 +257,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     // >1 only for a group character (Character.isGroup) - which member image a given clip's subject resolves to
     const memberCounts = computeMemberCounts(beats, characters)
     const requests: ClipRequest[] = []
-    const stateSoFar: string[] = []
+    // continuity facts in story order, with the beat and place they came from - see continuityFor
+    const stateSoFar: { fact: string, beatId: string, locationId: string }[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
@@ -271,11 +275,21 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const shotCount = shotCountFor(slot, beat, opensScene)
             const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
             shotCursor += shotCount
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, [...stateSoFar], opensScene, input))
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, input))
         })
-        stateSoFar.push(...beat.stateAfter)
+        stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
     }
     return requests
+
+    // Every fact of the whole story piles up to 25+ lines that don't belong to the clip's place or contradict it (the
+    // video model draws them in anyway) - a clip gets what happened at its own location and what the beat right
+    // before it left behind, the most recent few
+    function continuityFor(beat: StoryBeat) {
+        const previous = beats[beats.findIndex(b => b.id === beat.id) - 1]
+        return [...new Set(stateSoFar
+            .filter(s => s.locationId === beat.locationId || s.beatId === previous?.id)
+            .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
+    }
 
     function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
