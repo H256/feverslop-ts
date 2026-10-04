@@ -15,6 +15,9 @@ const LOOP_SPREAD_SEC = 0.1
 const ADLIB_GAP_SEC = 1.2       // heard words further apart than this belong to different ad-lib lines
 const ADLIB_MIN_WORDS = 2
 const ADLIB_MIN_ACTIVE = 0.5    // share of an ad-lib line that has to lie inside vocal activity
+const ADLIB_SURE = 0.7          // ... or whisper is this sure of the words (quiet backing vocals stay under the activity threshold)
+const ADLIB_MIN_WORD_PROBABILITY = 0.3
+const GUESS_MIN_ACTIVE = 0.4    // share of a guessed (never heard) word that has to lie inside vocal activity - else nobody sings it
 const ADLIB_REPLACES_BELOW = 0.5 // a lyric line that was mostly not heard gives way to ad-libs sung over it
 const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
 
@@ -128,6 +131,13 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
     if (timed.every(w => w.sim === 0)) throw new Error('None of the lyrics were found in the transcript - is lyricsLanguage right, and are there vocals in the song?')
     interpolate(timed, lyric.map(w => w.sectionIndex), activity)
 
+    // a word whisper never heard was placed by guesswork: where the vocal stem is silent nobody sings it, and a mouth
+    // moving without sound is worse than a missing word
+    const sungAt = (w: { start: number, end: number }) => {
+        if (!activity?.length) return true
+        const covered = activity.reduce((sum, r) => sum + Math.max(0, Math.min(w.end, r.end) - Math.max(w.start, r.start)), 0)
+        return w.end > w.start && covered >= GUESS_MIN_ACTIVE * (w.end - w.start)
+    }
     let k = 0
     const timedLines: TimedLine[] = lines.map(line => {
         const words = timed.slice(k, k += line.words.length)
@@ -138,7 +148,7 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
             text: line.text,
             start: words[0]!.start,
             end: words.at(-1)!.end,
-            words: words.map(({text, start, end}) => ({text, start, end})),
+            words: words.filter(w => w.sim > 0 || sungAt(w)).map(({text, start, end}) => ({text, start, end})),
             confidence: round(words.reduce((sum, w) => sum + w.sim, 0) / words.length),
         }
     })
@@ -195,7 +205,7 @@ export function clampToActivity(words: TranscriptWord[], activity?: ActivityRang
  * inventions like "AAAAAAAA" fail the first test), so they become lines of their own that the singer lip-syncs.
  */
 function adlibLines(unmatched: (TranscriptWord & { norm: string })[], vocabulary: Set<string>, activity?: ActivityRange[]): TimedLine[] {
-    const real = unmatched.filter(w => w.end > w.start && [...vocabulary].some(v => similarity(v, w.norm) >= MATCH_SIMILARITY))
+    const real = unmatched.filter(w => w.end > w.start && w.probability >= ADLIB_MIN_WORD_PROBABILITY && [...vocabulary].some(v => similarity(v, w.norm) >= MATCH_SIMILARITY))
     const groups: (typeof real)[] = []
     for (const word of real) {
         const group = groups.at(-1)
@@ -205,7 +215,8 @@ function adlibLines(unmatched: (TranscriptWord & { norm: string })[], vocabulary
     return groups.filter(g => g.length >= ADLIB_MIN_WORDS).flatMap(group => {
         const start = group[0]!.start
         const end = group.at(-1)!.end
-        if (activity?.length) {
+        const sure = group.length >= 3 && group.reduce((sum, w) => sum + w.probability, 0) / group.length >= ADLIB_SURE
+        if (activity?.length && !sure) {
             const active = activity.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0)
             if (active / (end - start) < ADLIB_MIN_ACTIVE) return []
         }
