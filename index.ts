@@ -392,16 +392,18 @@ const locationDescriptions = await project.step('locationDescriptions', '8b · D
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 ////////// BREAKING THE STORY INTO BEATS
+// one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
+const beatCount = Math.max(6, Math.round(music.durationSec / 15))
 const beats = await project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
     const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>({
         reasoning: 'medium',
         // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
-        maxTokens: 16384,
+        maxTokens: Math.max(16384, beatCount * 1100),
         input: `Break the story into story beats for a music video. A beat is one continuous piece of action at ONE location.
 The beats have no timing yet - they are stretched onto the song later, so describe what happens, not how long it takes.
 
-The song has these sections, in order: ${lyricSections.map(s => s.label).join(', ')}.
-Aim for about ${Math.max(6, Math.round(lyricSections.length * 1.5))} beats that follow the story from start to end.
+The song is ${Math.round(music.durationSec)} seconds long. The story is spread evenly over that time, in order from the first second to the last - the song sections do not matter for the beats, a beat does not belong to a verse or a chorus.
+Aim for about ${beatCount} beats that follow the story from start to end, each one with new action - a beat never repeats what an earlier beat already showed.
 
 For every beat give:
 - "summary": what visibly happens, 1-3 sentences, present tense.
@@ -416,7 +418,6 @@ For every beat give:
 - "intensity": 0.0 (calm, quiet) to 1.0 (climax), used to match the loudness of the music.
 - "weight": 1-5, how much screen time the beat deserves.
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
-- "lyricAnchor": the song section label this beat belongs under if the lyrics describe it (e.g. "Chorus"), otherwise omit it.
 - "stateAfter": short facts that are true after this beat and must stay visible later, e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
 - "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
@@ -791,7 +792,7 @@ ${storySummary}`,
     const assigned = await askJson<{ lines: { line: number, singers: string[] }[] }>({
         reasoning: 'medium',
         // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
-        maxTokens: 16384,
+        maxTokens: Math.max(16384, beatCount * 1100),
         input: `These characters sing the song of a music video: ${JSON.stringify(singers)}.
 Decide who sings which line. A line is sung by one singer, or by several together (duet or choir lines, e.g. a chorus).
 Follow the lyrics and the story: who would say these words? Keep a verse with one singer unless its lines answer each other.
@@ -832,7 +833,7 @@ function performanceRules({singers, lines}: Singing) {
 This is a performance music video: ${singers.map(nameOf).join(', ')} ${singers.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced, while acting out the story.
 Sections with vocals and who sings them: ${[...bySection].map(([section, ids]) => `${section} (${[...ids].join(', ')})`).join('; ')}.
 Sections without vocals have no singing - the story plays freely there.
-For every beat under a section with vocals (its "lyricAnchor" is that section):
+For every beat that plays while the song has vocals:
 - the singer(s) of that section are on screen: their ids are in "characterIds".
 - their moments keep the face visible to the camera while they sing, e.g. "Thorin sings while forging the blade" - no turned-away or hidden faces, no masks or objects over the mouth.
 `

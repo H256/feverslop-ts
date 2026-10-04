@@ -158,9 +158,12 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
  * Stretches the story beats over the slots, in story order, every beat getting at least one slot.
  * Dynamic programming over contiguous runs, minimizing:
  * - intensity of the beat vs energy of the music
- * - beats with a lyric anchor landing outside that song section
  * - run lengths deviating from the beat's share of the screen time (weight)
  */
+// how hard a beat's run of clips is pulled towards its share of the screen time - the energy match alone would give a
+// whole low-energy-cost stretch of the song to one beat and a single clip to its neighbour
+const RUN_LENGTH_WEIGHT = 2
+
 export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[] {
     const B = beats.length
     const S = slots.length
@@ -168,11 +171,8 @@ export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[]
 
     const totalWeight = beats.reduce((sum, b) => sum + b.weight, 0)
     const target = beats.map(b => b.weight / totalWeight * S)
-    const normalize = (label: string) => label.toLowerCase().replace(/[^a-z]/g, '')
-
     const slotCost = (beat: StoryBeat, slot: Slot) =>
         Math.abs(beat.intensity - slot.energy)
-        + (beat.lyricAnchor && normalize(beat.lyricAnchor) !== normalize(slot.section) ? 1 : 0)
         + (beat.kind === 'hit' && slot.energy < 0.5 ? 0.5 : 0)
 
     // prefix[b][i] = cost of slots 0..i-1 all assigned to beat b
@@ -182,7 +182,7 @@ export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[]
         return sums
     })
     const runCost = (b: number, from: number, to: number) =>
-        prefix[b]![to]! - prefix[b]![from]! + 0.5 * ((to - from - target[b]!) ** 2) / Math.max(1, target[b]!)
+        prefix[b]![to]! - prefix[b]![from]! + RUN_LENGTH_WEIGHT * ((to - from - target[b]!) ** 2) / Math.max(1, target[b]!)
 
     // best[b][i] = cost of assigning beats 0..b-1 to slots 0..i-1
     const best = Array.from({length: B + 1}, () => new Array<number>(S + 1).fill(Infinity))

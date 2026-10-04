@@ -25,7 +25,7 @@ export type StoryBeat = {
     intensity: number,              // 0-1, matched against the music energy
     weight: number,                 // relative screen time
     kind: 'establish' | 'build' | 'hit' | 'release',
-    lyricAnchor?: string,           // song section label this beat should play under
+    lyricAnchor?: string,           // old projects only - beats follow the song's time, not its sections
     stateAfter: string[],           // continuity facts that are true after this beat
     // for a group character (Character.isGroup) in characterIds: how many distinct individuals of that group are
     // visible together on screen during this beat - drives how many member variant images are worth generating
