@@ -299,7 +299,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const previous = beats[beats.findIndex(b => b.id === beat.id) - 1]
         return [...new Set(stateSoFar
             .filter(s => s.locationId === beat.locationId || s.beatId === previous?.id)
-            .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
+            .map(s => s.fact)
+            // what a mirror shows is never a fact of the room: the video model puts that face in every mirror from then on
+            .filter(fact => !/(mirror|reflection|reflects?|reflected).*(shows?|figure|face|stands?)/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
     function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
@@ -528,6 +530,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${joinAnd(silentSingers.map(s => `${s.label}, ${s.name},`))} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing the emotion of the moment through the eyes and brows.`
                     : ''
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
+                // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
+                // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
+                const others = onSinger ? shot.focus.filter(s => !singing?.singers.includes(s.id)) : []
+                const othersClause = others.length
+                    ? ` ${joinAnd(others.map(s => `${s.label}, ${s.name},`))} ${others.length > 1 ? 'stay' : 'stays'} silent: no singing, no mouth movement, no sound from ${others.length > 1 ? 'them' : 'it'}.`
+                    : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const opening = j === 0
                     ? onSinger
@@ -546,7 +554,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
                     const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${propClause}`.trim()
+                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${othersClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
