@@ -296,9 +296,11 @@ def fill_deaf_windows(model, vocals: str, words: list[dict], activity: list[dict
         finally:
             tmp.unlink(missing_ok=True)
         log(f"  {len(found)} word(s)")
+        # a second pass on a few seconds can hallucinate too (a held vowel becomes "Thug, Thug") - only words it is
+        # somewhat sure of count, and they replace only the first-pass words they overlap in time
+        found = [w for w in found if w["probability"] >= 0.3]
         if found:
-            # the new words replace whatever the first pass wrote in that window (usually a single hallucinated word)
-            words = [w for w in words if not (start <= w["start"] < end)] + found
+            words = [w for w in words if not any(w["start"] < f["end"] and f["start"] < w["end"] for f in found)] + found
     return sorted(words, key=lambda w: w["start"])
 
 
