@@ -328,6 +328,9 @@ moments of the beat are written to follow each other without a restart. What fol
 - Rendering a clip again leaves the clips after it starting on its old last frame; the next run warns about each (delete
   `videos/<id>.mp4` to render it again).
 - A changed `continuity` redoes `shotMoments`.
+- As a reference picture the frame carries the room and the people, but not the exact pose and framing of the frame:
+  the clip may start from a different position. `pinStartFrame` (on by default) locks it to the frame at frame 0 (`MiniMaxH3AddGuide`
+  with the image); a clip then starts on the exact frame the one before ends on.
 
 ### config.json
 
@@ -357,6 +360,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper, the `<d>[English]` lyrics tag, and the song brief (`--render=song`) |
 | `alignLyrics`                         | `true` = stems, transcript and real lyric timing; default: `true` when someone sings, else `false`. Set it to `true` in clip mode to place the lyric cues at the right moments |
 | `continuity`                          | `"auto"` (default) = the beats the story planning marked `continuous` run on without a cut, `"always"` = every clip but the first of each beat starts on the last frame of the clip before it, `"never"` = every clip is its own cut - see [Continuous scenes](#continuous-scenes) |
+| `pinStartFrame`                       | `true` (default) = a continuing clip is locked to the last frame of the clip before it as its first frame (`MiniMaxH3AddGuide`, `h3-ref2video`); `false` = that frame is only one of the reference pictures, which carry the room and the people but not the pose - see [Continuous scenes](#continuous-scenes) |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
 | `imageWorkflow`, `videoWorkflow`, `songWorkflow` | a workflow file in `comfy/workflows/`, without `.ts`                                              |

@@ -119,6 +119,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
 | `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
 | `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |
+| `pinStartFrame`   | `true`           | continuing clips (README: [Continuous scenes](../README.md#continuous-scenes)): `true` = the clip is locked to the last frame of the clip before it as its real first frame (`MiniMaxH3AddGuide` with `image`, `h3-ref2video` only), `false` = that frame is only one of the reference pictures |
 | `singers`         | `[]`             | who sings on screen: `[]` = nobody (clip mode), `["auto"]` = the LLM picks, `["Thorin"]` = names or ids - see [Singing characters](../README.md#singing-characters) |
 | `lyricsLanguage`  | `"en"`           | language code of the lyrics, for Whisper and the `<d>[English]` lyrics tag               |
 | `alignLyrics`     | `true` with singers, else `false` | stems, transcript and real lyric timing                                 |

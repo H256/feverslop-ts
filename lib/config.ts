@@ -18,6 +18,9 @@ export type RenderConfig = {
     // hero image (the old renderPicture path) - useful to cut render cost while iterating on a project.
     sequenceSheets: boolean,
     sequenceWorkflow: string,       // file name in comfy/workflows/, without .ts
+    // a continuing clip (config.continuity) is also pinned to the last frame of the clip before it as its first frame
+    // (MiniMaxH3AddGuide), not only given it as a reference picture
+    pinStartFrame: boolean,
 }
 
 export type PlanConfig = {
@@ -45,6 +48,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     songDuration: -1,
     sequenceSheets: true,
     sequenceWorkflow: 'h3-sequence-to-sheet',
+    pinStartFrame: true,
     singers: [],
     lyricsLanguage: 'en',
     continuity: 'auto',
@@ -80,6 +84,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         }
     }
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
+    if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)

@@ -329,6 +329,7 @@ export class Renderer implements Disposable {
                 ...(withVocals ? {vocals: `${this.remoteDir}/stems/vocals.wav`} : {}),
                 // the full mix, locked into the AV latent via MiniMaxH3AddGuide - see comfy/workflows/h3-ref2video.ts
                 song: songRemote,
+                ...(this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${boundaryFrameAsset(clip.startsFrom, 'lf')}`} : {}),
                 songStart: secondsAt(clip.frameStart),
                 frames,
                 duration: secondsAt(frames),
