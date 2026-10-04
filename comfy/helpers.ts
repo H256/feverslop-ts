@@ -56,6 +56,9 @@ export type VideoWorkflowOptions = {
     // locked into the AV latent via MiniMaxH3AddGuide so every instrument (not just the ones with their own
     // isolated track) has some real audio grounding behind its idle/active prompt text.
     song: string,
+    // ComfyUI input name of the picture the video has to start on (a continuing clip's first frame, config.pinStartFrame):
+    // locked to frame 0 with MiniMaxH3AddGuide instead of only being one of the loose reference pictures
+    startFrame?: string,
     songStart: number,          // seconds - exactly on the clip's first frame, for every track in `audios`
     frames: number,             // frames to render, already a length the model accepts (see renderFrames)
     duration: number,           // frames / FPS - the audio to trim, covering the whole render
