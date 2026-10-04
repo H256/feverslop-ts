@@ -88,8 +88,29 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         if (bars.length) groups.push(bars.slice(0, firstSize))
         for (let i = firstSize; i < bars.length; i += barsPerSlot) groups.push(bars.slice(i, i + barsPerSlot))
         if (groups.length === 0) {
-            // zero length (e.g. the refined last section starts at the very end of the song) or no downbeat inside it
-            log.warn(`section "${section.label}" (${formatTime(section.start, true)} – ${formatTime(section.end, true)}) has no bar of its own and gets no clip - unless it is empty, the video has a gap there. Check the section times (music.sections / lyricsTiming in project.json), then --redo=timeline`)
+            // no downbeat inside it - typically an intro before the beat tracker locks on (the first downbeat
+            // can be 10+ s into a drumless intro). A real section still needs clips or the video has a gap there:
+            // cut it into equal parts by time. Zero length sections (the refined last one at the very end) get none.
+            const length = section.end - section.start
+            if (length < 1) {
+                log.warn(`section "${section.label}" (${formatTime(section.start, true)} – ${formatTime(section.end, true)}) has no bar of its own and gets no clip - unless it is empty, the video has a gap there. Check the section times (music.sections / lyricsTiming in project.json), then --redo=timeline`)
+                return
+            }
+            const parts = Math.ceil(length / maxClipSec)
+            const part = length / parts
+            const sectionSlots = Array.from({length: parts}, (_, i) => ({
+                id: '',
+                index: 0,
+                section: section.label,
+                start: section.start + i * part,
+                end: i === parts - 1 ? section.end : section.start + (i + 1) * part,
+                bars: Math.max(1, Math.round(part / barSec)),
+                energy: section.energy,
+                lyrics: [] as string[],
+            }))
+            const lines = lyricSections[sectionIndex]?.lines ?? []
+            lines.forEach((line, i) => sectionSlots[Math.floor(i * sectionSlots.length / lines.length)]!.lyrics.push(line))
+            slots.push(...sectionSlots)
             return
         }
 
