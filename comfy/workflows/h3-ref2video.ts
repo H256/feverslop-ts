@@ -59,9 +59,16 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const song = wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song)}).AUDIO, start_index: opts.songStart, duration: opts.duration})
     const guided = wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO})
 
+    // A continuing clip's first frame (opts.startFrame) is a ref image like any other above - references only carry
+    // identity and place, the pose and framing of the last frame of the clip before get lost. The same node that locks
+    // the audio at frame 0 takes an image: that one is the clip's actual first frame.
+    const pinned = opts.startFrame
+        ? wf.MiniMaxH3AddGuide({positive: guided.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE})
+        : guided
+
     // int8 attention through comfy-kitchen: ~25% faster sampling on the Radeon. Only the guider gets it - the scheduler just needs the sigma schedule
     const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
-    const guider = wf.BasicGuider({model: attention.model, conditioning: guided.positive})
+    const guider = wf.BasicGuider({model: attention.model, conditioning: pinned.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
     const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})
