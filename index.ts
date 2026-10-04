@@ -405,7 +405,7 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
   - Things change once and stay changed: a door that opens stays open until a beat shows it closing, a mirror that cracks stays cracked, someone who is swallowed or gone does not come back. Never open, close and open the same thing again, and never show an event that already happened in an earlier beat once more.`
 
 // moments that still break the two rules the model keeps breaking (stand-in objects, blank faces) - checked after the shot-moments step
-const riskyMoment = /\b(featureless|faceless|blank (oval|face|photograph|photo)|pale oval|smudged? (face|oval)|no face|blade-shaped|name-object|name object|letters?|carved name|KASPAR)\b/i
+const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name|KASPAR)\b/i
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
