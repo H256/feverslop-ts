@@ -398,7 +398,12 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
   - Figurative language is never filmed as a thing: a name, a word, a voice, a memory, a feeling, a silence or a sound is not an object, not letters or writing, not glowing or visible matter, and nobody holds, carries, throws or hands one over. Show what a person really does or shows instead - the face, the eyes, the breath, the hands on real things in the room.
   - A character's face is always an ordinary human face, their own: never described as blank, pale, smudged, empty, covered or replaced by a shape. If a photograph or a mirror shows no face, that stays on the photograph or the mirror and is not written as a face missing on the character.
   - Something with no visible cause - a tap, a knock, a heartbeat, a pulse, a whisper - is never shown as an effect on a body or in the air. Show the person reacting, or a visible cause (a hand touching them, someone knocking on a door in the room).
-  - A mirror or a window shows the plain, true reflection of the room and of whoever stands in front of it, moving exactly as they do: no reflection that acts, looks or stands differently, and nothing happening on the glass itself.`
+  - A mirror or a window shows the plain, true reflection of the room and of whoever stands in front of it, moving exactly as they do: no reflection that acts, looks or stands differently, and nothing happening on the glass itself.
+  - An object that stands in for a name, a feeling or a memory (a "blade-shaped object", a key, a stone that "is" the name) is the same metaphor: never invent one for a character to hold, turn or look at - the video model draws a different one in every cut. A character holds only the real prop listed for them.
+  - Never write blank, featureless, faceless, smooth, smudged, erased, "pale oval" or "no face" about a face, or about a photograph near a face: a photograph is simply old and burnt at the edges, and its people are not described as missing.`
+
+// moments that still break the two rules the model keeps breaking (stand-in objects, blank faces) - checked after the shot-moments step
+const riskyMoment = /(featureless|faceless|blank (oval|face|photograph|photo)|pale oval|smudged? (face|oval)|no face|blade-shaped|name-object|name object)/i
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
@@ -615,6 +620,22 @@ ${JSON.stringify(block.map(b => ({
             if (!list?.length) continue // falls back to the legacy spread for this beat
             result[beat.id] = Array.from({length: needed}, (_, j) => list[Math.min(j, list.length - 1)]!)
         }
+    }
+    // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
+    // the prompt says - those moments get one rewrite
+    const risky = Object.entries(result).flatMap(([beatId, list]) => list.flatMap((moment, j) => riskyMoment.test(moment) ? [{beatId, j, moment}] : []))
+    if (risky.length) {
+        log.warn(`${risky.length} shot moment(s) with a blank face or a stand-in object - rewriting them`)
+        const rewritten = await askJson<{ moments: string[] }>({
+            input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead.
+${filmableRules}
+Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactly ${risky.length} entries, in the same order.
+---
+${JSON.stringify(risky.map(r => r.moment))}`,
+            instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
+        })
+        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => { result[r.beatId]![r.j] = String(rewritten.moments[k]) })
+        else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
     }
     return result
 })

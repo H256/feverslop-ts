@@ -270,6 +270,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
+    let lastFraming: string | undefined
     const cameraCursor: Record<keyof typeof cameraMoves, number> = {low: 0, mid: 0, high: 0}
 
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
@@ -443,10 +444,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? [...new Set([...singersInShot, ...castSubjects])]
                     : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
                 // a shot with a line start frames the singer, with a calmer camera
-                const framing = starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                // a clip that goes on from the last frame of the one before has no cut at its start: the camera move and the
+                // framing of that frame go on too, or the picture is seamless and the motion reverses (dolly in -> crane up)
+                const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
+                const framing = goesOn ? lastFraming! : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
-                const camera = nextCamera(cameraLevel, cameraCursor, lastCamera)
+                const camera = goesOn ? lastCamera! : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
+                lastFraming = framing
                 return {label: `[Shot ${j + 1}]`, at, framing, camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
             })
         }
