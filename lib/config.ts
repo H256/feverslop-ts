@@ -48,7 +48,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     songDuration: -1,
     sequenceSheets: true,
     sequenceWorkflow: 'h3-sequence-to-sheet',
-    pinStartFrame: false,
+    pinStartFrame: true,
     singers: [],
     lyricsLanguage: 'en',
     continuity: 'auto',
