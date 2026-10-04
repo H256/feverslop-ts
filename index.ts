@@ -398,11 +398,20 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
   - Figurative language is never filmed as a thing: a name, a word, a voice, a memory, a feeling, a silence or a sound is not an object, not letters or writing, not glowing or visible matter, and nobody holds, carries, throws or hands one over. Show what a person really does or shows instead - the face, the eyes, the breath, the hands on real things in the room.
   - A character's face is always an ordinary human face, their own: never described as blank, pale, smudged, empty, covered or replaced by a shape. If a photograph or a mirror shows no face, that stays on the photograph or the mirror and is not written as a face missing on the character.
   - Something with no visible cause - a tap, a knock, a heartbeat, a pulse, a whisper - is never shown as an effect on a body or in the air. Show the person reacting, or a visible cause (a hand touching them, someone knocking on a door in the room).
-  - A mirror or a window shows the plain, true reflection of the room and of whoever stands in front of it, moving exactly as they do: no reflection that acts, looks or stands differently, and nothing happening on the glass itself.`
+  - A mirror or a window shows the plain, true reflection of the room and of whoever stands in front of it, moving exactly as they do: no reflection that acts, looks or stands differently, and nothing happening on the glass itself.
+  - An object that stands in for a name, a feeling or a memory (a "blade-shaped object", a key, a stone that "is" the name) is the same metaphor: never invent one for a character to hold, turn or look at - the video model draws a different one in every cut. A character holds only the real prop listed for them.
+  - Never write blank, featureless, faceless, smooth, smudged, erased, "pale oval" or "no face" about a face, or about a photograph near a face: a photograph is simply old and burnt at the edges, and its people are not described as missing.
+  - Nothing in the picture is readable text: the video model scrambles every letter. A carved or written name, word or sign is "worn carved marks" or "a faded mark", never letters, and a name is never spelled out.
+  - Things change once and stay changed: a door that opens stays open until a beat shows it closing, a mirror that cracks stays cracked, someone who is swallowed or gone does not come back. Never open, close and open the same thing again, and never show an event that already happened in an earlier beat once more.`
+
+// moments that still break the two rules the model keeps breaking (stand-in objects, blank faces) - checked after the shot-moments step
+const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name|KASPAR)\b/i
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
 const beatCount = Math.max(6, Math.round(music.durationSec / 15))
+// where the last sung word ends - the singer is on screen until then
+const vocalsEnd = Math.max(0, ...(lyricsTiming?.lines.flatMap(l => l.words.map(w => w.end)) ?? []))
 const beats = await project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
     const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>({
         reasoning: 'medium',
@@ -429,11 +438,12 @@ For every beat give:
 - "weight": 1-5, how much screen time the beat deserves.
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
 - "continuous": true only if the beat is ONE unbroken take that runs through all its video clips without a cut - the camera and the action simply go on from clip to clip (a long walk through a room, a slow reveal, one action that takes many seconds). Use it sparingly: false (also when omitted) for a beat that is better cut together from several shots and angles.
-- "stateAfter": short facts about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull"), e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
+- "stateAfter": short facts about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull", and never what a mirror or reflection shows), e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
 - "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
 ${singing ? performanceRules(singing) : ''}
-Answer only with JSON: {"beats": [...]}
+${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the face to the camera, in every shot while singing. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
+` : ''}Answer only with JSON: {"beats": [...]}
 ---
 characters: ${JSON.stringify(cast.characters.map(c => ({id: c.id, role: c.role, ...(c.prop ? {prop: c.prop} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
 locations: ${JSON.stringify(cast.locations.map(l => l.id))}
@@ -615,6 +625,22 @@ ${JSON.stringify(block.map(b => ({
             if (!list?.length) continue // falls back to the legacy spread for this beat
             result[beat.id] = Array.from({length: needed}, (_, j) => list[Math.min(j, list.length - 1)]!)
         }
+    }
+    // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
+    // the prompt says - those moments get one rewrite
+    const risky = Object.entries(result).flatMap(([beatId, list]) => list.flatMap((moment, j) => riskyMoment.test(moment) ? [{beatId, j, moment}] : []))
+    if (risky.length) {
+        log.warn(`${risky.length} shot moment(s) with a blank face or a stand-in object - rewriting them`)
+        const rewritten = await askJson<{ moments: string[] }>({
+            input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead.
+${filmableRules}
+Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactly ${risky.length} entries, in the same order.
+---
+${JSON.stringify(risky.map(r => r.moment))}`,
+            instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
+        })
+        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => { result[r.beatId]![r.j] = String(rewritten.moments[k]) })
+        else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
     }
     return result
 })

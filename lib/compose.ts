@@ -270,6 +270,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
+    let lastFraming: string | undefined
     const cameraCursor: Record<keyof typeof cameraMoves, number> = {low: 0, mid: 0, high: 0}
 
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
@@ -298,7 +299,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const previous = beats[beats.findIndex(b => b.id === beat.id) - 1]
         return [...new Set(stateSoFar
             .filter(s => s.locationId === beat.locationId || s.beatId === previous?.id)
-            .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
+            .map(s => s.fact)
+            // what a mirror shows is never a fact of the room: the video model puts that face in every mirror from then on
+            .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
     function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
@@ -443,10 +446,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? [...new Set([...singersInShot, ...castSubjects])]
                     : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
                 // a shot with a line start frames the singer, with a calmer camera
-                const framing = starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                // a clip that goes on from the last frame of the one before has no cut at its start: the camera move and the
+                // framing of that frame go on too, or the picture is seamless and the motion reverses (dolly in -> crane up)
+                const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
+                const framing = goesOn ? lastFraming! : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
-                const camera = nextCamera(cameraLevel, cameraCursor, lastCamera)
+                const camera = goesOn ? lastCamera! : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
+                lastFraming = framing
                 return {label: `[Shot ${j + 1}]`, at, framing, camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
             })
         }
@@ -523,6 +530,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${joinAnd(silentSingers.map(s => `${s.label}, ${s.name},`))} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing the emotion of the moment through the eyes and brows.`
                     : ''
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
+                // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
+                // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
+                const others = onSinger ? shot.focus.filter(s => !singing?.singers.includes(s.id)) : []
+                const othersClause = others.length
+                    ? ` ${joinAnd(others.map(s => `${s.label}, ${s.name},`))} ${others.length > 1 ? 'stay' : 'stays'} silent: no singing, no mouth movement, no sound from ${others.length > 1 ? 'them' : 'it'}.`
+                    : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const opening = j === 0
                     ? onSinger
@@ -541,7 +554,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
                     const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${propClause}`.trim()
+                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${othersClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
