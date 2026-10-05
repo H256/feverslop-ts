@@ -339,6 +339,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 ```json
 {
   "singers": [],
+  "singerVoice": "auto",
   "lyricsLanguage": "en",
   "continuity": "auto",
   "seed": -1,

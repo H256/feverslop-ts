@@ -95,6 +95,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 ```json
 {
   "singers": [],
+  "singerVoice": "auto",
   "lyricsLanguage": "en",
   "seed": -1,
   "imageResolution": -1,
@@ -121,10 +122,13 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |
 | `pinStartFrame`   | `true`           | continuing clips (README: [Continuous scenes](../README.md#continuous-scenes)): `true` = the clip is locked to the last frame of the clip before it as its real first frame (`MiniMaxH3AddGuide` with `image`, `h3-ref2video` only), `false` = that frame is only one of the reference pictures |
 | `singers`         | `[]`             | who sings on screen: `[]` = nobody (clip mode), `["auto"]` = the LLM picks, `["Thorin"]` = names or ids - see [Singing characters](../README.md#singing-characters) |
+| `singerVoice`     | `"auto"`         | voice of the song: `"auto"` = as the story has it, `"female"` / `"male"` = everybody who sings is a woman / man, `"mixed"` = a duet of one woman and one man; the story is written around them and the cast follows (changes the story, so everything after it redoes) |
 | `lyricsLanguage`  | `"en"`           | language code of the lyrics, for Whisper and the `<d>[English]` lyrics tag               |
 | `alignLyrics`     | `true` with singers, else `false` | stems, transcript and real lyric timing                                 |
 
-The planning fields (`singers`, `lyricsLanguage`, `alignLyrics`) change the plan, the others only the render. The
+Changing `singerVoice` after pictures were rendered: existing pictures are kept (a picture that exists is not rendered again), so delete the old character pictures to get the new cast.
+
+The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`) change the plan, the others only the render. The
 config is read and checked at every run - a wrong value stops with a message naming the field, an unknown field
 (a typo like `"singer"`) gets a warning.
 

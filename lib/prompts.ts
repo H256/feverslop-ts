@@ -1,4 +1,5 @@
 import type {AskOptions} from "./llm.ts";
+import type {SingerVoice} from "./config.ts";
 
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
@@ -52,7 +53,25 @@ Answer only with the style prompt.`,
     }
 }
 
-export function storyPrompt(lyrics: string, storyIdea: string): AskOptions {
+/**
+ * What config.singerVoice adds to the story, cast and singer prompts ('' for "auto"). The story is told around the
+ * singers from its first sentence on, so the cast and every look built on it follow.
+ */
+export function voiceRules(voice: SingerVoice) {
+    if (voice === 'auto') return {story: '', cast: '', pick: ''}
+    const who = voice === 'mixed'
+        ? 'two singers, one woman and one man (a duet - the lines are split between them or sung together)'
+        : `${voice === 'female' ? 'women' : 'men'} - every character who sings is ${voice}`
+    return {
+        story: `\n- The song is sung by ${who}. Write them as such from the first sentence on (consistent pronouns, no gender change later), whatever the lyrics or the story idea suggest.`,
+        cast: `- The song is sung by ${who}. State their gender in the role (e.g. "a young woman who ..."), even if the story text says otherwise. Other characters are not affected.\n`,
+        pick: voice === 'mixed'
+            ? 'The song is a duet of one woman and one man: pick exactly two singers, one female and one male character.\n'
+            : `The song is sung by ${voice === 'female' ? 'women' : 'men'}: every singer you pick must be a ${voice} character.\n`,
+    }
+}
+
+export function storyPrompt(lyrics: string, storyIdea: string, singerVoice: SingerVoice = 'auto'): AskOptions {
     return {
         input: `
     Take the following Lyrics and Story Idea and craft a story from it.
@@ -62,7 +81,7 @@ export function storyPrompt(lyrics: string, storyIdea: string): AskOptions {
         instructions: `You are a movie story writer. You will be given lyrics and a story idea, either of which may be missing (marked as "(none)").
 - If both are given, craft a story that considers both the lyrics and the story idea.
 - If only one is given, craft the story based on the one that is present.
-- If both are missing, do not write a story. Answer only with: NO STORY`,
+- If both are missing, do not write a story. Answer only with: NO STORY${voiceRules(singerVoice).story}`,
     }
 }
 
@@ -79,7 +98,7 @@ ${storyBase}
     }
 }
 
-export function castPrompt(storyBase: string): AskOptions {
+export function castPrompt(storyBase: string, singerVoice: SingerVoice = 'auto'): AskOptions {
     return {
         input: `Here is a story concept.
 You need to extract all characters and their role in the story.
@@ -94,7 +113,7 @@ Additionally, for every character:
 - "prop": if the character visibly carries or uses one distinctive physical object throughout the story (a weapon, tool, musical instrument, etc.), name it briefly (e.g. "electric guitar", "iron sword", "drum kit"). Every visible member of a band must get their actual instrument here, including drummers and other backing musicians, not just the lead. Leave it an empty string if the character carries nothing distinctive.
 - "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "guitar" for any electric/acoustic guitar, "piano" for piano/keys, "other" for anything else melodic (synth, strings, etc. - only when none of the above fit). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
 - "isGroup": true if this entry is a collective acting as one individual member of a group (e.g. "Orcs", "Miners", a band's backing dancers) rather than a single named person - several distinct-looking individuals of it can appear on screen at once. false for a single person or creature, even a memorable one.
-The rules for locations are: List them in order of appearance in the story. A location is a place that can be filmed as one set.
+${voiceRules(singerVoice).cast}The rules for locations are: List them in order of appearance in the story. A location is a place that can be filmed as one set.
 ---
 story:
 ${storyBase}

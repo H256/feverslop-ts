@@ -19,7 +19,7 @@ import {loadSettings} from "./lib/settings.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 import {projectExists, validProjectId} from "./lib/project-setup.ts";
 import {
-    castPrompt, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
@@ -223,6 +223,7 @@ await project.syncInputs({
     'story-idea.txt': {value: storyIdea, steps: ['story']},
     'style.txt': {value: style, steps: ['lookBrief'], assumed: ''},
     singers: {value: JSON.stringify(config.singers), steps: ['singing'], assumed: '[]'},
+    singerVoice: {value: config.singerVoice, steps: ['story'], assumed: 'auto'},
     lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
     // which beats run on without a cut changes what their shots have to tell
     continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
@@ -275,7 +276,7 @@ if (lyricsTiming) {
 }
 
 ////////// CRAFT A STORY FOR THE LYRICS
-const storyBase = await project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea)))
+const storyBase = await project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea, config.singerVoice)))
 log.box('Story', storyBase)
 if (storyBase === 'NO STORY') throw new Error('Neither lyrics nor a story idea given')
 
@@ -285,7 +286,7 @@ log.box('Summary', storySummary)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
 const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
-    const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase))
+    const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
     const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
     return {
         characters: extracted.characters.map(c => ({
@@ -824,7 +825,7 @@ async function chooseSingers(wanted: string[]): Promise<Singing> {
         const picked = await askJson<{ singers: string[] }>({
             input: `Pick the lead singer of this music video from the cast: the character who sings the lyrics on screen.
 Pick exactly one - two or three only if the lyrics clearly are a dialogue or duet between different characters. A group character (e.g. "Miners") can be the singer if the lyrics are sung by a group ("we").
-Answer only with JSON: {"singers": ["<character id>"]}
+${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": ["<character id>"]}
 ---
 cast: ${castList}
 lyrics:
