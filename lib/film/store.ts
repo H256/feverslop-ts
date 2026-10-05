@@ -12,6 +12,11 @@ const dependsOn: Record<FilmStepName, FilmStepName[]> = {
     screenplay: ['brief', 'outline'],
     cast: ['screenplay'],
     summary: ['screenplay'],
+    lookBrief: ['summary'],
+    characterLooks: ['cast', 'lookBrief'],
+    characterDescriptions: ['characterLooks'],
+    locationLooks: ['cast', 'lookBrief', 'summary'],
+    locationDescriptions: ['locationLooks'],
 }
 
 export const FILM_STEP_NAMES = Object.keys(dependsOn) as FilmStepName[]
@@ -75,6 +80,12 @@ export class FilmStore {
             this.data.inputs = current
             await this.save()
         }
+    }
+
+    /** Notes an input as it is now - for a file the run itself wrote (the picked style), which must not count as an edit next time. */
+    async recordInput(name: string, value: string) {
+        this.data.inputs = {...this.data.inputs, [name]: Bun.hash(value).toString(16)}
+        await this.save()
     }
 
     // Runs a step unless its result is already in project.json

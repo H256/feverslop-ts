@@ -13,6 +13,9 @@ export type FilmConfig = {
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
+    // every character and location gets a multi-angle reference sheet (a short turnaround video, sampled and composited,
+    // see lib/sequenceSheet.ts) instead of one picture - false renders just the picture, which is much cheaper
+    sequenceSheets: boolean,
     llm: { model?: string },        // a project may use another model than the settings - never another server or key
 }
 
@@ -22,6 +25,7 @@ export const filmDefaults: FilmConfig = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
+    sequenceSheets: true,
     llm: {},
 }
 
@@ -55,6 +59,7 @@ export async function loadFilmConfig(filmDir: string): Promise<FilmConfig> {
             fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
         }
     }
+    if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
     const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
     if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)

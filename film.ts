@@ -7,22 +7,26 @@ import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
-import {briefPrompt, castPrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts";
+import {briefPrompt, castPrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {estimateSeconds, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, Outline} from "./lib/film/types.ts";
 import {askJson, ask, configureLlm} from "./lib/llm.ts";
 import {log, printBanner, styles} from "./lib/log.ts";
+import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
 import {validProjectId} from "./lib/project-setup.ts";
+import {Renderer} from "./lib/render.ts";
 import {loadSettings} from "./lib/settings.ts";
+import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 
 process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
 process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--llm-url=…] [--llm-key=…] [--llm-model=…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images|all] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -31,6 +35,8 @@ const {values: args, positionals} = (() => {
             allowPositionals: true,
             options: {
                 redo: {type: 'string', default: ''},
+                render: {type: 'string', default: ''},
+                comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
@@ -40,7 +46,11 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-const redoSteps = args.redo.split(',').filter(Boolean) as FilmStepName[]
+// --render=all is everything that can be rendered so far
+const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images'] : [r]))
+const unknownRender = [...render].filter(r => r !== 'images')
+if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images or all`, usage)
+const redoSteps =args.redo.split(',').filter(Boolean) as FilmStepName[]
 const unknownRedo = redoSteps.filter(s => !(FILM_STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${FILM_STEP_NAMES.join(', ')}`, usage)
 
@@ -59,12 +69,13 @@ const readInput = async (name: string) => existsSync(film.input(name)) ? (await 
 /////////// INPUTS AND CONFIG
 log.section(`FILM · ${film.id}`)
 const config = await loadFilmConfig(film.dir)
-const settings = await loadSettings({projectModel: config.llm.model, llmUrl: args['llm-url'], llmApiKey: args['llm-key'], llmModel: args['llm-model']})
+const settings = await loadSettings({projectModel: config.llm.model, llmUrl: args['llm-url'], llmApiKey: args['llm-key'], llmModel: args['llm-model'], comfy: args.comfy})
 configureLlm(settings.llm)
 log.step('LLM', settings.llm.url
     ? `${settings.llm.url} · ${settings.llm.model ? styles.name(settings.llm.model) : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
 
+let style = await readInput('style.txt')
 const idea = await readInput('idea.txt')
 const screenplaySource = await readInput('screenplay.txt')
 if (!idea && !screenplaySource) throw new Error(`${film.input('idea.txt')} or ${film.input('screenplay.txt')} is needed - a story idea or a screenplay in any language`)
@@ -79,6 +90,7 @@ await film.syncInputs({
     'screenplay.txt': {value: screenplaySource, steps: ['brief']},
     dialogueLanguage: {value: config.dialogueLanguage, steps: ['brief']},
     targetDuration: {value: String(config.targetDuration), steps: ['outline']},
+    'style.txt': {value: style, steps: ['lookBrief']},
 })
 
 /////////// 1 · BRIEF
@@ -131,7 +143,7 @@ if (mode === 'screenplay' && seconds > 240) log.warn(`~${seconds}s is a long fil
 
 /////////// 4 · CAST
 const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
-    const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems))
+    const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined))
     let raw = await attempt()
     try {
         return toCast(raw, screenplay)
@@ -149,7 +161,89 @@ for (const l of cast.locations) log.step('Location', styles.name(l.name))
 const summary = await film.step('summary', '5 · SUMMARIZING THE STORY', () => ask(summaryPrompt(screenplay, cast)))
 log.step('Summary', styles.muted(summary))
 
-/////////// OUTPUT
 const fountain = join(film.dir, 'screenplay.fountain')
 await Bun.write(fountain, screenplayToFountain(screenplay))
 log.step('Screenplay', `${fountain} ${styles.muted('- read it; to change something, edit project.json and run again')}`)
+
+/////////// 6 · FILM LOOK
+// No style.txt on a film that has no look yet: the LLM shortlists a few styles (lib/styles.ts) that fit the story, one of
+// them is drawn at random - so the look neither follows the LLM's favorites nor ignores the story. It is written to
+// input/style.txt once and can be edited or swapped. A film whose look is already cached keeps it.
+if (!style && film.data.lookBrief === undefined) {
+    let candidates: FilmStyle[] = []
+    try {
+        const shortlist = await askJson<{ styles: string[] }>(styleShortlistPrompt(brief, summary, shuffledStyles(), 5))
+        candidates = stylesById(shortlist.styles)
+    } catch (e) {
+        log.step('Style', styles.muted(`no shortlist from the LLM (${e instanceof Error ? e.message : e}) - picking from the whole list`))
+    }
+    const picked = pickStyle(candidates.length ? candidates : undefined)
+    style = picked.text
+    await Bun.write(film.input('style.txt'), style)
+    await film.recordInput('style.txt', style)
+    log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
+}
+const lookBrief = await film.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, `${brief.genre}, ${brief.tone}. ${summary}`)))
+log.box('Look brief', lookBrief)
+
+/////////// 7 · CHARACTER LOOKS - a reference picture for everyone who is seen (a narrator's voice has none)
+const seen = cast.characters.filter(c => !c.voiceOnly)
+const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTER LOOKS', async () => {
+    const looks: Record<string, string> = {}
+    for (const [i, char] of seen.entries()) {
+        log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
+        const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
+        // the script's own description of the character is a fact the picture has to show
+        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance}`}, otherLooks))
+    }
+    return looks
+})
+for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
+
+/////////// 7b · the character looks without the reference sheet (pose, grey background, studio light) - for the clip prompts
+const characterDescriptions = await film.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
+    const descriptions: Record<string, string> = {}
+    for (const [i, char] of seen.entries()) {
+        log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
+        descriptions[char.id] = await ask(characterDescriptionPrompt(characterLooks[char.id] ?? ''))
+    }
+    return descriptions
+})
+for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
+
+/////////// 8 · LOCATION LOOKS
+const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
+    const looks: Record<string, string> = {}
+    for (const [i, location] of cast.locations.entries()) {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description}`))
+    }
+    return looks
+})
+for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
+
+/////////// 8b · the location looks without the establishing shot (camera, "empty") - for the clip prompts
+const locationDescriptions = await film.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
+    const descriptions: Record<string, string> = {}
+    for (const [i, location] of cast.locations.entries()) {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        descriptions[location.id] = await ask(locationDescriptionPrompt(locationLooks[location.id] ?? ''))
+    }
+    return descriptions
+})
+for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
+
+const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions})
+await Bun.write(join(film.dir, 'assets.json'), JSON.stringify(pictures, null, 2))
+
+/////////// 9 · RENDERING THE REFERENCE PICTURES WITH COMFYUI
+if (render.has('images')) {
+    const renderConfig = filmRenderConfig(config)
+    // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
+    using renderer = new Renderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
+    log.section('9 · RENDERING THE REFERENCE PICTURES')
+    log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
+    log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
+    log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
+    await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+}

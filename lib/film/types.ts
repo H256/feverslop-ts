@@ -80,4 +80,9 @@ export type FilmProject = {
     screenplay?: Screenplay,
     cast?: FilmCast,
     summary?: string,
+    lookBrief?: string,
+    characterLooks?: Record<string, string>,         // Krea 2 prompt of the reference picture, per character id (never a voice-only one)
+    characterDescriptions?: Record<string, string>,  // the look without the picture's pose, background and light - for the clip prompts
+    locationLooks?: Record<string, string>,
+    locationDescriptions?: Record<string, string>,
 }

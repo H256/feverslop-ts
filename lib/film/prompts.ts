@@ -120,15 +120,21 @@ ${screenplayJson}`,
     }
 }
 
-export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: string[] = []): AskOptions {
+// original: the screenplay as it was handed in - the structured one keeps only scenes and lines, so a character list
+// ("ELIAN (30s): an exhausted wanderer") and other notes of the writer would be lost
+export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: string[] = [], original?: string): AskOptions {
     return {
         maxTokens: 8192,
         reasoning: 'medium',
         input: `${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${outline ? `Planning notes (use them for appearance and voice where they cover a character):
 ${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
 
-` : ''}Screenplay:
-${screenplayToText(screenplay)}`,
+` : ''}${original ? `The screenplay as its writer handed it in - it may carry a character list or notes (ages, looks) that are facts for the cast:
+${original}
+
+---
+The same screenplay, structured:
+` : 'Screenplay:\n'}${screenplayToText(screenplay)}`,
         instructions: `You are a casting and location director. Read the screenplay and list everyone who appears or speaks in it, and every place it takes place in. Answer only with JSON:
 {
   "characters": [{"name": "", "aliases": [""], "role": "", "appearance": "", "voice": "", "voiceOnly": false}],
@@ -138,7 +144,7 @@ Characters:
 - "name": the character's name, in English letters where the script allows it.
 - "aliases": every cue and name the script uses for this character, exactly as written (e.g. "MARIA", "Maria", "Mother"). One character, one entry - cues that mean the same person belong together. Every speaker cue of the screenplay must be in some character's aliases.
 - "role": a short description of what the character does in the story.
-- "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn.
+- "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn. What the screenplay states is kept exactly - the age ("30s" stays in the thirties), size ("large" stays large), colors, species, clothing - and never contradicted by a filled-in detail.
 - "voice": for the video model - gender, age, pitch, timbre, pace, accent, in one sentence. Concrete, e.g. "a young woman's clear, light voice, fast and a little nervous".
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
 Locations: each place that can be filmed as one set, in order of appearance. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
@@ -154,5 +160,23 @@ Places: ${cast.locations.map(l => l.name).join(', ')}
 Screenplay:
 ${screenplayToText(screenplay)}`,
         instructions: 'You are an expert for story summarization. You receive a screenplay and summarize it in a short paragraph, in English, keeping characters and places intact. Answer only with the summary.',
+    }
+}
+
+// Shortlist, not a single pick: the code then draws one at random, so the LLM's favorites can't decide the look alone.
+export function styleShortlistPrompt(brief: Brief, summary: string, styleList: { id: string, name: string }[], count: number): AskOptions {
+    return {
+        maxTokens: 2048,
+        input: `Choose the ${count} film styles from the list that would suit this short film best, for a film generated with AI image and video models.
+Pick ${count} clearly different looks - not variations of one look - spread over at least 3 different kinds of medium (live action, 2D animation, 3D animation, craft/stop-motion, painted/printed). Let the genre, era, tone and audience decide; painted or "artistic" styles are only right when the story asks for them.
+Answer only with JSON: {"styles": ["<style id>", ...]}
+
+styles:
+${styleList.map(s => `- ${s.id}: ${s.name}`).join('\n')}
+---
+film: ${brief.title} - ${brief.logline}
+Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
+summary: ${summary}`,
+        instructions: 'You are a film director choosing the visual style of a short film. Answer only with the JSON.',
     }
 }
