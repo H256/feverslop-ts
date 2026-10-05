@@ -14,9 +14,10 @@ import {FilmRenderer} from "./lib/film/render.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
+import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, Outline, SceneCoverage} from "./lib/film/types.ts";
-import {askJson, ask, configureLlm} from "./lib/llm.ts";
+import {ask, configureLlm} from "./lib/llm.ts";
 import {log, printBanner, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
 import {validProjectId} from "./lib/project-setup.ts";
@@ -198,7 +199,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance}`}, otherLooks))
+        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build.`}, otherLooks))
     }
     return looks
 })
