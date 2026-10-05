@@ -13,7 +13,10 @@ palette, lighting, camera language, texture). Copy one of the examples below, or
 What works well with Krea 2 (stills) and MiniMax H3 (clips):
 
 - **Name the medium first**, then say how it is shot, drawn or built (stock, lens, line work, shading, materials).
-- **Describe visible things, not moods.** "Sodium-vapor streetlights, wet asphalt" beats "gritty and atmospheric".
+- **Describe the look, not the content.** Medium, stock or rendering, lens, light, palette, grain, camera behavior - and
+  say it with visible things ("hard low-key light, crushed blacks, fine silver grain" beats "dark and moody"). Leave out
+  places, props, costumes, weather and people: a style applies to every scene of the film, and whatever it names
+  ("cigarette smoke", "rain-slick streets", "castle sets") shows up in all of them. The story brings the content.
 - **Commit to one style.** Mixing ("photorealistic anime") confuses both models.
 - **Anime and stylized looks:** name the rendering ("flat cel shading, two-tone shadows, clean dark linework"), not just
   the genre.
