@@ -123,11 +123,11 @@ ${screenplayJson}`,
 
 // original: the screenplay as it was handed in - the structured one keeps only scenes and lines, so a character list
 // ("ELIAN (30s): an exhausted wanderer") and other notes of the writer would be lost
-export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: string[] = [], original?: string): AskOptions {
+export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: string[] = [], original?: string, setting?: string): AskOptions {
     return {
         maxTokens: 8192,
         reasoning: 'medium',
-        input: `${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${outline ? `Planning notes (use them for appearance and voice where they cover a character):
+        input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${outline ? `Planning notes (use them for appearance and voice where they cover a character):
 ${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
 
 ` : ''}${original ? `The screenplay as its writer handed it in - it may carry a character list or notes (ages, looks) that are facts for the cast:
@@ -146,7 +146,7 @@ Characters:
 - "name": the character's name, in English letters where the script allows it.
 - "aliases": every cue and name the script uses for this character, exactly as written (e.g. "MARIA", "Maria", "Mother"). One character, one entry - cues that mean the same person belong together. Every speaker cue of the screenplay must be in some character's aliases.
 - "role": a short description of what the character does in the story.
-- "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn. What the screenplay states is kept exactly - the age ("30s" stays in the thirties), size ("large" stays large), colors, species, clothing - and never contradicted by a filled-in detail.
+- "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn. What the screenplay states is kept exactly - the age ("30s" stays in the thirties), size ("large" stays large), colors, species, clothing - and never contradicted by a filled-in detail. Clothing, headgear, weapons and gear are exactly right for the setting's era and nation, named by what they are - for a 1916 German infantryman not just "a field-grey uniform", but e.g. "a field-grey M1915 tunic with a stand-up collar, an M1916 steel helmet, leather ammunition pouches on a belt with a buckle, wrapped puttees and hobnailed boots, a Gewehr 98 rifle" - because an image model reads a vague uniform as the most familiar one of a later war. Nothing from another period. Build and age are stated in plain terms ("of average height, lean", "in his early twenties") and an age is never made to look younger or older than written. Where the screenplay or its genre calls for the unusual - a giant, a child, a distorted creature, a nightmare - that is kept exactly as written and drawn that way. Otherwise a person has the ordinary proportions of that age: an adult is not "small", "tiny", "delicate", "boyish" or "child-like", and characters are told apart by hair, face, beard, clothing, gear and posture, not by extreme height or build.
 - "voice": for the video model - gender, age, pitch, timbre, pace, accent, as one phrase that fits after "says in": it starts with an article and contains the word "voice", e.g. "a young woman's clear, light voice, fast and a little nervous".
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
 Locations: each place that can be filmed as one set, in order of appearance. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,

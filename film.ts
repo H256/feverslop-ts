@@ -147,7 +147,7 @@ if (mode === 'screenplay' && seconds > 240) log.warn(`~${seconds}s is a long fil
 
 /////////// 4 · CAST
 const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
-    const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined))
+    const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined, brief.setting))
     let raw = await attempt()
     try {
         return toCast(raw, screenplay)
@@ -187,7 +187,7 @@ if (!style && film.data.lookBrief === undefined) {
     await film.recordInput('style.txt', style)
     log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
 }
-const lookBrief = await film.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, `${brief.genre}, ${brief.tone}. ${summary}`)))
+const lookBrief = await film.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, `${brief.genre}, ${brief.tone}, ${brief.setting}. ${summary}`)))
 log.box('Look brief', lookBrief)
 
 /////////// 7 · CHARACTER LOOKS - a reference picture for everyone who is seen (a narrator's voice has none)
