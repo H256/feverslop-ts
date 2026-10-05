@@ -93,6 +93,7 @@ cached project runs without either.
 - [docs/comfyui.md](docs/comfyui.md) – rendering with ComfyUI: setup, `config.json`, re-rendering, things to know,
   troubleshooting
 - [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
+- [docs/film.md](docs/film.md) – the experimental short-film pipeline (`bun run film:init`, `bun film.ts`): idea or screenplay → film
 
 ## Creating a project
 

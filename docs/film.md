@@ -7,6 +7,23 @@ LLM client, the settings and a few helpers with it. Films live in `films/<id>/`,
 **Status: stage 1 of the plan - text only, no GPU.** The steps below run today; reference pictures, the shot plan, clip
 requests and rendering are still to come (see [What's next](#whats-next)).
 
+## Quick start
+
+Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video pipeline (`bun run setup llm`, see the
+[README](../README.md#setup)). No ComfyUI, ffmpeg or uv yet.
+
+| Command | What it does |
+|---------|--------------|
+| `bun install` | once |
+| `bun run setup llm` | once: connect the LLM server |
+| `bun run film:init` | create a film: idea or screenplay, style, length, language, resolution |
+| `bun film.ts <film-id>` | run all steps; finished steps are cached, an edited input redoes what depends on it |
+| `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
+| `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=…` | another LLM for this run only |
+
+`bun run film <film-id>` is the same as `bun film.ts <film-id>`. Typical session: `film:init` → `bun film.ts <id>` → read
+`films/<id>/screenplay.fountain` → edit `project.json` if something is off → `bun film.ts <id>` again.
+
 ## Creating a film
 
 ```bash
