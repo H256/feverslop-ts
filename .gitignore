@@ -42,3 +42,4 @@ projects
 # generated, ~4.3 MB (bun run comfy:types)
 comfy/nodes.ts
 
+films

@@ -1,0 +1,158 @@
+// Prompts of the short-film pipeline. Everything is written in English; only dialogue stays in its own language.
+// These are separate from lib/prompts.ts on purpose - the music-video prompts are tuned for songs and stay as they are.
+import type {AskOptions} from "../llm.ts";
+import type {Brief, FilmCast, Outline, Screenplay} from "./types.ts";
+import {screenplayToText} from "./fountain.ts";
+
+// What the video model can actually show - the constraints of the generation, not taste. A clip is at most ~10 seconds
+// of one location with a handful of people; speech comes out of the model itself, from the prompt.
+const filmableRules = `The film is generated clip by clip with an AI video model (every clip: at most ~10 seconds, one place, a few people), so write for that:
+- Tell the story in pictures and short spoken lines. Dialogue lines are short: at most ~15 words, one thought each. A long thought is split between speakers or across a pause with an action.
+- Few characters (2-4 is ideal, 6 at the very most) and few locations (1-3 is ideal, 4 at the very most). One location per scene. No crowds - at most a few people at once.
+- Every action line is something the camera sees or the microphone hears, in the present tense. No thoughts, no backstory, no "we realize", no mood words without what they look like.
+- No text that must be readable on screen (letters, signs, screens, phone messages) - tell it in dialogue or action instead.
+- Mirrors, photographs and screens showing a face are avoided - the video model copies the face into them.`
+
+export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
+    return {
+        maxTokens: 4096,
+        input: `${mode === 'screenplay' ? 'Screenplay' : 'Story idea'}:
+${source}`,
+        instructions: `You are a script editor. You are given ${mode === 'screenplay' ? 'a screenplay' : 'a story idea for a short film'} in any language. Answer only with JSON:
+{"title": "", "language": "", "logline": "", "genre": "", "tone": "", "setting": ""}
+- "title": the film's title - ${mode === 'screenplay' ? 'the screenplay\'s own title if it has one, else a short fitting one' : 'a short fitting title, in the language of the dialogue'}, no quotation marks.
+- "language": the ISO 639-1 code of the language the characters ${dialogueLanguage ? `speak: always "${dialogueLanguage}"` : mode === 'screenplay' ? 'speak in the screenplay (the dominant one if several)' : 'will speak - the language the idea is written in'}.
+- "logline": one sentence in English: who wants what, and what stands in the way.
+- "genre", "tone", "setting": a few words each, in English. The setting is era and place.`,
+    }
+}
+
+export function outlinePrompt(idea: string, brief: Brief, targetSeconds: number): AskOptions {
+    const duration = targetSeconds > 0
+        ? `The finished film runs about ${targetSeconds} seconds. Plan the scenes so their "seconds" add up to that: roughly one scene per 15-30 seconds.`
+        : 'The film is as long as the story needs, but a short film: 1-3 minutes.'
+    return {
+        maxTokens: 8192,
+        reasoning: 'medium',
+        input: `Story idea:
+${idea}
+
+Title: ${brief.title}
+Logline: ${brief.logline}
+Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
+Dialogue language: ${brief.language}`,
+        instructions: `You are a short-film writer. Plan the film from the story idea: a complete small story with a beginning, a turn and an end - not a scene from the middle of something.
+${duration}
+
+${filmableRules}
+
+Answer only with JSON:
+{
+  "characters": [{"name": "", "role": "", "appearance": "", "voice": ""}],
+  "scenes": [{"heading": "INT. PLACE - NIGHT", "characters": [""], "summary": "", "purpose": "", "seconds": 20}]
+}
+- "name": a first name or a short name, as the script will write it. A narrator who is never seen is a character too (name it "Narrator").
+- "appearance": concrete and visible - age, build, face, hair, clothing. No personality.
+- "voice": how the character sounds, for the video model - gender, age, pitch, timbre, pace, accent. Concrete, e.g. "an older man's low, gravelly voice, slow and calm, a slight northern accent".
+- "heading": a slugline - INT. or EXT., the place, DAY/NIGHT/DUSK/DAWN. The same place is always named the same way.
+- "summary": what happens, in 2-3 sentences. "purpose": what the scene changes in the story.
+Names, headings and the story are written in English; the dialogue language only matters later, in the script.`,
+    }
+}
+
+const screenplayJson = `{
+  "scenes": [{
+    "setting": "INT",
+    "location": "",
+    "time": "NIGHT",
+    "elements": [
+      {"type": "action", "text": ""},
+      {"type": "dialogue", "speaker": "", "text": "", "kind": "spoken", "delivery": "", "language": ""}
+    ]
+  }]
+}
+- "setting": "INT", "EXT" or "INT/EXT". "location": the place as the slugline names it, without INT./EXT. and without the time. "time": DAY, NIGHT, DUSK, DAWN, ...
+- "speaker": the character cue, as the script writes it. "kind": "spoken" (the character is in the picture and speaks), "offscreen" (heard, but not in the picture) or "voiceover" (narration or thoughts, lips closed).
+- "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "language" is optional - only a line spoken in another language than the film's.`
+
+export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
+    return {
+        maxTokens: 16384,
+        reasoning: 'medium',
+        input: `Title: ${brief.title}
+Logline: ${brief.logline}
+Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
+Dialogue language: ${brief.language}
+
+Characters:
+${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
+
+Scenes:
+${outline.scenes.map((s, i) => `${i + 1}. ${s.heading} (${s.seconds}s) - ${s.characters.join(', ') || 'nobody'}\n   ${s.summary}\n   Purpose: ${s.purpose}`).join('\n')}`,
+        instructions: `You are a screenwriter. Write the screenplay for this outline - every scene of it, in order, with the same characters and places.
+
+${filmableRules}
+- All dialogue is written in the dialogue language (${brief.language}) - natural, spoken, with the character's own voice. Action lines and deliveries are English.
+- Each scene's length matches its planned seconds: about 2.5 spoken words per second plus the time of its actions.
+- Write only what the outline contains - no new characters, no new places.
+
+Answer only with JSON in this format:
+${screenplayJson}`,
+    }
+}
+
+export function screenplayParsePrompt(source: string, language: string, missing: string[] = []): AskOptions {
+    return {
+        maxTokens: 24576,
+        reasoning: 'low',
+        input: `${missing.length ? `Your last attempt changed or lost these dialogue lines - they must appear exactly as in the screenplay, character for character:\n${missing.map(m => `- ${m}`).join('\n')}\n\n` : ''}Screenplay:
+${source}`,
+        instructions: `You are a script supervisor. Convert the screenplay into structured JSON. Do not rewrite it.
+- Every dialogue line is copied verbatim: the same words, in the same language, with the same spelling and punctuation. Never translate, correct, shorten or reword it. A line spoken in a different language than ${language} gets "language" set to its ISO 639-1 code.
+- Keep every scene and every line, in order. Do not invent or drop scenes, characters or lines.
+- Action lines are kept in meaning; they may be tidied into plain present-tense sentences in English. Transitions (CUT TO:, FADE OUT) and camera directions of the writer are dropped.
+- Sluglines in any language (INNEN, INT., EXT., 内...) become "setting" "INT", "EXT" or "INT/EXT", "location" and "time" - location and time translated into English, the place always named the same way.
+- A parenthetical becomes "delivery" in English. (V.O.) and (O.S.) / (OFF) become "voiceover" and "offscreen".
+- "speaker" is the character cue exactly as written.
+
+Answer only with JSON in this format:
+${screenplayJson}`,
+    }
+}
+
+export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: string[] = []): AskOptions {
+    return {
+        maxTokens: 8192,
+        reasoning: 'medium',
+        input: `${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${outline ? `Planning notes (use them for appearance and voice where they cover a character):
+${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
+
+` : ''}Screenplay:
+${screenplayToText(screenplay)}`,
+        instructions: `You are a casting and location director. Read the screenplay and list everyone who appears or speaks in it, and every place it takes place in. Answer only with JSON:
+{
+  "characters": [{"name": "", "aliases": [""], "role": "", "appearance": "", "voice": "", "voiceOnly": false}],
+  "locations": [{"name": "", "aliases": [""], "description": ""}]
+}
+Characters:
+- "name": the character's name, in English letters where the script allows it.
+- "aliases": every cue and name the script uses for this character, exactly as written (e.g. "MARIA", "Maria", "Mother"). One character, one entry - cues that mean the same person belong together. Every speaker cue of the screenplay must be in some character's aliases.
+- "role": a short description of what the character does in the story.
+- "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn.
+- "voice": for the video model - gender, age, pitch, timbre, pace, accent, in one sentence. Concrete, e.g. "a young woman's clear, light voice, fast and a little nervous".
+- "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
+Locations: each place that can be filmed as one set, in order of appearance. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
+    }
+}
+
+export function summaryPrompt(screenplay: Screenplay, cast: FilmCast): AskOptions {
+    return {
+        maxTokens: 4096,
+        input: `Cast: ${cast.characters.map(c => c.name).join(', ')}
+Places: ${cast.locations.map(l => l.name).join(', ')}
+
+Screenplay:
+${screenplayToText(screenplay)}`,
+        instructions: 'You are an expert for story summarization. You receive a screenplay and summarize it in a short paragraph, in English, keeping characters and places intact. Answer only with the summary.',
+    }
+}

@@ -12,7 +12,9 @@
     "styles:doc": "bun tools/styles-doc.ts",
     "typecheck": "bun tools/typecheck.ts",
     "comfy:types": "bun comfy/gen-types.ts",
-    "comfy:convert": "bun comfy/json-to-ts.ts"
+    "comfy:convert": "bun comfy/json-to-ts.ts",
+    "film": "bun film.ts",
+    "film:init": "bun tools/film-init.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
