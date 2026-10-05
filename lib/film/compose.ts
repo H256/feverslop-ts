@@ -195,8 +195,10 @@ function normalizeLine(line: string) {
     return /[.?!]$/.test(clean) ? clean : `${clean}.`
 }
 
-// the guide wants one or two style sentences before [Shot 1]
-const styleOpening = (lookBrief: string) => lookBrief.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean).slice(0, 2).join(' ')
+// The guide wants one or two style sentences before [Shot 1]. Only the first of the look brief: it names the medium and the
+// style - the second already describes the world of the whole film, every place in it, and the video model draws what is
+// described there into whichever place it is shown (the crystal trees of one location showed up in another)
+const styleOpening = (lookBrief: string) => lookBrief.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean).slice(0, 1).join(' ')
 
 const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
