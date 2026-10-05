@@ -19,6 +19,7 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun install` | once |
 | `bun run setup llm` | once: connect the LLM server |
 | `bun run film:init` | create a film: idea or screenplay, style, length, language, resolution |
+| `bun run film:replace-character [film-id]` | wizard: swap a character's reference picture for your own (or one that came out wrong) and update its description - see [Replacing a character](#replacing-a-character) |
 | `bun film.ts <film-id>` | run all steps; finished steps are cached, an edited input redoes what depends on it |
 | `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
 | `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
@@ -88,6 +89,19 @@ mouth closed. Speaker ids are numbered per clip, in the order of the spoken line
 
 A clip whose first shot goes on in the same take as the one before starts on that clip's last frame (`startsFrom`, `<Picture N>`
 as its first frame) - `continuity` in the config.
+
+## Replacing a character
+
+A reference picture that came out wrong, or a character you have drawn yourself or carry over from another project:
+
+```bash
+bun run film:replace-character          # asks which film, which character, and for the new picture
+```
+
+The wizard keeps the old picture in `films/<id>/old/`, saves yours as the character's picture (any image format), clears what was built from the old
+one (with `sequenceSheets`: the sheet's video and frames), lets a vision-capable LLM describe the new picture for the clip prompts (or you type
+it), names the clips that were already rendered with the old picture - they are not touched, delete the ones you want redone - and offers to
+render the new reference sheet. It is the film counterpart of `bun run replace-character`.
 
 ## config.json
 

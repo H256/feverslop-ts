@@ -14,7 +14,8 @@
     "comfy:types": "bun comfy/gen-types.ts",
     "comfy:convert": "bun comfy/json-to-ts.ts",
     "film": "bun film.ts",
-    "film:init": "bun tools/film-init.ts"
+    "film:init": "bun tools/film-init.ts",
+    "film:replace-character": "bun tools/film-replace-character.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
