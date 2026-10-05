@@ -850,7 +850,7 @@ ${storySummary}`,
     const assigned = await askJson<{ lines: { line: number, singers: string[] }[] }>({
         reasoning: 'medium',
         // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
-        maxTokens: Math.max(16384, beatCount * 1100),
+        maxTokens: Math.max(16384, lines.length * 100),
         input: `These characters sing the song of a music video: ${JSON.stringify(singers)}.
 Decide who sings which line. A line is sung by one singer, or by several together (duet or choir lines, e.g. a chorus).
 Follow the lyrics and the story: who would say these words? Keep a verse with one singer unless its lines answer each other.
