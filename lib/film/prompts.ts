@@ -1,7 +1,7 @@
 // Prompts of the short-film pipeline. Everything is written in English; only dialogue stays in its own language.
 // These are separate from lib/prompts.ts on purpose - the music-video prompts are tuned for songs and stay as they are.
 import type {AskOptions} from "../llm.ts";
-import type {Brief, FilmCast, Outline, Screenplay} from "./types.ts";
+import type {Brief, FilmCast, FilmCharacter, FilmLocation, Outline, Scene, Screenplay} from "./types.ts";
 import {screenplayToText} from "./fountain.ts";
 
 // What the video model can actually show - the constraints of the generation, not taste. A clip is at most ~10 seconds
@@ -146,7 +146,7 @@ Characters:
 - "aliases": every cue and name the script uses for this character, exactly as written (e.g. "MARIA", "Maria", "Mother"). One character, one entry - cues that mean the same person belong together. Every speaker cue of the screenplay must be in some character's aliases.
 - "role": a short description of what the character does in the story.
 - "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn. What the screenplay states is kept exactly - the age ("30s" stays in the thirties), size ("large" stays large), colors, species, clothing - and never contradicted by a filled-in detail.
-- "voice": for the video model - gender, age, pitch, timbre, pace, accent, in one sentence. Concrete, e.g. "a young woman's clear, light voice, fast and a little nervous".
+- "voice": for the video model - gender, age, pitch, timbre, pace, accent, as one phrase that fits after "says in": it starts with an article and contains the word "voice", e.g. "a young woman's clear, light voice, fast and a little nervous".
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
 Locations: each place that can be filmed as one set, in order of appearance. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
     }
@@ -179,5 +179,38 @@ film: ${brief.title} - ${brief.logline}
 Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
 summary: ${summary}`,
         instructions: 'You are a film director choosing the visual style of a short film. Answer only with the JSON.',
+    }
+}
+
+// One scene at a time: its shots. The dialogue is numbered so that the answer can be checked against it - every line
+// in exactly one shot, in order - and the shots are what the clips are packed from (lib/film/coverage.ts).
+export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, problems: string[] = []): AskOptions {
+    let line = 0
+    const script = scene.elements.map(element => element.type === 'action'
+        ? element.text
+        : `D${++line} ${element.speaker}${element.kind === 'voiceover' ? ' (voice-over)' : element.kind === 'offscreen' ? ' (off-screen)' : ''}${element.delivery ? ` (${element.delivery})` : ''}: ${element.text}`).join('\n')
+    return {
+        maxTokens: 8192,
+        reasoning: 'medium',
+        input: `${problems.length ? `Your last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}Scene: ${scene.setting}. ${scene.location} - ${scene.time}
+Place: ${location.name} - ${location.description}
+Characters you may use, exactly as spelled: ${characters.filter(c => !c.voiceOnly).map(c => c.name).join(', ')}
+Dialogue language: ${language}
+
+${script}`,
+        instructions: `You are a film director planning the shots of one scene of a short film. The film is generated clip by clip with an AI video model: a clip is at most ~9 seconds long and holds a few shots, every shot lives in one clip and is never split.
+Plan the shots for the whole scene, in order. Every action and every dialogue line of the scene appears in exactly one shot - none dropped, none repeated, in the order of the script. The dialogue lines are numbered D1, D2, ...: list the numbers of the lines spoken in a shot in "lines".
+
+Answer only with JSON:
+{"soundscape": "", "shots": [{"framing": "", "camera": "", "characters": [""], "action": "", "lines": [1], "seconds": 4, "continues": false}]}
+- "soundscape": 1-3 sentences, the ambience and physical sounds of the scene (wind, rain, footsteps, cloth, breathing). No dialogue, no music.
+- "framing": the shot size and angle, e.g. "wide establishing shot", "medium close-up", "over-the-shoulder shot", "extreme close-up insert". Vary them: no more than two of the same in a row, a wide shot where the place matters, close-ups for faces that speak or react.
+- "camera": one natural English sentence with the movement, amplitude and speed ("the camera pushes in slowly", "the camera drifts sideways at walking pace"). A shot is never fully locked off.
+- "characters": the names, exactly as spelled above, of everyone visible in the shot. A voice-over speaker or someone speaking off-screen is not in it. Someone who speaks on screen always is.
+- "action": 1-3 sentences, present tense, what is visible and audible in the shot, naming the characters exactly as spelled above. Say which way people turn, what they look at, what the face shows - and the mechanics of any contact, not only its result. The dialogue itself is not repeated here, only what the speaker does while saying it.
+- "seconds": 2-8. A shot with dialogue lasts as long as it takes to speak it (about 2.5 words per second) plus a moment for the reaction; at most two lines per shot, then the cut goes to the other person.
+- "continues": true only if the shot goes on in the same take as the shot before it, the same camera setup without a cut (the camera follows on). Sparingly - false is the usual.
+
+${filmableRules}`,
     }
 }

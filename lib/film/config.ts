@@ -16,6 +16,9 @@ export type FilmConfig = {
     // every character and location gets a multi-angle reference sheet (a short turnaround video, sampled and composited,
     // see lib/sequenceSheet.ts) instead of one picture - false renders just the picture, which is much cheaper
     sequenceSheets: boolean,
+    // a clip whose first shot goes on in the same take as the last shot of the clip before starts on that clip's last
+    // frame: "auto" = where the shot planning marked it, "never" = every clip is its own cut
+    continuity: 'auto' | 'never',
     llm: { model?: string },        // a project may use another model than the settings - never another server or key
 }
 
@@ -26,6 +29,7 @@ export const filmDefaults: FilmConfig = {
     imageResolution: -1,
     videoResolution: -1,
     sequenceSheets: true,
+    continuity: 'auto',
     llm: {},
 }
 
@@ -60,6 +64,7 @@ export async function loadFilmConfig(filmDir: string): Promise<FilmConfig> {
         }
     }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
+    if (!['auto', 'never'].includes(config.continuity)) fail(`continuity must be "auto" or "never", got ${JSON.stringify(config.continuity)}`)
     if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
     const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
     if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)

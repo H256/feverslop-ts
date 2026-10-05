@@ -5,14 +5,16 @@ import {existsSync, readdirSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
+import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
+import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts";
-import {briefPrompt, castPrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
-import {estimateSeconds, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
-import type {Brief, FilmMode, Outline} from "./lib/film/types.ts";
+import type {Brief, FilmMode, Outline, SceneCoverage} from "./lib/film/types.ts";
 import {askJson, ask, configureLlm} from "./lib/llm.ts";
 import {log, printBanner, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
@@ -236,12 +238,53 @@ for (const [id, description] of Object.entries(locationDescriptions)) log.box(id
 const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions})
 await Bun.write(join(film.dir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
-/////////// 9 · RENDERING THE REFERENCE PICTURES WITH COMFYUI
+/////////// 9 · SHOTS - every scene broken into shots, one LLM call per scene
+const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async () => {
+    const result: SceneCoverage[] = []
+    for (const [i, scene] of screenplay.scenes.entries()) {
+        log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
+        const location = locationOf(cast, scene.location)!
+        let problems: string[] = []
+        for (let attempt = 0; ; attempt++) {
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, problems))
+            try {
+                result.push(toCoverage(raw, scene, cast))
+                break
+            } catch (e) {
+                // a dropped line of dialogue or a wrong name is what the model can fix when told - once
+                if (!(e instanceof CoverageProblem) || attempt >= 1) throw e
+                problems = e.problems
+                log.warn(`${e.message} - asking again`)
+            }
+        }
+    }
+    return result
+})
+
+/////////// 10 · CLIPS - shots packed into clips of up to ~9 s, then the H3 requests, built deterministically and never cached
+const clips = packClips(screenplay, coverage, config.continuity)
+const requests = buildFilmClipRequests({
+    screenplay, cast, clips,
+    soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
+    characterDescriptions, locationDescriptions, lookBrief,
+})
+const outputDir = join(film.dir, 'output')
+for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
+await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
+    title: screenplay.title,
+    language: screenplay.language,
+    totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
+    clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
+}, null, 2))
+for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
+log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
+
+/////////// 11 · RENDERING THE REFERENCE PICTURES WITH COMFYUI
 if (render.has('images')) {
     const renderConfig = filmRenderConfig(config)
     // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
     using renderer = new Renderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
-    log.section('9 · RENDERING THE REFERENCE PICTURES')
+    log.section('11 · RENDERING THE REFERENCE PICTURES')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
     log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)

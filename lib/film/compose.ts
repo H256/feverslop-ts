@@ -1,0 +1,202 @@
+import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
+import {languageName} from "../config.ts";
+import {formatTimestamp, round} from "../frames.ts";
+import {dialogueOf, type FilmClip} from "./coverage.ts";
+import {filmPictureAsset} from "./pictures.ts";
+import {characterOf, locationOf} from "./screenplay.ts";
+import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
+
+// Builds MiniMax H3 full-reference (ref2v) requests deterministically from the film's data - the same six sections as the
+// music-video pipeline's lib/compose.ts (docs/minimax-h3-video-prompt-writing-guide.md), but with spoken dialogue instead of
+// a song: no audio references, the video model speaks the lines itself from `<d>[Language] ...</d>`, with a speaker id and
+// a voice description. The music-video code is not shared on purpose - it is built around stems and downbeats.
+
+// the last frame of a rendered clip, which a continuing clip starts from
+export const filmBoundaryFrame = (clipId: string) => `assets/clips/${clipId}_lf.png`
+
+export type FilmClipRequest = {
+    id: string,
+    index: number,
+    sceneId: string,
+    seconds: number,
+    frameStart: number,         // on the film's frame grid (lib/frames.ts)
+    frames: number,             // frames this clip contributes to the final film
+    startsFrom?: string,        // goes on from the last frame of this clip (`<Picture N>` below, kind 'frame')
+    shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
+    // every spoken line of the clip, in order: `at` is the start of its shot, speaker ids are numbered per clip
+    dialogue: { at: number, line: number, speaker: string, speakerId: string, subject?: string, kind: DialogueKind, text: string }[],
+    assets: {
+        pictures: { label: string, file: string, subject: string, kind: 'character' | 'location' | 'frame', id: string, name: string, description: string }[],
+    },
+    prompt: string,
+}
+
+export type FilmInput = {
+    screenplay: Screenplay,
+    cast: FilmCast,
+    clips: FilmClip[],
+    soundscapes: Record<string, string>,             // scene id -> ambience
+    characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
+    locationDescriptions: Record<string, string>,
+    lookBrief: string,
+}
+
+// one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
+// same person" to the video model
+const positions = [
+    'in the front on the left', 'in the front, center', 'in the front on the right',
+    'a step behind them on the left', 'a step behind them, center', 'a step behind them on the right',
+    'further back on the left', 'further back on the right',
+]
+
+export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
+    return input.clips.map(clip => buildClip(clip, input))
+}
+
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, lookBrief}: FilmInput): FilmClipRequest {
+    const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
+    const location = locationOf(cast, scene.location)
+    const sceneLines = dialogueOf(scene)
+
+    // the picture slots: the place, then everyone who is in a shot of the clip, then the frame the clip goes on from
+    const visibleIds = [...new Set(clip.shots.flatMap(s => s.characters))]
+    const room = MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (clip.startsFrom ? 1 : 0)
+    const characters = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined).slice(0, room)
+
+    const subjects = [
+        ...(location ? [{kind: 'location' as const, id: location.id, name: location.name, description: locationDescriptions[location.id] ?? location.description}] : []),
+        ...characters.map(c => ({kind: 'character' as const, id: c.id, name: c.name, description: characterDescriptions[c.id] ?? c.appearance})),
+    ].map((s, n) => ({...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`}))
+    const locationSubject = subjects.find(s => s.kind === 'location')
+    const castSubjects = subjects.filter(s => s.kind === 'character')
+    const subjectOf = (characterId: string) => castSubjects.find(s => s.id === characterId)
+    const framePicture = clip.startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
+
+    // speaker ids (S1), (S2), ... in the order of the spoken lines of this clip - numbered per clip, not per character
+    type Spoken = { at: number, line: number, key: string, character?: FilmCharacter, kind: DialogueKind, text: string, delivery?: string, language: string }
+    let cursor = 0
+    const shots = clip.shots.map((shot, j) => {
+        const at = round(cursor)
+        cursor += shot.seconds
+        const spoken: Spoken[] = shot.lines.map(n => {
+            const line = sceneLines[n]!
+            if (line.type !== 'dialogue') throw new Error('not a dialogue line')
+            const character = characterOf(cast, line.speaker)
+            return {at, line: n, key: character?.id ?? line.speaker, character, kind: line.kind, text: line.text, delivery: line.delivery, language: line.language ?? screenplay.language}
+        })
+        return {...shot, label: `[Shot ${j + 1}]`, at, spoken, focus: shot.characters.map(subjectOf).filter(s => s !== undefined)}
+    })
+    const speakers = [...new Set(shots.flatMap(s => s.spoken.map(l => l.key)))]
+    const speakerId = (key: string) => `(S${speakers.indexOf(key) + 1})`
+
+    const names = (s: { name: string }) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(s.name)}(?![\\p{L}\\p{N}])`, 'gu')
+    const withLabels = (text: string) => castSubjects.reduce((t, s) => t.replace(names(s), s.label), text)
+
+    // "<Subject 2> (S1) says in ..." for someone with a picture in this clip, else the speaker is only a voice
+    const who = (line: Spoken) => {
+        const subject = line.character ? subjectOf(line.character.id) : undefined
+        return subject ? `${subject.label} ${speakerId(line.key)}` : `The speaker ${speakerId(line.key)}`
+    }
+    const voiceOf = (line: Spoken) => voicePhrase(line.character?.voice ?? 'a clear, natural voice')
+    const lineText = (line: Spoken) => {
+        const language = languageName(line.language) ?? 'English'
+        const dialogue = `<d>[${language}] ${normalizeLine(line.text)}</d>`
+        const delivery = line.delivery ? `, ${line.delivery},` : ','
+        if (line.kind === 'voiceover') return `${who(line)} says in an off-screen voiceover, in ${voiceOf(line)}${delivery} ${dialogue} while their lips remain completely closed.`
+        if (line.kind === 'offscreen') return `${who(line)}, off-screen, says in ${voiceOf(line)}${delivery} ${dialogue}`
+        return `${who(line)} says in ${voiceOf(line)}${delivery} ${dialogue}`
+    }
+
+    const shotTexts = shots.map((shot, j) => {
+        const focusLabels = joinAnd(shot.focus.map(s => s.label))
+        const opening = j === 0
+            ? `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+            // the place is repeated on every cut - a shot without it tends to fall back to the plain grey background of the character pictures
+            : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+        const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
+        const inFrame = shot.focus.length
+            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}`).join('; ')}.`
+            : ''
+        const lines = shot.spoken.map(lineText).join(' ')
+        // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
+        const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
+        const silent = speaking.size ? shot.focus.filter(s => !speaking.has(s.id)) : []
+        const silentClause = silent.length
+            ? ` ${joinAnd(silent.map(s => `${s.label}, ${s.name},`))} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
+            : ''
+        return `${opening}${fromFrame}${inFrame} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}`.replace(/\s+/g, ' ').trim()
+    })
+
+    const seconds = String(Math.round(clip.seconds * 10) / 10)
+    const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
+    const sceneClause = clip.opensScene
+        ? `The scene begins at ${scene.time.toLowerCase()}.`
+        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : ''}`
+    const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
+
+    const prompt = [
+        'subject_definitions:',
+        ...subjects.map(s => s.kind === 'location'
+            ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+            : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
+        ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd(subjects.map(s => s.label))}.`] : []),
+        '',
+        'summary:',
+        `[reference generation${framePicture ? ' + keyframe completion' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second clip of a short film${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${talking} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''}.`,
+        '',
+        'retention_analysis:',
+        ...subjects.map(s => `${s.label} (appears in ${s.kind === 'location' ? shots.map(x => x.label).join(', ') : appearsIn(s.label) || shots[0]!.label}): fully_preserved - ${s.kind === 'location'
+            ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
+            : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
+        ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
+        '',
+        'detailed_description:',
+        styleOpening(lookBrief),
+        ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
+        ...shotTexts,
+        '',
+        'overall_soundscape:',
+        soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`,
+        '',
+        'non_diegetic_music:',
+        'N/A',
+    ].join('\n')
+
+    return {
+        id: clip.id,
+        index: clip.index,
+        sceneId: clip.sceneId,
+        seconds: clip.seconds,
+        frameStart: clip.frameStart,
+        frames: clip.frames,
+        ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
+        shots: shots.map(s => ({label: s.label, at: s.at, framing: s.framing, camera: s.camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...s.focus.map(f => f.label)]})),
+        dialogue: shots.flatMap(s => s.spoken.map(l => ({
+            at: l.at, line: l.line, speaker: l.character?.name ?? l.key, speakerId: speakerId(l.key),
+            ...(l.character && subjectOf(l.character.id) ? {subject: subjectOf(l.character.id)!.label} : {}),
+            kind: l.kind, text: l.text,
+        }))),
+        assets: {
+            pictures: [
+                ...subjects.map(s => ({label: s.picture, file: filmPictureAsset(s.kind, s.id), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                ...(clip.startsFrom ? [{label: framePicture!, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
+            ],
+        },
+        prompt,
+    }
+}
+
+// "a young man's low, hoarse voice, ..." goes after "says in" - a description of the person is made into "the voice of ..."
+const voicePhrase = (voice: string) => /\bvoice\b/i.test(voice) ? voice : `the voice of ${voice.charAt(0).toLowerCase()}${voice.slice(1)}`.replace(/\.$/, '')
+
+// the guide: basic punctuation only, every line ends with . ? or !
+function normalizeLine(line: string) {
+    const clean = line.replace(/\.{2,}|…/g, '.').replace(/[~*]+/g, '').replace(/([!?.,])\1+/g, '$1').trim()
+    return /[.?!]$/.test(clean) ? clean : `${clean}.`
+}
+
+// the guide wants one or two style sentences before [Shot 1]
+const styleOpening = (lookBrief: string) => lookBrief.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean).slice(0, 2).join(' ')
+
+const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

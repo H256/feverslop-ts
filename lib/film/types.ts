@@ -73,6 +73,19 @@ export type FilmLocation = {
 }
 export type FilmCast = { characters: FilmCharacter[], locations: FilmLocation[] }
 
+// One shot of a scene: what the camera sees and which dialogue lines are spoken in it. A shot is the unit that is
+// never split - it lives in one clip, with its lines.
+export type Shot = {
+    framing: string,                // "medium close-up"
+    camera: string,                 // "the camera pushes in slowly"
+    characters: string[],           // ids of the characters who are in the picture
+    action: string,                 // what is visible, characters by their exact names - the dialogue itself is not in it
+    lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
+    seconds: number,                // planned length, at least the time to speak its lines
+    continues?: boolean,            // the shot goes on in the same take as the one before, no cut
+}
+export type SceneCoverage = { sceneId: string, soundscape: string, shots: Shot[] }
+
 export type FilmProject = {
     inputs?: Record<string, string>,    // fingerprints of the input files and settings - not a step
     brief?: Brief,
@@ -85,4 +98,5 @@ export type FilmProject = {
     characterDescriptions?: Record<string, string>,  // the look without the picture's pose, background and light - for the clip prompts
     locationLooks?: Record<string, string>,
     locationDescriptions?: Record<string, string>,
+    coverage?: SceneCoverage[],         // the shots of every scene, in scene order
 }

@@ -17,6 +17,7 @@ const dependsOn: Record<FilmStepName, FilmStepName[]> = {
     characterDescriptions: ['characterLooks'],
     locationLooks: ['cast', 'lookBrief', 'summary'],
     locationDescriptions: ['locationLooks'],
+    coverage: ['screenplay', 'cast'],
 }
 
 export const FILM_STEP_NAMES = Object.keys(dependsOn) as FilmStepName[]
