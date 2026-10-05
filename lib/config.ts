@@ -23,8 +23,13 @@ export type RenderConfig = {
     pinStartFrame: boolean,
 }
 
+export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
+
 export type PlanConfig = {
     singers: string[],              // [] = clip mode, ["auto"] = the LLM picks, or character names / ids
+    // voice of the song: "auto" = whatever the story gives, "female"/"male" = everybody who sings is a woman/man,
+    // "mixed" = a duet of one woman and one man
+    singerVoice: SingerVoice,
     lyricsLanguage: string,         // ISO 639-1 code, for Whisper and the <d>[Language] tag
     alignLyrics: boolean,           // stems + transcript + real lyric timing - default: on when someone sings
     // clips of one beat that run on without a cut start on the previous clip's last frame: "auto" = the beats the story
@@ -50,6 +55,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     sequenceWorkflow: 'h3-sequence-to-sheet',
     pinStartFrame: true,
     singers: [],
+    singerVoice: 'auto',
     lyricsLanguage: 'en',
     continuity: 'auto',
     llm: {},
@@ -97,6 +103,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         fail(`singers must be a list of character names, e.g. ["auto"] or ["Thorin"], got ${JSON.stringify(config.singers)}`)
     }
     if (config.singers.includes('auto') && config.singers.length > 1) fail(`singers: "auto" can't be combined with names, got ${JSON.stringify(config.singers)}`)
+    if (!['auto', 'female', 'male', 'mixed'].includes(config.singerVoice)) fail(`singerVoice must be "auto", "female", "male" or "mixed", got ${JSON.stringify(config.singerVoice)}`)
     if (typeof config.lyricsLanguage !== 'string' || !languageName(config.lyricsLanguage)) {
         fail(`lyricsLanguage must be a language code like "en" or "de", got ${JSON.stringify(config.lyricsLanguage)}`)
     }
