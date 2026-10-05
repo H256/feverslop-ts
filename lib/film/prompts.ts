@@ -141,6 +141,7 @@ The same screenplay, structured:
   "locations": [{"name": "", "aliases": [""], "description": ""}]
 }
 Characters:
+- Only individuals the story follows are characters: someone who speaks, acts on the plot or is looked at and looks back, and who comes back or matters. Extras, crowds, passers-by, ghosts, silhouettes and other background presences are not - they are described in the scene itself, and leaving them out keeps the number of reference pictures small. A character of any kind needs a face and a body to draw.
 - "name": the character's name, in English letters where the script allows it.
 - "aliases": every cue and name the script uses for this character, exactly as written (e.g. "MARIA", "Maria", "Mother"). One character, one entry - cues that mean the same person belong together. Every speaker cue of the screenplay must be in some character's aliases.
 - "role": a short description of what the character does in the story.
