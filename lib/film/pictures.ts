@@ -23,7 +23,8 @@ export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterL
 
 // What lib/render.ts's Renderer reads - the film's own settings on top of the shared defaults (workflows, sequence sheets)
 export function filmRenderConfig(config: FilmConfig): RenderConfig {
-    return {...defaults, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, sequenceSheets: config.sequenceSheets}
+    // the film has its own video workflow: no audio goes in (comfy/workflows/h3-ref2video-film.ts)
+    return {...defaults, videoWorkflow: 'h3-ref2video-film', seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, sequenceSheets: config.sequenceSheets}
 }
 
 /** Runs every render at once (the renderer queues them, one job per server) and throws afterwards if any failed. */

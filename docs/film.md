@@ -5,8 +5,9 @@ with looks and voices, locations, reference pictures, shots and one MiniMax H3 r
 separate pipeline next to the music-video one (`index.ts`) and shares only the LLM client, the settings, the renderer and a
 few helpers with it. Films live in `films/<id>/`, not in `projects/`.
 
-**Status: stages 1-3a of the plan.** Everything up to the clip requests runs today, and the reference pictures can be
-rendered. Rendering the clips and assembling the film are still to come (see [What's next](#whats-next)).
+**Status: stages 1-3b of the plan.** Everything up to the clip requests runs, the reference pictures and the clips can be
+rendered (one clip tested: the model speaks the line, with its own sound). Assembling the film is still to come (see
+[What's next](#whats-next)).
 
 ## Quick start
 
@@ -20,7 +21,8 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun run film:init` | create a film: idea or screenplay, style, length, language, resolution |
 | `bun film.ts <film-id>` | run all steps; finished steps are cached, an edited input redoes what depends on it |
 | `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
-| `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI (`--render=all` = everything renderable so far) |
+| `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
+| `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first); `--render=all` = images, then videos |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
 `bun run film <film-id>` is the same as `bun film.ts <film-id>`. Typical session: `film:init` → `bun film.ts <id>` → read
@@ -56,7 +58,7 @@ look is redone.
 | 8 | `locationLooks`, `locationDescriptions` | the same for the locations | cast, lookBrief, summary |
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json` | coverage |
-| 11 | –           | Reference pictures rendered with ComfyUI (only with `--render=images`) | |
+| 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
 
 Steps 6-8 use the music-video pipeline's look prompts unchanged; the script's own description of a character is passed in
 as a fact the picture has to show. The original screenplay is also given to the cast step, because a character list
@@ -108,12 +110,12 @@ All optional:
 - **No TTS and no audio references.** The video model speaks the dialogue itself: it is written into the clip prompt as
   `<d>[Language] …</d>` with a speaker id and a voice description per character (`FilmCharacter.voice`).
 - **Cast and locations are references**, as in the music-video pipeline.
+- **The clips have their own workflow**, `comfy/workflows/h3-ref2video-film.ts`: pictures only. Like ComfyUI's own MiniMax H3 template it samples the empty video+audio latent that `MiniMaxH3ReferenceToVideo` returns and decodes it twice (video VAE, audio VAE) - the sound, speech included, comes from the model.
 - The music-video pipeline, its prompts and `lib/project.ts` are not touched - `lib/film/` has its own store, config,
   prompts and clip builder. The look prompts (`lookBriefPrompt`, `characterLookPrompt`, ...) and the `Renderer` are imported.
 
 ## What's next
 
-1. A film workflow without audio inputs (`h3-ref2video` throws without audio tracks), rendering the clips - in order within
-   a continuing chain - and the clip frames for the chaining
+1. Assembling the film from the rendered clips (own audio, short fades at the cuts)
 2. Dialogue check with Whisper (does the clip say what the script says?) with an automatic new render
 3. Assembling with crossfades, optional score and subtitles; a timeline export for an editor

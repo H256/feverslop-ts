@@ -10,6 +10,7 @@ import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts";
+import {FilmRenderer} from "./lib/film/render.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
@@ -19,7 +20,7 @@ import {askJson, ask, configureLlm} from "./lib/llm.ts";
 import {log, printBanner, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
 import {validProjectId} from "./lib/project-setup.ts";
-import {Renderer} from "./lib/render.ts";
+
 import {loadSettings} from "./lib/settings.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 
@@ -28,7 +29,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images|all] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos|all] [--only=clip-005,clip-006] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -38,6 +39,7 @@ const {values: args, positionals} = (() => {
             options: {
                 redo: {type: 'string', default: ''},
                 render: {type: 'string', default: ''},
+                only: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -49,9 +51,9 @@ const {values: args, positionals} = (() => {
     }
 })()
 // --render=all is everything that can be rendered so far
-const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images'] : [r]))
-const unknownRender = [...render].filter(r => r !== 'images')
-if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images or all`, usage)
+const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos'] : [r]))
+const unknownRender = [...render].filter(r => r !== 'images' && r !== 'videos')
+if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos or all`, usage)
 const redoSteps =args.redo.split(',').filter(Boolean) as FilmStepName[]
 const unknownRedo = redoSteps.filter(s => !(FILM_STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${FILM_STEP_NAMES.join(', ')}`, usage)
@@ -279,14 +281,40 @@ await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
 for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
 log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
 
-/////////// 11 · RENDERING THE REFERENCE PICTURES WITH COMFYUI
-if (render.has('images')) {
+/////////// 11 · RENDERING WITH COMFYUI
+if (render.has('images') || render.has('videos')) {
     const renderConfig = filmRenderConfig(config)
     // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
-    using renderer = new Renderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
-    log.section('11 · RENDERING THE REFERENCE PICTURES')
+    using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
+    log.section('11 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
-    log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-    await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+    if (render.has('images')) {
+        log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
+        await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+    }
+    // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
+    if (render.has('videos')) {
+        if (render.has('images')) await renderer.freeMemory()
+        const only = new Set(args.only.split(',').filter(Boolean))
+        const selected = requests.filter(r => only.size === 0 || only.has(r.id))
+        const unknown = [...only].filter(id => !requests.some(r => r.id === id))
+        if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
+        log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
+        // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
+        await renderAll(clipChains(selected), async chain => {
+            for (const clip of chain) await renderer.renderFilmClip(clip)
+        })
+    }
+}
+
+// Runs of clips where each one starts on the last frame of the one before (FilmClipRequest.startsFrom), in film order
+function clipChains(clips: typeof requests): (typeof requests)[] {
+    const chains: (typeof requests)[] = []
+    for (const clip of clips) {
+        const chain = clip.startsFrom ? chains.find(c => c.at(-1)!.id === clip.startsFrom) : undefined
+        if (chain) chain.push(clip)
+        else chains.push([clip])
+    }
+    return chains
 }
