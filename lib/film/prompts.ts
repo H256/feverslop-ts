@@ -114,6 +114,7 @@ ${source}`,
 - Sluglines in any language (INNEN, INT., EXT., 内...) become "setting" "INT", "EXT" or "INT/EXT", "location" and "time" - location and time translated into English, the place always named the same way.
 - A parenthetical becomes "delivery" in English. (V.O.) and (O.S.) / (OFF) become "voiceover" and "offscreen".
 - "speaker" is the character cue exactly as written.
+- Markdown around the text (**bold**, *italics*, headings, "SCENE 3" labels) is formatting, not part of the screenplay: it is left out of the lines and the scenes. A parenthesised translation of a spoken line, in another language, on the line after it, is not spoken and not a delivery - it is dropped. A parenthetical before a line stays the delivery.
 
 Answer only with JSON in this format:
 ${screenplayJson}`,
