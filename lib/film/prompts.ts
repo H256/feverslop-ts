@@ -185,7 +185,7 @@ summary: ${summary}`,
 
 // One scene at a time: its shots. The dialogue is numbered so that the answer can be checked against it - every line
 // in exactly one shot, in order - and the shots are what the clips are packed from (lib/film/coverage.ts).
-export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, problems: string[] = []): AskOptions {
+export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, lookBrief: string, problems: string[] = []): AskOptions {
     let line = 0
     const script = scene.elements.map(element => element.type === 'action'
         ? element.text
@@ -197,6 +197,7 @@ export function coveragePrompt(scene: Scene, location: FilmLocation, characters:
 Place: ${location.name} - ${location.description}
 Characters you may use, exactly as spelled: ${characters.filter(c => !c.voiceOnly).map(c => c.name).join(', ')}
 Dialogue language: ${language}
+Film look (its camera language is yours too): ${lookBrief}
 
 ${script}`,
         instructions: `You are a film director planning the shots of one scene of a short film. The film is generated clip by clip with an AI video model: a clip is at most ~9 seconds long and holds a few shots, every shot lives in one clip and is never split.
@@ -206,7 +207,7 @@ Answer only with JSON:
 {"soundscape": "", "shots": [{"framing": "", "camera": "", "characters": [""], "action": "", "lines": [1], "seconds": 4, "continues": false}]}
 - "soundscape": 1-3 sentences, the ambience and physical sounds of the scene (wind, rain, footsteps, cloth, breathing). No dialogue, no music.
 - "framing": the shot size and angle, e.g. "wide establishing shot", "medium close-up", "over-the-shoulder shot", "extreme close-up insert". Vary them: no more than two of the same in a row, a wide shot where the place matters, close-ups for faces that speak or react.
-- "camera": one natural English sentence with the movement, amplitude and speed ("the camera pushes in slowly", "the camera drifts sideways at walking pace"). A shot is never fully locked off.
+- "camera": one natural English sentence with the movement, amplitude and speed ("the camera pushes in slowly", "the camera drifts sideways at walking pace"). The camera follows the film look above: where the look asks for a still, locked-off camera, the shot is locked off; otherwise it is never fully static, which reads as a photograph.
 - "characters": the names, exactly as spelled above, of everyone visible in the shot. A voice-over speaker or someone speaking off-screen is not in it. Someone who speaks on screen always is.
 - "action": 1-3 sentences, present tense, what is visible and audible in the shot, naming the characters exactly as spelled above. Say which way people turn, what they look at, what the face shows - and the mechanics of any contact, not only its result. The dialogue itself is not repeated here, only what the speaker does while saying it.
 - "seconds": 2-8. A shot with dialogue lasts as long as it takes to speak it (about 2.5 words per second) plus a moment for the reaction; at most two lines per shot, then the cut goes to the other person.

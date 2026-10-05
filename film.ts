@@ -249,7 +249,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
         for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, problems))
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, problems))
             try {
                 result.push(toCoverage(raw, scene, cast))
                 break
