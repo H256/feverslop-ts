@@ -265,7 +265,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
         for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene, cast), problems))
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems))
             try {
                 // the first time what the script checks find is a reason to ask again, the second time it is only noted
                 const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0)
@@ -289,6 +289,7 @@ const requests = buildFilmClipRequests({
     screenplay, cast, clips,
     soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
     stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
+    voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
     characterDescriptions, locationDescriptions, lookBrief,
 })
 const outputDir = join(film.dir, 'output')

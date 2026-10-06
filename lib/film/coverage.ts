@@ -12,7 +12,7 @@ const MIN_SHOT_SEC = 2
 const LEAD_IN_SEC = 1.2
 
 type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, seconds?: unknown, continues?: unknown }
-export type RawCoverage = { soundscape?: unknown, staging?: unknown, shots?: RawShot[] }
+export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
@@ -84,11 +84,11 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     if (shots.some(s => !s.action)) problems.push('every shot needs an action')
     if (problems.length) throw new CoverageProblem(problems)
     // a scene that is only a place is one shot, without people
-    const {shots: unique, notes} = collapseEmptyScene(shots, scene, cast)
-    const soft = softProblems(unique, scene, cast)
+    const {shots: unique, notes} = collapseEmptyScene(shots, scene, raw.people === false ? false : raw.people === true ? true : undefined)
+    const soft = softProblems(unique, scene)
     if (soft.length && strict) throw new CoverageProblem(soft)
     notes.push(...soft.map(p => `kept anyway: ${p}`))
-    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), shots: unique}, notes}
+    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), shots: unique}, notes}
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together

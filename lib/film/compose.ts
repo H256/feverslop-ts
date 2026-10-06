@@ -2,7 +2,6 @@ import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
-import {describesVoices} from "./shot-checks.ts";
 import {filmPictureAsset} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
@@ -38,6 +37,7 @@ export type FilmInput = {
     clips: FilmClip[],
     soundscapes: Record<string, string>,             // scene id -> ambience
     stagings: Record<string, string>,                // scene id -> where everyone is, in what posture and clothes
+    voices: Record<string, boolean>,                 // scene id -> the script itself has voices in it (whispers, a chant): wordless sounds are allowed there
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
     locationDescriptions: Record<string, string>,
     lookBrief: string,
@@ -55,11 +55,11 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
     return input.clips.map(clip => buildClip(clip, input))
 }
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, stagings, lookBrief}: FilmInput): FilmClipRequest {
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
-    const voicesInScene = describesVoices(scene)
+    const voicesInScene = voices[clip.sceneId] === true
 
     // the picture slots: the place, then everyone who is in a shot of the clip, then the frame the clip goes on from
     const visibleIds = [...new Set(clip.shots.flatMap(s => s.characters))]
