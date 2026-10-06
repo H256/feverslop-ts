@@ -8,6 +8,10 @@ import {Renderer} from "../render.ts";
 import {workflowDir} from "../config.ts";
 import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 
+/** What a clip was rendered from - the film refuses to use a clip made from another prompt or length. */
+export const promptHash = (clip: { prompt: string, frames: number }) => Bun.hash(`${clip.frames}
+${clip.prompt}`).toString(16)
+
 const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
 
 /**
@@ -20,6 +24,9 @@ export class FilmRenderer extends Renderer {
         const target = join(this.projectDir, file)
         if (existsSync(target)) {
             log.step('Exists', styles.muted(file))
+            const meta = `${target}.json`
+            const renderedFrom = existsSync(meta) ? (await Bun.file(meta).json()).promptHash : undefined
+            if (renderedFrom !== undefined && renderedFrom !== promptHash(clip)) log.warn(`${file} was rendered from another prompt than the plan has now - delete it (and its .json) to render it again`)
             // it starts on the last frame of the clip before - rendered again since, that frame is another one
             const startFrame = clip.startsFrom ? join(this.projectDir, filmBoundaryFrame(clip.startsFrom)) : undefined
             if (startFrame && existsSync(startFrame) && statSync(startFrame).mtimeMs > statSync(target).mtimeMs) {
@@ -64,6 +71,7 @@ export class FilmRenderer extends Renderer {
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final film
+            promptHash: promptHash(clip),   // a clip rendered from another prompt than the plan has now is stale
             renderedFrames: rendered.frames,
             size: `${rendered.width}x${rendered.height}`,
             request: `output/clips/${clip.id}.json`,

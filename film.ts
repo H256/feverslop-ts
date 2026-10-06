@@ -11,7 +11,8 @@ import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts";
-import {FilmRenderer} from "./lib/film/render.ts";
+import {checkDialogue} from "./lib/film/dialogue-check.ts";
+import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
@@ -31,7 +32,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--check] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -42,6 +43,7 @@ const {values: args, positionals} = (() => {
                 redo: {type: 'string', default: ''},
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
+                check: {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -270,6 +272,7 @@ const clips = packClips(screenplay, coverage, config.continuity)
 const requests = buildFilmClipRequests({
     screenplay, cast, clips,
     soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
+    stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
     characterDescriptions, locationDescriptions, lookBrief,
 })
 const outputDir = join(film.dir, 'output')
@@ -314,9 +317,25 @@ if (render.has('images') || render.has('videos')) {
     }
 }
 
-/////////// 12 · ASSEMBLING THE FILM
+/////////// 12 · DIALOGUE CHECK - Whisper on the rendered clips against the script
+if (args.check) {
+    log.section('12 · CHECKING THE DIALOGUE')
+    const only = new Set(args.only.split(',').filter(Boolean))
+    const selected = requests.filter(r => only.size === 0 || only.has(r.id))
+    const results = await checkDialogue({clips: selected, projectDir: film.dir, language: screenplay.language, work: join(film.dir, 'output', 'check')})
+    await Bun.write(join(film.dir, 'output', 'dialogue-check.json'), JSON.stringify(results, null, 2))
+    const label = {ok: styles.muted('ok'), cut: 'CUT OFF', wrong: 'WRONG', extra: 'EXTRA SPEECH', 'silent-but-heard': 'SPEECH WITHOUT A LINE'} as const
+    for (const r of results) {
+        if (r.status === 'ok') continue
+        log.warn(`${r.id}: ${label[r.status]} - script: "${r.expected || '(no dialogue)'}" - heard: "${r.heard || '(nothing)'}"${r.missing.length ? ` - missing: ${r.missing.join(' ')}` : ''}${r.extra.length ? ` - extra: ${r.extra.join(' ')}` : ''}`)
+    }
+    const bad = results.filter(r => r.status !== 'ok')
+    log.step('Dialogue', `${results.length - bad.length} of ${results.length} clips as the script, ${bad.length ? bad.map(r => r.id).join(', ') + ' not' : 'all fine'} ${styles.muted('- details in output/dialogue-check.json; delete a clip (videos/<id>.mp4 and .json) to render it again')}`)
+}
+
+/////////// 13 · ASSEMBLING THE FILM
 if (render.has('final')) {
-    log.section('12 · ASSEMBLING THE FILM')
+    log.section('13 · ASSEMBLING THE FILM')
     const only = new Set(args.only.split(',').filter(Boolean))
     const unknown = [...only].filter(id => !requests.some(r => r.id === id))
     if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
@@ -324,7 +343,8 @@ if (render.has('final')) {
     // some of the clips only: a try-out, never the film itself
     const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
-    const result = await assembleFilm({clips: selected, projectDir: film.dir, target})
+    // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
+    const result = await assembleFilm({clips: selected.map(r => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, promptHash: promptHash(r)})), projectDir: film.dir, target})
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}${only.size ? ` - ${selected.length} of ${requests.length} clips (--only)` : ''}`)}`)
 }
 

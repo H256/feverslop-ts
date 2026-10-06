@@ -56,11 +56,11 @@ export function missingDialogue(screenplay: Screenplay, source: string) {
 
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu
 
-/** Seconds to speak a line - a rough 2.5 words per second (4 characters in scripts without word spaces) plus a breath. */
+/** Seconds to speak a line - a rough 2.2 words per second (4 characters in scripts without word spaces) plus a breath. Measured on rendered clips: the model speaks lines of emotional drama slowly. */
 export function speechSeconds(line: string) {
     const cjk = line.match(CJK)?.length ?? 0
     const words = line.replace(CJK, ' ').split(/\s+/).filter(w => /[\p{L}\p{N}]/u.test(w)).length
-    return cjk / 4 + words / 2.5 + 0.4
+    return cjk / 4 + words / 2.2 + 0.5
 }
 
 /** A rough running time: every spoken line takes its time, every action about 3 seconds - a guess to compare with the target, nothing more. */

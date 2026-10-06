@@ -7,9 +7,11 @@ import type {FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts"
 export const MAX_CLIP_SEC = 10 - 17 / FPS
 const MAX_SHOT_SEC = 8
 const MIN_SHOT_SEC = 2
+// the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
+const LEAD_IN_SEC = 1.2
 
 type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, seconds?: unknown, continues?: unknown }
-export type RawCoverage = { soundscape?: unknown, shots?: RawShot[] }
+export type RawCoverage = { soundscape?: unknown, staging?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
@@ -18,7 +20,7 @@ export const dialogueOf = (scene: Scene) => scene.elements.filter(element => ele
 /** Seconds a shot needs for its lines - speaking time of every line plus a beat before the reaction. */
 export const speakingSeconds = (scene: Scene, lines: number[]) => {
     const dialogue = dialogueOf(scene)
-    return lines.reduce((sum, n) => sum + speechSeconds(dialogue[n]!.text), 0) + (lines.length ? 0.6 : 0)
+    return lines.reduce((sum, n) => sum + speechSeconds(dialogue[n]!.text), 0) + (lines.length ? LEAD_IN_SEC : 0)
 }
 
 /** What the model can fix by being asked again: a dialogue line lost or twice, an unknown name. */
@@ -76,7 +78,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast): Scen
     }
     if (shots.some(s => !s.action)) problems.push('every shot needs an action')
     if (problems.length) throw new CoverageProblem(problems)
-    return {sceneId: scene.id, soundscape: text(raw.soundscape), shots}
+    return {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), shots}
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together
@@ -97,11 +99,12 @@ export type FilmClip = {
  * split (so no line of dialogue is cut in two), and a clip holds as many shots as fit into MAX_CLIP_SEC. A shot that
  * goes on in the same take as the one before it starts a continuing clip when it opens one (config.continuity).
  */
-export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], continuity: 'auto' | 'never'): FilmClip[] {
+export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], continuity: 'auto' | 'scene' | 'never'): FilmClip[] {
     const clips: FilmClip[] = []
     let frameStart = 0
     for (const scene of screenplay.scenes) {
-        const shots = coverage.find(c => c.sceneId === scene.id)?.shots
+        // the time a shot needs for its lines is worked out again here: a plan made with a shorter estimate gets the new one
+        const shots = coverage.find(c => c.sceneId === scene.id)?.shots.map(s => ({...s, seconds: round(Math.max(s.seconds, speakingSeconds(scene, s.lines)))}))
         if (!shots) throw new Error(`no shots for scene ${scene.id} - run again, or --redo=coverage`)
         let current: Shot[] = []
         const flush = () => {
@@ -113,7 +116,7 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
             clips.push({
                 id: `clip-${String(index).padStart(3, '0')}`, index, sceneId: scene.id, opensScene: !clips.some(c => c.sceneId === scene.id),
                 shots: current, seconds, frameStart, frames,
-                ...(continuity === 'auto' && current[0]!.continues && previous?.sceneId === scene.id ? {startsFrom: previous.id} : {}),
+                ...((continuity === 'scene' || (continuity === 'auto' && current[0]!.continues)) && previous?.sceneId === scene.id ? {startsFrom: previous.id} : {}),
             })
             frameStart += frames
             current = []

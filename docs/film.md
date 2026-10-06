@@ -24,6 +24,7 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
 | `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
 | `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first) |
+| `bun film.ts <film-id> --check [--only=clip-005,clip-006]` | dialogue check: Whisper on the rendered clips against the script - which line is cut off, wrong, or which clip has speech that is not in the script (`output/dialogue-check.json`) |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
@@ -61,7 +62,8 @@ look is redone.
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json` | coverage |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
-| 12 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
+| 12 | –           | Dialogue check, only with `--check` | |
+| 13 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
 
 Steps 6-8 use the music-video pipeline's look prompts unchanged; the script's own description of a character is passed in
 as a fact the picture has to show. The original screenplay is also given to the cast step, because a character list
@@ -88,6 +90,8 @@ number. Dialogue is written into the shot as `<Subject 2> (S1) says in a young m
 an off-screen speaker and a voice-over (lips closed) have their own forms, and everyone else in the frame keeps their
 mouth closed. Speaker ids are numbered per clip, in the order of the spoken lines. The scene's ambience goes into
 `overall_soundscape`, `non_diegetic_music` is `N/A`.
+
+**Staging.** The shot planning writes for every scene the fixed arrangement of the people - where they are, in what posture, what they wear and hold - and every clip of the scene carries it in its prompt; the shots must keep to it. Without it, every clip draws the posture again (a man lying in the crater, sitting at its rim, lying again, with the uniform open, closed ...). **No speech without a line:** every shot without a line of dialogue says that nobody speaks, and the soundscape excludes speech apart from the dialogue - the video model otherwise makes up speech for people it shows. A clip with dialogue keeps all frames the model rendered, the last word of a line often falls behind the planned end, and the time planned for a line is generous (the model starts about a second into the shot).
 
 A clip whose first shot goes on in the same take as the one before starts on that clip's last frame (`startsFrom`, `<Picture N>`
 as its first frame) - `continuity` in the config.
@@ -118,7 +122,7 @@ All optional:
 | `dialogueLanguage` | `"auto"` = the language of the idea, or a code like `"de"`. Ignored for a screenplay |
 | `targetDuration`   | seconds an idea is developed for, at least 10; `-1` = as long as the story needs |
 | `sequenceSheets`   | `true` (default) = every picture is a multi-angle reference sheet (a short turnaround video, sampled and composited), `false` = one plain picture each - much cheaper |
-| `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"never"` = every clip is its own cut |
+| `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other), `"never"` = every clip is its own cut |
 | `seed`, `imageResolution`, `videoResolution`, `llm` | as in the music-video [config.json](../README.md#configjson) |
 
 ## Design decisions
@@ -132,6 +136,7 @@ All optional:
 
 ## What's next
 
-1. Dialogue check with Whisper (does the clip say what the script says?) with an automatic new render
-2. Subtitles (the translations that are dropped when parsing could become them), an optional score, level matching between clips
+1. An automatic new render (another seed) for the clips the dialogue check flags, and a check of the pictures (does the staging hold from clip to clip?)
+2. Fewer shots for scenes without dialogue (a duration budget), states of a character as reference variants (wounded, uniform open)
+3. Subtitles (the translations that are dropped when parsing could become them), an optional score, level matching between clips
 3. A timeline export for an editor, a gallery, tests for the pure parts

@@ -36,6 +36,7 @@ export type FilmInput = {
     cast: FilmCast,
     clips: FilmClip[],
     soundscapes: Record<string, string>,             // scene id -> ambience
+    stagings: Record<string, string>,                // scene id -> where everyone is, in what posture and clothes
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
     locationDescriptions: Record<string, string>,
     lookBrief: string,
@@ -53,7 +54,7 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
     return input.clips.map(clip => buildClip(clip, input))
 }
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, lookBrief}: FilmInput): FilmClipRequest {
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, stagings, lookBrief}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -124,7 +125,10 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const silentClause = silent.length
             ? ` ${joinAnd(silent.map(s => `${s.label}, ${s.name},`))} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
             : ''
-        return `${opening}${fromFrame}${inFrame} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}`.replace(/\s+/g, ' ').trim()
+        // The video model makes up speech - a babble of invented words - for people it shows when the prompt does not say that nobody
+        // speaks. Every shot without a line of dialogue says so.
+        const noSpeech = !shot.spoken.length && shot.focus.length ? ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.' : ''
+        return `${opening}${fromFrame}${inFrame} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)
@@ -153,10 +157,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         'detailed_description:',
         styleOpening(lookBrief),
         ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
+        ...(stagings[clip.sceneId] ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagings[clip.sceneId]!)}`] : []),
         ...shotTexts,
         '',
         'overall_soundscape:',
-        soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`,
+        `${soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.' : 'There is no speech, murmuring or voices.'}`,
         '',
         'non_diegetic_music:',
         'N/A',

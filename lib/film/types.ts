@@ -84,7 +84,8 @@ export type Shot = {
     seconds: number,                // planned length, at least the time to speak its lines
     continues?: boolean,            // the shot goes on in the same take as the one before, no cut
 }
-export type SceneCoverage = { sceneId: string, soundscape: string, shots: Shot[] }
+// staging: the fixed physical arrangement of the scene - where everyone is, in what posture, what they wear and hold - which every shot keeps to
+export type SceneCoverage = { sceneId: string, soundscape: string, staging?: string, shots: Shot[] }
 
 export type FilmProject = {
     inputs?: Record<string, string>,    // fingerprints of the input files and settings - not a step
