@@ -11,7 +11,6 @@ import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts";
-import {checkDialogue} from "./lib/film/dialogue-check.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
@@ -35,7 +34,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--check] [--again] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -46,7 +45,6 @@ const {values: args, positionals} = (() => {
                 redo: {type: 'string', default: ''},
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
-                check: {type: 'boolean', default: false},
                 again: {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
@@ -348,25 +346,9 @@ if (render.has('images') || render.has('videos')) {
     }
 }
 
-/////////// 12 · DIALOGUE CHECK - Whisper on the rendered clips against the script
-if (args.check) {
-    log.section('12 · CHECKING THE DIALOGUE')
-    const only = new Set(args.only.split(',').filter(Boolean))
-    const selected = requests.filter(r => only.size === 0 || only.has(r.id))
-    const results = await checkDialogue({clips: selected, projectDir: film.dir, language: screenplay.language, work: join(film.dir, 'output', 'check')})
-    await Bun.write(join(film.dir, 'output', 'dialogue-check.json'), JSON.stringify(results, null, 2))
-    const label = {ok: styles.muted('ok'), cut: 'CUT OFF', wrong: 'WRONG', extra: 'EXTRA SPEECH', 'silent-but-heard': 'SPEECH WITHOUT A LINE'} as const
-    for (const r of results) {
-        if (r.status === 'ok') continue
-        log.warn(`${r.id}: ${label[r.status]} - script: "${r.expected || '(no dialogue)'}" - heard: "${r.heard || '(nothing)'}"${r.missing.length ? ` - missing: ${r.missing.join(' ')}` : ''}${r.extra.length ? ` - extra: ${r.extra.join(' ')}` : ''}`)
-    }
-    const bad = results.filter(r => r.status !== 'ok')
-    log.step('Dialogue', `${results.length - bad.length} of ${results.length} clips as the script, ${bad.length ? bad.map(r => r.id).join(', ') + ' not' : 'all fine'} ${styles.muted('- details in output/dialogue-check.json; delete a clip (videos/<id>.mp4 and .json) to render it again')}`)
-}
-
-/////////// 13 · ASSEMBLING THE FILM
+/////////// 12 · ASSEMBLING THE FILM
 if (render.has('final')) {
-    log.section('13 · ASSEMBLING THE FILM')
+    log.section('12 · ASSEMBLING THE FILM')
     const only = new Set(args.only.split(',').filter(Boolean))
     const unknown = [...only].filter(id => !requests.some(r => r.id === id))
     if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)

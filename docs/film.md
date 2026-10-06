@@ -25,7 +25,6 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
 | `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first) |
 | `bun film.ts <film-id> --render=videos --only=clip-005 --again` | render the named clips **again with a new seed** (every one is GPU time; `--only` is required): the old version is put away in `old/attempts/`. A clip that goes on from the last frame of one of them is named - it is not rendered again unless you name it too |
-| `bun film.ts <film-id> --check [--only=clip-005,clip-006]` | a **hint, not a verdict:** Whisper on the rendered clips against the script (`output/dialogue-check.json`). Whisper is brittle - it hears words in noise, misses whispers, writes numbers differently - so nothing is built on it: it changes and renders nothing. Listen to the clips |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
@@ -63,8 +62,7 @@ look is redone.
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json` | coverage |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
-| 12 | –           | Dialogue check (advisory), only with `--check` | |
-| 13 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
+| 12 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
 
 Steps 6-8 use the music-video pipeline's look prompts unchanged; the script's own description of a character is passed in
 as a fact the picture has to show. The original screenplay is also given to the cast step, because a character list
@@ -94,7 +92,7 @@ mouth closed. Speaker ids are numbered per clip, in the order of the spoken line
 
 **Staging.** The shot planning writes for every scene the fixed arrangement of the people - where they are, in what posture, what they wear and hold - and every clip of the scene carries it in its prompt; the shots must keep to it. Without it, every clip draws the posture again (a man lying in the crater, sitting at its rim, lying again, with the uniform open, closed ...). **No speech without a line:** every shot without a line of dialogue says that nobody speaks, and the soundscape excludes speech apart from the dialogue - the video model otherwise makes up speech for people it shows. A clip with dialogue keeps all frames the model rendered, the last word of a line often falls behind the planned end, and the time planned for a line is generous (the model starts about a second into the shot).
 
-**Fewer, better shots.** The shot planner is told that a shot shows something new (never a second shot of what an earlier one shows; atmosphere is one shot) and is given the most shots a scene has material for (one per block of action of the screenplay, one per two lines of dialogue - counted from its structure, not from its text, which differs between languages). It also reads the script of every scene and says whether anyone is in it (`people` - a character, a creature, people said in general words) and whether the script itself has voices in it that are not numbered lines (`voices` - whispers, a chant, a spell). A scene that is only a place becomes one shot without people; where the script has voices, they stay, wordless and indistinct; everywhere else every shot without a line says that nobody speaks. Nothing here is guessed from word lists - understanding is the language model's job, and the sound of the finished clips is checked by `--check`. The few checks in code only count (too many shots: asked again once, then kept with a warning). `output/shotlist.md` is the plan to read: scene by scene the staging, the shots with who is in them, what happens and what is said, and the clip of each shot. Duplicate shots that say the same in other words are best seen there.
+**Fewer, better shots.** The shot planner is told that a shot shows something new (never a second shot of what an earlier one shows; atmosphere is one shot) and is given the most shots a scene has material for (one per block of action of the screenplay, one per two lines of dialogue - counted from its structure, not from its text, which differs between languages). It also reads the script of every scene and says whether anyone is in it (`people` - a character, a creature, people said in general words) and whether the script itself has voices in it that are not numbered lines (`voices` - whispers, a chant, a spell). A scene that is only a place becomes one shot without people; where the script has voices, they stay, wordless and indistinct; everywhere else every shot without a line says that nobody speaks. Nothing here is guessed from word lists - understanding is the language model's job, and what a finished clip says is for you to listen to (Whisper is too brittle to build on, and too slow without a GPU). The few checks in code only count (too many shots: asked again once, then kept with a warning). `output/shotlist.md` is the plan to read: scene by scene the staging, the shots with who is in them, what happens and what is said, and the clip of each shot. Duplicate shots that say the same in other words are best seen there.
 
 A clip whose first shot goes on in the same take as the one before starts on that clip's last frame (`startsFrom`, `<Picture N>`
 as its first frame) - `continuity` in the config.
@@ -139,7 +137,6 @@ All optional:
 
 ## What's next
 
-1. A better hint for speech that is not in the script (Whisper alone is too brittle; its confidence per word, or a language model that reads the transcript, could help) - never an automatic action
-2. Fewer shots for scenes without dialogue (a duration budget), states of a character as reference variants (wounded, uniform open)
-3. Subtitles (the translations that are dropped when parsing could become them), an optional score, level matching between clips
+1. States of a character as reference variants (wounded, uniform open)
+2. Subtitles (the translations that are dropped when parsing could become them), an optional score, level matching between clips
 3. A timeline export for an editor, a gallery, tests for the pure parts

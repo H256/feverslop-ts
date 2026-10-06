@@ -2,7 +2,7 @@ import type {Scene, Shot} from "./types.ts";
 
 // Checks of a planned scene that need no understanding of words - only counting. What needs understanding (is anyone in the scene, does
 // the script have voices in it) is not guessed from word lists here: the shot planning reads the script and says (SceneCoverage.people and
-// .voices). Whether a clip has speech that it should not is what the dialogue check finds, on the sound itself.
+// .voices). Whether a finished clip has speech that it should not is for the listener: Whisper is too brittle to build on.
 // All soft: the planner is asked again once, and what is still found then is kept with a warning (lib/film/coverage.ts).
 
 /**
