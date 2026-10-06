@@ -14,7 +14,7 @@ import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts"
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
@@ -27,7 +27,7 @@ import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionProm
 import {validProjectId} from "./lib/project-setup.ts";
 
 import {loadSettings} from "./lib/settings.ts";
-import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
+import {shuffledStyles, stylesById} from "./lib/styles.ts";
 
 process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
 process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
@@ -182,18 +182,14 @@ log.step('Screenplay', `${fountain} ${styles.muted('- read it; to change somethi
 // them is drawn at random - so the look neither follows the LLM's favorites nor ignores the story. It is written to
 // input/style.txt once and can be edited or swapped. A film whose look is already cached keeps it.
 if (!style && film.data.lookBrief === undefined) {
-    let candidates: FilmStyle[] = []
-    try {
-        const shortlist = await askJson<{ styles: string[] }>(styleShortlistPrompt(brief, summary, shuffledStyles(), 5))
-        candidates = stylesById(shortlist.styles)
-    } catch (e) {
-        log.step('Style', styles.muted(`no shortlist from the LLM (${e instanceof Error ? e.message : e}) - picking from the whole list`))
-    }
-    const picked = pickStyle(candidates.length ? candidates : undefined)
+    // the style that fits the film, chosen by the language model - not drawn from a shortlist
+    const choice = await askJson<{ style?: string, reason?: string }>(styleChoicePrompt(brief, summary, shuffledStyles()))
+    const picked = stylesById([choice.style])[0]
+    if (!picked) throw new Error(`the language model did not name a style of the list ("${choice.style}") - write one into ${film.input('style.txt')} (docs/style-examples.md has them) and run again`)
     style = picked.text
     await Bun.write(film.input('style.txt'), style)
     await film.recordInput('style.txt', style)
-    log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
+    log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`- ${choice.reason ?? 'the best fit'} - written to input/style.txt, edit or replace it to change the look`)}`)
 }
 const lookBrief = await film.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, `${brief.genre}, ${brief.tone}, ${brief.setting}. ${summary}`)))
 log.box('Look brief', lookBrief)

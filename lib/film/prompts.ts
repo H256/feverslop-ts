@@ -111,7 +111,7 @@ ${source}`,
 - Every dialogue line is copied verbatim: the same words, in the same language, with the same spelling and punctuation. Never translate, correct, shorten or reword it. A line spoken in a different language than ${language} gets "language" set to its ISO 639-1 code.
 - Keep every scene and every line, in order. Do not invent or drop scenes, characters or lines.
 - Action lines are kept in meaning; they may be tidied into plain present-tense sentences in English. Transitions (CUT TO:, FADE OUT) and camera directions of the writer are dropped.
-- Sluglines in any language (INNEN, INT., EXT., 内...) become "setting" "INT", "EXT" or "INT/EXT", "location" and "time" - location and time translated into English, the place always named the same way.
+- Sluglines in any language (INNEN, INT., EXT., 内...) become "setting" "INT", "EXT" or "INT/EXT", "location" and "time" - location and time translated into English, the place always named the same way. A heading that names a shot or a view instead of a place ("CLOSE UP - HIS FACE", "WIDE SHOT", "THE COLLISION") is not a new place: the scene stays where the scene before it was, at the time it had - "location" and "time" are those of the scene before, never "unknown".
 - A parenthetical becomes "delivery" in English. (V.O.) and (O.S.) / (OFF) become "voiceover" and "offscreen".
 - "speaker" is the character cue exactly as written.
 - Markdown around the text (**bold**, *italics*, headings, "SCENE 3" labels) is formatting, not part of the screenplay: it is left out of the lines and the scenes. A parenthesised translation of a spoken line, in another language, on the line after it, is not spoken and not a delivery - it is dropped. A parenthetical before a line stays the delivery.
@@ -149,7 +149,7 @@ Characters:
 - "appearance": concrete and visible, in 1-2 sentences - age, build, face, hair, clothing. Take what the screenplay says and fill the gaps with plain, fitting choices, so the character can be drawn. What the screenplay states is kept exactly (age, size, colors, species, clothing) and never contradicted by a filled-in detail. Age and build are written plainly, as facts. Clothing and gear are named exactly as they were in the setting's era and place - not a vague "uniform" or "robe", which an image model fills with the most familiar one, maybe from another period.
 - "voice": for the video model - gender, age, pitch, timbre, pace, accent, as one phrase that fits after "says in": it starts with an article and contains the word "voice", e.g. "a young woman's clear, light voice, fast and a little nervous".
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
-Locations: each place that can be filmed as one set, in order of appearance. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
+Locations: each place that can be filmed as one set, in order of appearance. Sluglines name views and moments as much as places: the same place under several names, seen closer or from another side, at another time of day, is one location with all those names as aliases - a new location only where the look is clearly another (a clearing and the dense forest around it, the inside of a hut and its yard). Fewer, clearly different places are better than many that overlap. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
     }
 }
 
@@ -165,13 +165,13 @@ ${screenplayToText(screenplay)}`,
     }
 }
 
-// Shortlist, not a single pick: the code then draws one at random, so the LLM's favorites can't decide the look alone.
-export function styleShortlistPrompt(brief: Brief, summary: string, styleList: { id: string, name: string }[], count: number): AskOptions {
+// The one style that fits the film: genre, tone, setting and audience decide. No draw and no forced variety - the look has to carry the tone of the film.
+export function styleChoicePrompt(brief: Brief, summary: string, styleList: { id: string, name: string }[]): AskOptions {
     return {
         maxTokens: 2048,
-        input: `Choose the ${count} film styles from the list that would suit this short film best, for a film generated with AI image and video models.
-Pick ${count} clearly different looks - not variations of one look - spread over at least 3 different kinds of medium (live action, 2D animation, 3D animation, craft/stop-motion, painted/printed). Let the genre, era, tone and audience decide; painted or "artistic" styles are only right when the story asks for them.
-Answer only with JSON: {"styles": ["<style id>", ...]}
+        input: `Choose the film style from the list that suits this short film best, for a film generated with AI image and video models.
+The look has to carry the tone of the film: genre, tone, setting and audience decide, and the style that fits is the one to choose - even if it is the obvious one, not the most unusual.
+Answer only with JSON: {"style": "<style id>", "reason": "<one short sentence>"}
 
 styles:
 ${styleList.map(s => `- ${s.id}: ${s.name}`).join('\n')}

@@ -43,9 +43,9 @@ style (typed, from a file, or from the built-in list), the target length of an i
 language and the image and video resolution. It writes `films/<id>/` and prints the command to run it.
 
 By hand: `films/<id>/input/idea.txt` **or** `input/screenplay.txt` (the screenplay wins if both exist), optionally
-`input/style.txt` and `config.json`. Without `style.txt` the first run has the LLM shortlist 5 fitting styles from
-[docs/style-examples.md](style-examples.md) and draws one at random; it is written to `input/style.txt` - edit it and the
-look is redone.
+`input/style.txt` and `config.json`. Without `style.txt` the first run has the LLM choose the one style from
+[docs/style-examples.md](style-examples.md) that suits the film - genre, tone, setting and audience decide, there is no
+draw and no forced variety - and say why; it is written to `input/style.txt`. Edit or replace it and the look is redone.
 
 ## Steps
 
