@@ -24,8 +24,8 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
 | `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
 | `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first) |
-| `bun film.ts <film-id> --render=videos --retry=2` | **costs GPU time:** after rendering, run the dialogue check and render every flagged clip again (up to 2 times, a new seed each time). A flagged clip that other clips start on takes those with it. What was replaced is kept in `old/attempts/`. Off by default |
-| `bun film.ts <film-id> --check [--only=clip-005,clip-006]` | dialogue check: Whisper on the rendered clips against the script - which line is cut off, wrong, or which clip has speech that is not in the script (`output/dialogue-check.json`) |
+| `bun film.ts <film-id> --render=videos --only=clip-005 --again` | render the named clips **again with a new seed** (every one is GPU time; `--only` is required): the old version is put away in `old/attempts/`. A clip that goes on from the last frame of one of them is named - it is not rendered again unless you name it too |
+| `bun film.ts <film-id> --check [--only=clip-005,clip-006]` | a **hint, not a verdict:** Whisper on the rendered clips against the script (`output/dialogue-check.json`). Whisper is brittle - it hears words in noise, misses whispers, writes numbers differently - so nothing is built on it: it changes and renders nothing. Listen to the clips |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
@@ -63,7 +63,7 @@ look is redone.
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json` | coverage |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
-| 12 | –           | Dialogue check, only with `--check` | |
+| 12 | –           | Dialogue check (advisory), only with `--check` | |
 | 13 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
 
 Steps 6-8 use the music-video pipeline's look prompts unchanged; the script's own description of a character is passed in
@@ -139,7 +139,7 @@ All optional:
 
 ## What's next
 
-1. An automatic new render (another seed) for the clips the dialogue check flags, and a check of the pictures (does the staging hold from clip to clip?)
+1. A better hint for speech that is not in the script (Whisper alone is too brittle; its confidence per word, or a language model that reads the transcript, could help) - never an automatic action
 2. Fewer shots for scenes without dialogue (a duration budget), states of a character as reference variants (wounded, uniform open)
 3. Subtitles (the translations that are dropped when parsing could become them), an optional score, level matching between clips
 3. A timeline export for an editor, a gallery, tests for the pure parts
