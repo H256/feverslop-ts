@@ -5,11 +5,14 @@ import type {Scene, Shot} from "./types.ts";
 // .voices). Whether a clip has speech that it should not is what the dialogue check finds, on the sound itself.
 // All soft: the planner is asked again once, and what is still found then is kept with a warning (lib/film/coverage.ts).
 
-/** The most shots a scene needs: one for every sentence of its action, and one for every two lines of dialogue. */
+/**
+ * The most shots a scene needs: one for every block of action the screenplay has, and one for every two lines of dialogue. Counted from the
+ * structure of the screenplay, not from its text - sentences and their punctuation differ between languages and scripts.
+ */
 export function maxShotsFor(scene: Scene) {
-    const sentences = scene.elements.filter(e => e.type === 'action').reduce((sum, e) => sum + Math.max(1, e.text.split(/(?<=[.!?])\s+/).filter(s => s.trim()).length), 0)
+    const blocks = scene.elements.filter(e => e.type === 'action').length
     const lines = scene.elements.filter(e => e.type === 'dialogue').length
-    return Math.max(1, sentences + Math.ceil(lines / 2))
+    return Math.max(1, blocks + Math.ceil(lines / 2))
 }
 
 const MAX_SHOT_SEC = 8
