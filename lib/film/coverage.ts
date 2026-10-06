@@ -1,5 +1,6 @@
 import {FPS, frameAt, round} from "../frames.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
+import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
 
 // The longest a clip can be: the video model renders 5 + 17·k frames and every clip is rounded up to such a length, so
@@ -34,7 +35,11 @@ export class CoverageProblem extends Error {
  * Checks what the LLM planned for a scene and turns it into a SceneCoverage. Everything else is normalized: a speaker on
  * screen is always in the shot's characters, and a shot is never shorter than its lines.
  */
-export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast): SceneCoverage {
+/**
+ * strict: what lib/film/shot-checks.ts finds (people in a scene that names none, speech without a line, too many shots) is a problem the planner is asked
+ * to fix; not strict, it is only noted - a rule of thumb must never stop a film.
+ */
+export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true): { coverage: SceneCoverage, notes: string[] } {
     if (!Array.isArray(raw?.shots) || !raw.shots.length) throw new CoverageProblem(['there are no shots'])
     const dialogue = dialogueOf(scene)
     const problems: string[] = []
@@ -78,7 +83,12 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast): Scen
     }
     if (shots.some(s => !s.action)) problems.push('every shot needs an action')
     if (problems.length) throw new CoverageProblem(problems)
-    return {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), shots}
+    // a scene that is only a place is one shot, without people
+    const {shots: unique, notes} = collapseEmptyScene(shots, scene, cast)
+    const soft = softProblems(unique, scene, cast)
+    if (soft.length && strict) throw new CoverageProblem(soft)
+    notes.push(...soft.map(p => `kept anyway: ${p}`))
+    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), shots: unique}, notes}
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together

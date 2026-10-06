@@ -14,7 +14,9 @@ import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts"
 import {checkDialogue} from "./lib/film/dialogue-check.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {retryFlagged} from "./lib/film/retry.ts";
+import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
@@ -263,9 +265,12 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
         for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), problems))
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene, cast), problems))
             try {
-                result.push(toCoverage(raw, scene, cast))
+                // the first time what the script checks find is a reason to ask again, the second time it is only noted
+                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0)
+                for (const note of notes) log.warn(note)
+                result.push(planned)
                 break
             } catch (e) {
                 // a dropped line of dialogue or a wrong name is what the model can fix when told - once
@@ -298,6 +303,7 @@ await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
     totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
     clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
 }, null, 2))
+await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
 for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
 log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
 

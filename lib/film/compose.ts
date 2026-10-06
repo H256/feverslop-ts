@@ -2,6 +2,7 @@ import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
+import {describesVoices} from "./shot-checks.ts";
 import {filmPictureAsset} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
@@ -58,6 +59,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
+    const voicesInScene = describesVoices(scene)
 
     // the picture slots: the place, then everyone who is in a shot of the clip, then the frame the clip goes on from
     const visibleIds = [...new Set(clip.shots.flatMap(s => s.characters))]
@@ -127,7 +129,10 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             : ''
         // The video model makes up speech - a babble of invented words - for people it shows when the prompt does not say that nobody
         // speaks. Every shot without a line of dialogue says so.
-        const noSpeech = !shot.spoken.length && shot.focus.length ? ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.' : ''
+        // (voices the script itself describes - whispers, a chant - stay: wordless and indistinct)
+        const noSpeech = !shot.spoken.length && shot.focus.length
+            ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
+            : ''
         return `${opening}${fromFrame}${inFrame} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
@@ -161,7 +166,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         ...shotTexts,
         '',
         'overall_soundscape:',
-        `${soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.' : 'There is no speech, murmuring or voices.'}`,
+        `${soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'Apart from the dialogue given in the shots, no words are spoken: voices and whispers described above are indistinct and wordless.' : 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.') : (voicesInScene ? 'No words are spoken: voices and whispers described above are indistinct and wordless.' : 'There is no speech, murmuring or voices.')}`,
         '',
         'non_diegetic_music:',
         'N/A',
