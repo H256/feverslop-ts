@@ -5,9 +5,9 @@ with looks and voices, locations, reference pictures, shots and one MiniMax H3 r
 separate pipeline next to the music-video one (`index.ts`) and shares only the LLM client, the settings, the renderer and a
 few helpers with it. Films live in `films/<id>/`, not in `projects/`.
 
-**Status: stages 1-3b of the plan.** Everything up to the clip requests runs, the reference pictures and the clips can be
-rendered (one clip tested: the model speaks the line, with its own sound). Assembling the film is still to come (see
-[What's next](#whats-next)).
+**Status: stages 1-3c of the plan.** The whole way from an idea or a screenplay to a finished film runs: reference pictures and
+clips are rendered with ComfyUI (the model speaks the dialogue and makes its own sound) and assembled into `<id>.mp4`. Checking the
+dialogue, subtitles and a score are still to come (see [What's next](#whats-next)).
 
 ## Quick start
 
@@ -23,7 +23,8 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id>` | run all steps; finished steps are cached, an edited input redoes what depends on it |
 | `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
 | `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
-| `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first); `--render=all` = images, then videos |
+| `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first) |
+| `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
 `bun run film <film-id>` is the same as `bun film.ts <film-id>`. Typical session: `film:init` → `bun film.ts <id>` → read
@@ -60,6 +61,7 @@ look is redone.
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json` | coverage |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
+| 12 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
 
 Steps 6-8 use the music-video pipeline's look prompts unchanged; the script's own description of a character is passed in
 as a fact the picture has to show. The original screenplay is also given to the cast step, because a character list
@@ -130,6 +132,6 @@ All optional:
 
 ## What's next
 
-1. Assembling the film from the rendered clips (own audio, short fades at the cuts)
-2. Dialogue check with Whisper (does the clip say what the script says?) with an automatic new render
-3. Assembling with crossfades, optional score and subtitles; a timeline export for an editor
+1. Dialogue check with Whisper (does the clip say what the script says?) with an automatic new render
+2. Subtitles (the translations that are dropped when parsing could become them), an optional score, level matching between clips
+3. A timeline export for an editor, a gallery, tests for the pure parts

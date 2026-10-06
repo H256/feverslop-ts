@@ -1,10 +1,11 @@
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
 // usage: bun film.ts <film-id> [--redo=screenplay,cast]
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync, readdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
+import {assembleFilm} from "./lib/film/assemble.ts";
 import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
@@ -30,7 +31,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos|all] [--only=clip-005,clip-006] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -52,9 +53,9 @@ const {values: args, positionals} = (() => {
     }
 })()
 // --render=all is everything that can be rendered so far
-const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos'] : [r]))
-const unknownRender = [...render].filter(r => r !== 'images' && r !== 'videos')
-if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos or all`, usage)
+const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
+const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
+if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
 const redoSteps =args.redo.split(',').filter(Boolean) as FilmStepName[]
 const unknownRedo = redoSteps.filter(s => !(FILM_STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${FILM_STEP_NAMES.join(', ')}`, usage)
@@ -272,6 +273,10 @@ const requests = buildFilmClipRequests({
     characterDescriptions, locationDescriptions, lookBrief,
 })
 const outputDir = join(film.dir, 'output')
+// a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
+const planned = new Set(requests.map(r => `${r.id}.json`))
+const clipsDir = join(outputDir, 'clips')
+if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
 for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
 await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
     title: screenplay.title,
@@ -307,6 +312,20 @@ if (render.has('images') || render.has('videos')) {
             for (const clip of chain) await renderer.renderFilmClip(clip)
         })
     }
+}
+
+/////////// 12 · ASSEMBLING THE FILM
+if (render.has('final')) {
+    log.section('12 · ASSEMBLING THE FILM')
+    const only = new Set(args.only.split(',').filter(Boolean))
+    const unknown = [...only].filter(id => !requests.some(r => r.id === id))
+    if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
+    const selected = requests.filter(r => only.size === 0 || only.has(r.id))
+    // some of the clips only: a try-out, never the film itself
+    const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
+    log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
+    const result = await assembleFilm({clips: selected, projectDir: film.dir, target})
+    log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}${only.size ? ` - ${selected.length} of ${requests.length} clips (--only)` : ''}`)}`)
 }
 
 // Runs of clips where each one starts on the last frame of the one before (FilmClipRequest.startsFrom), in film order
