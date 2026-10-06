@@ -50,6 +50,15 @@ if (kind === 'idea') {
         validate: value => Number(value) >= 10 || Number(value) === -1 ? undefined : 'at least 10, or -1 for as long as the story needs',
     }))
     if (Number(duration) !== filmDefaults.targetDuration) config.targetDuration = Number(duration)
+} else {
+    // a screenplay keeps its length unless a shorter film is asked for: the shots are then planned to it
+    const duration = answer(await p.text({
+        message: 'Plan the film to a length? (seconds - empty = as long as the screenplay needs)',
+        placeholder: 'empty',
+        initialValue: '',
+        validate: value => !value || Number(value) >= 10 ? undefined : 'at least 10 seconds, or empty',
+    }))
+    if (duration) config.targetDuration = Number(duration)
 }
 
 const customize = answer(await p.confirm({message: 'Customize the film settings (language, resolution, ...)?', initialValue: false}))

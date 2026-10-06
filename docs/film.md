@@ -24,6 +24,7 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --redo=cast` | redo a step and everything built on it (several: `--redo=outline,screenplay`) |
 | `bun film.ts <film-id> --render=images` | also render the reference pictures of the characters and locations with ComfyUI |
 | `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first) |
+| `bun film.ts <film-id> --render=videos --retry=2` | **costs GPU time:** after rendering, run the dialogue check and render every flagged clip again (up to 2 times, a new seed each time). A flagged clip that other clips start on takes those with it. What was replaced is kept in `old/attempts/`. Off by default |
 | `bun film.ts <film-id> --check [--only=clip-005,clip-006]` | dialogue check: Whisper on the rendered clips against the script - which line is cut off, wrong, or which clip has speech that is not in the script (`output/dialogue-check.json`) |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
@@ -120,7 +121,7 @@ All optional:
 | Field | Values |
 |-------|--------|
 | `dialogueLanguage` | `"auto"` = the language of the idea, or a code like `"de"`. Ignored for a screenplay |
-| `targetDuration`   | seconds an idea is developed for, at least 10; `-1` = as long as the story needs |
+| `targetDuration`   | seconds of film, at least 10; `-1` = as long as the story needs. An idea is developed for it, and the shots of every scene are planned to it (each scene gets its share, by the length of its script). A **screenplay** is only planned to a length when this is written in `config.json` - without it the shot planning decides freely, and a script of ~140 s easily becomes 240 s |
 | `sequenceSheets`   | `true` (default) = every picture is a multi-angle reference sheet (a short turnaround video, sampled and composited), `false` = one plain picture each - much cheaper |
 | `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other), `"never"` = every clip is its own cut |
 | `seed`, `imageResolution`, `videoResolution`, `llm` | as in the music-video [config.json](../README.md#configjson) |

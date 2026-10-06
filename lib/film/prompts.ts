@@ -185,7 +185,7 @@ summary: ${summary}`,
 
 // One scene at a time: its shots. The dialogue is numbered so that the answer can be checked against it - every line
 // in exactly one shot, in order - and the shots are what the clips are packed from (lib/film/coverage.ts).
-export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, lookBrief: string, problems: string[] = []): AskOptions {
+export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, lookBrief: string, budgetSeconds: number | undefined, problems: string[] = []): AskOptions {
     let line = 0
     const script = scene.elements.map(element => element.type === 'action'
         ? element.text
@@ -198,7 +198,8 @@ Place: ${location.name} - ${location.description}
 Characters you may use, exactly as spelled: ${characters.filter(c => !c.voiceOnly).map(c => c.name).join(', ')}
 Dialogue language: ${language}
 Film look (its camera language is yours too): ${lookBrief}
-
+${budgetSeconds ? `Planned length of this scene: about ${budgetSeconds} seconds.
+` : ''}
 ${script}`,
         instructions: `You are a film director planning the shots of one scene of a short film. The film is generated clip by clip with an AI video model: a clip is at most ~9 seconds long and holds a few shots, every shot lives in one clip and is never split.
 Plan the shots for the whole scene, in order. Every action and every dialogue line of the scene appears in exactly one shot - none dropped, none repeated, in the order of the script. Show only what the scene contains: no people, creatures, events or lines that the script does not put there - a scene without people shows none, a place is shown as a place. Every shot keeps to the staging: a person does not change posture, place or clothing from one shot to the next unless the action says that they do - and then says how - and the camera positions are ones that can really see the staging (no impossible angles). Nobody speaks, shouts, whispers or calls in a shot unless it is one of the numbered dialogue lines: an action that has someone speak without a line makes the video model invent words. The dialogue lines are numbered D1, D2, ...: list the numbers of the lines spoken in a shot in "lines".
@@ -211,7 +212,7 @@ Answer only with JSON:
 - "camera": one natural English sentence with the movement, amplitude and speed ("the camera pushes in slowly", "the camera drifts sideways at walking pace"). The camera follows the film look above: where the look asks for a still, locked-off camera, the shot is locked off; otherwise it is never fully static, which reads as a photograph.
 - "characters": the names, exactly as spelled above, of everyone visible in the shot. A voice-over speaker or someone speaking off-screen is not in it. Someone who speaks on screen always is.
 - "action": 1-3 sentences, present tense, what is visible and audible in the shot, naming the characters exactly as spelled above. Say which way people turn, what they look at, what the face shows - and the mechanics of any contact, not only its result. The dialogue itself is not repeated here, only what the speaker does while saying it.
-- "seconds": 2-8. A shot with dialogue lasts as long as it takes to speak it (about 2.5 words per second) plus a moment for the reaction; at most two lines per shot, then the cut goes to the other person.
+- "seconds": 2-8.${budgetSeconds ? ` The seconds of all the shots add up to about the planned length of the scene: fewer, longer shots rather than many short ones, and a place or an action that needs no cut is one shot.` : ''} A shot with dialogue lasts as long as it takes to speak it (about 2.5 words per second) plus a moment for the reaction; at most two lines per shot, then the cut goes to the other person.
 - "continues": true only if the shot goes on in the same take as the shot before it, the same camera setup without a cut (the camera follows on). Sparingly - false is the usual.
 
 ${filmableRules}`,

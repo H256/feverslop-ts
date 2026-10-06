@@ -13,6 +13,7 @@ import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, renderAll} from "./lib/film/pictures.ts";
 import {checkDialogue} from "./lib/film/dialogue-check.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
+import {retryFlagged} from "./lib/film/retry.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, styleShortlistPrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
@@ -32,7 +33,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--check] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--check] [--retry=2] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -44,6 +45,7 @@ const {values: args, positionals} = (() => {
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 check: {type: 'boolean', default: false},
+                retry: {type: 'string', default: '0'},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -58,7 +60,10 @@ const {values: args, positionals} = (() => {
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
-const redoSteps =args.redo.split(',').filter(Boolean) as FilmStepName[]
+const retries = Number(args.retry)
+if (!Number.isInteger(retries) || retries < 0 || retries > 5) log.usageError(`--retry must be a whole number from 0 to 5, got "${args.retry}"`, usage)
+if (retries > 0 && !render.has('videos')) log.usageError('--retry goes with --render=videos: it renders the clips the dialogue check flags again', usage)
+const redoSteps = args.redo.split(',').filter(Boolean) as FilmStepName[]
 const unknownRedo = redoSteps.filter(s => !(FILM_STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${FILM_STEP_NAMES.join(', ')}`, usage)
 
@@ -97,7 +102,7 @@ await film.syncInputs({
     'idea.txt': {value: idea, steps: ['brief']},
     'screenplay.txt': {value: screenplaySource, steps: ['brief']},
     dialogueLanguage: {value: config.dialogueLanguage, steps: ['brief']},
-    targetDuration: {value: String(config.targetDuration), steps: ['outline']},
+    targetDuration: {value: String(config.targetDuration), steps: ['outline', 'coverage']},
     'style.txt': {value: style, steps: ['lookBrief']},
 })
 
@@ -245,6 +250,12 @@ const pictures = filmPictures(cast, {characterLooks, characterDescriptions, loca
 await Bun.write(join(film.dir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
 /////////// 9 · SHOTS - every scene broken into shots, one LLM call per scene
+// the length of the film: asked for in the config (an idea always has one), shared out to the scenes by the length of their script
+const sceneWeight = (scene: (typeof screenplay.scenes)[number]) => estimateSeconds({...screenplay, scenes: [scene]})
+const totalWeight = screenplay.scenes.reduce((sum, s) => sum + sceneWeight(s), 0)
+const budgeted = config.targetDuration > 0 && (mode === 'idea' || config.targetDurationSet)
+const budgetOf = (scene: (typeof screenplay.scenes)[number]) => budgeted ? Math.max(4, Math.round(config.targetDuration * sceneWeight(scene) / totalWeight)) : undefined
+if (budgeted) log.step('Planned length', `${config.targetDuration}s ${styles.muted('- every scene gets its share of it')}`)
 const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async () => {
     const result: SceneCoverage[] = []
     for (const [i, scene] of screenplay.scenes.entries()) {
@@ -252,7 +263,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
         for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, problems))
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), problems))
             try {
                 result.push(toCoverage(raw, scene, cast))
                 break
@@ -311,9 +322,22 @@ if (render.has('images') || render.has('videos')) {
         if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
         // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
-        await renderAll(clipChains(selected), async chain => {
+        const renderClips = (clips: typeof requests) => renderAll(clipChains(clips), async chain => {
             for (const clip of chain) await renderer.renderFilmClip(clip)
         })
+        await renderClips(selected)
+
+        // only on request: every flagged clip (and the clips that start on its last frame) is rendered again, up to --retry times
+        if (retries > 0) {
+            log.step('Retry', styles.warning(`up to ${retries} new render(s) of every clip the dialogue check flags - every one is GPU time, a flagged clip in a chain takes the clips behind it with it`))
+            const results = await retryFlagged({
+                requests, selected, projectDir: film.dir, retries, render: renderClips,
+                check: clips => checkDialogue({clips, projectDir: film.dir, language: screenplay.language, work: join(film.dir, 'output', 'check')}),
+            })
+            await Bun.write(join(film.dir, 'output', 'dialogue-check.json'), JSON.stringify(results, null, 2))
+            const bad = results.filter(r => r.status !== 'ok')
+            log.step('Dialogue', bad.length ? `still not as the script after ${retries} attempt(s): ${bad.map(r => r.id).join(', ')} - details in output/dialogue-check.json` : `all ${results.length} clips as the script`)
+        }
     }
 }
 

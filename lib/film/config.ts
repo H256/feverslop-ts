@@ -9,7 +9,9 @@ export type FilmConfig = {
     // the language of the dialogue of a story idea: "auto" = the language the idea is written in. A screenplay keeps
     // its own language - its dialogue is never translated
     dialogueLanguage: string,
-    targetDuration: number,         // seconds of film an idea is developed for; -1 = as long as the story needs
+    // seconds of film: an idea is developed for it, and the shots of every scene are planned to it (a scene gets its share of the
+    // script's length). A screenplay is planned to a length only when this is written in config.json; -1 = as long as the story needs
+    targetDuration: number,
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
@@ -34,7 +36,11 @@ export const filmDefaults: FilmConfig = {
     llm: {},
 }
 
-export async function loadFilmConfig(filmDir: string): Promise<FilmConfig> {
+// targetDurationSet: targetDuration is written in config.json - for an idea the default applies anyway, a screenplay is only planned
+// to a length when one was asked for
+export type LoadedFilmConfig = FilmConfig & { targetDurationSet: boolean }
+
+export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig> {
     const file = join(filmDir, 'config.json')
     const fail = (message: string): never => {
         throw new Error(`${file}: ${message}`)
@@ -72,5 +78,5 @@ export async function loadFilmConfig(filmDir: string): Promise<FilmConfig> {
     if (config.llm.model !== undefined && (typeof config.llm.model !== 'string' || !config.llm.model.trim())) {
         fail(`llm.model must be a model id of the LLM server, got ${JSON.stringify(config.llm.model)}`)
     }
-    return config
+    return {...config, targetDurationSet: 'targetDuration' in raw}
 }
