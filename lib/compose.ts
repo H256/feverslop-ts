@@ -423,7 +423,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const energyLevel = slot.energy < 0.4 ? 'low' : slot.energy < 0.7 ? 'mid' : 'high'
         const notes = slot.lyrics.filter(l => l.startsWith('(')).map(l => l.replace(/[()]/g, ''))
 
-        const names = (s: { name: string }) => new RegExp(`\\b${escapeRegExp(s.name)}\\b`, 'g')
+        // the story names a character by name or by id ("Der Mann", "der-mann") - both are the character with the picture
+        const names = (s: { name: string, id: string }) => new RegExp(`\\b(?:${escapeRegExp(s.name)}|${escapeRegExp(s.id)})\\b`, 'gi')
         const withLabels = (text: string) => castSubjects.reduce((t, s) => t.replace(names(s), s.label), text)
 
         // with vocals, a cut never falls into a sung word
@@ -527,14 +528,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // lip-sync is ruled out, not the emotion: eyes, brows and posture stay free to follow the shot
                 const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
                 const silentClause = silentSingers.length
-                    ? ` ${joinAnd(silentSingers.map(s => `${s.label}, ${s.name},`))} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing the emotion of the moment through the eyes and brows.`
+                    ? ` ${silentSingers.length > 1 ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`)) : `${silentSingers[0]!.label}, ${silentSingers[0]!.name},`} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing the emotion of the moment through the eyes and brows.`
                     : ''
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
                 // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
                 const others = onSinger ? shot.focus.filter(s => !singing?.singers.includes(s.id)) : []
                 const othersClause = others.length
-                    ? ` ${joinAnd(others.map(s => `${s.label}, ${s.name},`))} ${others.length > 1 ? 'stay' : 'stays'} silent: no singing, no mouth movement, no sound from ${others.length > 1 ? 'them' : 'it'}.`
+                    ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent: no singing, no mouth movement, no sound from ${others.length > 1 ? 'them' : 'it'}.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const opening = j === 0
@@ -734,7 +735,8 @@ function continueWith(moment: string) {
 
 // the guide wants one or two style sentences before [Shot 1]
 function styleOpening(lookBrief: string) {
-    return splitSentences(lookBrief).slice(0, 2).join(' ')
+    // only the first sentence: the second describes the world of every location - the video model draws the kitchen into the attic
+    return splitSentences(lookBrief).slice(0, 1).join(' ')
 }
 
 function splitSentences(text: string) {
@@ -751,7 +753,7 @@ function spread<T>(items: T[], k: number, n: number): T[] {
 
 // the guide: basic punctuation only, every line ends with . ? or !
 function normalizeLyric(line: string) {
-    const clean = line.replace(/\.{2,}|…/g, '.').replace(/[~*]+/g, '').replace(/([!?.,])\1+/g, '$1').trim()
+    const clean = line.replace(/\.{2,}|…/g, '.').replace(/[~*]+/g, '').replace(/([!?.,])\1+/g, '$1').trim().replace(/[,;:]+$/, '')
     return /[.?!]$/.test(clean) ? clean : `${clean}.`
 }
 

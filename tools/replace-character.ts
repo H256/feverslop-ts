@@ -12,6 +12,7 @@ import {loadProjectConfig} from "../lib/config.ts";
 import {ask, configureLlm} from "../lib/llm.ts";
 import {printBanner, styles} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
+import {genderNote} from "../lib/gender-check.ts";
 import {characterImageDescriptionPrompt} from "../lib/prompts.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {Character, Project} from "../lib/project.ts";
@@ -160,6 +161,20 @@ if (newDescription) {
     await Bun.write(file, JSON.stringify(data, null, 2))
     p.log.success('Saved the new description to project.json')
     changes.push('the new description is saved in project.json')
+
+    // a picture of another gender than the story writes: the beats say "she", the picture is a man (or the other way round)
+    try {
+        const settings = await loadSettings({projectModel: config.llm.model})
+        configureLlm(settings.llm)
+        const own = (data.beats ?? []).map(b => b.summary).filter(s => typeof s === 'string' && s.includes(char.name)).slice(0, 4).join(' ')
+        const note = await genderNote(char.name, `${char.role ?? ''} ${own}`.trim().slice(0, 2500), newDescription)
+        if (note) {
+            p.log.warn(note)
+            p.log.message(styles.muted(`To have the story follow the picture: set "singerVoice" in projects/${id}/config.json ("male" or "female") and redo it (bun index.ts ${id} --redo=story) - everything built on the story is made again - or edit the beats in project.json by hand.`))
+        }
+    } catch {
+        // the check is a courtesy: no language model connected, nothing to say
+    }
 }
 
 const description = newDescription
