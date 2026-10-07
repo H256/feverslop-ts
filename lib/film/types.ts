@@ -87,6 +87,8 @@ export type Shot = {
     action: string,                 // what is visible, characters by their exact names - the dialogue itself is not in it
     lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
     seconds: number,                // planned length, at least the time to speak its lines
+    view?: string,                  // where the camera is in the place and what it looks toward, in the terms of the scene's layout
+    people?: Record<string, { state?: string, frame?: string }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side)
     states?: Record<string, string>,// character id -> state id, for a character who is in one of their other looks in this shot (left out = the normal look)
     texts?: string[],               // only when a line is too long for one clip: the part of it (same order as lines) spoken in this shot - the parts of a line, joined, are the line
     deliveries?: string[],          // how each of its lines is spoken (same order as lines): feeling, intensity, pace - where the script has no parenthetical
@@ -109,6 +111,7 @@ export type FilmProject = {
     characterDescriptions?: Record<string, string>,  // the look without the picture's pose, background and light - for the clip prompts
     locationLooks?: Record<string, string>,
     locationDescriptions?: Record<string, string>,
+    scriptNotes?: string[],             // contradictions the script has in itself (a person bound, then free, then bound again) - read by the language model, only reported
     subtitles?: Record<string, string>, // config subtitles = a language code: the translation of every line spoken in another language, by "sceneId:line" (line = index among the dialogue lines of the scene)
     coverage?: SceneCoverage[],         // the shots of every scene, in scene order
 }

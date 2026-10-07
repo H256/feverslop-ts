@@ -15,7 +15,7 @@ const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, seconds?: unknown, continues?: unknown }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -69,7 +69,9 @@ export function splitLongShot(scene: Scene, shot: Shot): Shot[] {
             ...shot,
             lines,
             ...(lines.some((n, k) => whole(n, texts[k]!)) ? {texts} : {}),
-            action: i ? `The same shot goes on without a cut: ${shot.action}` : shot.action,
+            // the parts after the first go on speaking in the same take: the action is not told again (the model would do it again)
+            action: i ? 'The shot goes on without a cut: nothing starts over and nobody repeats what they did - the speaker goes on speaking in the same place and pose, the others stay as they are.' : shot.action,
+            ...(i ? {people: undefined} : {}),
             seconds: round(group.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC),
             ...(i ? {continues: true} : {}),
         }
@@ -124,6 +126,15 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
                 else if (ids.includes(character.id)) states[character.id] = state.id
             }
         }
+        // per person in the shot: where they are and what they hold at its start, and how they are in the picture
+        const people: NonNullable<Shot['people']> = {}
+        if (shot.people && typeof shot.people === 'object' && !Array.isArray(shot.people)) {
+            for (const [who, entry] of Object.entries(shot.people as Record<string, unknown>)) {
+                const character = characterOf(cast, who)
+                const e = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {}
+                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {})}
+            }
+        }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
         const deliveries = lines.map((_, k) => said[k] ?? '')
         const asked = Number(shot.seconds)
@@ -136,6 +147,8 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             lines,
             ...(deliveries.some(Boolean) ? {deliveries} : {}),
             ...(Object.keys(states).length ? {states} : {}),
+            ...(text(shot.view) ? {view: text(shot.view)} : {}),
+            ...(Object.keys(people).length ? {people} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
             ...(shot.continues === true && i > 0 ? {continues: true} : {}),
         }
@@ -156,8 +169,9 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     const soft = softProblems(unique, scene, raw.fast === true)
     // the action names someone who is not in the shot: the video model draws a stranger for a name without a picture
     unique.forEach((shot, i) => {
-        const strangers = cast.characters.filter(c => !c.voiceOnly && !shot.characters.includes(c.id) && mentions(shot.action, c)).map(c => c.name)
-        if (strangers.length) soft.push(`shot ${i + 1}: the action names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the action, or put them in the shot`)
+        const written = [shot.action, shot.view ?? '', ...Object.values(shot.people ?? {}).flatMap(p => [p.state ?? '', p.frame ?? ''])].join(' ')
+        const strangers = cast.characters.filter(c => !c.voiceOnly && !shot.characters.includes(c.id) && mentions(written, c)).map(c => c.name)
+        if (strangers.length) soft.push(`shot ${i + 1}: the shot's text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the action, or put them in the shot`)
     })
     if (soft.length && strict) throw new CoverageProblem(soft)
     notes.push(...soft.map(p => `kept anyway: ${p}`))

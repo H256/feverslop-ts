@@ -250,3 +250,44 @@ describe('character states', () => {
         expect(jobs.find(j => j.id === 'karl')!.baseId).toBeUndefined()
     })
 })
+
+describe('shot geography', () => {
+    const scene = screenplay.scenes[0]!
+    const base = {framing: 'over-the-shoulder shot', camera: 'c', seconds: 4}
+
+    test('view and, per person, state and frame are kept; people who are not in the shot are dropped', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [
+            {...base, view: 'from beside the cot, looking toward the hearth', characters: ['Anna', 'Ben'], action: 'Anna turns.', lines: [1, 2],
+                people: {Anna: {state: 'stands at the stone, hands on the roots', frame: 'sharp, left of centre'}, Ben: {frame: 'foreground right, back and shoulder only, out of focus'}, Zed: {state: 'x'}}},
+        ]}, scene, cast)
+        const shot = coverage.shots[0]!
+        expect(shot.view).toContain('hearth')
+        expect(Object.keys(shot.people!).sort()).toEqual(['anna', 'ben'])
+        expect(shot.people!.ben!.state).toBeUndefined()
+    })
+    test('the other person is in the picture when the planner says so - and a text that names someone outside the shot is a problem', () => {
+        expect(() => toCoverage({soundscape: 's', people: true, shots: [
+            {...base, characters: ['Anna'], action: 'Anna speaks.', lines: [1], people: {Anna: {state: 'stands, looking at Ben'}}},
+            {...base, characters: ['Ben'], action: 'Ben answers.', lines: [2]},
+        ]}, scene, cast)).toThrow(/Ben/)
+    })
+    test('a part of a long line does not tell the action again', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lifts the radio down from the shelf.', lines: [1, 2]}]}, screenplay.scenes[1]!, cast)
+        const parts = splitLongShot(screenplay.scenes[1]!, {...coverage.shots[0]!, lines: [0], seconds: 14, people: {anna: {state: 'stands at the shelf'}}})
+        expect(parts.length).toBeGreaterThan(1)
+        expect(parts[0]!.action).toContain('radio')
+        expect(parts[1]!.action).not.toContain('radio')
+        expect(parts[1]!.people).toBeUndefined()
+    })
+    test('the clip prompt says where the camera is, where everyone is at the start and how they are in the picture', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [
+            {...base, view: 'beside the bridge rail, looking along it', characters: ['Anna', 'Ben'], action: 'Anna turns to Ben.', lines: [1, 2],
+                people: {Anna: {state: 'stands at the rail, one hand on it', frame: 'sharp, left of centre'}, Ben: {state: 'waits two steps away', frame: 'foreground right, shoulder only, soft'}}},
+        ]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('The camera is beside the bridge rail, looking along it.')
+        expect(request!.prompt).toMatch(/At the start of the shot: <Subject 2> stands at the rail, one hand on it; <Subject 3> waits two steps away\./)
+        expect(request!.prompt).toContain('foreground right, shoulder only, soft')
+    })
+})

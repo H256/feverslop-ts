@@ -16,7 +16,7 @@ import type {PictureJob} from "./lib/render.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
@@ -171,6 +171,14 @@ const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', asyn
 })
 for (const c of cast.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)
 for (const l of cast.locations) log.step('Location', styles.name(l.name))
+
+/////////// 4b · SCRIPT NOTES - what the script contradicts itself in (only reported: the script is the writer's)
+const scriptNotes = await film.step('scriptNotes', '4b · READING THE SCRIPT FOR CONTRADICTIONS', async () => {
+    const answer = await askJson<{ notes?: unknown }>(scriptNotesPrompt(screenplay))
+    return Array.isArray(answer.notes) ? answer.notes.filter((n): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim()) : []
+})
+for (const note of scriptNotes) log.warn(`script: ${note}`)
+if (scriptNotes.length) log.step('Script', styles.muted('the film follows the script as it is - edit project.json (screenplay) to resolve these before rendering'))
 
 /////////// 5 · SUMMARY
 const summary = await film.step('summary', '5 · SUMMARIZING THE STORY', () => ask(summaryPrompt(screenplay, cast)))

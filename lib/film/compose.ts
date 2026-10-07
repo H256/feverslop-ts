@@ -126,8 +126,12 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
         const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
         const inFrame = shot.focus.length
-            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}`).join('; ')}.`
+            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}`).join('; ')}.`
             : ''
+        // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
+        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.` : ''
+        const starts = shot.focus.filter(s => shot.people?.[s.id]?.state)
+        const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
         const lines = shot.spoken.map(lineText).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
@@ -141,7 +145,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const noSpeech = !shot.spoken.length && shot.focus.length
             ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
             : ''
-        return `${opening}${fromFrame}${inFrame} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
+        return `${opening}${fromFrame}${view}${inFrame}${start} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)
