@@ -8,6 +8,9 @@ import type {FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts"
 export const MAX_CLIP_SEC = 10 - 17 / FPS
 const MAX_SHOT_SEC = 8
 const MIN_SHOT_SEC = 2
+// a shot with more speech than this is cut into shots with a part of the line each - the video model is limited to ~10 s a clip
+const MAX_SPEECH_SHOT_SEC = 10
+const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 const LEAD_IN_SEC = 1.2
 
@@ -22,6 +25,54 @@ export const dialogueOf = (scene: Scene) => scene.elements.filter(element => ele
 export const speakingSeconds = (scene: Scene, lines: number[]) => {
     const dialogue = dialogueOf(scene)
     return lines.reduce((sum, n) => sum + speechSeconds(dialogue[n]!.text), 0) + (lines.length ? LEAD_IN_SEC : 0)
+}
+
+const segments = (value: string, granularity: 'sentence' | 'word') =>
+    [...new Intl.Segmenter(undefined, {granularity}).segment(value)].map(s => s.segment)
+
+/** The text cut into pieces of at most `maxSec` speaking time: at sentence ends, a sentence that is too long at word breaks. Joined, the pieces are the text. */
+function speechParts(value: string, maxSec: number): string[] {
+    const pieces = segments(value, 'sentence').flatMap(sentence => speechSeconds(sentence) <= maxSec ? [sentence] : (() => {
+        const words = segments(sentence, 'word')
+        const out: string[] = []
+        for (const word of words) out.length && speechSeconds(out.at(-1)! + word) <= maxSec ? out[out.length - 1] += word : out.push(word)
+        return out
+    })())
+    const total = speechSeconds(value)
+    const share = Math.min(maxSec, total / Math.ceil(total / maxSec) * 1.25)
+    const parts: string[] = []
+    for (const piece of pieces) parts.length && speechSeconds(parts.at(-1)! + piece) <= share ? parts[parts.length - 1] += piece : parts.push(piece)
+    return parts.map(p => p.trim()).filter(Boolean)
+}
+
+/**
+ * A shot whose lines take longer than a clip is cut into shots that each speak a part of them - sentence by sentence, the
+ * words never change. The shots after the first go on in the same take, from the last frame of the one before.
+ */
+export function splitLongShot(scene: Scene, shot: Shot): Shot[] {
+    if (shot.seconds <= MAX_SPEECH_SHOT_SEC || !shot.lines.length) return [shot]
+    const dialogue = dialogueOf(scene)
+    const units = shot.lines.flatMap(n => speechParts(dialogue[n]!.text, SPLIT_TARGET_SEC - LEAD_IN_SEC).map(text => ({line: n, text})))
+    const groups: { line: number, text: string }[][] = []
+    for (const unit of units) {
+        const last = groups.at(-1)
+        const sec = (g: { text: string }[]) => g.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC
+        last && sec([...last, unit]) <= SPLIT_TARGET_SEC ? last.push(unit) : groups.push([unit])
+    }
+    if (groups.length < 2) return [shot]
+    return groups.map((group, i) => {
+        const lines = [...new Set(group.map(u => u.line))]
+        const texts = lines.map(n => group.filter(u => u.line === n).map(u => u.text).join(' '))
+        const whole = (n: number, text: string) => text === dialogue[n]!.text ? undefined : text
+        return {
+            ...shot,
+            lines,
+            ...(lines.some((n, k) => whole(n, texts[k]!)) ? {texts} : {}),
+            action: i ? `The same shot goes on without a cut: ${shot.action}` : shot.action,
+            seconds: round(group.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC),
+            ...(i ? {continues: true} : {}),
+        }
+    })
 }
 
 /** What the model can fix by being asked again: a dialogue line lost or twice, an unknown name. */
@@ -117,7 +168,7 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
     let frameStart = 0
     for (const scene of screenplay.scenes) {
         // the time a shot needs for its lines is worked out again here: a plan made with a shorter estimate gets the new one
-        const shots = coverage.find(c => c.sceneId === scene.id)?.shots.map(s => ({...s, seconds: round(Math.max(s.seconds, speakingSeconds(scene, s.lines)))}))
+        const shots = coverage.find(c => c.sceneId === scene.id)?.shots.map(s => ({...s, seconds: round(Math.max(s.seconds, speakingSeconds(scene, s.lines)))})).flatMap(s => splitLongShot(scene, s))
         if (!shots) throw new Error(`no shots for scene ${scene.id} - run again, or --redo=coverage`)
         let current: Shot[] = []
         const flush = () => {

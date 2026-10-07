@@ -85,7 +85,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             const line = sceneLines[n]!
             if (line.type !== 'dialogue') throw new Error('not a dialogue line')
             const character = characterOf(cast, line.speaker)
-            return {at, line: n, key: character?.id ?? line.speaker, character, kind: line.kind, text: line.text, delivery: line.delivery || shot.deliveries?.[k] || undefined, language: line.language ?? screenplay.language}
+            return {at, line: n, key: character?.id ?? line.speaker, character, kind: line.kind, text: shot.texts?.[k] ?? line.text, delivery: line.delivery || shot.deliveries?.[k] || undefined, language: line.language ?? screenplay.language}
         })
         return {...shot, label: `[Shot ${j + 1}]`, at, spoken, focus: shot.characters.map(subjectOf).filter(s => s !== undefined)}
     })

@@ -22,9 +22,9 @@ export function shotlistMarkdown({screenplay, cast, coverage, clips}: { screenpl
             out.push('', `### ${clip.id} · ${clip.seconds.toFixed(1)} s${clip.startsFrom ? ` · goes on from ${clip.startsFrom}` : ''}`)
             for (const shot of clip.shots) {
                 out.push('', `**${scene.id}.${++n}** · ${shot.seconds.toFixed(1)} s · ${shot.framing}${shot.continues ? ' · same take' : ''}`, `- who: ${shot.characters.length ? shot.characters.map(name).join(', ') : 'nobody'}`, `- ${shot.action}`)
-                for (const l of shot.lines) {
+                for (const [k, l] of shot.lines.entries()) {
                     const line = dialogue[l]
-                    if (line?.type === 'dialogue') out.push(`- says${line.kind === 'voiceover' ? ' (voice-over)' : line.kind === 'offscreen' ? ' (off-screen)' : ''}: **${line.speaker}** "${line.text}"`)
+                    if (line?.type === 'dialogue') out.push(`- says${line.kind === 'voiceover' ? ' (voice-over)' : line.kind === 'offscreen' ? ' (off-screen)' : ''}${shot.texts?.[k] ? ' (part of a long line)' : ''}: **${line.speaker}** "${shot.texts?.[k] ?? line.text}"`)
                 }
             }
         }

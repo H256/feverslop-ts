@@ -83,6 +83,7 @@ export type Shot = {
     action: string,                 // what is visible, characters by their exact names - the dialogue itself is not in it
     lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
     seconds: number,                // planned length, at least the time to speak its lines
+    texts?: string[],               // only when a line is too long for one clip: the part of it (same order as lines) spoken in this shot - the parts of a line, joined, are the line
     deliveries?: string[],          // how each of its lines is spoken (same order as lines): feeling, intensity, pace - where the script has no parenthetical
     continues?: boolean,            // the shot goes on in the same take as the one before, no cut
 }
