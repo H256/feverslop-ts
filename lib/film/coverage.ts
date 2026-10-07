@@ -11,7 +11,7 @@ const MIN_SHOT_SEC = 2
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, seconds?: unknown, continues?: unknown }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -60,6 +60,8 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             const speaker = line.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
             if (speaker && !speaker.voiceOnly && !ids.includes(speaker.id)) ids.push(speaker.id)
         }
+        const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
+        const deliveries = lines.map((_, k) => said[k] ?? '')
         const asked = Number(shot.seconds)
         const planned = Number.isFinite(asked) ? Math.min(MAX_SHOT_SEC, Math.max(MIN_SHOT_SEC, asked)) : 4
         return {
@@ -68,6 +70,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             characters: [...new Set(ids)],
             action: text(shot.action),
             lines,
+            ...(deliveries.some(Boolean) ? {deliveries} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
             ...(shot.continues === true && i > 0 ? {continues: true} : {}),
         }

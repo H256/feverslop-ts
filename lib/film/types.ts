@@ -45,6 +45,7 @@ export type Scene = {
     setting: 'INT' | 'EXT' | 'INT/EXT',
     location: string,               // as written in the slugline
     time: string,                   // DAY, NIGHT, DUSK, ...
+    shot?: string,                  // the script's own heading when it names a shot or a view ("CLOSE UP - HIS FACE") - the writer's wish for the framing
     elements: ScreenplayElement[],
 }
 
@@ -82,6 +83,7 @@ export type Shot = {
     action: string,                 // what is visible, characters by their exact names - the dialogue itself is not in it
     lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
     seconds: number,                // planned length, at least the time to speak its lines
+    deliveries?: string[],          // how each of its lines is spoken (same order as lines): feeling, intensity, pace - where the script has no parenthetical
     continues?: boolean,            // the shot goes on in the same take as the one before, no cut
 }
 // staging: the fixed physical arrangement of the scene - where everyone is, in what posture, what they wear and hold - which every shot keeps to

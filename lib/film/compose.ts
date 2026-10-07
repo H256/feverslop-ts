@@ -81,11 +81,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const shots = clip.shots.map((shot, j) => {
         const at = round(cursor)
         cursor += shot.seconds
-        const spoken: Spoken[] = shot.lines.map(n => {
+        const spoken: Spoken[] = shot.lines.map((n, k) => {
             const line = sceneLines[n]!
             if (line.type !== 'dialogue') throw new Error('not a dialogue line')
             const character = characterOf(cast, line.speaker)
-            return {at, line: n, key: character?.id ?? line.speaker, character, kind: line.kind, text: line.text, delivery: line.delivery, language: line.language ?? screenplay.language}
+            return {at, line: n, key: character?.id ?? line.speaker, character, kind: line.kind, text: line.text, delivery: line.delivery || shot.deliveries?.[k] || undefined, language: line.language ?? screenplay.language}
         })
         return {...shot, label: `[Shot ${j + 1}]`, at, spoken, focus: shot.characters.map(subjectOf).filter(s => s !== undefined)}
     })

@@ -4,7 +4,7 @@ import type {DialogueKind, FilmCast, FilmCharacter, FilmLocation, Scene, Screenp
 
 // What the LLM answers for a screenplay - checked and turned into a Screenplay. Models are loose with enums and
 // empty fields, so everything is normalized here and a script that can't be used is rejected with the reason.
-type RawScreenplay = { scenes?: { setting?: string, location?: string, time?: string, elements?: Record<string, unknown>[] }[] }
+type RawScreenplay = { scenes?: { setting?: string, location?: string, time?: string, shot?: string, elements?: Record<string, unknown>[] }[] }
 
 const SETTINGS = ['INT', 'EXT', 'INT/EXT'] as const
 const KINDS: DialogueKind[] = ['spoken', 'offscreen', 'voiceover']
@@ -35,6 +35,7 @@ export function toScreenplay(raw: RawScreenplay, meta: { title: string, language
             setting: SETTINGS.find(s => s === setting) ?? 'INT',
             location: text(scene.location).replace(/^(INT\/EXT|INT|EXT)\.?\s+/i, '') || 'UNKNOWN',
             time: text(scene.time) || 'DAY',
+            ...(text(scene.shot) ? {shot: text(scene.shot)} : {}),
             elements,
         }
     })

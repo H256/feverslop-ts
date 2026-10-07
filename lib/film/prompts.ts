@@ -65,6 +65,7 @@ const screenplayJson = `{
     "setting": "INT",
     "location": "",
     "time": "NIGHT",
+    "shot": "",
     "elements": [
       {"type": "action", "text": ""},
       {"type": "dialogue", "speaker": "", "text": "", "kind": "spoken", "delivery": "", "language": ""}
@@ -73,7 +74,7 @@ const screenplayJson = `{
 }
 - "setting": "INT", "EXT" or "INT/EXT". "location": the place as the slugline names it, without INT./EXT. and without the time. "time": DAY, NIGHT, DUSK, DAWN, ...
 - "speaker": the character cue, as the script writes it. "kind": "spoken" (the character is in the picture and speaks), "offscreen" (heard, but not in the picture) or "voiceover" (narration or thoughts, lips closed).
-- "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "language" is optional - only a line spoken in another language than the film's.`
+- "shot" is optional - only when the heading of the scene names a shot or a view instead of a place: the heading as written, in English ("CLOSE UP - ANUBIS", "WIDE SHOT"). "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "language" is optional - only a line spoken in another language than the film's.`
 
 export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
     return {
@@ -199,21 +200,23 @@ Characters you may use, exactly as spelled: ${characters.filter(c => !c.voiceOnl
 Dialogue language: ${language}
 Film look (its camera language is yours too): ${lookBrief}
 ${budgetSeconds ? `Planned length of this scene: about ${budgetSeconds} seconds.
+` : ''}${scene.shot ? `The writer's heading for this scene: ${scene.shot} - the framing the writer wants for it.
 ` : ''}
 ${script}`,
         instructions: `You are a film director planning the shots of one scene of a short film. The film is generated clip by clip with an AI video model: a clip is at most ~9 seconds long and holds a few shots, every shot lives in one clip and is never split.
 Plan the shots for the whole scene, in order. Every action and every dialogue line of the scene appears in exactly one shot - none dropped, none repeated, in the order of the script. Show only what the scene contains: no people, creatures, events or lines that the script does not put there - a scene without people shows none, a place is shown as a place. Every shot keeps to the staging: a person does not change posture, place or clothing from one shot to the next unless the action says that they do - and then says how - and the camera positions are ones that can really see the staging (no impossible angles). A shot shows something new - a new action, a person, a detail of the place, or a line of dialogue: never plan a second shot of what an earlier one already shows, and atmosphere (mist, rain, noise) is one shot, not several. This scene has material for at most ${maxShots} shot${maxShots > 1 ? 's' : ''} - fewer is better; a scene with no people and no dialogue is one long shot of up to 8 seconds with a slow camera move. Nobody speaks words in a shot unless it is one of the numbered dialogue lines: an action that has someone speak without a line makes the video model invent words. Voices, whispers, chanting or cries that the script itself describes are written as indistinct, wordless sounds. The dialogue lines are numbered D1, D2, ...: list the numbers of the lines spoken in a shot in "lines".
 
 Answer only with JSON:
-{"people": true, "voices": false, "soundscape": "", "staging": "", "shots": [{"framing": "", "camera": "", "characters": [""], "action": "", "lines": [1], "seconds": 4, "continues": false}]}
+{"people": true, "voices": false, "soundscape": "", "staging": "", "shots": [{"framing": "", "camera": "", "characters": [""], "action": "", "lines": [1], "deliveries": [""], "seconds": 4, "continues": false}]}
 - "people": read the script of the scene and say whether anyone is in it - a character, a creature, or people said in general words ("the men", "a crowd"). false for a scene that is only a place: landscape, weather, the sound of guns.
 - "voices": true only if the script of the scene itself describes voices that are not numbered dialogue lines - whispering voices, a chant, a spell, a crowd calling, voices in someone's head. Otherwise false.
-- "staging": 2-4 sentences, the fixed physical arrangement of the scene at its start, as facts that stay true in every shot until an action changes them: where each person is and in what posture (lying on his back, kneeling, standing), where they are in relation to each other and to the features of the place, what they wear and the condition of it (open or closed, torn, wet), and what they hold. Concrete positions, no camera and no mood.
+- "staging": 2-4 sentences, the fixed physical arrangement of the scene at its start, as facts that stay true in every shot until an action changes them: where each person is and in what posture (lying on his back, kneeling, standing), where they are in relation to each other and to the features of the place, what they wear and the condition of it (open or closed, torn, wet), and what they hold. Concrete positions, no camera and no mood. Only what the script, the character list or the place description says: do not invent clothing, gear or objects that are not given, and never contradict them.
 - "soundscape": 1-3 sentences, the ambience and physical sounds of the scene (wind, rain, footsteps, cloth, breathing). No dialogue, no music.
-- "framing": the shot size and angle, e.g. "wide establishing shot", "medium close-up", "over-the-shoulder shot", "extreme close-up insert". Vary them: no more than two of the same in a row, a wide shot where the place matters, close-ups for faces that speak or react.
+- "framing": the shot size and angle, e.g. "wide establishing shot", "medium close-up", "over-the-shoulder shot", "extreme close-up insert". Vary them: no more than two of the same in a row, a wide shot where the place matters, close-ups for faces that speak or react. If the writer's heading for the scene names a framing ("CLOSE UP - ANUBIS", "WIDE SHOT"), the shot of this scene has that framing and centres on what the heading names - a close-up of one person shows that person, not both.
 - "camera": one natural English sentence with the movement, amplitude and speed ("the camera pushes in slowly", "the camera drifts sideways at walking pace"). The camera follows the film look above: where the look asks for a still, locked-off camera, the shot is locked off; otherwise it is never fully static, which reads as a photograph.
 - "characters": the names, exactly as spelled above, of everyone visible in the shot. A voice-over speaker or someone speaking off-screen is not in it. Someone who speaks on screen always is.
 - "action": 1-3 sentences, present tense, what is visible and audible in the shot, naming the characters exactly as spelled above. Say which way people turn, what they look at, what the face shows - and the mechanics of any contact, not only its result. The dialogue itself is not repeated here, only what the speaker does while saying it.
+- "deliveries": one entry per number in "lines", same order - how that line is spoken, in English, from the situation of the script: the feeling and what is behind it, the intensity, the pace ("cold and controlled, every word measured", "a hoarse whisper, afraid to be heard", "shouting over the noise, panicked"). Not the timbre of the voice - that is known. "" only if there are no lines.
 - "seconds": 2-8.${budgetSeconds ? ` The seconds of all the shots add up to about the planned length of the scene: fewer, longer shots rather than many short ones, and a place or an action that needs no cut is one shot.` : ''} A shot with dialogue lasts as long as it takes to speak it (about 2.5 words per second) plus a moment for the reaction; at most two lines per shot, then the cut goes to the other person.
 - "continues": true only if the shot goes on in the same take as the shot before it, the same camera setup without a cut (the camera follows on). Sparingly - false is the usual.
 
