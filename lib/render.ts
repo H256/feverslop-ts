@@ -28,7 +28,7 @@ async function loadWorkflow<T extends { default: unknown }>(name: string): Promi
 // description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
-export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number }
+export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[] }
 
 type Server = ComfyServer & { api: ComfyApi }
 
@@ -200,7 +200,7 @@ export class Renderer implements Disposable {
 
         const {prompt: sequencePrompt, beatTimes} = picture.kind === 'character'
             ? characterSequencePrompt(picture.description)
-            : locationSequencePrompt(picture.description)
+            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
         const videoFile = join(dir, 'sequence.mp4')
         const videoTarget = join(this.projectDir, videoFile)
         if (!existsSync(videoTarget)) {

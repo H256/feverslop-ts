@@ -53,9 +53,19 @@ export function characterSequencePrompt(description: string, frames = SEQUENCE_F
     return {prompt, beatTimes}
 }
 
-/** Five locked-off tripod views of one location from its hero image: front, right side, rear, left side, wide establishing. */
-export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+/**
+ * Five locked-off tripod views of one location from its hero image: front, right side, rear, left side, wide establishing.
+ * With `views` (the four views after the first, each a camera position and what is seen from it - designed for the place and its
+ * story, see lib/film/prompts.ts locationViewsPrompt) the cuts go to those instead: the generic "behind the location" is a turn
+ * around the same spot, and the video model has no idea what the other side of a place holds.
+ */
+export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES, views?: string[]): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(5, frames)
+    if (views && views.length >= 4) {
+        const cut = (i: number) => `At ${formatTimestamp(beatTimes[i]!)}, the shot cuts to a new locked-off camera position: ${views[i - 1]!.replace(/[.\s]+$/, '')}.`
+        const designed = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] ${cut(1)} [Shot 3] ${cut(2)} [Shot 4] ${cut(3)} [Shot 5] ${cut(4)} The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. No people, text, watermark or unrelated structures.`
+        return {prompt: designed, beatTimes}
+    }
     // every beat is its own locked-off setup at an explicit cut time - a bare list of views reads as one continuous
     // camera move around the place instead of separate shots
     const prompt = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a new locked-off camera position at the right side of the location, looking at it from the right, a completely different viewpoint. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a new locked-off camera position behind the location, looking back across it from the rear. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a new locked-off camera position at the left side of the location, looking at it from the left. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a wide establishing view showing the whole location from a distance. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot. No people, text, watermark or unrelated structures.`

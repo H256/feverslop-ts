@@ -342,3 +342,28 @@ describe('motion and hand-over', () => {
         expect(request!.prompt).toMatch(/During the shot: <Subject 2> stays where she stands, does not step forward or back; <Subject 3> stands motionless, arms at his sides\./)
     })
 })
+
+describe('staging and people', () => {
+    const scene = screenplay.scenes[0]!
+    const base = {framing: 'close-up', camera: 'c', seconds: 4}
+    const input = (people: boolean) => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna speaks.', lines: [1],
+            ...(people ? {people: {Anna: {state: 'stands at the rail'}}} : {})}, {...base, characters: ['Ben'], action: 'Ben speaks.', lines: [2]}]}, scene, cast, false)
+        return {screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
+            soundscapes: {}, stagings: {s1: 'The bridge runs left to right. Anna stands on the left, Ben on the right. Rain falls.'}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'}
+    }
+    test('where the plan says where everybody is per shot, the staging places nobody - the close-up would get them twice', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const data = input(true)
+        data.clips[0]!.shots.forEach(s => { s.people = {...(s.people ?? {}), ...Object.fromEntries(s.characters.map(id => [id, {state: 'stands'}]))} })
+        const [request] = buildFilmClipRequests(data)
+        expect(request!.prompt).toContain('The bridge runs left to right.')
+        expect(request!.prompt).toContain('Rain falls.')
+        expect(request!.prompt).not.toMatch(/Anna stands on the left|Ben on the right/)
+    })
+    test('an older plan without per-shot positions keeps the staging as it is, apart from people without a picture', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const [request] = buildFilmClipRequests(input(false))
+        expect(request!.prompt).toContain('stands on the left')
+    })
+})

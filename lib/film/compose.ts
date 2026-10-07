@@ -56,6 +56,9 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
     return input.clips.map(clip => buildClip(clip, input))
 }
 
+// does the plan of every shot say where its people are?
+const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
+
 function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
@@ -81,6 +84,13 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const subjectOf = (characterId: string) => castSubjects.find(s => s.id === characterId)
     // characters of the film who have no picture in this clip: the text of the clip does not name them (the model would draw a stranger)
     const unpictured = cast.characters.filter(c => !c.voiceOnly && !subjectOf(c.id))
+    // The staging is the layout of the place. Where the plan says where everybody is per shot (people.state), the sentences of the staging that
+    // place people are left out: "true in every shot" put a person into a close-up twice - once as the close-up, once standing where the staging has them.
+    const planned = shots_planned(clip)
+    const stagingFull = stagings[clip.sceneId] ?? ''
+    const stagingText = planned
+        ? withoutSentencesNaming(stagingFull, cast.characters.filter(c => !c.voiceOnly))
+        : withoutSentencesNaming(stagingFull, unpictured)
     const framePicture = clip.startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
 
     // speaker ids (S1), (S2), ... in the order of the spoken lines of this clip - numbered per clip, not per character
@@ -176,7 +186,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         'detailed_description:',
         styleOpening(lookBrief),
         ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
-        ...(withoutSentencesNaming(stagings[clip.sceneId] ?? '', unpictured) ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(withoutSentencesNaming(stagings[clip.sceneId]!, unpictured))}`] : []),
+        ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
         ...shotTexts,
         '',
         'overall_soundscape:',
