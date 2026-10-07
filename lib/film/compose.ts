@@ -3,7 +3,7 @@ import {languageName} from "../config.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
-import {filmPictureAsset} from "./pictures.ts";
+import {filmPictureAsset, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
 
@@ -68,8 +68,13 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const characters = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined).slice(0, room)
 
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, name: location.name, description: locationDescriptions[location.id] ?? location.description}] : []),
-        ...characters.map(c => ({kind: 'character' as const, id: c.id, name: c.name, description: characterDescriptions[c.id] ?? c.appearance})),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, name: location.name, description: locationDescriptions[location.id] ?? location.description}] : []),
+        ...characters.map(c => {
+            // the look the character is in when they first appear in this clip - the clip has one picture of them
+            const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]
+            const pictureId = stateId && c.states?.some(s => s.id === stateId) ? statePictureId(c.id, stateId) : c.id
+            return {kind: 'character' as const, id: c.id, pictureId, name: c.name, description: characterDescriptions[pictureId] ?? characterDescriptions[c.id] ?? c.appearance}
+        }),
     ].map((s, n) => ({...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`}))
     const locationSubject = subjects.find(s => s.kind === 'location')
     const castSubjects = subjects.filter(s => s.kind === 'character')
@@ -191,7 +196,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         }))),
         assets: {
             pictures: [
-                ...subjects.map(s => ({label: s.picture, file: filmPictureAsset(s.kind, s.id), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                ...subjects.map(s => ({label: s.picture, file: filmPictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 ...(clip.startsFrom ? [{label: framePicture!, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
             ],
         },

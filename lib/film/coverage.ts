@@ -15,7 +15,7 @@ const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, seconds?: unknown, continues?: unknown }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -112,6 +112,18 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             const speaker = line.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
             if (speaker && !speaker.voiceOnly && !ids.includes(speaker.id)) ids.push(speaker.id)
         }
+        // the looks the shot has: character name -> look name, kept for characters who are in the shot
+        const states: Record<string, string> = {}
+        if (shot.states && typeof shot.states === 'object' && !Array.isArray(shot.states)) {
+            for (const [who, which] of Object.entries(shot.states as Record<string, unknown>)) {
+                const character = characterOf(cast, who)
+                const wanted = text(which).toLowerCase()
+                const state = character?.states?.find(s => s.id === wanted || s.name.toLowerCase() === wanted)
+                if (!wanted || wanted === 'normal') continue
+                if (!character || !state) problems.push(`shot ${i + 1}: "${who}" has no look "${text(which)}"`)
+                else if (ids.includes(character.id)) states[character.id] = state.id
+            }
+        }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
         const deliveries = lines.map((_, k) => said[k] ?? '')
         const asked = Number(shot.seconds)
@@ -123,6 +135,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             action: text(shot.action),
             lines,
             ...(deliveries.some(Boolean) ? {deliveries} : {}),
+            ...(Object.keys(states).length ? {states} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
             ...(shot.continues === true && i > 0 ? {continues: true} : {}),
         }

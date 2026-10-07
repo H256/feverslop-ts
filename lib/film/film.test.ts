@@ -198,3 +198,55 @@ describe('subtitles', () => {
         expect(toSrt(cues)).toMatch(/^1\n00:00:01,\d{3} --> 00:00:\d{2},\d{3}\nOne line\.\n\n2\n/)
     })
 })
+
+describe('character states', () => {
+    const play = toScreenplay({scenes: [{setting: 'EXT', location: 'The Field', time: 'DAY', elements: [
+        {type: 'action', text: 'Karl is hit.'}, {type: 'dialogue', speaker: 'KARL', text: 'Ah.', kind: 'spoken'}, {type: 'action', text: 'Karl crawls on.'},
+    ]}]}, {title: 'S', language: 'en'})
+    const stateCast = toCast({
+        characters: [
+            {name: 'Karl', aliases: ['KARL'], voice: 'a low voice', states: [{name: 'Wounded', change: 'his tunic is torn and dark with blood'}, {name: 'wounded', change: 'again'}, {name: '', change: 'x'}]},
+            {name: 'Narrator', aliases: ['NARRATOR'], voiceOnly: true, states: [{name: 'x', change: 'y'}]},
+        ],
+        locations: [{name: 'The Field', aliases: ['The Field']}],
+    }, play)
+
+    test('states are kept with ids, at most two, never for a voice-only character', () => {
+        const karl = stateCast.characters[0]!
+        expect(karl.states?.map(s => s.id)).toEqual(['wounded', 'wounded-2'])
+        expect(stateCast.characters[1]!.states).toBeUndefined()
+    })
+    test('a shot names the look of a character who is in it; an unknown look is a problem', () => {
+        const scene = play.scenes[0]!
+        const shot = (extra: Record<string, unknown>) => ({framing: 'wide', camera: 'c', characters: ['Karl'], action: 'Karl crawls.', seconds: 4, lines: [1], ...extra})
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [shot({states: {Karl: 'wounded'}})]}, scene, stateCast)
+        expect(coverage.shots[0]!.states).toEqual({karl: 'wounded'})
+        expect(toCoverage({soundscape: 's', people: true, shots: [shot({states: {Karl: 'normal'}})]}, scene, stateCast).coverage.shots[0]!.states).toBeUndefined()
+        expect(() => toCoverage({soundscape: 's', people: true, shots: [shot({states: {Karl: 'on fire'}})]}, scene, stateCast)).toThrow(/on fire/)
+    })
+    test('the clip uses the picture of the look the character is in', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const scene = play.scenes[0]!
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Karl'], action: 'Karl crawls.', seconds: 4, lines: [1], states: {Karl: 'wounded'}}]}, scene, stateCast)
+        const input = {
+            screenplay: play, cast: stateCast, clips: packClips(play, [coverage], 'auto'), soundscapes: {}, stagings: {}, voices: {}, lookBrief: 'Look. More.',
+            characterDescriptions: {karl: 'a man in a clean tunic', 'karl--wounded': 'a man in a torn, bloody tunic'}, locationDescriptions: {},
+        }
+        const [request] = buildFilmClipRequests(input)
+        const picture = request!.assets.pictures.find(p => p.kind === 'character')!
+        expect(picture.file).toBe('assets/characters/karl--wounded.png')
+        expect(picture.id).toBe('karl')
+        expect(request!.prompt).toContain('a man in a torn, bloody tunic')
+        expect(request!.prompt).not.toContain('a man in a clean tunic')
+        // without a state the normal picture
+        const plain = buildFilmClipRequests({...input, clips: packClips(play, [{...coverage, shots: coverage.shots.map(s => ({...s, states: undefined}))}], 'auto')})
+        expect(plain[0]!.assets.pictures.find(p => p.kind === 'character')!.file).toBe('assets/characters/karl.png')
+    })
+    test('every look is a picture of its own, drawn from the seed of the normal one', async () => {
+        const {filmPictures} = await import("./pictures.ts")
+        const jobs = filmPictures(stateCast, {characterLooks: {karl: 'a', 'karl--wounded': 'b'}, characterDescriptions: {}, locationLooks: {}, locationDescriptions: {}})
+        expect(jobs.filter(j => j.kind === 'character').map(j => j.id)).toEqual(['karl', 'karl--wounded', 'karl--wounded-2'])
+        expect(jobs.find(j => j.id === 'karl--wounded')!.baseId).toBe('karl')
+        expect(jobs.find(j => j.id === 'karl')!.baseId).toBeUndefined()
+    })
+})

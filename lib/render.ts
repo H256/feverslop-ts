@@ -28,7 +28,7 @@ async function loadWorkflow<T extends { default: unknown }>(name: string): Promi
 // description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
-export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string }
+export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number }
 
 type Server = ComfyServer & { api: ComfyApi }
 
@@ -150,7 +150,7 @@ export class Renderer implements Disposable {
         if (existsSync(target)) return log.step('Exists', styles.muted(picture.file))
 
         const {seed} = await this.render(`${picture.kind} ${picture.id}`, target, '.png', async () => {
-            const seed = resolveSeed(this.config.seed)
+            const seed = picture.seed ?? resolveSeed(this.config.seed)
             const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
             const result = imageWorkflow({
                 prompt: picture.prompt,
@@ -184,7 +184,7 @@ export class Renderer implements Disposable {
 
         if (!existsSync(anchorTarget)) {
             const {seed} = await this.render(`${picture.kind} ${picture.id} anchor`, anchorTarget, '.png', async () => {
-                const seed = resolveSeed(this.config.seed)
+                const seed = picture.seed ?? resolveSeed(this.config.seed)
                 const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
                 const result = imageWorkflow({
                     prompt: picture.prompt,

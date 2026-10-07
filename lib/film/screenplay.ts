@@ -1,6 +1,6 @@
 import slugify from "slugify";
 import {languageName} from "../config.ts";
-import type {DialogueKind, FilmCast, FilmCharacter, FilmLocation, Scene, Screenplay, ScreenplayElement} from "./types.ts";
+import type {DialogueKind, FilmCast, FilmCharacter, FilmCharacterState, FilmLocation, Scene, Screenplay, ScreenplayElement} from "./types.ts";
 
 // What the LLM answers for a screenplay - checked and turned into a Screenplay. Models are loose with enums and
 // empty fields, so everything is normalized here and a script that can't be used is rejected with the reason.
@@ -74,8 +74,22 @@ export function estimateSeconds(screenplay: Screenplay) {
 const key = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').trim()
 const toId = (name: string) => slugify(name, {lower: true, strict: true}) || 'x'
 
+// the other looks of a character: at most two, each with a name and what is different
+function statesOf(c: { voiceOnly?: boolean, states?: { name?: string, change?: string }[] }): { states?: FilmCharacterState[] } {
+    if (c.voiceOnly === true || !Array.isArray(c.states)) return {}
+    const taken = new Set<string>()
+    const states = c.states.filter(s => text(s?.name) && text(s?.change)).slice(0, 2).map((s): FilmCharacterState => {
+        let id = toId(text(s.name))
+        for (let n = 2; taken.has(id); n++) id = `${toId(text(s.name))}-${n}`
+        taken.add(id)
+        return {id, name: text(s.name), change: text(s.change)}
+    })
+    return states.length ? {states} : {}
+}
+
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
-export function toCast(raw: { characters?: Partial<FilmCharacter>[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {
+export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string }[] }
+export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {
     const unique = (base: string, taken: Set<string>) => {
         let id = base
         for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
@@ -91,6 +105,7 @@ export function toCast(raw: { characters?: Partial<FilmCharacter>[], locations?:
         appearance: text(c.appearance),
         voice: text(c.voice),
         ...(c.voiceOnly === true ? {voiceOnly: true} : {}),
+        ...statesOf(c),
     }))
     const locationIds = new Set<string>()
     const locations: FilmLocation[] = (raw.locations ?? []).filter(l => text(l.name)).map(l => ({
