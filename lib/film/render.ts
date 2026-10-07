@@ -1,12 +1,11 @@
 import {existsSync, mkdirSync, statSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
-import type {FilmVideoWorkflowOptions, VideoSampling} from "../../comfy/workflows/h3-ref2video-film.ts";
+import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
 import {Renderer} from "../render.ts";
-import type {ComfyServer} from "../settings.ts";
-import {type RenderConfig, workflowDir} from "../config.ts";
+import {workflowDir} from "../config.ts";
 import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 
 /** What a clip was rendered from - the film refuses to use a clip made from another prompt or length. */
@@ -20,10 +19,6 @@ const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.p
  * with the film workflow - pictures only, no audio goes in, the model speaks the dialogue itself.
  */
 export class FilmRenderer extends Renderer {
-    constructor(projectId: string, projectDir: string, config: RenderConfig, servers: ComfyServer[], readonly sampling: VideoSampling = 'turbo') {
-        super(projectId, projectDir, config, servers)
-    }
-
     async renderFilmClip(clip: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
@@ -61,7 +56,6 @@ export class FilmRenderer extends Renderer {
                 frames,
                 seed,
                 resolution: this.config.videoResolution,
-                sampling: this.sampling,
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}
@@ -72,7 +66,6 @@ export class FilmRenderer extends Renderer {
         if (!rendered.hasAudio) log.warn(`${file} has no audio track - the film needs the sound the model makes`)
         await Bun.write(`${target}.json`, JSON.stringify({
             workflow: this.config.videoWorkflow,
-            sampling: this.sampling,
             seed,
             resolution: this.config.videoResolution,
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),

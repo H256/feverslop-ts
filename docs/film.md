@@ -147,7 +147,7 @@ render the new reference sheet. It is the film counterpart of `bun run replace-c
 All optional:
 
 ```json
-{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "sequenceSheets": true, "locationViews": false, "continuity": "auto", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "videoSampling": "turbo", "llm": {}}
+{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "sequenceSheets": true, "locationViews": false, "continuity": "auto", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
 ```
 
 | Field | Values |
@@ -159,7 +159,6 @@ All optional:
 | `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other), `"never"` = every clip is its own cut |
 | `subtitles`        | `"script"` (default) = the translations the screenplay has under its lines (in brackets, they are kept as `translation`), `"off"`, or a language code like `"en"`: every line in another language is translated into it (a step, cached) |
 | `burnSubtitles`    | `false` (default) = the subtitles are a track of the mp4 that the player switches on, `true` = burned into the picture (always visible, for players that do not show a track - messengers, uploads; the video is encoded once more) |
-| `videoSampling`    | `"turbo"` (default) = the video model with its turbo LoRA, 8 steps. `"beta"` or `"simple"` = without the LoRA, res_multistep with that scheduler, 20 steps: several times slower, but it follows the prompt more closely - for a held shot that zooms or people who walk up to the camera although the prompt says otherwise. Applies to every clip rendered from then on (`--again --only=clip-004` to try it on one) |
 | `levelMatching`    | `true` (default) = every clip's sound is brought towards -20 LUFS, at most 9 dB either way - the model makes each clip's level on its own |
 | `scoreVolume`      | dB under the film's own sound for a score (-40 to 0, default -14) |
 | `seed`, `imageResolution`, `videoResolution`, `llm` | as in the music-video [config.json](../README.md#configjson) |

@@ -429,29 +429,3 @@ describe('held shots', () => {
         expect(toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna speaks.', lines: [1, 2], seconds: 4, hold: 'yes'}]}, scene, cast).coverage.shots[0]!.hold).toBeUndefined()
     })
 })
-
-describe('video sampling', () => {
-    const options = {prompt: 'p', pictures: [], frames: 73, seed: 1, resolution: -1 as const, filenamePrefix: 'x'}
-    const nodes = async (sampling?: 'turbo' | 'beta' | 'simple') => {
-        const {default: workflow} = await import("../../comfy/workflows/h3-ref2video-film.ts")
-        const {workflow: wf, output} = workflow({...options, ...(sampling ? {sampling} : {})})
-        return Object.values(wf.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>)
-    }
-    test('turbo (the default): the turbo LoRA, euler, 8 steps', async () => {
-        for (const list of [await nodes(), await nodes('turbo')]) {
-            expect(list.filter(n => n.class_type === 'LoraLoaderModelOnly')).toHaveLength(1)
-            expect(list.find(n => n.class_type === 'KSamplerSelect')!.inputs.sampler_name).toBe('euler')
-            expect(list.find(n => n.class_type === 'BasicScheduler')!.inputs.steps).toBe(8)
-        }
-    })
-    test('beta / simple: no LoRA, res_multistep, 20 steps, that scheduler', async () => {
-        for (const sampling of ['beta', 'simple'] as const) {
-            const list = await nodes(sampling)
-            expect(list.filter(n => n.class_type === 'LoraLoaderModelOnly')).toHaveLength(0)
-            expect(list.find(n => n.class_type === 'KSamplerSelect')!.inputs.sampler_name).toBe('res_multistep')
-            const scheduler = list.find(n => n.class_type === 'BasicScheduler')!
-            expect(scheduler.inputs.steps).toBe(20)
-            expect(scheduler.inputs.scheduler).toBe(sampling)
-        }
-    })
-})
