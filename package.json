@@ -17,7 +17,8 @@
     "film": "bun film.ts",
     "film:init": "bun tools/film-init.ts",
     "film:replace-character": "bun tools/film-replace-character.ts",
-    "film:gallery": "bun tools/film-gallery.ts"
+    "film:gallery": "bun tools/film-gallery.ts",
+    "film:views-test": "bun tools/film-views-test.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

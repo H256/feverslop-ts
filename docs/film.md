@@ -28,6 +28,7 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --render=videos --only=clip-005 --again` | render the named clips **again with a new seed** (every one is GPU time; `--only` is required): the old version is put away in `old/attempts/`. A clip that goes on from the last frame of one of them is named - it is not rendered again unless you name it too |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun run film:gallery` | `films/index.html`: every film on one page - the film to watch, cast and places, links to the shot list and the screenplay |
+| `bun run film:views-test <film-id> [location-id]` | which image-edit model makes the other sides of a place best? Makes the designed views of a location from its hero picture with FLUX.2 Klein 4B, Qwen-Edit 2509 + Multiple angles and Qwen-Edit 2511 + Next Scene and saves them next to each other (`films/<id>/views-test/…/comparison.png`) - see [Location views](#location-views) |
 | `bun test` | tests for the pure parts (`lib/film/film.test.ts`) |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
@@ -173,6 +174,12 @@ and speaks it at the planned speed - right to about a second; nothing listens to
 A score: put an audio file into `films/<id>/input/` as `score.mp3` (or .wav, .flac, .m4a, .ogg) before `--render=final`. It is looped or cut to
 the film, mixed in at `scoreVolume`, and ducks under the dialogue (sidechain compressor). The film is made once more with the score, so the
 file can be exchanged and `--render=final` run again; a score is not generated.
+
+## Location views
+
+With `"locationViews": true` the five views of a location's reference sheet are designed for the place (a floor plan, then: the picture itself, the reverse, the two sides, a wide view) and every shot names the view that is its background. The sheet's video model cuts to the views it is told about - but it cannot know what the other side of a place holds, so the reverse is only roughly right.
+
+An **image-edit model** can make a view from the hero picture on purpose. Which one is best for places (not for people, where Qwen is strong) is not known - there is no benchmark. `bun run film:views-test <film-id>` finds out on your own place and your own GPU: it makes views 2-5 from the hero picture with FLUX.2 Klein 4B, Qwen-Edit 2509 with the "Multiple angles" LoRA (the camera is turned by degrees) and Qwen-Edit 2511 with the "Next Scene" LoRA, same seed, and puts them in a comparison picture, a row per setup. `--setups=klein` makes one setup only. The workflows are `comfy/workflows/edit-flux2-klein.ts` and `edit-qwen.ts`; their model and LoRA file names are typed from what the ComfyUI server has installed, so a missing model fails the typecheck. The result is not used by the film yet - the setup that wins gets built into the `locationViews` step.
 
 ## Design decisions
 

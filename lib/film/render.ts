@@ -1,6 +1,6 @@
 import {existsSync, mkdirSync, statSync} from "node:fs";
-import {dirname, join} from "node:path";
-import {type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
+import {basename, dirname, join} from "node:path";
+import {type EditWorkflow, type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
@@ -19,6 +19,23 @@ const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.p
  * with the film workflow - pictures only, no audio goes in, the model speaks the dialogue itself.
  */
 export class FilmRenderer extends Renderer {
+    /**
+     * One picture edited into another by an image-edit workflow (comfy/workflows/edit-*.ts): `source` goes in, `target` is saved. Resumable
+     * like every render here; an existing target is kept.
+     */
+    async renderEdit(label: string, source: string, target: string, workflow: EditWorkflow, prompt: string, seed: number) {
+        if (existsSync(target)) return log.step('Exists', styles.muted(target))
+        mkdirSync(dirname(target), {recursive: true})
+        const remote = `${this.remoteDir}/edit/${basename(source)}`
+        await this.render(label, target, '.png', async () => ({
+            result: workflow({prompt, image: remote, seed, filenamePrefix: `${this.remoteDir}/edit/${basename(target, '.png')}`}),
+            uploads: [{from: source, to: remote}],
+            meta: {seed},
+        }))
+        await Bun.write(`${target}.json`, JSON.stringify({prompt, seed, source}, null, 2))
+        log.step('Saved', target)
+    }
+
     async renderFilmClip(clip: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)

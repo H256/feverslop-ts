@@ -32,6 +32,15 @@ export type ImageWorkflowOptions = {
 }
 export type ImageWorkflow = (opts: ImageWorkflowOptions) => WorkflowResult
 
+// One image edited into another: the picture in, a prompt for what changes, a new picture out (tools/film-views-test.ts)
+export type EditWorkflowOptions = {
+    prompt: string,
+    image: string,              // ComfyUI input name of the picture to edit, e.g. "feverslop-ts/<project>/edit/hero.png"
+    seed: number,
+    filenamePrefix: string,
+}
+export type EditWorkflow = (opts: EditWorkflowOptions) => WorkflowResult
+
 export type AudioWorkflowOptions = {
     style: string,               // musical style/genre/instrumentation caption
     lyrics: string,               // full lyrics with [Section] tags, sung words only
