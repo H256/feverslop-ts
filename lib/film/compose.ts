@@ -151,7 +151,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
         const silent = speaking.size ? shot.focus.filter(s => !speaking.has(s.id)) : []
         const silentClause = silent.length
-            ? ` ${joinAnd(silent.map(s => `${s.label}, ${s.name},`))} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
+            ? ` ${silent.length > 1 ? joinAnd(silent.map(s => `${s.label} (${s.name})`)) : `${silent[0]!.label}, ${silent[0]!.name},`} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
             : ''
         // The video model makes up speech - a babble of invented words - for people it shows when the prompt does not say that nobody
         // speaks. Every shot without a line of dialogue says so.
