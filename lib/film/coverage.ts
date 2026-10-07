@@ -1,4 +1,5 @@
 import {FPS, frameAt, round} from "../frames.ts";
+import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
 import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
@@ -12,10 +13,10 @@ const MIN_SHOT_SEC = 2
 const MAX_SPEECH_SHOT_SEC = 10
 const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
-const LEAD_IN_SEC = 1.2
+export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, seconds?: unknown, continues?: unknown }
-export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, shots?: RawShot[] }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, hold?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
+export type RawCoverage = { soundscape?: unknown, staging?: unknown, ends?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
@@ -68,7 +69,9 @@ export function splitLongShot(scene: Scene, shot: Shot): Shot[] {
             ...shot,
             lines,
             ...(lines.some((n, k) => whole(n, texts[k]!)) ? {texts} : {}),
-            action: i ? `The same shot goes on without a cut: ${shot.action}` : shot.action,
+            // the parts after the first go on speaking in the same take: the action is not told again (the model would do it again)
+            action: i ? 'The shot goes on without a cut: nothing starts over and nobody repeats what they did - the speaker goes on speaking in the same place and pose, the others stay as they are.' : shot.action,
+            ...(i ? {people: undefined} : {}),
             seconds: round(group.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC),
             ...(i ? {continues: true} : {}),
         }
@@ -111,6 +114,27 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             const speaker = line.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
             if (speaker && !speaker.voiceOnly && !ids.includes(speaker.id)) ids.push(speaker.id)
         }
+        // the looks the shot has: character name -> look name, kept for characters who are in the shot
+        const states: Record<string, string> = {}
+        if (shot.states && typeof shot.states === 'object' && !Array.isArray(shot.states)) {
+            for (const [who, which] of Object.entries(shot.states as Record<string, unknown>)) {
+                const character = characterOf(cast, who)
+                const wanted = text(which).toLowerCase()
+                const state = character?.states?.find(s => s.id === wanted || s.name.toLowerCase() === wanted)
+                if (!wanted || wanted === 'normal') continue
+                if (!character || !state) problems.push(`shot ${i + 1}: "${who}" has no look "${text(which)}"`)
+                else if (ids.includes(character.id)) states[character.id] = state.id
+            }
+        }
+        // per person in the shot: where they are and what they hold at its start, and how they are in the picture
+        const people: NonNullable<Shot['people']> = {}
+        if (shot.people && typeof shot.people === 'object' && !Array.isArray(shot.people)) {
+            for (const [who, entry] of Object.entries(shot.people as Record<string, unknown>)) {
+                const character = characterOf(cast, who)
+                const e = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {}
+                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {})}
+            }
+        }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
         const deliveries = lines.map((_, k) => said[k] ?? '')
         const asked = Number(shot.seconds)
@@ -122,6 +146,11 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             action: text(shot.action),
             lines,
             ...(deliveries.some(Boolean) ? {deliveries} : {}),
+            ...(Object.keys(states).length ? {states} : {}),
+            ...(text(shot.view) ? {view: text(shot.view)} : {}),
+            ...(shot.hold === true ? {hold: true} : {}),
+            ...(Number.isInteger(Number(shot.placeView)) && Number(shot.placeView) >= 1 && Number(shot.placeView) <= 5 ? {placeView: Number(shot.placeView)} : {}),
+            ...(Object.keys(people).length ? {people} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
             ...(shot.continues === true && i > 0 ? {continues: true} : {}),
         }
@@ -139,10 +168,24 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     if (problems.length) throw new CoverageProblem(problems)
     // a scene that is only a place is one shot, without people
     const {shots: unique, notes} = collapseEmptyScene(shots, scene, raw.people === false ? false : raw.people === true ? true : undefined)
-    const soft = softProblems(unique, scene)
+    const soft = softProblems(unique, scene, raw.fast === true)
+    // the action names someone who is not in the shot: the video model draws a stranger for a name without a picture
+    unique.forEach((shot, i) => {
+        const written = [shot.action, shot.view ?? '', ...Object.values(shot.people ?? {}).flatMap(p => [p.state ?? '', p.frame ?? ''])].join(' ')
+        const strangers = cast.characters.filter(c => !c.voiceOnly && !shot.characters.includes(c.id) && mentions(written, c)).map(c => c.name)
+        if (strangers.length) soft.push(`shot ${i + 1}: the shot's text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the action, or put them in the shot`)
+    })
     if (soft.length && strict) throw new CoverageProblem(soft)
     notes.push(...soft.map(p => `kept anyway: ${p}`))
-    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), shots: unique}, notes}
+    // where everyone is when the scene ends - the next scene starts from it
+    const ends: Record<string, string> = {}
+    if (raw.ends && typeof raw.ends === 'object' && !Array.isArray(raw.ends)) {
+        for (const [who, where] of Object.entries(raw.ends as Record<string, unknown>)) {
+            const character = characterOf(cast, who)
+            if (character && text(where)) ends[character.id] = text(where)
+        }
+    }
+    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(Object.keys(ends).length ? {ends} : {}), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), ...(raw.fast === true ? {fast: true} : {}), shots: unique}, notes}
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together

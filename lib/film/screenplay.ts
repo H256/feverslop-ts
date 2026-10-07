@@ -1,6 +1,6 @@
 import slugify from "slugify";
 import {languageName} from "../config.ts";
-import type {DialogueKind, FilmCast, FilmCharacter, FilmLocation, Scene, Screenplay, ScreenplayElement} from "./types.ts";
+import type {DialogueKind, FilmCast, FilmCharacter, FilmCharacterState, FilmLocation, Scene, Screenplay, ScreenplayElement} from "./types.ts";
 
 // What the LLM answers for a screenplay - checked and turned into a Screenplay. Models are loose with enums and
 // empty fields, so everything is normalized here and a script that can't be used is rejected with the reason.
@@ -24,6 +24,7 @@ export function toScreenplay(raw: RawScreenplay, meta: { title: string, language
                 return [{
                     type: 'dialogue', speaker, text: line, kind,
                     ...(text(element.delivery) ? {delivery: text(element.delivery)} : {}),
+                    ...(text(element.translation) ? {translation: text(element.translation)} : {}),
                     ...(language && language !== meta.language && languageName(language) ? {language} : {}),
                 }]
             }
@@ -73,8 +74,51 @@ export function estimateSeconds(screenplay: Screenplay) {
 const key = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').trim()
 const toId = (name: string) => slugify(name, {lower: true, strict: true}) || 'x'
 
+// the other looks of a character: at most two, each with a name and what is different
+function statesOf(c: { voiceOnly?: boolean, states?: { name?: string, change?: string }[] }): { states?: FilmCharacterState[] } {
+    if (c.voiceOnly === true || !Array.isArray(c.states)) return {}
+    const taken = new Set<string>()
+    const states = c.states.filter(s => text(s?.name) && text(s?.change)).slice(0, 2).map((s): FilmCharacterState => {
+        let id = toId(text(s.name))
+        for (let n = 2; taken.has(id); n++) id = `${toId(text(s.name))}-${n}`
+        taken.add(id)
+        return {id, name: text(s.name), change: text(s.change)}
+    })
+    return states.length ? {states} : {}
+}
+
+export type ScriptEdit = { scene?: unknown, element?: unknown, text?: unknown, time?: unknown }
+
+/**
+ * Applies the repair the language model proposes for a script that contradicts itself - and only that kind: a new text for an ACTION line,
+ * or a new time of day for a scene. Dialogue is never touched, no scene or line is added or dropped. What does not fit (an unknown scene,
+ * a dialogue line, an empty text) is left out and reported.
+ */
+export function applyScriptFixes(screenplay: Screenplay, edits: unknown): { screenplay: Screenplay, applied: { scene: string, before: string, after: string }[], rejected: string[] } {
+    const applied: { scene: string, before: string, after: string }[] = []
+    const rejected: string[] = []
+    const scenes = screenplay.scenes.map(scene => ({...scene, elements: [...scene.elements]}))
+    for (const edit of Array.isArray(edits) ? edits as ScriptEdit[] : []) {
+        const scene = scenes.find(s => s.id === text(edit?.scene))
+        if (!scene) { rejected.push(`no scene "${text(edit?.scene)}"`); continue }
+        if (text(edit.time)) {
+            applied.push({scene: scene.id, before: `time: ${scene.time}`, after: `time: ${text(edit.time).toUpperCase()}`})
+            scene.time = text(edit.time).toUpperCase()
+        }
+        if (edit.element === undefined && !text(edit.text)) continue
+        const n = Number(edit.element)
+        const element = scene.elements[n]
+        if (!Number.isInteger(n) || !element || element.type !== 'action') { rejected.push(`${scene.id}: element ${String(edit.element)} is not an action line`); continue }
+        if (!text(edit.text)) { rejected.push(`${scene.id}: empty text`); continue }
+        applied.push({scene: scene.id, before: element.text, after: text(edit.text)})
+        scene.elements[n] = {type: 'action', text: text(edit.text)}
+    }
+    return {screenplay: {...screenplay, scenes}, applied, rejected}
+}
+
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
-export function toCast(raw: { characters?: Partial<FilmCharacter>[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {
+export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string }[] }
+export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {
     const unique = (base: string, taken: Set<string>) => {
         let id = base
         for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
@@ -90,6 +134,7 @@ export function toCast(raw: { characters?: Partial<FilmCharacter>[], locations?:
         appearance: text(c.appearance),
         voice: text(c.voice),
         ...(c.voiceOnly === true ? {voiceOnly: true} : {}),
+        ...statesOf(c),
     }))
     const locationIds = new Set<string>()
     const locations: FilmLocation[] = (raw.locations ?? []).filter(l => text(l.name)).map(l => ({

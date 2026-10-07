@@ -11,11 +11,13 @@
     "replace-character": "bun tools/replace-character.ts",
     "styles:doc": "bun tools/styles-doc.ts",
     "typecheck": "bun tools/typecheck.ts",
+    "test": "bun test",
     "comfy:types": "bun comfy/gen-types.ts",
     "comfy:convert": "bun comfy/json-to-ts.ts",
     "film": "bun film.ts",
     "film:init": "bun tools/film-init.ts",
-    "film:replace-character": "bun tools/film-replace-character.ts"
+    "film:replace-character": "bun tools/film-replace-character.ts",
+    "film:gallery": "bun tools/film-gallery.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
