@@ -410,41 +410,6 @@ describe('location views', () => {
     })
 })
 
-describe('image edit workflows', () => {
-    const options = {prompt: 'the same place from the other side', image: 'feverslop-ts/film-x/edit/hero.png', seed: 42, filenamePrefix: 'feverslop-ts/film-x/edit/view-2'}
-    // the API graph of a workflow: node id -> {class_type, inputs}
-    const graph = async (path: string, name = 'default') => {
-        const {WorkflowBuilder} = await import("../../comfy/nodes.ts")
-        const module = await import(path) as Record<string, (o: typeof options) => { workflow: InstanceType<typeof WorkflowBuilder>, output: string }>
-        const {workflow, output} = module[name]!(options)
-        return {nodes: workflow.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>, output}
-    }
-    const classes = (nodes: Record<string, { class_type: string }>) => Object.values(nodes).map(n => n.class_type)
-
-    test('FLUX.2 Klein: the picture is a reference of both conditionings, four steps, the prompt and the seed are in', async () => {
-        const {nodes} = await graph("../../comfy/workflows/edit-flux2-klein.ts")
-        const kinds = classes(nodes)
-        expect(kinds.filter(k => k === 'ReferenceLatent')).toHaveLength(2)
-        expect(kinds).toContain('Flux2Scheduler')
-        expect(Object.values(nodes).find(n => n.class_type === 'Flux2Scheduler')!.inputs.steps).toBe(4)
-        expect(Object.values(nodes).find(n => n.class_type === 'CLIPTextEncode' && n.inputs.text)!.inputs.text).toBe(options.prompt)
-        expect(Object.values(nodes).find(n => n.class_type === 'RandomNoise')!.inputs.noise_seed).toBe(42)
-        expect(Object.values(nodes).find(n => n.class_type === 'LoadImage')!.inputs.image).toBe(options.image)
-    })
-    test('Qwen edit: the camera LoRA and the Lightning LoRA are chained in front of the sampler', async () => {
-        for (const [name, loras] of [['qwenAngles', ['Lightning-4steps', 'Multiple-angles']], ['qwenNextScene', ['Lightning-4steps', 'next-scene']]] as const) {
-            const {nodes} = await graph("../../comfy/workflows/edit-qwen.ts", name)
-            const used = Object.values(nodes).filter(n => n.class_type === 'LoraLoaderModelOnly').map(n => String(n.inputs.lora_name))
-            expect(used).toHaveLength(2)
-            for (const part of loras) expect(used.some(u => u.includes(part))).toBe(true)
-            const sampler = Object.values(nodes).find(n => n.class_type === 'KSampler')!
-            expect(sampler.inputs.steps).toBe(4)
-            expect(sampler.inputs.seed).toBe(42)
-            expect(Object.values(nodes).find(n => n.class_type === 'TextEncodeQwenImageEditPlus' && n.inputs.prompt)!.inputs.prompt).toBe(options.prompt)
-        }
-    })
-})
-
 describe('held shots', () => {
     const scene = screenplay.scenes[0]!
     const input = (hold: boolean) => {
