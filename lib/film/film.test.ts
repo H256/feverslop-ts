@@ -450,6 +450,15 @@ describe('film config workflows', () => {
         const {filmRenderConfig} = await import("./pictures.ts")
         expect(filmRenderConfig(await load({videoWorkflow: 'h3-ref2video'})).videoWorkflow).toBe('h3-ref2video')
     })
+    test('the beta workflow: the same graph without the LoRA, res_multistep, beta, 20 steps', async () => {
+        expect((await load({videoWorkflow: 'h3-ref2video-film-beta'})).videoWorkflow).toBe('h3-ref2video-film-beta')
+        const {workflow, output} = (await import("../../comfy/workflows/h3-ref2video-film-beta.ts")).default({prompt: 'p', pictures: [], frames: 73, seed: 1, resolution: -1, filenamePrefix: 'x'})
+        const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>)
+        expect(nodes.filter(n => n.class_type === 'LoraLoaderModelOnly')).toHaveLength(0)
+        expect(nodes.find(n => n.class_type === 'KSamplerSelect')!.inputs.sampler_name).toBe('res_multistep')
+        const scheduler = nodes.find(n => n.class_type === 'BasicScheduler')!
+        expect([scheduler.inputs.scheduler, scheduler.inputs.steps]).toEqual(['beta', 20])
+    })
     test('a workflow that is not in comfy/workflows/ is refused', async () => {
         await expect(load({videoWorkflow: 'nope'})).rejects.toThrow('videoWorkflow: no workflow comfy/workflows/nope.ts')
         await expect(load({imageWorkflow: 'nope'})).rejects.toThrow('imageWorkflow: no workflow comfy/workflows/nope.ts')
