@@ -429,3 +429,29 @@ describe('held shots', () => {
         expect(toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna speaks.', lines: [1, 2], seconds: 4, hold: 'yes'}]}, scene, cast).coverage.shots[0]!.hold).toBeUndefined()
     })
 })
+
+describe('film config workflows', () => {
+    const load = async (config: object) => {
+        const {mkdtempSync, writeFileSync, rmSync} = await import("node:fs")
+        const {tmpdir} = await import("node:os")
+        const {join} = await import("node:path")
+        const {loadFilmConfig} = await import("./config.ts")
+        const dir = mkdtempSync(join(tmpdir(), 'film-config-'))
+        try {
+            writeFileSync(join(dir, 'config.json'), JSON.stringify(config))
+            return await loadFilmConfig(dir)
+        } finally {
+            rmSync(dir, {recursive: true, force: true})
+        }
+    }
+    test('one image and one video workflow: the defaults, or the files named', async () => {
+        const standard = await load({})
+        expect([standard.imageWorkflow, standard.videoWorkflow]).toEqual(['krea2-image', 'h3-ref2video-film'])
+        const {filmRenderConfig} = await import("./pictures.ts")
+        expect(filmRenderConfig(await load({videoWorkflow: 'h3-ref2video'})).videoWorkflow).toBe('h3-ref2video')
+    })
+    test('a workflow that is not in comfy/workflows/ is refused', async () => {
+        await expect(load({videoWorkflow: 'nope'})).rejects.toThrow('videoWorkflow: no workflow comfy/workflows/nope.ts')
+        await expect(load({imageWorkflow: 'nope'})).rejects.toThrow('imageWorkflow: no workflow comfy/workflows/nope.ts')
+    })
+})

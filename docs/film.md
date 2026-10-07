@@ -147,13 +147,14 @@ render the new reference sheet. It is the film counterpart of `bun run replace-c
 All optional:
 
 ```json
-{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "sequenceSheets": true, "locationViews": false, "continuity": "auto", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
+{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "imageWorkflow": "krea2-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "auto", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
 ```
 
 | Field | Values |
 |-------|--------|
 | `dialogueLanguage` | `"auto"` = the language of the idea, or a code like `"de"`. Ignored for a screenplay |
 | `targetDuration`   | seconds of film, at least 10; `-1` = as long as the story needs. An idea is developed for it, and the shots of every scene are planned to it (each scene gets its share, by the length of its script). A **screenplay** is only planned to a length when this is written in `config.json` - without it the shot planning decides freely, and a script of ~140 s easily becomes 240 s |
+| `imageWorkflow`, `videoWorkflow` | the workflow file in `comfy/workflows/` (without `.ts`) that renders the pictures and the clips - exactly one each, as in the music-video projects (see [custom workflows](custom-workflows.md)). The film's clips use `h3-ref2video-film` by default: pictures only, no audio goes in. A video workflow for the film takes that file's options (`FilmVideoWorkflowOptions`); the name of the workflow that made a clip is in its `.json` |
 | `sequenceSheets`   | `true` (default) = every picture is a multi-angle reference sheet (a short turnaround video, sampled and composited), `false` = one plain picture each - much cheaper |
 | `locationViews`    | `false` (default). `true` = the five views of every location sheet are **designed** for the place and its story: a step (`locationViews`) writes the floor plan and the views (the reverse - what lies behind the camera of the first view -, the two sides, a wide view), the sheet's video cuts to them, and every shot says which view is its background (`placeView`). For conversations where a reverse shot has to show the other side of the place. Needs `sequenceSheets`; adds to the clip prompts, so only for a film planned with it - switch it on, delete the location pictures (`assets/locations/*`, `assets/sequence/locations/*`) and `--redo=locationViews,coverage` |
 | `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other), `"never"` = every clip is its own cut |

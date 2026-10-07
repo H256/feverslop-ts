@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Resolution} from "../../comfy/helpers.ts";
-import {languageName} from "../config.ts";
+import {defaults, languageName, workflowDir} from "../config.ts";
 import {warnUnknownKeys} from "../log.ts";
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
@@ -15,6 +15,10 @@ export type FilmConfig = {
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
+    // file names in comfy/workflows/, without .ts - exactly one workflow for the pictures and one for the clips (see docs/custom-workflows.md; a video
+    // workflow of the film takes comfy/workflows/h3-ref2video-film.ts's options: pictures only, no audio)
+    imageWorkflow: string,
+    videoWorkflow: string,
     // every character and location gets a multi-angle reference sheet (a short turnaround video, sampled and composited,
     // see lib/sequenceSheet.ts) instead of one picture - false renders just the picture, which is much cheaper
     sequenceSheets: boolean,
@@ -45,6 +49,8 @@ export const filmDefaults: FilmConfig = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
+    imageWorkflow: defaults.imageWorkflow,
+    videoWorkflow: 'h3-ref2video-film',
     sequenceSheets: true,
     locationViews: false,
     continuity: 'auto',
@@ -88,6 +94,9 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
         if (!(value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)))) {
             fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
         }
+    }
+    for (const key of ['imageWorkflow', 'videoWorkflow'] as const) {
+        if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
     }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
