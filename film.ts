@@ -36,7 +36,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -49,6 +49,7 @@ const {values: args, positionals} = (() => {
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
                 'fix-script': {type: 'boolean', default: false},
+                scenes: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -77,6 +78,10 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
 
 const film = new FilmStore(filmId!)
 await film.load()
+// --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
+const sceneIds = new Set(args.scenes.split(',').filter(Boolean))
+if (sceneIds.size && !redoSteps.includes('coverage')) log.usageError('--scenes goes with --redo=coverage: it names the scenes whose shots are planned again', usage)
+const keptCoverage = sceneIds.size ? film.data.coverage : undefined
 for (const step of redoSteps) film.invalidate(step)
 
 const readInput = async (name: string) => existsSync(film.input(name)) ? (await Bun.file(film.input(name)).text()).trim() : ''
@@ -307,6 +312,13 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         return previous && ends.length ? {scene: previous.sceneId, ends: Object.fromEntries(ends), view: previous.shots.at(-1)?.view} : undefined
     }
     for (const [i, scene] of screenplay.scenes.entries()) {
+        // a scene that is not named keeps the shots it had
+        const kept = keptCoverage?.find(c => c.sceneId === scene.id)
+        if (sceneIds.size && !sceneIds.has(scene.id) && kept) {
+            log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.muted(`${scene.id} keeps its shots`))
+            result.push(kept)
+            continue
+        }
         log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
