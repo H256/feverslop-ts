@@ -17,7 +17,8 @@ const SAMPLE_RATE = 48000
 export async function assembleFilm({clips, projectDir, target}: {
     // useRendered: use every frame the model rendered, not only the planned ones - for a clip with dialogue, whose last word can fall
     // into the few frames after the planned end. promptHash: the hash of the prompt planned now - a clip rendered from another one is stale
-    clips: { id: string, frames: number, useRendered?: boolean, promptHash?: string }[],
+    // continuesPrevious: the clip starts on the last frame of the clip right before it in the film - that frame is already there, the clip's first frame is the same picture and is left out (it would stand twice and stutter)
+    clips: { id: string, frames: number, useRendered?: boolean, continuesPrevious?: boolean, promptHash?: string }[],
     projectDir: string,
     target: string,
 }) {
@@ -48,12 +49,14 @@ export async function assembleFilm({clips, projectDir, target}: {
     const resampled = infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
     if (resampled) log.warn(`${resampled} clip(s) have another frame rate than ${FPS} fps and are resampled`)
 
-    const totalFrames = used.reduce((sum, n) => sum + n, 0)
+    const skipped = clips.map(c => c.continuesPrevious ? 1 : 0)
+    const totalFrames = used.reduce((sum, n, i) => sum + n - skipped[i]!, 0)
     const filters = clips.map((clip, i) => {
         const seconds = secondsAt(used[i]!)
+        const from = secondsAt(skipped[i]!)
         return [
-            `[${i}:v]${Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${used[i]},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
-            `[${i}:a]aresample=${SAMPLE_RATE},aformat=channel_layouts=stereo,apad,atrim=end=${seconds},asetpts=PTS-STARTPTS,afade=t=in:d=${FADE_SEC},afade=t=out:st=${Math.max(0, seconds - FADE_SEC)}:d=${FADE_SEC}[a${i}]`,
+            `[${i}:v]${Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=start_frame=${skipped[i]}:end_frame=${used[i]},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
+            `[${i}:a]aresample=${SAMPLE_RATE},aformat=channel_layouts=stereo,apad,atrim=start=${from}:end=${seconds},asetpts=PTS-STARTPTS,afade=t=in:d=${FADE_SEC},afade=t=out:st=${Math.max(0, seconds - from - FADE_SEC)}:d=${FADE_SEC}[a${i}]`,
         ].join(';')
     })
     filters.push(`${clips.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${clips.length}:v=1:a=1[v][a]`)

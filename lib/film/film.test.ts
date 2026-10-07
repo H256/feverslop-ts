@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import {MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
-import {collapseEmptyScene, maxShotsFor} from "./shot-checks.ts";
+import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
 import {characterOf, locationOf, missingDialogue, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay} from "./types.ts";
@@ -74,7 +74,7 @@ describe('coverage', () => {
     test('every dialogue line must be in exactly one shot, in order', () => {
         expect(() => toCoverage({soundscape: 's', shots: [shot({lines: [1]})]}, bridge, cast)).toThrow()
         expect(() => toCoverage({soundscape: 's', shots: [shot({lines: [2, 1]})]}, bridge, cast)).toThrow()
-        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1]}), shot({characters: ['Ben'], lines: [2]})]}, bridge, cast)
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1]}), shot({characters: ['Ben'], action: 'Ben answers.', lines: [2]})]}, bridge, cast)
         expect(coverage.shots.map(s => s.lines)).toEqual([[0], [1]])
     })
     test('whoever speaks on screen is in the shot, an unknown name is a problem', () => {
@@ -98,13 +98,18 @@ describe('coverage', () => {
         const line = hut.elements.find(e => e.type === 'dialogue')!
         expect(parts.map(p => p.texts?.[0] ?? '').join(' ')).toBe(line.type === 'dialogue' ? line.text : '')
     })
+    test('an action that names someone who is not in the shot is a problem', () => {
+        expect(() => toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], action: 'Anna looks at Ben.'}), shot({characters: ['Ben'], action: 'Ben nods.', lines: [2]})]}, bridge, cast)).toThrow(/Ben/)
+        const {notes} = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], action: 'Anna looks at Ben.'}), shot({characters: ['Ben'], action: 'Ben nods.', lines: [2]})]}, bridge, cast, false)
+        expect(notes.some(n => n.includes('Ben'))).toBe(true)
+    })
     test('short shots are not split', () => {
         const {coverage} = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1, 2]})]}, bridge, cast)
         expect(splitLongShot(bridge, coverage.shots[0]!)).toHaveLength(1)
     })
     test('clips never span two scenes and never exceed the limit', () => {
         const plans: SceneCoverage[] = [
-            toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8}), shot({characters: ['Ben'], lines: [2], seconds: 8})]}, bridge, cast).coverage,
+            toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8}), shot({characters: ['Ben'], action: 'Ben answers.', lines: [2], seconds: 8})]}, bridge, cast).coverage,
             toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8})]}, hut, cast).coverage,
         ]
         const clips = packClips(screenplay, plans, 'auto')
@@ -116,7 +121,7 @@ describe('coverage', () => {
         clips.reduce((frame, c) => { expect(c.frameStart).toBe(frame); return frame + c.frames }, 0)
     })
     test('continuity "scene" chains every clip but the first of a scene, "never" none', () => {
-        const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8}), shot({characters: ['Ben'], lines: [2], seconds: 8})]}, bridge, cast).coverage
+        const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8}), shot({characters: ['Ben'], action: 'Ben answers.', lines: [2], seconds: 8})]}, bridge, cast).coverage
         const hutPlan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8})]}, hut, cast).coverage
         const chained = packClips(screenplay, [plan, hutPlan], 'scene')
         expect(chained.filter(c => c.startsFrom).map(c => c.id)).toContain('clip-002')
@@ -137,8 +142,27 @@ describe('shot checks', () => {
     test('a scene with people is not collapsed', () => {
         expect(collapseEmptyScene([mk(3), mk(4)], scene, true).shots).toHaveLength(2)
     })
+    test('a fast action sequence may have more shots than its script has blocks', () => {
+        const shots = [mk(3), mk(3), mk(3), mk(3), mk(3)]
+        expect(softProblems(shots, scene)).toHaveLength(1)
+        expect(softProblems(shots, scene, true)).toHaveLength(0)
+        expect(softProblems([...shots, mk(3), mk(3)], scene, true)).toHaveLength(1)
+    })
     test('the most shots come from the structure of the script', () => {
         expect(maxShotsFor(scene)).toBe(2)
         expect(maxShotsFor(screenplay.scenes[0]!)).toBeGreaterThanOrEqual(2)
+    })
+})
+
+describe('names', () => {
+    const anna = cast.characters.find(c => c.id === 'anna')!
+    const ben = cast.characters.find(c => c.id === 'ben')!
+    test('a sentence that names a character without a picture is left out', async () => {
+        const {withoutSentencesNaming, mentions} = await import("./names.ts")
+        const text = 'Anna stands at the stone. Ben is on the cot, bound. The room is dark.'
+        expect(withoutSentencesNaming(text, [ben])).toBe('Anna stands at the stone. The room is dark.')
+        expect(withoutSentencesNaming(text, [])).toBe(text)
+        expect(mentions("ANNA's hands shake", anna)).toBe(true)
+        expect(mentions('Annabel waits', anna)).toBe(false)
     })
 })

@@ -2,6 +2,7 @@ import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
+import {mentions, withoutSentencesNaming} from "./names.ts";
 import {filmPictureAsset} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
@@ -73,6 +74,8 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const locationSubject = subjects.find(s => s.kind === 'location')
     const castSubjects = subjects.filter(s => s.kind === 'character')
     const subjectOf = (characterId: string) => castSubjects.find(s => s.id === characterId)
+    // characters of the film who have no picture in this clip: the text of the clip does not name them (the model would draw a stranger)
+    const unpictured = cast.characters.filter(c => !c.voiceOnly && !subjectOf(c.id))
     const framePicture = clip.startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
 
     // speaker ids (S1), (S2), ... in the order of the spoken lines of this clip - numbered per clip, not per character
@@ -140,7 +143,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
-        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : ''}`
+        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
     const prompt = [
@@ -162,11 +165,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         'detailed_description:',
         styleOpening(lookBrief),
         ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
-        ...(stagings[clip.sceneId] ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagings[clip.sceneId]!)}`] : []),
+        ...(withoutSentencesNaming(stagings[clip.sceneId] ?? '', unpictured) ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(withoutSentencesNaming(stagings[clip.sceneId]!, unpictured))}`] : []),
         ...shotTexts,
         '',
         'overall_soundscape:',
-        `${soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'Apart from the dialogue given in the shots, no words are spoken: voices and whispers described above are indistinct and wordless.' : 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.') : (voicesInScene ? 'No words are spoken: voices and whispers described above are indistinct and wordless.' : 'There is no speech, murmuring or voices.')}`,
+        `${withoutSentencesNaming(soundscapes[clip.sceneId] ?? '', unpictured) || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'Apart from the dialogue given in the shots, no words are spoken: voices and whispers described above are indistinct and wordless.' : 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.') : (voicesInScene ? 'No words are spoken: voices and whispers described above are indistinct and wordless.' : 'There is no speech, murmuring or voices.')}`,
         '',
         'non_diegetic_music:',
         'N/A',

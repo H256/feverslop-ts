@@ -88,7 +88,9 @@ export class FilmRenderer extends Renderer {
         const last = filmBoundaryFrame(clip.id)
         if (renderedFrames === undefined && existsSync(join(this.projectDir, first)) && existsSync(join(this.projectDir, last))) return
         mkdirSync(join(this.projectDir, dirname(first)), {recursive: true})
-        const frames = Math.min(clip.frames, renderedFrames ?? (await probeVideo(video)).frames)
+        // the last frame of the film's part of the clip: a clip with dialogue is used with every frame the model rendered (assembleFilm useRendered)
+        const available = renderedFrames ?? (await probeVideo(video)).frames
+        const frames = clip.dialogue.length ? available : Math.min(clip.frames, available)
         await extractFrame(video, 0, join(this.projectDir, first))
         await extractFrame(video, frames - 1, join(this.projectDir, last))
         log.step('Saved', `${first}, ${last} ${styles.muted(`frames 0 and ${frames - 1}`)}`)

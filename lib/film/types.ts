@@ -90,7 +90,7 @@ export type Shot = {
 // staging: the fixed physical arrangement of the scene - where everyone is, in what posture, what they wear and hold - which every shot keeps to
 // people / voices: what the shot planning read in the script of the scene - is anyone in it (a character, a creature, people said in general
 // words), does the script itself have voices in it that are not numbered lines (whispers, a chant, a spell). Not set in a plan made before.
-export type SceneCoverage = { sceneId: string, soundscape: string, staging?: string, people?: boolean, voices?: boolean, shots: Shot[] }
+export type SceneCoverage = { sceneId: string, soundscape: string, staging?: string, people?: boolean, voices?: boolean, fast?: boolean, shots: Shot[] }
 
 export type FilmProject = {
     inputs?: Record<string, string>,    // fingerprints of the input files and settings - not a step

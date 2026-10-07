@@ -1,4 +1,5 @@
 import {FPS, frameAt, round} from "../frames.ts";
+import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
 import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
@@ -15,7 +16,7 @@ const SPLIT_TARGET_SEC = 8.3
 const LEAD_IN_SEC = 1.2
 
 type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, seconds?: unknown, continues?: unknown }
-export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, shots?: RawShot[] }
+export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
@@ -139,10 +140,15 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     if (problems.length) throw new CoverageProblem(problems)
     // a scene that is only a place is one shot, without people
     const {shots: unique, notes} = collapseEmptyScene(shots, scene, raw.people === false ? false : raw.people === true ? true : undefined)
-    const soft = softProblems(unique, scene)
+    const soft = softProblems(unique, scene, raw.fast === true)
+    // the action names someone who is not in the shot: the video model draws a stranger for a name without a picture
+    unique.forEach((shot, i) => {
+        const strangers = cast.characters.filter(c => !c.voiceOnly && !shot.characters.includes(c.id) && mentions(shot.action, c)).map(c => c.name)
+        if (strangers.length) soft.push(`shot ${i + 1}: the action names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the action, or put them in the shot`)
+    })
     if (soft.length && strict) throw new CoverageProblem(soft)
     notes.push(...soft.map(p => `kept anyway: ${p}`))
-    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), shots: unique}, notes}
+    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), ...(raw.fast === true ? {fast: true} : {}), shots: unique}, notes}
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together

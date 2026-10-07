@@ -31,7 +31,8 @@ export function collapseEmptyScene(shots: Shot[], scene: Scene, people: boolean 
 }
 
 /** Too many shots for what the scene has in it. */
-export function softProblems(shots: Shot[], scene: Scene): string[] {
-    const most = maxShotsFor(scene)
+export function softProblems(shots: Shot[], scene: Scene, fast = false): string[] {
+    // a fast action sequence is cut on the movement: however short its script, up to 6 shots
+    const most = fast ? Math.max(maxShotsFor(scene) * 2, 6) : maxShotsFor(scene)
     return shots.length > most ? [`${shots.length} shots, but the scene has material for ${most} at most - fewer, longer shots, and no second shot of what an earlier one already shows`] : []
 }
