@@ -20,22 +20,13 @@ export type FilmVideoWorkflowOptions = {
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final film
 export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
 
-// How the model is sampled: the turbo LoRA with 8 steps (this file), or none with 20 (h3-ref2video-film-held.ts)
-export type Sampling = { lora: boolean, sampler: 'euler' | 'res_multistep', scheduler: 'beta57' | 'beta', steps: number }
-
 export default function h3Ref2VideoFilm(opts: FilmVideoWorkflowOptions): WorkflowResult {
-    return h3Film(opts, {lora: true, sampler: 'euler', scheduler: 'beta57', steps: 8})
-}
-
-export function h3Film(opts: FilmVideoWorkflowOptions, sampling: Sampling): WorkflowResult {
     const wf = new WorkflowBuilder()
 
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
     const unet = wf.UNETLoader({unet_name: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors', weight_dtype: 'default'})
-    const model = sampling.lora
-        ? wf.LoraLoaderModelOnly({lora_name: 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', strength_model: 1, model: unet.MODEL})
-        : unet
+    const model = wf.LoraLoaderModelOnly({lora_name: 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', strength_model: 1, model: unet.MODEL})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
@@ -65,8 +56,8 @@ export function h3Film(opts: FilmVideoWorkflowOptions, sampling: Sampling): Work
     const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
     const guider = wf.BasicGuider({model: attention.model, conditioning: positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
-    const sampler = wf.KSamplerSelect({sampler_name: sampling.sampler})
-    const sigmas = wf.BasicScheduler({scheduler: sampling.scheduler, steps: sampling.steps, denoise: 1, model: model.MODEL})
+    const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
+    const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})
     // No audio goes in - not as a reference, not as a guide: the latent of the reference node is the (empty) one that is sampled
     const sampled = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,

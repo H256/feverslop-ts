@@ -184,7 +184,6 @@ With `"locationViews": true` the five views of a location's reference sheet are 
   `<d>[Language] …</d>` with a speaker id and a voice description per character (`FilmCharacter.voice`).
 - **Cast and locations are references**, as in the music-video pipeline.
 - **The clips have their own workflow**, `comfy/workflows/h3-ref2video-film.ts`: pictures only. Like ComfyUI's own MiniMax H3 template it samples the empty video+audio latent that `MiniMaxH3ReferenceToVideo` returns and decodes it twice (video VAE, audio VAE) - the sound, speech included, comes from the model.
-- **Clips with a held shot have a second workflow**, `comfy/workflows/h3-ref2video-film-held.ts`: the same graph without the turbo LoRA - res_multistep, beta scheduler, 20 steps, fixed in the file, nothing to configure. The turbo LoRA moves the picture whatever the prompt says (the camera zooms in, a person walks up to it); without it "the framing stays" is followed. About 2.5 times slower, so only the clips whose shot the planner marked `hold` (talking close-ups, conversations) use it; the clip's `.json` says which workflow made it.
 - **No word lists, no Whisper.** What the script means - who is in a scene, whether a shot is a fight, how a line is spoken - is read by the language model and
   written down as fields; the code only counts and compares names from the cast. What a finished clip says is for you to listen to: Whisper is
   too brittle to build on and too slow without a GPU. `--again --only=<clips>` renders a clip once more with a new seed.
