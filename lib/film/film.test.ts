@@ -321,3 +321,24 @@ describe('script repair', () => {
         expect(applyScriptFixes(play, 'nope').screenplay).toEqual(play)
     })
 })
+
+describe('motion and hand-over', () => {
+    const scene = screenplay.scenes[0]!
+    const base = {framing: 'two-shot', camera: 'c', seconds: 4}
+
+    test('motion per person and where everybody is at the end of the scene are kept', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true,
+            ends: {Anna: 'stands at the rail, hands on it', Ben: 'waits two steps away', Zed: 'x', Ben2: ''},
+            shots: [{...base, characters: ['Anna', 'Ben'], action: 'Anna speaks.', lines: [1, 2],
+                people: {Anna: {motion: 'stays where she stands, only the head and mouth move'}, Ben: {state: 'waits', motion: 'takes two steps toward Anna and stops'}}}]}, scene, cast)
+        expect(coverage.shots[0]!.people!.anna).toEqual({motion: 'stays where she stands, only the head and mouth move'})
+        expect(coverage.ends).toEqual({anna: 'stands at the rail, hands on it', ben: 'waits two steps away'})
+    })
+    test('the prompt says who stays where they are', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna', 'Ben'], action: 'Anna turns to Ben.', lines: [1, 2],
+            people: {Anna: {state: 'stands at the rail', motion: 'stays where she stands, does not step forward or back'}, Ben: {motion: 'stands motionless, arms at his sides'}}}]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toMatch(/During the shot: <Subject 2> stays where she stands, does not step forward or back; <Subject 3> stands motionless, arms at his sides\./)
+    })
+})

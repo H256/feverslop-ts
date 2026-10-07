@@ -163,31 +163,36 @@ const readScript = async () => {
     const answer = await askJson<{ notes?: unknown }>(scriptNotesPrompt(screenplay, mode === 'idea' ? idea : undefined))
     return Array.isArray(answer.notes) ? answer.notes.filter((n): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim()) : []
 }
-let scriptNotes = await film.step('scriptNotes', '3b · READING THE SCRIPT FOR CONTRADICTIONS', readScript)
-// the repair is done in rounds: a repair can leave something over, or make something new - up to 3 rounds with --fix-script, 2 for a script of the pipeline's own
-const maxRounds = args['fix-script'] ? 3 : mode === 'idea' && !film.data.scriptFixes ? 2 : 0
-let backedUp = false
-for (let round = 0; round < maxRounds && scriptNotes.length; round++) {
-    const answer = await askJson<{ edits?: unknown }>(scriptFixPrompt(screenplay, scriptNotes))
-    const fixed = applyScriptFixes(screenplay, answer.edits)
-    for (const reason of fixed.rejected) log.warn(`script repair: ${reason}`)
-    if (!fixed.applied.length) break
-    // what was there goes to old/ (once), the shots follow the new script - the cast and the looks stay: only action lines and times of day changed
-    if (!backedUp) {
-        const keep = join(film.dir, 'old', `script-fix-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}`)
-        mkdirSync(keep, {recursive: true})
-        copyFileSync(film.file, join(keep, 'project.json'))
-        log.step('Script', styles.muted(`the old version is in ${keep}; cast and looks are kept, the shots are planned again`))
-        backedUp = true
+let scriptNotes: string[] = film.data.scriptNotes ?? []
+try {
+    scriptNotes = await film.step('scriptNotes', '3b · READING THE SCRIPT FOR CONTRADICTIONS', readScript)
+    // the repair is done in rounds: a repair can leave something over, or make something new - up to 3 rounds with --fix-script, 2 for a script of the pipeline's own
+    const maxRounds = args['fix-script'] ? 3 : mode === 'idea' && !film.data.scriptFixes ? 2 : 0
+    let backedUp = false
+    for (let round = 0; round < maxRounds && scriptNotes.length; round++) {
+        const answer = await askJson<{ edits?: unknown }>(scriptFixPrompt(screenplay, scriptNotes))
+        const fixed = applyScriptFixes(screenplay, answer.edits)
+        for (const reason of fixed.rejected) log.warn(`script repair: ${reason}`)
+        if (!fixed.applied.length) break
+        // what was there goes to old/ (once), the shots follow the new script - the cast and the looks stay: only action lines and times of day changed
+        if (!backedUp) {
+            const keep = join(film.dir, 'old', `script-fix-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}`)
+            mkdirSync(keep, {recursive: true})
+            copyFileSync(film.file, join(keep, 'project.json'))
+            log.step('Script', styles.muted(`the old version is in ${keep}; cast and looks are kept, the shots are planned again`))
+            backedUp = true
+        }
+        screenplay = fixed.screenplay
+        film.data.screenplay = screenplay
+        film.data.scriptFixes = [...(film.data.scriptFixes ?? []), ...fixed.applied]
+        delete film.data.coverage
+        delete film.data.scriptNotes
+        await film.save()
+        for (const change of fixed.applied) log.step('Repaired', `${styles.name(change.scene)} ${styles.muted(`- ${change.before.slice(0, 70)}`)} → ${change.after.slice(0, 110)}`)
+        scriptNotes = await film.step('scriptNotes', `3c · READING THE REPAIRED SCRIPT (round ${round + 1})`, readScript)
     }
-    screenplay = fixed.screenplay
-    film.data.screenplay = screenplay
-    film.data.scriptFixes = [...(film.data.scriptFixes ?? []), ...fixed.applied]
-    delete film.data.coverage
-    delete film.data.scriptNotes
-    await film.save()
-    for (const change of fixed.applied) log.step('Repaired', `${styles.name(change.scene)} ${styles.muted(`- ${change.before.slice(0, 70)}`)} → ${change.after.slice(0, 110)}`)
-    scriptNotes = await film.step('scriptNotes', `3c · READING THE REPAIRED SCRIPT (round ${round + 1})`, readScript)
+} catch (e) {
+    log.warn(`the script could not be checked for contradictions (${e instanceof Error ? e.message : String(e)}) - the film goes on without; --redo=scriptNotes tries again`)
 }
 for (const note of scriptNotes) log.warn(`script: ${note}`)
 if (scriptNotes.length) log.step('Script', styles.muted(mode === 'screenplay' ? 'the film follows the script as it is - --fix-script repairs it (old version kept), or edit project.json (screenplay)' : 'the film follows the script as it is - edit project.json (screenplay) to resolve these before rendering'))
@@ -295,12 +300,18 @@ const budgetOf = (scene: (typeof screenplay.scenes)[number]) => budgeted ? Math.
 if (budgeted) log.step('Planned length', `${config.targetDuration}s ${styles.muted('- every scene gets its share of it')}`)
 const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async () => {
     const result: SceneCoverage[] = []
+    // what the scene before ended with, by the names of the cast - the shots of this scene start from it where the scene goes on
+    const handover = (i: number) => {
+        const previous = result[i - 1]
+        const ends = Object.entries(previous?.ends ?? {}).map(([id, where]) => [cast.characters.find(c => c.id === id)?.name ?? id, where] as const)
+        return previous && ends.length ? {scene: previous.sceneId, ends: Object.fromEntries(ends)} : undefined
+    }
     for (const [i, scene] of screenplay.scenes.entries()) {
         log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
         for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems))
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i)))
             try {
                 // the first time what the script checks find is a reason to ask again, the second time it is only noted
                 const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0)

@@ -16,7 +16,7 @@ const SPLIT_TARGET_SEC = 8.3
 export const LEAD_IN_SEC = 1.2
 
 type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
-export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
+export type RawCoverage = { soundscape?: unknown, staging?: unknown, ends?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
@@ -132,7 +132,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             for (const [who, entry] of Object.entries(shot.people as Record<string, unknown>)) {
                 const character = characterOf(cast, who)
                 const e = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {}
-                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {})}
+                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {})}
             }
         }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
@@ -175,7 +175,15 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     })
     if (soft.length && strict) throw new CoverageProblem(soft)
     notes.push(...soft.map(p => `kept anyway: ${p}`))
-    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), ...(raw.fast === true ? {fast: true} : {}), shots: unique}, notes}
+    // where everyone is when the scene ends - the next scene starts from it
+    const ends: Record<string, string> = {}
+    if (raw.ends && typeof raw.ends === 'object' && !Array.isArray(raw.ends)) {
+        for (const [who, where] of Object.entries(raw.ends as Record<string, unknown>)) {
+            const character = characterOf(cast, who)
+            if (character && text(where)) ends[character.id] = text(where)
+        }
+    }
+    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(Object.keys(ends).length ? {ends} : {}), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), ...(raw.fast === true ? {fast: true} : {}), shots: unique}, notes}
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together

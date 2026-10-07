@@ -132,6 +132,8 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const view = shot.view ? ` The camera is ${withLabels(shot.view)}.` : ''
         const starts = shot.focus.filter(s => shot.people?.[s.id]?.state)
         const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
+        const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion)
+        const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
         const lines = shot.spoken.map(lineText).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
@@ -145,7 +147,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const noSpeech = !shot.spoken.length && shot.focus.length
             ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
             : ''
-        return `${opening}${fromFrame}${view}${inFrame}${start} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
+        return `${opening}${fromFrame}${view}${inFrame}${start}${motion} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)

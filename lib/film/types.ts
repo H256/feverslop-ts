@@ -92,7 +92,7 @@ export type Shot = {
     lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
     seconds: number,                // planned length, at least the time to speak its lines
     view?: string,                  // where the camera is in the place and what it looks toward, in the terms of the scene's layout
-    people?: Record<string, { state?: string, frame?: string }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side)
+    people?: Record<string, { state?: string, frame?: string, motion?: string }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side), motion = what moves during the shot
     states?: Record<string, string>,// character id -> state id, for a character who is in one of their other looks in this shot (left out = the normal look)
     texts?: string[],               // only when a line is too long for one clip: the part of it (same order as lines) spoken in this shot - the parts of a line, joined, are the line
     deliveries?: string[],          // how each of its lines is spoken (same order as lines): feeling, intensity, pace - where the script has no parenthetical
@@ -101,7 +101,8 @@ export type Shot = {
 // staging: the fixed physical arrangement of the scene - where everyone is, in what posture, what they wear and hold - which every shot keeps to
 // people / voices: what the shot planning read in the script of the scene - is anyone in it (a character, a creature, people said in general
 // words), does the script itself have voices in it that are not numbered lines (whispers, a chant, a spell). Not set in a plan made before.
-export type SceneCoverage = { sceneId: string, soundscape: string, staging?: string, people?: boolean, voices?: boolean, fast?: boolean, shots: Shot[] }
+// ends: where everybody is and what they hold when the scene is over, by character id - the next scene starts from it
+export type SceneCoverage = { sceneId: string, soundscape: string, staging?: string, ends?: Record<string, string>, people?: boolean, voices?: boolean, fast?: boolean, shots: Shot[] }
 
 export type FilmProject = {
     inputs?: Record<string, string>,    // fingerprints of the input files and settings - not a step
