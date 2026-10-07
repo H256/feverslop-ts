@@ -93,6 +93,7 @@ cached project runs without either.
 - [docs/comfyui.md](docs/comfyui.md) – rendering with ComfyUI: setup, `config.json`, re-rendering, things to know,
   troubleshooting
 - [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
+- [docs/film.md](docs/film.md) – the experimental short-film pipeline (`bun run film:init`, `bun film.ts`): idea or screenplay → film
 
 ## Creating a project
 
@@ -289,10 +290,16 @@ bun index.ts --render=images                    # Krea 2 reference pictures -> a
 bun index.ts --render=videos                    # MiniMax H3 clips -> videos/
 bun index.ts --render=final                     # assemble <project-id>.mp4 from the rendered clips
 bun index.ts --render=videos --only=slot-001    # just some clips, to try things out
+bun index.ts --render=videos --only=slot-005 --again   # slot-005 once more, with a new seed - the old one is kept
 ```
 
 - Existing pictures and clips are never overwritten - delete one to render it again. Your own pictures in `assets/`
   are used as they are.
+- `--again` renders the clips named in `--only` (required - it never redoes everything) once more. The old version -
+  the video, its `.json` and its first and last frame - is put away in `old/attempts/<clip-id>-<time>/`, so you can make
+  several versions of a clip and keep the one you like: move its files back to where they were. It needs a new seed
+  (`"seed": -1` in `config.json`, the default - a fixed seed gives the same clip again). A clip that goes on from the last
+  frame of one you render again is named, but not rendered with it - name it too if the picture should go on from the new one.
 - Every rendered file gets a `.json` next to it with the workflow, seed and resolution it was made with.
 - Clips are skipped until all their pictures exist; the final video needs all clips.
 - With several ComfyUI servers, all pictures - then all clips - are rendered in parallel, one job per server. The

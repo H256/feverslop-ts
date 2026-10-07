@@ -379,7 +379,7 @@ export class Renderer implements Disposable {
      * ComfyUI is still rendering (Ctrl+C, crash, sleep), the next run attaches to that job - or downloads its result
      * if it finished in the meantime - instead of rendering again. Returns the meta of the job that made the file.
      */
-    private async render<M>(label: string, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
+    protected async render<M>(label: string, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
         const initial: PendingJob<M> | undefined = existsSync(pendingFile) ? await Bun.file(pendingFile).json() : undefined
