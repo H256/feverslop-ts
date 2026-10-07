@@ -36,6 +36,9 @@ export type FilmConfig = {
     // a score file in input/ (score.mp3, .wav, .flac, .m4a or .ogg) is mixed under the film at this volume in dB (relative to the film's own sound),
     // and ducks under the dialogue
     scoreVolume: number,
+    // the video model's sampling: "turbo" = the turbo LoRA, 8 steps (fast); "beta" / "simple" = without it, res_multistep with that scheduler, 20 steps -
+    // several times slower, for when the turbo LoRA ignores the prompt (a held shot that zooms, people who walk up to the camera)
+    videoSampling: 'turbo' | 'beta' | 'simple',
     llm: { model?: string },        // a project may use another model than the settings - never another server or key
 }
 
@@ -52,6 +55,7 @@ export const filmDefaults: FilmConfig = {
     burnSubtitles: false,
     levelMatching: true,
     scoreVolume: -14,
+    videoSampling: 'turbo',
     llm: {},
 }
 
@@ -97,6 +101,7 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)
     if (typeof config.levelMatching !== 'boolean') fail(`levelMatching must be true or false, got ${JSON.stringify(config.levelMatching)}`)
     if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40) fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
+    if (!['turbo', 'beta', 'simple'].includes(config.videoSampling)) fail(`videoSampling must be "turbo", "beta" or "simple", got ${JSON.stringify(config.videoSampling)}`)
     if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
     const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
     if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)

@@ -389,7 +389,7 @@ log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) =
 if (render.has('images') || render.has('videos')) {
     const renderConfig = filmRenderConfig(config)
     // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
-    using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
+    using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy, config.videoSampling)
     log.section('11 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
