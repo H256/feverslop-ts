@@ -16,13 +16,13 @@ import type {PictureJob} from "./lib/render.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {applyScriptFixes, estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
-import type {Brief, FilmMode, Outline, SceneCoverage} from "./lib/film/types.ts";
+import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
 import {ask, configureLlm} from "./lib/llm.ts";
 import {log, printBanner, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
@@ -293,7 +293,26 @@ const locationDescriptions = await film.step('locationDescriptions', '8b · DESC
 })
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
-const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions})
+/////////// 8c · LOCATION VIEWS - the five views of a location's reference sheet, designed for the place and its story (only with sequence sheets)
+const locationViews = config.sequenceSheets && config.locationViews
+    ? await film.step('locationViews', '8c · DESIGNING THE VIEWS OF THE LOCATIONS', async () => {
+        const result: Record<string, LocationView[]> = {}
+        for (const [i, location] of cast.locations.entries()) {
+            log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+            // what happens there, from the script: the action lines of its scenes
+            const scenes = screenplay.scenes.filter(s => locationOf(cast, s.location)?.id === location.id)
+                .map(s => `${s.id}: ${s.elements.filter(e => e.type === 'action').map(e => e.text).join(' ')}`.slice(0, 700)).join('\n').slice(0, 3000)
+            const answer = await askJson<{ views?: Partial<LocationView>[] }>(locationViewsPrompt(location, locationLooks[location.id] ?? '', scenes))
+            const views = (answer.views ?? []).filter(v => typeof v?.name === 'string' && typeof v?.shows === 'string' && v.name.trim() && v.shows.trim()).map(v => ({name: v.name!.trim(), shows: v.shows!.trim()}))
+            if (views.length !== 5) throw new Error(`the views of ${location.name}: ${views.length} instead of 5 - run it again (--redo=locationViews)`)
+            result[location.id] = views
+        }
+        return result
+    })
+    : {} as Record<string, LocationView[]>
+for (const [id, views] of Object.entries(locationViews)) log.step(id, styles.muted(views.map((v, i) => `${i + 1}. ${v.name}`).join(' · ')))
+
+const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationViews})
 await Bun.write(join(film.dir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
 /////////// 9 · SHOTS - every scene broken into shots, one LLM call per scene
@@ -323,7 +342,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const location = locationOf(cast, scene.location)!
         let problems: string[] = []
         for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i)))
+            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
             try {
                 // the first time what the script checks find is a reason to ask again, the second time it is only noted
                 const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0)
@@ -348,7 +367,7 @@ const requests = buildFilmClipRequests({
     soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
     stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
     voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
-    characterDescriptions, locationDescriptions, lookBrief,
+    characterDescriptions, locationDescriptions, locationViews, lookBrief,
 })
 const outputDir = join(film.dir, 'output')
 // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film

@@ -41,6 +41,7 @@ export type FilmInput = {
     voices: Record<string, boolean>,                 // scene id -> the script itself has voices in it (whispers, a chant): wordless sounds are allowed there
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
     locationDescriptions: Record<string, string>,
+    locationViews?: Record<string, { name: string, shows: string }[]>,   // the views of the location sheet, when it has them
     lookBrief: string,
 }
 
@@ -59,7 +60,7 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
 // does the plan of every shot say where its people are?
 const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -71,7 +72,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const characters = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined).slice(0, room)
 
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, name: location.name, description: locationDescriptions[location.id] ?? location.description}] : []),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, name: location.name, description: `${locationDescriptions[location.id] ?? location.description}${locationViews?.[location.id]?.length ? ` The picture is a sheet of views of the place: ${locationViews[location.id]!.map((v, i) => `${i + 1}. ${v.name}`).join('; ')}.` : ''}`.trim()}] : []),
         ...characters.map(c => {
             // the look the character is in when they first appear in this clip - the clip has one picture of them
             const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]
@@ -139,7 +140,8 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}`).join('; ')}.`
             : ''
         // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
-        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.` : ''
+        const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined
+        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? ` The background is view ${shot.placeView} of ${locationSubject.picture}: ${placeView.name}.` : ''}` : ''
         const starts = shot.focus.filter(s => shot.people?.[s.id]?.state)
         const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
         const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion)

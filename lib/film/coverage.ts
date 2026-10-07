@@ -15,7 +15,7 @@ const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, ends?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -148,6 +148,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             ...(deliveries.some(Boolean) ? {deliveries} : {}),
             ...(Object.keys(states).length ? {states} : {}),
             ...(text(shot.view) ? {view: text(shot.view)} : {}),
+            ...(Number.isInteger(Number(shot.placeView)) && Number(shot.placeView) >= 1 && Number(shot.placeView) <= 5 ? {placeView: Number(shot.placeView)} : {}),
             ...(Object.keys(people).length ? {people} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
             ...(shot.continues === true && i > 0 ? {continues: true} : {}),

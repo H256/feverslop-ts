@@ -18,6 +18,10 @@ export type FilmConfig = {
     // every character and location gets a multi-angle reference sheet (a short turnaround video, sampled and composited,
     // see lib/sequenceSheet.ts) instead of one picture - false renders just the picture, which is much cheaper
     sequenceSheets: boolean,
+    // the five views of a location's sheet are designed for the place and its story (what lies on the other side, the sides, a wide view) and every shot
+    // names the view that is its background - for dialogue between people who face each other, where a reverse shot needs the opposite side of the place.
+    // Needs sequenceSheets. Off by default: it adds to every clip prompt, so a film planned without it keeps its prompts
+    locationViews: boolean,
     // a clip whose first shot goes on in the same take as the last shot of the clip before starts on that clip's last
     // frame: "auto" = where the shot planning marked it, "scene" = every clip of a scene but its first (the people keep their posture and
     // clothes from clip to clip, but the scene is rendered one clip after the other), "never" = every clip is its own cut
@@ -42,6 +46,7 @@ export const filmDefaults: FilmConfig = {
     imageResolution: -1,
     videoResolution: -1,
     sequenceSheets: true,
+    locationViews: false,
     continuity: 'auto',
     subtitles: 'script',
     burnSubtitles: false,
@@ -85,6 +90,8 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
         }
     }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
+    if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
+    if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
     if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)

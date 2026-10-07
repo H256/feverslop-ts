@@ -16,11 +16,13 @@ export const statePictureId = (characterId: string, stateId: string) => `${chara
 export type FilmPictureJob = PictureJob & { baseId?: string }
 
 /** The reference pictures of a film: every location, and every character who is ever seen (not a narrator's voice). */
-export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'>): FilmPictureJob[] {
+export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'> & Pick<Partial<FilmProject>, 'locationViews'>): FilmPictureJob[] {
     return [
         ...cast.locations.map(l => ({
             kind: 'location' as const, id: l.id, file: filmPictureAsset('location', l.id), name: l.name,
             prompt: data.locationLooks?.[l.id] ?? '', description: data.locationDescriptions?.[l.id] ?? '',
+            // the four views after the first, as the sheet's video is asked to cut to them
+            ...(data.locationViews?.[l.id]?.length === 5 ? {views: data.locationViews[l.id]!.slice(1).map(v => v.shows)} : {}),
         })),
         ...cast.characters.filter(c => !c.voiceOnly).map(c => ({
             kind: 'character' as const, id: c.id, file: filmPictureAsset('character', c.id), name: c.name,

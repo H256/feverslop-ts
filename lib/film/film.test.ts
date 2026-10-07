@@ -367,3 +367,45 @@ describe('staging and people', () => {
         expect(request!.prompt).toContain('stands on the left')
     })
 })
+
+describe('location views', () => {
+    const views = [
+        {name: 'the main view', shows: 'the hero picture'},
+        {name: 'from the water side, looking back toward the dunes', shows: 'the camera stands at the water and looks at the dunes'},
+        {name: 'from the left', shows: 'seen along the place from the left'},
+        {name: 'from the right', shows: 'seen along the place from the right'},
+        {name: 'wide and raised', shows: 'the whole place from above'},
+    ]
+    const scene = screenplay.scenes[0]!
+
+    test('the sheet video cuts to the designed views - without views the generic prompt is unchanged', async () => {
+        const {locationSequencePrompt} = await import("../sequenceSheet.ts")
+        const generic = locationSequencePrompt('A bridge')
+        expect(generic.prompt).toContain('behind the location, looking back across it from the rear')
+        const designed = locationSequencePrompt('A bridge', undefined, views.slice(1).map(v => v.shows))
+        expect(designed.prompt).toContain('the camera stands at the water and looks at the dunes')
+        expect(designed.prompt).toContain('seen along the place from the left')
+        expect(designed.prompt).not.toContain('from the rear')
+        expect(designed.beatTimes).toHaveLength(5)
+    })
+    test('the pictures of a location carry the four views after the first', async () => {
+        const {filmPictures} = await import("./pictures.ts")
+        const jobs = filmPictures(cast, {characterLooks: {}, characterDescriptions: {}, locationLooks: {}, locationDescriptions: {}, locationViews: {'the-bridge': views}})
+        expect(jobs.find(j => j.id === 'the-bridge')!.views).toEqual(views.slice(1).map(v => v.shows))
+        expect(jobs.find(j => j.id === 'the-hut')!.views).toBeUndefined()
+    })
+    test('a shot names the number of its background view, only 1 to 5', () => {
+        const shot = (placeView: unknown) => ({framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2], placeView})
+        expect(toCoverage({soundscape: 's', people: true, shots: [shot(2)]}, scene, cast).coverage.shots[0]!.placeView).toBe(2)
+        expect(toCoverage({soundscape: 's', people: true, shots: [shot(9)]}, scene, cast).coverage.shots[0]!.placeView).toBeUndefined()
+        expect(toCoverage({soundscape: 's', people: true, shots: [shot('x')]}, scene, cast).coverage.shots[0]!.placeView).toBeUndefined()
+    })
+    test('the clip prompt lists the views of the sheet and says which is the background of a shot', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', view: 'from the water side', placeView: 2, camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2]}]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
+            soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, locationViews: {'the-bridge': views}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('The picture is a sheet of views of the place: 1. the main view; 2. from the water side, looking back toward the dunes;')
+        expect(request!.prompt).toContain('The background is view 2 of <Picture 1>: from the water side, looking back toward the dunes.')
+    })
+})
