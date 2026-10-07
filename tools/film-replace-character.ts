@@ -13,6 +13,8 @@ import {FilmRenderer} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import type {FilmProject} from "../lib/film/types.ts";
+import {genderNote} from "../lib/film/gender-check.ts";
+import {mentions} from "../lib/film/names.ts";
 import {ask, configureLlm} from "../lib/llm.ts";
 import {printBanner, styles} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
@@ -166,6 +168,20 @@ if (newDescription) {
     await Bun.write(file, JSON.stringify(data, null, 2))
     p.log.success('Saved the new description to project.json')
     changes.push('the new description is saved in project.json')
+
+    // a picture of another gender than the script writes: the action lines say "she", the picture is a man (or the other way round)
+    try {
+        const settings = await loadSettings({projectModel: config.llm.model})
+        configureLlm(settings.llm)
+        const own = (data.screenplay?.scenes ?? []).flatMap(s => s.elements).filter(e => e.type === 'action' && mentions(e.text, char)).map(e => e.text).slice(0, 4).join(' ')
+        const note = await genderNote(char.name, `${char.role} ${char.appearance} ${own}`.trim().slice(0, 2500), newDescription)
+        if (note) {
+            p.log.warn(note)
+            p.log.message(styles.muted(`Edit the action lines of ${char.name} in films/${id}/project.json (screenplay) and plan the shots again (bun film.ts ${id} --redo=coverage); for a story written from an idea, put the gender into the idea.`))
+        }
+    } catch {
+        // the check is a courtesy: no language model connected, nothing to say
+    }
 }
 const description = newDescription ?? data.characterDescriptions?.[char.id] ?? ''
 

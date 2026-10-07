@@ -2,7 +2,8 @@ import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
-import {filmPictureAsset} from "./pictures.ts";
+import {mentions, withoutSentencesNaming} from "./names.ts";
+import {filmPictureAsset, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
 
@@ -40,6 +41,7 @@ export type FilmInput = {
     voices: Record<string, boolean>,                 // scene id -> the script itself has voices in it (whispers, a chant): wordless sounds are allowed there
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
     locationDescriptions: Record<string, string>,
+    locationViews?: Record<string, { name: string, shows: string }[]>,   // the views of the location sheet, when it has them
     lookBrief: string,
 }
 
@@ -55,7 +57,10 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
     return input.clips.map(clip => buildClip(clip, input))
 }
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
+// does the plan of every shot say where its people are?
+const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
+
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -67,12 +72,26 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const characters = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined).slice(0, room)
 
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, name: location.name, description: locationDescriptions[location.id] ?? location.description}] : []),
-        ...characters.map(c => ({kind: 'character' as const, id: c.id, name: c.name, description: characterDescriptions[c.id] ?? c.appearance})),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, name: location.name, description: `${locationDescriptions[location.id] ?? location.description}${locationViews?.[location.id]?.length ? ` The picture is a sheet of views of the place: ${locationViews[location.id]!.map((v, i) => `${i + 1}. ${v.name}`).join('; ')}.` : ''}`.trim()}] : []),
+        ...characters.map(c => {
+            // the look the character is in when they first appear in this clip - the clip has one picture of them
+            const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]
+            const pictureId = stateId && c.states?.some(s => s.id === stateId) ? statePictureId(c.id, stateId) : c.id
+            return {kind: 'character' as const, id: c.id, pictureId, name: c.name, description: characterDescriptions[pictureId] ?? characterDescriptions[c.id] ?? c.appearance}
+        }),
     ].map((s, n) => ({...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`}))
     const locationSubject = subjects.find(s => s.kind === 'location')
     const castSubjects = subjects.filter(s => s.kind === 'character')
     const subjectOf = (characterId: string) => castSubjects.find(s => s.id === characterId)
+    // characters of the film who have no picture in this clip: the text of the clip does not name them (the model would draw a stranger)
+    const unpictured = cast.characters.filter(c => !c.voiceOnly && !subjectOf(c.id))
+    // The staging is the layout of the place. Where the plan says where everybody is per shot (people.state), the sentences of the staging that
+    // place people are left out: "true in every shot" put a person into a close-up twice - once as the close-up, once standing where the staging has them.
+    const planned = shots_planned(clip)
+    const stagingFull = stagings[clip.sceneId] ?? ''
+    const stagingText = planned
+        ? withoutSentencesNaming(stagingFull, cast.characters.filter(c => !c.voiceOnly))
+        : withoutSentencesNaming(stagingFull, unpictured)
     const framePicture = clip.startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
 
     // speaker ids (S1), (S2), ... in the order of the spoken lines of this clip - numbered per clip, not per character
@@ -118,14 +137,25 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
         const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
         const inFrame = shot.focus.length
-            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}`).join('; ')}.`
+            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}`).join('; ')}.`
             : ''
+        // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
+        const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined
+        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? ` The background is view ${shot.placeView} of ${locationSubject.picture}: ${placeView.name}.` : ''}` : ''
+        const starts = shot.focus.filter(s => shot.people?.[s.id]?.state)
+        // a held shot: what the picture IS from the first frame to the last, said positively - "no push-in" does not hold the video model back, a picture that stays does
+        const holdClause = shot.hold && shot.focus.length
+            ? ` A fixed tripod shot: the framing is the same from the first frame to the last - ${shot.focus.length > 1 ? joinAnd(shot.focus.map(s => s.label)) : shot.focus[0]!.label} keep${shot.focus.length > 1 ? '' : 's'} the same size and the same place in the frame, standing on the same spot, and only the head, the mouth and the expression move.`
+            : ''
+        const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
+        const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion)
+        const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
         const lines = shot.spoken.map(lineText).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
         const silent = speaking.size ? shot.focus.filter(s => !speaking.has(s.id)) : []
         const silentClause = silent.length
-            ? ` ${joinAnd(silent.map(s => `${s.label}, ${s.name},`))} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
+            ? ` ${silent.length > 1 ? joinAnd(silent.map(s => `${s.label} (${s.name})`)) : `${silent[0]!.label}, ${silent[0]!.name},`} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
             : ''
         // The video model makes up speech - a babble of invented words - for people it shows when the prompt does not say that nobody
         // speaks. Every shot without a line of dialogue says so.
@@ -133,14 +163,14 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const noSpeech = !shot.spoken.length && shot.focus.length
             ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
             : ''
-        return `${opening}${fromFrame}${inFrame} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
+        return `${opening}${fromFrame}${view}${inFrame}${start}${motion}${holdClause} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)
     const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
-        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : ''}`
+        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
     const prompt = [
@@ -162,11 +192,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         'detailed_description:',
         styleOpening(lookBrief),
         ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
-        ...(stagings[clip.sceneId] ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagings[clip.sceneId]!)}`] : []),
+        ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
         ...shotTexts,
         '',
         'overall_soundscape:',
-        `${soundscapes[clip.sceneId] || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'Apart from the dialogue given in the shots, no words are spoken: voices and whispers described above are indistinct and wordless.' : 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.') : (voicesInScene ? 'No words are spoken: voices and whispers described above are indistinct and wordless.' : 'There is no speech, murmuring or voices.')}`,
+        `${withoutSentencesNaming(soundscapes[clip.sceneId] ?? '', unpictured) || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'Apart from the dialogue given in the shots, no words are spoken: voices and whispers described above are indistinct and wordless.' : 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.') : (voicesInScene ? 'No words are spoken: voices and whispers described above are indistinct and wordless.' : 'There is no speech, murmuring or voices.')}`,
         '',
         'non_diegetic_music:',
         'N/A',
@@ -188,7 +218,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         }))),
         assets: {
             pictures: [
-                ...subjects.map(s => ({label: s.picture, file: filmPictureAsset(s.kind, s.id), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                ...subjects.map(s => ({label: s.picture, file: filmPictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 ...(clip.startsFrom ? [{label: framePicture!, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
             ],
         },

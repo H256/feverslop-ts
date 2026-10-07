@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Resolution} from "../../comfy/helpers.ts";
-import {languageName} from "../config.ts";
+import {defaults, languageName, workflowDir} from "../config.ts";
 import {warnUnknownKeys} from "../log.ts";
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
@@ -15,13 +15,31 @@ export type FilmConfig = {
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
+    // file names in comfy/workflows/, without .ts - exactly one workflow for the pictures and one for the clips (see docs/custom-workflows.md; a video
+    // workflow of the film takes comfy/workflows/h3-ref2video-film.ts's options: pictures only, no audio)
+    imageWorkflow: string,
+    videoWorkflow: string,
     // every character and location gets a multi-angle reference sheet (a short turnaround video, sampled and composited,
     // see lib/sequenceSheet.ts) instead of one picture - false renders just the picture, which is much cheaper
     sequenceSheets: boolean,
+    // the five views of a location's sheet are designed for the place and its story (what lies on the other side, the sides, a wide view) and every shot
+    // names the view that is its background - for dialogue between people who face each other, where a reverse shot needs the opposite side of the place.
+    // Needs sequenceSheets. Off by default: it adds to every clip prompt, so a film planned without it keeps its prompts
+    locationViews: boolean,
     // a clip whose first shot goes on in the same take as the last shot of the clip before starts on that clip's last
     // frame: "auto" = where the shot planning marked it, "scene" = every clip of a scene but its first (the people keep their posture and
     // clothes from clip to clip, but the scene is rendered one clip after the other), "never" = every clip is its own cut
     continuity: 'auto' | 'scene' | 'never',
+    // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
+    // code - every line spoken in another language is translated into it
+    subtitles: string,
+    // the subtitles are burned into the picture (always visible, the video is encoded once more) instead of being a track of the mp4 that the player switches on
+    burnSubtitles: boolean,
+    // every clip's own sound is brought to about the same loudness (the model makes each clip's level on its own)
+    levelMatching: boolean,
+    // a score file in input/ (score.mp3, .wav, .flac, .m4a or .ogg) is mixed under the film at this volume in dB (relative to the film's own sound),
+    // and ducks under the dialogue
+    scoreVolume: number,
     llm: { model?: string },        // a project may use another model than the settings - never another server or key
 }
 
@@ -31,8 +49,15 @@ export const filmDefaults: FilmConfig = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
+    imageWorkflow: defaults.imageWorkflow,
+    videoWorkflow: 'h3-ref2video-film',
     sequenceSheets: true,
+    locationViews: false,
     continuity: 'auto',
+    subtitles: 'script',
+    burnSubtitles: false,
+    levelMatching: true,
+    scoreVolume: -14,
     llm: {},
 }
 
@@ -70,8 +95,17 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
             fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
         }
     }
+    for (const key of ['imageWorkflow', 'videoWorkflow'] as const) {
+        if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
+    }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
+    if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
+    if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
+    if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
+    if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)
+    if (typeof config.levelMatching !== 'boolean') fail(`levelMatching must be true or false, got ${JSON.stringify(config.levelMatching)}`)
+    if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40) fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
     if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
     const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
     if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)
