@@ -1,7 +1,7 @@
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
 // usage: bun film.ts <film-id> [--redo=screenplay,cast]
-import {existsSync, readdirSync, rmSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
@@ -16,9 +16,9 @@ import type {PictureJob} from "./lib/render.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
-import {estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {applyScriptFixes, estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
@@ -36,7 +36,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -48,6 +48,7 @@ const {values: args, positionals} = (() => {
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
+                'fix-script': {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -130,7 +131,7 @@ if (mode === 'idea') {
 }
 
 /////////// 3 · SCREENPLAY
-const screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING THE SCREENPLAY' : '3 · STRUCTURING THE SCREENPLAY', async () => {
+let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING THE SCREENPLAY' : '3 · STRUCTURING THE SCREENPLAY', async () => {
     const meta = {title: brief.title, language: brief.language}
     if (mode === 'idea') return toScreenplay(await askJson(screenplayWritePrompt(brief, outline!)), meta)
 
@@ -156,6 +157,41 @@ if (mode === 'idea' && config.targetDuration > 0 && seconds > config.targetDurat
 }
 if (mode === 'screenplay' && seconds > 240) log.warn(`~${seconds}s is a long film for this pipeline - every 10 seconds is a clip to render`)
 
+/////////// 3b · SCRIPT NOTES - what the script contradicts itself in. The pipeline's own script (an idea) is repaired; a handed-in screenplay is only reported
+// - it is the writer's - unless --fix-script asks for the repair
+const readScript = async () => {
+    const answer = await askJson<{ notes?: unknown }>(scriptNotesPrompt(screenplay, mode === 'idea' ? idea : undefined))
+    return Array.isArray(answer.notes) ? answer.notes.filter((n): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim()) : []
+}
+let scriptNotes = await film.step('scriptNotes', '3b · READING THE SCRIPT FOR CONTRADICTIONS', readScript)
+// the repair is done in rounds: a repair can leave something over, or make something new - up to 3 rounds with --fix-script, 2 for a script of the pipeline's own
+const maxRounds = args['fix-script'] ? 3 : mode === 'idea' && !film.data.scriptFixes ? 2 : 0
+let backedUp = false
+for (let round = 0; round < maxRounds && scriptNotes.length; round++) {
+    const answer = await askJson<{ edits?: unknown }>(scriptFixPrompt(screenplay, scriptNotes))
+    const fixed = applyScriptFixes(screenplay, answer.edits)
+    for (const reason of fixed.rejected) log.warn(`script repair: ${reason}`)
+    if (!fixed.applied.length) break
+    // what was there goes to old/ (once), the shots follow the new script - the cast and the looks stay: only action lines and times of day changed
+    if (!backedUp) {
+        const keep = join(film.dir, 'old', `script-fix-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}`)
+        mkdirSync(keep, {recursive: true})
+        copyFileSync(film.file, join(keep, 'project.json'))
+        log.step('Script', styles.muted(`the old version is in ${keep}; cast and looks are kept, the shots are planned again`))
+        backedUp = true
+    }
+    screenplay = fixed.screenplay
+    film.data.screenplay = screenplay
+    film.data.scriptFixes = [...(film.data.scriptFixes ?? []), ...fixed.applied]
+    delete film.data.coverage
+    delete film.data.scriptNotes
+    await film.save()
+    for (const change of fixed.applied) log.step('Repaired', `${styles.name(change.scene)} ${styles.muted(`- ${change.before.slice(0, 70)}`)} → ${change.after.slice(0, 110)}`)
+    scriptNotes = await film.step('scriptNotes', `3c · READING THE REPAIRED SCRIPT (round ${round + 1})`, readScript)
+}
+for (const note of scriptNotes) log.warn(`script: ${note}`)
+if (scriptNotes.length) log.step('Script', styles.muted(mode === 'screenplay' ? 'the film follows the script as it is - --fix-script repairs it (old version kept), or edit project.json (screenplay)' : 'the film follows the script as it is - edit project.json (screenplay) to resolve these before rendering'))
+
 /////////// 4 · CAST
 const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
     const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined, brief.setting))
@@ -171,14 +207,6 @@ const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', asyn
 })
 for (const c of cast.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)
 for (const l of cast.locations) log.step('Location', styles.name(l.name))
-
-/////////// 4b · SCRIPT NOTES - what the script contradicts itself in (only reported: the script is the writer's)
-const scriptNotes = await film.step('scriptNotes', '4b · READING THE SCRIPT FOR CONTRADICTIONS', async () => {
-    const answer = await askJson<{ notes?: unknown }>(scriptNotesPrompt(screenplay))
-    return Array.isArray(answer.notes) ? answer.notes.filter((n): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim()) : []
-})
-for (const note of scriptNotes) log.warn(`script: ${note}`)
-if (scriptNotes.length) log.step('Script', styles.muted('the film follows the script as it is - edit project.json (screenplay) to resolve these before rendering'))
 
 /////////// 5 · SUMMARY
 const summary = await film.step('summary', '5 · SUMMARIZING THE STORY', () => ask(summaryPrompt(screenplay, cast)))

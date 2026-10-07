@@ -87,6 +87,35 @@ function statesOf(c: { voiceOnly?: boolean, states?: { name?: string, change?: s
     return states.length ? {states} : {}
 }
 
+export type ScriptEdit = { scene?: unknown, element?: unknown, text?: unknown, time?: unknown }
+
+/**
+ * Applies the repair the language model proposes for a script that contradicts itself - and only that kind: a new text for an ACTION line,
+ * or a new time of day for a scene. Dialogue is never touched, no scene or line is added or dropped. What does not fit (an unknown scene,
+ * a dialogue line, an empty text) is left out and reported.
+ */
+export function applyScriptFixes(screenplay: Screenplay, edits: unknown): { screenplay: Screenplay, applied: { scene: string, before: string, after: string }[], rejected: string[] } {
+    const applied: { scene: string, before: string, after: string }[] = []
+    const rejected: string[] = []
+    const scenes = screenplay.scenes.map(scene => ({...scene, elements: [...scene.elements]}))
+    for (const edit of Array.isArray(edits) ? edits as ScriptEdit[] : []) {
+        const scene = scenes.find(s => s.id === text(edit?.scene))
+        if (!scene) { rejected.push(`no scene "${text(edit?.scene)}"`); continue }
+        if (text(edit.time)) {
+            applied.push({scene: scene.id, before: `time: ${scene.time}`, after: `time: ${text(edit.time).toUpperCase()}`})
+            scene.time = text(edit.time).toUpperCase()
+        }
+        if (edit.element === undefined && !text(edit.text)) continue
+        const n = Number(edit.element)
+        const element = scene.elements[n]
+        if (!Number.isInteger(n) || !element || element.type !== 'action') { rejected.push(`${scene.id}: element ${String(edit.element)} is not an action line`); continue }
+        if (!text(edit.text)) { rejected.push(`${scene.id}: empty text`); continue }
+        applied.push({scene: scene.id, before: element.text, after: text(edit.text)})
+        scene.elements[n] = {type: 'action', text: text(edit.text)}
+    }
+    return {screenplay: {...screenplay, scenes}, applied, rejected}
+}
+
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
 export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string }[] }
 export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {

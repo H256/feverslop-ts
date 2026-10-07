@@ -19,10 +19,14 @@ export type OutlineScene = {
     summary: string,
     purpose: string,                // what the scene changes in the story
     seconds: number,                // planned screen time
+    begins?: string,                // where everybody is and in what state at the start (bound or free, hurt, what they hold or wear) and the time of day - what the scene before left
+    changes?: string,               // what happens on screen that changes a state (someone freed, something picked up, someone hurt, a move), or "nothing"
 }
 export type Outline = {
     characters: { name: string, role: string, appearance: string, voice: string }[],
     scenes: OutlineScene[],
+    // what has to be shown earlier for a later event to be believable: {event: "Leo breaks free in scene 12", setup: "the rope rots - shown in scenes 4 and 9"}
+    setups?: { event: string, setup: string }[],
 }
 
 // kind: spoken = the character is on screen and speaks, offscreen = heard but out of frame,
@@ -111,6 +115,7 @@ export type FilmProject = {
     characterDescriptions?: Record<string, string>,  // the look without the picture's pose, background and light - for the clip prompts
     locationLooks?: Record<string, string>,
     locationDescriptions?: Record<string, string>,
+    scriptFixes?: { scene: string, before: string, after: string }[], // what the script repair changed (action lines and times of day, never dialogue) - the repair is done once for a script of the pipeline's own
     scriptNotes?: string[],             // contradictions the script has in itself (a person bound, then free, then bound again) - read by the language model, only reported
     subtitles?: Record<string, string>, // config subtitles = a language code: the translation of every line spoken in another language, by "sceneId:line" (line = index among the dialogue lines of the scene)
     coverage?: SceneCoverage[],         // the shots of every scene, in scene order

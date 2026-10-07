@@ -291,3 +291,33 @@ describe('shot geography', () => {
         expect(request!.prompt).toContain('foreground right, shoulder only, soft')
     })
 })
+
+describe('script repair', () => {
+    const play = toScreenplay({scenes: [
+        {setting: 'EXT', location: 'The Yard', time: 'DUSK', elements: [{type: 'action', text: 'Leo walks free.'}, {type: 'dialogue', speaker: 'LEO', text: 'Hello.', kind: 'spoken'}]},
+        {setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'action', text: 'Leo is bound.'}]},
+    ]}, {title: 'R', language: 'en'})
+
+    test('an action line and a time of day can change, dialogue and scenes cannot', async () => {
+        const {applyScriptFixes} = await import("./screenplay.ts")
+        const result = applyScriptFixes(play, [
+            {scene: 's1', element: 0, text: 'Leo walks the length of his rope.'},
+            {scene: 's2', time: 'night'},
+            {scene: 's1', element: 1, text: 'Changed.'},      // dialogue
+            {scene: 's9', element: 0, text: 'x'},             // no such scene
+            {scene: 's2', element: 0, text: '  '},            // empty
+        ])
+        expect(result.applied.map(a => a.scene)).toEqual(['s1', 's2'])
+        expect(result.rejected).toHaveLength(3)
+        expect(result.screenplay.scenes[0]!.elements[0]).toEqual({type: 'action', text: 'Leo walks the length of his rope.'})
+        expect(result.screenplay.scenes[0]!.elements[1]).toEqual(play.scenes[0]!.elements[1]!)
+        expect(result.screenplay.scenes[1]!.time).toBe('NIGHT')
+        // the original is not changed
+        expect(play.scenes[1]!.time).toBe('DAY')
+    })
+    test('anything that is not a list of edits changes nothing', async () => {
+        const {applyScriptFixes} = await import("./screenplay.ts")
+        expect(applyScriptFixes(play, undefined).applied).toEqual([])
+        expect(applyScriptFixes(play, 'nope').screenplay).toEqual(play)
+    })
+})

@@ -12,6 +12,7 @@ const filmableRules = `The film is generated clip by clip with an AI video model
 - Every action line is something the camera sees or the microphone hears, in the present tense. No thoughts, no backstory, no "we realize", no mood words without what they look like.
 - No text that must be readable on screen (letters, signs, screens, phone messages) - tell it in dialogue or action instead.
 - A fight, duel, chase or battle is written as an exchange of 3-6 concrete beats, each on its own action line: who moves first and how, where it lands, how the other answers (blocks, dodges, falls back, strikes back) - the people act on each other, never one clash at the end and never two people standing still while their powers meet.
+- Keep track of the state of the story as it is written: where everybody is, whether they are bound, hurt, hold or wear something, what time of day it is. A scene goes on from the state the scene before left. A change - someone freed, something picked up or put down, a wound - happens on screen, in an action line, never as a state that appears between two scenes; and times of day run forward unless a line says that time jumped.
 - Mirrors, photographs and screens showing a face are avoided - the video model copies the face into them.`
 
 export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
@@ -50,13 +51,18 @@ ${filmableRules}
 Answer only with JSON:
 {
   "characters": [{"name": "", "role": "", "appearance": "", "voice": ""}],
-  "scenes": [{"heading": "INT. PLACE - NIGHT", "characters": [""], "summary": "", "purpose": "", "seconds": 20}]
+  "scenes": [{"heading": "INT. PLACE - NIGHT", "characters": [""], "summary": "", "purpose": "", "begins": "", "changes": "", "seconds": 20}],
+  "setups": [{"event": "", "setup": ""}]
 }
 - "name": a first name or a short name, as the script will write it. A narrator who is never seen is a character too (name it "Narrator").
 - "appearance": concrete and visible - age, build, face, hair, clothing. No personality.
 - "voice": how the character sounds, for the video model - gender, age, pitch, timbre, pace, accent. Concrete, e.g. "an older man's low, gravelly voice, slow and calm, a slight northern accent".
 - "heading": a slugline - INT. or EXT., the place, DAY/NIGHT/DUSK/DAWN. The same place is always named the same way.
 - "summary": what happens, in 2-3 sentences. "purpose": what the scene changes in the story.
+- "begins": where everybody in the scene is and in what state at its start: bound or free, hurt, what they hold or wear, and the time of day. It is what the scene before left - the same, unless that scene's "changes" say otherwise. The first scene gives the starting state.
+- "changes": what happens in the scene, on screen, that changes a state: someone is freed, something is picked up or put down, someone is hurt, someone goes to another place. "nothing" if nothing does. Every change is something the camera can see - no state ever changes between two scenes. Times of day run forward unless the story jumps in time.
+- "setups": for every event that has to be believable (an escape, a surprise, an object that is used), what has to be shown before it and in which scene - an escape from a rope needs the rope shown, and what makes it give way. [] if nothing needs it.
+- If the idea lists the steps of the story (an arc, beats, an ending), every step happens, in that order, in a scene of its own or inside one: none dropped, none reordered, no other ending.
 Names, headings and the story are written in English; the dialogue language only matters later, in the script.`,
     }
 }
@@ -90,7 +96,7 @@ Characters:
 ${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
 
 Scenes:
-${outline.scenes.map((s, i) => `${i + 1}. ${s.heading} (${s.seconds}s) - ${s.characters.join(', ') || 'nobody'}\n   ${s.summary}\n   Purpose: ${s.purpose}`).join('\n')}`,
+${outline.scenes.map((s, i) => `${i + 1}. ${s.heading} (${s.seconds}s) - ${s.characters.join(', ') || 'nobody'}\n   ${s.summary}\n   Purpose: ${s.purpose}${s.begins ? `\n   Starts with: ${s.begins}` : ''}${s.changes && s.changes.toLowerCase() !== 'nothing' ? `\n   Changes on screen: ${s.changes}` : ''}`).join('\n')}${outline.setups?.length ? `\n\nSetups - what has to be shown before a later event:\n${outline.setups.map(u => `- ${u.event}: ${u.setup}`).join('\n')}` : ''}`,
         instructions: `You are a screenwriter. Write the screenplay for this outline - every scene of it, in order, with the same characters and places.
 
 ${filmableRules}
@@ -157,12 +163,12 @@ Locations: each place that can be filmed as one set, in order of appearance. Slu
 }
 
 /** A read-through of the script for what contradicts itself - the planning and the video model can only follow a script that does. */
-export function scriptNotesPrompt(screenplay: Screenplay): AskOptions {
+export function scriptNotesPrompt(screenplay: Screenplay, idea?: string): AskOptions {
     return {
         maxTokens: 4096,
         reasoning: 'medium',
-        input: screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n'),
-        instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.
+        input: `${idea ? `Story idea the script was written from:\n${idea}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n')}`,
+        instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.${idea ? ' Also: a step the story idea names that the script does not show, or shows in another order or with another ending.' : ''}
 Answer only with JSON: {"notes": ["s5-s7: <what contradicts what, in one sentence>"]}. Name the scenes. At most 8 notes, the ones that matter most for the picture; [] if the script is consistent.`,
     }
 }
@@ -250,5 +256,23 @@ ${baseLook}
 
 The same character in another look - "${state.name}": ${state.change}`,
         instructions: 'You adapt an image prompt. Write the same prompt for the same character in the other look: every word that is not affected by the change stays exactly as it is (face, hair, build, medium, lens, light, background, pose, format), only clothing, condition or details the change touches are rewritten. Answer only with the new prompt.',
+    }
+}
+
+/** The repair of a script that contradicts itself: the smallest changes to action lines and times of day that make it follow. */
+export function scriptFixPrompt(screenplay: Screenplay, notes: string[]): AskOptions {
+    return {
+        maxTokens: 8192,
+        reasoning: 'medium',
+        input: `Contradictions found:
+${notes.map(n => `- ${n}`).join('\n')}
+
+Screenplay (scene ids, action lines numbered by their place among the elements of the scene):
+${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map((e, i) => e.type === 'action' ? `[${i}] ${e.text}` : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n')}`,
+        instructions: `You are a script doctor. Resolve the contradictions with the smallest changes to the screenplay.
+- Dialogue is never changed, and no scene, line or character is added or dropped. You change the text of ACTION lines, and the time of day of a scene.
+- A change of state is an event on screen: the person is bound with a rope that is long enough to walk the yard - and the rope is tied to a post; someone is freed because the rope tears; an object is taken down from a shelf by a hand that can reach it. Do not make a contradiction go away by deleting what happens - make it consistent by saying how.
+- Keep the voice and the length of the action lines; add a clause or a sentence where it is needed, no more. Times of day run forward unless a line says that time jumped.
+Answer only with JSON: {"edits": [{"scene": "s6", "element": 0, "text": "<the whole new action line>"}, {"scene": "s17", "time": "NIGHT"}]} - a "text" replaces the action line [element] of the scene; a "time" replaces the time of day of the scene; both in one edit if both change.`,
     }
 }
