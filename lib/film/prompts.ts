@@ -206,7 +206,7 @@ summary: ${summary}`,
 
 // One scene at a time: its shots. The dialogue is numbered so that the answer can be checked against it - every line
 // in exactly one shot, in order - and the shots are what the clips are packed from (lib/film/coverage.ts).
-export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, lookBrief: string, budgetSeconds: number | undefined, maxShots: number, problems: string[] = [], before?: { scene: string, ends: Record<string, string> }): AskOptions {
+export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, lookBrief: string, budgetSeconds: number | undefined, maxShots: number, problems: string[] = [], before?: { scene: string, ends: Record<string, string>, view?: string }): AskOptions {
     let line = 0
     const script = scene.elements.map(element => element.type === 'action'
         ? element.text
@@ -219,7 +219,7 @@ Place: ${location.name} - ${location.description}
 Characters you may use, exactly as spelled: ${characters.filter(c => !c.voiceOnly).map(c => c.name + (c.states?.length ? ` (other looks: ${c.states.map(s => `"${s.name}" = ${s.change}`).join('; ')})` : '')).join(', ')}
 Dialogue language: ${language}
 Film look (its camera language is yours too): ${lookBrief}
-${before ? `The scene before (${before.scene}) ended like this - if this scene goes on from it (same place, no jump in time), everybody starts where it left them: ${Object.entries(before.ends).map(([name, where]) => `${name} ${where}`).join('; ')}\n` : ''}
+${before ? `The scene before (${before.scene}) ended like this - if this scene goes on from it (same place, no jump in time), everybody starts where it left them: ${Object.entries(before.ends).map(([name, where]) => `${name} ${where}`).join('; ')}.${before.view ? ` Its last shot was taken ${before.view} - a shot of the other person in the same place looks back the other way along the line between them, so the people keep their sides: whoever stood on the left of the frame stays on that side of the place, and a reverse shot shows the opposite side of the place behind the person it is taken of.` : ''}\n` : ''}
 ${budgetSeconds ? `Planned length of this scene: about ${budgetSeconds} seconds.
 ` : ''}${scene.shot ? `The writer's heading for this scene: ${scene.shot} - the framing the writer wants for it.
 ` : ''}

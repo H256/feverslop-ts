@@ -304,7 +304,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
     const handover = (i: number) => {
         const previous = result[i - 1]
         const ends = Object.entries(previous?.ends ?? {}).map(([id, where]) => [cast.characters.find(c => c.id === id)?.name ?? id, where] as const)
-        return previous && ends.length ? {scene: previous.sceneId, ends: Object.fromEntries(ends)} : undefined
+        return previous && ends.length ? {scene: previous.sceneId, ends: Object.fromEntries(ends), view: previous.shots.at(-1)?.view} : undefined
     }
     for (const [i, scene] of screenplay.scenes.entries()) {
         log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
