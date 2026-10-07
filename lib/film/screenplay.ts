@@ -24,6 +24,7 @@ export function toScreenplay(raw: RawScreenplay, meta: { title: string, language
                 return [{
                     type: 'dialogue', speaker, text: line, kind,
                     ...(text(element.delivery) ? {delivery: text(element.delivery)} : {}),
+                    ...(text(element.translation) ? {translation: text(element.translation)} : {}),
                     ...(language && language !== meta.language && languageName(language) ? {language} : {}),
                 }]
             }

@@ -38,6 +38,7 @@ export type ScreenplayElement =
         kind: DialogueKind,
         delivery?: string,          // the parenthetical: "whispering", "out of breath"
         language?: string,          // only when it differs from Screenplay.language
+        translation?: string,       // a translation the screenplay itself has under the line (in brackets) - not spoken, it becomes the subtitle
     }
 
 export type Scene = {
@@ -104,5 +105,6 @@ export type FilmProject = {
     characterDescriptions?: Record<string, string>,  // the look without the picture's pose, background and light - for the clip prompts
     locationLooks?: Record<string, string>,
     locationDescriptions?: Record<string, string>,
+    subtitles?: Record<string, string>, // config subtitles = a language code: the translation of every line spoken in another language, by "sceneId:line" (line = index among the dialogue lines of the scene)
     coverage?: SceneCoverage[],         // the shots of every scene, in scene order
 }

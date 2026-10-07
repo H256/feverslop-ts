@@ -69,13 +69,13 @@ const screenplayJson = `{
     "shot": "",
     "elements": [
       {"type": "action", "text": ""},
-      {"type": "dialogue", "speaker": "", "text": "", "kind": "spoken", "delivery": "", "language": ""}
+      {"type": "dialogue", "speaker": "", "text": "", "kind": "spoken", "delivery": "", "language": "", "translation": ""}
     ]
   }]
 }
 - "setting": "INT", "EXT" or "INT/EXT". "location": the place as the slugline names it, without INT./EXT. and without the time. "time": DAY, NIGHT, DUSK, DAWN, ...
 - "speaker": the character cue, as the script writes it. "kind": "spoken" (the character is in the picture and speaks), "offscreen" (heard, but not in the picture) or "voiceover" (narration or thoughts, lips closed).
-- "shot" is optional - only when the heading of the scene names a shot or a view instead of a place: the heading as written, in English ("CLOSE UP - ANUBIS", "WIDE SHOT"). "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "language" is the ISO 639-1 code of the language the line is spoken in, on every dialogue line: read the words of the line, not who says it - one character may speak two languages in the same film.`
+- "shot" is optional - only when the heading of the scene names a shot or a view instead of a place: the heading as written, in English ("CLOSE UP - ANUBIS", "WIDE SHOT"). "delivery" is optional - the parenthetical, in English ("whispering", "out of breath"). "translation" is optional - only when the screenplay itself has a translation of the line under it (in brackets): the translation as written. "language" is the ISO 639-1 code of the language the line is spoken in, on every dialogue line: read the words of the line, not who says it - one character may speak two languages in the same film.`
 
 export function screenplayWritePrompt(brief: Brief, outline: Outline): AskOptions {
     return {
@@ -116,7 +116,7 @@ ${source}`,
 - Sluglines in any language (INNEN, INT., EXT., 内...) become "setting" "INT", "EXT" or "INT/EXT", "location" and "time" - location and time translated into English, the place always named the same way. A heading that names a shot or a view instead of a place ("CLOSE UP - HIS FACE", "WIDE SHOT", "THE COLLISION") is not a new place: the scene stays where the scene before it was, at the time it had - "location" and "time" are those of the scene before, never "unknown".
 - A parenthetical becomes "delivery" in English. (V.O.) and (O.S.) / (OFF) become "voiceover" and "offscreen".
 - "speaker" is the character cue exactly as written.
-- Markdown around the text (**bold**, *italics*, headings, "SCENE 3" labels) is formatting, not part of the screenplay: it is left out of the lines and the scenes. A parenthesised translation of a spoken line, in another language, on the line after it, is not spoken and not a delivery - it is dropped. A parenthetical before a line stays the delivery.
+- Markdown around the text (**bold**, *italics*, headings, "SCENE 3" labels) is formatting, not part of the screenplay: it is left out of the lines and the scenes. A parenthesised translation of a spoken line, in another language, on the line after it, is not spoken and not a delivery - it is the line's "translation", never part of its text. A parenthetical before a line stays the delivery.
 
 Answer only with JSON in this format:
 ${screenplayJson}`,

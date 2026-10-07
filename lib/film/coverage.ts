@@ -13,7 +13,7 @@ const MIN_SHOT_SEC = 2
 const MAX_SPEECH_SHOT_SEC = 10
 const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
-const LEAD_IN_SEC = 1.2
+export const LEAD_IN_SEC = 1.2
 
 type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }

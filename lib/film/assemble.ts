@@ -9,18 +9,34 @@ const FADE_SEC = 0.02
 // what every clip's sound is brought to - the model's own is 32 kHz
 const SAMPLE_RATE = 48000
 
+// the loudness every clip is brought to - the model makes the level of every clip on its own, a quiet clip next to a loud one is what makes a film sound cut together
+const TARGET_LUFS = -20
+// ... but never by more than this: a clip of only wind must not be turned up to the level of a spoken line
+const MAX_GAIN_DB = 9
+
+/** Integrated loudness (EBU R128) of a clip's sound in LUFS, undefined for silence. */
+export async function loudnessOf(file: string): Promise<number | undefined> {
+    const proc = Bun.spawn(['ffmpeg', '-v', 'info', '-nostats', '-i', file, '-vn', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'], {stdout: 'pipe', stderr: 'pipe'})
+    const output = await new Response(proc.stderr).text()
+    await proc.exited
+    const match = output.match(/Integrated loudness:\s*I:\s*(-?[\d.]+) LUFS/)
+    const value = match ? Number(match[1]) : NaN
+    return Number.isFinite(value) && value > -60 ? value : undefined
+}
+
 /**
  * Builds the film: every clip cut to exactly its own frames from frame 0 on - the frames past that were only rendered because
  * the model needs certain lengths - and joined, with the sound the model made for each clip. Unlike the music-video
  * pipeline there is no soundtrack under the film, so the clips' own sound is the film's sound.
  */
-export async function assembleFilm({clips, projectDir, target}: {
+export async function assembleFilm({clips, projectDir, target, levelMatching = false}: {
     // useRendered: use every frame the model rendered, not only the planned ones - for a clip with dialogue, whose last word can fall
     // into the few frames after the planned end. promptHash: the hash of the prompt planned now - a clip rendered from another one is stale
     // continuesPrevious: the clip starts on the last frame of the clip right before it in the film - that frame is already there, the clip's first frame is the same picture and is left out (it would stand twice and stutter)
     clips: { id: string, frames: number, useRendered?: boolean, continuesPrevious?: boolean, promptHash?: string }[],
     projectDir: string,
     target: string,
+    levelMatching?: boolean,        // every clip's sound is brought towards the same loudness
 }) {
     const files = clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
@@ -49,6 +65,14 @@ export async function assembleFilm({clips, projectDir, target}: {
     const resampled = infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
     if (resampled) log.warn(`${resampled} clip(s) have another frame rate than ${FPS} fps and are resampled`)
 
+    // gain per clip, to the common loudness (at most MAX_GAIN_DB either way)
+    const gains = levelMatching
+        ? await Promise.all(files.map(async f => {
+            const loudness = await loudnessOf(f)
+            return loudness === undefined ? 0 : Math.max(-MAX_GAIN_DB, Math.min(MAX_GAIN_DB, TARGET_LUFS - loudness))
+        }))
+        : files.map(() => 0)
+    if (levelMatching) log.step('Levels', styles.muted(`clips brought towards ${TARGET_LUFS} LUFS: ${Math.min(...gains).toFixed(1)} to ${Math.max(...gains).toFixed(1)} dB`))
     const skipped = clips.map(c => c.continuesPrevious ? 1 : 0)
     const totalFrames = used.reduce((sum, n, i) => sum + n - skipped[i]!, 0)
     const filters = clips.map((clip, i) => {
@@ -56,7 +80,7 @@ export async function assembleFilm({clips, projectDir, target}: {
         const from = secondsAt(skipped[i]!)
         return [
             `[${i}:v]${Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=start_frame=${skipped[i]}:end_frame=${used[i]},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
-            `[${i}:a]aresample=${SAMPLE_RATE},aformat=channel_layouts=stereo,apad,atrim=start=${from}:end=${seconds},asetpts=PTS-STARTPTS,afade=t=in:d=${FADE_SEC},afade=t=out:st=${Math.max(0, seconds - from - FADE_SEC)}:d=${FADE_SEC}[a${i}]`,
+            `[${i}:a]aresample=${SAMPLE_RATE},aformat=channel_layouts=stereo,${gains[i] ? `volume=${gains[i]!.toFixed(2)}dB,alimiter=limit=0.95,` : ''}apad,atrim=start=${from}:end=${seconds},asetpts=PTS-STARTPTS,afade=t=in:d=${FADE_SEC},afade=t=out:st=${Math.max(0, seconds - from - FADE_SEC)}:d=${FADE_SEC}[a${i}]`,
         ].join(';')
     })
     filters.push(`${clips.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${clips.length}:v=1:a=1[v][a]`)
@@ -90,5 +114,28 @@ export async function assembleFilm({clips, projectDir, target}: {
 
     const result = await probeVideo(target)
     if (result.frames !== totalFrames) log.warn(`the film has ${result.frames} frames, expected ${totalFrames}`)
-    return {frames: result.frames, width, height, seconds: secondsAt(result.frames), duration: formatTime(secondsAt(result.frames), true)}
+    // the second of the film every clip starts at
+    let at = 0
+    const starts = used.map((n, i) => { const start = at; at += secondsAt(n - skipped[i]!); return start })
+    return {starts, frames: result.frames, width, height, seconds: secondsAt(result.frames), duration: formatTime(secondsAt(result.frames), true)}
+}
+
+export const SCORE_EXTENSIONS = ['mp3', 'wav', 'flac', 'm4a', 'ogg']
+
+/**
+ * Mixes a score under the finished film: it is looped or cut to the film's length, set `volumeDb` below the film's own sound, and gives way
+ * (a sidechain compressor on the film's sound) while anybody speaks. The picture is copied, the sound is encoded once more.
+ */
+export async function addScore(film: string, score: string, volumeDb: number) {
+    const partial = `${film}.score.mp4`
+    const filter = [
+        `[0:a]aformat=channel_layouts=stereo,asplit=2[dry][key]`,
+        `[1:a]aresample=${SAMPLE_RATE},aformat=channel_layouts=stereo,volume=${volumeDb}dB[music]`,
+        `[music][key]sidechaincompress=threshold=0.02:ratio=10:attack=30:release=600[ducked]`,
+        `[dry][ducked]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]`,
+    ].join(';')
+    const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-i', film, '-stream_loop', '-1', '-i', score, '-filter_complex', filter, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-shortest', '-movflags', '+faststart', partial], {stdout: 'pipe', stderr: 'pipe'})
+    const stderr = new Response(proc.stderr).text()
+    if (await proc.exited !== 0) throw new Error(`ffmpeg could not mix the score:\n${await stderr}`)
+    renameSync(partial, film)
 }

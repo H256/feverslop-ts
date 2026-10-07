@@ -22,6 +22,14 @@ export type FilmConfig = {
     // frame: "auto" = where the shot planning marked it, "scene" = every clip of a scene but its first (the people keep their posture and
     // clothes from clip to clip, but the scene is rendered one clip after the other), "never" = every clip is its own cut
     continuity: 'auto' | 'scene' | 'never',
+    // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
+    // code - every line spoken in another language is translated into it
+    subtitles: string,
+    // every clip's own sound is brought to about the same loudness (the model makes each clip's level on its own)
+    levelMatching: boolean,
+    // a score file in input/ (score.mp3, .wav, .flac, .m4a or .ogg) is mixed under the film at this volume in dB (relative to the film's own sound),
+    // and ducks under the dialogue
+    scoreVolume: number,
     llm: { model?: string },        // a project may use another model than the settings - never another server or key
 }
 
@@ -33,6 +41,9 @@ export const filmDefaults: FilmConfig = {
     videoResolution: -1,
     sequenceSheets: true,
     continuity: 'auto',
+    subtitles: 'script',
+    levelMatching: true,
+    scoreVolume: -14,
     llm: {},
 }
 
@@ -72,6 +83,9 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
+    if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
+    if (typeof config.levelMatching !== 'boolean') fail(`levelMatching must be true or false, got ${JSON.stringify(config.levelMatching)}`)
+    if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40) fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
     if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
     const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
     if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)

@@ -166,3 +166,35 @@ describe('names', () => {
         expect(mentions('Annabel waits', anna)).toBe(false)
     })
 })
+
+describe('subtitles', () => {
+    const withTranslation = toScreenplay({
+        scenes: [{setting: 'INT', location: 'The Hut', time: 'NIGHT', elements: [
+            {type: 'action', text: 'A candle.'},
+            {type: 'dialogue', speaker: 'ANNA', text: 'Je suis là.', kind: 'spoken', translation: 'I am here.'},
+            {type: 'dialogue', speaker: 'BEN', text: 'Moi aussi.', kind: 'spoken'},
+        ]}],
+    }, {title: 'T', language: 'fr'})
+
+    test('the translations of the screenplay are the subtitles, nothing else', async () => {
+        const {subtitleTexts} = await import("./subtitles.ts")
+        expect(subtitleTexts(withTranslation, undefined, 'script')).toEqual({'s1:0': 'I am here.'})
+        expect(subtitleTexts(withTranslation, {'s1:1': 'Me too.'}, 'en')).toEqual({'s1:1': 'Me too.'})
+        expect(subtitleTexts(withTranslation, undefined, 'off')).toEqual({})
+    })
+    test('the translation step asks only for the lines in another language', async () => {
+        const {subtitlePrompt} = await import("./subtitles.ts")
+        expect(subtitlePrompt(withTranslation, 'fr').lines).toHaveLength(0)
+        expect(subtitlePrompt(withTranslation, 'en').lines.map(l => l.key)).toEqual(['s1:0', 's1:1'])
+    })
+    test('a cue starts a beat into its shot; a line over two clips is one cue; cues never overlap', async () => {
+        const {subtitleCues, toSrt} = await import("./subtitles.ts")
+        const clip = (id: string, seconds: number, line: number, at: number, text: string) => ({id, seconds, sceneId: 's1', dialogue: [{at, line, text}]}) as never
+        const cues = subtitleCues([clip('clip-001', 8, 0, 0, 'Une phrase. Et une autre phrase assez longue pour finir.'), clip('clip-002', 8, 0, 0, 'La suite.'), clip('clip-003', 8, 1, 1, 'Moi aussi.')], [0, 8, 16], {'s1:0': 'One line.', 's1:1': 'Me too.'})
+        expect(cues).toHaveLength(2)
+        expect(cues[0]!.start).toBeGreaterThan(0.5)
+        expect(cues[0]!.end).toBeGreaterThan(8)
+        expect(cues[0]!.end).toBeLessThan(cues[1]!.start)
+        expect(toSrt(cues)).toMatch(/^1\n00:00:01,\d{3} --> 00:00:\d{2},\d{3}\nOne line\.\n\n2\n/)
+    })
+})

@@ -5,7 +5,8 @@ import {existsSync, readdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
-import {assembleFilm} from "./lib/film/assemble.ts";
+import {addScore, assembleFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
+import {muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
@@ -103,6 +104,7 @@ await film.syncInputs({
     dialogueLanguage: {value: config.dialogueLanguage, steps: ['brief']},
     targetDuration: {value: String(config.targetDuration), steps: ['outline', 'coverage']},
     'style.txt': {value: style, steps: ['lookBrief']},
+    subtitles: {value: config.subtitles, steps: ['subtitles']},
 })
 
 /////////// 1 · BRIEF
@@ -353,7 +355,34 @@ if (render.has('final')) {
     const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
     // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
-    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id, promptHash: promptHash(r)})), projectDir: film.dir, target})
+    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id, promptHash: promptHash(r)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
+
+    // a score in input/ is mixed under the film
+    const score = SCORE_EXTENSIONS.map(ext => film.input(`score.${ext}`)).find(file => existsSync(file))
+    if (score) {
+        await addScore(target, score, config.scoreVolume)
+        log.step('Score', `${score} ${styles.muted(`under the film at ${config.scoreVolume} dB, ducking under the dialogue`)}`)
+    }
+
+    // subtitles: the screenplay's own translations, or the film's lines translated into the language in config.json
+    let translated = film.data.subtitles
+    if (config.subtitles !== 'script' && config.subtitles !== 'off') {
+        translated = await film.step('subtitles', '12a · TRANSLATING THE SUBTITLES', async () => {
+            const {lines, options} = subtitlePrompt(screenplay, config.subtitles)
+            if (!lines.length) return {}
+            const answer = await askJson<Record<string, unknown>>(options)
+            return Object.fromEntries(lines.flatMap(l => typeof answer[l.key] === 'string' && (answer[l.key] as string).trim() ? [[l.key, (answer[l.key] as string).trim()]] : []))
+        })
+    }
+    const cues = subtitleCues(selected, result.starts, subtitleTexts(screenplay, translated, config.subtitles))
+    if (cues.length) {
+        const srt = target.replace(/\.mp4$/, '.srt')
+        await Bun.write(srt, toSrt(cues))
+        await muxSubtitles(target, srt, config.subtitles === 'script' ? undefined : config.subtitles)
+        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, also a track in the mp4 - timing is estimated`)}`)
+    } else if (config.subtitles !== 'off') {
+        log.step('Subtitles', styles.muted(config.subtitles === 'script' ? 'none - the screenplay has no translations under its lines (config.json: "subtitles": "en" translates them)' : 'none - every line is in that language already'))
+    }
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}${only.size ? ` - ${selected.length} of ${requests.length} clips (--only)` : ''}`)}`)
 }
 
