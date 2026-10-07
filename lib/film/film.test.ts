@@ -444,3 +444,23 @@ describe('image edit workflows', () => {
         }
     })
 })
+
+describe('held shots', () => {
+    const scene = screenplay.scenes[0]!
+    const input = (hold: boolean) => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'locked off', characters: ['Anna'], action: 'Anna speaks.', lines: [1], seconds: 4, hold, people: {Anna: {state: 'stands at the rail'}}}, {framing: 'close-up', camera: 'c', characters: ['Ben'], action: 'Ben answers.', lines: [2], seconds: 4}]}, scene, cast, false)
+        return {screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'}
+    }
+    test('a held shot says positively how the picture stays', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const [held] = buildFilmClipRequests(input(true))
+        expect(held!.prompt).toContain('A fixed tripod shot: the framing is the same from the first frame to the last - <Subject 2> keeps the same size and the same place in the frame')
+        const [free] = buildFilmClipRequests(input(false))
+        expect(free!.prompt).not.toContain('A fixed tripod shot')
+    })
+    test('the planner says per shot whether it is held', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna speaks.', lines: [1, 2], seconds: 4, hold: true}]}, scene, cast)
+        expect(coverage.shots[0]!.hold).toBe(true)
+        expect(toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna speaks.', lines: [1, 2], seconds: 4, hold: 'yes'}]}, scene, cast).coverage.shots[0]!.hold).toBeUndefined()
+    })
+})

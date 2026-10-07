@@ -143,6 +143,10 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined
         const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? ` The background is view ${shot.placeView} of ${locationSubject.picture}: ${placeView.name}.` : ''}` : ''
         const starts = shot.focus.filter(s => shot.people?.[s.id]?.state)
+        // a held shot: what the picture IS from the first frame to the last, said positively - "no push-in" does not hold the video model back, a picture that stays does
+        const holdClause = shot.hold && shot.focus.length
+            ? ` A fixed tripod shot: the framing is the same from the first frame to the last - ${shot.focus.length > 1 ? joinAnd(shot.focus.map(s => s.label)) : shot.focus[0]!.label} keep${shot.focus.length > 1 ? '' : 's'} the same size and the same place in the frame, standing on the same spot, and only the head, the mouth and the expression move.`
+            : ''
         const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
         const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion)
         const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
@@ -159,7 +163,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const noSpeech = !shot.spoken.length && shot.focus.length
             ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
             : ''
-        return `${opening}${fromFrame}${view}${inFrame}${start}${motion} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
+        return `${opening}${fromFrame}${view}${inFrame}${start}${motion}${holdClause} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)
