@@ -147,7 +147,7 @@ render the new reference sheet. It is the film counterpart of `bun run replace-c
 All optional:
 
 ```json
-{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "sequenceSheets": true, "continuity": "auto", "subtitles": "script", "levelMatching": true, "scoreVolume": -14, "llm": {}}
+{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "sequenceSheets": true, "continuity": "auto", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
 ```
 
 | Field | Values |
@@ -157,13 +157,14 @@ All optional:
 | `sequenceSheets`   | `true` (default) = every picture is a multi-angle reference sheet (a short turnaround video, sampled and composited), `false` = one plain picture each - much cheaper |
 | `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other), `"never"` = every clip is its own cut |
 | `subtitles`        | `"script"` (default) = the translations the screenplay has under its lines (in brackets, they are kept as `translation`), `"off"`, or a language code like `"en"`: every line in another language is translated into it (a step, cached) |
+| `burnSubtitles`    | `false` (default) = the subtitles are a track of the mp4 that the player switches on, `true` = burned into the picture (always visible, for players that do not show a track - messengers, uploads; the video is encoded once more) |
 | `levelMatching`    | `true` (default) = every clip's sound is brought towards -20 LUFS, at most 9 dB either way - the model makes each clip's level on its own |
 | `scoreVolume`      | dB under the film's own sound for a score (-40 to 0, default -14) |
 | `seed`, `imageResolution`, `videoResolution`, `llm` | as in the music-video [config.json](../README.md#configjson) |
 
 ## Subtitles and score
 
-`--render=final` also writes `<id>.srt` and adds it to the mp4 as a subtitle track (switch it on in the player). The text is the translation of a
+`--render=final` also writes `<id>.srt` and adds it to the mp4 as a subtitle track (switch it on in the player); with `"burnSubtitles": true` they are burned into the picture instead (white with a dark outline at the bottom; the video is encoded once more, the sound is copied). The text is the translation of a
 line: `"subtitles": "script"` uses the translations the screenplay itself has, a language code translates every line in another language
 (the screenplay's own translations are not used then). The timing is **an estimate** - a clip starts a line about a second into its shot
 and speaks it at the planned speed - right to about a second; nothing listens to the clips. A line cut over several clips is one cue.

@@ -25,6 +25,8 @@ export type FilmConfig = {
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
     subtitles: string,
+    // the subtitles are burned into the picture (always visible, the video is encoded once more) instead of being a track of the mp4 that the player switches on
+    burnSubtitles: boolean,
     // every clip's own sound is brought to about the same loudness (the model makes each clip's level on its own)
     levelMatching: boolean,
     // a score file in input/ (score.mp3, .wav, .flac, .m4a or .ogg) is mixed under the film at this volume in dB (relative to the film's own sound),
@@ -42,6 +44,7 @@ export const filmDefaults: FilmConfig = {
     sequenceSheets: true,
     continuity: 'auto',
     subtitles: 'script',
+    burnSubtitles: false,
     levelMatching: true,
     scoreVolume: -14,
     llm: {},
@@ -84,6 +87,7 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
+    if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)
     if (typeof config.levelMatching !== 'boolean') fail(`levelMatching must be true or false, got ${JSON.stringify(config.levelMatching)}`)
     if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40) fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
     if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)

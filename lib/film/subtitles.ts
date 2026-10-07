@@ -1,4 +1,5 @@
 import {existsSync, renameSync} from "node:fs";
+import {basename, dirname, resolve} from "node:path";
 import {languageName} from "../config.ts";
 import type {AskOptions} from "../llm.ts";
 import {dialogueOf, LEAD_IN_SEC} from "./coverage.ts";
@@ -67,6 +68,22 @@ export async function muxSubtitles(film: string, srt: string, language?: string)
     const stderr = new Response(proc.stderr).text()
     if (await proc.exited !== 0) throw new Error(`ffmpeg could not add the subtitles:\n${await stderr}`)
     if (existsSync(partial)) renameSync(partial, film)
+}
+
+/**
+ * The subtitles burned into the picture: the video is encoded once more, the sound is copied. The size is relative to the picture (libass
+ * lays an srt out on a 288-line page), white with a dark outline, at the bottom.
+ */
+export async function burnSubtitles(film: string, srt: string) {
+    const partial = `${film}.burn.mp4`
+    // run next to the files: a Windows path with a drive letter has to be escaped in a filter, a plain file name does not
+    const cwd = dirname(resolve(film))
+    const style = 'Fontsize=15,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=1.2,Shadow=0,MarginV=14,Alignment=2'
+    const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-i', basename(film), '-vf', `subtitles=${basename(srt)}:force_style='${style}'`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', basename(partial)], {cwd, stdout: 'pipe', stderr: 'pipe'})
+    const stderr = new Response(proc.stderr).text()
+    if (await proc.exited !== 0) throw new Error(`ffmpeg could not burn the subtitles in:
+${await stderr}`)
+    renameSync(partial, film)
 }
 
 /** The translation of every line that is not spoken in the subtitle language, one answer for the whole film. */

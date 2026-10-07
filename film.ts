@@ -6,7 +6,7 @@ import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
 import {addScore, assembleFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
-import {muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
+import {burnSubtitles, muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
@@ -385,8 +385,10 @@ if (render.has('final')) {
     if (cues.length) {
         const srt = target.replace(/\.mp4$/, '.srt')
         await Bun.write(srt, toSrt(cues))
-        await muxSubtitles(target, srt, config.subtitles === 'script' ? undefined : config.subtitles)
-        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, also a track in the mp4 - timing is estimated`)}`)
+        // burned in (always visible) or a track of the mp4 (the player switches it on) - not both, the text would be there twice
+        if (config.burnSubtitles) await burnSubtitles(target, srt)
+        else await muxSubtitles(target, srt, config.subtitles === 'script' ? undefined : config.subtitles)
+        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, ${config.burnSubtitles ? 'burned into the picture' : 'also a track in the mp4'} - timing is estimated`)}`)
     } else if (config.subtitles !== 'off') {
         log.step('Subtitles', styles.muted(config.subtitles === 'script' ? 'none - the screenplay has no translations under its lines (config.json: "subtitles": "en" translates them)' : 'none - every line is in that language already'))
     }
