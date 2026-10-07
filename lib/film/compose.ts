@@ -23,6 +23,7 @@ export type FilmClipRequest = {
     frameStart: number,         // on the film's frame grid (lib/frames.ts)
     frames: number,             // frames this clip contributes to the final film
     startsFrom?: string,        // goes on from the last frame of this clip (`<Picture N>` below, kind 'frame')
+    held?: boolean,             // has a held shot - rendered with the slower workflow that follows the prompt (comfy/workflows/h3-ref2video-film-held.ts)
     shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
     // every spoken line of the clip, in order: `at` is the start of its shot, speaker ids are numbered per clip
     dialogue: { at: number, line: number, speaker: string, speakerId: string, subject?: string, kind: DialogueKind, text: string }[],
@@ -210,6 +211,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         frameStart: clip.frameStart,
         frames: clip.frames,
         ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
+        ...(shots.some(s => s.hold && s.focus.length) ? {held: true} : {}),
         shots: shots.map(s => ({label: s.label, at: s.at, framing: s.framing, camera: s.camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...s.focus.map(f => f.label)]})),
         dialogue: shots.flatMap(s => s.spoken.map(l => ({
             at: l.at, line: l.line, speaker: l.character?.name ?? l.key, speakerId: speakerId(l.key),

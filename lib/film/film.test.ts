@@ -423,9 +423,35 @@ describe('held shots', () => {
         const [free] = buildFilmClipRequests(input(false))
         expect(free!.prompt).not.toContain('A fixed tripod shot')
     })
+    test('a clip with a held shot is marked (it is rendered by the slower workflow), one without is not', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        expect(buildFilmClipRequests(input(true))[0]!.held).toBe(true)
+        expect(buildFilmClipRequests(input(false))[0]!.held).toBeUndefined()
+    })
     test('the planner says per shot whether it is held', () => {
         const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna speaks.', lines: [1, 2], seconds: 4, hold: true}]}, scene, cast)
         expect(coverage.shots[0]!.hold).toBe(true)
         expect(toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna speaks.', lines: [1, 2], seconds: 4, hold: 'yes'}]}, scene, cast).coverage.shots[0]!.hold).toBeUndefined()
+    })
+})
+
+describe('video workflows', () => {
+    const options = {prompt: 'p', pictures: [], frames: 73, seed: 1, resolution: -1 as const, filenamePrefix: 'x'}
+    const nodes = async (file: string) => {
+        const {workflow, output} = (await import(file)).default(options)
+        return Object.values(workflow.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>)
+    }
+    test('the standard workflow: the Ref2V turbo LoRA, euler, 8 steps', async () => {
+        const list = await nodes("../../comfy/workflows/h3-ref2video-film.ts")
+        expect(list.filter(n => n.class_type === 'LoraLoaderModelOnly').map(n => String(n.inputs.lora_name))).toEqual(['minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors'])
+        expect(list.find(n => n.class_type === 'KSamplerSelect')!.inputs.sampler_name).toBe('euler')
+        expect(list.find(n => n.class_type === 'BasicScheduler')!.inputs.steps).toBe(8)
+    })
+    test('the held workflow: no LoRA, res_multistep, beta, 20 steps', async () => {
+        const list = await nodes("../../comfy/workflows/h3-ref2video-film-held.ts")
+        expect(list.filter(n => n.class_type === 'LoraLoaderModelOnly')).toHaveLength(0)
+        expect(list.find(n => n.class_type === 'KSamplerSelect')!.inputs.sampler_name).toBe('res_multistep')
+        const scheduler = list.find(n => n.class_type === 'BasicScheduler')!
+        expect([scheduler.inputs.scheduler, scheduler.inputs.steps]).toEqual(['beta', 20])
     })
 })

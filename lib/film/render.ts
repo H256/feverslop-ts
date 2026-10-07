@@ -40,15 +40,17 @@ export class FilmRenderer extends Renderer {
         if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')} - run --render=images`)
 
+        // a clip with a held shot is rendered without the turbo LoRA, which does not keep a picture still
+        const workflow = clip.held ? `${this.config.videoWorkflow}-held` : this.config.videoWorkflow
         const {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             const seed = resolveSeed(this.config.seed)
-            const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames }
+            const module = await import(join(workflowDir, `${workflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames }
 
             // Rendered at least as long as the clip needs, in a length the model accepts - the frames after the clip's own
             // are cut off again when the film is assembled
             const frames = module.renderFrames?.(clip.frames) ?? clip.frames
-            if (frames < clip.frames) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames}) returned only ${frames} frames`)
+            if (frames < clip.frames) throw new Error(`${workflow}: renderFrames(${clip.frames}) returned only ${frames} frames`)
             const result = module.default({
                 prompt: clip.prompt,
                 pictures: clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => `${this.remoteDir}/${p.file}`),
@@ -65,7 +67,7 @@ export class FilmRenderer extends Renderer {
         if (rendered.frames < clip.frames) log.warn(`${file} has ${rendered.frames} frames, the clip needs ${clip.frames} - delete it and render again`)
         if (!rendered.hasAudio) log.warn(`${file} has no audio track - the film needs the sound the model makes`)
         await Bun.write(`${target}.json`, JSON.stringify({
-            workflow: this.config.videoWorkflow,
+            workflow,
             seed,
             resolution: this.config.videoResolution,
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
