@@ -95,7 +95,7 @@ export class CoverageProblem extends Error {
  * strict: what lib/film/shot-checks.ts finds (people in a scene that names none, speech without a line, too many shots) is a problem the planner is asked
  * to fix; not strict, it is only noted - a rule of thumb must never stop a film.
  */
-export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true, introduced?: ReadonlySet<string>): { coverage: SceneCoverage, notes: string[] } {
+export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true, introduced?: ReadonlySet<string>, sceneNumber?: number): { coverage: SceneCoverage, notes: string[] } {
     if (!Array.isArray(raw?.shots) || !raw.shots.length) throw new CoverageProblem(['there are no shots'])
     const dialogue = dialogueOf(scene)
     const problems: string[] = []
@@ -125,7 +125,8 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
                 const state = character?.states?.find(s => s.id === wanted || s.name.toLowerCase() === wanted)
                 if (!wanted || wanted === 'normal') continue
                 if (!character || !state) problems.push(`shot ${i + 1}: "${who}" has no look "${text(which)}"`)
-                else if (ids.includes(character.id)) states[character.id] = state.id
+                // a look the script has not given yet (it begins in a later scene) is not used: the character has the normal look
+                else if (ids.includes(character.id) && !(sceneNumber !== undefined && state.from && sceneNumber < state.from)) states[character.id] = state.id
             }
         }
         // per person in the shot: where they are and what they hold at its start, and how they are in the picture

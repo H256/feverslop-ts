@@ -579,3 +579,25 @@ describe('a cutaway while a line is heard', () => {
         expect(request!.prompt).toContain('nobody in the picture speaks it')
     })
 })
+
+describe('a look begins in the scene the script gives it', () => {
+    const scene = screenplay.scenes[0]!
+    const anna = cast.characters.find(c => c.name === 'Anna')!
+    const withLook = {...cast, characters: cast.characters.map(c => c.id === anna.id ? {...c, states: [{id: 'bearded', name: 'bearded', change: 'a full beard', from: 3}]} : c)}
+    const raw = {soundscape: 's', people: true, shots: [{framing: 'medium shot', camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2], states: {Anna: 'bearded'}}]}
+    test('before that scene the planner cannot use it, from it on it can', () => {
+        expect(toCoverage(raw, scene, withLook, true, undefined, 2).coverage.shots[0]!.states).toBeUndefined()
+        expect(toCoverage(raw, scene, withLook, true, undefined, 3).coverage.shots[0]!.states).toEqual({[anna.id]: 'bearded'})
+    })
+    test('the cast step gives the scene number of a look, the screenplay headings are numbered for it', async () => {
+        const {toCast} = await import("./screenplay.ts")
+        const {screenplayToText} = await import("./fountain.ts")
+        expect(screenplayToText(screenplay, true)).toContain('[Scene 1] ')
+        expect(screenplayToText(screenplay, true)).toContain('[Scene 2] ')
+        expect(screenplayToText(screenplay)).not.toContain('[Scene 1]')
+        const made = toCast({characters: [{name: 'Anna', aliases: ['ANNA'], role: 'r', appearance: 'a', voice: 'v', states: [{name: 'bearded', change: 'a full beard', from: 19}, {name: 'tired', change: 'dark rings', from: 'nonsense'}]}, {name: 'Ben', aliases: ['BEN'], role: 'r', appearance: 'a', voice: 'v'}], locations: [{name: 'The Bridge', aliases: ['BRIDGE'], description: 'd'}, {name: 'The Hut', aliases: ['HUT'], description: 'd'}]} as never, screenplay)
+        const states = made.characters[0]!.states!
+        expect(states[0]!.from).toBe(19)
+        expect(states[1]!.from).toBeUndefined()
+    })
+})

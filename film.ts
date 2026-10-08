@@ -346,7 +346,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
             const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
             try {
                 // the first time what the script checks find is a reason to ask again, the second time it is only noted
-                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i))
+                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
                 for (const note of notes) log.warn(note)
                 result.push(planned)
                 break

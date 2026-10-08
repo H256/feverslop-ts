@@ -75,14 +75,15 @@ const key = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').tr
 const toId = (name: string) => slugify(name, {lower: true, strict: true}) || 'x'
 
 // the other looks of a character: at most two, each with a name and what is different
-function statesOf(c: { voiceOnly?: boolean, states?: { name?: string, change?: string }[] }): { states?: FilmCharacterState[] } {
+function statesOf(c: { voiceOnly?: boolean, states?: { name?: string, change?: string, from?: unknown }[] }): { states?: FilmCharacterState[] } {
     if (c.voiceOnly === true || !Array.isArray(c.states)) return {}
     const taken = new Set<string>()
     const states = c.states.filter(s => text(s?.name) && text(s?.change)).slice(0, 2).map((s): FilmCharacterState => {
         let id = toId(text(s.name))
         for (let n = 2; taken.has(id); n++) id = `${toId(text(s.name))}-${n}`
         taken.add(id)
-        return {id, name: text(s.name), change: text(s.change)}
+        const from = Number(s.from)
+        return {id, name: text(s.name), change: text(s.change), ...(Number.isInteger(from) && from > 1 ? {from} : {})}
     })
     return states.length ? {states} : {}
 }
@@ -117,7 +118,7 @@ export function applyScriptFixes(screenplay: Screenplay, edits: unknown): { scre
 }
 
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
-export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string }[] }
+export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string, from?: unknown }[] }
 export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {
     const unique = (base: string, taken: Set<string>) => {
         let id = base

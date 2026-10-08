@@ -76,7 +76,8 @@ export type FilmCharacter = {
     states?: FilmCharacterState[],  // other looks of the character that last for a stretch of the film (wounded, disguised) - each has a reference picture of its own
 }
 // id: slug, unique among the character's states. change: what is different from the normal look, in plain visible terms
-export type FilmCharacterState = { id: string, name: string, change: string }
+// from: the number of the scene (1 = the first) in which the script first shows the look - the shot planning cannot use it before
+export type FilmCharacterState = { id: string, name: string, change: string, from?: number }
 // one view of a place on its reference sheet: name = where the camera stands and what it looks toward (short), shows = what is seen from there
 export type LocationView = { name: string, shows: string }
 export type FilmLocation = {
