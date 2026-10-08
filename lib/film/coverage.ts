@@ -93,7 +93,7 @@ export class CoverageProblem extends Error {
  * strict: what lib/film/shot-checks.ts finds (people in a scene that names none, speech without a line, too many shots) is a problem the planner is asked
  * to fix; not strict, it is only noted - a rule of thumb must never stop a film.
  */
-export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true): { coverage: SceneCoverage, notes: string[] } {
+export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true, introduced?: ReadonlySet<string>): { coverage: SceneCoverage, notes: string[] } {
     if (!Array.isArray(raw?.shots) || !raw.shots.length) throw new CoverageProblem(['there are no shots'])
     const dialogue = dialogueOf(scene)
     const problems: string[] = []
@@ -169,6 +169,21 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     // a scene that is only a place is one shot, without people
     const {shots: unique, notes} = collapseEmptyScene(shots, scene, raw.people === false ? false : raw.people === true ? true : undefined)
     const soft = softProblems(unique, scene, raw.fast === true)
+    // a character the script has not brought in yet (named neither in this scene nor in one before) is not in the picture: asked again once, then left out
+    if (introduced) {
+        unique.forEach((shot, i) => {
+            const early = shot.characters.filter(id => !introduced.has(id))
+            if (!early.length) return
+            const who = early.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')
+            if (strict) {
+                soft.push(`shot ${i + 1}: ${who} ${early.length > 1 ? 'are' : 'is'} not in the script yet - it names them in a later scene; the shot shows the place or whoever the script has there, without them (the look brief says where everyone stands in the film, not who is in this scene)`)
+            } else {
+                shot.characters = shot.characters.filter(id => introduced.has(id))
+                for (const id of early) delete shot.people?.[id]
+                notes.push(`shot ${i + 1}: ${who} left out - the script does not bring them in yet`)
+            }
+        })
+    }
     // the action names someone who is not in the shot: the video model draws a stranger for a name without a picture
     unique.forEach((shot, i) => {
         const written = [shot.action, shot.view ?? '', ...Object.values(shot.people ?? {}).flatMap(p => [p.state ?? '', p.frame ?? ''])].join(' ')
@@ -182,7 +197,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     if (raw.ends && typeof raw.ends === 'object' && !Array.isArray(raw.ends)) {
         for (const [who, where] of Object.entries(raw.ends as Record<string, unknown>)) {
             const character = characterOf(cast, who)
-            if (character && text(where)) ends[character.id] = text(where)
+            if (character && text(where) && (!introduced || introduced.has(character.id))) ends[character.id] = text(where)
         }
     }
     return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(Object.keys(ends).length ? {ends} : {}), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), ...(raw.fast === true ? {fast: true} : {}), shots: unique}, notes}

@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
+import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
 import {characterOf, locationOf, missingDialogue, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
@@ -473,5 +473,28 @@ describe('shot planning prompt rules', () => {
         expect(instructions).toContain('never contradict each other')
         expect(instructions).toContain('an elevated view only for a camera that is high above')
         expect(instructions).not.toContain('never by that name')
+    })
+})
+
+describe('characters the script has not brought in yet', () => {
+    const empty = {...screenplay.scenes[0]!, elements: [{type: 'action' as const, text: 'A surreal horizon of dunes and black water under an eclipse.'}]}
+    const shot = {framing: 'wide establishing shot', camera: 'c', characters: ['Anna'], action: 'The place lies empty.', seconds: 4}
+    const raw = {soundscape: 's', people: true, shots: [shot]}
+    test('named by the end of a scene: in the action lines, as a speaker, in what is spoken - never from the look brief', async () => {
+        const {namedByScene} = await import("./names.ts")
+        const arrives = {...empty, elements: [{type: 'action' as const, text: 'Anna emerges from the dust.'}]}
+        expect([...namedByScene([empty, arrives], cast.characters, 0)]).toEqual([])
+        expect([...namedByScene([empty, arrives], cast.characters, 1)]).toEqual([cast.characters.find(c => c.name === 'Anna')!.id])
+        const speaks = {...empty, elements: [{type: 'dialogue' as const, speaker: 'BEN', text: 'Hello.', kind: 'spoken' as const}]}
+        expect(namedByScene([speaks], cast.characters, 0).size).toBe(1)
+    })
+    test('a shot with a character who arrives later is asked again; the second time they are left out', () => {
+        expect(() => toCoverage(raw, empty, cast, true, new Set())).toThrow(CoverageProblem)
+        const {coverage, notes} = toCoverage(raw, empty, cast, false, new Set())
+        expect(coverage.shots[0]!.characters).toEqual([])
+        expect(notes.join(' ')).toContain('left out')
+        // named by the script: nothing to say
+        const anna = cast.characters.find(c => c.name === 'Anna')!.id
+        expect(toCoverage(raw, empty, cast, true, new Set([anna])).coverage.shots[0]!.characters).toEqual([anna])
     })
 })

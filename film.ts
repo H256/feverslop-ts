@@ -17,6 +17,7 @@ import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {applyScriptFixes, estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
@@ -345,7 +346,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
             const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
             try {
                 // the first time what the script checks find is a reason to ask again, the second time it is only noted
-                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0)
+                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i))
                 for (const note of notes) log.warn(note)
                 result.push(planned)
                 break

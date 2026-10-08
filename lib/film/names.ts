@@ -19,3 +19,13 @@ export function withoutSentencesNaming(text: string, characters: FilmCharacter[]
         .filter(sentence => !characters.some(c => mentions(sentence, c)))
         .join('').trim()
 }
+
+/**
+ * The ids of the characters the script has named by the end of scene `index`: in the action lines, as the speaker of a line or in what is spoken.
+ * A character the script has not brought in yet is not in the picture - the planner (who also reads the look brief, where everyone stands) puts the
+ * cast into an establishing shot of an empty place. Matching is on the names the cast holds, nothing else.
+ */
+export function namedByScene(scenes: { elements: ({ type: 'action', text: string } | { type: 'dialogue', speaker: string, text: string })[] }[], characters: FilmCharacter[], index: number) {
+    const text = scenes.slice(0, index + 1).flatMap(scene => scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}. ${e.text}`)).join(' ')
+    return new Set(characters.filter(c => mentions(text, c)).map(c => c.id))
+}
