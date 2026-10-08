@@ -148,13 +148,14 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
         const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined
         const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? ` The background is view ${shot.placeView} of ${locationSubject.picture}: ${placeView.name}.` : ''}` : ''
-        const starts = shot.focus.filter(s => shot.people?.[s.id]?.state)
+        // a person who is only a shoulder at the near edge of the picture (an over-the-shoulder listener) is drawn from "In frame" alone: said where they really stand, the video model draws a second, whole person there
+        const starts = shot.focus.filter(s => shot.people?.[s.id]?.state && !shot.people[s.id]!.foreground)
         // a held shot: what the picture IS from the first frame to the last, said positively - "no push-in" does not hold the video model back, a picture that stays does
         const holdClause = shot.hold && shot.focus.length
             ? ` A fixed tripod shot: the framing is the same from the first frame to the last - ${shot.focus.length > 1 ? joinAnd(shot.focus.map(s => s.label)) : shot.focus[0]!.label} keep${shot.focus.length > 1 ? '' : 's'} the same size and the same place in the frame, standing on the same spot, and only the head, the mouth and the expression move.`
             : ''
         const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
-        const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion)
+        const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion && !shot.people[s.id]!.foreground)
         const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
         const lines = shot.spoken.map(lineText).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too

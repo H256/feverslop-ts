@@ -134,7 +134,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             for (const [who, entry] of Object.entries(shot.people as Record<string, unknown>)) {
                 const character = characterOf(cast, who)
                 const e = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {}
-                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion) || FACINGS.includes(text(e.facing) as Facing))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {}), ...(FACINGS.includes(text(e.facing) as Facing) ? {facing: text(e.facing) as Facing} : {})}
+                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion) || FACINGS.includes(text(e.facing) as Facing))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {}), ...(FACINGS.includes(text(e.facing) as Facing) ? {facing: text(e.facing) as Facing} : {}), ...(e.foreground === true ? {foreground: true} : {})}
             }
         }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []

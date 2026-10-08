@@ -545,3 +545,19 @@ describe('who talks looks at the listener', () => {
         expect(request!.prompt).toContain('sharp, centre, looking toward the left of the frame')
     })
 })
+
+describe('a person at the near edge of the picture', () => {
+    test('is drawn from "In frame" alone: no place, no movement - a second whole person would appear there', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const scene = screenplay.scenes[0]!
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'medium close-up', camera: 'c', characters: ['Anna', 'Ben'], action: 'Anna speaks to Ben.', lines: [1, 2], seconds: 4, hold: true, people: {
+            Anna: {state: 'stands at the stone, hands in the roots', frame: 'sharp, centre', facing: 'right', motion: 'stays at the stone'},
+            Ben: {state: 'stands at the east edge of the clearing', frame: 'soft, left of frame, back and shoulder only', foreground: true, motion: 'stays at the edge'}}}]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === scene.id), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('soft, left of frame, back and shoulder only')
+        expect(request!.prompt).toContain('stands at the stone, hands in the roots')
+        expect(request!.prompt).not.toContain('east edge of the clearing')
+        expect(request!.prompt).not.toContain('stays at the edge')
+        expect(request!.prompt).toContain('stays at the stone')
+    })
+})
