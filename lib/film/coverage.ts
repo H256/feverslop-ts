@@ -2,7 +2,9 @@ import {FPS, frameAt, round} from "../frames.ts";
 import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
 import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
-import type {FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
+import type {Facing, FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
+
+const FACINGS: readonly string[] = ['left', 'right', 'camera', 'away']
 
 // The longest a clip can be: the video model renders 5 + 17·k frames and every clip is rounded up to such a length, so
 // it is set a little under 10 s - the same limit as the music-video pipeline's MAX_CLIP_SEC
@@ -132,7 +134,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             for (const [who, entry] of Object.entries(shot.people as Record<string, unknown>)) {
                 const character = characterOf(cast, who)
                 const e = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {}
-                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {})}
+                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion) || FACINGS.includes(text(e.facing) as Facing))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {}), ...(FACINGS.includes(text(e.facing) as Facing) ? {facing: text(e.facing) as Facing} : {})}
             }
         }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
@@ -184,6 +186,20 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             }
         })
     }
+    // someone who talks to a person in the picture looks at them, not into the lens - the shot of their face is taken from the listener's side
+    unique.forEach((shot, i) => {
+        if (shot.characters.length < 2) return
+        const speakers = new Set(shot.lines.flatMap(n => {
+            const line = dialogue[n]
+            const who = line?.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
+            return who ? [who.id] : []
+        }))
+        for (const id of speakers) {
+            if (shot.people?.[id]?.facing !== 'camera') continue
+            const others = shot.characters.filter(c => c !== id).map(c => cast.characters.find(x => x.id === c)?.name ?? c)
+            soft.push(`shot ${i + 1}: ${cast.characters.find(c => c.id === id)?.name ?? id} talks to ${others.join(' and ')} but looks into the lens - they look at ${others.join(' and ')} ("facing": "left" or "right"), and the shot of their face is taken from ${others.join(' and ')}'s side, the listener a shoulder in the foreground or just outside the picture`)
+        }
+    })
     // the action names someone who is not in the shot: the video model draws a stranger for a name without a picture
     unique.forEach((shot, i) => {
         const written = [shot.action, shot.view ?? '', ...Object.values(shot.people ?? {}).flatMap(p => [p.state ?? '', p.frame ?? ''])].join(' ')

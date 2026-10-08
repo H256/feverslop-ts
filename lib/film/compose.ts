@@ -5,7 +5,13 @@ import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
 import {filmPictureAsset, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
-import type {DialogueKind, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
+import type {DialogueKind, Facing, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
+
+// which way a face is turned in the picture, said plainly after the person's place in the frame
+const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
+    : facing === 'right' ? ', looking toward the right of the frame'
+        : facing === 'camera' ? ', looking into the lens'
+            : facing === 'away' ? ', back to the camera' : ''
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the film's data - the same six sections as the
 // music-video pipeline's lib/compose.ts (docs/minimax-h3-video-prompt-writing-guide.md), but with spoken dialogue instead of
@@ -137,7 +143,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
         const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
         const inFrame = shot.focus.length
-            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}`).join('; ')}.`
+            ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}${facingPhrase(shot.people?.[s.id]?.facing)}`).join('; ')}.`
             : ''
         // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
         const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined

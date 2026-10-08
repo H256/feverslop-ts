@@ -31,6 +31,9 @@ export type Outline = {
 
 // kind: spoken = the character is on screen and speaks, offscreen = heard but out of frame,
 // voiceover = narration or thoughts, lips closed
+// which way a person's face is turned in the picture: toward the left or the right of the frame, into the lens, or the back to the camera
+export type Facing = 'left' | 'right' | 'camera' | 'away'
+
 export type DialogueKind = 'spoken' | 'offscreen' | 'voiceover'
 
 export type ScreenplayElement =
@@ -94,7 +97,7 @@ export type Shot = {
     lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
     seconds: number,                // planned length, at least the time to speak its lines
     view?: string,                  // where the camera is in the place and what it looks toward, in the terms of the scene's layout
-    people?: Record<string, { state?: string, frame?: string, motion?: string }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side), motion = what moves during the shot
+    people?: Record<string, { state?: string, frame?: string, motion?: string, facing?: Facing }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side), motion = what moves during the shot
     hold?: boolean,                 // a held shot: the camera and everybody stay where they are, only faces and mouths move (a talking close-up) - the prompt says how the picture stays
     placeView?: number,             // 1-5: which view of the location's reference sheet is the background of this shot
     states?: Record<string, string>,// character id -> state id, for a character who is in one of their other looks in this shot (left out = the normal look)

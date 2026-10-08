@@ -524,3 +524,24 @@ describe('rules found in the witch film', () => {
         expect(request!.prompt).toContain('heard over the picture, not spoken by anyone in it: everybody\'s lips stay completely closed')
     })
 })
+
+describe('who talks looks at the listener', () => {
+    const scene = screenplay.scenes[0]!
+    const lines = scene.elements.filter(e => e.type === 'dialogue')
+    const shotOf = (facing: string) => ({soundscape: 's', people: true, shots: [{framing: 'medium close-up', camera: 'c', characters: ['Anna', 'Ben'], action: 'Anna speaks to Ben.', lines: [1, 2], seconds: 4, people: {Anna: {state: 'stands', frame: 'sharp, centre', facing}, Ben: {state: 'stands', frame: 'soft, edge'}}}]})
+    test('a speaker with a listener in the shot who looks into the lens is asked again, once', () => {
+        expect(lines.length).toBeGreaterThan(0)
+        expect(() => toCoverage(shotOf('camera'), scene, cast, true)).toThrow(CoverageProblem)
+        // the second time it is only noted
+        const {notes} = toCoverage(shotOf('camera'), scene, cast, false)
+        expect(notes.join(' ')).toContain('looks into the lens')
+        // looking at the listener is fine, and facing is kept
+        expect(Object.values(toCoverage(shotOf('left'), scene, cast, true).coverage.shots[0]!.people!).map(p => p.facing)).toContain('left')
+    })
+    test('the face is turned the way the planner says, in the clip prompt', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage(shotOf('left'), scene, cast, true)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === scene.id), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('sharp, centre, looking toward the left of the frame')
+    })
+})
