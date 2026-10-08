@@ -191,7 +191,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         '',
         'detailed_description:',
         styleOpening(lookBrief),
-        ...(locationSubject ? [`The set stays as it is in ${locationSubject.label}: windows, doors, mirrors and props keep their place and shape, unless the action below changes them.`] : []),
+        ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
         ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
         ...shotTexts,
         '',
