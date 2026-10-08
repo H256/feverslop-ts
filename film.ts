@@ -19,7 +19,7 @@ import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
-import {applyScriptFixes, estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
@@ -207,13 +207,15 @@ if (scriptNotes.length) log.step('Script', styles.muted(mode === 'screenplay' ? 
 const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
     const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined, brief.setting))
     let raw = await attempt()
-    try {
-        return toCast(raw, screenplay)
-    } catch (e) {
-        if (!(e instanceof Error) || !e.message.startsWith('not in the cast: ')) throw e
-        log.warn(`${e.message} - asking again`)
-        raw = await attempt(e.message.replace('not in the cast: ', '').split('; '))
-        return toCast(raw, screenplay)
+    // what is left out is asked for - up to twice; an answer that fixes it can leave out something the one before had, so the answers are merged
+    for (let tries = 0; ; tries++) {
+        try {
+            return toCast(raw, screenplay)
+        } catch (e) {
+            if (!(e instanceof Error) || !e.message.startsWith('not in the cast: ') || tries >= 2) throw e
+            log.warn(`${e.message} - asking again`)
+            raw = mergeRawCasts(raw, await attempt(e.message.replace('not in the cast: ', '').split('; ')))
+        }
     }
 })
 for (const c of cast.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)

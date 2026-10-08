@@ -601,3 +601,14 @@ describe('a look begins in the scene the script gives it', () => {
         expect(states[1]!.from).toBeUndefined()
     })
 })
+
+describe('the cast step asked again', () => {
+    test('the union of both answers by name: the new one wins, what only the earlier one has is kept', async () => {
+        const {mergeRawCasts} = await import("./screenplay.ts")
+        const merged = mergeRawCasts(
+            {characters: [{name: 'Anna', role: 'old'}, {name: 'Radio Voice', role: 'voice'}], locations: [{name: 'The Hut'}]},
+            {characters: [{name: 'anna', role: 'new'}, {name: 'Ben', role: 'b'}], locations: [{name: 'The Bridge'}]})
+        expect(merged.characters!.map(c => `${c.name}:${c.role}`)).toEqual(['anna:new', 'Ben:b', 'Radio Voice:voice'])
+        expect(merged.locations!.map(l => l.name)).toEqual(['The Bridge', 'The Hut'])
+    })
+})

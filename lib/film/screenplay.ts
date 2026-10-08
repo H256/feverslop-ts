@@ -117,6 +117,20 @@ export function applyScriptFixes(screenplay: Screenplay, edits: unknown): { scre
     return {screenplay: {...screenplay, scenes}, applied, rejected}
 }
 
+type RawCast = { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }
+
+/**
+ * An answer of the cast step that is asked again fixes what was left out - and sometimes leaves out what the first one had (a voice, a place). The
+ * union of both, by name: what the new answer says wins, what only the earlier one has is kept.
+ */
+export function mergeRawCasts(earlier: RawCast, later: RawCast): RawCast {
+    const merge = <T extends { name?: string }>(a: T[] | undefined, b: T[] | undefined) => {
+        const names = new Set((b ?? []).map(x => (x.name ?? '').trim().toLowerCase()))
+        return [...(b ?? []), ...(a ?? []).filter(x => !names.has((x.name ?? '').trim().toLowerCase()))]
+    }
+    return {characters: merge(earlier.characters, later.characters), locations: merge(earlier.locations, later.locations)}
+}
+
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
 export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string, from?: unknown }[] }
 export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {

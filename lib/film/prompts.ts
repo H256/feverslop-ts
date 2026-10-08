@@ -133,7 +133,7 @@ ${screenplayJson}`,
 // ("ELIAN (30s): an exhausted wanderer") and other notes of the writer would be lost
 export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: string[] = [], original?: string, setting?: string): AskOptions {
     return {
-        maxTokens: 8192,
+        maxTokens: 12288,
         reasoning: 'medium',
         input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${outline ? `Planning notes (use them for appearance and voice where they cover a character):
 ${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
