@@ -612,3 +612,16 @@ describe('the cast step asked again', () => {
         expect(merged.locations!.map(l => l.name)).toEqual(['The Bridge', 'The Hut'])
     })
 })
+
+describe('a closer too many in an answer of the language model', () => {
+    test('a bracket that closes the whole answer while it goes on is left out', async () => {
+        const {closeOpenBrackets} = await import("../llm.ts")
+        const answer = '{"people": true, "ends": {"Leo": "stands", "Ben": "waits"}}, "shots": [{"framing": "wide", "people": {"Leo": {"state": "x"}}, "lines": []}]}'
+        expect(() => JSON.parse(answer)).toThrow()
+        expect(JSON.parse(closeOpenBrackets(answer)).shots[0].framing).toBe('wide')
+        // what was repaired before still is: a missing closer at the end
+        expect(JSON.parse(closeOpenBrackets('{"a": [{"b": 1}'))).toEqual({a: [{b: 1}]})
+        // a closer that ends the answer is not touched
+        expect(closeOpenBrackets('{"a": 1}')).toBe('{"a": 1}')
+    })
+})

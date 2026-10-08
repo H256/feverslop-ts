@@ -239,7 +239,7 @@ export function coveragePrompt(scene: Scene, location: FilmLocation, characters:
         ? element.text
         : `D${++line} ${element.speaker}${element.kind === 'voiceover' ? ' (voice-over)' : element.kind === 'offscreen' ? ' (off-screen)' : ''}${element.delivery ? ` (${element.delivery})` : ''}: ${element.text}`).join('\n')
     return {
-        maxTokens: 8192,
+        maxTokens: 16384,
         reasoning: 'medium',
         input: `${problems.length ? `Your last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}Scene: ${scene.setting}. ${scene.location} - ${scene.time}
 Place: ${location.name} - ${location.description}

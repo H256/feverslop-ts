@@ -216,14 +216,15 @@ function escapeControlCharsInStrings(text: string): string {
 // Long answers sometimes lose or mix up closing brackets - e.g. ..."}} or ..."]]} instead of ..."]}} at the end of the
 // last array, with everything before it complete. Closing what is still open, by type, repairs that: a closer that
 // doesn't match the innermost open bracket first closes the ones the model forgot (or, if that kind isn't open at all,
-// is taken as the innermost one), and at the end the rest is closed. Strings are tracked
-// (as in escapeControlCharsInStrings) so brackets inside text are left alone.
-function closeOpenBrackets(text: string): string {
+// is taken as the innermost one), and at the end the rest is closed. A closer that would close the whole answer while it goes on
+// (a comma and more after it: ..."}}, "shots": [...] where the "ends" object had been closed already) is one too many and is left out.
+// Strings are tracked (as in escapeControlCharsInStrings) so brackets inside text are left alone.
+export function closeOpenBrackets(text: string): string {
     const open: string[] = []
     let out = ''
     let inString = false
     let escaped = false
-    for (const ch of text) {
+    for (const [i, ch] of [...text].entries()) {
         if (inString) {
             if (escaped) escaped = false
             else if (ch === '\\') escaped = true
@@ -233,6 +234,7 @@ function closeOpenBrackets(text: string): string {
         } else if (ch === '{' || ch === '[') {
             open.push(ch === '{' ? '}' : ']')
         } else if (ch === '}' || ch === ']') {
+            if (open.length === 1 && open[0] === ch && /^\s*,/.test(text.slice(i + 1))) continue
             if (open.includes(ch)) {
                 while (open.at(-1) !== ch) out += open.pop()
                 open.pop()
