@@ -98,6 +98,7 @@ export type Shot = {
     seconds: number,                // planned length, at least the time to speak its lines
     view?: string,                  // where the camera is in the place and what it looks toward, in the terms of the scene's layout
     people?: Record<string, { state?: string, frame?: string, motion?: string, facing?: Facing, foreground?: boolean }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side), motion = what moves during the shot
+    cutaway?: boolean,              // the picture shows hands, an object or a place while a line is heard: the speaker is not in it, the line is spoken off-screen
     hold?: boolean,                 // a held shot: the camera and everybody stay where they are, only faces and mouths move (a talking close-up) - the prompt says how the picture stays
     placeView?: number,             // 1-5: which view of the location's reference sheet is the background of this shot
     states?: Record<string, string>,// character id -> state id, for a character who is in one of their other looks in this shot (left out = the normal look)

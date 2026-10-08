@@ -129,12 +129,14 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         return subject ? `${subject.label} ${speakerId(line.key)}` : `The speaker ${speakerId(line.key)}`
     }
     const voiceOf = (line: Spoken) => voicePhrase(line.character?.voice ?? 'a clear, natural voice')
-    const lineText = (line: Spoken) => {
+    const lineText = (line: Spoken, onScreen: boolean) => {
         const language = languageName(line.language) ?? 'English'
         const dialogue = `<d>[${language}] ${normalizeLine(line.text)}</d>`
         const delivery = line.delivery ? `, ${line.delivery},` : ','
         if (line.kind === 'voiceover') return `${who(line)} says in an off-screen voiceover, in ${voiceOf(line)}${delivery} ${dialogue} - heard over the picture, not spoken by anyone in it: everybody's lips stay completely closed.`
         if (line.kind === 'offscreen') return `${who(line)}, off-screen, says in ${voiceOf(line)}${delivery} ${dialogue}`
+        // the speaker is not in this picture (a cutaway to hands, an object, a place): the words come from outside the frame
+        if (!onScreen) return `${who(line)}, off-screen, says in ${voiceOf(line)}${delivery} ${dialogue} - nobody in the picture speaks it.`
         return `${who(line)} says in ${voiceOf(line)}${delivery} ${dialogue}`
     }
 
@@ -160,7 +162,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
         const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion && !shot.people[s.id]!.foreground)
         const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
-        const lines = shot.spoken.map(lineText).join(' ')
+        const lines = shot.spoken.map(l => lineText(l, !l.character || shot.focus.some(f => f.id === l.character!.id))).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
         const silent = speaking.size ? shot.focus.filter(s => !speaking.has(s.id)) : []

@@ -563,3 +563,19 @@ describe('a person at the near edge of the picture', () => {
         expect(request!.prompt).toContain('stays at the stone')
     })
 })
+
+describe('a cutaway while a line is heard', () => {
+    const scene = screenplay.scenes[0]!
+    const raw = (cutaway: boolean) => ({soundscape: 's', people: true, shots: [{framing: 'extreme close-up insert', camera: 'c', characters: ['Anna'], action: 'The jar fills the frame.', lines: [1, 2], seconds: 4, cutaway}]})
+    test('the speaker is not added to the picture, the line is spoken off-screen', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const on = toCoverage(raw(false), scene, cast).coverage.shots[0]!
+        expect(on.characters.length).toBeGreaterThan(0)
+        const {coverage} = toCoverage({...raw(true), shots: [{...raw(true).shots[0]!, characters: []}]}, scene, cast)
+        expect(coverage.shots[0]!.cutaway).toBe(true)
+        expect(coverage.shots[0]!.characters).toEqual([])
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === scene.id), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('off-screen, says in')
+        expect(request!.prompt).toContain('nobody in the picture speaks it')
+    })
+})

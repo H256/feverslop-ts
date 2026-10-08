@@ -17,7 +17,7 @@ const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, hold?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, hold?: unknown, cutaway?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, ends?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -110,8 +110,8 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             if (!found) problems.push(`shot ${i + 1}: "${name}" is not one of the characters`)
             return found ? [found.id] : []
         })
-        // whoever speaks on screen is in the picture
-        for (const n of lines) {
+        // whoever speaks on screen is in the picture - unless the shot is a cutaway: hands, an object or a place while the line is heard
+        for (const n of shot.cutaway === true ? [] : lines) {
             const line = dialogue[n]!
             const speaker = line.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
             if (speaker && !speaker.voiceOnly && !ids.includes(speaker.id)) ids.push(speaker.id)
@@ -151,6 +151,7 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             ...(Object.keys(states).length ? {states} : {}),
             ...(text(shot.view) ? {view: text(shot.view)} : {}),
             ...(shot.hold === true ? {hold: true} : {}),
+            ...(shot.cutaway === true ? {cutaway: true} : {}),
             ...(Number.isInteger(Number(shot.placeView)) && Number(shot.placeView) >= 1 && Number(shot.placeView) <= 5 ? {placeView: Number(shot.placeView)} : {}),
             ...(Object.keys(people).length ? {people} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
