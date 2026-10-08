@@ -506,6 +506,8 @@ describe('rules found in the witch film', () => {
         expect(instructions).toContain('what the script reveals, uncovers, builds, breaks or changes later')
         expect(instructions).toContain('every object that someone picks up, carries, uses or moves')
         expect(instructions).toContain('only in "states", never in "appearance"')
+        expect(instructions).toContain('not an object that turns up in one scene')
+        expect(instructions).toContain('never invented to fit the mood')
     })
     test('state and frame are one position, conversations keep the listener in the picture, a look keeps the whole outfit', async () => {
         const {coveragePrompt, stateLookPrompt} = await import("./prompts.ts")
