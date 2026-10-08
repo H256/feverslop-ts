@@ -400,13 +400,15 @@ describe('location views', () => {
         expect(toCoverage({soundscape: 's', people: true, shots: [shot(9)]}, scene, cast).coverage.shots[0]!.placeView).toBeUndefined()
         expect(toCoverage({soundscape: 's', people: true, shots: [shot('x')]}, scene, cast).coverage.shots[0]!.placeView).toBeUndefined()
     })
-    test('the clip prompt lists the views of the sheet and says which is the background of a shot', async () => {
+    test('the place is the one view the clip starts in - not the sheet - and the prompt says which side a shot looks from', async () => {
         const {buildFilmClipRequests} = await import("./compose.ts")
         const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', view: 'from the water side', placeView: 2, camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2]}]}, scene, cast)
         const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
             soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, locationViews: {'the-bridge': views}, lookBrief: 'Look. More.'})
-        expect(request!.prompt).toContain('The picture is a sheet of views of the place: 1. the main view; 2. from the water side, looking back toward the dunes;')
-        expect(request!.prompt).toContain('The background is view 2 of <Picture 1>: from the water side, looking back toward the dunes.')
+        expect(request!.prompt).toContain('The picture shows the place from the water side, looking back toward the dunes.')
+        expect(request!.prompt).toContain('The background is <Picture 1>.')
+        expect(request!.prompt).not.toContain('sheet of views')
+        expect(request!.assets.pictures[0]!.file).toBe('assets/sequence/locations/the-bridge/frames/frame_01.png')
     })
 })
 
