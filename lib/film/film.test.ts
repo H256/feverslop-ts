@@ -466,12 +466,12 @@ describe('film config workflows', () => {
 })
 
 describe('shot planning prompt rules', () => {
-    test('the view of the place matches the camera position, and an object named after someone is described', async () => {
+    test('the view of the place matches the camera position', async () => {
         const {coveragePrompt} = await import("./prompts.ts")
         const views = [{name: 'from the shore, looking north', shows: 'x'}, {name: 'high above the whole place', shows: 'y'}]
         const {instructions} = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look. More.', undefined, 6, [], undefined, views)
         expect(instructions).toContain('never contradict each other')
         expect(instructions).toContain('an elevated view only for a camera that is high above')
-        expect(instructions).toContain('never by that name')
+        expect(instructions).not.toContain('never by that name')
     })
 })
