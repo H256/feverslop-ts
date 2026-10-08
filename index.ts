@@ -5,8 +5,9 @@ import {log, printBanner, styles} from "./lib/log.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
-import {type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
+import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {asBeatShots, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -297,6 +298,7 @@ const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS'
         characters: extracted.characters.map(c => ({
             id: toId(c.name), name: c.name, role: c.role,
             ...(c.isGroup === true ? {isGroup: true} : {}),
+            ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
         })),
@@ -565,15 +567,15 @@ const beatSinging = singingPerBeat({slots: timeline.slots, mapping, beats, singi
 // the beats are asked in blocks, one after the other. The cut is only ever between two beats - all clips of a scene
 // belong to one beat, so everything that has to stay continuous is in one call - and a block sees the finished shots of
 // the beat before it and the summary of the beat after it, so a scene change on a block boundary still connects.
-const MOMENT_BLOCK_BEATS = 8
+const MOMENT_BLOCK_BEATS = 1
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
     type Beat = (typeof beats)[number]
-    const askBlock = (block: Beat[], finished: { beat: Beat, shots: string[] } | undefined, after: Beat | undefined) => askJson<{ moments: Record<string, string[]> }>({
+    const askBlock = (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, problems: string[] = []) => askJson<{ moments: Record<string, unknown> }>({
         reasoning: 'medium',
-        // thinking at medium easily takes 8k tokens on its own, the shots come on top
-        maxTokens: 16384,
-        input: `For every story beat below, expand it into a shot list for a music video: exactly "shotsNeeded" short sentences, in order, one concrete visible action per shot.
+        // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
+        maxTokens: 32768,
+        input: `${problems.length ? `Your last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}For every story beat below, stage a shot list for a music video: exactly "shotsNeeded" shots, in order, each with one concrete visible action and the people in the picture, where they stand and how they move.
 
 Rules:
 - Each shot must show real physical progression from the one before it - never repeat, restate or merely rephrase the previous shot's action, and never describe the camera or a held/static moment.
@@ -593,16 +595,24 @@ Rules:
 - A beat with "continuous": true is one unbroken take: its shots follow each other without a cut, and a clip starts exactly on the last frame of the clip before. Every shot goes on from the exact state the one before ends in - same place, same people in the same positions, same camera subject - never a new angle, a new setting or a restart of the action.
 - ${filmableRules} If the beat's "moments" or "summary" do that, replace it by the real action.
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
+- Be compact: "action" at most two sentences, "state", "frame" and "motion" each a short phrase (about 15 words), "staging" 2-4 sentences; people who do the same thing in the same place are one entry. Nothing is written twice.
+- Stage before you shoot. Per beat, "staging" is the fixed floor plan of the place for this beat, 2-4 sentences: which features are on which side or wall, where the entrances are and where people come from, where each person or group stands when the beat starts and how far apart they are. It stays the same for every shot of the beat, and a beat in the same place as the one before keeps the layout of the one before. Nothing in it moves. Include nobody and nothing the story does not put there.
+- Every shot says who is in the picture ("characters", exactly as spelled in "cast") and, for each of them in "people": "state" - where they are and what they do, hold and wear at the START of the shot, as a phrase with a verb; "frame" - how they are in the picture: sharp or soft, where in the frame, which way the body and the gaze turn, in which part of the place ("sharp, left of centre, three-quarter view, looking at X"); "motion" - what moves during the shot, with its direction relative to the others, or that they stay where they are. The video model lets people walk and turn on its own, so say when they do not. People are spread through the place and the frame at different depths and angles, each in their own relation to the others and to the place - never everybody in a row facing the lens. Everyone is somewhere definite, and a person is somewhere only once: nobody is in two places in one shot.
+- Everything that happens between people, or between a person and a thing, is staged as choreography, whatever it is - a fight, a dance, a band playing together, a chase, a ritual, a meeting: each shot is one or two beats of it. Say who moves first, with what and how fast, where it lands, what the other does in the same moment, and what it does to the one it touches (the one who is hit gives way, falls, staggers or holds, according to how they were hit). The people move through the place - they close in, give ground, come from where the staging says - and do not stand still while the action happens off to the side.
+- A listener, a bystander or a band member who does not sing stays in the picture whenever the staging has them near the shot, doing something of their own (watching, playing, reacting) - and does not sing.
+- When a singer sings in a shot ("singingPerShot" true), the singer is in "characters", the face and the mouth are clear in the frame (the face turned to the camera or in a three-quarter view, not hidden, not too small), and the camera is held or only breathes - no push-in toward the face. Whoever plays an instrument that is audible in the shot ("activePerShot" true) is in it with the instrument in their hands.
+- "framing" is the shot size and angle ("wide shot", "medium close-up", "low-angle medium shot") - what can show everyone "characters" lists - and "camera" is one sentence with the movement and its speed. Every shot is a new camera position: no two in a row with the same movement, and "view" says where the camera stands and what it looks toward, in terms of the staging, on the same side of the action within one beat unless the story crosses it. "hold" is true for a shot in which nobody moves from where they are and the camera stays: the clip then keeps the framing from the first frame to the last.
 - Name characters by their "name" from "cast" below (not pronouns, and never the "id" that "characterIds"/"castProps" use - it only says who is meant), so every shot reads on its own. Use the name exactly as spelled and capitalized in "cast" - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
 - A beat may list "singing": "singerIds" are the characters whose voice is the song's vocals, and "singingPerShot" gives one true/false flag per shot of that beat for whether a lyric is actually sung at that point. A singer only sings on shots flagged true. On a shot flagged false they make no sound at all - no singing, crying out, calling, humming or "a voice that joins" - even if the beat's "summary" or "moments" say so (the music there is purely instrumental); show them doing something silent instead (listening, breathing, watching, reacting, standing ready). Characters with no "singing" entry are unaffected.
 
-Answer only with JSON: {"moments": {"<beatId>": ["shot 1 action", "shot 2 action", ...]}}
+Answer only with JSON: {"moments": {"<beatId>": {"staging": "", "ends": {"<name>": "where they are and what they do and hold when the beat is over, a phrase with a verb"}, "shots": [{"action": "", "framing": "", "camera": "", "view": "", "hold": false, "characters": [""], "people": {"<name>": {"state": "", "frame": "", "motion": ""}}}]}}}
+- "ends": for every character of the beat. The next beat starts from it.
 ---
 castProps: ${JSON.stringify(Object.fromEntries(cast.characters.filter(c => c.prop).map(c => [c.id, c.prop])))}
 cast: ${JSON.stringify(cast.characters.map(c => ({id: c.id, name: c.name})))}
-${finished ? `Already written - the finished shots of the beat "${finished.beat.id}", which comes right before the first beat below (do not write them again): ${JSON.stringify(finished.shots)}
-The first beat below follows directly after them: start from the state they end in - where everyone stands, what they hold - unless it opens a new scene.
+${finished ? `Already written - the staging and the end of the beat "${finished.beat.id}", which comes right before the first beat below (do not write it again): ${JSON.stringify({staging: finished.plan.staging, ends: finished.plan.ends, lastShot: finished.plan.shots.at(-1)})}
+The first beat below follows directly after it: start from where it ends - where everyone stands, what they hold - unless it opens a new scene.
 ` : ''}${after ? `For orientation only - the beat after the last beat below ("${after.id}"): ${after.summary}
 Let the last shot of the last beat below lead toward it, and write nothing for it.
 ` : ''}beats (write shots only for these):
@@ -618,23 +628,43 @@ ${JSON.stringify(block.map(b => ({
 
     const blockCount = Math.ceil(beats.length / MOMENT_BLOCK_BEATS)
     const blockSize = Math.ceil(beats.length / blockCount) // evenly sized - never a last block with a single beat
-    const result: Record<string, string[]> = {}
+    const result: Record<string, BeatShots> = {}
     for (let from = 0; from < beats.length; from += blockSize) {
         const block = beats.slice(from, from + blockSize)
         const before = beats[from - 1]
         const after = beats[from + blockSize]
         if (blockCount > 1) log.step(`Beats ${from / blockSize + 1}/${blockCount}`, styles.muted(`${block[0]!.id} - ${block.at(-1)!.id}`))
-        const extracted = await askBlock(block, before && result[before.id] ? {beat: before, shots: result[before.id]!} : undefined, after)
-        for (const beat of block) {
-            const needed = shotCounts[beat.id] ?? 1
-            const list = extracted.moments?.[beat.id]
-            if (!list?.length) continue // falls back to the legacy spread for this beat
-            result[beat.id] = Array.from({length: needed}, (_, j) => list[Math.min(j, list.length - 1)]!)
+        const handover = before && result[before.id] ? {beat: before, plan: result[before.id]!} : undefined
+        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id])}))
+        // a long nested answer now and then has a bracket wrong that cannot be repaired: asked again, twice at most, then the beats of
+        // the block fall back to the legacy spread (a warning says so) instead of the run failing after the blocks that worked
+        let first: ReturnType<typeof read> | undefined
+        for (let attempt = 1; attempt <= 3 && !first; attempt++) {
+            try {
+                first = read(await askBlock(block, handover, after))
+            } catch (e) {
+                log.warn(`the answer for ${block[0]!.id} - ${block.at(-1)!.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - these beats keep their beat moments'}`)
+            }
         }
+        if (!first) continue
+        let reads = first
+        // what can be counted (a name that is not in the cast, a singing shot without a singer, a shot that names someone it does not show) is asked once more
+        const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
+        if (problems.length) {
+            log.warn(`${problems.length} problem(s) in the staged shots - asking once more`)
+            for (const p of problems) console.log(styles.muted(`        · ${p}`))
+            const again = await askBlock(block, handover, after, problems).then(read, (e: unknown) => {
+                log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
+                return reads
+            })
+            reads = reads.map((r, n) => again[n]!.read && (!r.read || again[n]!.read!.problems.length <= r.read.problems.length) ? again[n]! : r)
+            for (const r of reads) for (const p of r.read?.problems ?? []) log.warn(`${r.beat.id}, ${p}`)
+        }
+        for (const {beat, read: r} of reads) if (r) result[beat.id] = r.plan // a beat without a plan falls back to the legacy spread
     }
     // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
     // the prompt says - those moments get one rewrite
-    const risky = Object.entries(result).flatMap(([beatId, list]) => list.flatMap((moment, j) => riskyMoment.test(moment) ? [{beatId, j, moment}] : []))
+    const risky = Object.entries(result).flatMap(([beatId, plan]) => plan.shots.flatMap((shot, j) => riskyMoment.test(shot.action) ? [{beatId, j, moment: shot.action}] : []))
     if (risky.length) {
         log.warn(`${risky.length} shot moment(s) with a blank face or a stand-in object - rewriting them`)
         const rewritten = await askJson<{ moments: string[] }>({
@@ -645,16 +675,18 @@ Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactl
 ${JSON.stringify(risky.map(r => r.moment))}`,
             instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
         })
-        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => { result[r.beatId]![r.j] = String(rewritten.moments[k]) })
+        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => { result[r.beatId]!.shots[r.j] = {...result[r.beatId]!.shots[r.j]!, action: String(rewritten.moments[k])} })
         else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
     }
     return result
 })
 if (shotMoments) for (const beat of beats) {
-    const list = shotMoments[beat.id]
-    if (!list) continue
-    console.log(`   ${styles.name(beat.id)} ${styles.muted(`${list.length} shots`)}`)
-    for (const line of list) console.log(styles.muted(`        · ${line}`))
+    const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
+    if (!plan) continue
+    console.log(`   ${styles.name(beat.id)} ${styles.muted(`${plan.shots.length} shots`)}`)
+    if (plan.staging) console.log(styles.muted(`        staging: ${plan.staging}`))
+    const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
+    for (const shot of plan.shots) console.log(styles.muted(`        · ${shot.characters?.length ? `[${shot.characters.map(nameOf).join(', ')}] ` : ''}${shot.action}`))
 }
 
 ////////// BUILDING THE MINIMAX H3 REQUESTS

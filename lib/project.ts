@@ -11,7 +11,9 @@ export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
 // isGroup: a collective cast entry acting as one individual member of the group (e.g. "Orcs", "Miners") rather
 // than a single person - see computeMemberCounts in lib/compose.ts for how this turns into several distinct
 // reference images so every member on screen doesn't look identical throughout the video.
-export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, isGroup?: boolean }
+// alike: the members of the group look alike - a species, a pack of one kind of creature, a unit in the same uniform -
+// so the group has one look and no member variants (a group of recognizably different individuals has them)
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, isGroup?: boolean, alike?: boolean }
 export type Location = { id: string, name: string }
 
 // A story beat has no timing - it is stretched onto the music later
@@ -34,6 +36,21 @@ export type StoryBeat = {
     // visible together on screen during this beat - drives how many member variant images are worth generating
     groupSize?: Record<string, number>,
 }
+
+// One shot as the planner staged it (step 11b): the action, who is in the picture and where/how each of them is. Names are
+// resolved to character ids when the plan is read (lib/shot-plan.ts). Everything but the action is optional - a plan from
+// before this existed has only actions.
+export type ShotPlan = {
+    action: string,
+    framing?: string,
+    camera?: string,
+    view?: string,                  // where the camera stands and what it looks toward, in terms of the staging
+    hold?: boolean,                 // nobody moves and the camera does not: same framing from the first frame to the last
+    characters?: string[],          // ids of everyone visible in the shot
+    people?: Record<string, { state?: string, frame?: string, motion?: string }>,
+}
+// A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
+export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[] }
 
 export type LyricSection = { label: string, lines: string[] }
 
@@ -136,7 +153,7 @@ export type Project = {
     timeline?: Timeline,
     mapping?: Assignment[],
     propActivity?: PropActivity,
-    shotMoments?: Record<string, string[]>,   // beatId -> one distinct action per shot, replacing beat.moments when not --legacy-moments
+    shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
 export type StepName = Exclude<keyof Project, 'inputs'>
 

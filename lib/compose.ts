@@ -1,4 +1,5 @@
-import type {Assignment, Character, Location, MusicMap, PropActivity, PropStem, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
+import {asBeatShots} from "./shot-plan.ts";
+import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {formatTimestamp, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
@@ -26,7 +27,7 @@ export const MAX_GROUP_MEMBERS = 5
 export function computeMemberCounts(beats: StoryBeat[], characters: Character[]): Record<string, number> {
     const counts: Record<string, number> = {}
     for (const char of characters) {
-        if (!char.isGroup) continue
+        if (!char.isGroup || char.alike) continue
         const seen = beats.filter(b => b.characterIds.includes(char.id)).map(b => b.groupSize?.[char.id] ?? 2)
         counts[char.id] = Math.min(MAX_GROUP_MEMBERS, Math.max(1, ...(seen.length ? seen : [2])))
     }
@@ -79,8 +80,9 @@ export type Input = {
     music: MusicMap,
     language: string,           // for <d>[...], e.g. "English"
     singing?: Singing,          // performance mode
-    // beatId -> one distinct, progressing action per shot (step 9b) - replaces the beat.moments spread when given
-    shotMoments?: Record<string, string[]>,
+    // beatId -> the staged shots of the beat (step 11b: action, who is in the picture, where they stand) - replaces the
+    // beat.moments spread when given. A plan from before the staging is a list of actions and works without the staging
+    shotMoments?: Record<string, BeatShots | string[]>,
     propActivity?: PropActivity,
     // whether the song's stems were actually separated (config.alignLyrics) - when false, no drums/vocals/prop
     // stem is available and every clip's anchor track falls back to the whole, unseparated song instead
@@ -276,7 +278,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
         const moments = beat.moments?.length ? beat.moments : splitSentences(beat.summary)
         // step 9b: one distinct action per shot, already sized to the beat's total shot count - sliced out in order
-        const flat = shotMoments?.[beat.id]
+        const staged = shotMoments?.[beat.id] ? asBeatShots(shotMoments[beat.id]!) : undefined
+        const flat = staged?.shots
         let shotCursor = 0
 
         scene.forEach((slot, k) => {
@@ -286,7 +289,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             shotCursor += shotCount
             // a clip of a continuous beat starts on the last frame of the clip before it
             const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input))
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging))
         })
         stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
     }
@@ -304,7 +307,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: string[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input, staging?: string): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -330,7 +333,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildSubjects() {
             const subjects = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
-                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem})),
+                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike})),
             ].map((s, n) => {
                 const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
                 const variant = members > 1 ? slot.index % members : 0
@@ -436,26 +439,31 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildShots() {
             let singingShots = 0
             return cuts.map((at, j) => {
-                const moment = flatShotMoments?.[j] ?? spread(moments, j, shotCount).join(' ')
+                const plan = flatShotMoments?.[j]
+                const moment = plan?.action ? withLabels(plan.action) : spread(moments, j, shotCount).join(' ')
                 // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
                 const named = castSubjects.find(s => names(s).test(moment))
                 const starting = vocals.filter(v => inShot(j, v.start))
                 const continuing = vocals.filter(v => v.start < at && v.end > at)
                 // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
                 const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
-                const focus = opensScene && j === 0
-                    ? [...new Set([...singersInShot, ...castSubjects])]
-                    : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
+                // staged by the planner: who is in the picture is its call, the singers of this shot are kept in
+                const planned = plan?.characters?.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
+                const focus = planned?.length
+                    ? [...new Set([...singersInShot, ...planned])]
+                    : opensScene && j === 0
+                        ? [...new Set([...singersInShot, ...castSubjects])]
+                        : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
                 // a shot with a line start frames the singer, with a calmer camera
                 // a clip that goes on from the last frame of the one before has no cut at its start: the camera move and the
                 // framing of that frame go on too, or the picture is seamless and the motion reverses (dolly in -> crane up)
                 const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
-                const framing = goesOn ? lastFraming! : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                const framing = goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
-                const camera = goesOn ? lastCamera! : nextCamera(cameraLevel, cameraCursor, lastCamera)
+                const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera) : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
                 lastFraming = framing
-                return {label: `[Shot ${j + 1}]`, at, framing, camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
+                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
             })
         }
 
@@ -546,9 +554,20 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // callout tends to fall back to the character reference pictures' plain grey background
                     : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                 const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
+                // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
+                // plan keeps the fixed positions
+                const stagedPeople = shot.plan?.people
+                const personInFrame = (s: typeof shot.focus[number], n: number) => {
+                    const p = stagedPeople?.[s.id]
+                    const face = shot.singers.includes(s) ? ', the face clearly visible' : ''
+                    if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
+                    return `${s.label}, ${s.name}, ${[p?.state, p?.frame, p?.motion].filter(Boolean).map(t => withLabels(t!)).join('; ') || 'in the frame'}${face}`
+                }
+                const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view)}.` : ''
+                const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, nobody steps closer or away, the camera does not move.' : ''
                 const inFrame = shot.focus.length
-                    ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${shot.singers.includes(s) ? ', the face clearly visible' : ''}`).join('; ')}.${locationAnchor && smallGroup(shot.focus.length) ? ` ${locationAnchor} still visible behind them.` : ''}`
-                    : ''
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${locationAnchor && smallGroup(shot.focus.length) ? ` ${locationAnchor} still visible behind them.` : ''}${holdClause}`
+                    : `${viewClause}${holdClause}`
 
                 if (performing) {
                     const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
@@ -634,7 +653,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // appearance - a subject definition that says a character "plays" something reads as a
                     // standing trait to the video model, and it keeps them miming that action even in shots
                     // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
-                    : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
+                    : s.isGroup
+                        // several individuals, not one: a group is never described as a single person
+                        ? `${s.label} is ${s.name}, a group of several (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them, the others are other individuals of the same group with the same kind of dress and gear`}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                        : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
                 ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd([locationSubject, ...castSubjects].filter(s => s !== undefined).map(s => s.label))}.`] : []),
                 ...tracks.map(trackDefinition),
                 '',
@@ -652,6 +674,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'detailed_description:',
                 styleOpening(lookBrief),
                 ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
+                ...(staging ? [`Layout of the place: ${withLabels(staging)}`] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),
                 ...shotTexts,
