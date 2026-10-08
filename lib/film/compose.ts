@@ -124,7 +124,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const language = languageName(line.language) ?? 'English'
         const dialogue = `<d>[${language}] ${normalizeLine(line.text)}</d>`
         const delivery = line.delivery ? `, ${line.delivery},` : ','
-        if (line.kind === 'voiceover') return `${who(line)} says in an off-screen voiceover, in ${voiceOf(line)}${delivery} ${dialogue} while their lips remain completely closed.`
+        if (line.kind === 'voiceover') return `${who(line)} says in an off-screen voiceover, in ${voiceOf(line)}${delivery} ${dialogue} - heard over the picture, not spoken by anyone in it: everybody's lips stay completely closed.`
         if (line.kind === 'offscreen') return `${who(line)}, off-screen, says in ${voiceOf(line)}${delivery} ${dialogue}`
         return `${who(line)} says in ${voiceOf(line)}${delivery} ${dialogue}`
     }

@@ -252,7 +252,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build.`}, otherLooks))
+        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks))
         // other looks of the character (wounded, disguised): the same prompt with only the change applied
         for (const state of char.states ?? []) looks[statePictureId(char.id, state.id)] = await ask(stateLookPrompt(looks[char.id]!, char.name, state))
     }
@@ -277,7 +277,7 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description}`))
+        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`))
     }
     return looks
 })

@@ -498,3 +498,26 @@ describe('characters the script has not brought in yet', () => {
         expect(toCoverage(raw, empty, cast, true, new Set([anna])).coverage.shots[0]!.characters).toEqual([anna])
     })
 })
+
+describe('rules found in the witch film', () => {
+    test('the place is described without what the script reveals later and without props', async () => {
+        const {castPrompt} = await import("./prompts.ts")
+        const {instructions} = castPrompt(screenplay)
+        expect(instructions).toContain('what the script reveals, uncovers, builds, breaks or changes later')
+        expect(instructions).toContain('every object that someone picks up, carries, uses or moves')
+    })
+    test('state and frame are one position, conversations keep the listener in the picture, a look keeps the whole outfit', async () => {
+        const {coveragePrompt, stateLookPrompt} = await import("./prompts.ts")
+        const {instructions} = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look. More.', undefined, 6)
+        expect(instructions).toContain('the same single position as their "frame"')
+        expect(instructions).toContain('both in every shot of their conversation')
+        expect(stateLookPrompt('base', 'Anna', {name: 'wounded', change: 'a cut'}).instructions).toContain('head to feet (trousers or skirt, shoes included)')
+    })
+    test('a voice-over is heard over the picture: nobody in the shot speaks it', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const voiceScreenplay = {...screenplay, scenes: [{...screenplay.scenes[0]!, elements: [{type: 'dialogue' as const, speaker: 'ANNA', text: 'A voice on the radio.', kind: 'voiceover' as const}]}]}
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna holds a radio.', lines: [1], seconds: 4}]}, voiceScreenplay.scenes[0]!, cast)
+        const [request] = buildFilmClipRequests({screenplay: voiceScreenplay, cast, clips: packClips(voiceScreenplay, [coverage], 'auto'), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('heard over the picture, not spoken by anyone in it: everybody\'s lips stay completely closed')
+    })
+})
