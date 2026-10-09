@@ -68,6 +68,43 @@ export async function cutAudio(songFile: string, start: number, end: number, out
  * Cuts every section into clips of a power-of-two bar count that fits the hardware limit.
  * With the lyrics timing, the sections start where their vocals start and every clip gets the words sung in it.
  */
+/**
+ * Splits the bars of a section into clips of 1..maxBars bars so that as few sung words as possible are cut in two by a clip
+ * boundary: a clip that ends in the middle of a word leaves the video model half a word at its end and a fragment at the start
+ * of the next clip. Only the timing of the words is used. Dynamic programming over the bar boundaries, minimizing
+ * - a word cut by a boundary (1 each), a line that goes on over a boundary between two words (small),
+ * - the clip length deviating from `barsPerSlot` (small - the usual length stays the usual one).
+ * Returns the bar index where each clip starts, or undefined if no split keeps every clip within maxClipSec.
+ */
+export function chooseClipStarts(barTimes: number[], sectionStart: number, sectionEnd: number, barsPerSlot: number, maxBars: number, maxClipSec: number, timing: LyricsTiming): number[] | undefined {
+    const n = barTimes.length
+    if (!n) return undefined
+    const words = timing.lines.flatMap(l => l.words)
+    const margin = 0.05
+    const cutCost = (t: number) => {
+        const cut = words.filter(w => w.start < t - margin && w.end > t + margin).length
+        if (cut) return cut
+        return timing.lines.some(l => l.start < t - margin && l.end > t + margin) ? 0.1 : 0
+    }
+    const timeAt = (k: number) => k === 0 ? sectionStart : k === n ? sectionEnd : barTimes[k]!
+    // best[j]: cheapest way to have clips cover bars 0..j-1, with a boundary before bar j
+    const best: number[] = Array(n + 1).fill(Infinity)
+    const from: number[] = Array(n + 1).fill(-1)
+    best[0] = 0
+    for (let j = 1; j <= n; j++) {
+        for (let len = 1; len <= Math.min(maxBars, j); len++) {
+            const i = j - len
+            if (best[i] === Infinity || timeAt(j) - timeAt(i) > maxClipSec) continue
+            const cost = best[i]! + (j < n ? cutCost(timeAt(j)) : 0) + 0.15 * Math.abs(len - barsPerSlot)
+            if (cost < best[j]!) { best[j] = cost; from[j] = i }
+        }
+    }
+    if (best[n] === Infinity) return undefined
+    const starts: number[] = []
+    for (let j = n; j > 0; j = from[j]!) starts.unshift(from[j]!)
+    return starts
+}
+
 export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], maxClipSec: number, timing?: LyricsTiming): Timeline {
     const barSec = 240 / music.bpm
     const barsPerSlot = 2 ** Math.floor(Math.log2(Math.max(1, Math.floor(maxClipSec / barSec))))
@@ -78,15 +115,18 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         const bars = music.downbeats
             .map((time, index) => ({time, index}))
             .filter(b => b.time >= section.start - 0.05 && b.time < section.end - 0.05)
-        const groups: typeof bars[] = []
-        // the section's opening slot starts at section.start, not at its first bar, so it doesn't lose
+        let groups: typeof bars[] = []
+        // with the lyrics timing the clips are cut where no sung word is cut in two (chooseClipStarts)
+        const starts = timing ? chooseClipStarts(bars.map(b => b.time), section.start, section.end, barsPerSlot, Math.max(1, Math.floor(maxClipSec / barSec)), maxClipSec, timing) : undefined
+        if (starts) groups = starts.map((from, k) => bars.slice(from, starts[k + 1] ?? bars.length))
+        // otherwise: the section's opening slot starts at section.start, not at its first bar, so it doesn't lose
         // a pickup/lead-in before the first downbeat - but that lead-in still counts against its time
         // budget, so the first group gets fewer bars than barsPerSlot whenever there is one, however many
         // it takes to keep (lead-in + those bars) within maxClipSec
         let firstSize = barsPerSlot
-        while (firstSize > 1 && bars[firstSize] && bars[firstSize]!.time - section.start > maxClipSec) firstSize--
-        if (bars.length) groups.push(bars.slice(0, firstSize))
-        for (let i = firstSize; i < bars.length; i += barsPerSlot) groups.push(bars.slice(i, i + barsPerSlot))
+        while (!starts && firstSize > 1 && bars[firstSize] && bars[firstSize]!.time - section.start > maxClipSec) firstSize--
+        if (!starts && bars.length) groups.push(bars.slice(0, firstSize))
+        if (!starts) for (let i = firstSize; i < bars.length; i += barsPerSlot) groups.push(bars.slice(i, i + barsPerSlot))
         if (groups.length === 0) {
             // no downbeat inside it - typically an intro before the beat tracker locks on (the first downbeat
             // can be 10+ s into a drumless intro). A real section still needs clips or the video has a gap there:
@@ -117,7 +157,7 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         // a short leftover is merged into the previous clip if that still fits
         const last = groups.at(-1)!
         const beforeLast = groups.at(-2)
-        if (beforeLast && last.length < barsPerSlot && (section.end - beforeLast[0]!.time) <= maxClipSec) {
+        if (!starts && beforeLast && last.length < barsPerSlot && (section.end - beforeLast[0]!.time) <= maxClipSec) {
             groups.splice(-2, 2, [...beforeLast, ...last])
         }
 

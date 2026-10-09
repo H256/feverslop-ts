@@ -239,7 +239,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
-| 11b | `shotMoments`   | One distinct, progressing action per shot per beat, replacing `beat.moments` ³   | beats, timeline, mapping, propActivity |
+| 11b | `shotMoments`   | The staged shots per beat: floor plan, then per shot the action, who is in the picture and where they stand and move, replacing `beat.moments` ³ | beats, timeline, mapping, propActivity |
 | 12 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
 ¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings ·
@@ -549,6 +549,12 @@ screen - in every shot, from the first appearance to the last - looked exactly t
    the same way the main cast is already pushed apart from each other.
 3. **Shots** (`12`): each clip rotates through a group's member pictures instead of resolving every shot to the same
    file, so the group doesn't render from one single shared face for the whole video.
+
+**A species is one look.** Member variants are only for groups of recognizably different individuals (a crew of miners, a
+crowd). A kind of creature - mole-men, a pack of wolves, a unit in one uniform - is flagged `"isGroup": true, "alike": true`:
+one reference picture, one description, no variants, and the clip prompt says that every one of them looks like the
+picture. For a project planned before this flag, set `alike` in `cast.characters` and run `--redo=characterLookVariants`
+(and put the picture you want at `assets/characters/<id>.png`).
 
 **Fixing this by hand.** If step 5 missed that a character is a group, or a beat's estimate is off, edit
 `cast.characters`/`beats` in `project.json` directly, then:
