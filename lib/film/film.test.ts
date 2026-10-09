@@ -632,3 +632,17 @@ describe('a closer too many in an answer of the language model', () => {
         expect(closeOpenBrackets('{"a": 1}')).toBe('{"a": 1}')
     })
 })
+
+describe('the timeline as an edit decision list', () => {
+    test('clips in order, a continuing clip without its first frame', async () => {
+        const {timelineEdl} = await import("./timeline.ts")
+        const edl = timelineEdl('Test', [{id: 'clip-001', frames: 48}, {id: 'clip-002', frames: 72, startsFrom: 'clip-001'}, {id: 'clip-003', frames: 24, startsFrom: 'clip-001'}])
+        expect(edl).toContain('TITLE: Test')
+        expect(edl).toContain('001  AX       V     C        00:00:00:00 00:00:02:00 00:00:00:00 00:00:02:00')
+        // the second goes on from the first: source from frame 1, record right after the first
+        expect(edl).toContain('002  AX       V     C        00:00:00:01 00:00:03:00 00:00:02:00 00:00:04:23')
+        // the third names a clip that is not the one before it: nothing is left out
+        expect(edl).toContain('003  AX       V     C        00:00:00:00 00:00:01:00 00:00:04:23 00:00:05:23')
+        expect(edl).toContain('* FROM CLIP NAME: clip-002.mp4')
+    })
+})
