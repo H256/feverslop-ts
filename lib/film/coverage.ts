@@ -73,7 +73,9 @@ export function splitLongShot(scene: Scene, shot: Shot): Shot[] {
             ...(lines.some((n, k) => whole(n, texts[k]!)) ? {texts} : {}),
             // the parts after the first go on speaking in the same take: the action is not told again (the model would do it again)
             action: i ? 'The shot goes on without a cut: nothing starts over and nobody repeats what they did - the speaker goes on speaking in the same place and pose, the others stay as they are.' : shot.action,
-            ...(i ? {people: undefined} : {}),
+            // ... and nobody is told again where they stand or what they do - but how each is in the picture stays (a listener who is only a shoulder at the edge of
+            // it must not be given a place in the middle: the video model then draws a whole second person there, or falls back to the character's picture)
+            ...(i && shot.people ? {people: Object.fromEntries(Object.entries(shot.people).map(([id, p]) => [id, {frame: p.frame, facing: p.facing, foreground: p.foreground}]))} : {}),
             seconds: round(group.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC),
             ...(i ? {continues: true} : {}),
         }

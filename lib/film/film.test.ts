@@ -277,7 +277,14 @@ describe('shot geography', () => {
         expect(parts.length).toBeGreaterThan(1)
         expect(parts[0]!.action).toContain('radio')
         expect(parts[1]!.action).not.toContain('radio')
-        expect(parts[1]!.people).toBeUndefined()
+        expect(parts[1]!.people).toEqual({anna: {frame: undefined, facing: undefined, foreground: undefined}})
+    })
+    test('the parts after the first keep how everyone is in the picture, not what they do', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna', 'Ben'], action: 'Anna speaks.', lines: [1, 2]}]}, screenplay.scenes[1]!, cast)
+        const parts = splitLongShot(screenplay.scenes[1]!, {...coverage.shots[0]!, lines: [0], seconds: 14, people: {anna: {state: 'stands', motion: 'turns', frame: 'sharp, centre'}, ben: {state: 'waits', frame: 'foreground left, shoulder only', facing: 'right', foreground: true}}})
+        expect(parts[1]!.people!.ben).toEqual({frame: 'foreground left, shoulder only', facing: 'right', foreground: true})
+        expect(parts[1]!.people!.anna!.state).toBeUndefined()
+        expect(parts[1]!.people!.anna!.motion).toBeUndefined()
     })
     test('the clip prompt says where the camera is, where everyone is at the start and how they are in the picture', async () => {
         const {buildFilmClipRequests} = await import("./compose.ts")
