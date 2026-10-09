@@ -28,6 +28,7 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --render=videos --only=clip-005 --again` | render the named clips **again with a new seed** (every one is GPU time; `--only` is required): the old version is put away in `old/attempts/`. A clip that goes on from the last frame of one of them is named - it is not rendered again unless you name it too |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
 | `bun run film:gallery` | `films/index.html`: every film on one page - the film to watch, cast and places, links to the shot list and the screenplay |
+| `bun run film:migrate <film-id> <copy-of-the-old-film-folder> [--apply]` | after a changed plan (renumbered clips): clips whose prompt is the same keep their video under the new number. Without `--apply` only the result is shown |
 | `bun test` | tests for the pure parts (`lib/film/film.test.ts`) |
 | `bun film.ts <film-id> --llm-model=… --llm-url=… --llm-key=… --comfy=http://a:8188,…` | another LLM / ComfyUI servers for this run only |
 
@@ -64,7 +65,7 @@ draw and no forced variety - and say why; it is written to `input/style.txt`. Ed
 | 8 | `locationLooks`, `locationDescriptions` | the same for the locations | cast, lookBrief, summary |
 | 8c | `subtitles` | Only with `--render=final` and `"subtitles": "en"` (a language code) in config.json: every line that is not in that language, translated | screenplay |
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
-| 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json` | coverage |
+| 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json`, `output/timeline.edl` (the film as an edit decision list for an editor: DaVinci Resolve, Premiere, … - the clips cut as the assembled film cuts them) | coverage |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
 | 12 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
 
@@ -193,6 +194,5 @@ With `"locationViews": true` the five views of a location's reference sheet are 
 
 ## What's next
 
-1. A generated score (the music-video pipeline can make music), burned-in subtitles
-2. A timeline export for an editor
-3. Tests for the parts that need servers (LLM, ComfyUI)
+1. A generated score (the music-video pipeline can make music)
+2. Tests for the parts that need servers (LLM, ComfyUI)
