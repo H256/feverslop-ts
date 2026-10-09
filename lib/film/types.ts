@@ -31,6 +31,9 @@ export type Outline = {
 
 // kind: spoken = the character is on screen and speaks, offscreen = heard but out of frame,
 // voiceover = narration or thoughts, lips closed
+// which way a person's face is turned in the picture: toward the left or the right of the frame, into the lens, or the back to the camera
+export type Facing = 'left' | 'right' | 'camera' | 'away'
+
 export type DialogueKind = 'spoken' | 'offscreen' | 'voiceover'
 
 export type ScreenplayElement =
@@ -73,7 +76,8 @@ export type FilmCharacter = {
     states?: FilmCharacterState[],  // other looks of the character that last for a stretch of the film (wounded, disguised) - each has a reference picture of its own
 }
 // id: slug, unique among the character's states. change: what is different from the normal look, in plain visible terms
-export type FilmCharacterState = { id: string, name: string, change: string }
+// from: the number of the scene (1 = the first) in which the script first shows the look - the shot planning cannot use it before
+export type FilmCharacterState = { id: string, name: string, change: string, from?: number }
 // one view of a place on its reference sheet: name = where the camera stands and what it looks toward (short), shows = what is seen from there
 export type LocationView = { name: string, shows: string }
 export type FilmLocation = {
@@ -94,7 +98,8 @@ export type Shot = {
     lines: number[],                // the dialogue lines spoken in it: indexes into the scene's dialogue elements, in order
     seconds: number,                // planned length, at least the time to speak its lines
     view?: string,                  // where the camera is in the place and what it looks toward, in the terms of the scene's layout
-    people?: Record<string, { state?: string, frame?: string, motion?: string }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side), motion = what moves during the shot
+    people?: Record<string, { state?: string, frame?: string, motion?: string, facing?: Facing, foreground?: boolean }>, // per character in the shot: state = what they do/hold/wear and where they are at the START of the shot, frame = how they are in the picture (sharp or soft, where, from which side), motion = what moves during the shot
+    cutaway?: boolean,              // the picture shows hands, an object or a place while a line is heard: the speaker is not in it, the line is spoken off-screen
     hold?: boolean,                 // a held shot: the camera and everybody stay where they are, only faces and mouths move (a talking close-up) - the prompt says how the picture stays
     placeView?: number,             // 1-5: which view of the location's reference sheet is the background of this shot
     states?: Record<string, string>,// character id -> state id, for a character who is in one of their other looks in this shot (left out = the normal look)

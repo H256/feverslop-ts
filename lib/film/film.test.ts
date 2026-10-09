@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
+import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
 import {characterOf, locationOf, missingDialogue, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
@@ -277,7 +277,14 @@ describe('shot geography', () => {
         expect(parts.length).toBeGreaterThan(1)
         expect(parts[0]!.action).toContain('radio')
         expect(parts[1]!.action).not.toContain('radio')
-        expect(parts[1]!.people).toBeUndefined()
+        expect(parts[1]!.people).toEqual({anna: {frame: undefined, facing: undefined, foreground: undefined}})
+    })
+    test('the parts after the first keep how everyone is in the picture, not what they do', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna', 'Ben'], action: 'Anna speaks.', lines: [1, 2]}]}, screenplay.scenes[1]!, cast)
+        const parts = splitLongShot(screenplay.scenes[1]!, {...coverage.shots[0]!, lines: [0], seconds: 14, people: {anna: {state: 'stands', motion: 'turns', frame: 'sharp, centre'}, ben: {state: 'waits', frame: 'foreground left, shoulder only', facing: 'right', foreground: true}}})
+        expect(parts[1]!.people!.ben).toEqual({frame: 'foreground left, shoulder only', facing: 'right', foreground: true})
+        expect(parts[1]!.people!.anna!.state).toBeUndefined()
+        expect(parts[1]!.people!.anna!.motion).toBeUndefined()
     })
     test('the clip prompt says where the camera is, where everyone is at the start and how they are in the picture', async () => {
         const {buildFilmClipRequests} = await import("./compose.ts")
@@ -400,13 +407,15 @@ describe('location views', () => {
         expect(toCoverage({soundscape: 's', people: true, shots: [shot(9)]}, scene, cast).coverage.shots[0]!.placeView).toBeUndefined()
         expect(toCoverage({soundscape: 's', people: true, shots: [shot('x')]}, scene, cast).coverage.shots[0]!.placeView).toBeUndefined()
     })
-    test('the clip prompt lists the views of the sheet and says which is the background of a shot', async () => {
+    test('the place is the one view the clip starts in - not the sheet - and the prompt says which side a shot looks from', async () => {
         const {buildFilmClipRequests} = await import("./compose.ts")
         const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', view: 'from the water side', placeView: 2, camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2]}]}, scene, cast)
         const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
             soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, locationViews: {'the-bridge': views}, lookBrief: 'Look. More.'})
-        expect(request!.prompt).toContain('The picture is a sheet of views of the place: 1. the main view; 2. from the water side, looking back toward the dunes;')
-        expect(request!.prompt).toContain('The background is view 2 of <Picture 1>: from the water side, looking back toward the dunes.')
+        expect(request!.prompt).toContain('The picture shows the place from the water side, looking back toward the dunes.')
+        expect(request!.prompt).toContain('The background is <Picture 1>.')
+        expect(request!.prompt).not.toContain('sheet of views')
+        expect(request!.assets.pictures[0]!.file).toBe('assets/sequence/locations/the-bridge/frames/frame_01.png')
     })
 })
 
@@ -462,5 +471,164 @@ describe('film config workflows', () => {
     test('a workflow that is not in comfy/workflows/ is refused', async () => {
         await expect(load({videoWorkflow: 'nope'})).rejects.toThrow('videoWorkflow: no workflow comfy/workflows/nope.ts')
         await expect(load({imageWorkflow: 'nope'})).rejects.toThrow('imageWorkflow: no workflow comfy/workflows/nope.ts')
+    })
+})
+
+describe('shot planning prompt rules', () => {
+    test('the view of the place matches the camera position', async () => {
+        const {coveragePrompt} = await import("./prompts.ts")
+        const views = [{name: 'from the shore, looking north', shows: 'x'}, {name: 'high above the whole place', shows: 'y'}]
+        const {instructions} = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look. More.', undefined, 6, [], undefined, views)
+        expect(instructions).toContain('never contradict each other')
+        expect(instructions).toContain('an elevated view only for a camera that is high above')
+        expect(instructions).not.toContain('never by that name')
+    })
+})
+
+describe('characters the script has not brought in yet', () => {
+    const empty = {...screenplay.scenes[0]!, elements: [{type: 'action' as const, text: 'A surreal horizon of dunes and black water under an eclipse.'}]}
+    const shot = {framing: 'wide establishing shot', camera: 'c', characters: ['Anna'], action: 'The place lies empty.', seconds: 4}
+    const raw = {soundscape: 's', people: true, shots: [shot]}
+    test('named by the end of a scene: in the action lines, as a speaker, in what is spoken - never from the look brief', async () => {
+        const {namedByScene} = await import("./names.ts")
+        const arrives = {...empty, elements: [{type: 'action' as const, text: 'Anna emerges from the dust.'}]}
+        expect([...namedByScene([empty, arrives], cast.characters, 0)]).toEqual([])
+        expect([...namedByScene([empty, arrives], cast.characters, 1)]).toEqual([cast.characters.find(c => c.name === 'Anna')!.id])
+        const speaks = {...empty, elements: [{type: 'dialogue' as const, speaker: 'BEN', text: 'Hello.', kind: 'spoken' as const}]}
+        expect(namedByScene([speaks], cast.characters, 0).size).toBe(1)
+    })
+    test('a shot with a character who arrives later is asked again; the second time they are left out', () => {
+        expect(() => toCoverage(raw, empty, cast, true, new Set())).toThrow(CoverageProblem)
+        const {coverage, notes} = toCoverage(raw, empty, cast, false, new Set())
+        expect(coverage.shots[0]!.characters).toEqual([])
+        expect(notes.join(' ')).toContain('left out')
+        // named by the script: nothing to say
+        const anna = cast.characters.find(c => c.name === 'Anna')!.id
+        expect(toCoverage(raw, empty, cast, true, new Set([anna])).coverage.shots[0]!.characters).toEqual([anna])
+    })
+})
+
+describe('rules found in the witch film', () => {
+    test('the place is described without what the script reveals later and without props', async () => {
+        const {castPrompt} = await import("./prompts.ts")
+        const {instructions} = castPrompt(screenplay)
+        expect(instructions).toContain('what the script reveals, uncovers, builds, breaks or changes later')
+        expect(instructions).toContain('every object that someone picks up, carries, uses or moves')
+        expect(instructions).toContain('only in "states", never in "appearance"')
+        expect(instructions).toContain('not an object that turns up in one scene')
+        expect(instructions).toContain('never invented to fit the mood')
+    })
+    test('state and frame are one position, conversations keep the listener in the picture, a look keeps the whole outfit', async () => {
+        const {coveragePrompt, stateLookPrompt} = await import("./prompts.ts")
+        const {instructions} = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look. More.', undefined, 6)
+        expect(instructions).toContain('the same single position as their "frame"')
+        expect(instructions).toContain('both in every shot of their conversation')
+        expect(stateLookPrompt('base', 'Anna', {name: 'wounded', change: 'a cut'}).instructions).toContain('head to feet (trousers or skirt, shoes included)')
+    })
+    test('a voice-over is heard over the picture: nobody in the shot speaks it', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const voiceScreenplay = {...screenplay, scenes: [{...screenplay.scenes[0]!, elements: [{type: 'dialogue' as const, speaker: 'ANNA', text: 'A voice on the radio.', kind: 'voiceover' as const}]}]}
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'close-up', camera: 'c', characters: ['Anna'], action: 'Anna holds a radio.', lines: [1], seconds: 4}]}, voiceScreenplay.scenes[0]!, cast)
+        const [request] = buildFilmClipRequests({screenplay: voiceScreenplay, cast, clips: packClips(voiceScreenplay, [coverage], 'auto'), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('heard over the picture, not spoken by anyone in it: everybody\'s lips stay completely closed')
+    })
+})
+
+describe('who talks looks at the listener', () => {
+    const scene = screenplay.scenes[0]!
+    const lines = scene.elements.filter(e => e.type === 'dialogue')
+    const shotOf = (facing: string) => ({soundscape: 's', people: true, shots: [{framing: 'medium close-up', camera: 'c', characters: ['Anna', 'Ben'], action: 'Anna speaks to Ben.', lines: [1, 2], seconds: 4, people: {Anna: {state: 'stands', frame: 'sharp, centre', facing}, Ben: {state: 'stands', frame: 'soft, edge'}}}]})
+    test('a speaker with a listener in the shot who looks into the lens is asked again, once', () => {
+        expect(lines.length).toBeGreaterThan(0)
+        expect(() => toCoverage(shotOf('camera'), scene, cast, true)).toThrow(CoverageProblem)
+        // the second time it is only noted
+        const {notes} = toCoverage(shotOf('camera'), scene, cast, false)
+        expect(notes.join(' ')).toContain('looks into the lens')
+        // looking at the listener is fine, and facing is kept
+        expect(Object.values(toCoverage(shotOf('left'), scene, cast, true).coverage.shots[0]!.people!).map(p => p.facing)).toContain('left')
+    })
+    test('the face is turned the way the planner says, in the clip prompt', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage(shotOf('left'), scene, cast, true)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === scene.id), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('sharp, centre, looking toward the left of the frame')
+    })
+})
+
+describe('a person at the near edge of the picture', () => {
+    test('is drawn from "In frame" alone: no place, no movement - a second whole person would appear there', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const scene = screenplay.scenes[0]!
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'medium close-up', camera: 'c', characters: ['Anna', 'Ben'], action: 'Anna speaks to Ben.', lines: [1, 2], seconds: 4, hold: true, people: {
+            Anna: {state: 'stands at the stone, hands in the roots', frame: 'sharp, centre', facing: 'right', motion: 'stays at the stone'},
+            Ben: {state: 'stands at the east edge of the clearing', frame: 'soft, left of frame, back and shoulder only', foreground: true, motion: 'stays at the edge'}}}]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === scene.id), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('soft, left of frame, back and shoulder only')
+        expect(request!.prompt).toContain('stands at the stone, hands in the roots')
+        expect(request!.prompt).not.toContain('east edge of the clearing')
+        expect(request!.prompt).not.toContain('stays at the edge')
+        expect(request!.prompt).toContain('stays at the stone')
+    })
+})
+
+describe('a cutaway while a line is heard', () => {
+    const scene = screenplay.scenes[0]!
+    const raw = (cutaway: boolean) => ({soundscape: 's', people: true, shots: [{framing: 'extreme close-up insert', camera: 'c', characters: ['Anna'], action: 'The jar fills the frame.', lines: [1, 2], seconds: 4, cutaway}]})
+    test('the speaker is not added to the picture, the line is spoken off-screen', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const on = toCoverage(raw(false), scene, cast).coverage.shots[0]!
+        expect(on.characters.length).toBeGreaterThan(0)
+        const {coverage} = toCoverage({...raw(true), shots: [{...raw(true).shots[0]!, characters: []}]}, scene, cast)
+        expect(coverage.shots[0]!.cutaway).toBe(true)
+        expect(coverage.shots[0]!.characters).toEqual([])
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1], seconds: 4}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === scene.id), soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('off-screen, says in')
+        expect(request!.prompt).toContain('nobody in the picture speaks it')
+    })
+})
+
+describe('a look begins in the scene the script gives it', () => {
+    const scene = screenplay.scenes[0]!
+    const anna = cast.characters.find(c => c.name === 'Anna')!
+    const withLook = {...cast, characters: cast.characters.map(c => c.id === anna.id ? {...c, states: [{id: 'bearded', name: 'bearded', change: 'a full beard', from: 3}]} : c)}
+    const raw = {soundscape: 's', people: true, shots: [{framing: 'medium shot', camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2], states: {Anna: 'bearded'}}]}
+    test('before that scene the planner cannot use it, from it on it can', () => {
+        expect(toCoverage(raw, scene, withLook, true, undefined, 2).coverage.shots[0]!.states).toBeUndefined()
+        expect(toCoverage(raw, scene, withLook, true, undefined, 3).coverage.shots[0]!.states).toEqual({[anna.id]: 'bearded'})
+    })
+    test('the cast step gives the scene number of a look, the screenplay headings are numbered for it', async () => {
+        const {toCast} = await import("./screenplay.ts")
+        const {screenplayToText} = await import("./fountain.ts")
+        expect(screenplayToText(screenplay, true)).toContain('[Scene 1] ')
+        expect(screenplayToText(screenplay, true)).toContain('[Scene 2] ')
+        expect(screenplayToText(screenplay)).not.toContain('[Scene 1]')
+        const made = toCast({characters: [{name: 'Anna', aliases: ['ANNA'], role: 'r', appearance: 'a', voice: 'v', states: [{name: 'bearded', change: 'a full beard', from: 19}, {name: 'tired', change: 'dark rings', from: 'nonsense'}]}, {name: 'Ben', aliases: ['BEN'], role: 'r', appearance: 'a', voice: 'v'}], locations: [{name: 'The Bridge', aliases: ['BRIDGE'], description: 'd'}, {name: 'The Hut', aliases: ['HUT'], description: 'd'}]} as never, screenplay)
+        const states = made.characters[0]!.states!
+        expect(states[0]!.from).toBe(19)
+        expect(states[1]!.from).toBeUndefined()
+    })
+})
+
+describe('the cast step asked again', () => {
+    test('the union of both answers by name: the new one wins, what only the earlier one has is kept', async () => {
+        const {mergeRawCasts} = await import("./screenplay.ts")
+        const merged = mergeRawCasts(
+            {characters: [{name: 'Anna', role: 'old'}, {name: 'Radio Voice', role: 'voice'}], locations: [{name: 'The Hut'}]},
+            {characters: [{name: 'anna', role: 'new'}, {name: 'Ben', role: 'b'}], locations: [{name: 'The Bridge'}]})
+        expect(merged.characters!.map(c => `${c.name}:${c.role}`)).toEqual(['anna:new', 'Ben:b', 'Radio Voice:voice'])
+        expect(merged.locations!.map(l => l.name)).toEqual(['The Bridge', 'The Hut'])
+    })
+})
+
+describe('a closer too many in an answer of the language model', () => {
+    test('a bracket that closes the whole answer while it goes on is left out', async () => {
+        const {closeOpenBrackets} = await import("../llm.ts")
+        const answer = '{"people": true, "ends": {"Leo": "stands", "Ben": "waits"}}, "shots": [{"framing": "wide", "people": {"Leo": {"state": "x"}}, "lines": []}]}'
+        expect(() => JSON.parse(answer)).toThrow()
+        expect(JSON.parse(closeOpenBrackets(answer)).shots[0].framing).toBe('wide')
+        // what was repaired before still is: a missing closer at the end
+        expect(JSON.parse(closeOpenBrackets('{"a": [{"b": 1}'))).toEqual({a: [{b: 1}]})
+        // a closer that ends the answer is not touched
+        expect(closeOpenBrackets('{"a": 1}')).toBe('{"a": 1}')
     })
 })

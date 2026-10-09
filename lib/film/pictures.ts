@@ -9,6 +9,9 @@ import type {FilmCast, FilmProject} from "./types.ts";
 // the same place the music-video pipeline keeps its reference pictures, inside films/<id>/
 export const filmPictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
 
+/** One view of a location's reference sheet as a picture of its own (view 1..5 = frame 0..4 of the sheet video) - the video model gets the one view, not the grid. */
+export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view - 1).padStart(2, '0')}.png`
+
 /** A character in another look has the picture of its own: <character id>--<state id>. */
 export const statePictureId = (characterId: string, stateId: string) => `${characterId}--${stateId}`
 

@@ -28,7 +28,11 @@ export function screenplayToFountain(screenplay: Screenplay) {
     return `${lines.join('\n').trim()}\n`
 }
 
-// The screenplay as plain text for a prompt - the Fountain without its title page
-export function screenplayToText(screenplay: Screenplay) {
-    return screenplayToFountain(screenplay).split('\n').slice(3).join('\n').trim()
+// The screenplay as plain text for a prompt - the Fountain without its title page; numbered: every scene heading starts with "[Scene n]" (a prompt that has to point at scenes)
+export function screenplayToText(screenplay: Screenplay, numbered = false) {
+    const text = screenplayToFountain(screenplay).split('\n').slice(3)
+    if (!numbered) return text.join('\n').trim()
+    const headings = screenplay.scenes.map(scene => `${scene.setting}. ${upper(scene.location)} - ${upper(scene.time)}`)
+    let n = 0
+    return text.map(line => n < headings.length && line === headings[n] ? `[Scene ${++n}] ${line}` : line).join('\n').trim()
 }

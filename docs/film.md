@@ -177,7 +177,7 @@ file can be exchanged and `--render=final` run again; a score is not generated.
 
 ## Location views
 
-With `"locationViews": true` the five views of a location's reference sheet are designed for the place (a floor plan, then: the picture itself, the reverse, the two sides, a wide view) and every shot names the view that is its background. The sheet's video model cuts to the views it is told about - but it cannot know what the other side of a place holds, so the reverse is only roughly right.
+With `"locationViews": true` the five views of a location's reference sheet are designed for the place (a floor plan, then: the picture itself, the reverse, the two sides, a wide view) and every shot names the view that is its background. The clip gets that **one view** as the picture of the place (frame 0-4 of the sheet video, `assets/sequence/locations/<id>/frames/`), never the sheet itself - the video model shows a grid of views back. A shot that looks from another view says so in words ("that side is not in the picture"). The sheet's video model cuts to the views it is told about - but it cannot know what the other side of a place holds, so the reverse is only roughly right.
 
 ## Design decisions
 

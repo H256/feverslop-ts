@@ -17,8 +17,9 @@ import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
-import {applyScriptFixes, estimateSeconds, locationOf, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
@@ -206,13 +207,15 @@ if (scriptNotes.length) log.step('Script', styles.muted(mode === 'screenplay' ? 
 const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
     const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined, brief.setting))
     let raw = await attempt()
-    try {
-        return toCast(raw, screenplay)
-    } catch (e) {
-        if (!(e instanceof Error) || !e.message.startsWith('not in the cast: ')) throw e
-        log.warn(`${e.message} - asking again`)
-        raw = await attempt(e.message.replace('not in the cast: ', '').split('; '))
-        return toCast(raw, screenplay)
+    // what is left out is asked for - up to twice; an answer that fixes it can leave out something the one before had, so the answers are merged
+    for (let tries = 0; ; tries++) {
+        try {
+            return toCast(raw, screenplay)
+        } catch (e) {
+            if (!(e instanceof Error) || !e.message.startsWith('not in the cast: ') || tries >= 2) throw e
+            log.warn(`${e.message} - asking again`)
+            raw = mergeRawCasts(raw, await attempt(e.message.replace('not in the cast: ', '').split('; ')))
+        }
     }
 })
 for (const c of cast.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)
@@ -251,7 +254,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build.`}, otherLooks))
+        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks))
         // other looks of the character (wounded, disguised): the same prompt with only the change applied
         for (const state of char.states ?? []) looks[statePictureId(char.id, state.id)] = await ask(stateLookPrompt(looks[char.id]!, char.name, state))
     }
@@ -276,7 +279,7 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description}`))
+        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`))
     }
     return looks
 })
@@ -345,7 +348,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
             const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
             try {
                 // the first time what the script checks find is a reason to ask again, the second time it is only noted
-                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0)
+                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
                 for (const note of notes) log.warn(note)
                 result.push(planned)
                 break
