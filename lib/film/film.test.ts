@@ -455,7 +455,7 @@ describe('film config workflows', () => {
     }
     test('one image and one video workflow: the defaults, or the files named', async () => {
         const standard = await load({})
-        expect([standard.imageWorkflow, standard.videoWorkflow]).toEqual(['krea2-image', 'h3-ref2video-film'])
+        expect([standard.imageWorkflow, standard.videoWorkflow]).toEqual(['kroma-image', 'h3-ref2video-film'])
         const {filmRenderConfig} = await import("./pictures.ts")
         expect(filmRenderConfig(await load({videoWorkflow: 'h3-ref2video'})).videoWorkflow).toBe('h3-ref2video')
     })
