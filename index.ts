@@ -880,7 +880,7 @@ async function chooseSingers(wanted: string[]): Promise<Singing> {
     if (wanted[0] === 'auto') {
         const picked = await askJson<{ singers: string[] }>({
             input: `Pick the singers of this music video from the cast: the characters who sing the lyrics on screen.
-Pick the lead first, and prefer an individual character for it: the one whose story the song tells, or who calls the lines out. A group character (e.g. "Miners") sings as well when the lyrics have group parts ("we", a chorus, a shouted refrain, lines the others answer) - then pick the lead and the group both, so that the verses can be the lead's and the refrains the group's. Pick the group alone only if the whole song is clearly sung by the group as one voice and nobody in it leads. Several individual singers only if the lyrics clearly are a dialogue or duet between different characters. Three singers at most. Characters that fight, hunt or threaten the singers do not sing.
+Pick the lead first, and prefer an individual character for it: the one whose story the song tells, or who calls the lines out. A group character (e.g. "Miners") sings as well when the lyrics have group parts ("we", a chorus, a shouted refrain, lines the others answer) - then pick the lead and the group both, so that the verses can be the lead's and the refrains the group's. Pick the group alone only if the whole song is clearly sung by the group as one voice and nobody in it leads. A party made of individual characters (a crew or band of named members) is no group entry: its refrains are sung by the lead together with up to two of its members, the ones with the most to do in the story - the rest of the party stays on screen. Several individual singers only if the lyrics clearly are a dialogue or duet between different characters. Three singers at most. Characters that fight, hunt or threaten the singers do not sing.
 ${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": ["<character id>"]}
 ---
 cast: ${castList}
@@ -909,7 +909,7 @@ ${storySummary}`,
         maxTokens: Math.max(16384, lines.length * 100),
         input: `These characters sing the song of a music video: ${JSON.stringify(singers)}.
 Decide who sings which line. A line is sung by one singer, or by several together (duet or choir lines, e.g. a chorus).
-Follow the lyrics and the story: who would say these words? Keep a verse with one singer unless its lines answer each other. When a group is among the singers, it sings the refrains and the shouted group lines - together with the lead, so name both - and the lead alone sings the verses; the group alone sings only a line that is clearly only theirs.
+Follow the lyrics and the story: who would say these words? Keep a verse with one singer unless its lines answer each other. When a group, or companions of the lead, are among the singers, they sing the refrains and the shouted group lines - together with the lead, so name all of them - and the lead alone sings the verses; the group alone sings only a line that is clearly only theirs.
 Answer only with JSON: {"lines": [{"line": 0, "singers": ["<character id>"]}, ...]} - one entry for every line number below.
 ---
 cast: ${castList}

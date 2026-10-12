@@ -341,7 +341,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const description = s.kind === 'location'
                     ? locationDescriptions[s.id] ?? ''
                     : characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? ''
-                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description}
+                // how many of a group the beat shows together (Beat.groupSize) - stated in the subject definition so the
+                // video model does not pick the number itself (it drew six of "the other five")
+                const count = s.kind === 'character' && s.isGroup ? beat.groupSize?.[s.id] : undefined
+                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description, count}
             })
             const locationSubject = subjects.find(s => s.kind === 'location')
             const castSubjects = subjects.filter(s => s.kind === 'character')
@@ -655,7 +658,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
                     : s.isGroup
                         // several individuals, not one: a group is never described as a single person
-                        ? `${s.label} is ${s.name}, a group of several (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them, the others are other individuals of the same group with the same kind of dress and gear`}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                        ? `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                         : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
                 ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd([locationSubject, ...castSubjects].filter(s => s !== undefined).map(s => s.label))}.`] : []),
                 ...tracks.map(trackDefinition),
