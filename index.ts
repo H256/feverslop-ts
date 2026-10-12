@@ -20,6 +20,7 @@ import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 import {projectExists, validProjectId} from "./lib/project-setup.ts";
+import {propMissing} from "./lib/prop-check.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
@@ -367,6 +368,10 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
     return looks
 })
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
+// a prop the look does not name is not in the reference picture - the clips would show the model's own idea of it
+for (const c of cast.characters) {
+    if (c.prop && characterLooks[c.id] && propMissing(characterLooks[c.id]!, c.prop)) log.warn(`${c.id}: the look does not show its prop "${c.prop}" - redo characterLooks, or edit the look in ${project.file} by hand`)
+}
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
 const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
@@ -514,6 +519,7 @@ const characterLookVariants = await project.step('characterLookVariants', '9c ·
             looks.push(await ask(characterVariantLookPrompt(lookBrief, char, looks)))
         }
         variants[char.id] = looks
+        if (char.prop) looks.forEach((look, i) => { if (propMissing(look, char.prop!)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${char.prop}"`) })
     }
     return variants
 })
