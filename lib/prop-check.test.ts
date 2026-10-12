@@ -1,5 +1,5 @@
 import {expect, test} from "bun:test";
-import {propMissing, propNoun} from "./prop-check.ts";
+import {propMissing, propNoun, propNouns} from "./prop-check.ts";
 
 test('the noun of a prop is the last word of its first phrase', () => {
     expect(propNoun('a long-shafted war hammer with a black iron head')).toBe('hammer')
@@ -14,6 +14,12 @@ test('a look that names the prop passes, also as part of a longer word and in th
     expect(propMissing('She grips a long war hammer with a black iron head.', 'a war hammer with a black head')).toBe(false)
     expect(propMissing('She carries a huge warhammer.', 'a hammer')).toBe(false)
     expect(propMissing('Two torches hang from her belt.', 'a hand torch')).toBe(false)
+})
+
+test('a prop styled after another thing may be named by that thing', () => {
+    expect(propNouns('a compact mace-style hammer with a studded spherical iron head')).toEqual(['hammer', 'mace'])
+    expect(propMissing('Right hand grips a compact mace with a studded spherical iron head on a short dark haft.', 'a compact mace-style hammer with a studded spherical iron head')).toBe(false)
+    expect(propNouns('a long-shafted war hammer')).toEqual(['hammer'])
 })
 
 test('a look without the prop is reported', () => {
