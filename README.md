@@ -352,7 +352,7 @@ Settings per project, all optional - read at every run and checked field by fiel
   "seed": -1,
   "imageResolution": -1,
   "videoResolution": -1,
-  "imageWorkflow": "krea2-image",
+  "imageWorkflow": "kroma-image",
   "videoWorkflow": "h3-ref2video",
   "songWorkflow": "yue2-song",
   "songDuration": -1,
@@ -387,6 +387,7 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 
 | Workflow        | Kind  | Originally exported from ComfyUI as ¹              |
 |-----------------|-------|-----------------------------------------------------|
+| `kroma-image`   | image | `kroma.json` (default)                              |
 | `krea2-image`   | image | `image_t2i_startframe_krea_v1.json`                |
 | `h3-ref2video`  | video | `r2v_audio_fullmix_guide_1-pass_turbo.json`        |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |

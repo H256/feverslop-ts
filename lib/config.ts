@@ -46,7 +46,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
-    imageWorkflow: 'krea2-image',
+    imageWorkflow: 'kroma-image',
     videoWorkflow: 'h3-ref2video',
     songAudio: true,
     songWorkflow: 'yue2-song',

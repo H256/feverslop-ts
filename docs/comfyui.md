@@ -44,6 +44,7 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
 
    | Workflow                          | Models                                                                                                                                                                                                              | Custom nodes                                               |
    |-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
+   | `kroma-image` (pictures, default) | `kroma-v0.3.1-turbo-opd.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_image_vae.safetensors`                                                                                                             | `SeedNode`, `SaveImageAdvanced`, `VRAMCleanup`, `ResolutionSelector` (only for megapixels) |
    | `krea2-image` (pictures)          | `krea2_turbo_fp8_scaled.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_image_vae.safetensors`                                                                                                             | `VRAMCleanup`, `ResolutionSelector` (only for megapixels)   |
    | `h3-ref2video` (clips)            | `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
    | `h3-sequence-to-sheet` (reference sheets) | `minimax_h3_fl2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`, `ResolutionSelector`     |
@@ -100,7 +101,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
   "seed": -1,
   "imageResolution": -1,
   "videoResolution": -1,
-  "imageWorkflow": "krea2-image",
+  "imageWorkflow": "kroma-image",
   "videoWorkflow": "h3-ref2video",
   "songAudio": true,
   "sequenceSheets": true,
@@ -115,7 +116,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `seed`            | `-1`             | `-1` = a new random seed for every render, `0` or more = fixed                          |
 | `imageResolution` | `-1`             | see [Resolution](#resolution)                                                           |
 | `videoResolution` | `-1`             | see [Resolution](#resolution)                                                           |
-| `imageWorkflow`   | `"krea2-image"`  | a file name in `comfy/workflows/`, without `.ts`                                        |
+| `imageWorkflow`   | `"kroma-image"`  | a file name in `comfy/workflows/`, without `.ts` - `"krea2-image"` for the previous one |
 | `videoWorkflow`   | `"h3-ref2video"` | a file name in `comfy/workflows/`, without `.ts`                                        |
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
 | `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
@@ -162,6 +163,10 @@ The orientation is fixed per kind of render, whichever way round the size is wri
 
 `"1088x1920"` and `"1920x1088"` therefore mean the same. Sizes should be multiples of 32 for H3; megapixel values are
 rounded to multiples of 32 by the `ResolutionSelector` node.
+
+`kroma-image` renders in two passes and saves twice the size it samples at: its `-1` is a 544×960 first pass,
+scaled up 2× to 1088×1920 (characters; 1920×1088 for locations), and `imageResolution` sets the size of the first
+pass - `"1088x1920"` gives a 2176×3840 picture.
 
 Video frame rate is always 24 fps.
 
@@ -260,7 +265,7 @@ wizard). Walks through:
 ### Workflows
 
 `imageWorkflow`, `videoWorkflow` and `sequenceWorkflow` pick the workflow file used for rendering. The included ones
-are `krea2-image`, `h3-ref2video` and `h3-sequence-to-sheet`. Any file in `comfy/workflows/` that follows the
+are `kroma-image` (default) and `krea2-image` for pictures, `h3-ref2video` and `h3-sequence-to-sheet`. Any file in `comfy/workflows/` that follows the
 workflow contract can be used - see [custom-workflows.md](custom-workflows.md). Different projects can use different
 workflows.
 
