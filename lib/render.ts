@@ -276,8 +276,10 @@ export class Renderer implements Disposable {
     // stemFiles: the isolated stems of the whole song (stems/vocals.wav, stems/drums.wav, ...) plus a "song"
     // entry for the whole, unseparated song - vocals is needed by clips with a singer, others by whichever
     // tracks this clip's prompt references ("song" when stems weren't separated at all, see lib/compose.ts).
-    async renderClip(clip: ClipRequest, stemFiles: Record<string, string>) {
-        const file = `videos/${clip.id}.mp4`
+    // preview: a cheap try-out (config.preview) into previews/<id>.mp4 - never into videos/, so nothing takes it for the
+    // clip, and without boundary frames: a continuing clip's preview starts on the last frame of the *rendered* clip before
+    async renderClip(clip: ClipRequest, stemFiles: Record<string, string>, preview = false) {
+        const file = `${preview ? 'previews' : 'videos'}/${clip.id}.mp4`
         const target = join(this.projectDir, file)
         if (existsSync(target)) {
             log.step('Exists', styles.muted(file))
@@ -287,8 +289,9 @@ export class Renderer implements Disposable {
                 log.warn(`${file} starts on an older version of ${clip.startsFrom}'s last frame - delete it to render it again`)
             }
             // clips rendered before the boundary frames existed get them now
-            return this.saveBoundaryFrames(clip, target)
+            return preview ? undefined : this.saveBoundaryFrames(clip, target)
         }
+        const previewConfig = this.config.preview ?? {scale: 0.25, steps: 4}
 
         const missing = clip.assets.pictures.filter(p => !existsSync(join(this.projectDir, p.file)))
         if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
@@ -298,7 +301,8 @@ export class Renderer implements Disposable {
         if (missingStems.length) return log.warn(`${clip.id} skipped - missing stem file(s) for: ${missingStems.map(a => a.stem).join(', ')}`)
         if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id} skipped - missing the full song (needed for MiniMaxH3AddGuide)`)
 
-        const {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', async () => {
+        mkdirSync(dirname(target), {recursive: true})
+        const {seed} = await this.render(`${preview ? 'preview' : 'clip'} ${clip.id}`, target, '.mp4', async () => {
             const pictureUploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             // Upload the whole separated stem per track (not a per-clip cut) and let the workflow trim it to
             // this clip's span itself (TrimAudioDuration) - a pre-cut file can't account for the video model
@@ -335,7 +339,8 @@ export class Renderer implements Disposable {
                 duration: secondsAt(frames),
                 seed,
                 resolution: this.config.videoResolution,
-                filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
+                ...(preview ? {resolutionScale: previewConfig.scale, steps: previewConfig.steps} : {}),
+                filenamePrefix: `${this.remoteDir}/${preview ? 'previews' : 'videos'}/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}
         })
@@ -346,6 +351,7 @@ export class Renderer implements Disposable {
             workflow: this.config.videoWorkflow,
             seed,
             resolution: this.config.videoResolution,
+            ...(preview ? {preview: previewConfig} : {}),
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final video
@@ -354,7 +360,7 @@ export class Renderer implements Disposable {
             request: `output/clips/${clip.id}.json`,
         }, null, 2))
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used`)}`)
-        await this.saveBoundaryFrames(clip, target, rendered.frames)
+        if (!preview) await this.saveBoundaryFrames(clip, target, rendered.frames)
     }
 
     /**

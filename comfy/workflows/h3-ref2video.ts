@@ -28,7 +28,7 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, 'landscape', 0.4, opts.resolutionScale)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -71,7 +71,7 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const guider = wf.BasicGuider({model: attention.model, conditioning: pinned.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
-    const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})
+    const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: opts.steps ?? 8, denoise: 1, model: model.MODEL})
     const sampled = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,
         guider: guider.GUIDER,

@@ -64,6 +64,10 @@ export type VideoWorkflowOptions = {
     duration: number,           // frames / FPS - the audio to trim, covering the whole render
     seed: number,
     resolution: Resolution,     // always rendered landscape
+    // a preview render (--preview, see PreviewConfig): the factor on the pixels of `resolution` (pass it to resolution())
+    // and the sampling steps - without them the workflow's own, so a full render is unchanged
+    resolutionScale?: number,
+    steps?: number,
     filenamePrefix: string,
 }
 export type VideoWorkflow = (opts: VideoWorkflowOptions) => WorkflowResult
@@ -129,21 +133,24 @@ export function resolveSeed(seed: number) {
 /**
  * Width and height for a resolution setting - node outputs, typed to go straight into width/height widgets.
  * The result always has the requested orientation, whatever way round the setting was written.
+ * `scale` is a factor on the number of pixels (a preview render), not on each side.
  */
-export function resolution(workflow: WorkflowBuilder, setting: Resolution, orientation: Orientation, workflowDefault: Exclude<Resolution, -1>): { width: number, height: number } {
+export function resolution(workflow: WorkflowBuilder, setting: Resolution, orientation: Orientation, workflowDefault: Exclude<Resolution, -1>, scale = 1): { width: number, height: number } {
     const value = setting === -1 ? workflowDefault : setting
 
     if (typeof value === 'number') {
         const selector = workflow.ResolutionSelector({
             aspect_ratio: orientation === 'portrait' ? '9:16 (Portrait Widescreen)' : '16:9 (Widescreen)',
-            megapixels: value,
+            megapixels: value * scale,
             multiple: 32,
         })
         return {width: widget(selector.width), height: widget(selector.height)}
     }
 
     const [a, b] = value.split('x').map(Number) as [number, number]
-    const [long, short] = a >= b ? [a, b] : [b, a]
+    // scale is a factor on the area, so each side shrinks by its square root - kept a multiple of 32 like the selector above
+    const side = (n: number) => scale === 1 ? n : Math.max(32, Math.round(n * Math.sqrt(scale) / 32) * 32)
+    const [long, short] = a >= b ? [side(a), side(b)] : [side(b), side(a)]
     const [width, height] = orientation === 'landscape' ? [long, short] : [short, long]
     return {width: widget(workflow.PrimitiveInt({value: width}).INT), height: widget(workflow.PrimitiveInt({value: height}).INT)}
 }

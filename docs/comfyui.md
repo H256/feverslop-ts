@@ -74,6 +74,7 @@ bun index.ts --render=videos                    # all clips
 bun index.ts --render=final                     # only assemble the final video from the rendered clips
 bun index.ts --render=images,videos             # any combination - always in the order images, videos, final
 bun index.ts --render=videos --only=slot-001    # only the listed clips (comma separated)
+bun index.ts --render=videos --preview          # cheap try-outs into previews/ - fewer steps, a fraction of the pixels
 ```
 
 The planning steps run as usual first (cached ones are skipped), so the renders always use the current story, looks
@@ -116,6 +117,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `seed`            | `-1`             | `-1` = a new random seed for every render, `0` or more = fixed                          |
 | `imageResolution` | `-1`             | see [Resolution](#resolution)                                                           |
 | `videoResolution` | `-1`             | see [Resolution](#resolution)                                                           |
+| `preview`         | `{"scale": 0.25, "steps": 4}` | `--preview`: `scale` = the part of the pixels (0.25 = half the width and height), `steps` = sampling steps. A workflow takes them from `opts.resolutionScale` and `opts.steps` - see [custom workflows](custom-workflows.md) |
 | `imageWorkflow`   | `"kroma-image"`  | a file name in `comfy/workflows/`, without `.ts` - `"krea2-image"` for the previous one |
 | `videoWorkflow`   | `"h3-ref2video"` | a file name in `comfy/workflows/`, without `.ts`                                        |
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
