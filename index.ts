@@ -687,6 +687,8 @@ ${JSON.stringify(block.map(b => ({
             reads = reads.map((r, n) => again[n]!.read && (!r.read || again[n]!.read!.problems.length <= r.read.problems.length) ? again[n]! : r)
             for (const r of reads) for (const p of r.read?.problems ?? []) log.warn(`${r.beat.id}, ${p}`)
         }
+        // what the code repaired or only noted costs no further call - a line in the log, nothing else
+        for (const r of reads) for (const note of r.read?.notes ?? []) console.log(styles.muted(`        · ${r.beat.id}, ${note}`))
         for (const {beat, read: r} of reads) if (r) result[beat.id] = r.plan // a beat without a plan falls back to the legacy spread
     }
     // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
