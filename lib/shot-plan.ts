@@ -23,6 +23,37 @@ const characterOf = (characters: Character[], who: string) => {
 
 export type ReadPlan = { plan: BeatShots, problems: string[] }
 
+const normalized = (value: string | undefined) => (value ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+const nameOfId = (characters: Character[], id: string) => characters.find(c => c.id === id)?.name ?? id
+
+/**
+ * Two named people of one shot who are given the same motion (or the same state and the same frame) are in unison -
+ * the video model then plays one movement five times, in the same beat. A crowd entry (isGroup) is one entry for
+ * several bodies and is not compared; what it does is the prompt's to say.
+ */
+function unisonProblems(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[]): string[] {
+    const named = Object.entries(people).filter(([id]) => !characters.find(c => c.id === id)?.isGroup)
+    const byMotion = new Map<string, string[]>()
+    for (const [id, p] of named) {
+        const same = normalized(p.motion)
+        const key = same.split(' ').length >= 2 ? `motion:${same}` : p.state && p.frame ? `place:${normalized(p.state)}|${normalized(p.frame)}` : ''
+        if (key) byMotion.set(key, [...(byMotion.get(key) ?? []), id])
+    }
+    return [...byMotion.values()].filter(ids => ids.length > 1).map(ids =>
+        `shot ${j + 1}: ${ids.map(id => nameOfId(characters, id)).join(', ')} have the same motion or place - give each of them their own action, direction and timing`)
+}
+
+const SINGING = /\b(?:sings?|singing|sang|lip-?sync\w*|mouths? (?:is |are )?open on the (?:verse|chorus|line|lyrics?)|on the (?:verse|chorus))\b/i
+
+/** Someone who does not sing in this shot is not described singing: the video model moves their lips to the vocals. */
+function singingProblems(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: { singerIds: string[], singingPerShot: boolean[] }): string[] {
+    if (!singers) return []
+    const allowed = singers.singingPerShot[j] ? singers.singerIds : []
+    return Object.entries(people)
+        .filter(([id, p]) => !allowed.includes(id) && SINGING.test([p.state, p.frame, p.motion].filter(Boolean).join(' ')))
+        .map(([id]) => `shot ${j + 1}: ${nameOfId(characters, id)} does not sing in this shot - no singing, lip movement or "mouth open on the verse" for them`)
+}
+
 /**
  * The planner's answer for one beat as a BeatShots, padded or cut to `needed` shots. `problems` are what asking again can fix:
  * a name that is not in the cast, nobody of the singers in a shot where a line is sung, a shot that names someone it does not show.
@@ -61,6 +92,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         // while a line is sung, a singer is in the picture
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
             problems.push(`shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
+        problems.push(...unisonProblems(j, people, characters), ...singingProblems(j, people, characters, singers))
         return {
             action,
             ...(text(e.framing) ? {framing: text(e.framing)} : {}),
