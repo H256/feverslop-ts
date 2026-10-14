@@ -33,6 +33,15 @@ export type PictureJob = { kind: 'character' | 'location', id: string, name: str
 type Server = ComfyServer & { api: ComfyApi }
 
 /**
+ * Whether a recorded job is picked up again on the next run. A failed job stays in ComfyUI's history, so resuming it
+ * would report the same error again for ever, whatever was changed since (the workflow, the config, a freed GPU) -
+ * only a job that is queued, running or finished is worth waiting for.
+ */
+export function resumesJob(state: 'queued' | 'running' | 'finished' | 'failed' | 'unknown'): boolean {
+    return state === 'queued' || state === 'running' || state === 'finished'
+}
+
+/**
  * Renders on one or more ComfyUI servers, one job per server at a time: each render takes the first free server,
  * a resumed job waits for the server it was queued on.
  */
@@ -416,11 +425,11 @@ export class Renderer implements Disposable {
         const {api} = server
         if (pending) {
             const state = await this.jobState(server, pending.promptId)
-            if (state !== 'unknown') {
+            if (resumesJob(state)) {
                 log.step('Resuming', `${styles.name(label)} ${styles.muted(`@${server.name}, job ${pending.promptId}, queued at ${formatClock(pending.queuedAt)}, ${state}`)}`)
                 return pending
             }
-            log.warn(`${label}: the job queued at ${formatClock(pending.queuedAt)} is no longer on ${server.name} - rendering again`)
+            log.warn(`${label}: the job queued at ${formatClock(pending.queuedAt)} ${state === 'failed' ? `failed on ${server.name}` : `is no longer on ${server.name}`} - rendering again`)
         }
 
         log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name}`)}`)
