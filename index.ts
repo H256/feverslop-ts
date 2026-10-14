@@ -741,6 +741,7 @@ const clips = buildClipRequests({
     propActivity,
     stemsAvailable: Boolean(stems),
     continuity: config.continuity,
+    pinStartFrame: config.pinStartFrame,
 })
 
 const outputDir = join(project.dir, 'output')
