@@ -157,6 +157,8 @@ function nextCamera(level: keyof typeof cameraMoves, cursor: Record<keyof typeof
 
 // More cuts with more musical energy - shared by buildClipRequests and the step that sizes the per-shot moment lists
 function shotCountFor(slot: Slot, beat: StoryBeat, opensScene: boolean) {
+    // a piece of a fight clip (config.fightClips) is one shot
+    if (slot.micro) return 1
     const base = opensScene && beat.kind === 'establish' ? 1 : slot.energy < 0.45 ? 1 : slot.energy < 0.75 ? 2 : 4
     // a single shot covering 3+ bars runs long enough, at this kind of tempo, to read as a held photo rather than
     // a shot - cut it at least once even when energy or an establishing beat would otherwise keep it uncut
@@ -319,7 +321,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             : []
         // the singers are always on screen, first, in the order they sing - even if the beat forgot them
         const singerIds = [...new Set(performed.flatMap(v => v.singerIds))]
-        const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id))]
+        // a piece of a fight clip has only the people of its own shot as references: fewer pictures, nobody to strike by mistake
+        const shotIds = slot.micro && flatShotMoments?.length ? new Set(flatShotMoments.flatMap(s => s.characters ?? [])) : undefined
+        const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id) && (!shotIds || shotIds.has(id)))]
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
             .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom ? 1 : 0))

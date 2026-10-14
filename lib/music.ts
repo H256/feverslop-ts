@@ -1,5 +1,5 @@
 import {join} from "node:path";
-import type {Assignment, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
+import type {Assignment, Character, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, SlotVocal, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
 import {refineSections, slotVocals} from "./lyrics.ts";
 import {formatTime, round} from "./frames.ts";
 import {log} from "./log.ts";
@@ -247,4 +247,59 @@ export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[]
         i = k
     }
     return assignments
+}
+
+
+/** A beat that is a fight: a big moment (kind "hit") with a crowd of creatures in it - orcs, witches, a pack. */
+export function isFightBeat(beat: StoryBeat, characters: Character[]): boolean {
+    return beat.kind === 'hit' && beat.characterIds.some(id => characters.find(c => c.id === id)?.isGroup === true)
+}
+
+/**
+ * config.fightClips: the clips of a fight beat are cut into pieces of `barsPerPiece` bars (one bar is about two
+ * seconds) - one shot and one action each, a clip with only the people of that shot as references (compose.ts).
+ * The ids and indexes of all slots are numbered anew, the mapping follows; lyrics stay with the first piece of a slot,
+ * sung lines go to the piece they are sung in (times relative to the piece).
+ */
+export function splitFightSlots(slots: Slot[], mapping: Assignment[], beats: StoryBeat[], characters: Character[], music: MusicMap, barsPerPiece = 1): { slots: Slot[], mapping: Assignment[] } {
+    const fights = new Set(beats.filter(b => isFightBeat(b, characters)).map(b => b.id))
+    const out: Slot[] = []
+    const outMapping: Assignment[] = []
+    slots.forEach((slot, i) => {
+        const beatId = mapping[i]!.beatId
+        if (!fights.has(beatId)) {
+            out.push({...slot})
+            outMapping.push({slotId: '', beatId})
+            return
+        }
+        const bars = music.downbeats.filter(t => t >= slot.start - 0.05 && t < slot.end - 0.05)
+        const cuts = bars.filter((_, k) => k > 0 && k % barsPerPiece === 0 && bars[k]! > slot.start + 0.3 && bars[k]! < slot.end - 0.3)
+        const edges = [slot.start, ...cuts, slot.end]
+        edges.slice(0, -1).forEach((from, k) => {
+            const to = edges[k + 1]!
+            const vocals: SlotVocal[] = (slot.vocals ?? []).flatMap(v => {
+                const words = v.words
+                    .filter(w => slot.start + (w.start + w.end) / 2 >= from && slot.start + (w.start + w.end) / 2 < to)
+                    .map(w => ({...w, start: round(slot.start + w.start - from), end: round(slot.start + w.end - from)}))
+                if (!words.length) return []
+                return [{...v, start: words[0]!.start, end: words.at(-1)!.end, words}]
+            })
+            out.push({
+                ...slot,
+                start: from,
+                end: to,
+                bars: Math.max(1, Math.round(bars.filter(t => t >= from - 0.05 && t < to - 0.05).length)),
+                lyrics: k === 0 ? slot.lyrics : [],
+                vocals: slot.vocals ? vocals : undefined,
+                micro: true,
+            })
+            outMapping.push({slotId: '', beatId})
+        })
+    })
+    out.forEach((slot, i) => {
+        slot.index = i
+        slot.id = `slot-${String(i + 1).padStart(3, '0')}`
+        outMapping[i]!.slotId = slot.id
+    })
+    return {slots: out, mapping: outMapping}
 }
