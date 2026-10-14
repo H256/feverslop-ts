@@ -86,3 +86,18 @@ describe('readBeatPlan - compass words', () => {
         expect(r.notes).toEqual([])
     })
 })
+
+describe('readBeatPlan - the rest of a shot', () => {
+    const a: Character = {id: 'a', name: 'Anna', role: 'x'}
+    const b: Character = {id: 'b', name: 'Bea', role: 'x'}
+    const beat = {id: 'b9', characterIds: ['a', 'b']} as StoryBeat
+    test('what the others do is read and kept with the shot', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna strikes', characters: ['Anna', 'Bea'], people: {Anna: {motion: 'strikes'}}, rest: ' Bea parries an orc and answers with the haft. '}]}, beat, [a, b], 1)!
+        expect(r.plan.shots[0]!.rest).toBe('Bea parries an orc and answers with the haft.')
+        expect(r.problems).toEqual([])
+    })
+    test('a shot without it has none', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna strikes', characters: ['Anna']}]}, beat, [a, b], 1)!
+        expect(r.plan.shots[0]!.rest).toBeUndefined()
+    })
+})

@@ -149,6 +149,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             ...(e.hold === true ? {hold: true} : {}),
             ...(ids.length ? {characters: ids} : {}),
             ...(Object.keys(people).length ? {people} : {}),
+            ...(text(e.rest) ? {rest: text(e.rest)} : {}),
         }
     })
     if (shots.some(s => !s.action)) problems.push('every shot needs an action')

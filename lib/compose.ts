@@ -564,12 +564,21 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const p = stagedPeople?.[s.id]
                     const face = shot.singers.includes(s) ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
-                    return `${s.label}, ${s.name}, ${[p?.state, p?.frame, p?.motion].filter(Boolean).map(t => withLabels(t!)).join('; ') || 'in the frame'}${face}`
+                    // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
+                    if (!p) return `${s.label}, ${s.name}, in the frame${face}`
+                    return `${s.label}, ${s.name}, ${[p.state, p.frame, p.motion].filter(Boolean).map(t => withLabels(t!)).join('; ') || 'in the frame'}${face}`
                 }
+                // who is in the frame without a line of their own is busy with the event too, each in their own way - never
+                // standing by: the video model otherwise lets them wait in their reference pose while the shot's two or
+                // three people act
+                const unstaged = shot.plan ? shot.focus.filter(s => !stagedPeople?.[s.id]) : []
+                const restClause = unstaged.length
+                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest ? withLabels(shot.plan.rest).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, none of them stands idle or only watches`}.`
+                    : ''
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view)}.` : ''
                 const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, nobody steps closer or away, the camera does not move.' : ''
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${locationAnchor && smallGroup(shot.focus.length) ? ` ${locationAnchor} still visible behind them.` : ''}${holdClause}`
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor && smallGroup(shot.focus.length) ? ` ${locationAnchor} still visible behind them.` : ''}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {

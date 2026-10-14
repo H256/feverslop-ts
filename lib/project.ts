@@ -48,6 +48,7 @@ export type ShotPlan = {
     hold?: boolean,                 // nobody moves and the camera does not: same framing from the first frame to the last
     characters?: string[],          // ids of everyone visible in the shot
     people?: Record<string, { state?: string, frame?: string, motion?: string }>,
+    rest?: string,                  // what everyone in the shot who has no entry of their own does at the same time, each in their own way
 }
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
 export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[] }
