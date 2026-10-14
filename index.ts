@@ -6,7 +6,7 @@ import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
@@ -234,6 +234,8 @@ await project.syncInputs({
     lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
     // which beats run on without a cut changes what their shots have to tell
     continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
+    // fight beats cut into one-bar pieces change how many shots a beat has
+    fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
 })
 // the sections are named after the lyrics tags
 if (project.data.music && lyricSections.length && project.data.music.sections.map(s => s.label).join('|') !== lyricSections.map(s => s.label).join('|')) {
@@ -557,9 +559,17 @@ if (timeline.aligned) {
 }
 
 ////////// MATCHING THE STORY TO THE MUSIC
-const mapping = await project.step('mapping', '11 · MATCHING THE STORY TO THE MUSIC', async () => mapBeatsToSlots(beats, timeline.slots))
+const storyMapping = await project.step('mapping', '11 · MATCHING THE STORY TO THE MUSIC', async () => mapBeatsToSlots(beats, timeline.slots))
+// config.fightClips: the clips of a fight beat are cut into one-bar pieces (not cached - derived from the timeline and the mapping)
+const {slots: clipSlots, mapping} = config.fightClips
+    ? splitFightSlots(timeline.slots, storyMapping, beats, cast.characters, music)
+    : {slots: timeline.slots, mapping: storyMapping}
+if (config.fightClips && clipSlots.length !== timeline.slots.length) {
+    const fightBeats = new Set(clipSlots.filter(s => s.micro).map(s => mapping[s.index]!.beatId))
+    log.step('Fight clips', styles.muted(`${clipSlots.length} clips instead of ${timeline.slots.length}: the fight beats ${[...fightBeats].join(', ')} are cut into one-bar pieces`))
+}
 const beatById = new Map(beats.map(b => [b.id, b]))
-for (const slot of timeline.slots) {
+for (const slot of clipSlots) {
     const beat = beatById.get(mapping[slot.index]!.beatId)!
     console.log(`   ${styles.muted(`${formatTime(slot.start)}`)} ${slot.section.padEnd(12)} ${energyBar(slot.energy)} ${styles.name(beat.id)} ${styles.muted(energyBar(beat.intensity))}`)
 }
@@ -568,8 +578,8 @@ for (const slot of timeline.slots) {
 // beat.moments (2-6 sentences) is written before the beat's shot count is known, so a beat can end up covering far
 // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
-const beatProps = propActivity ? propActivityPerBeat({slots: timeline.slots, mapping, beats, characters: cast.characters}, propActivity) : undefined
-const beatSinging = singingPerBeat({slots: timeline.slots, mapping, beats, singing})
+const beatProps = propActivity ? propActivityPerBeat({slots: clipSlots, mapping, beats, characters: cast.characters}, propActivity) : undefined
+const beatSinging = singingPerBeat({slots: clipSlots, mapping, beats, singing})
 // All beats in one call don't fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So
 // the beats are asked in blocks, one after the other. The cut is only ever between two beats - all clips of a scene
 // belong to one beat, so everything that has to stay continuous is in one call - and a block sees the finished shots of
@@ -588,7 +598,7 @@ if (plannedBefore) {
     delete project.data.shotMoments
 }
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
-    const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
+    const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
     type Beat = (typeof beats)[number]
     const askBlock = (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, problems: string[] = []) => askJson<{ moments: Record<string, unknown> }>({
         reasoning: 'medium',
@@ -611,6 +621,7 @@ Rules:
 - Name the visible facial reaction the shot's action produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace, a flicker of relief) whenever the moment calls for one - a shot with no facial reaction described tends to render with the same flat expression as every other shot of that character.
 - Every shot is its own short, separately rendered clip - a shot never gets to finish an action in a later shot, even later shots of the same beat. So an action that travels somewhere (a weapon swing, a lunge, a breath or thrown object) must also land and resolve within THAT SAME shot's sentence - never end a shot on a motion that's still only underway ("swings his hammer, the head descending toward X" with no impact described) and leave the impact for the next shot to show, or it renders as the motion stalling and reversing instead of completing. Combine the wind-up and the result in one sentence when they belong together, the way the strong examples above already do.
 - Any effect that crosses space to hit someone - a breath of fire, a thrown weapon, a spray of debris, a spell - must say which way it travels and that it lands on the character's front, and that character must be described as facing (or turning to face) where it came from. Never leave the relative facing of attacker and target unstated for this kind of hazard: unspecified, it can render as hitting the target's back or from an impossible angle.
+- A beat with "micro": true is a fight cut into pieces of one bar (about two seconds), one piece per shot and every piece rendered as its own clip: each shot is ONE blow or ONE reaction, whole - the swing and the contact and what it does to the one struck, or the face of the one struck, or a close insert of the weapon on the arm - with at most two people in it, the opponent always in the picture and named, the place named in the shot (the river behind, the forge-glow). Alternate impact and reaction, vary the size (close, medium, low angle), and give a different pair of fighters to the next shot. A wide shot is only the first and the last of the beat.
 - A beat with "continuous": true is one unbroken take: its shots follow each other without a cut, and a clip starts exactly on the last frame of the clip before. Every shot goes on from the exact state the one before ends in - same place, same people in the same positions, same camera subject - never a new angle, a new setting or a restart of the action.
 - ${filmableRules} If the beat's "moments" or "summary" do that, replace it by the real action.
 - Use the beat's "summary" and "moments" as the story to tell, but you are free to invent the intermediate physical action needed to fill every shot.
@@ -648,6 +659,7 @@ ${JSON.stringify(block.map(b => ({
             id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
             ...(isContinuous(b, config.continuity) ? {continuous: true} : {}),
             ...(b.groupSize && Object.keys(b.groupSize).length ? {groupSize: b.groupSize} : {}),
+            ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === b.id) ? {micro: true} : {}),
             shotsNeeded: shotCounts[b.id] ?? 1,
             ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
             ...(beatSinging[b.id] ? {singing: beatSinging[b.id]} : {}),
@@ -725,7 +737,7 @@ if (shotMoments) for (const beat of beats) {
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
 log.section('12 · BUILDING THE MINIMAX H3 REQUESTS')
 const clips = buildClipRequests({
-    slots: timeline.slots,
+    slots: clipSlots,
     mapping,
     beats,
     characters: cast.characters,

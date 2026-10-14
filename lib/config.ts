@@ -21,6 +21,9 @@ export type RenderConfig = {
     // a continuing clip (config.continuity) is also pinned to the last frame of the clip before it as its first frame
     // (MiniMaxH3AddGuide), not only given it as a reference picture
     pinStartFrame: boolean,
+    // the clips of a fight beat (a "hit" with a crowd of creatures in it) are cut into one-bar pieces with one shot each,
+    // and a piece has only the people of its shot as references - see splitFightSlots in lib/music.ts. Off by default
+    fightClips: boolean,
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
@@ -54,6 +57,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     sequenceSheets: true,
     sequenceWorkflow: 'h3-sequence-to-sheet',
     pinStartFrame: true,
+    fightClips: false,
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
@@ -91,6 +95,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     }
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
+    if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
