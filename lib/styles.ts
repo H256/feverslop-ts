@@ -125,9 +125,21 @@ export const STYLES: FilmStyle[] = [
     {id: 'unplugged-stage', group: medium, name: 'Intimate unplugged stage', text: 'Intimate unplugged stage film look: warm stage lighting, soft bokeh from small lights, close handheld framing, shallow depth of field, warm amber and deep blue.'},
 ]
 
-/** A random style from the list (or from the given candidates). */
+/** Realistic looks: filmed live action. Everything else (animation, craft, painted, found media) is artistic. */
+export const isRealistic = (style: FilmStyle) => style.group === live || style.group === liveLook
+
+/** How often a live action style is drawn when the candidates have both - the artistic ones are the exception. */
+export const REALISTIC_SHARE = 0.85
+
+/**
+ * A random style from the list (or from the given candidates): a live action one in most cases, because most of
+ * the list is not (58 of 94) and a plain uniform draw gave a painted or drawn look to stories that wanted none.
+ */
 export function pickStyle(candidates: FilmStyle[] = STYLES, random = Math.random): FilmStyle {
-    return candidates[Math.floor(random() * candidates.length)]!
+    const realistic = candidates.filter(isRealistic)
+    const artistic = candidates.filter(style => !isRealistic(style))
+    const pool = realistic.length && artistic.length ? (random() < REALISTIC_SHARE ? realistic : artistic) : candidates
+    return pool[Math.floor(random() * pool.length)]!
 }
 
 /** The styles in random order - shown to the LLM that way so it can't favor the first entries. */
