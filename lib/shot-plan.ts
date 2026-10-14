@@ -34,6 +34,9 @@ export const MAX_FOREGROUND = 4
 const UNISON_ASKS = 3
 const WIDE = /\b(?:wide|establishing|long shot|panoram\w*|aerial|overhead|high-angle)\b/i
 
+/** north, south, east, west: no direction the video model can use. */
+export const COMPASS = /\b(?:north|south|east|west)(?:ward|wards|ern)?\b/gi
+
 const normalized = (value: string | undefined) => (value ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
 const nameOfId = (characters: Character[], id: string) => characters.find(c => c.id === id)?.name ?? id
 
@@ -131,6 +134,8 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         // while a line is sung, a singer is in the picture
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
             problems.push(`shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
+        const compass = (written.match(COMPASS) ?? []).length
+        if (compass) notes.push(`shot ${j + 1}: ${compass} compass word(s) - the video model cannot place them`)
         const unison = unisonChecks(j, people, characters)
         problems.push(...unison.problems)
         notes.push(...unison.notes, ...singingNotes(j, people, characters, singers))
