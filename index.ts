@@ -574,6 +574,18 @@ const beatSinging = singingPerBeat({slots: timeline.slots, mapping, beats, singi
 // belong to one beat, so everything that has to stay continuous is in one call - and a block sees the finished shots of
 // the beat before it and the summary of the beat after it, so a scene change on a block boundary still connects.
 const MOMENT_BLOCK_BEATS = 1
+// a beat whose answer stayed unusable has no plan and plays on its beat moments: the next run plans just those beats
+// again, the ones already planned stay as they are
+const plannedBefore = args['legacy-moments'] ? undefined : (() => {
+    const before = project.data.shotMoments
+    if (!before || beats.every(b => before[b.id] !== undefined)) return undefined
+    return Object.fromEntries(Object.entries(before).filter(([, plan]) => !Array.isArray(plan))) as Record<string, BeatShots>
+})()
+if (plannedBefore) {
+    const missing = beats.filter(b => !plannedBefore[b.id]).map(b => b.id)
+    log.step('Planning again', styles.muted(`${missing.join(', ')} - no plan of their own yet, the other ${beats.length - missing.length} stay`))
+    delete project.data.shotMoments
+}
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: timeline.slots, mapping, beats})
     type Beat = (typeof beats)[number]
@@ -604,6 +616,7 @@ Rules:
 - Write only what a camera sees, in plain measures: "a step", "an arm's length", "close" - no inches or seconds, and no anatomy below the skin (muscles, throat, diaphragm, bones).
 - Be compact, and write every fact once. "action" is what happens in the shot, between the people and with things, in at most two sentences - the mechanics and what it does to the other. "state" is only how a person stands, sits or holds things at the START, "frame" is only the picture - where in the frame, at what depth, sharp or soft, which way the body and the face are turned - and "motion" is only what that person's own body does that "action" has not already said (leave it "" if there is nothing), each a short phrase of at most about 12 words. Nothing in "state", "frame" or "motion" repeats "action", and "state" and "frame" agree on which way a person faces. Every named person has their own entry; only a crowd that the cast lists as one entry ("group": true) is one entry. "staging" 2-4 sentences.
 - Stage before you shoot. Per beat, "staging" is the fixed floor plan of the place for this beat, 2-4 sentences: which features are on which side or wall, where the entrances are and where people come from, where each person or group stands when the beat starts and how far apart they are. It stays the same for every shot of the beat, and a beat in the same place as the one before keeps the layout of the one before. Nothing in it moves. Include nobody and nothing the story does not put there.
+- A shot is about a few people. At most 4 people get an entry in "people" per shot - the ones the shot is about: who acts, who is struck, who is looked at, who answers. Everyone else of the beat who is visible is listed in "characters" without an entry (the rest of the line, the others behind) or is left out; only a wide or establishing shot lists more than 4 people in "characters". A march or a crowd of seven is staged through the few it is about, in the order of the file: who leads, who falls behind, who looks back.
 - Every shot says who is in the picture ("characters", exactly as spelled in "cast") and, for each of them in "people": "state" - where they are and what they do, hold and wear at the START of the shot, as a phrase with a verb; "frame" - how they are in the picture: sharp or soft, where in the frame, which way the body and the gaze turn, in which part of the place ("sharp, left of centre, three-quarter view, looking at X"); "motion" - what moves during the shot, with its direction relative to the others, or that they stay where they are. The video model lets people walk and turn on its own, so for someone who talks, sings, plays or acts in place say that they stay; but where the story has people arrive, enter, follow, search or retreat, they move with it - "stays" and "follows" never describe the same person in one shot, "state" and "motion" agree. People are spread through the place and the frame at different depths and angles, each in their own relation to the others and to the place - never everybody in a row facing the lens. Everyone is somewhere definite, and a person is somewhere only once: nobody is in two places in one shot.
 - Whatever the relation between two people is - hostile, tender, searching, arguing, comforting, ignoring - a shot says how far apart they are at the start and at the end, who looks at whom, who starts the move and what the other does in the same moment (steps back, leans in, turns away, answers with the eyes). Touch names the hand and where it lands; a search names what is searched and where; a feeling is shown by the body and the face, never by a word for it. Nobody just stands and faces the lens while the relation happens.
 - Everything that happens between people, or between a person and a thing, is staged as choreography, whatever it is - a fight, a dance, a band playing together, a chase, a ritual, a meeting: each shot is one or two beats of it. Say who moves first, with what and how fast, where it lands, what the other does in the same moment, and what it does to the one it touches (the one who is hit gives way, falls, staggers or holds, according to how they were hit). The people move through the place - they close in, give ground, come from where the staging says - and do not stand still while the action happens off to the side.
@@ -640,9 +653,10 @@ ${JSON.stringify(block.map(b => ({
 
     const blockCount = Math.ceil(beats.length / MOMENT_BLOCK_BEATS)
     const blockSize = Math.ceil(beats.length / blockCount) // evenly sized - never a last block with a single beat
-    const result: Record<string, BeatShots> = {}
+    const result: Record<string, BeatShots> = {...plannedBefore}
     for (let from = 0; from < beats.length; from += blockSize) {
         const block = beats.slice(from, from + blockSize)
+        if (block.every(b => result[b.id])) continue
         const before = beats[from - 1]
         const after = beats[from + blockSize]
         if (blockCount > 1) log.step(`Beats ${from / blockSize + 1}/${blockCount}`, styles.muted(`${block[0]!.id} - ${block.at(-1)!.id}`))

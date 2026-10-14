@@ -23,6 +23,10 @@ const characterOf = (characters: Character[], who: string) => {
 
 export type ReadPlan = { plan: BeatShots, problems: string[] }
 
+/** The most people a shot gives an own entry to, and shows at once unless it is a wide shot. */
+export const MAX_FOREGROUND = 4
+const WIDE = /\b(?:wide|establishing|long shot|panoram\w*|aerial|overhead|high-angle)\b/i
+
 const normalized = (value: string | undefined) => (value ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
 const nameOfId = (characters: Character[], id: string) => characters.find(c => c.id === id)?.name ?? id
 
@@ -93,6 +97,12 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
             problems.push(`shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
         problems.push(...unisonProblems(j, people, characters), ...singingProblems(j, people, characters, singers))
+        const entries = Object.keys(people).length
+        if (entries > MAX_FOREGROUND)
+            problems.push(`shot ${j + 1}: ${entries} people have their own entry - at most ${MAX_FOREGROUND}: the ones the shot is about, the others stay in "characters" without an entry`)
+        const framing = text(e.framing)
+        if (ids.length > MAX_FOREGROUND && !WIDE.test(framing))
+            problems.push(`shot ${j + 1}: ${ids.length} people in a "${framing || 'shot'}" - only a wide or establishing shot shows more than ${MAX_FOREGROUND}; leave the others out of "characters"`)
         return {
             action,
             ...(text(e.framing) ? {framing: text(e.framing)} : {}),

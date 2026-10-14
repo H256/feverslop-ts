@@ -65,3 +65,23 @@ describe('readBeatPlan - individuals', () => {
         expect(silent.problems[0]).toContain('Brenna')
     })
 })
+
+describe('readBeatPlan - foreground', () => {
+    const names = ['Anna', 'Bea', 'Cora', 'Dina', 'Edda', 'Fay']
+    const cast: Character[] = names.map(name => ({id: name.toLowerCase(), name, role: 'x'}))
+    const beat7 = {id: 'b3', characterIds: cast.map(c => c.id)} as StoryBeat
+    const entry = (name: string, n: number) => ({state: `stands ${n} paces from the wall`, motion: `does move number ${n}`})
+
+    test('more than four own entries in one shot are asked again', () => {
+        const people = Object.fromEntries(names.slice(0, 5).map((n, i) => [n, entry(n, i)]))
+        const r = readBeatPlan({shots: [{action: 'They fight', framing: 'wide shot', characters: names.slice(0, 5), people}]}, beat7, cast, 1)!
+        expect(r.problems).toHaveLength(1)
+        expect(r.problems[0]).toContain('5 people have their own entry')
+    })
+    test('more than four people in a medium shot are asked again, in a wide shot they are fine', () => {
+        const medium = readBeatPlan({shots: [{action: 'They march', framing: 'medium shot', characters: names}]}, beat7, cast, 1)!
+        expect(medium.problems[0]).toContain('only a wide or establishing shot')
+        const wide = readBeatPlan({shots: [{action: 'They march', framing: 'wide shot', characters: names, people: {Anna: entry('Anna', 1), Bea: entry('Bea', 2)}}]}, beat7, cast, 1)!
+        expect(wide.problems).toEqual([])
+    })
+})
