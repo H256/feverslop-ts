@@ -21,10 +21,17 @@ const characterOf = (characters: Character[], who: string) => {
     return characters.find(c => c.name.toLowerCase() === wanted || c.id.toLowerCase() === wanted)
 }
 
-export type ReadPlan = { plan: BeatShots, problems: string[] }
+/**
+ * problems: what asking again can fix and a shot cannot do without (a name that is not in the cast, a singing shot without
+ * its singer, three people in unison). notes: what the code repaired or what is only worth a line in the log - they never
+ * cost another planner call, so a rule that is nice to have can not keep the run from going on.
+ */
+export type ReadPlan = { plan: BeatShots, problems: string[], notes: string[] }
 
 /** The most people a shot gives an own entry to, and shows at once unless it is a wide shot. */
 export const MAX_FOREGROUND = 4
+/** From how many people with the same motion in one shot the planner is asked again. */
+const UNISON_ASKS = 3
 const WIDE = /\b(?:wide|establishing|long shot|panoram\w*|aerial|overhead|high-angle)\b/i
 
 const normalized = (value: string | undefined) => (value ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -35,7 +42,7 @@ const nameOfId = (characters: Character[], id: string) => characters.find(c => c
  * the video model then plays one movement five times, in the same beat. A crowd entry (isGroup) is one entry for
  * several bodies and is not compared; what it does is the prompt's to say.
  */
-function unisonProblems(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[]): string[] {
+function unisonChecks(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[]): { problems: string[], notes: string[] } {
     const named = Object.entries(people).filter(([id]) => !characters.find(c => c.id === id)?.isGroup)
     const byMotion = new Map<string, string[]>()
     for (const [id, p] of named) {
@@ -43,30 +50,53 @@ function unisonProblems(j: number, people: NonNullable<ShotPlan['people']>, char
         const key = same.split(' ').length >= 2 ? `motion:${same}` : p.state && p.frame ? `place:${normalized(p.state)}|${normalized(p.frame)}` : ''
         if (key) byMotion.set(key, [...(byMotion.get(key) ?? []), id])
     }
-    return [...byMotion.values()].filter(ids => ids.length > 1).map(ids =>
-        `shot ${j + 1}: ${ids.map(id => nameOfId(characters, id)).join(', ')} have the same motion or place - give each of them their own action, direction and timing`)
+    const problems: string[] = []
+    const notes: string[] = []
+    for (const ids of byMotion.values()) {
+        if (ids.length < 2) continue
+        const line = `shot ${j + 1}: ${ids.map(id => nameOfId(characters, id)).join(', ')} have the same motion or place`
+        // three or more is a chorus line and is asked again; two alike is a note
+        if (ids.length >= UNISON_ASKS) problems.push(`${line} - give each of them their own action, direction and timing`)
+        else notes.push(line)
+    }
+    return {problems, notes}
 }
 
 const SINGING = /\b(?:sings?|singing|sang|lip-?sync\w*|mouths? (?:is |are )?open on the (?:verse|chorus|line|lyrics?)|on the (?:verse|chorus))\b/i
 
-/** Someone who does not sing in this shot is not described singing: the video model moves their lips to the vocals. */
-function singingProblems(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: { singerIds: string[], singingPerShot: boolean[] }): string[] {
+/** Someone who does not sing in this shot is described singing: a note - the clip prompt keeps their mouth closed anyway. */
+function singingNotes(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: { singerIds: string[], singingPerShot: boolean[] }): string[] {
     if (!singers) return []
     const allowed = singers.singingPerShot[j] ? singers.singerIds : []
     return Object.entries(people)
         .filter(([id, p]) => !allowed.includes(id) && SINGING.test([p.state, p.frame, p.motion].filter(Boolean).join(' ')))
-        .map(([id]) => `shot ${j + 1}: ${nameOfId(characters, id)} does not sing in this shot - no singing, lip movement or "mouth open on the verse" for them`)
+        .map(([id]) => `shot ${j + 1}: ${nameOfId(characters, id)} is described singing but does not sing in this shot`)
 }
 
 /**
- * The planner's answer for one beat as a BeatShots, padded or cut to `needed` shots. `problems` are what asking again can fix:
- * a name that is not in the cast, nobody of the singers in a shot where a line is sung, a shot that names someone it does not show.
+ * More own entries than MAX_FOREGROUND in a shot: the code keeps the ones the shot is about - the singers of the shot
+ * first, then in the order the shot's action names them - and drops the rest of the entries. The dropped stay in the
+ * shot's characters, in the picture without a direction of their own, instead of costing another planner call.
  */
+function trimForeground(people: NonNullable<ShotPlan['people']>, action: string, characters: Character[], singing: string[]): { people: NonNullable<ShotPlan['people']>, dropped: string[] } {
+    const ids = Object.keys(people)
+    if (ids.length <= MAX_FOREGROUND) return {people, dropped: []}
+    const at = (id: string) => {
+        const c = characters.find(x => x.id === id)
+        const i = c ? [c.name, c.id].map(n => action.toLowerCase().indexOf(n.toLowerCase())).filter(k => k >= 0).sort((a, b) => a - b)[0] : undefined
+        return i ?? Number.MAX_SAFE_INTEGER
+    }
+    const ranked = [...ids].sort((a, b) => Number(singing.includes(b)) - Number(singing.includes(a)) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+    const keep = new Set(ranked.slice(0, MAX_FOREGROUND))
+    return {people: Object.fromEntries(ids.filter(id => keep.has(id)).map(id => [id, people[id]!])), dropped: ids.filter(id => !keep.has(id))}
+}
+
 export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Character[], needed: number, singers?: { singerIds: string[], singingPerShot: boolean[] }): ReadPlan | undefined {
     const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : undefined
     const rawShots = Array.isArray(raw) ? raw : o && Array.isArray(o.shots) ? o.shots : undefined
     if (!rawShots?.length) return undefined
     const problems: string[] = []
+    const notes: string[] = []
     const onScreen = characters.filter(c => beat.characterIds.includes(c.id))
 
     const shots = rawShots.map((entry, j): ShotPlan => {
@@ -78,7 +108,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             if (!found) problems.push(`shot ${j + 1}: "${name}" is not one of the characters`)
             return found ? [found.id] : []
         }))]
-        const people: NonNullable<ShotPlan['people']> = {}
+        let people: NonNullable<ShotPlan['people']> = {}
         if (e.people && typeof e.people === 'object' && !Array.isArray(e.people)) {
             for (const [who, entry] of Object.entries(e.people as Record<string, unknown>)) {
                 const found = characterOf(characters, who)
@@ -89,6 +119,11 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
                 people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {})}
             }
         }
+        const trimmed = trimForeground(people, action, characters, singers?.singingPerShot[j] ? singers.singerIds : [])
+        if (trimmed.dropped.length) {
+            people = trimmed.people
+            notes.push(`shot ${j + 1}: ${trimmed.dropped.length + MAX_FOREGROUND} people had an own entry - ${trimmed.dropped.map(id => nameOfId(characters, id)).join(', ')} kept without one`)
+        }
         // the shot's text names someone who is not in it: the video model draws a stranger for a name without a picture
         const written = [action, text(e.view), ...Object.values(people).flatMap(p => [p.state ?? '', p.frame ?? '', p.motion ?? ''])].join(' ')
         const strangers = onScreen.filter(c => !ids.includes(c.id) && mentionsCharacter(written, c)).map(c => c.name)
@@ -96,13 +131,11 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         // while a line is sung, a singer is in the picture
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
             problems.push(`shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
-        problems.push(...unisonProblems(j, people, characters), ...singingProblems(j, people, characters, singers))
-        const entries = Object.keys(people).length
-        if (entries > MAX_FOREGROUND)
-            problems.push(`shot ${j + 1}: ${entries} people have their own entry - at most ${MAX_FOREGROUND}: the ones the shot is about, the others stay in "characters" without an entry`)
+        const unison = unisonChecks(j, people, characters)
+        problems.push(...unison.problems)
+        notes.push(...unison.notes, ...singingNotes(j, people, characters, singers))
         const framing = text(e.framing)
-        if (ids.length > MAX_FOREGROUND && !WIDE.test(framing))
-            problems.push(`shot ${j + 1}: ${ids.length} people in a "${framing || 'shot'}" - only a wide or establishing shot shows more than ${MAX_FOREGROUND}; leave the others out of "characters"`)
+        if (ids.length > MAX_FOREGROUND && !WIDE.test(framing)) notes.push(`shot ${j + 1}: ${ids.length} people in a "${framing || 'shot'}"`)
         return {
             action,
             ...(text(e.framing) ? {framing: text(e.framing)} : {}),
@@ -123,5 +156,5 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         }
     }
     const sized = Array.from({length: needed}, (_, j) => shots[Math.min(j, shots.length - 1)]!)
-    return {plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems}
+    return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems}
 }
