@@ -72,3 +72,17 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.notes[0]).toContain('Bea')
     })
 })
+
+describe('readBeatPlan - compass words', () => {
+    const a: Character = {id: 'a', name: 'Anna', role: 'x'}
+    const beat = {id: 'b8', characterIds: ['a']} as StoryBeat
+    test('a compass point in a shot is a note, no further call', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna turns to face the orc to the north', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing south', motion: 'steps eastward'}}}]}, beat, [a], 1)!
+        expect(r.problems).toEqual([])
+        expect(r.notes.some(n => n.includes('3 compass word'))).toBe(true)
+    })
+    test('directions as the picture shows them are fine', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna turns to the orc on the right of the frame', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing the orc', motion: 'steps toward the camera'}}}]}, beat, [a], 1)!
+        expect(r.notes).toEqual([])
+    })
+})
