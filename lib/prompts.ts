@@ -125,15 +125,15 @@ ${storyBase}
 }
 
 // Shortlist, not a single pick: the code then draws one at random, so the LLM's favorites can't decide the look alone.
-export function styleShortlistPrompt(storyText: string, styleList: {id: string, name: string}[], count: number): AskOptions {
+export function styleShortlistPrompt(storyText: string, styleList: {id: string, name: string, group?: string}[], count: number): AskOptions {
     return {
         maxTokens: 2048,
         input: `Choose the ${count} film styles from the list that would suit this story or song best, for a music video generated with AI image and video models.
-Pick ${count} clearly different looks - not variations of one look - spread over at least 3 different kinds of medium (live action, 2D animation, 3D animation, craft/stop-motion, painted/printed). Let the story's genre, era, tone and audience decide; painted or "artistic" styles are only right when the story asks for them.
+Realistic live action is the default: at least ${Math.ceil(count * 0.6)} of the ${count} are live action looks (filmed, with a real camera and real light - different eras, genres, film stocks or lighting), clearly different from each other, not variations of one look. At most ${Math.floor(count * 0.4)} are another medium (animation, craft/stop-motion, painted/printed), and only if the story or song really asks for it - a story that does not name such a look gets none. Let the story's genre, era, tone and audience decide among the live action looks.
 Answer only with JSON: {"styles": ["<style id>", ...]}
 
 styles:
-${styleList.map(s => `- ${s.id}: ${s.name}`).join('\n')}
+${styleList.map(s => `- ${s.id}: ${s.name}${s.group ? ` [${s.group}]` : ''}`).join('\n')}
 ---
 story or lyrics:
 ${storyText}`,
