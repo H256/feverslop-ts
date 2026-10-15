@@ -1056,11 +1056,34 @@ ${storySummary}`,
         singers = known(picked.singers)
         if (!singers.length) throw new Error(`The LLM picked no singer from the cast (${JSON.stringify(picked.singers)}) - run again, or name the singers in config.json`)
     } else {
+        // a name the cast does not carry letter for letter (config.json in the song's language, the cast in English: "schamanin" / "Shamaness")
+        // is asked once: the LLM knows which character is meant, code does not guess
+        const unmatched = wanted.filter(name => !findCharacter(characters, name))
+        const resolved = new Map<string, string>()
+        if (unmatched.length) {
+            const mapped = await askJson<{ singers: { name: string, id: string | null }[] }>({
+                input: `config.json names these singers of a music video, but not all of them are spelled like the characters of the cast (another language, a nickname, an epithet). For every name say which character of the cast it means - or null if none does.
+Answer only with JSON: {"singers": [{"name": "<name as given>", "id": "<character id or null>"}]}
+---
+names: ${JSON.stringify(unmatched)}
+cast: ${castList}
+story summary:
+${storySummary}`,
+                instructions: 'You match names to the characters of a cast. Answer only with JSON.',
+            })
+            for (const m of mapped.singers ?? []) {
+                const [id] = known([m.id])
+                if (id) resolved.set(m.name, id)
+            }
+        }
         singers = [...new Set(wanted.flatMap(name => {
             const character = findCharacter(characters, name)
-            if (!character) log.warn(`singers: "${name}" is not in the cast - ignored`)
-            return character ? [character.id] : []
+            const id = character?.id ?? resolved.get(name)
+            if (!id) log.warn(`singers: "${name}" is not in the cast - ignored`)
+            else if (!character) log.step('Singers', `"${name}" is ${id}`)
+            return id ? [id] : []
         }))]
+
         if (!singers.length) throw new Error(`singers: none of ${wanted.join(', ')} is in the cast. The characters are: ${characters.map(c => `${c.name} (${c.id})`).join(', ')}`)
     }
     if (singers.length === 1) return {singers, lines: lines.map(l => ({line: l.line, text: l.text, singers}))}
