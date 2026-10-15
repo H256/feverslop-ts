@@ -13,7 +13,8 @@ import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/fi
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import type {PictureJob} from "./lib/render.ts";
-import {FilmRenderer, promptHash} from "./lib/film/render.ts";
+import {FilmRenderer, filmClipFingerprint, promptHash} from "./lib/film/render.ts";
+import {freshness} from "./lib/provenance.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
@@ -41,7 +42,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -55,6 +56,8 @@ const {values: args, positionals} = (() => {
                 again: {type: 'boolean', default: false},
                 'fix-script': {type: 'boolean', default: false},
                 'allow-import-gaps': {type: 'boolean', default: false},
+                refresh: {type: 'string', default: ''},
+                strict: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
@@ -420,6 +423,8 @@ if (render.has('images') || render.has('videos')) {
     const renderConfig = filmRenderConfig(config)
     // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
     using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
+    // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
+    renderer.refresh = new Set(args.refresh.split(',').filter(Boolean))
     log.section('11 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
@@ -469,6 +474,14 @@ if (render.has('final')) {
     // some of the clips only: a try-out, never the film itself
     const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
+    // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
+    const filmConfig = filmRenderConfig(config)
+    const stale = selected.filter(r => freshness(join(film.dir, 'videos', `${r.id}.mp4`), filmClipFingerprint(r, film.dir, filmConfig)) === 'stale').map(r => r.id)
+    if (stale.length) {
+        const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${stale.join(', ')} - render them again with --render=videos --refresh=clips`
+        if (args.strict) throw new Error(message)
+        log.warn(message)
+    }
     // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
     const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id, promptHash: promptHash(r)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
 

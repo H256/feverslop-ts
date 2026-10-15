@@ -6,7 +6,7 @@
 // usage: bun run film:replace-character [film-id]
 import * as p from "@clack/prompts";
 import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from "node:fs";
-import {dirname, join} from "node:path";
+import {basename, dirname, join} from "node:path";
 import {loadFilmConfig} from "../lib/film/config.ts";
 import {filmPictureAsset, filmRenderConfig} from "../lib/film/pictures.ts";
 import {FilmRenderer} from "../lib/film/render.ts";
@@ -18,6 +18,7 @@ import {mentions} from "../lib/film/names.ts";
 import {ask, configureLlm} from "../lib/llm.ts";
 import {printBanner, styles} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
+import {pinnedSidecar} from "../lib/provenance.ts";
 import {characterImageDescriptionPrompt} from "../lib/prompts.ts";
 import type {PictureJob} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
@@ -101,6 +102,9 @@ await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', imagePath, '-frames:v', '
     errorMessage: err => `ffmpeg could not read ${imagePath} as an image:\n${err}`,
 })
 renameSync(partial, targetFile)
+// the user's own picture: kept as it is whatever the look prompts say later, never reported as stale (lib/provenance.ts);
+// the clips made with the old one are, through the picture's content, and are listed when the video is assembled
+await Bun.write(`${targetFile}.json`, JSON.stringify(pinnedSidecar(`replaced with ${basename(imagePath)}`), null, 2))
 p.log.success(`Saved ${targetFile}`)
 changes.push(`the new image is saved as ${targetFile}`)
 
