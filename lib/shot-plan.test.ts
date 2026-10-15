@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {asBeatShots, readBeatPlan} from "./shot-plan.ts";
+import {asBeatShots, parseShotLines, readBeatPlan} from "./shot-plan.ts";
 import type {Character, StoryBeat} from "./project.ts";
 
 const cael: Character = {id: 'cael', name: 'Cael', role: 'singer'}
@@ -111,5 +111,59 @@ describe('readBeatPlan - the rest of a shot', () => {
     test('a shot without it has none', () => {
         const r = readBeatPlan({shots: [{action: 'Anna strikes', characters: ['Anna']}]}, beat, [a, b], 1)!
         expect(r.plan.shots[0]!.rest).toBeUndefined()
+    })
+})
+
+describe('parseShotLines', () => {
+    const answer = `STAGING: The tunnel mouth is at the left of the frame. The women stand on the shelf.
+SHOT 1
+framing: medium shot
+camera: The camera tracks slowly from left to right.
+view: From the shelf looking toward the formations.
+hold: no
+characters: Vael, The orcs
+action: The orc lunges at Vael, blade low; she says "no" and turns to face it.
+person: Vael | state: stands at the front, hammer in her right hand | frame: sharp, centre, three-quarter view | motion: turns to face the orc
+person: The orcs | state: the tallest in front | frame: right of the frame | motion: lunges, blade low
+rest: Brenna and Kessa hold their hammers cocked; Dara steps in on a second orc.
+SHOT 2
+framing: close-up
+camera: held
+view: tight on the arm
+hold: yes
+characters: Vael
+action: The blade strikes her silver forearm and splits.
+ENDS
+end: Vael | stands at the river's edge, hammer low
+end: The orcs | driven back to the water`
+
+    test('shots, people, rest, staging and ends are read', () => {
+        const r = parseShotLines(answer)
+        expect(r.staging).toContain('tunnel mouth')
+        expect(r.shots).toHaveLength(2)
+        expect(r.shots[0]!.characters).toEqual(['Vael', 'The orcs'])
+        expect(r.shots[0]!.action).toContain('"no"')
+        expect(Object.keys(r.shots[0]!.people as object)).toEqual(['Vael', 'The orcs'])
+        expect((r.shots[0]!.people as any).Vael.motion).toBe('turns to face the orc')
+        expect(r.shots[0]!.rest).toContain('Dara steps in')
+        expect(r.shots[1]!.hold).toBe(true)
+        expect(r.ends).toEqual({Vael: "stands at the river's edge, hammer low", 'The orcs': 'driven back to the water'})
+    })
+    test('markdown around the keys and a code fence are tolerated, unknown lines skipped', () => {
+        const r = parseShotLines('```\n**SHOT 1**\n- **framing:** wide shot\n- action: They run.\nnonsense without a key\n- characters: Anna and Bea\n```')
+        expect(r.shots).toHaveLength(1)
+        expect(r.shots[0]!.framing).toBe('wide shot')
+        expect(r.shots[0]!.characters).toEqual(['Anna', 'Bea'])
+    })
+    test('what it reads is what readBeatPlan takes', () => {
+        const a: Character = {id: 'vael', name: 'Vael', role: 'x'}
+        const b: Character = {id: 'the-orcs', name: 'The orcs', role: 'crowd', isGroup: true}
+        const beat = {id: 'b1', characterIds: ['vael', 'the-orcs']} as StoryBeat
+        const parsed = parseShotLines(answer)
+        const r = readBeatPlan({staging: parsed.staging, ends: parsed.ends, shots: parsed.shots}, beat, [a, b], 2)!
+        expect(r.problems).toEqual([])
+        expect(r.plan.shots[0]!.people!.vael!.motion).toBe('turns to face the orc')
+        expect(r.plan.shots[0]!.rest).toContain('Brenna')
+        expect(r.plan.ends).toEqual({vael: "stands at the river's edge, hammer low", 'the-orcs': 'driven back to the water'})
     })
 })
