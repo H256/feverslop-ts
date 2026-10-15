@@ -77,21 +77,37 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.problems).toEqual([])
         expect(r.notes[0]).toContain('5 people')
     })
-    test('somebody who does not sing is described singing: a note', () => {
-        const r = readBeatPlan({shots: [{action: 'They march', characters: ['Anna', 'Bea'], people: {Anna: {state: 'leads', motion: 'sings'}, Bea: {state: 'follows', motion: 'mouth open on the verse'}}}]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true]})!
+    test('somebody who does not sing is marked as singing by the planner: a note', () => {
+        const r = readBeatPlan({shots: [{action: 'They march', characters: ['Anna', 'Bea'], people: {Anna: {state: 'leads', motion: 'marches', singing: 'yes'}, Bea: {state: 'follows', motion: 'marches', singing: 'yes'}}}]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true]})!
         expect(r.problems).toEqual([])
         expect(r.notes).toHaveLength(1)
         expect(r.notes[0]).toContain('Bea')
     })
 })
 
-describe('readBeatPlan - compass words', () => {
+describe('readBeatPlan - no word lists', () => {
     const a: Character = {id: 'a', name: 'Anna', role: 'x'}
     const beat = {id: 'b8', characterIds: ['a']} as StoryBeat
-    test('a compass point in a shot is a note, no further call', () => {
+    test('a compass word in the text is not read by code - the prompt asks for directions as the picture shows them', () => {
         const r = readBeatPlan({shots: [{action: 'Anna turns to face the orc to the north', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing south', motion: 'steps eastward'}}}]}, beat, [a], 1)!
         expect(r.problems).toEqual([])
-        expect(r.notes.some(n => n.includes('3 compass word'))).toBe(true)
+        expect(r.notes).toEqual([])
+    })
+    test("the planner's size and risky flag are read, a size that is not one of the three is dropped", () => {
+        const r = readBeatPlan({shots: [{action: 'Anna walks', characters: ['Anna'], size: 'Wide', risky: 'yes'}, {action: 'Anna stops', characters: ['Anna'], size: 'huge', risky: 'no'}]}, beat, [a], 2)!
+        expect(r.plan.shots[0]).toMatchObject({size: 'wide', risky: true})
+        expect(r.plan.shots[1]!.size).toBeUndefined()
+        expect(r.plan.shots[1]!.risky).toBeUndefined()
+    })
+    test('a person marked as singing in a shot where nobody sings is a note', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna waits', characters: ['Anna'], people: {Anna: {state: 'stands', motion: 'sways', singing: 'yes'}}}]}, beat, [a], 1, {singerIds: [], singingPerShot: [false]})!
+        expect(r.notes.some(n => n.includes('does not sing'))).toBe(true)
+        expect(r.plan.shots[0]!.people!.a!.singing).toBe(true)
+    })
+    test('the line format carries size, risky and singing', () => {
+        const parsed = parseShotLines('SHOT 1\nframing: wide shot\nsize: wide\nrisky: yes\ncharacters: Anna\naction: x\nperson: Anna | state: s | frame: f | motion: m | singing: yes')
+        expect(parsed.shots[0]).toMatchObject({size: 'wide', risky: true})
+        expect((parsed.shots[0]!.people as Record<string, Record<string, string>>).Anna!.singing).toBe('yes')
     })
     test('directions as the picture shows them are fine', () => {
         const r = readBeatPlan({shots: [{action: 'Anna turns to the orc on the right of the frame', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing the orc', motion: 'steps toward the camera'}}}]}, beat, [a], 1)!

@@ -35,6 +35,9 @@ export type StoryBeat = {
     // for a group character (Character.isGroup) in characterIds: how many distinct individuals of that group are
     // visible together on screen during this beat - drives how many member variant images are worth generating
     groupSize?: Record<string, number>,
+    // the summary has somebody arrive, appear or emerge during the beat - the beat's own opening clip is then not "everybody
+    // is already there". Read from the planner's answer, never from the words of the summary (see compose.ts)
+    entrance?: boolean,
 }
 
 // One shot as the planner staged it (step 11b): the action, who is in the picture and where/how each of them is. Names are
@@ -46,8 +49,10 @@ export type ShotPlan = {
     camera?: string,
     view?: string,                  // where the camera stands and what it looks toward, in terms of the staging
     hold?: boolean,                 // nobody moves and the camera does not: same framing from the first frame to the last
+    size?: 'wide' | 'medium' | 'close', // the shot size as the planner classed it (framing stays its own words)
+    risky?: boolean,                // the planner could only write the action with a blank face or a stand-in object: it is rewritten once
     characters?: string[],          // ids of everyone visible in the shot
-    people?: Record<string, { state?: string, frame?: string, motion?: string }>,
+    people?: Record<string, { state?: string, frame?: string, motion?: string, singing?: boolean }>,
     rest?: string,                  // what everyone in the shot who has no entry of their own does at the same time, each in their own way
 }
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)

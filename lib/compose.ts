@@ -635,8 +635,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
             // in the same ongoing performance, with no entrance word in the summary, and still need telling that
             // frame 1 already shows everyone. Continuation clips (sceneClause above) already say this explicitly.
-            const entranceWords = /\b(emerge[sd]?|emerging|appear(s|ed|ing)?|enter(s|ed|ing)?|arriv(es?|ed|ing)|materiali[sz](es?|ed|ing)|steps? into (the )?frame|walks? into (the )?frame|fades? in|comes? into view)\b/i
-            const alreadyPresentNote = opensScene && !entranceWords.test(sceneClause)
+            // beat.entrance is the planner's own reading of the summary (a beat of an older project has none: everybody is there)
+            const alreadyPresentNote = opensScene && beat.entrance !== true
                 ? 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
                 : undefined
 
