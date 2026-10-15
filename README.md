@@ -324,7 +324,18 @@ How it works in detail: [docs/comfyui.md](docs/comfyui.md#the-final-video-and-fr
 Every clip is rendered on its own, from the location sheet and the character pictures - so two clips of the same room
 can disagree about where the door is, and every clip boundary is a cut. A beat can be **continuous**: its clips then run
 on without a cut. The beats step (`beats`) may mark a beat `"continuous": true` (one unbroken take: a long walk, a slow
-reveal); `"continuity": "always"` in `config.json` does it for every beat, `"never"` for none.
+reveal); `"continuity": "auto"` in `config.json` lets the clips of those beats run on, `"always"` does it for every beat.
+**It is off by default** (`"never"`: every clip is its own cut) - read the side effect below before switching it on.
+
+> **Side effect: the picture drifts, and the next clip starts on the drift.** A continuing clip starts on the last frame
+> of the clip before it, so whatever that clip did to the picture is the starting point of the next one. In a still,
+> locked-off shot (a person at a mirror, almost no movement) the model has little to follow and tends to re-draw the
+> picture: a faint double of the head and of the reflection, wall patches that slide, a black patch at an edge, an
+> object that was not there. Such a clip is clean in its first frame and worse every second - and the clip after it
+> starts on that last frame and keeps it. Continuity therefore suits shots with real movement (a walk, a reveal, a
+> fight) and not a held pose. If a continuing clip looks wrong, render it with another seed (`--again`) before the
+> ones after it, or set `"continuity": "never"` again. (Seen in a bathroom-mirror project, `h3-ref2video`: a pinned
+> frame that was also given as a reference picture made it much worse - the frame now goes in as the pin only.)
 
 In a continuous beat each clip but the first gets the last frame of the clip before it (`assets/clips/<id>_lf.png`) as one
 more reference picture, written into the prompt as the first frame of `[Shot 1]` (`keyframe completion`), and the shot
@@ -337,7 +348,8 @@ moments of the beat are written to follow each other without a restart. What fol
 - A changed `continuity` redoes `shotMoments`.
 - As a reference picture the frame carries the room and the people, but not the exact pose and framing of the frame:
   the clip may start from a different position. `pinStartFrame` (on by default) locks it to the frame at frame 0 (`MiniMaxH3AddGuide`
-  with the image); a clip then starts on the exact frame the one before ends on.
+  with the image); a clip then starts on the exact frame the one before ends on. With `pinStartFrame` the frame is
+  **not** also one of the reference pictures (the same image twice made the model blend it in a second time, shifted).
 
 ### config.json
 
@@ -348,7 +360,7 @@ Settings per project, all optional - read at every run and checked field by fiel
   "singers": [],
   "singerVoice": "auto",
   "lyricsLanguage": "en",
-  "continuity": "auto",
+  "continuity": "never",
   "seed": -1,
   "imageResolution": -1,
   "videoResolution": -1,
@@ -367,8 +379,9 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `singers`                             | `[]` = clip mode (default), `["auto"]` = the LLM picks the lead singer, `["Thorin", "brenna"]` = these characters, by name or id - see [Singing characters](#singing-characters) |
 | `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper, the `<d>[English]` lyrics tag, and the song brief (`--render=song`) |
 | `alignLyrics`                         | `true` = stems, transcript and real lyric timing; default: `true` when someone sings, else `false`. Set it to `true` in clip mode to place the lyric cues at the right moments |
-| `continuity`                          | `"auto"` (default) = the beats the story planning marked `continuous` run on without a cut, `"always"` = every clip but the first of each beat starts on the last frame of the clip before it, `"never"` = every clip is its own cut - see [Continuous scenes](#continuous-scenes) |
+| `continuity`                          | `"never"` (default) = every clip is its own cut, `"auto"` = the beats the story planning marked `continuous` run on without a cut, `"always"` = every clip but the first of each beat starts on the last frame of the clip before it. Off by default: the picture drifts from clip to clip and the next one starts on the drift - see [Continuous scenes](#continuous-scenes) |
 | `pinStartFrame`                       | `true` (default) = a continuing clip is locked to the last frame of the clip before it as its first frame (`MiniMaxH3AddGuide`, `h3-ref2video`); `false` = that frame is only one of the reference pictures, which carry the room and the people but not the pose - see [Continuous scenes](#continuous-scenes) |
+| `locationView`                        | `"auto"` (default) = the shot planning chooses one of the five views of the place for every shot (step `shotViews`, 11c) and a clip gets the one of its first shot as its place picture; `-1` = the whole reference sheet (all five views side by side - the video model shows that back as a grid with a black patch in the first seconds), `0`-`4` = that one view for every clip (front, right, behind, left, wide). Needs the sequence sheets (`sequenceSheets`, on by default) - without them the picture is the plain one. The choice is made from the text of the plan and the names of the views, never from the pictures: a language model that cannot read images is enough, and it is deliberately kept that way |
 | `fightClips`                          | `false` (default) = fight beats are cut like every beat; `true` = the clips of a fight beat (a "hit" with a crowd of creatures) are cut into one-bar pieces with one shot each and only the people of the shot as references - see `docs/comfyui.md` |
 | `leakRetries`                         | `0` (default) = off; `1` or more = a clip that came out as the reference pictures lined up on their grey backdrop is rendered again with another seed, that many times at most (needs `"seed": -1`). Already rendered clips: `bun run leak-scan <project-id>` - see `docs/comfyui.md` |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |

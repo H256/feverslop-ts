@@ -49,6 +49,9 @@ export type FilmInput = {
     locationDescriptions: Record<string, string>,
     locationViews?: Record<string, { name: string, shows: string }[]>,   // the views of the location sheet, when it has them
     lookBrief: string,
+    // config.pinStartFrame: a continuing clip's first frame is pinned by the render itself - then it is not a reference
+    // picture as well, and the prompt has no `<Picture N>` for it (the same image twice was blended in a second time, shifted)
+    pinStartFrame?: boolean,
 }
 
 // one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
@@ -66,7 +69,7 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
 // does the plan of every shot say where its people are?
 const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief}: FilmInput): FilmClipRequest {
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -74,7 +77,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
 
     // the picture slots: the place, then everyone who is in a shot of the clip, then the frame the clip goes on from
     const visibleIds = [...new Set(clip.shots.flatMap(s => s.characters))]
-    const room = MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (clip.startsFrom ? 1 : 0)
+    const room = MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (clip.startsFrom && !pinStartFrame ? 1 : 0)
     const characters = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined).slice(0, room)
 
     // With designed views the place's picture is the one view the clip starts in - not the sheet of all of them, which the video model shows back as a grid of four
@@ -101,7 +104,8 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const stagingText = planned
         ? withoutSentencesNaming(stagingFull, cast.characters.filter(c => !c.voiceOnly))
         : withoutSentencesNaming(stagingFull, unpictured)
-    const framePicture = clip.startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
+    const framePicture = clip.startsFrom && !pinStartFrame ? `<Picture ${subjects.length + 1}>` : undefined
+    const pinnedFrame = clip.startsFrom !== undefined && pinStartFrame === true
 
     // speaker ids (S1), (S2), ... in the order of the spoken lines of this clip - numbered per clip, not per character
     type Spoken = { at: number, line: number, key: string, character?: FilmCharacter, kind: DialogueKind, text: string, delivery?: string, language: string }
@@ -182,7 +186,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
-        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : ''}`
+        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.' : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
     const prompt = [
@@ -233,7 +237,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         assets: {
             pictures: [
                 ...subjects.map(s => ({label: s.picture, file: 'file' in s && s.file ? s.file : filmPictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
-                ...(clip.startsFrom ? [{label: framePicture!, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
+                ...(clip.startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
             ],
         },
         prompt,

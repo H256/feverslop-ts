@@ -334,7 +334,8 @@ export class Renderer implements Disposable {
             if (frames < clip.frames) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames}) returned only ${frames} frames`)
             const result = videoWorkflow({
                 prompt: clip.prompt,
-                pictures: clip.assets.pictures.map(p => `${this.remoteDir}/${p.file}`),
+                // a pinned first frame (config.pinStartFrame) goes in as the guide only - as a reference picture too it is blended in twice
+                pictures: clip.assets.pictures.filter(p => !(this.config.pinStartFrame && p.kind === 'frame')).map(p => `${this.remoteDir}/${p.file}`),
                 audios: clip.assets.audio.map(a => `${this.remoteDir}/stems/${a.stem}.wav`),
                 ...(withVocals ? {vocals: `${this.remoteDir}/stems/vocals.wav`} : {}),
                 // the full mix, locked into the AV latent via MiniMaxH3AddGuide - see comfy/workflows/h3-ref2video.ts

@@ -28,7 +28,9 @@ export type FilmConfig = {
     locationViews: boolean,
     // a clip whose first shot goes on in the same take as the last shot of the clip before starts on that clip's last
     // frame: "auto" = where the shot planning marked it, "scene" = every clip of a scene but its first (the people keep their posture and
-    // clothes from clip to clip, but the scene is rendered one clip after the other), "never" = every clip is its own cut
+    // clothes from clip to clip, but the scene is rendered one clip after the other), "never" (default) = every clip is its own cut.
+    // Off by default: a continuing clip starts on whatever the clip before it drifted to, and the drift (doubled people,
+    // displaced patches of the set) is carried on and grows - see docs/film.md
     continuity: 'auto' | 'scene' | 'never',
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
@@ -53,7 +55,7 @@ export const filmDefaults: FilmConfig = {
     videoWorkflow: 'h3-ref2video-film',
     sequenceSheets: true,
     locationViews: false,
-    continuity: 'auto',
+    continuity: 'never',
     subtitles: 'script',
     burnSubtitles: false,
     levelMatching: true,

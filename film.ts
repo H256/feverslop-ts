@@ -372,6 +372,7 @@ const requests = buildFilmClipRequests({
     stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
     voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
     characterDescriptions, locationDescriptions, locationViews, lookBrief,
+    pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
 })
 const outputDir = join(film.dir, 'output')
 // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film

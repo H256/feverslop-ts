@@ -39,8 +39,17 @@ export type PlanConfig = {
     lyricsLanguage: string,         // ISO 639-1 code, for Whisper and the <d>[Language] tag
     alignLyrics: boolean,           // stems + transcript + real lyric timing - default: on when someone sings
     // clips of one beat that run on without a cut start on the previous clip's last frame: "auto" = the beats the story
-    // planning marked as one continuous take, "always" = every clip but the first of each beat, "never" = every clip is its own cut
+    // planning marked as one continuous take, "always" = every clip but the first of each beat, "never" (default) = every
+    // clip is its own cut. Off by default: a continuing clip starts on whatever the clip before it drifted to, and the
+    // drift (doubled people, displaced wall patches) is carried on and grows - see README "Continuous scenes"
     continuity: 'auto' | 'always' | 'never',
+    // which view of the location's reference sheet a clip gets as its place picture: "auto" (default, see below), -1 = the whole sheet (all its views
+    // side by side - the video model shows that back as a grid, with the sheet's empty cell as a black patch, in the
+    // first seconds of a clip), 0-4 = that one view of it, from the frames the sheet was composed of
+    // (assets/sequence/locations/<id>/frames/frame_0N.png): 0 front, 1 right, 2 behind, 3 left, 4 wide; "auto" = the
+    // shot planning chooses the view of every shot (step shotViews) and a clip gets the one of its first shot - from
+    // the text of the plan and the names of the views, deliberately not from the pictures (no vision model needed)
+    locationView: number | 'auto',
 }
 
 // a project may use another model than the settings - never another server or key
@@ -65,7 +74,8 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
-    continuity: 'auto',
+    continuity: 'never',
+    locationView: 'auto',
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
@@ -117,6 +127,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.lyricsLanguage !== 'string' || !languageName(config.lyricsLanguage)) {
         fail(`lyricsLanguage must be a language code like "en" or "de", got ${JSON.stringify(config.lyricsLanguage)}`)
     }
+    if (config.locationView !== 'auto' && (!Number.isInteger(config.locationView) || config.locationView < -1 || config.locationView > 4)) fail(`locationView must be -1 (the whole sheet), the number of a view, 0 to 4, or "auto", got ${JSON.stringify(config.locationView)}`)
     if (!['auto', 'always', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "always" or "never", got ${JSON.stringify(config.continuity)}`)
     if (typeof config.alignLyrics !== 'boolean') fail(`alignLyrics must be true or false, got ${JSON.stringify(config.alignLyrics)}`)
     if (config.singers.length && !config.alignLyrics) fail('singers need the lyrics timing - remove "alignLyrics": false')
