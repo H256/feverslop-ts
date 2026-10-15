@@ -78,6 +78,8 @@ Must save exactly one **PNG**.
 | `duration`       | `number`                | `frames / FPS` - how much audio to trim, covering the whole render                               |
 | `seed`           | `number`                | already resolved - never `-1`                                                                    |
 | `resolution`     | `-1 \| number \| "WxH"` | the `videoResolution` setting - pass it to `resolution()` with `'landscape'`                     |
+| `resolutionScale` | `number \| undefined` | only for a `--preview`: the factor on the pixels - pass it to `resolution()` as its last argument |
+| `steps`          | `number \| undefined`  | only for a `--preview`: the sampling steps - use `opts.steps ?? <the workflow's own>`            |
 | `filenamePrefix` | `string`                | where ComfyUI should save the result                                                             |
 
 Must save exactly one **MP4**, 24 fps (`FPS` from `helpers.ts`), with at least `frames` frames. Frame 0 must belong to

@@ -291,6 +291,7 @@ bun index.ts --render=videos                    # MiniMax H3 clips -> videos/
 bun index.ts --render=final                     # assemble <project-id>.mp4 from the rendered clips
 bun index.ts --render=videos --only=slot-001    # just some clips, to try things out
 bun index.ts --render=videos --only=slot-005 --again   # slot-005 once more, with a new seed - the old one is kept
+bun index.ts --render=videos --only=slot-005 --preview # a cheap try-out of slot-005 -> previews/slot-005.mp4
 ```
 
 - Existing pictures and clips are never overwritten - delete one to render it again. Your own pictures in `assets/`
@@ -300,6 +301,12 @@ bun index.ts --render=videos --only=slot-005 --again   # slot-005 once more, wit
   several versions of a clip and keep the one you like: move its files back to where they were. It needs a new seed
   (`"seed": -1` in `config.json`, the default - a fixed seed gives the same clip again). A clip that goes on from the last
   frame of one you render again is named, but not rendered with it - name it too if the picture should go on from the new one.
+- `--preview` renders the clips (all, or `--only`) as cheap try-outs into `previews/<clip-id>.mp4`: the same prompt, pictures,
+  audio and length, but with `preview.scale` of the pixels and `preview.steps` sampling steps (`config.json`). A preview is
+  never a finished clip - it does not go into `videos/`, leaves no first/last frame and is not used by `--render=final`. A clip
+  that goes on from the clip before it needs that clip rendered for real (it starts on its last frame). With `--again` the
+  old preview is put away in `old/attempts/<clip-id>-preview-<time>/`. Rendering is as before, so a preview of the same
+  seed is not the same picture as the real clip - it shows composition and timing, not detail.
 - Every rendered file gets a `.json` next to it with the workflow, seed and resolution it was made with.
 - Clips are skipped until all their pictures exist; the final video needs all clips.
 - With several ComfyUI servers, all pictures - then all clips - are rendered in parallel, one job per server. The
@@ -371,6 +378,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `pinStartFrame`                       | `true` (default) = a continuing clip is locked to the last frame of the clip before it as its first frame (`MiniMaxH3AddGuide`, `h3-ref2video`); `false` = that frame is only one of the reference pictures, which carry the room and the people but not the pose - see [Continuous scenes](#continuous-scenes) |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
+| `preview`                             | `{"scale": 0.25, "steps": 4}` (default) = what `--preview` renders: `scale` is the part of the *pixels* (0.25 = half the width and height), `steps` the sampling steps (`h3-ref2video` and `h3-ref2video-cpu-clip`; the film workflows ignore it) |
 | `imageWorkflow`, `videoWorkflow`, `songWorkflow` | a workflow file in `comfy/workflows/`, without `.ts`                                              |
 | `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `songAudio`                           | final video: `true` = the original song replaces the clips' audio (default), `false` = keep the clips' audio |

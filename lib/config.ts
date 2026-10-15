@@ -4,6 +4,10 @@ import type {Resolution} from "../comfy/helpers.ts";
 import {warnUnknownKeys} from "./log.ts";
 
 // projects/<id>/config.json - documented in docs/comfyui.md
+// --preview: a clip rendered cheaply to judge it before the real render - same prompt, pictures, audio and length, but
+// a fraction of the pixels and fewer sampling steps. scale is a factor on the *area* (0.25 = half the width and height)
+export type PreviewConfig = { scale: number, steps: number }
+
 export type RenderConfig = {
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
@@ -21,6 +25,7 @@ export type RenderConfig = {
     // a continuing clip (config.continuity) is also pinned to the last frame of the clip before it as its first frame
     // (MiniMaxH3AddGuide), not only given it as a reference picture
     pinStartFrame: boolean,
+    preview?: PreviewConfig,         // optional only for the film's render config - a project always has it (defaults)
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
@@ -54,6 +59,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     sequenceSheets: true,
     sequenceWorkflow: 'h3-sequence-to-sheet',
     pinStartFrame: true,
+    preview: {scale: 0.25, steps: 4},
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
@@ -91,6 +97,14 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     }
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
+    const preview = config.preview as unknown
+    if (!preview || typeof preview !== 'object' || Array.isArray(preview)) fail(`preview must be an object like {"scale": 0.25, "steps": 4}, got ${JSON.stringify(preview)}`)
+    config.preview = {...defaults.preview!, ...(preview as object)}
+    warnUnknownKeys(preview as object, ['scale', 'steps'], `${file}: preview`)
+    if (!(typeof config.preview.scale === 'number' && config.preview.scale > 0 && config.preview.scale <= 1)) {
+        fail(`preview.scale is the part of the pixels a preview renders, more than 0 up to 1 (0.25 = half the width and height), got ${JSON.stringify(config.preview.scale)}`)
+    }
+    if (!(Number.isInteger(config.preview.steps) && config.preview.steps >= 1)) fail(`preview.steps must be a whole number of sampling steps, 1 or more, got ${JSON.stringify(config.preview.steps)}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)

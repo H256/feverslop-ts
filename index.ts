@@ -41,7 +41,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
-const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
+const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
@@ -55,6 +55,7 @@ const {values: args, positionals} = (() => {
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
+                preview: {type: 'boolean', default: false},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
@@ -76,6 +77,9 @@ if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.joi
 // --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
 if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
+// --preview renders the clips cheaply (config.json "preview": fewer steps, a fraction of the pixels) into previews/, to judge them first
+if (args.preview && !render.has('videos')) log.usageError('--preview goes with --render=videos: it renders the clips (all, or the ones named in --only) as cheap previews into previews/', usage)
+if (args.preview && render.has('final')) log.usageError('--preview does not go with --render=final - the final video is assembled from the real clips in videos/', usage)
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
@@ -797,7 +801,7 @@ if (render.has('images') || render.has('videos')) {
     if (render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
         const selected = clips.filter(c => only.size === 0 || only.has(c.id))
-        log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
+        log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}${args.preview ? styles.muted(` - previews at ${config.preview!.scale} of the pixels, ${config.preview!.steps} steps -> previews/`) : ''}`)
         // on request, and only for the clips named: the old version is put away in old/attempts/, then the clip is rendered again
         if (args.again) {
             const unknown = [...only].filter(id => !clips.some(c => c.id === id))
@@ -805,7 +809,9 @@ if (render.has('images') || render.has('videos')) {
             if (config.seed !== -1) log.warn(`"seed" is ${config.seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)
             const stamp = versionStamp()
             for (const clip of selected) {
-                const keep = archiveFiles(project.dir, `${clip.id}-${stamp}`, [join('videos', `${clip.id}.mp4`), join('videos', `${clip.id}.mp4.json`), boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
+                const keep = archiveFiles(project.dir, `${clip.id}${args.preview ? '-preview' : ''}-${stamp}`, args.preview
+                    ? [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]
+                    : [join('videos', `${clip.id}.mp4`), join('videos', `${clip.id}.mp4.json`), boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
                 log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
             }
             // a clip that goes on from the last frame of one of these starts on a picture that is gone
@@ -813,12 +819,13 @@ if (render.has('images') || render.has('videos')) {
             for (const clip of selected) {
                 for (let next = clips.find(c => c.startsFrom === clip.id); next; next = clips.find(c => c.startsFrom === next!.id)) if (!selected.includes(next)) later.add(next.id)
             }
-            if (later.size) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
+            // a preview leaves no last frame behind - the clips after it are not affected
+            if (later.size && !args.preview) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
         }
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
         await renderAll(clipChains(selected), async chain => {
-            for (const clip of chain) await renderer.renderClip(clip, stemFiles)
+            for (const clip of chain) await renderer.renderClip(clip, stemFiles, args.preview)
         })
     }
 }
