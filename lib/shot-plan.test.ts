@@ -52,6 +52,17 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.problems).toEqual([])
         expect(r.notes).toEqual([])
     })
+    test('three people and one of them with an entry but no motion: a note, no further call', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna and Bea clear the way', characters: ['Anna', 'Bea', 'Cora'], people: {Anna: own(1), Bea: own(2), Cora: {state: 'stands at the back'}}}]}, beat, cast, 1)!
+        expect(r.problems).toEqual([])
+        expect(r.notes).toHaveLength(1)
+        expect(r.notes[0]).toContain('Cora has no motion in a shot of 3 people')
+    })
+    test('two people and one of them without motion: not a note, the check is for three or more', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna speaks, Bea listens', characters: ['Anna', 'Bea'], people: {Anna: own(1), Bea: {state: 'stands at the back'}}}]}, beat, cast, 1)!
+        expect(r.problems).toEqual([])
+        expect(r.notes).toEqual([])
+    })
     test('more than four own entries are cut to four by the code: singers first, then the order of the action', () => {
         const people = Object.fromEntries(names.map((n, i) => [n, own(i)]))
         const r = readBeatPlan({shots: [{action: 'Fay leads, then Edda follows', characters: names, framing: 'wide shot', people}]}, beat, cast, 1, {singerIds: ['dina'], singingPerShot: [true]})!
