@@ -540,14 +540,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         }
 
         // A couple of concrete, already-authored visual details from the location's own description (skipping
-        // the first comma segment, which just repeats the name) - repeated whenever few enough characters share
-        // the frame that they'd otherwise dominate it, since a close/medium shot with little else in it and only
-        // a location *label* to go on tends to fall back to the characters' own reference pictures' plain grey
-        // background instead - observed in practice not just for solo shots but for two-character medium-close-ups.
+        // the first comma segment, which just repeats the name) - repeated in every shot with somebody in it, since a
+        // shot with only a location *label* to go on tends to fall back to the characters' own reference pictures'
+        // plain grey background instead - observed in practice for solo shots and two-character medium-close-ups, and
+        // for groups: three people in a medium close-up and four in a wide shot came out as the reference figures
+        // lined up on their grey backdrop (roots-of-the-world), which a group of that size had no anchor against.
         const locationAnchor = locationSubject
             ? locationSubject.description.split(',').map(s => s.trim()).filter(Boolean).slice(1, 3).join(', ')
             : undefined
-        const smallGroup = (n: number) => n > 0 && n <= 2
 
         function buildShotTexts() {
             return shots.map((shot, j) => {
@@ -597,7 +597,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view)}.` : ''
                 const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, nobody steps closer or away, the camera does not move.' : ''
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor && smallGroup(shot.focus.length) ? ` ${locationAnchor} still visible behind them.` : ''}${holdClause}`
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor ? ` ${locationAnchor} still visible behind them.` : ''}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {
@@ -697,7 +697,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                    : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
+                    : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`}`),
                 ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
@@ -705,6 +705,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'detailed_description:',
                 styleOpening(lookBrief),
                 ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
+                // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
+                ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
                 ...(staging ? [`Layout of the place: ${withLabels(staging)}`] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),

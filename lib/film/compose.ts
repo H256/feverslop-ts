@@ -202,12 +202,14 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         'retention_analysis:',
         ...subjects.map(s => `${s.label} (appears in ${s.kind === 'location' ? shots.map(x => x.label).join(', ') : appearsIn(s.label) || shots[0]!.label}): fully_preserved - ${s.kind === 'location'
             ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-            : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
+            : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`}`),
         ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
         '',
         'detailed_description:',
         styleOpening(lookBrief),
         ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
+        // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
+        ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
         ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
         ...shotTexts,
         '',

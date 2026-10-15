@@ -7,6 +7,7 @@ import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo} from "./assemble.ts";
+import {backdropSeconds} from "./leak.ts";
 import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
@@ -307,7 +308,7 @@ export class Renderer implements Disposable {
         if (missingStems.length) return log.warn(`${clip.id} skipped - missing stem file(s) for: ${missingStems.map(a => a.stem).join(', ')}`)
         if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id} skipped - missing the full song (needed for MiniMaxH3AddGuide)`)
 
-        const {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', async () => {
+        const prepare = async () => {
             const pictureUploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             // Upload the whole separated stem per track (not a per-clip cut) and let the workflow trim it to
             // this clip's span itself (TrimAudioDuration) - a pre-cut file can't account for the video model
@@ -348,7 +349,29 @@ export class Renderer implements Disposable {
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}
-        })
+        }
+        let {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', prepare)
+
+        // a clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one
+        // that did is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times
+        for (let tries = 0; this.config.leakRetries > 0; tries++) {
+            const leaked = await backdropSeconds(target)
+            if (!leaked.length) break
+            const where = `${leaked.length} sample(s) between ${leaked[0]!.toFixed(1)} and ${leaked.at(-1)!.toFixed(1)} s`
+            if (this.config.seed !== -1) {
+                log.warn(`${file} has a grey studio backdrop (${where}) - the seed is fixed in config.json, so rendering it again gives the same clip. Use "seed": -1, or --again with another seed`)
+                break
+            }
+            const put = join(this.projectDir, 'old', 'leaks', `${clip.id}-seed-${seed}.mp4`)
+            if (tries >= this.config.leakRetries) {
+                log.warn(`${file} still has a grey studio backdrop (${where}) after ${tries} more render(s) - kept as it is, bun run leak-scan ${this.projectId} lists it again`)
+                break
+            }
+            mkdirSync(dirname(put), {recursive: true})
+            renameSync(target, put)
+            log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
+            seed = (await this.render(`clip ${clip.id}`, target, '.mp4', prepare)).seed
+        }
 
         const rendered = await probeVideo(target)
         if (rendered.frames < clip.frames) log.warn(`${file} has ${rendered.frames} frames, the clip needs ${clip.frames} - delete it and render again`)
