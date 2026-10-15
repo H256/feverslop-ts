@@ -84,6 +84,8 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     let answer = ''
     let outputTokens: number | undefined
     let incomplete: string | undefined
+    // a stream that ends without a terminal event was cut off by the connection or the server - what came before is not an answer
+    let finished = false
     prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId()}, reasoning)
 
     const stopSpinner = startSpinner(() => {
@@ -103,12 +105,16 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
                     answer += event.delta
                     break
                 case 'response.completed':
+                    finished = true
                     outputTokens = event.response.usage?.output_tokens
                     break
                 case 'response.incomplete':
+                    finished = true
                     outputTokens = event.response.usage?.output_tokens
                     incomplete = event.response.incomplete_details?.reason ?? 'unknown reason'
                     break
+                case 'response.failed':
+                    throw new Error(`the LLM server reported a failed response: ${event.response.error?.message ?? event.response.error?.code ?? 'no reason given'}`)
                 case 'error':
                     throw new Error(event.message)
             }
@@ -116,6 +122,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     } finally {
         stopSpinner()
     }
+    if (!finished) throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
     log.step('Done', styles.muted(`${thinking.length} chars thinking (${reasoning}), ${answer.length} chars answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''}`))
     // llama.cpp reports a cut-off answer as "completed" - all tokens used up means cut off, too
     const limit = prompt.max_output_tokens

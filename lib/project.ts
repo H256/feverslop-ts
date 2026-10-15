@@ -167,7 +167,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     stems: [],
     instrumentStems: ['stems', 'cast'],
     transcript: ['stems'],
-    lyricsTiming: ['transcript'],
+    lyricsTiming: ['transcript', 'music'],
     story: [],
     summary: ['story'],
     cast: ['story'],
@@ -215,7 +215,8 @@ export class ProjectStore {
 
     // written next to the target first, so a crash mid-write never leaves a truncated project.json
     async save() {
-        const partial = `${this.file}.partial`
+        // the process id in the name: two runs saving at once never write into the same temporary file
+        const partial = `${this.file}.${process.pid}.partial`
         await Bun.write(partial, JSON.stringify(this.data, null, 2))
         renameSync(partial, this.file)
     }

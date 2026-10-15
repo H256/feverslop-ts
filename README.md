@@ -301,7 +301,16 @@ bun index.ts --render=videos --only=slot-005 --again   # slot-005 once more, wit
   several versions of a clip and keep the one you like: move its files back to where they were. It needs a new seed
   (`"seed": -1` in `config.json`, the default - a fixed seed gives the same clip again). A clip that goes on from the last
   frame of one you render again is named, but not rendered with it - name it too if the picture should go on from the new one.
-- Every rendered file gets a `.json` next to it with the workflow, seed and resolution it was made with.
+- Every rendered file gets a `.json` next to it with the workflow, seed, resolution and a `fingerprint` of what it was made
+  from (prompt, workflow, the content of its pictures and - for a clip that goes on from another - that clip). An existing
+  file whose fingerprint no longer matches the plan is **stale**: it is used as it is and listed (when rendering, and
+  when the final video is assembled). `--refresh=pictures,clips` puts the stale ones away in `old/attempts/` and renders
+  them again; `--strict` makes the final video refuse stale clips. Files without a fingerprint (older projects) and
+  pictures you replaced with `replace-character` (their `.json` says `"source": "user"`) are never reported.
+- A job that was queued for another request than the plan has now is not resumed after an interruption (its
+  `.pending-<id>.json` is kept), the clip is queued again.
+- Only one run works on a project at a time (`.lock` in the project folder, with the process id; a lock of a process
+  that is gone is taken over).
 - Clips are skipped until all their pictures exist; the final video needs all clips.
 - With several ComfyUI servers, all pictures - then all clips - are rendered in parallel, one job per server. The
   status line at the bottom shows every running job and its server.

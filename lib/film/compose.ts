@@ -1,6 +1,7 @@
 import {escapeRegExp} from "../shot-plan.ts";
 import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
+import {log} from "../log.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
@@ -77,9 +78,16 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const voicesInScene = voices[clip.sceneId] === true
 
     // the picture slots: the place, then everyone who is in a shot of the clip, then the frame the clip goes on from
-    const visibleIds = [...new Set(clip.shots.flatMap(s => s.characters))]
+    // who speaks comes first: a speaker without a picture would be turned into an off-screen voice
+    const speakerIds = clip.shots.flatMap(s => s.lines.map(n => {
+        const line = sceneLines[n]
+        return line?.type === 'dialogue' ? characterOf(cast, line.speaker)?.id : undefined
+    }))
+    const visibleIds = [...new Set(clip.shots.flatMap(s => s.characters))].sort((a, b) => Number(speakerIds.includes(b)) - Number(speakerIds.includes(a)))
     const room = MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (clip.startsFrom && !pinStartFrame ? 1 : 0)
-    const characters = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined).slice(0, room)
+    const visible = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined)
+    const characters = visible.slice(0, room)
+    if (visible.length > room) log.warn(`${clip.id}: ${visible.length} people in its shots but room for ${room} pictures - ${visible.slice(room).map(c => c.name).join(', ')} get none (shots need to be divided, --redo=coverage --scenes=${clip.sceneId})`)
 
     // With designed views the place's picture is the one view the clip starts in - not the sheet of all of them, which the video model shows back as a grid of four
     const views = location ? locationViews?.[location.id] : undefined

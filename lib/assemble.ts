@@ -41,6 +41,13 @@ export async function probeVideo(file: string): Promise<VideoInfo> {
     return {frames, width: video.width!, height: video.height!, fps, hasAudio: streams.some(s => s.codec_type === 'audio')}
 }
 
+/**
+ * How many frames of the 24 fps target grid a clip fills: a clip at another frame rate is resampled by the assembly,
+ * so its own frame count (48 at 12 fps) is not what ends up in the film (96).
+ */
+export const framesOnGrid = (info: Pick<VideoInfo, 'frames' | 'fps'>) =>
+    Math.abs(info.fps - FPS) > 0.01 ? Math.round(info.frames * FPS / info.fps) : info.frames
+
 /** The duration of an audio or video file in seconds, from its container. */
 export async function probeDuration(file: string): Promise<number> {
     const stdout = await runProcess(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], {errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
@@ -76,7 +83,7 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
 
     const infos = await Promise.all(files.map(probeVideo))
     clips.forEach((clip, i) => {
-        if (infos[i]!.frames < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${infos[i]!.frames} frames, but the clip needs ${clip.frames} - delete it and render again`)
+        if (framesOnGrid(infos[i]!) < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${framesOnGrid(infos[i]!)} frames (at ${FPS} fps), but the clip needs ${clip.frames} - delete it and render again`)
         if (!songAudio && !infos[i]!.hasAudio) throw new Error(`videos/${clip.id}.mp4 has no audio - set "songAudio": true in config.json`)
     })
 

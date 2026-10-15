@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {chooseClipStarts, isFightBeat, splitFightSlots} from "./music.ts";
+import {buildTimeline, chooseClipStarts, isFightBeat, splitFightSlots} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
@@ -64,5 +64,21 @@ describe('splitFightSlots', () => {
         expect(r.slots[0]!.lyrics).toEqual(['Orcs in the dark'])
         expect(r.slots[1]!.lyrics).toEqual([])
         expect(r.slots[2]!.vocals).toEqual([])
+    })
+})
+
+describe('buildTimeline', () => {
+    test('a long lead-in before late downbeats is cut by time so every clip fits the limit', () => {
+        const music = {bpm: 120, durationSec: 20, downbeats: [15, 17, 19], barEnergy: [0.5, 0.5, 0.5], sections: [{label: 's', start: 0, end: 20, energy: 0.5}]} as unknown as MusicMap
+        const {slots} = buildTimeline(music, [{label: 's', lines: ['a line']}], 9.292)
+        expect(slots.length).toBeGreaterThan(1)
+        for (const slot of slots) {
+            expect(slot.end - slot.start).toBeGreaterThan(0)
+            expect(slot.end - slot.start).toBeLessThanOrEqual(9.292 + 1e-6)
+        }
+        // no gaps: every clip starts where the one before ends, from 0 to the end of the song
+        expect(slots[0]!.start).toBe(0)
+        slots.forEach((s, i) => { if (i) expect(s.start).toBe(slots[i - 1]!.end) })
+        expect(slots.at(-1)!.end).toBe(20)
     })
 })

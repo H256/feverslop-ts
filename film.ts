@@ -13,16 +13,18 @@ import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/fi
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import type {PictureJob} from "./lib/render.ts";
-import {FilmRenderer, promptHash} from "./lib/film/render.ts";
+import {FilmRenderer, filmClipFingerprint, promptHash} from "./lib/film/render.ts";
+import {freshness} from "./lib/provenance.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
+import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {timelineEdl} from "./lib/film/timeline.ts";
-import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
@@ -40,7 +42,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -53,6 +55,9 @@ const {values: args, positionals} = (() => {
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
                 'fix-script': {type: 'boolean', default: false},
+                'allow-import-gaps': {type: 'boolean', default: false},
+                refresh: {type: 'string', default: ''},
+                strict: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
@@ -81,11 +86,17 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
 }
 
 const film = new FilmStore(filmId!)
+// before the load: a run that writes works from the state it read, so no other run may save in between
+lockProject(film.dir, `film ${film.id}`)
 await film.load()
 // --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
 const sceneIds = new Set(args.scenes.split(',').filter(Boolean))
 if (sceneIds.size && !redoSteps.includes('coverage')) log.usageError('--scenes goes with --redo=coverage: it names the scenes whose shots are planned again', usage)
 const keptCoverage = sceneIds.size ? film.data.coverage : undefined
+// the shots of a scene stay only for the screenplay, cast, look and views they were planned from: a screenplay that is
+// planned again (or edited) gives other scenes and dialogue indices, and old shots would be read against them
+const coverageBasis = () => Bun.hash(JSON.stringify([film.data.screenplay, film.data.cast, film.data.lookBrief, film.data.locationViews])).toString(16)
+const keptBasis = keptCoverage ? coverageBasis() : undefined
 for (const step of redoSteps) film.invalidate(step)
 
 const readInput = async (name: string) => existsSync(film.input(name)) ? (await Bun.file(film.input(name)).text()).trim() : ''
@@ -116,6 +127,8 @@ await film.syncInputs({
     targetDuration: {value: String(config.targetDuration), steps: ['outline', 'coverage']},
     'style.txt': {value: style, steps: ['lookBrief']},
     subtitles: {value: config.subtitles, steps: ['subtitles']},
+    // designed views of the places change what the coverage is planned against
+    sequenceViews: {value: `${config.sequenceSheets}:${config.locationViews}`, steps: ['locationViews', 'coverage']},
 })
 
 /////////// 1 · BRIEF
@@ -146,17 +159,27 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
 
     // the dialogue is checked against the source: the LLM structures the script, it must not reword a line
     let result = toScreenplay(await askJson(screenplayParsePrompt(source, brief.language)), meta)
-    let missing = missingDialogue(result, source)
+    // lost lines count as well: the check above only sees what the LLM added or changed
+    const unfaithful = (play: typeof result) => [...missingDialogue(play, source), ...omittedSourceLines(play, source)]
+    let missing = unfaithful(result)
     if (missing.length) {
-        log.warn(`${missing.length} dialogue line(s) differ from the screenplay - asking again`)
+        log.warn(`${missing.length} dialogue line(s) differ from or are missing in the screenplay - asking again`)
         result = toScreenplay(await askJson(screenplayParsePrompt(source, brief.language, missing)), meta)
-        missing = missingDialogue(result, source)
+        missing = unfaithful(result)
     }
     if (missing.length) {
-        log.warn(`${missing.length} dialogue line(s) still differ from the screenplay - fix them in ${film.file}, or run --redo=screenplay:\n${missing.map(m => `  "${m}"`).join('\n')}`)
+        log.warn(`${missing.length} line(s) still differ from or are missing in the screenplay - fix them in ${film.file}, or run --redo=screenplay:\n${missing.map(m => `  "${m}"`).join('\n')}`)
     }
     return result
 })
+// the screenplay is the base of every expensive step after it: one that does not hold the whole source stops the run here
+// (the source is checked again on every run, so a fix in project.json lets it through)
+if (mode === 'screenplay') {
+    const unfaithful = [...missingDialogue(screenplay, source), ...omittedSourceLines(screenplay, source)]
+    if (unfaithful.length && !args['allow-import-gaps']) {
+        throw new Error(`the structured screenplay is not the source: ${unfaithful.length} line(s) are changed or missing:\n${unfaithful.slice(0, 10).map(m => `  "${m}"`).join('\n')}\nfix them in ${film.file}, run --redo=screenplay, or go on anyway with --allow-import-gaps`)
+    }
+}
 const lines = screenplay.scenes.flatMap(s => s.elements).filter(e => e.type === 'dialogue').length
 const seconds = estimateSeconds(screenplay)
 log.step('Scenes', styles.muted(`${screenplay.scenes.length} · ${lines} dialogue lines`))
@@ -336,9 +359,11 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const ends = Object.entries(previous?.ends ?? {}).map(([id, where]) => [cast.characters.find(c => c.id === id)?.name ?? id, where] as const)
         return previous && ends.length ? {scene: previous.sceneId, ends: Object.fromEntries(ends), view: previous.shots.at(-1)?.view} : undefined
     }
+    const keepsShots = keptBasis === undefined || keptBasis === coverageBasis()
+    if (!keepsShots) log.warn('the screenplay, cast or look changed since the shots were planned - every scene is planned again, --scenes cannot keep the old shots')
     for (const [i, scene] of screenplay.scenes.entries()) {
         // a scene that is not named keeps the shots it had
-        const kept = keptCoverage?.find(c => c.sceneId === scene.id)
+        const kept = keepsShots ? keptCoverage?.find(c => c.sceneId === scene.id) : undefined
         if (sceneIds.size && !sceneIds.has(scene.id) && kept) {
             log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.muted(`${scene.id} keeps its shots`))
             result.push(kept)
@@ -398,6 +423,8 @@ if (render.has('images') || render.has('videos')) {
     const renderConfig = filmRenderConfig(config)
     // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
     using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
+    // what was made from another request than the plan has now is rendered again - the old ones are kept (lib/provenance.ts)
+    renderer.refresh = new Set(args.refresh.split(',').filter(Boolean))
     log.section('11 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
@@ -447,6 +474,14 @@ if (render.has('final')) {
     // some of the clips only: a try-out, never the film itself
     const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
+    // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
+    const filmConfig = filmRenderConfig(config)
+    const stale = selected.filter(r => freshness(join(film.dir, 'videos', `${r.id}.mp4`), filmClipFingerprint(r, film.dir, filmConfig)) === 'stale').map(r => r.id)
+    if (stale.length) {
+        const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${stale.join(', ')} - render them again with --render=videos --refresh=clips`
+        if (args.strict) throw new Error(message)
+        log.warn(message)
+    }
     // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
     const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id, promptHash: promptHash(r)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
 

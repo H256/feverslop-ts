@@ -8,14 +8,16 @@ import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
+import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
-import {type PictureJob, Renderer} from "./lib/render.ts";
+import {clipFingerprint, type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
-import {assembleFinal} from "./lib/assemble.ts";
+import {assembleFinal, formatSlotRanges} from "./lib/assemble.ts";
+import {freshness} from "./lib/provenance.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
@@ -45,6 +47,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
+             [--refresh=pictures,clips] [--strict]   (--refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -64,6 +67,8 @@ const {values: args, positionals} = (() => {
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
                 'debug-audio': {type: 'boolean', default: false},
+                refresh: {type: 'string', default: ''},
+                strict: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
@@ -76,6 +81,10 @@ const {values: args, positionals} = (() => {
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use song, images, videos, final or all`, usage)
+// --refresh=pictures,clips renders what was made from another request than the plan has now (lib/provenance.ts) again
+const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
+const unknownRefresh = [...refreshKinds].filter(k => k !== 'pictures' && k !== 'clips')
+if (unknownRefresh.length) log.usageError(`--refresh: unknown "${unknownRefresh.join(', ')}" - use pictures, clips`, usage)
 // --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
 if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
@@ -94,6 +103,8 @@ if (!projectExists(projectId)) {
 }
 const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
+// before the load: a run that writes works from the state it read, so no other run may save in between
+if (!args.gallery) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
@@ -303,15 +314,24 @@ log.box('Summary', storySummary)
 const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
     const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
     const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
+    const takenCharacters = new Set<string>()
+    const takenLocations = new Set<string>()
+    const uniqueId = (base: string, taken: Set<string>) => {
+        let id = base
+        for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
+        taken.add(id)
+        return id
+    }
     return {
+        // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
         characters: extracted.characters.map(c => ({
-            id: toId(c.name), name: c.name, role: c.role,
+            id: uniqueId(toId(c.name), takenCharacters), name: c.name, role: c.role,
             ...(c.isGroup === true ? {isGroup: true} : {}),
             ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
         })),
-        locations: extracted.locations.map(l => ({id: toId(l.name), ...l})),
+        locations: extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)})),
     }
 })
 log.step('Characters', styles.muted(`(${cast.characters.length})`))
@@ -925,6 +945,7 @@ for (const clip of clips) {
 if (render.has('images') || render.has('videos')) {
     const only = new Set(args.only.split(',').filter(Boolean))
     using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
+    renderer.refresh = refreshKinds
     log.section('13 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})${config.sequenceSheets ? `, sequence sheets (${config.sequenceWorkflow})` : ''}`))
     log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
@@ -969,6 +990,13 @@ if (render.has('final')) {
     log.section('14 · ASSEMBLING THE FINAL VIDEO')
     log.step('Audio', config.songAudio ? 'original song' : styles.muted('the clips\' own audio ("songAudio": false)'))
     const target = join(project.dir, `${project.id}.mp4`)
+    // a clip made from another request than the plan has now is still a clip: said here, an error only with --strict
+    const stale = clips.filter(c => freshness(join(project.dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, project.dir, config)) === 'stale').map(c => c.id)
+    if (stale.length) {
+        const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${formatSlotRanges(stale)} - render them again with --render=videos --refresh=clips`
+        if (args.strict) throw new Error(message)
+        log.warn(message)
+    }
     const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
 }

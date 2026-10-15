@@ -1,7 +1,7 @@
 import {describe, expect, test} from "bun:test";
 import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
-import {characterOf, locationOf, missingDialogue, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
+import {characterOf, locationOf, missingDialogue, omittedSourceLines, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay} from "./types.ts";
 
@@ -119,6 +119,18 @@ describe('coverage', () => {
         expect(clips.map(c => c.index)).toEqual(clips.map((_, i) => i + 1))
         // frames of the clips follow each other without gaps
         clips.reduce((frame, c) => { expect(c.frameStart).toBe(frame); return frame + c.frames }, 0)
+    })
+    test('a single shot longer than a clip that cannot be split is an error, not a clip over the limit', () => {
+        const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1, 2], seconds: 4})]}, bridge, cast).coverage
+        const long = {...plan, shots: plan.shots.map(s => ({...s, seconds: 9.8, lines: []}))}
+        expect(() => packClips(screenplay, [long, toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 4})]}, hut, cast).coverage], 'auto')).toThrow(/cannot be split/)
+    })
+    test('shots are not packed into one clip when their people would not all get a picture', () => {
+        const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 2}), shot({lines: [2], seconds: 2, characters: ['Ben'], action: 'Ben answers.'})]}, bridge, cast).coverage
+        const crowd = (from: number) => Array.from({length: 5}, (_, i) => `c${from + i}`)
+        const wide = {...plan, shots: [{...plan.shots[0]!, characters: crowd(0)}, {...plan.shots[1]!, characters: crowd(5)}]}
+        const clips = packClips(screenplay, [wide, toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 4})]}, hut, cast).coverage], 'auto').filter(c => c.sceneId === 's1')
+        expect(clips).toHaveLength(2)
     })
     test('continuity "scene" chains every clip but the first of a scene, "never" none', () => {
         const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8}), shot({characters: ['Ben'], action: 'Ben answers.', lines: [2], seconds: 8})]}, bridge, cast).coverage
@@ -644,5 +656,26 @@ describe('the timeline as an edit decision list', () => {
         // the third names a clip that is not the one before it: nothing is left out
         expect(edl).toContain('003  AX       V     C        00:00:00:00 00:00:01:00 00:00:04:23 00:00:05:23')
         expect(edl).toContain('* FROM CLIP NAME: clip-002.mp4')
+    })
+})
+
+describe('source fidelity and ambiguous names', () => {
+    const play = toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'A', text: 'Hello.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'})
+    test('a source line the screenplay has no trace of is reported', () => {
+        expect(omittedSourceLines(play, 'A\nHello.\nB\nDo not leave me here.')).toEqual(['Do not leave me here.'])
+    })
+    test('a source with everything in it reports nothing', () => {
+        expect(omittedSourceLines(play, 'A\nHello.')).toEqual([])
+    })
+    test('a short line is not found inside other words', () => {
+        const short = toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'A', text: 'No.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'})
+        expect(missingDialogue(short, 'A\nNone of this is said.')).toEqual(['No.'])
+    })
+    test('an alias that names two characters belongs to neither - the cue is then not in the cast', () => {
+        const raw = {characters: [{name: 'Anna', aliases: ['A']}, {name: 'Ben', aliases: ['A']}], locations: [{name: 'The Hut', aliases: ['The Hut']}]}
+        expect(() => toCast(raw, play)).toThrow('not in the cast')
+        const named = toCast(raw, toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'Anna', text: 'Hi.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'}))
+        expect(characterOf(named, 'A')).toBeUndefined()
+        expect(characterOf(named, 'Anna')?.name).toBe('Anna')
     })
 })

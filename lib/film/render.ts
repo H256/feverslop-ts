@@ -5,12 +5,25 @@ import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
 import {Renderer} from "../render.ts";
+import {fileFingerprint, fingerprint, recordedFingerprint} from "../provenance.ts";
 import {workflowDir} from "../config.ts";
 import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 
 /** What a clip was rendered from - the film refuses to use a clip made from another prompt or length. */
 export const promptHash = (clip: { prompt: string, frames: number }) => Bun.hash(`${clip.frames}
 ${clip.prompt}`).toString(16)
+
+/**
+ * What a film clip is made from, beyond its prompt: the pictures it is given (their content), the workflow and size, and -
+ * for a clip that goes on from another - what that one was made from, so rendering a clip again makes its successors stale.
+ */
+export function filmClipFingerprint(clip: FilmClipRequest, projectDir: string, config: { videoWorkflow: string, videoResolution: string | number, pinStartFrame?: boolean }) {
+    return fingerprint(
+        promptHash(clip), config.videoWorkflow, config.videoResolution, config.pinStartFrame === true,
+        clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
+        clip.startsFrom ? recordedFingerprint(join(projectDir, `videos/${clip.startsFrom}.mp4`)) ?? '' : '',
+    )
+}
 
 const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
 
@@ -22,7 +35,8 @@ export class FilmRenderer extends Renderer {
     async renderFilmClip(clip: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
-        if (existsSync(target)) {
+        const request = filmClipFingerprint(clip, this.projectDir, this.config)
+        if (existsSync(target) && !this.staleFile('clips', file, request, [file, `${file}.json`, firstFrame(clip.id), filmBoundaryFrame(clip.id)])) {
             log.step('Exists', styles.muted(file))
             const meta = `${target}.json`
             const renderedFrom = existsSync(meta) ? (await Bun.file(meta).json()).promptHash : undefined
@@ -40,7 +54,7 @@ export class FilmRenderer extends Renderer {
         if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')} - run --render=images`)
 
-        const {seed} = await this.render(`clip ${clip.id}`, target, '.mp4', async () => {
+        const {seed} = await this.render({label: `clip ${clip.id}`, request}, target, '.mp4', async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             const seed = resolveSeed(this.config.seed)
             const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames }
@@ -72,6 +86,7 @@ export class FilmRenderer extends Renderer {
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final film
             promptHash: promptHash(clip),   // a clip rendered from another prompt than the plan has now is stale
+            fingerprint: request,           // the same for everything it is made from (lib/provenance.ts)
             renderedFrames: rendered.frames,
             size: `${rendered.width}x${rendered.height}`,
             request: `output/clips/${clip.id}.json`,
