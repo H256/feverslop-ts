@@ -75,6 +75,7 @@ export type Slot = {
     energy: number,
     lyrics: string[],               // approximate: section lines spread over its slots
     vocals?: SlotVocal[],           // real timing, only when the lyrics are aligned
+    micro?: boolean,                // a piece of a fight clip (config.fightClips): one shot, only its own people as references
 }
 export type Timeline = {
     maxClipSec: number,
