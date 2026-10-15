@@ -10,6 +10,8 @@ import type {ProjectConfig} from "./config.ts";
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
 export const pictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+// one view of a location's reference sheet - the frame the sheet's panel was made from, not a crop of the small panel
+export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view).padStart(2, '0')}.png`
 // one reference image per member of a group character, instead of the single shared id - see computeMemberCounts
 export const groupMemberId = (characterId: string, member: number) => `${characterId}-v${member}`
 
@@ -91,6 +93,8 @@ export type Input = {
     // config.pinStartFrame: a continuing clip gets the last frame of the clip before it as its pinned first frame
     // (the render passes it to the workflow separately) - it is then not one of the reference pictures
     pinStartFrame?: boolean,
+    // config.locationView: a clip's place picture is this one view of the location's sheet (0-4); -1 or none = the sheet
+    locationView?: number,
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
@@ -310,7 +314,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, locationView}: Input, staging?: string): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -736,7 +740,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // pictureId was resolved once in buildSubjects, together with the description bound to it - see the
                 // comment there for why they have to be resolved as one pair, not separately
                 pictures: [
-                    ...subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                    ...subjects.map(s => ({label: s.picture, file: s.kind === 'location' && locationView !== undefined && locationView >= 0 ? locationViewAsset(s.pictureId, locationView) : pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                     ...(startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: boundaryFrameAsset(startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: startsFrom, name: `last frame of ${startsFrom}`, description: ''}] : []),
                 ],
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above

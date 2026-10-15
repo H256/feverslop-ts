@@ -743,6 +743,7 @@ const clips = buildClipRequests({
     stemsAvailable: Boolean(stems),
     continuity: config.continuity,
     pinStartFrame: config.pinStartFrame,
+    locationView: config.locationView,
 })
 
 const outputDir = join(project.dir, 'output')
