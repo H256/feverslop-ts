@@ -1,11 +1,12 @@
-import {existsSync, mkdirSync, statSync} from "node:fs";
+import {existsSync, mkdirSync, readFileSync, statSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
 import {Renderer} from "../render.ts";
-import {fileFingerprint, fingerprint, recordedFingerprint} from "../provenance.ts";
+import {type Freshness, freshness} from "../provenance.ts";
+import {filmClipSpec, specId} from "../render-spec.ts";
 import {workflowDir} from "../config.ts";
 import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 
@@ -13,16 +14,23 @@ import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 export const promptHash = (clip: { prompt: string, frames: number }) => Bun.hash(`${clip.frames}
 ${clip.prompt}`).toString(16)
 
+type FilmVideoConfig = { videoWorkflow: string, videoResolution: string | number, pinStartFrame?: boolean }
+
+/** The id of the request a film clip is rendered from (lib/render-spec.ts) - what its sidecar records and the film compares. */
+export const filmClipFingerprint = (clip: FilmClipRequest, projectDir: string, config: FilmVideoConfig) =>
+    specId(filmClipSpec({...clip, promptHash: promptHash(clip)}, projectDir, config))
+
 /**
- * What a film clip is made from, beyond its prompt: the pictures it is given (their content), the workflow and size, and -
- * for a clip that goes on from another - what that one was made from, so rendering a clip again makes its successors stale.
+ * Is the rendered clip made from the request planned now? A clip rendered before fingerprints existed only has its prompt
+ * hash: that still decides (a clip from another prompt is stale), nothing else can be told of it.
  */
-export function filmClipFingerprint(clip: FilmClipRequest, projectDir: string, config: { videoWorkflow: string, videoResolution: string | number, pinStartFrame?: boolean }) {
-    return fingerprint(
-        promptHash(clip), config.videoWorkflow, config.videoResolution, config.pinStartFrame === true,
-        clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
-        clip.startsFrom ? recordedFingerprint(join(projectDir, `videos/${clip.startsFrom}.mp4`)) ?? '' : '',
-    )
+export function filmClipFreshness(clip: FilmClipRequest, projectDir: string, config: FilmVideoConfig): Freshness {
+    const file = join(projectDir, `videos/${clip.id}.mp4`)
+    const sidecar = existsSync(`${file}.json`) ? (() => { try { return JSON.parse(readFileSync(`${file}.json`, 'utf8')) as Record<string, unknown> } catch { return {} } })() : undefined
+    if (sidecar && sidecar.fingerprint === undefined && typeof sidecar.promptHash === 'string' && sidecar.source !== 'user' && sidecar.pinned !== true) {
+        return sidecar.promptHash === promptHash(clip) ? 'current' : 'stale'
+    }
+    return freshness(file, filmClipFingerprint(clip, projectDir, config))
 }
 
 const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
@@ -35,7 +43,8 @@ export class FilmRenderer extends Renderer {
     async renderFilmClip(clip: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
-        const request = filmClipFingerprint(clip, this.projectDir, this.config)
+        const spec = filmClipSpec({...clip, promptHash: promptHash(clip)}, this.projectDir, this.config)
+        const request = specId(spec)
         if (existsSync(target) && !this.staleFile('clips', file, request, [file, `${file}.json`, firstFrame(clip.id), filmBoundaryFrame(clip.id)])) {
             log.step('Exists', styles.muted(file))
             const meta = `${target}.json`
@@ -54,7 +63,7 @@ export class FilmRenderer extends Renderer {
         if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')} - run --render=images`)
 
-        const {seed} = await this.render({label: `clip ${clip.id}`, request}, target, '.mp4', async () => {
+        const {seed} = await this.render({label: `clip ${clip.id}`, spec}, target, '.mp4', async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             const seed = resolveSeed(this.config.seed)
             const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames }

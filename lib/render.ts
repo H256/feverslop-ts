@@ -8,7 +8,8 @@ import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo} from "./assemble.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
-import {fileFingerprint, fingerprint, freshness, isUserFile, recordedFingerprint} from "./provenance.ts";
+import {freshness, isUserFile} from "./provenance.ts";
+import {anchorSpec, clipSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
 import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
@@ -31,18 +32,9 @@ async function loadWorkflow<T extends { default: unknown }>(name: string): Promi
 // description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
-/**
- * What a clip is made from: its prompt and length, the workflow, the content of the pictures it is given and - for a clip
- * that goes on from another - what that one was made from. A clip whose predecessor is rendered again is stale with it.
- */
-export function clipFingerprint(clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'>) {
-    return fingerprint(
-        clip.prompt, clip.frames, config.videoWorkflow, config.videoResolution,
-        clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
-        clip.assets.audio.map(a => [a.stem, a.songStart, a.songEnd]),
-        clip.startsFrom ? recordedFingerprint(join(projectDir, `videos/${clip.startsFrom}.mp4`)) ?? '' : '',
-    )
-}
+/** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
+export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'>) =>
+    specId(clipSpec(clip, projectDir, config))
 
 export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[] }
 
@@ -189,10 +181,11 @@ export class Renderer implements Disposable {
     // Characters are portrait, locations landscape - saved to the placeholder paths the clips reference
     async renderPicture(picture: PictureJob) {
         const target = join(this.projectDir, picture.file)
-        const current = fingerprint(picture.prompt, this.config.imageWorkflow, this.config.imageResolution)
+        const spec = pictureSpec(picture, this.config)
+        const current = specId(spec)
         if (existsSync(target) && !this.staleFile('pictures', picture.file, current, [picture.file, `${picture.file}.json`])) return log.step('Exists', styles.muted(picture.file))
 
-        const {seed} = await this.render({label: `${picture.kind} ${picture.id}`, request: current}, target, '.png', async () => {
+        const {seed} = await this.render({label: `${picture.kind} ${picture.id}`, spec}, target, '.png', async () => {
             const seed = picture.seed ?? resolveSeed(this.config.seed)
             const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
             const result = imageWorkflow({
@@ -229,8 +222,10 @@ export class Renderer implements Disposable {
             : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
         // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
         const anchorIsUsers = isUserFile(anchorTarget)
-        const anchorFingerprint = anchorIsUsers ? fileFingerprint(anchorTarget) : fingerprint(picture.prompt, this.config.imageWorkflow, this.config.imageResolution)
-        const sheetFingerprint = fingerprint(anchorFingerprint, sequencePrompt, this.config.sequenceWorkflow)
+        const anchor = anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
+        const anchorFingerprint = specId(anchor)
+        const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow)
+        const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow))
         if (existsSync(target)) {
             const frameFiles = existsSync(join(this.projectDir, dir, 'frames')) ? readdirSync(join(this.projectDir, dir, 'frames')).map(f => join(dir, 'frames', f)) : []
             const away = [picture.file, `${picture.file}.json`, videoFile, `${videoFile}.json`, ...frameFiles, ...(anchorIsUsers ? [] : [anchorFile, `${anchorFile}.json`])]
@@ -239,7 +234,7 @@ export class Renderer implements Disposable {
         mkdirSync(join(this.projectDir, dir), {recursive: true})
 
         if (!existsSync(anchorTarget)) {
-            const {seed} = await this.render({label: `${picture.kind} ${picture.id} anchor`, request: anchorFingerprint}, anchorTarget, '.png', async () => {
+            const {seed} = await this.render({label: `${picture.kind} ${picture.id} anchor`, spec: anchor}, anchorTarget, '.png', async () => {
                 const seed = picture.seed ?? resolveSeed(this.config.seed)
                 const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
                 const result = imageWorkflow({
@@ -255,7 +250,7 @@ export class Renderer implements Disposable {
         }
 
         if (!existsSync(videoTarget)) {
-            const {seed} = await this.render({label: `${picture.kind} ${picture.id} sequence`, request: fingerprint(anchorFingerprint, sequencePrompt, this.config.sequenceWorkflow)}, videoTarget, '.mp4', async () => {
+            const {seed} = await this.render({label: `${picture.kind} ${picture.id} sequence`, spec: sequence}, videoTarget, '.mp4', async () => {
                 const seed = resolveSeed(this.config.seed)
                 const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
                 const result = sequenceWorkflow({
@@ -302,7 +297,7 @@ export class Renderer implements Disposable {
         // deleted after the conversion. ffmpeg detects mp3 or flac from the content, the extension is irrelevant.
         const downloaded = songFile.replace(/\.wav$/, '.generated.audio')
 
-        const {seed, duration} = await this.render({label: 'song', request: fingerprint(brief.style, brief.lyrics, this.config.songWorkflow, this.config.songDuration)}, downloaded, ['.mp3', '.flac'], async () => {
+        const {seed, duration} = await this.render({label: 'song', spec: songSpec(brief, this.config)}, downloaded, ['.mp3', '.flac'], async () => {
             const seed = resolveSeed(this.config.seed)
             const duration = this.config.songDuration === -1 ? DEFAULT_SONG_DURATION : this.config.songDuration
             const {default: audioWorkflow} = await loadWorkflow<{ default: AudioWorkflow }>(this.config.songWorkflow)
@@ -330,7 +325,8 @@ export class Renderer implements Disposable {
     async renderClip(clip: ClipRequest, stemFiles: Record<string, string>) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
-        const request = clipFingerprint(clip, this.projectDir, this.config)
+        const spec = clipSpec(clip, this.projectDir, this.config)
+        const request = specId(spec)
         const away = [file, `${file}.json`, boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')]
         if (existsSync(target) && !this.staleFile('clips', file, request, away)) {
             log.step('Exists', styles.muted(file))
@@ -393,7 +389,7 @@ export class Renderer implements Disposable {
             })
             return {result, uploads, meta: {seed}}
         }
-        let {seed} = await this.render({label: `clip ${clip.id}`, request}, target, '.mp4', prepare)
+        let {seed} = await this.render({label: `clip ${clip.id}`, spec}, target, '.mp4', prepare)
 
         // a clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one
         // that did is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times
@@ -413,7 +409,7 @@ export class Renderer implements Disposable {
             mkdirSync(dirname(put), {recursive: true})
             renameSync(target, put)
             log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
-            seed = (await this.render({label: `clip ${clip.id}`, request}, target, '.mp4', prepare)).seed
+            seed = (await this.render({label: `clip ${clip.id}`, spec}, target, '.mp4', prepare)).seed
         }
 
         const rendered = await probeVideo(target)
@@ -456,10 +452,10 @@ export class Renderer implements Disposable {
      * ComfyUI is still rendering (Ctrl+C, crash, sleep), the next run attaches to that job - or downloads its result
      * if it finished in the meantime - instead of rendering again. Returns the meta of the job that made the file.
      */
-    protected async render<M>(what: string | { label: string, request: string }, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
+    protected async render<M>(what: string | { label: string, spec: RenderSpec }, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const label = typeof what === 'string' ? what : what.label
         // a fingerprint of what the job is made from: a job queued for another request is not the one to take the result of
-        const request = typeof what === 'string' ? undefined : what.request
+        const request = typeof what === 'string' ? undefined : specId(what.spec)
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
         let initial = await readPending<M>(pendingFile)

@@ -1,4 +1,4 @@
-import {existsSync, readFileSync, renameSync} from "node:fs";
+import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {formatSlotRanges, framesOnGrid, probeVideo} from "../assemble.ts";
 import {FPS, formatTime, secondsAt} from "../frames.ts";
@@ -31,9 +31,9 @@ export async function loudnessOf(file: string): Promise<number | undefined> {
  */
 export async function assembleFilm({clips, projectDir, target, levelMatching = false}: {
     // useRendered: use every frame the model rendered, not only the planned ones - for a clip with dialogue, whose last word can fall
-    // into the few frames after the planned end. promptHash: the hash of the prompt planned now - a clip rendered from another one is stale
+    // into the few frames after the planned end
     // continuesPrevious: the clip starts on the last frame of the clip right before it in the film - that frame is already there, the clip's first frame is the same picture and is left out (it would stand twice and stutter)
-    clips: { id: string, frames: number, useRendered?: boolean, continuesPrevious?: boolean, promptHash?: string }[],
+    clips: { id: string, frames: number, useRendered?: boolean, continuesPrevious?: boolean }[],
     projectDir: string,
     target: string,
     levelMatching?: boolean,        // every clip's sound is brought towards the same loudness
@@ -43,13 +43,6 @@ export async function assembleFilm({clips, projectDir, target, levelMatching = f
     if (missing.length) throw new Error(`Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`)
 
     const infos = await Promise.all(files.map(probeVideo))
-    // a clip rendered from another prompt than the one planned now belongs to another version of the film
-    const stale = clips.filter(c => {
-        const meta = join(projectDir, 'videos', `${c.id}.mp4.json`)
-        const rendered = existsSync(meta) ? JSON.parse(readFileSync(meta, 'utf8')).promptHash : undefined
-        return c.promptHash !== undefined && rendered !== undefined && rendered !== c.promptHash
-    }).map(c => c.id)
-    if (stale.length) throw new Error(`${stale.length} clip(s) were rendered from another prompt than the plan has now: ${formatSlotRanges(stale)}\nDelete videos/<clip-id>.mp4 (and its .json) of those and render them again: --render=videos --only=${stale.join(',')}`)
     // the frames each clip contributes
     const used = clips.map((c, i) => c.useRendered ? framesOnGrid(infos[i]!) : c.frames)
     clips.forEach((clip, i) => {

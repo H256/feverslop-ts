@@ -13,8 +13,7 @@ import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/fi
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import type {PictureJob} from "./lib/render.ts";
-import {FilmRenderer, filmClipFingerprint, promptHash} from "./lib/film/render.ts";
-import {freshness} from "./lib/provenance.ts";
+import {FilmRenderer, filmClipFreshness} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
@@ -512,14 +511,14 @@ if (render.has('final')) {
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
     // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
     const filmConfig = filmRenderConfig(config)
-    const stale = selected.filter(r => freshness(join(film.dir, 'videos', `${r.id}.mp4`), filmClipFingerprint(r, film.dir, filmConfig)) === 'stale').map(r => r.id)
+    const stale = selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id)
     if (stale.length) {
         const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${stale.join(', ')} - render them again with --render=videos --refresh=clips`
         if (args.strict) throw new Error(message)
         log.warn(message)
     }
     // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
-    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id, promptHash: promptHash(r)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
+    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id})), projectDir: film.dir, target, levelMatching: config.levelMatching})
 
     // a score in input/ is mixed under the film
     const score = SCORE_EXTENSIONS.map(ext => film.input(`score.${ext}`)).find(file => existsSync(file))
