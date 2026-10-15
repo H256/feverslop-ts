@@ -13,19 +13,19 @@ import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/fi
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import type {PictureJob} from "./lib/render.ts";
-import {FilmRenderer, filmClipFingerprint, promptHash} from "./lib/film/render.ts";
-import {freshness} from "./lib/provenance.ts";
+import {FilmRenderer, filmClipFreshness} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {timelineEdl} from "./lib/film/timeline.ts";
 import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
+import {applyAnnotations, parseFountain} from "./lib/film/fountain-import.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
@@ -157,6 +157,22 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
     const meta = {title: brief.title, language: brief.language}
     if (mode === 'idea') return toScreenplay(await askJson(screenplayWritePrompt(brief, outline!)), meta)
 
+    // A source in Fountain is read by code: no line can be dropped, reworded or given to another speaker. The model only
+    // annotates what the structure cannot say (the English of place and time, the language of a line, the actions)
+    const imported = parseFountain(source)
+    if (imported) {
+        log.step('Import', styles.muted(`Fountain - ${imported.scenes.length} scene(s) read by code, the model only annotates`))
+        const notes = await askJson(fountainAnnotatePrompt(imported.scenes.map(scene => ({
+            location: scene.location, time: scene.time,
+            actions: scene.elements.flatMap(e => e.type === 'action' ? [e.text] : []),
+            lines: scene.elements.flatMap(e => e.type === 'dialogue' ? [{text: e.text, ...(e.delivery ? {delivery: e.delivery} : {})}] : []),
+        })), brief.language)).catch((e: unknown) => {
+            log.warn(`the annotation is unusable (${e instanceof Error ? e.message : e}) - the script is used as written`)
+            return undefined
+        })
+        return toScreenplay(applyAnnotations(imported, notes), meta)
+    }
+
     // the dialogue is checked against the source: the LLM structures the script, it must not reword a line
     let result = toScreenplay(await askJson(screenplayParsePrompt(source, brief.language)), meta)
     // lost lines count as well: the check above only sees what the LLM added or changed
@@ -175,7 +191,8 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
 // the screenplay is the base of every expensive step after it: one that does not hold the whole source stops the run here
 // (the source is checked again on every run, so a fix in project.json lets it through)
 if (mode === 'screenplay') {
-    const unfaithful = [...missingDialogue(screenplay, source), ...omittedSourceLines(screenplay, source)]
+    // a Fountain source was read by code: its structure is complete by construction (and its actions are tidied into English, which a word comparison would take for lost lines)
+    const unfaithful = parseFountain(source) ? missingDialogue(screenplay, source) : [...missingDialogue(screenplay, source), ...omittedSourceLines(screenplay, source)]
     if (unfaithful.length && !args['allow-import-gaps']) {
         throw new Error(`the structured screenplay is not the source: ${unfaithful.length} line(s) are changed or missing:\n${unfaithful.slice(0, 10).map(m => `  "${m}"`).join('\n')}\nfix them in ${film.file}, run --redo=screenplay, or go on anyway with --allow-import-gaps`)
     }
@@ -280,9 +297,13 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks))
+        const lookOptions = characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks)
+        looks[char.id] = await film.each('characterLooks', char.id, lookOptions, () => ask(lookOptions))
         // other looks of the character (wounded, disguised): the same prompt with only the change applied
-        for (const state of char.states ?? []) looks[statePictureId(char.id, state.id)] = await ask(stateLookPrompt(looks[char.id]!, char.name, state))
+        for (const state of char.states ?? []) {
+            const stateOptions = stateLookPrompt(looks[char.id]!, char.name, state)
+            looks[statePictureId(char.id, state.id)] = await film.each('characterLooks', statePictureId(char.id, state.id), stateOptions, () => ask(stateOptions))
+        }
     }
     return looks
 })
@@ -293,8 +314,12 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     const descriptions: Record<string, string> = {}
     for (const [i, char] of seen.entries()) {
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
-        descriptions[char.id] = await ask(characterDescriptionPrompt(characterLooks[char.id] ?? ''))
-        for (const state of char.states ?? []) descriptions[statePictureId(char.id, state.id)] = await ask(characterDescriptionPrompt(characterLooks[statePictureId(char.id, state.id)] ?? ''))
+        const descriptionOptions = characterDescriptionPrompt(characterLooks[char.id] ?? '')
+        descriptions[char.id] = await film.each('characterDescriptions', char.id, descriptionOptions, () => ask(descriptionOptions))
+        for (const state of char.states ?? []) {
+            const stateOptions = characterDescriptionPrompt(characterLooks[statePictureId(char.id, state.id)] ?? '')
+            descriptions[statePictureId(char.id, state.id)] = await film.each('characterDescriptions', statePictureId(char.id, state.id), stateOptions, () => ask(stateOptions))
+        }
     }
     return descriptions
 })
@@ -305,7 +330,8 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`))
+        const lookOptions = locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`)
+        looks[location.id] = await film.each('locationLooks', location.id, lookOptions, () => ask(lookOptions))
     }
     return looks
 })
@@ -316,7 +342,8 @@ const locationDescriptions = await film.step('locationDescriptions', '8b · DESC
     const descriptions: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        descriptions[location.id] = await ask(locationDescriptionPrompt(locationLooks[location.id] ?? ''))
+        const descriptionOptions = locationDescriptionPrompt(locationLooks[location.id] ?? '')
+        descriptions[location.id] = await film.each('locationDescriptions', location.id, descriptionOptions, () => ask(descriptionOptions))
     }
     return descriptions
 })
@@ -331,10 +358,13 @@ const locationViews = config.sequenceSheets && config.locationViews
             // what happens there, from the script: the action lines of its scenes
             const scenes = screenplay.scenes.filter(s => locationOf(cast, s.location)?.id === location.id)
                 .map(s => `${s.id}: ${s.elements.filter(e => e.type === 'action').map(e => e.text).join(' ')}`.slice(0, 700)).join('\n').slice(0, 3000)
-            const answer = await askJson<{ views?: Partial<LocationView>[] }>(locationViewsPrompt(location, locationLooks[location.id] ?? '', scenes))
-            const views = (answer.views ?? []).filter(v => typeof v?.name === 'string' && typeof v?.shows === 'string' && v.name.trim() && v.shows.trim()).map(v => ({name: v.name!.trim(), shows: v.shows!.trim()}))
-            if (views.length !== 5) throw new Error(`the views of ${location.name}: ${views.length} instead of 5 - run it again (--redo=locationViews)`)
-            result[location.id] = views
+            const viewsOptions = locationViewsPrompt(location, locationLooks[location.id] ?? '', scenes)
+            result[location.id] = await film.each('locationViews', location.id, viewsOptions, async () => {
+                const answer = await askJson<{ views?: Partial<LocationView>[] }>(viewsOptions)
+                const views = (answer.views ?? []).filter(v => typeof v?.name === 'string' && typeof v?.shows === 'string' && v.name.trim() && v.shows.trim()).map(v => ({name: v.name!.trim(), shows: v.shows!.trim()}))
+                if (views.length !== 5) throw new Error(`the views of ${location.name}: ${views.length} instead of 5 - run it again (--redo=locationViews)`)
+                return views
+            })
         }
         return result
     })
@@ -371,22 +401,27 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         }
         log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
         const location = locationOf(cast, scene.location)!
-        let problems: string[] = []
-        for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
-            try {
-                // the first time what the script checks find is a reason to ask again, the second time it is only noted
-                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
-                for (const note of notes) log.warn(note)
-                result.push(planned)
-                break
-            } catch (e) {
-                // a dropped line of dialogue or a wrong name is what the model can fix when told - once
-                if (!(e instanceof CoverageProblem) || attempt >= 1) throw e
-                problems = e.problems
-                log.warn(`${e.message} - asking again`)
+        const planScene = async () => {
+            let problems: string[] = []
+            for (let attempt = 0; ; attempt++) {
+                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
+                try {
+                    // the first time what the script checks find is a reason to ask again, the second time it is only noted
+                    const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
+                    for (const note of notes) log.warn(note)
+                    return planned
+                } catch (e) {
+                    // a dropped line of dialogue or a wrong name is what the model can fix when told - once
+                    if (!(e instanceof CoverageProblem) || attempt >= 1) throw e
+                    problems = e.problems
+                    log.warn(`${e.message} - asking again`)
+                }
             }
         }
+        // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
+        // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
+        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id])
+        result.push(await film.each('coverage', scene.id, firstAsk, planScene))
     }
     return result
 })
@@ -476,14 +511,14 @@ if (render.has('final')) {
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
     // a clip made from another picture, workflow or start frame than the plan has now is still a clip: said here, an error only with --strict
     const filmConfig = filmRenderConfig(config)
-    const stale = selected.filter(r => freshness(join(film.dir, 'videos', `${r.id}.mp4`), filmClipFingerprint(r, film.dir, filmConfig)) === 'stale').map(r => r.id)
+    const stale = selected.filter(r => filmClipFreshness(r, film.dir, filmConfig) === 'stale').map(r => r.id)
     if (stale.length) {
         const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${stale.join(', ')} - render them again with --render=videos --refresh=clips`
         if (args.strict) throw new Error(message)
         log.warn(message)
     }
     // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
-    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id, promptHash: promptHash(r)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
+    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id})), projectDir: film.dir, target, levelMatching: config.levelMatching})
 
     // a score in input/ is mixed under the film
     const score = SCORE_EXTENSIONS.map(ext => film.input(`score.${ext}`)).find(file => existsSync(file))

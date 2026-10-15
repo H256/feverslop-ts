@@ -51,6 +51,15 @@ By hand: `films/<id>/input/idea.txt` **or** `input/screenplay.txt` (the screenpl
 [docs/style-examples.md](style-examples.md) that suits the film - genre, tone, setting and audience decide, there is no
 draw and no forced variety - and say why; it is written to `input/style.txt`. Edit or replace it and the look is redone.
 
+A `screenplay.txt` in **Fountain** is read by code, not by the model, so no line can be dropped, reworded or given to
+another speaker. Read: title page (`Title:`, `Language:`), sluglines (`INT.` `EXT.` `INT./EXT.` `I/E`, forced with `.`),
+character cues in capitals or forced with `@` (with `(V.O.)` `(O.S.)` `(O.C.)` `(CONT'D)`), parentheticals before a line
+(delivery) and after it (the script's own translation), action (also forced with `!`). Left out: transitions, notes
+`[[...]]`, boneyard `/* */`, sections and synopses. The model then only annotates place and time in English, the
+language of each line and its delivery, and tidies the action lines. Free text, dual dialogue (`^`) and text before the
+first slugline are not Fountain for this reader: the model structures them as before, and the source is checked in both
+directions (a lost line stops the run, `--allow-import-gaps` goes on anyway).
+
 ## Steps
 
 | # | Step (`--redo=`) | What it does | Built on |

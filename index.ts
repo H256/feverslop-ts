@@ -391,7 +391,8 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
         const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, char, otherLooks))
+        const options = characterLookPrompt(lookBrief, char, otherLooks)
+        looks[char.id] = await project.each('characterLooks', char.id, options, () => ask(options))
     }
     return looks
 })
@@ -406,7 +407,8 @@ const characterDescriptions = await project.step('characterDescriptions', '7b ·
     const descriptions: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
-        descriptions[char.id] = await ask(characterDescriptionPrompt(characterLooks[char.id] ?? ''))
+        const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
+        descriptions[char.id] = await project.each('characterDescriptions', char.id, options, () => ask(options))
     }
     return descriptions
 })
@@ -417,7 +419,8 @@ const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATIO
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        looks[location.id] = await ask(locationLookPrompt(lookBrief, storySummary, location.name))
+        const options = locationLookPrompt(lookBrief, storySummary, location.name)
+        looks[location.id] = await project.each('locationLooks', location.id, options, () => ask(options))
     }
     return looks
 })
@@ -428,7 +431,8 @@ const locationDescriptions = await project.step('locationDescriptions', '8b · D
     const descriptions: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        descriptions[location.id] = await ask(locationDescriptionPrompt(locationLooks[location.id] ?? ''))
+        const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
+        descriptions[location.id] = await project.each('locationDescriptions', location.id, options, () => ask(options))
     }
     return descriptions
 })
@@ -444,9 +448,6 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
   - Never write blank, featureless, faceless, smooth, smudged, erased, "pale oval" or "no face" about a face, or about a photograph near a face: a photograph is simply old and burnt at the edges, and its people are not described as missing.
   - Nothing in the picture is readable text: the video model scrambles every letter. A carved or written name, word or sign is "worn carved marks" or "a faded mark", never letters, and a name is never spelled out.
   - Things change once and stay changed: a door that opens stays open until a beat shows it closing, a mirror that cracks stays cracked, someone who is swallowed or gone does not come back. Never open, close and open the same thing again, and never show an event that already happened in an earlier beat once more.`
-
-// moments that still break the two rules the model keeps breaking (stand-in objects, blank faces) - checked after the shot-moments step
-const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name)\b/i
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
@@ -481,6 +482,7 @@ For every beat give:
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
 - "continuous": true only if the beat is ONE unbroken take that runs through all its video clips without a cut - the camera and the action simply go on from clip to clip (a long walk through a room, a slow reveal, one action that takes many seconds). Use it sparingly: false (also when omitted) for a beat that is better cut together from several shots and angles.
 - "stateAfter": short facts about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull", and never what a mirror or reflection shows), e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
+- "entrance": true only if the summary has somebody arrive, appear or emerge during the beat (the beat's first clip then shows the place before them); false when everybody who is in the beat is already there when it starts.
 - "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
 ${singing ? performanceRules(singing) : ''}
@@ -524,6 +526,7 @@ ${storyBase}`,
             intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
             weight: Math.max(1, Number(beat.weight) || 1),
             continuous: beat.continuous === true,
+            entrance: beat.entrance === true,
             stateAfter: beat.stateAfter ?? [],
             ...(Object.keys(groupSize).length ? {groupSize} : {}),
         }
@@ -549,7 +552,8 @@ const characterLookVariants = await project.step('characterLookVariants', '9c ·
         const looks = [characterLooks[char.id] ?? '']
         for (let i = 1; i < count; i++) {
             log.step(`Member ${i + 1}/${count}`, styles.name(char.id))
-            looks.push(await ask(characterVariantLookPrompt(lookBrief, char, looks)))
+            const options = characterVariantLookPrompt(lookBrief, char, looks)
+            looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => ask(options)))
         }
         variants[char.id] = looks
         if (char.prop) looks.forEach((look, i) => { if (propMissing(look, char.prop!)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${char.prop}"`) })
@@ -568,7 +572,10 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
         log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
         descriptions[id] = [
             characterDescriptions[id] ?? '',
-            ...await Promise.all(looks.slice(1).map(look => ask(characterDescriptionPrompt(look)))),
+            ...await Promise.all(looks.slice(1).map((look, i) => {
+                const options = characterDescriptionPrompt(look)
+                return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
+            })),
         ]
     }
     return descriptions
@@ -684,13 +691,15 @@ Rules:
 Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown. A field is always one line (no line breaks inside it), "people" entries are the "person:" lines, "characters" are the names separated by commas, "rest" is what everybody in "characters" without a "person:" line does at the same time:
 ${chunk.from === 0 ? 'STAGING: <the floor plan of the place for this beat, 2-4 sentences, on one line>\n' : ''}SHOT <number>
 framing: <shot size and angle>
+size: <wide, medium or close - the size class of the framing>
 camera: <one sentence: the movement and its speed>
 view: <where the camera stands and what it looks toward>
 hold: <yes or no>
+risky: <yes only if the action could only be written with a blank or missing face, a stand-in object for a name or feeling, or readable text - else no>
 characters: <Name>, <Name>
 action: <what happens in the shot, at most two sentences>
-person: <Name> | state: <...> | frame: <...> | motion: <...>
-person: <Name> | state: <...> | frame: <...> | motion: <...>
+person: <Name> | state: <...> | frame: <...> | motion: <...> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
+person: <Name> | state: <...> | frame: <...> | motion: <...> | singing: <yes or no>
 rest: <what the others in the picture do>
 (then SHOT <next number> with the same fields, up to shot ${chunk.to})${chunk.to === chunk.total ? `
 ENDS
@@ -784,9 +793,10 @@ ${JSON.stringify(block.map(b => ({
     }
     // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
     // the prompt says - those moments get one rewrite
-    const risky = Object.entries(result).flatMap(([beatId, plan]) => plan.shots.flatMap((shot, j) => riskyMoment.test(shot.action) ? [{beatId, j, moment: shot.action}] : []))
+    // the planner flags them itself ("risky") - no word list decides what counts
+    const risky = Object.entries(result).flatMap(([beatId, plan]) => plan.shots.flatMap((shot, j) => shot.risky ? [{beatId, j, moment: shot.action}] : []))
     if (risky.length) {
-        log.warn(`${risky.length} shot moment(s) with a blank face or a stand-in object - rewriting them`)
+        log.warn(`${risky.length} shot moment(s) the planner flagged (blank face, stand-in object, readable text) - rewriting them`)
         const rewritten = await askJson<{ moments: string[] }>({
             input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead.
 ${filmableRules}
@@ -795,7 +805,10 @@ Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactl
 ${JSON.stringify(risky.map(r => r.moment))}`,
             instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
         })
-        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => { result[r.beatId]!.shots[r.j] = {...result[r.beatId]!.shots[r.j]!, action: String(rewritten.moments[k])} })
+        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => {
+            const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
+            result[r.beatId]!.shots[r.j] = {...shot, action: String(rewritten.moments[k])}
+        })
         else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
     }
     return result

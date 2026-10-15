@@ -6,6 +6,9 @@ import type {BeatShots, Character, ShotPlan, StoryBeat} from "./project.ts";
 
 export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
+const SIZES = ['wide', 'medium', 'close'] as const
+/** A flag the planner answered: true, or "yes" in the line format. */
+const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
 
 /** Does the text name this character (by name or id, as a whole word)? */
 export const mentionsCharacter = (value: string, character: Pick<Character, 'name' | 'id'>) =>
@@ -32,11 +35,6 @@ export type ReadPlan = { plan: BeatShots, problems: string[], notes: string[] }
 export const MAX_FOREGROUND = 4
 /** From how many people with the same motion in one shot the planner is asked again. */
 const UNISON_ASKS = 3
-const WIDE = /\b(?:wide|establishing|long shot|panoram\w*|aerial|overhead|high-angle)\b/i
-
-/** north, south, east, west: no direction the video model can use. */
-export const COMPASS = /\b(?:north|south|east|west)(?:ward|wards|ern)?\b/gi
-
 const normalized = (value: string | undefined) => (value ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
 const nameOfId = (characters: Character[], id: string) => characters.find(c => c.id === id)?.name ?? id
 
@@ -65,14 +63,12 @@ function unisonChecks(j: number, people: NonNullable<ShotPlan['people']>, charac
     return {problems, notes}
 }
 
-const SINGING = /\b(?:sings?|singing|sang|lip-?sync\w*|mouths? (?:is |are )?open on the (?:verse|chorus|line|lyrics?)|on the (?:verse|chorus))\b/i
-
-/** Someone who does not sing in this shot is described singing: a note - the clip prompt keeps their mouth closed anyway. */
+/** Someone who does not sing in this shot is marked as singing by the planner: a note - the clip prompt keeps their mouth closed anyway. */
 function singingNotes(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: { singerIds: string[], singingPerShot: boolean[] }): string[] {
     if (!singers) return []
     const allowed = singers.singingPerShot[j] ? singers.singerIds : []
     return Object.entries(people)
-        .filter(([id, p]) => !allowed.includes(id) && SINGING.test([p.state, p.frame, p.motion].filter(Boolean).join(' ')))
+        .filter(([id, p]) => !allowed.includes(id) && p.singing === true)
         .map(([id]) => `shot ${j + 1}: ${nameOfId(characters, id)} is described singing but does not sing in this shot`)
 }
 
@@ -119,7 +115,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
                 if (!found || !(text(p.state) || text(p.frame) || text(p.motion))) continue
                 // somebody described but not listed is in the picture too
                 if (!ids.includes(found.id)) ids.push(found.id)
-                people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {})}
+                people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {}), ...(yes(p.singing) ? {singing: true} : {})}
             }
         }
         const trimmed = trimForeground(people, action, characters, singers?.singingPerShot[j] ? singers.singerIds : [])
@@ -134,13 +130,11 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         // while a line is sung, a singer is in the picture
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
             problems.push(`shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
-        const compass = (written.match(COMPASS) ?? []).length
-        if (compass) notes.push(`shot ${j + 1}: ${compass} compass word(s) - the video model cannot place them`)
         const unison = unisonChecks(j, people, characters)
         problems.push(...unison.problems)
         notes.push(...unison.notes, ...singingNotes(j, people, characters, singers))
-        const framing = text(e.framing)
-        if (ids.length > MAX_FOREGROUND && !WIDE.test(framing)) notes.push(`shot ${j + 1}: ${ids.length} people in a "${framing || 'shot'}"`)
+        const size = SIZES.find(s => s === text(e.size).toLowerCase())
+        if (ids.length > MAX_FOREGROUND && size !== 'wide') notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
         // three or more people: everybody moves (the prompt asks for it) - what the code can tell without reading the
         // words is a person with an entry of their own and no motion, who is then left standing in the reference pose
         const motionless = ids.filter(id => people[id] && !people[id]!.motion)
@@ -151,6 +145,8 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             ...(text(e.camera) ? {camera: text(e.camera)} : {}),
             ...(text(e.view) ? {view: text(e.view)} : {}),
             ...(e.hold === true ? {hold: true} : {}),
+            ...(size ? {size} : {}),
+            ...(yes(e.risky) ? {risky: true} : {}),
             ...(ids.length ? {characters: ids} : {}),
             ...(Object.keys(people).length ? {people} : {}),
             ...(text(e.rest) ? {rest: text(e.rest)} : {}),
@@ -175,8 +171,8 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  * The planner's answer in the line format (index.ts, step 11b) as the object readBeatPlan reads. One field per line:
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
- *   framing: / camera: / view: / hold: yes|no / characters: A, B / action: ... / rest: ...
- *   person: A | state: ... | frame: ... | motion: ...
+ *   framing: / size: wide|medium|close / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ...
+ *   person: A | state: ... | frame: ... | motion: ... | singing: yes|no
  *   ENDS
  *   end: A | where they are when the beat is over
  * Lines of JSON are no better than a quote in the middle of a sentence, and a broken bracket cost a whole beat; here
@@ -203,20 +199,21 @@ export function parseShotLines(answer: string): { staging?: string, ends: Record
         if ((m = line.match(/^end\s*:\s*([^|]+?)\s*\|\s*(.+)$/i))) { ends[m[1]!.trim()] = m[2]!.trim(); continue }
         if (inEnds || !current) continue
         if ((m = line.match(/^person\s*:\s*(.+)$/i))) {
-            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion)\s*:)/i)
+            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion|singing)\s*:)/i)
             const name = parts[0]!.trim()
             const entry: Record<string, string> = {}
             for (const part of parts.slice(1)) {
-                const kv = part.match(/^(state|frame|motion)\s*:\s*(.*)$/i)
+                const kv = part.match(/^(state|frame|motion|singing)\s*:\s*(.*)$/i)
                 if (kv) entry[kv[1]!.toLowerCase()] = kv[2]!.trim()
             }
             if (name) (current.people as Record<string, unknown>)[name] = entry
             continue
         }
-        if ((m = line.match(/^(framing|camera|view|hold|characters|action|rest)\s*:\s*(.*)$/i))) {
+        if ((m = line.match(/^(framing|size|camera|view|hold|risky|characters|action|rest)\s*:\s*(.*)$/i))) {
             const key = m[1]!.toLowerCase()
             const value = m[2]!.trim()
             if (key === 'hold') current.hold = /^(yes|true)\b/i.test(value)
+            else if (key === 'risky') current.risky = /^(yes|true)\b/i.test(value)
             else if (key === 'characters') current.characters = value.split(/\s*,\s*|\s+and\s+/).map(v => v.trim()).filter(Boolean)
             else current[key] = value
         }

@@ -1,3 +1,5 @@
+import type {Partials} from "../partials.ts";
+
 // Data of the short-film pipeline (film.ts) - lives in films/<id>/project.json, separate from the music-video projects.
 
 // How a film starts: from a story idea the pipeline develops into a screenplay, or from a screenplay it adopts
@@ -115,6 +117,7 @@ export type SceneCoverage = { sceneId: string, soundscape: string, staging?: str
 
 export type FilmProject = {
     inputs?: Record<string, string>,    // fingerprints of the input files and settings - not a step
+    partials?: Partials,                // answers of a running step, one per element (lib/partials.ts) - not a step
     brief?: Brief,
     outline?: Outline,                  // idea mode only
     screenplay?: Screenplay,

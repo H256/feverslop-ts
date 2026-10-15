@@ -310,14 +310,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
     // Every fact of the whole story piles up to 25+ lines that don't belong to the clip's place or contradict it (the
     // video model draws them in anyway) - a clip gets what happened at its own location and what the beat right
-    // before it left behind, the most recent few
+    // before it left behind, the most recent few. What a mirror shows is not filtered here by words: the beats prompt
+    // and filmableRules already say that a mirror shows the plain reflection of the room and is never a fact of it
     function continuityFor(beat: StoryBeat) {
         const previous = beats[beats.findIndex(b => b.id === beat.id) - 1]
         return [...new Set(stateSoFar
             .filter(s => s.locationId === beat.locationId || s.beatId === previous?.id)
-            .map(s => s.fact)
-            // what a mirror shows is never a fact of the room: the video model puts that face in every mirror from then on
-            .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
+            .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
     function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number): ClipRequest {
@@ -635,8 +634,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
             // in the same ongoing performance, with no entrance word in the summary, and still need telling that
             // frame 1 already shows everyone. Continuation clips (sceneClause above) already say this explicitly.
-            const entranceWords = /\b(emerge[sd]?|emerging|appear(s|ed|ing)?|enter(s|ed|ing)?|arriv(es?|ed|ing)|materiali[sz](es?|ed|ing)|steps? into (the )?frame|walks? into (the )?frame|fades? in|comes? into view)\b/i
-            const alreadyPresentNote = opensScene && !entranceWords.test(sceneClause)
+            // beat.entrance is the planner's own reading of the summary (a beat of an older project has none: everybody is there)
+            const alreadyPresentNote = opensScene && beat.entrance !== true
                 ? 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
                 : undefined
 
