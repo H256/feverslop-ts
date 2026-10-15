@@ -24,6 +24,9 @@ export type RenderConfig = {
     // the clips of a fight beat (a "hit" with a crowd of creatures in it) are cut into one-bar pieces with one shot each,
     // and a piece has only the people of its shot as references - see splitFightSlots in lib/music.ts. Off by default
     fightClips: boolean,
+    // a clip that came out as the reference pictures lined up on their grey backdrop (see lib/leak.ts) is rendered again,
+    // with another seed, up to this many times. 0 = off: the check costs a little, a render again costs a whole clip
+    leakRetries: number,
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
@@ -58,6 +61,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     sequenceWorkflow: 'h3-sequence-to-sheet',
     pinStartFrame: true,
     fightClips: false,
+    leakRetries: 0,
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
@@ -96,6 +100,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
+    if (!Number.isInteger(config.leakRetries) || config.leakRetries < 0) fail(`leakRetries must be a whole number, 0 or more, got ${JSON.stringify(config.leakRetries)}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)

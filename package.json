@@ -18,7 +18,8 @@
     "film:init": "bun tools/film-init.ts",
     "film:replace-character": "bun tools/film-replace-character.ts",
     "film:gallery": "bun tools/film-gallery.ts",
-    "film:migrate": "bun tools/film-migrate.ts"
+    "film:migrate": "bun tools/film-migrate.ts",
+    "leak-scan": "bun tools/leak-scan.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
