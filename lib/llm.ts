@@ -249,22 +249,56 @@ export function closeOpenBrackets(text: string): string {
     return out + (inString ? '"' : '') + open.reverse().join('')
 }
 
+// End (exclusive) of the first complete top-level value starting at `start`, or -1 if it never closes. Strings are
+// tracked as in closeOpenBrackets, so brackets in the prose after the JSON are not taken for part of it.
+function firstValueEnd(text: string, start: number): number {
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (let i = start; i < text.length; i++) {
+        const ch = text[i]!
+        if (inString) {
+            if (escaped) escaped = false
+            else if (ch === '\\') escaped = true
+            else if (ch === '"') inString = false
+        } else if (ch === '"') {
+            inString = true
+        } else if (ch === '{' || ch === '[') {
+            depth++
+        } else if ((ch === '}' || ch === ']') && --depth === 0) {
+            return i + 1
+        }
+    }
+    return -1
+}
+
 // Models like to wrap JSON in ```json fences or add a sentence around it
 export async function askJson<T>(options: AskOptions): Promise<T> {
     const answer = await ask(options)
-    const start = answer.search(/[{[]/)
-    const end = Math.max(answer.lastIndexOf('}'), answer.lastIndexOf(']'))
-    const json = escapeControlCharsInStrings(answer.slice(start, end + 1))
-    try {
-        return JSON.parse(json)
-    } catch (e) {
+    const start = Math.max(answer.search(/[{[]/), 0)
+    // candidates, best first: the first complete value (prose with a bracket after it is left out); up to the last
+    // closer (a bracket mix-up the repair can fix); everything from the start (a cut-off answer - the repair closes
+    // what is still open)
+    const lastCloser = Math.max(answer.lastIndexOf('}'), answer.lastIndexOf(']'))
+    const first = firstValueEnd(answer, start)
+    const candidates = [...new Set([
+        ...(first > 0 ? [answer.slice(start, first)] : []),
+        ...(lastCloser >= start ? [answer.slice(start, lastCloser + 1)] : []),
+        answer.slice(start).replace(/\s*```\s*$/, ''),
+    ])].map(escapeControlCharsInStrings)
+    let error: unknown
+    for (const json of candidates) {
+        try {
+            return JSON.parse(json)
+        } catch (e) {
+            error ??= e
+        }
         try {
             const repaired = JSON.parse(closeOpenBrackets(json))
             log.warn('the answer lacked a closing bracket - closed it')
             return repaired
-        } catch {
-            log.box('Unparsable answer', answer)
-            throw new Error(`LLM did not answer with valid JSON: ${(e as Error).message}`)
-        }
+        } catch {}
     }
+    log.box('Unparsable answer', answer)
+    throw new Error(`LLM did not answer with valid JSON: ${(error as Error).message}`)
 }

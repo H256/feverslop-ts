@@ -27,6 +27,20 @@ export function hasFlatBackdrop(frame: Uint8Array): boolean {
     return median > 70 && median < 170 && colour / values.length < 30 && near > 0.6
 }
 
+/** How long a run of flagged samples has to be before a clip counts as leaked: a single flash or fade frame is not one. */
+const MIN_RUN_SEC = 1
+
+/** Whether the flagged seconds (from backdropSeconds) hold a run of at least MIN_RUN_SEC. */
+export function hasBackdropRun(seconds: number[]): boolean {
+    const need = Math.ceil(MIN_RUN_SEC * SAMPLE_FPS)
+    let run = 0
+    for (const [n, s] of seconds.entries()) {
+        run = n > 0 && Math.abs(s - seconds[n - 1]! - 1 / SAMPLE_FPS) < 1e-6 ? run + 1 : 1
+        if (run >= need) return true
+    }
+    return false
+}
+
 /** The seconds of a video at which a frame has a flat grey backdrop (sampled four times a second) - none when it is clean. */
 export async function backdropSeconds(video: string): Promise<number[]> {
     // raw frames over a pipe: the text helpers in lib/process.ts would decode them

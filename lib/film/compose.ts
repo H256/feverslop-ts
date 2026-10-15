@@ -1,3 +1,4 @@
+import {escapeRegExp} from "../shot-plan.ts";
 import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
 import {formatTimestamp, round} from "../frames.ts";
@@ -259,4 +260,3 @@ function normalizeLine(line: string) {
 const styleOpening = (lookBrief: string) => lookBrief.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean).slice(0, 1).join(' ')
 
 const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

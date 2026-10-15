@@ -4,7 +4,7 @@
 // usage: bun run leak-scan <project-id>
 import {existsSync, readdirSync} from "node:fs";
 import {join} from "node:path";
-import {backdropSeconds} from "../lib/leak.ts";
+import {backdropSeconds, hasBackdropRun} from "../lib/leak.ts";
 import {printBanner, styles} from "../lib/log.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 
@@ -25,7 +25,7 @@ const leaked: string[] = []
 for (const file of files) {
     const seconds = await backdropSeconds(join(videos, file))
     const clip = file.replace(/\.mp4$/, '')
-    if (!seconds.length) continue
+    if (!hasBackdropRun(seconds)) continue
     leaked.push(clip)
     console.log(`${styles.name(clip)}  ${seconds.length} sample(s) on a grey backdrop, ${seconds[0]!.toFixed(1)}-${seconds.at(-1)!.toFixed(1)} s`)
 }

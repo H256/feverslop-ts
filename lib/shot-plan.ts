@@ -4,7 +4,7 @@ import type {BeatShots, Character, ShotPlan, StoryBeat} from "./project.ts";
 // the planner reads the story and says who is in each shot and where they stand, the code resolves names to ids, counts,
 // and asks again where the answer breaks a rule that can be counted.
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
 /** Does the text name this character (by name or id, as a whole word)? */
@@ -165,6 +165,8 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             if (found && text(where)) ends[found.id] = text(where)
         }
     }
+    // padded or cut below so the run goes on, but the planner is asked again: repeated shots read as "the same action, closer"
+    if (shots.length !== needed) problems.push(`shot count: needed ${needed}, got ${shots.length}`)
     const sized = Array.from({length: needed}, (_, j) => shots[Math.min(j, shots.length - 1)]!)
     return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems}
 }

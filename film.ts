@@ -15,6 +15,8 @@ import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} 
 import type {PictureJob} from "./lib/render.ts";
 import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
+import {versionStamp} from "./lib/archive.ts";
+import {clipChains} from "./lib/batch.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
@@ -183,7 +185,7 @@ try {
         if (!fixed.applied.length) break
         // what was there goes to old/ (once), the shots follow the new script - the cast and the looks stay: only action lines and times of day changed
         if (!backedUp) {
-            const keep = join(film.dir, 'old', `script-fix-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}`)
+            const keep = join(film.dir, 'old', `script-fix-${versionStamp()}`)
             mkdirSync(keep, {recursive: true})
             copyFileSync(film.file, join(keep, 'project.json'))
             log.step('Script', styles.muted(`the old version is in ${keep}; cast and looks are kept, the shots are planned again`))
@@ -421,7 +423,7 @@ if (render.has('images') || render.has('videos')) {
         // on request, and only for the clips named: they are put away in old/attempts/ and rendered again, with a new seed
         if (args.again) {
             if (config.seed !== -1) log.warn(`"seed" is ${config.seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)
-            const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')
+            const stamp = versionStamp()
             for (const clip of selected) log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${archiveClip(film.dir, clip.id, stamp)}`)}`)
             // a clip that goes on from the last frame of one of these starts on a picture that no longer exists
             const later = new Set<string>()
@@ -479,13 +481,3 @@ if (render.has('final')) {
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}${only.size ? ` - ${selected.length} of ${requests.length} clips (--only)` : ''}`)}`)
 }
 
-// Runs of clips where each one starts on the last frame of the one before (FilmClipRequest.startsFrom), in film order
-function clipChains(clips: typeof requests): (typeof requests)[] {
-    const chains: (typeof requests)[] = []
-    for (const clip of clips) {
-        const chain = clip.startsFrom ? chains.find(c => c.at(-1)!.id === clip.startsFrom) : undefined
-        if (chain) chain.push(clip)
-        else chains.push([clip])
-    }
-    return chains
-}

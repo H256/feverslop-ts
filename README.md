@@ -153,6 +153,7 @@ bun index.ts --redo=story,lookBrief   # several at once
 bun index.ts --render=all             # also render with ComfyUI and assemble <project-id>.mp4, see below
 bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
+bun index.ts --debug-audio            # also cut one listenable wav per track and clip into output/audio (not needed for rendering)
 bun index.ts --legacy-moments         # skip step 11b, spread beat.moments across shots the old way
 bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity after editing prop/propStem by hand
 ```
