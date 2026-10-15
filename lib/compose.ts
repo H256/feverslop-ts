@@ -93,8 +93,10 @@ export type Input = {
     // config.pinStartFrame: a continuing clip gets the last frame of the clip before it as its pinned first frame
     // (the render passes it to the workflow separately) - it is then not one of the reference pictures
     pinStartFrame?: boolean,
-    // config.locationView: a clip's place picture is this one view of the location's sheet (0-4); -1 or none = the sheet
-    locationView?: number,
+    // config.locationView: a clip's place picture is one view of the location's sheet (0-4): this one for every clip, or
+    // with "auto" the one the shot planning chose for the first shot of the clip (shotViews); -1 or none = the sheet
+    locationView?: number | 'auto',
+    shotViews?: Record<string, number[]>,
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
@@ -293,10 +295,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const opensScene = k === 0
             const shotCount = shotCountFor(slot, beat, opensScene)
             const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
+            const view = typeof input.locationView === 'number' ? input.locationView : input.locationView === 'auto' ? input.shotViews?.[beat.id]?.[shotCursor] : undefined
             shotCursor += shotCount
             // a clip of a continuous beat starts on the last frame of the clip before it
             const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging))
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging, view))
         })
         stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
     }
@@ -314,7 +317,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, locationView}: Input, staging?: string): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
