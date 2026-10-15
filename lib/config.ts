@@ -41,7 +41,8 @@ export type PlanConfig = {
     // side by side - the video model shows that back as a grid, with the sheet's empty cell as a black patch, in the
     // first seconds of a clip), 0-4 = that one view of it, from the frames the sheet was composed of
     // (assets/sequence/locations/<id>/frames/frame_0N.png): 0 front, 1 right, 2 behind, 3 left, 4 wide; "auto" = the
-    // shot planning chooses the view of every shot (step shotViews) and a clip gets the one of its first shot
+    // shot planning chooses the view of every shot (step shotViews) and a clip gets the one of its first shot - from
+    // the text of the plan and the names of the views, deliberately not from the pictures (no vision model needed)
     locationView: number | 'auto',
 }
 
