@@ -7,6 +7,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
+import {clipChains, renderAll} from "./lib/batch.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
@@ -41,9 +42,9 @@ printBanner()
 const MAX_CLIP_SEC = 10 - 17 / FPS
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
-//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
+//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]
+             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -62,6 +63,7 @@ const {values: args, positionals} = (() => {
                 comfy: {type: 'string'},
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
+                'debug-audio': {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
@@ -424,7 +426,7 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
   - Things change once and stay changed: a door that opens stays open until a beat shows it closing, a mirror that cracks stays cracked, someone who is swallowed or gone does not come back. Never open, close and open the same thing again, and never show an event that already happened in an earlier beat once more.`
 
 // moments that still break the two rules the model keeps breaking (stand-in objects, blank faces) - checked after the shot-moments step
-const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name|KASPAR)\b/i
+const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name)\b/i
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
@@ -475,6 +477,7 @@ ${storyBase}`,
         instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
     })
 
+    const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
     const characterIds = new Set(cast.characters.map(c => c.id))
     const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
     const locationIds = cast.locations.map(l => l.id)
@@ -482,7 +485,8 @@ ${storyBase}`,
         if (!locationIds.includes(beat.locationId)) {
             log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
         }
-        const beatCharacterIds = beat.characterIds.filter(id => characterIds.has(id))
+        const beatCharacterIds = (Array.isArray(beat.characterIds) ? beat.characterIds : []).filter(id => characterIds.has(id))
+        const summary = String(beat.summary ?? '')
         const groupSize = Object.fromEntries(
             Object.entries(beat.groupSize ?? {})
                 .filter(([id]) => groupIds.has(id) && beatCharacterIds.includes(id))
@@ -490,11 +494,13 @@ ${storyBase}`,
         )
         return {
             ...beat,
+            kind: BEAT_KINDS.includes(beat.kind) ? beat.kind : 'build' as const,
+            summary,
             id: `beat-${String(i + 1).padStart(2, '0')}`,
             order: i + 1,
             locationId: locationIds.includes(beat.locationId) ? beat.locationId : locationIds[0]!,
             characterIds: beatCharacterIds,
-            moments: beat.moments?.length ? beat.moments : [beat.summary],
+            moments: Array.isArray(beat.moments) && beat.moments.length ? beat.moments.map(String) : [summary],
             intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
             weight: Math.max(1, Number(beat.weight) || 1),
             continuous: beat.continuous === true,
@@ -600,6 +606,8 @@ if (plannedBefore) {
     const missing = beats.filter(b => !plannedBefore[b.id]).map(b => b.id)
     log.step('Planning again', styles.muted(`${missing.join(', ')} - no plan of their own yet, the other ${beats.length - missing.length} stay`))
     delete project.data.shotMoments
+    // the beats planned now have no view yet - the views of the others stay (see shotViews)
+    delete project.data.shotViews
 }
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
@@ -743,11 +751,19 @@ if (shotMoments) for (const beat of beats) {
 const locationView = config.sequenceSheets ? config.locationView : -1
 // The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
 // the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
+// a beat without an entry (its answer failed, or it had no plan then) is asked again on the next run, the others stay
+const viewsBefore = project.data.shotViews
+if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
 const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
     const result: Record<string, number[]> = {}
     for (const beat of beats) {
         const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
         if (!plan) continue
+        const kept = viewsBefore?.[beat.id]
+        if (kept?.length === plan.shots.length) {
+            result[beat.id] = kept
+            continue
+        }
         const answer = await askJson<{ views: unknown[] }>({
             input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
 views (number: what it shows):
@@ -763,6 +779,8 @@ Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length -
             log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
             return undefined
         })
+        // not stored: the beat is asked again on the next run instead of keeping the first view for good
+        if (!answer) continue
         const views = plan.shots.map((_, n) => {
             const v = Number(answer?.views?.[n])
             return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
@@ -808,7 +826,8 @@ for (const clip of clips) {
     // one debug-listenable file per track, cut from its own stem to this clip's span - not what's actually
     // uploaded for rendering any more (lib/render.ts uploads and trims the whole stem itself), just handy to
     // hear exactly what a track covers
-    for (const audio of clip.assets.audio) {
+    // only with --debug-audio: one ffmpeg process per track and clip, on every run, for files nobody needs to render
+    for (const audio of args['debug-audio'] ? clip.assets.audio : []) {
         await cutAudio(stemFiles[audio.stem!]!, secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
     }
 }
@@ -924,32 +943,6 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
-
-// Runs of clips where each one starts on the last frame of the one before (ClipRequest.startsFrom), in song order
-function clipChains(clips: ClipRequest[]): ClipRequest[][] {
-    const chains: ClipRequest[][] = []
-    for (const clip of clips) {
-        const chain = clip.startsFrom ? chains.find(c => c.at(-1)!.id === clip.startsFrom) : undefined
-        if (chain) chain.push(clip)
-        else chains.push([clip])
-    }
-    return chains
-}
-
-/**
- * Runs all renders and lets the others finish when one fails - their jobs are on the servers already.
- * Throws afterwards if any failed.
- */
-async function renderAll<T>(items: T[], renderOne: (item: T) => Promise<unknown>) {
-    const results = await Promise.allSettled(items.map(renderOne))
-    const errors = results.flatMap(r => r.status === 'rejected' ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : [])
-    if (!errors.length) return
-    // e.g. "no server reachable" arrives once per render
-    const unique = [...new Set(errors)]
-    if (unique.length === 1) throw new Error(errors.length > 1 ? `${unique[0]} (${errors.length} renders)` : unique[0])
-    for (const error of unique) log.warn(error)
-    throw new Error(`${errors.length} of ${items.length} renders failed - see the warnings above`)
-}
 
 /**
  * The singers from config.json: names or ids matched loosely against the cast, or ["auto"] - the LLM picks the lead

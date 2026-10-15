@@ -7,7 +7,7 @@ import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo} from "./assemble.ts";
-import {backdropSeconds} from "./leak.ts";
+import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
@@ -356,7 +356,7 @@ export class Renderer implements Disposable {
         // that did is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times
         for (let tries = 0; this.config.leakRetries > 0; tries++) {
             const leaked = await backdropSeconds(target)
-            if (!leaked.length) break
+            if (!hasBackdropRun(leaked)) break
             const where = `${leaked.length} sample(s) between ${leaked[0]!.toFixed(1)} and ${leaked.at(-1)!.toFixed(1)} s`
             if (this.config.seed !== -1) {
                 log.warn(`${file} has a grey studio backdrop (${where}) - the seed is fixed in config.json, so rendering it again gives the same clip. Use "seed": -1, or --again with another seed`)
@@ -415,7 +415,7 @@ export class Renderer implements Disposable {
     protected async render<M>(label: string, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
-        const initial: PendingJob<M> | undefined = existsSync(pendingFile) ? await Bun.file(pendingFile).json() : undefined
+        const initial = await readPending<M>(pendingFile)
         const home = initial ? this.homeOf(label, initial, servers) : undefined
 
         const server = await this.acquire(home?.name)
@@ -471,7 +471,9 @@ export class Renderer implements Disposable {
         })
         const nodes = Object.fromEntries(Object.entries(prompt).map(([id, node]) => [id, node.class_type]))
         const queuedJob: PendingJob<M> = {promptId: queued.prompt_id, server: {name: server.name, url: server.url}, output, nodes, meta, queuedAt: Date.now()}
-        await Bun.write(pendingFile, JSON.stringify(queuedJob, null, 2))
+        // written beside and renamed, so a stop in the middle of the write never leaves half a file behind
+        await Bun.write(`${pendingFile}.partial`, JSON.stringify(queuedJob, null, 2))
+        renameSync(`${pendingFile}.partial`, pendingFile)
         return queuedJob
     }
 
@@ -556,6 +558,17 @@ export class Renderer implements Disposable {
             stopSpinner()
             for (const unsubscribe of off) unsubscribe()
         }
+    }
+}
+
+/** The recorded job of a render, or undefined when there is none - or when the file is damaged (a stop in the middle of a write). */
+async function readPending<M>(file: string): Promise<PendingJob<M> | undefined> {
+    if (!existsSync(file)) return undefined
+    try {
+        return await Bun.file(file).json()
+    } catch (e) {
+        log.warn(`${basename(file)} is damaged (${e instanceof Error ? e.message : e}) - ignored, the clip is queued again`)
+        return undefined
     }
 }
 

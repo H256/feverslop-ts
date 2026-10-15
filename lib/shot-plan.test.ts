@@ -7,11 +7,12 @@ const maren: Character = {id: 'maren', name: 'Maren', role: 'miner'}
 const beat = {id: 'b1', characterIds: ['cael', 'maren']} as StoryBeat
 
 describe('readBeatPlan', () => {
-    test('resolves names to ids, takes the staging and the ends, pads to the shots needed', () => {
+    test('resolves names to ids, takes the staging and the ends, pads to the shots needed and asks again', () => {
         const r = readBeatPlan({staging: 'the shaft on the left', ends: {Cael: 'stands at the shaft'}, shots: [
             {action: 'Cael lifts the hammer', characters: ['Cael', 'Maren'], people: {Cael: {state: 'stands', frame: 'left', motion: 'stays'}}, hold: true},
         ]}, beat, [cael, maren], 2)!
-        expect(r.problems).toEqual([])
+        // a count that does not fit is padded, and the planner is asked again
+        expect(r.problems).toEqual(['shot count: needed 2, got 1'])
         expect(r.plan.shots).toHaveLength(2)
         expect(r.plan.shots[0]!.characters).toEqual(['cael', 'maren'])
         expect(r.plan.shots[0]!.people!.cael!.frame).toBe('left')
