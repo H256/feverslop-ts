@@ -1,9 +1,10 @@
 import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "../log.ts";
+import {dropPartials, keepEach} from "../partials.ts";
 import type {FilmProject} from "./types.ts";
 
-export type FilmStepName = Exclude<keyof FilmProject, 'inputs'>
+export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials'>
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<FilmStepName, FilmStepName[]> = {
@@ -65,6 +66,7 @@ export class FilmStore {
     invalidate(name: FilmStepName) {
         if (this.data[name] !== undefined) log.step('Redo', styles.name(name))
         delete this.data[name]
+        dropPartials(this.data, name)
         for (const [step, deps] of Object.entries(dependsOn) as [FilmStepName, FilmStepName[]][]) {
             if (deps.includes(name) && this.data[step] !== undefined) this.invalidate(step)
         }
@@ -104,7 +106,13 @@ export class FilmStore {
         }
         const result = await run()
         this.data[name] = result
+        dropPartials(this.data, name)
         await this.save()
         return result
+    }
+
+    /** One element of a step that asks per element: its answer is kept at once and not asked again for the same input (lib/partials.ts). */
+    each<T>(name: FilmStepName, key: string, input: unknown, run: () => Promise<T>): Promise<T> {
+        return keepEach(this.data, () => this.save(), name, key, input, run)
     }
 }

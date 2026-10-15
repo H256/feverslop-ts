@@ -391,7 +391,8 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
         const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, char, otherLooks))
+        const options = characterLookPrompt(lookBrief, char, otherLooks)
+        looks[char.id] = await project.each('characterLooks', char.id, options, () => ask(options))
     }
     return looks
 })
@@ -406,7 +407,8 @@ const characterDescriptions = await project.step('characterDescriptions', '7b ·
     const descriptions: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
-        descriptions[char.id] = await ask(characterDescriptionPrompt(characterLooks[char.id] ?? ''))
+        const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
+        descriptions[char.id] = await project.each('characterDescriptions', char.id, options, () => ask(options))
     }
     return descriptions
 })
@@ -417,7 +419,8 @@ const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATIO
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        looks[location.id] = await ask(locationLookPrompt(lookBrief, storySummary, location.name))
+        const options = locationLookPrompt(lookBrief, storySummary, location.name)
+        looks[location.id] = await project.each('locationLooks', location.id, options, () => ask(options))
     }
     return looks
 })
@@ -428,7 +431,8 @@ const locationDescriptions = await project.step('locationDescriptions', '8b · D
     const descriptions: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        descriptions[location.id] = await ask(locationDescriptionPrompt(locationLooks[location.id] ?? ''))
+        const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
+        descriptions[location.id] = await project.each('locationDescriptions', location.id, options, () => ask(options))
     }
     return descriptions
 })
@@ -548,7 +552,8 @@ const characterLookVariants = await project.step('characterLookVariants', '9c ·
         const looks = [characterLooks[char.id] ?? '']
         for (let i = 1; i < count; i++) {
             log.step(`Member ${i + 1}/${count}`, styles.name(char.id))
-            looks.push(await ask(characterVariantLookPrompt(lookBrief, char, looks)))
+            const options = characterVariantLookPrompt(lookBrief, char, looks)
+            looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => ask(options)))
         }
         variants[char.id] = looks
         if (char.prop) looks.forEach((look, i) => { if (propMissing(look, char.prop!)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${char.prop}"`) })
@@ -567,7 +572,10 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
         log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
         descriptions[id] = [
             characterDescriptions[id] ?? '',
-            ...await Promise.all(looks.slice(1).map(look => ask(characterDescriptionPrompt(look)))),
+            ...await Promise.all(looks.slice(1).map((look, i) => {
+                const options = characterDescriptionPrompt(look)
+                return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
+            })),
         ]
     }
     return descriptions

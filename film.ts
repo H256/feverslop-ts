@@ -298,9 +298,13 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
-        looks[char.id] = await ask(characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks))
+        const lookOptions = characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks)
+        looks[char.id] = await film.each('characterLooks', char.id, lookOptions, () => ask(lookOptions))
         // other looks of the character (wounded, disguised): the same prompt with only the change applied
-        for (const state of char.states ?? []) looks[statePictureId(char.id, state.id)] = await ask(stateLookPrompt(looks[char.id]!, char.name, state))
+        for (const state of char.states ?? []) {
+            const stateOptions = stateLookPrompt(looks[char.id]!, char.name, state)
+            looks[statePictureId(char.id, state.id)] = await film.each('characterLooks', statePictureId(char.id, state.id), stateOptions, () => ask(stateOptions))
+        }
     }
     return looks
 })
@@ -311,8 +315,12 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     const descriptions: Record<string, string> = {}
     for (const [i, char] of seen.entries()) {
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
-        descriptions[char.id] = await ask(characterDescriptionPrompt(characterLooks[char.id] ?? ''))
-        for (const state of char.states ?? []) descriptions[statePictureId(char.id, state.id)] = await ask(characterDescriptionPrompt(characterLooks[statePictureId(char.id, state.id)] ?? ''))
+        const descriptionOptions = characterDescriptionPrompt(characterLooks[char.id] ?? '')
+        descriptions[char.id] = await film.each('characterDescriptions', char.id, descriptionOptions, () => ask(descriptionOptions))
+        for (const state of char.states ?? []) {
+            const stateOptions = characterDescriptionPrompt(characterLooks[statePictureId(char.id, state.id)] ?? '')
+            descriptions[statePictureId(char.id, state.id)] = await film.each('characterDescriptions', statePictureId(char.id, state.id), stateOptions, () => ask(stateOptions))
+        }
     }
     return descriptions
 })
@@ -323,7 +331,8 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        looks[location.id] = await ask(locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`))
+        const lookOptions = locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`)
+        looks[location.id] = await film.each('locationLooks', location.id, lookOptions, () => ask(lookOptions))
     }
     return looks
 })
@@ -334,7 +343,8 @@ const locationDescriptions = await film.step('locationDescriptions', '8b · DESC
     const descriptions: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        descriptions[location.id] = await ask(locationDescriptionPrompt(locationLooks[location.id] ?? ''))
+        const descriptionOptions = locationDescriptionPrompt(locationLooks[location.id] ?? '')
+        descriptions[location.id] = await film.each('locationDescriptions', location.id, descriptionOptions, () => ask(descriptionOptions))
     }
     return descriptions
 })
@@ -349,10 +359,13 @@ const locationViews = config.sequenceSheets && config.locationViews
             // what happens there, from the script: the action lines of its scenes
             const scenes = screenplay.scenes.filter(s => locationOf(cast, s.location)?.id === location.id)
                 .map(s => `${s.id}: ${s.elements.filter(e => e.type === 'action').map(e => e.text).join(' ')}`.slice(0, 700)).join('\n').slice(0, 3000)
-            const answer = await askJson<{ views?: Partial<LocationView>[] }>(locationViewsPrompt(location, locationLooks[location.id] ?? '', scenes))
-            const views = (answer.views ?? []).filter(v => typeof v?.name === 'string' && typeof v?.shows === 'string' && v.name.trim() && v.shows.trim()).map(v => ({name: v.name!.trim(), shows: v.shows!.trim()}))
-            if (views.length !== 5) throw new Error(`the views of ${location.name}: ${views.length} instead of 5 - run it again (--redo=locationViews)`)
-            result[location.id] = views
+            const viewsOptions = locationViewsPrompt(location, locationLooks[location.id] ?? '', scenes)
+            result[location.id] = await film.each('locationViews', location.id, viewsOptions, async () => {
+                const answer = await askJson<{ views?: Partial<LocationView>[] }>(viewsOptions)
+                const views = (answer.views ?? []).filter(v => typeof v?.name === 'string' && typeof v?.shows === 'string' && v.name.trim() && v.shows.trim()).map(v => ({name: v.name!.trim(), shows: v.shows!.trim()}))
+                if (views.length !== 5) throw new Error(`the views of ${location.name}: ${views.length} instead of 5 - run it again (--redo=locationViews)`)
+                return views
+            })
         }
         return result
     })
@@ -389,22 +402,27 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         }
         log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.name(`${scene.setting}. ${scene.location} - ${scene.time}`))
         const location = locationOf(cast, scene.location)!
-        let problems: string[] = []
-        for (let attempt = 0; ; attempt++) {
-            const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
-            try {
-                // the first time what the script checks find is a reason to ask again, the second time it is only noted
-                const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
-                for (const note of notes) log.warn(note)
-                result.push(planned)
-                break
-            } catch (e) {
-                // a dropped line of dialogue or a wrong name is what the model can fix when told - once
-                if (!(e instanceof CoverageProblem) || attempt >= 1) throw e
-                problems = e.problems
-                log.warn(`${e.message} - asking again`)
+        const planScene = async () => {
+            let problems: string[] = []
+            for (let attempt = 0; ; attempt++) {
+                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
+                try {
+                    // the first time what the script checks find is a reason to ask again, the second time it is only noted
+                    const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
+                    for (const note of notes) log.warn(note)
+                    return planned
+                } catch (e) {
+                    // a dropped line of dialogue or a wrong name is what the model can fix when told - once
+                    if (!(e instanceof CoverageProblem) || attempt >= 1) throw e
+                    problems = e.problems
+                    log.warn(`${e.message} - asking again`)
+                }
             }
         }
+        // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
+        // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
+        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id])
+        result.push(await film.each('coverage', scene.id, firstAsk, planScene))
     }
     return result
 })

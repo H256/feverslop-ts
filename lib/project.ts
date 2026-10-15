@@ -1,6 +1,7 @@
 import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "./log.ts";
+import {dropPartials, keepEach, type Partials} from "./partials.ts";
 
 // prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
 // propStem: only set when the prop is a musical instrument audible in the song - which stem its sound belongs to,
@@ -130,6 +131,7 @@ export type Assignment = { slotId: string, beatId: string }
 
 export type Project = {
     inputs?: Record<string, string>, // fingerprints of the input files and settings - not a step
+    partials?: Partials,             // answers of a running step, one per element (lib/partials.ts) - not a step
     // The YuE2 style/tags prompt written for lyrics.txt (music-style.txt is the optional direction hint for it) -
     // lyrics.txt itself isn't cached here, it's a plain input file like story-idea.txt, generated once into
     // existence and then treated as fixed (delete it, or edit it, to get a new one - see index.ts)
@@ -163,7 +165,7 @@ export type Project = {
     shotViews?: Record<string, number[]>,   // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
-export type StepName = Exclude<keyof Project, 'inputs'>
+export type StepName = Exclude<keyof Project, 'inputs' | 'partials'>
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<StepName, StepName[]> = {
@@ -229,6 +231,7 @@ export class ProjectStore {
     invalidate(name: StepName) {
         if (this.data[name] !== undefined) log.step('Redo', styles.name(name))
         delete this.data[name]
+        dropPartials(this.data, name)
         for (const [step, deps] of Object.entries(dependsOn) as [StepName, StepName[]][]) {
             if (deps.includes(name) && this.data[step] !== undefined) this.invalidate(step)
         }
@@ -267,7 +270,13 @@ export class ProjectStore {
         }
         const result = await run()
         this.data[name] = result
+        dropPartials(this.data, name)
         await this.save()
         return result
+    }
+
+    /** One element of a step that asks per element: its answer is kept at once and not asked again for the same input (lib/partials.ts). */
+    each<T>(name: StepName, key: string, input: unknown, run: () => Promise<T>): Promise<T> {
+        return keepEach(this.data, () => this.save(), name, key, input, run)
     }
 }
