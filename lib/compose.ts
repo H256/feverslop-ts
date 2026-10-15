@@ -1,3 +1,4 @@
+import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
 import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {formatTimestamp, frameAt, round} from "./frames.ts";
@@ -333,7 +334,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const singerIds = [...new Set(performed.flatMap(v => v.singerIds))]
         // a piece of a fight clip has only the people of its own shot as references: fewer pictures, nobody to strike by mistake
         const shotIds = slot.micro && flatShotMoments?.length ? new Set(flatShotMoments.flatMap(s => s.characters ?? [])) : undefined
-        const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id) && (!shotIds || shotIds.has(id)))]
+        const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
             .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
@@ -454,7 +455,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // with vocals, a cut never falls into a sung word
         const cuts = avoidWords(
-            Array.from({length: shotCount}, (_, j) => j === 0 ? 0 : round((bars[Math.floor(j * slot.bars / shotCount)] ?? slot.start) - slot.start)),
+            Array.from({length: shotCount}, (_, j) => j === 0 ? 0 : round((bars[Math.floor(j * slot.bars / shotCount)] ?? slot.start + (slot.end - slot.start) * j / shotCount) - slot.start)),
             vocals.flatMap(v => v.words), 120 / music.bpm, duration)
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
 
@@ -530,7 +531,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function propNote(focus: typeof castSubjects, start: number, end: number, moment: string, shotIndex: number): string {
             if (!propActivity) return ''
             const notes = focus
-                .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length && !names(s).test(moment))
+                .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length && !moment.includes(s.label))
                 .map(s => {
                     if (isActive({start, end}, propActivity[s.propStem!]!)) return `${s.label}, ${s.name}, is actively using the ${s.prop} right now.`
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
@@ -646,7 +647,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // does this correction apply - affirmative phrasing throughout, same as idlePropPoses above.
             const idleAtOpen = opensScene
                 ? castSubjects
-                    .filter(s => s.propStem && s.prop && !isActive({start: slot.start, end: slot.end}, propActivity?.[s.propStem!] ?? []))
+                    .filter(s => s.propStem && s.prop && propActivity?.[s.propStem]?.length && !isActive({start: slot.start, end: slot.end}, propActivity[s.propStem]!))
                     .map(s => `${s.label} ${(idlePropPoses[s.propStem!] ?? idlePropPosesDefault)[0]!(s.prop!)}`)
                 : []
             const sceneClauseFull = sceneClause + (idleAtOpen.length ? ` ${joinAnd(idleAtOpen)}.` : '')
@@ -814,4 +815,3 @@ function normalizeLyric(line: string) {
 }
 
 const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

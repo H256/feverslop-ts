@@ -7,11 +7,12 @@ const maren: Character = {id: 'maren', name: 'Maren', role: 'miner'}
 const beat = {id: 'b1', characterIds: ['cael', 'maren']} as StoryBeat
 
 describe('readBeatPlan', () => {
-    test('resolves names to ids, takes the staging and the ends, pads to the shots needed', () => {
+    test('resolves names to ids, takes the staging and the ends, pads to the shots needed and asks again', () => {
         const r = readBeatPlan({staging: 'the shaft on the left', ends: {Cael: 'stands at the shaft'}, shots: [
             {action: 'Cael lifts the hammer', characters: ['Cael', 'Maren'], people: {Cael: {state: 'stands', frame: 'left', motion: 'stays'}}, hold: true},
         ]}, beat, [cael, maren], 2)!
-        expect(r.problems).toEqual([])
+        // a count that does not fit is padded, and the planner is asked again
+        expect(r.problems).toEqual(['shot count: needed 2, got 1'])
         expect(r.plan.shots).toHaveLength(2)
         expect(r.plan.shots[0]!.characters).toEqual(['cael', 'maren'])
         expect(r.plan.shots[0]!.people!.cael!.frame).toBe('left')
@@ -49,6 +50,17 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
     })
     test('different motions, and a crowd entry next to a person, are fine', () => {
         const r = readBeatPlan({shots: [{action: 'They strike', characters: ['Anna', 'Bea', 'Orcs'], people: {Anna: own(1), Bea: own(2), Orcs: {state: 'press in', motion: 'the first lunges, two hang back'}}}]}, beat, cast, 1)!
+        expect(r.problems).toEqual([])
+        expect(r.notes).toEqual([])
+    })
+    test('three people and one of them with an entry but no motion: a note, no further call', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna and Bea clear the way', characters: ['Anna', 'Bea', 'Cora'], people: {Anna: own(1), Bea: own(2), Cora: {state: 'stands at the back'}}}]}, beat, cast, 1)!
+        expect(r.problems).toEqual([])
+        expect(r.notes).toHaveLength(1)
+        expect(r.notes[0]).toContain('Cora has no motion in a shot of 3 people')
+    })
+    test('two people and one of them without motion: not a note, the check is for three or more', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna speaks, Bea listens', characters: ['Anna', 'Bea'], people: {Anna: own(1), Bea: {state: 'stands at the back'}}}]}, beat, cast, 1)!
         expect(r.problems).toEqual([])
         expect(r.notes).toEqual([])
     })

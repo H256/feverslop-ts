@@ -2,7 +2,7 @@ import {describe, expect, test} from "bun:test";
 import {mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
-import {backdropSeconds, hasFlatBackdrop} from "./leak.ts";
+import {backdropSeconds, hasBackdropRun, hasFlatBackdrop} from "./leak.ts";
 
 const WIDTH = 96, HEIGHT = 54
 
@@ -64,5 +64,16 @@ describe('backdropSeconds', () => {
         } finally {
             rmSync(dir, {recursive: true, force: true})
         }
+    })
+})
+
+describe('hasBackdropRun', () => {
+    test('a single flagged sample is no leak', () => {
+        expect(hasBackdropRun([])).toBe(false)
+        expect(hasBackdropRun([1.5])).toBe(false)
+        expect(hasBackdropRun([0.5, 1.5, 2.5, 3.5])).toBe(false)
+    })
+    test('a second in a row is one', () => {
+        expect(hasBackdropRun([2, 2.25, 2.5, 2.75])).toBe(true)
     })
 })

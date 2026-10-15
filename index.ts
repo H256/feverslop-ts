@@ -7,6 +7,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
+import {clipChains, renderAll} from "./lib/batch.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
@@ -41,9 +42,9 @@ printBanner()
 const MAX_CLIP_SEC = 10 - 17 / FPS
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
-//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]  (this run only)
+//              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments]
+             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -62,6 +63,7 @@ const {values: args, positionals} = (() => {
                 comfy: {type: 'string'},
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
+                'debug-audio': {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
@@ -424,7 +426,7 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
   - Things change once and stay changed: a door that opens stays open until a beat shows it closing, a mirror that cracks stays cracked, someone who is swallowed or gone does not come back. Never open, close and open the same thing again, and never show an event that already happened in an earlier beat once more.`
 
 // moments that still break the two rules the model keeps breaking (stand-in objects, blank faces) - checked after the shot-moments step
-const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name|KASPAR)\b/i
+const riskyMoment = /\b((featureless|blank|pale|smooth|smudged|erased|empty)(, (featureless|blank|pale|smooth))* (oval|face)|faceless|no face|blade-shaped|name-object|name object|letters?|carved name)\b/i
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
@@ -475,6 +477,7 @@ ${storyBase}`,
         instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
     })
 
+    const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
     const characterIds = new Set(cast.characters.map(c => c.id))
     const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
     const locationIds = cast.locations.map(l => l.id)
@@ -482,7 +485,8 @@ ${storyBase}`,
         if (!locationIds.includes(beat.locationId)) {
             log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
         }
-        const beatCharacterIds = beat.characterIds.filter(id => characterIds.has(id))
+        const beatCharacterIds = (Array.isArray(beat.characterIds) ? beat.characterIds : []).filter(id => characterIds.has(id))
+        const summary = String(beat.summary ?? '')
         const groupSize = Object.fromEntries(
             Object.entries(beat.groupSize ?? {})
                 .filter(([id]) => groupIds.has(id) && beatCharacterIds.includes(id))
@@ -490,11 +494,13 @@ ${storyBase}`,
         )
         return {
             ...beat,
+            kind: BEAT_KINDS.includes(beat.kind) ? beat.kind : 'build' as const,
+            summary,
             id: `beat-${String(i + 1).padStart(2, '0')}`,
             order: i + 1,
             locationId: locationIds.includes(beat.locationId) ? beat.locationId : locationIds[0]!,
             characterIds: beatCharacterIds,
-            moments: beat.moments?.length ? beat.moments : [beat.summary],
+            moments: Array.isArray(beat.moments) && beat.moments.length ? beat.moments.map(String) : [summary],
             intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
             weight: Math.max(1, Number(beat.weight) || 1),
             continuous: beat.continuous === true,
@@ -600,6 +606,8 @@ if (plannedBefore) {
     const missing = beats.filter(b => !plannedBefore[b.id]).map(b => b.id)
     log.step('Planning again', styles.muted(`${missing.join(', ')} - no plan of their own yet, the other ${beats.length - missing.length} stay`))
     delete project.data.shotMoments
+    // the beats planned now have no view yet - the views of the others stay (see shotViews)
+    delete project.data.shotViews
 }
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
@@ -639,13 +647,14 @@ Rules:
 - Stage before you shoot. Per beat, "staging" is the fixed floor plan of the place for this beat, 2-4 sentences: which features are on which side or wall, where the entrances are and where people come from, where each person or group stands when the beat starts and how far apart they are. It stays the same for every shot of the beat, and a beat in the same place as the one before keeps the layout of the one before. Nothing in it moves. Include nobody and nothing the story does not put there.
 - A shot is about a few people. At most 4 people get an entry in "people" per shot - the ones the shot is about: who acts, who is struck, who is looked at, who answers. Everyone else of the beat who is visible is listed in "characters" without an entry (the rest of the line, the others behind) or is left out; only a wide or establishing shot lists more than 4 people in "characters". A march or a crowd of seven is staged through the few it is about, in the order of the file: who leads, who falls behind, who looks back.
 - A fight of several against several is a melee, a scuffle in the whole place - not a duel with onlookers. Everybody of the beat who is in the picture is in it: whoever has no entry in "people" is named in "characters" and "rest" says in one or two sentences what all of them do at the same time, each against their own opponent and in their own way (one parries high and answers with the haft, one is shoved back and comes in again, one goes down on a knee and is helped up). Nobody of a fight stands, waits or watches unless the story says so; the same holds for a march, a ritual or any event the whole party takes part in - "rest" is what the others do in it.
-- Every shot says who is in the picture ("characters", exactly as spelled in "cast") and, for each of them in "people": "state" - where they are and what they do, hold and wear at the START of the shot, as a phrase with a verb; "frame" - how they are in the picture: sharp or soft, where in the frame, which way the body and the gaze turn, in which part of the place ("sharp, left of centre, three-quarter view, looking at X"); "motion" - what moves during the shot, with its direction relative to the others, or that they stay where they are. The video model lets people walk and turn on its own, so for someone who talks, sings, plays or acts in place say that they stay; but where the story has people arrive, enter, follow, search or retreat, they move with it - "stays" and "follows" never describe the same person in one shot, "state" and "motion" agree. People are spread through the place and the frame at different depths and angles, each in their own relation to the others and to the place - never everybody in a row facing the lens. Everyone is somewhere definite, and a person is somewhere only once: nobody is in two places in one shot.
+- Every shot says who is in the picture ("characters", exactly as spelled in "cast") and, for each of them in "people": "state" - where they are and what they do, hold and wear at the START of the shot, as a phrase with a verb; "frame" - how they are in the picture: sharp or soft, where in the frame, which way the body and the gaze turn, in which part of the place ("sharp, left of centre, three-quarter view, looking at X"); "motion" - what moves during the shot, with its direction relative to the others, or that they stay where they are. The video model lets people walk and turn on its own, so for someone who sings, plays or works at one spot say that they stay (everybody else of a shot with three or more people moves, see below); but where the story has people arrive, enter, follow, search or retreat, they move with it - "stays" and "follows" never describe the same person in one shot, "state" and "motion" agree. People are spread through the place and the frame at different depths and angles, each in their own relation to the others and to the place - never everybody in a row facing the lens. Everyone is somewhere definite, and a person is somewhere only once: nobody is in two places in one shot.
 - Whatever the relation between two people is - hostile, tender, searching, arguing, comforting, ignoring - a shot says how far apart they are at the start and at the end, who looks at whom, who starts the move and what the other does in the same moment (steps back, leans in, turns away, answers with the eyes). Touch names the hand and where it lands; a search names what is searched and where; a feeling is shown by the body and the face, never by a word for it. Nobody just stands and faces the lens while the relation happens.
 - Everything that happens between people, or between a person and a thing, is staged as choreography, whatever it is - a fight, a dance, a band playing together, a chase, a ritual, a meeting: each shot is one or two beats of it. Say who moves first, with what and how fast, where it lands, what the other does in the same moment, and what it does to the one it touches (the one who is hit gives way, falls, staggers or holds, according to how they were hit). The people move through the place - they close in, give ground, come from where the staging says - and do not stand still while the action happens off to the side.
 - People are individuals, not a chorus line. Two people in one picture never do the same thing at the same moment: each has their own action, direction, height, target and timing - one starts, the next answers after the first one's move, another reacts to what was done (flinches, gives ground, takes the blow, hangs back, helps someone up), one is a step slower or faster. Never "they all raise", "they swing together", "in unison" or "in a staggered line" for people of a fight, a march or a search; unison is only for something the story itself does together (a chant, a drill) - and even then each has their own face, gesture or small difference. Different weapons and different builds move differently: use what each one carries and is.
 - A cast entry with "group": true is a crowd in one entry, and the beat says how many of it are there ("groupSize"). Its entry says how it breaks up - at least three different things when it is four or more: who goes first, who hangs back, who is struck and how, who falls or turns, who goes where - so the crowd is never one body doing one thing, and it moves through the place from where the staging says.
 - A fight is an exchange over its shots, not one blow: a blow lands and the shot goes on with what it does (the one hit gives way, the other answers, the first parries, someone comes in from the side) up to the next blow. No "hold at the peak" or "hold the pose" for a fight, and "hold": true is never a fight shot. After a clash the two sides do not stand side by side: one gives ground, falls, flees or is driven back, according to the story.
-- A listener, a bystander or a band member who does not sing stays in the picture whenever the staging has them near the shot, doing something of their own (watching, playing, reacting) - and does not sing.
+- A listener, a bystander or a band member who does not sing stays in the picture whenever the staging has them near the shot, doing something of their own (playing, or moving with the event: a step, a turn, a hand that lifts or grips - never only watching or reacting with the eyes) - and does not sing.
+- In a shot with three or more people in the picture - above all a wide one - nobody just stands there, and a wide shot is not a group portrait. "stays", "holds still", "stands", "watches", "waits" and "looks at" are not what a person does there: only whoever sings, plays or works at one spot stays in place, and even their body does something the camera sees (the weight shifts, the hands work, the head turns to someone). Everybody else has a movement of the body - a step toward or away, a turn, a hand or a tool that lifts, lowers or is passed on, a crouch, a lean - with its direction relative to the others; what they look at belongs to that movement ("steps aside to let Kae pass, eyes on her"), it does not replace it. At least two different people in such a shot change where they are in the place, in different directions or at different moments, and the people at the back move as much as the ones in front.
 - When a singer sings in a shot ("singingPerShot" true), the singer is in "characters", the face and the mouth are in view (three-quarter or profile is right when the singer looks at something: at the opponent, at the others, at the danger - the lens is never the target; not hidden, not too small), and the singing is part of the action: sung through effort, shouted at the other, drawn between breaths, over the blow - a singer in a fight keeps fighting while they sing, reacts with the whole body and does not turn to the lens to perform. The camera may follow the action (track, arc, handheld) as long as the mouth stays in view. Whoever plays an instrument that is audible in the shot ("activePerShot" true) is in it with the instrument in their hands.
 - "framing" is the shot size and angle ("wide shot", "medium close-up", "low-angle medium shot") - what can show everyone "characters" lists - and "camera" is one sentence with the movement and its speed (no times or durations in it - how long a shot is, is not yours to say). Every shot is a new camera position: no two in a row with the same movement, and "view" says where the camera stands and what it looks toward, in terms of the staging, on the same side of the action within one beat unless the story crosses it. "hold" is true for a shot in which nobody moves from where they are and the camera stays: the clip then keeps the framing from the first frame to the last.
 - Name characters by their "name" from "cast" below (not pronouns, and never the "id" that "characterIds"/"castProps" use - it only says who is meant), so every shot reads on its own. Use the name exactly as spelled and capitalized in "cast" - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
@@ -785,11 +794,19 @@ if (shotMoments) for (const beat of beats) {
 const locationView = config.sequenceSheets ? config.locationView : -1
 // The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
 // the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
+// a beat without an entry (its answer failed, or it had no plan then) is asked again on the next run, the others stay
+const viewsBefore = project.data.shotViews
+if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
 const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
     const result: Record<string, number[]> = {}
     for (const beat of beats) {
         const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
         if (!plan) continue
+        const kept = viewsBefore?.[beat.id]
+        if (kept?.length === plan.shots.length) {
+            result[beat.id] = kept
+            continue
+        }
         const answer = await askJson<{ views: unknown[] }>({
             input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
 views (number: what it shows):
@@ -805,6 +822,8 @@ Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length -
             log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
             return undefined
         })
+        // not stored: the beat is asked again on the next run instead of keeping the first view for good
+        if (!answer) continue
         const views = plan.shots.map((_, n) => {
             const v = Number(answer?.views?.[n])
             return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
@@ -850,7 +869,8 @@ for (const clip of clips) {
     // one debug-listenable file per track, cut from its own stem to this clip's span - not what's actually
     // uploaded for rendering any more (lib/render.ts uploads and trims the whole stem itself), just handy to
     // hear exactly what a track covers
-    for (const audio of clip.assets.audio) {
+    // only with --debug-audio: one ffmpeg process per track and clip, on every run, for files nobody needs to render
+    for (const audio of args['debug-audio'] ? clip.assets.audio : []) {
         await cutAudio(stemFiles[audio.stem!]!, secondsAt(frameAt(audio.songStart)), secondsAt(frameAt(audio.songEnd)), join(project.dir, audio.file))
     }
 }
@@ -966,32 +986,6 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
-
-// Runs of clips where each one starts on the last frame of the one before (ClipRequest.startsFrom), in song order
-function clipChains(clips: ClipRequest[]): ClipRequest[][] {
-    const chains: ClipRequest[][] = []
-    for (const clip of clips) {
-        const chain = clip.startsFrom ? chains.find(c => c.at(-1)!.id === clip.startsFrom) : undefined
-        if (chain) chain.push(clip)
-        else chains.push([clip])
-    }
-    return chains
-}
-
-/**
- * Runs all renders and lets the others finish when one fails - their jobs are on the servers already.
- * Throws afterwards if any failed.
- */
-async function renderAll<T>(items: T[], renderOne: (item: T) => Promise<unknown>) {
-    const results = await Promise.allSettled(items.map(renderOne))
-    const errors = results.flatMap(r => r.status === 'rejected' ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : [])
-    if (!errors.length) return
-    // e.g. "no server reachable" arrives once per render
-    const unique = [...new Set(errors)]
-    if (unique.length === 1) throw new Error(errors.length > 1 ? `${unique[0]} (${errors.length} renders)` : unique[0])
-    for (const error of unique) log.warn(error)
-    throw new Error(`${errors.length} of ${items.length} renders failed - see the warnings above`)
-}
 
 /**
  * The singers from config.json: names or ids matched loosely against the cast, or ["auto"] - the LLM picks the lead

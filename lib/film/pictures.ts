@@ -54,14 +54,4 @@ export function filmRenderConfig(config: FilmConfig): RenderConfig {
     return {...defaults, imageWorkflow: config.imageWorkflow, videoWorkflow: config.videoWorkflow, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, sequenceSheets: config.sequenceSheets}
 }
 
-/** Runs every render at once (the renderer queues them, one job per server) and throws afterwards if any failed. */
-export async function renderAll<T>(items: T[], renderOne: (item: T) => Promise<unknown>) {
-    const results = await Promise.allSettled(items.map(renderOne))
-    const errors = results.flatMap(r => r.status === 'rejected' ? [r.reason instanceof Error ? r.reason.message : String(r.reason)] : [])
-    if (!errors.length) return
-    // e.g. "no server reachable" arrives once per render
-    const unique = [...new Set(errors)]
-    if (unique.length === 1) throw new Error(errors.length > 1 ? `${unique[0]} (${errors.length} renders)` : unique[0])
-    for (const error of unique) log.warn(error)
-    throw new Error(`${errors.length} of ${items.length} renders failed - see the warnings above`)
-}
+export {renderAll} from "../batch.ts"

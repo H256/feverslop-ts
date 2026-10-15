@@ -179,7 +179,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     locationLooks: ['cast', 'lookBrief', 'summary'],
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
-    beats: ['story', 'cast', 'singing'],
+    beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
     propActivity: ['stems', 'instrumentStems', 'cast'],

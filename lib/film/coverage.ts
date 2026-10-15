@@ -12,7 +12,7 @@ export const MAX_CLIP_SEC = 10 - 17 / FPS
 const MAX_SHOT_SEC = 8
 const MIN_SHOT_SEC = 2
 // a shot with more speech than this is cut into shots with a part of the line each - the video model is limited to ~10 s a clip
-const MAX_SPEECH_SHOT_SEC = 10
+const MAX_SPEECH_SHOT_SEC = MAX_CLIP_SEC
 const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
