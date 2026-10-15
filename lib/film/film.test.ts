@@ -120,6 +120,18 @@ describe('coverage', () => {
         // frames of the clips follow each other without gaps
         clips.reduce((frame, c) => { expect(c.frameStart).toBe(frame); return frame + c.frames }, 0)
     })
+    test('a single shot longer than a clip that cannot be split is an error, not a clip over the limit', () => {
+        const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1, 2], seconds: 4})]}, bridge, cast).coverage
+        const long = {...plan, shots: plan.shots.map(s => ({...s, seconds: 9.8, lines: []}))}
+        expect(() => packClips(screenplay, [long, toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 4})]}, hut, cast).coverage], 'auto')).toThrow(/cannot be split/)
+    })
+    test('shots are not packed into one clip when their people would not all get a picture', () => {
+        const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 2}), shot({lines: [2], seconds: 2, characters: ['Ben'], action: 'Ben answers.'})]}, bridge, cast).coverage
+        const crowd = (from: number) => Array.from({length: 5}, (_, i) => `c${from + i}`)
+        const wide = {...plan, shots: [{...plan.shots[0]!, characters: crowd(0)}, {...plan.shots[1]!, characters: crowd(5)}]}
+        const clips = packClips(screenplay, [wide, toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 4})]}, hut, cast).coverage], 'auto').filter(c => c.sceneId === 's1')
+        expect(clips).toHaveLength(2)
+    })
     test('continuity "scene" chains every clip but the first of a scene, "never" none', () => {
         const plan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8}), shot({characters: ['Ben'], action: 'Ben answers.', lines: [2], seconds: 8})]}, bridge, cast).coverage
         const hutPlan = toCoverage({soundscape: 's', people: true, shots: [shot({lines: [1], seconds: 8})]}, hut, cast).coverage

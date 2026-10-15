@@ -1,3 +1,4 @@
+import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {FPS, frameAt, round} from "../frames.ts";
 import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
@@ -241,6 +242,9 @@ export type FilmClip = {
  * split (so no line of dialogue is cut in two), and a clip holds as many shots as fit into MAX_CLIP_SEC. A shot that
  * goes on in the same take as the one before it starts a continuing clip when it opens one (config.continuity).
  */
+/** The people a clip can show: the video model takes MAX_REFERENCE_IMAGES pictures, one of them the place. */
+export const MAX_PEOPLE_PER_CLIP = MAX_REFERENCE_IMAGES - 1
+
 export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], continuity: 'auto' | 'scene' | 'never'): FilmClip[] {
     const clips: FilmClip[] = []
     let frameStart = 0
@@ -248,6 +252,11 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
         // the time a shot needs for its lines is worked out again here: a plan made with a shorter estimate gets the new one
         const shots = coverage.find(c => c.sceneId === scene.id)?.shots.map(s => ({...s, seconds: round(Math.max(s.seconds, speakingSeconds(scene, s.lines)))})).flatMap(s => splitLongShot(scene, s))
         if (!shots) throw new Error(`no shots for scene ${scene.id} - run again, or --redo=coverage`)
+        // a single shot that still does not fit a clip (no line to split it at, or one unit longer than a clip) is a plan
+        // that cannot be rendered as it is - said here, not found as a failed or cut-off render
+        for (const [k, shot] of shots.entries()) {
+            if (shot.seconds > MAX_CLIP_SEC) throw new Error(`scene ${scene.id}, shot ${k + 1}: ${shot.seconds}s is longer than a clip can be (${round(MAX_CLIP_SEC)}s) and cannot be split - shorten it or divide it into shots (--redo=coverage --scenes=${scene.id})`)
+        }
         let current: Shot[] = []
         const flush = () => {
             if (!current.length) return
@@ -264,7 +273,9 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
             current = []
         }
         for (const shot of shots) {
-            if (current.length && current.reduce((sum, s) => sum + s.seconds, 0) + shot.seconds > MAX_CLIP_SEC) flush()
+            // a clip also ends where the people of its shots would no longer all get a picture of their own
+            const people = new Set([...current, shot].flatMap(s => s.characters))
+            if (current.length && (current.reduce((sum, s) => sum + s.seconds, 0) + shot.seconds > MAX_CLIP_SEC || people.size > MAX_PEOPLE_PER_CLIP)) flush()
             current.push(shot)
         }
         flush()

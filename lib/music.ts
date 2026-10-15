@@ -177,10 +177,25 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
             }
         })
 
+        // a clip that is too long however the bars fall (a long lead-in before the first few late downbeats, a gap
+        // between two bars) is cut by time into equal parts: no cut point of the music is left inside the limit
+        const sized = sectionSlots.flatMap(slot => {
+            const length = slot.end - slot.start
+            if (length <= maxClipSec + 1e-6) return [slot]
+            const parts = Math.ceil(length / maxClipSec - 1e-6)
+            const part = length / parts
+            return Array.from({length: parts}, (_, i) => ({
+                ...slot,
+                start: slot.start + i * part,
+                end: i === parts - 1 ? slot.end : slot.start + (i + 1) * part,
+                bars: Math.max(1, Math.round(part / barSec)),
+            }))
+        })
+
         // the fallback without word timing: the section's lines spread evenly over its clips
         const lines = lyricSections[sectionIndex]?.lines ?? []
-        lines.forEach((line, i) => sectionSlots[Math.floor(i * sectionSlots.length / lines.length)]!.lyrics.push(line))
-        slots.push(...sectionSlots)
+        lines.forEach((line, i) => sized[Math.floor(i * sized.length / lines.length)]!.lyrics.push(line))
+        slots.push(...sized)
     })
 
     slots.forEach((slot, i) => {
