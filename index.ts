@@ -306,15 +306,24 @@ log.box('Summary', storySummary)
 const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
     const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
     const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
+    const takenCharacters = new Set<string>()
+    const takenLocations = new Set<string>()
+    const uniqueId = (base: string, taken: Set<string>) => {
+        let id = base
+        for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
+        taken.add(id)
+        return id
+    }
     return {
+        // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
         characters: extracted.characters.map(c => ({
-            id: toId(c.name), name: c.name, role: c.role,
+            id: uniqueId(toId(c.name), takenCharacters), name: c.name, role: c.role,
             ...(c.isGroup === true ? {isGroup: true} : {}),
             ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
         })),
-        locations: extracted.locations.map(l => ({id: toId(l.name), ...l})),
+        locations: extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)})),
     }
 })
 log.step('Characters', styles.muted(`(${cast.characters.length})`))

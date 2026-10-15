@@ -23,7 +23,7 @@ import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParseP
 import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {timelineEdl} from "./lib/film/timeline.ts";
-import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
@@ -41,7 +41,7 @@ process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : 
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -54,6 +54,7 @@ const {values: args, positionals} = (() => {
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
                 'fix-script': {type: 'boolean', default: false},
+                'allow-import-gaps': {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
@@ -155,17 +156,27 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
 
     // the dialogue is checked against the source: the LLM structures the script, it must not reword a line
     let result = toScreenplay(await askJson(screenplayParsePrompt(source, brief.language)), meta)
-    let missing = missingDialogue(result, source)
+    // lost lines count as well: the check above only sees what the LLM added or changed
+    const unfaithful = (play: typeof result) => [...missingDialogue(play, source), ...omittedSourceLines(play, source)]
+    let missing = unfaithful(result)
     if (missing.length) {
-        log.warn(`${missing.length} dialogue line(s) differ from the screenplay - asking again`)
+        log.warn(`${missing.length} dialogue line(s) differ from or are missing in the screenplay - asking again`)
         result = toScreenplay(await askJson(screenplayParsePrompt(source, brief.language, missing)), meta)
-        missing = missingDialogue(result, source)
+        missing = unfaithful(result)
     }
     if (missing.length) {
-        log.warn(`${missing.length} dialogue line(s) still differ from the screenplay - fix them in ${film.file}, or run --redo=screenplay:\n${missing.map(m => `  "${m}"`).join('\n')}`)
+        log.warn(`${missing.length} line(s) still differ from or are missing in the screenplay - fix them in ${film.file}, or run --redo=screenplay:\n${missing.map(m => `  "${m}"`).join('\n')}`)
     }
     return result
 })
+// the screenplay is the base of every expensive step after it: one that does not hold the whole source stops the run here
+// (the source is checked again on every run, so a fix in project.json lets it through)
+if (mode === 'screenplay') {
+    const unfaithful = [...missingDialogue(screenplay, source), ...omittedSourceLines(screenplay, source)]
+    if (unfaithful.length && !args['allow-import-gaps']) {
+        throw new Error(`the structured screenplay is not the source: ${unfaithful.length} line(s) are changed or missing:\n${unfaithful.slice(0, 10).map(m => `  "${m}"`).join('\n')}\nfix them in ${film.file}, run --redo=screenplay, or go on anyway with --allow-import-gaps`)
+    }
+}
 const lines = screenplay.scenes.flatMap(s => s.elements).filter(e => e.type === 'dialogue').length
 const seconds = estimateSeconds(screenplay)
 log.step('Scenes', styles.muted(`${screenplay.scenes.length} · ${lines} dialogue lines`))

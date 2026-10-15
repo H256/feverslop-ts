@@ -51,9 +51,33 @@ const letters = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{
  */
 export function missingDialogue(screenplay: Screenplay, source: string) {
     const normalized = letters(source)
+    const words = ` ${wordKey(source)} `
+    // whole words: a short line must not count as found because its letters stand inside other words (scripts without
+    // spaces between words are compared by their letters)
+    const found = (line: string) => CJK.test(line) ? normalized.includes(letters(line)) : words.includes(` ${wordKey(line)} `)
     return screenplay.scenes.flatMap(scene => scene.elements)
-        .filter(element => element.type === 'dialogue' && !normalized.includes(letters(element.text)))
+        .filter(element => element.type === 'dialogue' && !found(element.text))
         .map(element => (element as Extract<ScreenplayElement, { type: 'dialogue' }>).text)
+}
+
+const wordKey = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/**
+ * The other direction: lines of the source the screenplay has no trace of. missingDialogue only sees what the output
+ * added or changed - a line the LLM dropped is invisible to it. A source line (three words or more) is "left out" when
+ * fewer than half of its words occur anywhere in the screenplay (speakers, dialogue, actions, places); action lines
+ * the LLM tidied up still share their words with the original, a lost line shares none.
+ */
+export function omittedSourceLines(screenplay: Screenplay, source: string) {
+    const tokens = (value: string) => (value.toLocaleLowerCase().replace(CJK, ' $& ').match(/[\p{L}\p{N}]+/gu) ?? [])
+    const kept = new Set([
+        screenplay.title,
+        ...screenplay.scenes.flatMap(scene => [scene.location, scene.time, ...scene.elements.flatMap(e => e.type === 'dialogue' ? [e.speaker, e.text, e.delivery ?? '', e.translation ?? ''] : [e.text])]),
+    ].flatMap(tokens))
+    return source.split(/\r?\n/).map(line => line.trim()).filter(line => {
+        const words = tokens(line)
+        return words.length >= 3 && words.filter(w => kept.has(w)).length / words.length < 0.5
+    })
 }
 
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu
@@ -158,6 +182,14 @@ export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<F
         aliases: [...new Set([text(l.name), ...(Array.isArray(l.aliases) ? l.aliases.map(text) : [])].filter(Boolean))],
         description: text(l.description),
     }))
+    // an alias that names several characters (or places) belongs to none of them but the one whose own name it is: the
+    // first match would otherwise decide who speaks, and changing the order of the cast would change the film. A line
+    // spoken by such a cue is then "not in the cast" and the cast step is asked again.
+    for (const group of [characters, locations] as { name: string, aliases: string[] }[][]) {
+        const owners = new Map<string, number>()
+        for (const entry of group) for (const k of new Set(entry.aliases.map(key))) owners.set(k, (owners.get(k) ?? 0) + 1)
+        for (const entry of group) entry.aliases = entry.aliases.filter(a => owners.get(key(a))! < 2 || key(a) === key(entry.name))
+    }
     if (!characters.length) throw new Error('the cast has no characters')
     if (!locations.length) throw new Error('the cast has no locations')
 

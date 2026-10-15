@@ -1,7 +1,7 @@
 import {describe, expect, test} from "bun:test";
 import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
-import {characterOf, locationOf, missingDialogue, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
+import {characterOf, locationOf, missingDialogue, omittedSourceLines, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay} from "./types.ts";
 
@@ -656,5 +656,26 @@ describe('the timeline as an edit decision list', () => {
         // the third names a clip that is not the one before it: nothing is left out
         expect(edl).toContain('003  AX       V     C        00:00:00:00 00:00:01:00 00:00:04:23 00:00:05:23')
         expect(edl).toContain('* FROM CLIP NAME: clip-002.mp4')
+    })
+})
+
+describe('source fidelity and ambiguous names', () => {
+    const play = toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'A', text: 'Hello.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'})
+    test('a source line the screenplay has no trace of is reported', () => {
+        expect(omittedSourceLines(play, 'A\nHello.\nB\nDo not leave me here.')).toEqual(['Do not leave me here.'])
+    })
+    test('a source with everything in it reports nothing', () => {
+        expect(omittedSourceLines(play, 'A\nHello.')).toEqual([])
+    })
+    test('a short line is not found inside other words', () => {
+        const short = toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'A', text: 'No.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'})
+        expect(missingDialogue(short, 'A\nNone of this is said.')).toEqual(['No.'])
+    })
+    test('an alias that names two characters belongs to neither - the cue is then not in the cast', () => {
+        const raw = {characters: [{name: 'Anna', aliases: ['A']}, {name: 'Ben', aliases: ['A']}], locations: [{name: 'The Hut', aliases: ['The Hut']}]}
+        expect(() => toCast(raw, play)).toThrow('not in the cast')
+        const named = toCast(raw, toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'Anna', text: 'Hi.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'}))
+        expect(characterOf(named, 'A')).toBeUndefined()
+        expect(characterOf(named, 'Anna')?.name).toBe('Anna')
     })
 })
