@@ -1,6 +1,6 @@
 import {existsSync, readFileSync, renameSync} from "node:fs";
 import {join} from "node:path";
-import {formatSlotRanges, probeVideo} from "../assemble.ts";
+import {formatSlotRanges, framesOnGrid, probeVideo} from "../assemble.ts";
 import {FPS, formatTime, secondsAt} from "../frames.ts";
 import {log, startSpinner, styles} from "../log.ts";
 
@@ -51,9 +51,9 @@ export async function assembleFilm({clips, projectDir, target, levelMatching = f
     }).map(c => c.id)
     if (stale.length) throw new Error(`${stale.length} clip(s) were rendered from another prompt than the plan has now: ${formatSlotRanges(stale)}\nDelete videos/<clip-id>.mp4 (and its .json) of those and render them again: --render=videos --only=${stale.join(',')}`)
     // the frames each clip contributes
-    const used = clips.map((c, i) => c.useRendered ? infos[i]!.frames : c.frames)
+    const used = clips.map((c, i) => c.useRendered ? framesOnGrid(infos[i]!) : c.frames)
     clips.forEach((clip, i) => {
-        if (infos[i]!.frames < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${infos[i]!.frames} frames, but the clip needs ${clip.frames} - delete it and render again`)
+        if (framesOnGrid(infos[i]!) < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${framesOnGrid(infos[i]!)} frames (at ${FPS} fps), but the clip needs ${clip.frames} - delete it and render again`)
         if (!infos[i]!.hasAudio) throw new Error(`videos/${clip.id}.mp4 has no audio - the film's sound comes from the clips: delete it and render again`)
     })
 

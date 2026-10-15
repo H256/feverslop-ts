@@ -8,6 +8,7 @@ import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
+import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
@@ -94,6 +95,8 @@ if (!projectExists(projectId)) {
 }
 const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
+// before the load: a run that writes works from the state it read, so no other run may save in between
+if (!args.gallery) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)

@@ -17,6 +17,7 @@ import {FilmRenderer, promptHash} from "./lib/film/render.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
+import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
@@ -81,11 +82,17 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
 }
 
 const film = new FilmStore(filmId!)
+// before the load: a run that writes works from the state it read, so no other run may save in between
+lockProject(film.dir, `film ${film.id}`)
 await film.load()
 // --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
 const sceneIds = new Set(args.scenes.split(',').filter(Boolean))
 if (sceneIds.size && !redoSteps.includes('coverage')) log.usageError('--scenes goes with --redo=coverage: it names the scenes whose shots are planned again', usage)
 const keptCoverage = sceneIds.size ? film.data.coverage : undefined
+// the shots of a scene stay only for the screenplay, cast, look and views they were planned from: a screenplay that is
+// planned again (or edited) gives other scenes and dialogue indices, and old shots would be read against them
+const coverageBasis = () => Bun.hash(JSON.stringify([film.data.screenplay, film.data.cast, film.data.lookBrief, film.data.locationViews])).toString(16)
+const keptBasis = keptCoverage ? coverageBasis() : undefined
 for (const step of redoSteps) film.invalidate(step)
 
 const readInput = async (name: string) => existsSync(film.input(name)) ? (await Bun.file(film.input(name)).text()).trim() : ''
@@ -116,6 +123,8 @@ await film.syncInputs({
     targetDuration: {value: String(config.targetDuration), steps: ['outline', 'coverage']},
     'style.txt': {value: style, steps: ['lookBrief']},
     subtitles: {value: config.subtitles, steps: ['subtitles']},
+    // designed views of the places change what the coverage is planned against
+    sequenceViews: {value: `${config.sequenceSheets}:${config.locationViews}`, steps: ['locationViews', 'coverage']},
 })
 
 /////////// 1 · BRIEF
@@ -336,9 +345,11 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const ends = Object.entries(previous?.ends ?? {}).map(([id, where]) => [cast.characters.find(c => c.id === id)?.name ?? id, where] as const)
         return previous && ends.length ? {scene: previous.sceneId, ends: Object.fromEntries(ends), view: previous.shots.at(-1)?.view} : undefined
     }
+    const keepsShots = keptBasis === undefined || keptBasis === coverageBasis()
+    if (!keepsShots) log.warn('the screenplay, cast or look changed since the shots were planned - every scene is planned again, --scenes cannot keep the old shots')
     for (const [i, scene] of screenplay.scenes.entries()) {
         // a scene that is not named keeps the shots it had
-        const kept = keptCoverage?.find(c => c.sceneId === scene.id)
+        const kept = keepsShots ? keptCoverage?.find(c => c.sceneId === scene.id) : undefined
         if (sceneIds.size && !sceneIds.has(scene.id) && kept) {
             log.step(`Scene ${i + 1}/${screenplay.scenes.length}`, styles.muted(`${scene.id} keeps its shots`))
             result.push(kept)

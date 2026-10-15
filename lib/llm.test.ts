@@ -3,7 +3,7 @@ import {ask, askJson, configureLlm, EmptyAnswerError, TruncatedError} from "./ll
 
 // A fake server that speaks the part of the OpenAI Responses API the pipelines use (model list, a streamed answer), so ask() and askJson() are
 // tested with their retries - cut-off and empty answers - without a language model.
-type Reply = { text: string, outputTokens?: number, incomplete?: boolean }
+type Reply = { text: string, outputTokens?: number, incomplete?: boolean, failed?: boolean, noEnd?: boolean }
 let replies: Reply[] = []
 const requests: { max_output_tokens: number, instructions: string }[] = []
 let server: ReturnType<typeof Bun.serve>
@@ -22,9 +22,11 @@ beforeAll(() => {
             const response = {id: 'r', object: 'response', created_at: 0, model: 'fake-model', output: [], usage: {input_tokens: 1, output_tokens: reply.outputTokens ?? reply.text.length, total_tokens: 1}}
             const events: object[] = [
                 ...(reply.text ? [{type: 'response.output_text.delta', delta: reply.text, sequence_number: 1}] : []),
-                reply.incomplete
+                ...(reply.noEnd ? [] : [reply.failed
+                    ? {type: 'response.failed', response: {...response, status: 'failed', error: {code: 'server_error', message: 'boom'}}, sequence_number: 2}
+                    : reply.incomplete
                     ? {type: 'response.incomplete', response: {...response, status: 'incomplete', incomplete_details: {reason: 'max_output_tokens'}}, sequence_number: 2}
-                    : {type: 'response.completed', response: {...response, status: 'completed'}, sequence_number: 2},
+                    : {type: 'response.completed', response: {...response, status: 'completed'}, sequence_number: 2}]),
             ]
             return new Response(sse(events), {headers: {'content-type': 'text/event-stream'}})
         },
@@ -59,6 +61,13 @@ describe('ask', () => {
         expect(requests.map(r => r.max_output_tokens)).toEqual([100, 200, 200])
         expect(requests[2]!.instructions).toContain('Keep your thinking short')
         expect(requests[0]!.instructions).not.toContain('Keep your thinking short')
+    })
+    test('a failed response is an error even when text came before it', async () => {
+        await expect(run([{text: '{"valid":true}', failed: true}], () => ask({instructions: 'i', input: 'x'}))).rejects.toThrow('boom')
+        expect(requests).toHaveLength(1)
+    })
+    test('a stream without a terminal event is an error', async () => {
+        await expect(run([{text: 'half', noEnd: true}], () => ask({instructions: 'i', input: 'x'}))).rejects.toThrow('without a completed')
     })
     test('four empty answers are an error', async () => {
         await expect(run([{text: ''}, {text: ''}, {text: ''}, {text: ''}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))).rejects.toBeInstanceOf(EmptyAnswerError)
