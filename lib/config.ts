@@ -40,7 +40,7 @@ export type PlanConfig = {
     // clip is its own cut. Off by default: a continuing clip starts on whatever the clip before it drifted to, and the
     // drift (doubled people, displaced wall patches) is carried on and grows - see README "Continuous scenes"
     continuity: 'auto' | 'always' | 'never',
-    // which view of the location's reference sheet a clip gets as its place picture: -1 = the whole sheet (all its views
+    // which view of the location's reference sheet a clip gets as its place picture: "auto" (default, see below), -1 = the whole sheet (all its views
     // side by side - the video model shows that back as a grid, with the sheet's empty cell as a black patch, in the
     // first seconds of a clip), 0-4 = that one view of it, from the frames the sheet was composed of
     // (assets/sequence/locations/<id>/frames/frame_0N.png): 0 front, 1 right, 2 behind, 3 left, 4 wide; "auto" = the
@@ -71,7 +71,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     singerVoice: 'auto',
     lyricsLanguage: 'en',
     continuity: 'never',
-    locationView: -1,
+    locationView: 'auto',
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')

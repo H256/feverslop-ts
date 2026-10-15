@@ -237,7 +237,7 @@ await project.syncInputs({
     // assumed: what a project recorded before the default became "never" ran with - so it is not redone by the new default alone
     continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
     // the choice of views is made again when the mode changes - it is only made at all with "auto"
-    locationView: {value: String(config.locationView), steps: ['shotViews'], assumed: '-1'},
+    locationView: {value: String(config.sequenceSheets ? config.locationView : -1), steps: ['shotViews'], assumed: '-1'},
     // fight beats cut into one-bar pieces change how many shots a beat has
     fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
 })
@@ -738,9 +738,11 @@ if (shotMoments) for (const beat of beats) {
 }
 
 ////////// CHOOSING THE VIEW OF THE PLACE - only with "locationView": "auto"
+// The views are the frames the location sheets were composed of: without sequence sheets there are none and the picture is the plain one
+const locationView = config.sequenceSheets ? config.locationView : -1
 // The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
 // the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
-const shotViews = shotMoments && config.locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
+const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
     const result: Record<string, number[]> = {}
     for (const beat of beats) {
         const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
@@ -791,7 +793,7 @@ const clips = buildClipRequests({
     stemsAvailable: Boolean(stems),
     continuity: config.continuity,
     pinStartFrame: config.pinStartFrame,
-    locationView: config.locationView,
+    locationView,
     shotViews,
 })
 
