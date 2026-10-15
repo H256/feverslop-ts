@@ -20,12 +20,13 @@ import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {timelineEdl} from "./lib/film/timeline.ts";
 import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
+import {applyAnnotations, parseFountain} from "./lib/film/fountain-import.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
@@ -157,6 +158,22 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
     const meta = {title: brief.title, language: brief.language}
     if (mode === 'idea') return toScreenplay(await askJson(screenplayWritePrompt(brief, outline!)), meta)
 
+    // A source in Fountain is read by code: no line can be dropped, reworded or given to another speaker. The model only
+    // annotates what the structure cannot say (the English of place and time, the language of a line, the actions)
+    const imported = parseFountain(source)
+    if (imported) {
+        log.step('Import', styles.muted(`Fountain - ${imported.scenes.length} scene(s) read by code, the model only annotates`))
+        const notes = await askJson(fountainAnnotatePrompt(imported.scenes.map(scene => ({
+            location: scene.location, time: scene.time,
+            actions: scene.elements.flatMap(e => e.type === 'action' ? [e.text] : []),
+            lines: scene.elements.flatMap(e => e.type === 'dialogue' ? [{text: e.text, ...(e.delivery ? {delivery: e.delivery} : {})}] : []),
+        })), brief.language)).catch((e: unknown) => {
+            log.warn(`the annotation is unusable (${e instanceof Error ? e.message : e}) - the script is used as written`)
+            return undefined
+        })
+        return toScreenplay(applyAnnotations(imported, notes), meta)
+    }
+
     // the dialogue is checked against the source: the LLM structures the script, it must not reword a line
     let result = toScreenplay(await askJson(screenplayParsePrompt(source, brief.language)), meta)
     // lost lines count as well: the check above only sees what the LLM added or changed
@@ -175,7 +192,8 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
 // the screenplay is the base of every expensive step after it: one that does not hold the whole source stops the run here
 // (the source is checked again on every run, so a fix in project.json lets it through)
 if (mode === 'screenplay') {
-    const unfaithful = [...missingDialogue(screenplay, source), ...omittedSourceLines(screenplay, source)]
+    // a Fountain source was read by code: its structure is complete by construction (and its actions are tidied into English, which a word comparison would take for lost lines)
+    const unfaithful = parseFountain(source) ? missingDialogue(screenplay, source) : [...missingDialogue(screenplay, source), ...omittedSourceLines(screenplay, source)]
     if (unfaithful.length && !args['allow-import-gaps']) {
         throw new Error(`the structured screenplay is not the source: ${unfaithful.length} line(s) are changed or missing:\n${unfaithful.slice(0, 10).map(m => `  "${m}"`).join('\n')}\nfix them in ${film.file}, run --redo=screenplay, or go on anyway with --allow-import-gaps`)
     }

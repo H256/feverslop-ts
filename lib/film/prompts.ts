@@ -109,6 +109,22 @@ ${screenplayJson}`,
     }
 }
 
+/**
+ * The annotation of a screenplay that code has already read (lib/film/fountain-import.ts): what the structure cannot say.
+ * The answer holds no dialogue - the model is shown the lines to read their language, and cannot change them.
+ */
+export function fountainAnnotatePrompt(scenes: { location: string, time: string, actions: string[], lines: { text: string, delivery?: string }[] }[], language: string): AskOptions {
+    return {
+        maxTokens: 12288,
+        reasoning: 'low',
+        input: JSON.stringify({scenes}),
+        instructions: `You are a script supervisor. A screenplay has been read into scenes; you add what the structure cannot say. Do not rewrite dialogue - it is not part of your answer. Answer only with JSON: {"scenes": [{"location": "", "time": "", "shot": "", "actions": [], "lines": [{"language": "", "delivery": ""}]}]} - one entry per scene, in the same order.
+- "location" and "time": the place and the time of day of the heading, in English, the same place always named the same way (DAY, NIGHT, DUSK, DAWN, ...). A heading that names a shot or a view instead of a place ("CLOSE UP - HIS FACE", "WIDE SHOT", "THE COLLISION") is not a new place: "location" and "time" are those of the scene before, never "unknown", and "shot" is the heading as written, in English. Otherwise "shot" is "".
+- "actions": the action lines of the scene, in the same order and the same number, tidied into plain present-tense English sentences - what the camera sees or the microphone hears, nothing added, nothing dropped.
+- "lines": one entry for every dialogue line of the scene, in the same order and the same number. "language" is the ISO 639-1 code of the language the line is spoken in - read its words, not who says it (the main language of the film is ${language}). "delivery" is the line's parenthetical in English ("whispering", "out of breath"), or "" when it has none.`,
+    }
+}
+
 export function screenplayParsePrompt(source: string, language: string, missing: string[] = []): AskOptions {
     return {
         maxTokens: 24576,
