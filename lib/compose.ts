@@ -682,7 +682,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                    : `the facial identity, build, hair and costume of ${s.name} are retained, but expression is free to follow the shot's action.`}`),
+                    : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`}`),
                 ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
@@ -690,6 +690,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'detailed_description:',
                 styleOpening(lookBrief),
                 ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
+                // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
+                ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
                 ...(staging ? [`Layout of the place: ${withLabels(staging)}`] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 ...(state.length ? [`Continuity from earlier scenes: ${state.map(withLabels).join('; ')}.`] : []),
