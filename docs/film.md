@@ -102,7 +102,16 @@ mouth closed. Speaker ids are numbered per clip, in the order of the spoken line
 A clip whose first shot goes on in the same take as the one before starts on that clip's last frame (`startsFrom`, `<Picture N>`
 as its first frame) - `continuity` in the config. That frame is the last one the film really shows of the clip before (for a clip with
 dialogue every frame the model rendered), and the assembly leaves out the first frame of the continuing clip - it is the same picture and
-would stand twice and stutter.
+would stand twice and stutter. The frame is only the pinned first frame (`pinStartFrame`) - not a reference picture as well, and the
+prompt has no `<Picture N>` for it: the same image twice made the model blend it in a second time, shifted.
+
+**It is off by default** (`"continuity": "never"`: every clip is its own cut). **Side effect: the picture drifts, and the next clip starts
+on the drift.** A continuing clip starts on the last frame of the clip before it, so whatever that clip did to the picture is the starting
+point of the next one. In a still, locked-off shot (a person at a mirror, almost no movement) the model has little to follow and tends to
+re-draw the picture: a faint double of the head and of the reflection, patches of the set that slide, a black patch at an edge, an object
+that was not there. Such a clip is clean in its first frame and worse every second - and the clip after it starts on that last frame and
+keeps it. Continuity suits shots with real movement (a walk, a reveal) and not a held pose. If a continuing clip looks wrong, render it
+again with another seed before the ones after it, or set `"continuity": "never"` again.
 
 **Long lines.** A shot never speaks more than a clip holds (~10 s). A line that takes longer - one character with a long speech - is spoken
 over several shots that go on in the same take, cut at the ends of its sentences (a sentence that is too long on its own at a word break).
@@ -148,7 +157,7 @@ render the new reference sheet. It is the film counterpart of `bun run replace-c
 All optional:
 
 ```json
-{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "imageWorkflow": "kroma-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "auto", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
+{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "imageWorkflow": "kroma-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "never", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
 ```
 
 | Field | Values |
@@ -158,7 +167,7 @@ All optional:
 | `imageWorkflow`, `videoWorkflow` | the workflow file in `comfy/workflows/` (without `.ts`) that renders the pictures and the clips - exactly one each, as in the music-video projects (see [custom workflows](custom-workflows.md)). The film's clips use `h3-ref2video-film` by default: pictures only, no audio goes in. A video workflow for the film takes that file's options (`FilmVideoWorkflowOptions`); the name of the workflow that made a clip is in its `.json`. `h3-ref2video-film-beta` is the same graph without the turbo LoRA (res_multistep, beta, 20 steps - about 2.5 times slower, follows the prompt more closely, e.g. for held shots): `"videoWorkflow": "h3-ref2video-film-beta"`; copy it to experiment |
 | `sequenceSheets`   | `true` (default) = every picture is a multi-angle reference sheet (a short turnaround video, sampled and composited), `false` = one plain picture each - much cheaper |
 | `locationViews`    | `false` (default). `true` = the five views of every location sheet are **designed** for the place and its story: a step (`locationViews`) writes the floor plan and the views (the reverse - what lies behind the camera of the first view -, the two sides, a wide view), the sheet's video cuts to them, and every shot says which view is its background (`placeView`). For conversations where a reverse shot has to show the other side of the place. Needs `sequenceSheets`; adds to the clip prompts, so only for a film planned with it - switch it on, delete the location pictures (`assets/locations/*`, `assets/sequence/locations/*`) and `--redo=locationViews,coverage` |
-| `continuity`       | `"auto"` (default) = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other), `"never"` = every clip is its own cut |
+| `continuity`       | `"never"` (default) = every clip is its own cut, `"auto"` = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other). Off by default: the picture drifts from clip to clip and the next one starts on the drift - see the paragraph above |
 | `subtitles`        | `"script"` (default) = the translations the screenplay has under its lines (in brackets, they are kept as `translation`), `"off"`, or a language code like `"en"`: every line in another language is translated into it (a step, cached) |
 | `burnSubtitles`    | `false` (default) = the subtitles are a track of the mp4 that the player switches on, `true` = burned into the picture (always visible, for players that do not show a track - messengers, uploads; the video is encoded once more) |
 | `levelMatching`    | `true` (default) = every clip's sound is brought towards -20 LUFS, at most 9 dB either way - the model makes each clip's level on its own |

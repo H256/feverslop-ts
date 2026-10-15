@@ -5,6 +5,7 @@ import {log, printBanner, styles} from "./lib/log.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
+import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, readBeatPlan} from "./lib/shot-plan.ts";
@@ -233,7 +234,10 @@ await project.syncInputs({
     singerVoice: {value: config.singerVoice, steps: ['story'], assumed: 'auto'},
     lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
     // which beats run on without a cut changes what their shots have to tell
+    // assumed: what a project recorded before the default became "never" ran with - so it is not redone by the new default alone
     continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
+    // the choice of views is made again when the mode changes - it is only made at all with "auto"
+    locationView: {value: String(config.sequenceSheets ? config.locationView : -1), steps: ['shotViews'], assumed: '-1'},
     // fight beats cut into one-bar pieces change how many shots a beat has
     fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
 })
@@ -733,6 +737,41 @@ if (shotMoments) for (const beat of beats) {
     for (const shot of plan.shots) console.log(styles.muted(`        · ${shot.characters?.length ? `[${shot.characters.map(nameOf).join(', ')}] ` : ''}${shot.action}`))
 }
 
+////////// CHOOSING THE VIEW OF THE PLACE - only with "locationView": "auto"
+// The views are the frames the location sheets were composed of: without sequence sheets there are none and the picture is the plain one
+const locationView = config.sequenceSheets ? config.locationView : -1
+// The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
+// the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
+const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
+    const result: Record<string, number[]> = {}
+    for (const beat of beats) {
+        const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
+        if (!plan) continue
+        const answer = await askJson<{ views: unknown[] }>({
+            input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
+views (number: what it shows):
+${LOCATION_VIEWS.map((v, n) => `${n}: ${v}`).join('\n')}
+
+The place: ${plan.staging ?? beat.summary}
+shots:
+${JSON.stringify(plan.shots.map((s, n) => ({shot: n, framing: s.framing, camera: s.camera, view: s.view, action: s.action})))}
+
+Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length - 1} per shot, in order]} - exactly ${plan.shots.length} numbers.`,
+            instructions: 'You are a music video director who chooses the view of a place for each shot. Answer only with JSON.',
+        }).catch((e: unknown) => {
+            log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
+            return undefined
+        })
+        const views = plan.shots.map((_, n) => {
+            const v = Number(answer?.views?.[n])
+            return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
+        })
+        result[beat.id] = views
+        console.log(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
+    }
+    return result
+}) : undefined
+
 ////////// BUILDING THE MINIMAX H3 REQUESTS
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
 log.section('12 · BUILDING THE MINIMAX H3 REQUESTS')
@@ -753,6 +792,9 @@ const clips = buildClipRequests({
     propActivity,
     stemsAvailable: Boolean(stems),
     continuity: config.continuity,
+    pinStartFrame: config.pinStartFrame,
+    locationView,
+    shotViews,
 })
 
 const outputDir = join(project.dir, 'output')

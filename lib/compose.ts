@@ -10,6 +10,8 @@ import type {ProjectConfig} from "./config.ts";
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
 export const pictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+// one view of a location's reference sheet - the frame the sheet's panel was made from, not a crop of the small panel
+export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view).padStart(2, '0')}.png`
 // one reference image per member of a group character, instead of the single shared id - see computeMemberCounts
 export const groupMemberId = (characterId: string, member: number) => `${characterId}-v${member}`
 
@@ -88,6 +90,13 @@ export type Input = {
     // stem is available and every clip's anchor track falls back to the whole, unseparated song instead
     stemsAvailable: boolean,
     continuity?: ProjectConfig['continuity'],   // default 'auto'
+    // config.pinStartFrame: a continuing clip gets the last frame of the clip before it as its pinned first frame
+    // (the render passes it to the workflow separately) - it is then not one of the reference pictures
+    pinStartFrame?: boolean,
+    // config.locationView: a clip's place picture is one view of the location's sheet (0-4): this one for every clip, or
+    // with "auto" the one the shot planning chose for the first shot of the clip (shotViews); -1 or none = the sheet
+    locationView?: number | 'auto',
+    shotViews?: Record<string, number[]>,
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
@@ -288,10 +297,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const opensScene = k === 0
             const shotCount = shotCountFor(slot, beat, opensScene)
             const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
+            const view = typeof input.locationView === 'number' ? input.locationView : input.locationView === 'auto' ? input.shotViews?.[beat.id]?.[shotCursor] : undefined
             shotCursor += shotCount
             // a clip of a continuous beat starts on the last frame of the clip before it
             const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging))
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging, view))
         })
         stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
     }
@@ -309,7 +319,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .filter(fact => !/\b(mirror|reflection|reflects?|reflected)\b.*\b(shows?|figure|face|stands?)\b/i.test(fact)))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable}: Input, staging?: string): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -326,7 +336,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id) && (!shotIds || shotIds.has(id)))]
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
-            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom ? 1 : 0))
+            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -365,7 +375,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         const {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices} = buildSubjects()
         // the last frame of the previous clip, after the subjects' pictures: a standalone <Picture N>, the first frame of [Shot 1]
-        const framePicture = startsFrom ? `<Picture ${subjects.length + 1}>` : undefined
+        // Pinned: the frame is the video's real first frame, no longer a picture of its own. Given as a reference
+        // picture as well, the model blended the same image in a second time, shifted - a ghost double of the
+        // people and displaced wall patches that grew over the clip - so then the prompt only says that the
+        // shot goes on from its first frame, without a `<Picture N>` to point at
+        const framePicture = startsFrom && !pinStartFrame ? `<Picture ${subjects.length + 1}>` : undefined
+        const pinnedFrame = startsFrom !== undefined && pinStartFrame === true
 
         // The vocals track's audio still covers the whole clip (see tracks below - same "always full clip length"
         // reasoning), but the prompt has to say in words where inside it the singing actually happens, or the
@@ -613,7 +628,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // reads as the subjects vanishing and popping back in mid-scene. Only the opening clip gets it as-is.
             const sceneClause = opensScene
                 ? withLabels(beat.summary)
-                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : ''}`
+                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
@@ -732,8 +747,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // pictureId was resolved once in buildSubjects, together with the description bound to it - see the
                 // comment there for why they have to be resolved as one pair, not separately
                 pictures: [
-                    ...subjects.map(s => ({label: s.picture, file: pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
-                    ...(startsFrom ? [{label: framePicture!, file: boundaryFrameAsset(startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: startsFrom, name: `last frame of ${startsFrom}`, description: ''}] : []),
+                    ...subjects.map(s => ({label: s.picture, file: s.kind === 'location' && locationView !== undefined && locationView >= 0 ? locationViewAsset(s.pictureId, locationView) : pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                    ...(startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: boundaryFrameAsset(startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: startsFrom, name: `last frame of ${startsFrom}`, description: ''}] : []),
                 ],
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
                 audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem})),

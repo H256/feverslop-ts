@@ -155,6 +155,7 @@ export type Project = {
     timeline?: Timeline,
     mapping?: Assignment[],
     propActivity?: PropActivity,
+    shotViews?: Record<string, number[]>,   // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
 export type StepName = Exclude<keyof Project, 'inputs'>
@@ -183,6 +184,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     mapping: ['beats', 'timeline'],
     propActivity: ['stems', 'instrumentStems', 'cast'],
     shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing'],
+    shotViews: ['shotMoments'],
 }
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]

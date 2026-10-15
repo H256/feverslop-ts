@@ -54,6 +54,18 @@ export function characterSequencePrompt(description: string, frames = SEQUENCE_F
 }
 
 /**
+ * The five views of a location sheet, in the order of the sheet's frames (assets/sequence/locations/<id>/frames/frame_0N.png) -
+ * what locationSequencePrompt asks the video for (without designed views). What the shot planning chooses from.
+ */
+export const LOCATION_VIEWS = [
+    'a level, static front view of the location - the hero view',
+    'a locked-off position at the right side of the location, looking at it from the right',
+    'a locked-off position behind the location, looking back across it from the rear',
+    'a locked-off position at the left side of the location, looking at it from the left',
+    'a wide establishing view showing the whole location from a distance',
+]
+
+/**
  * Five locked-off tripod views of one location from its hero image: front, right side, rear, left side, wide establishing.
  * With `views` (the four views after the first, each a camera position and what is seen from it - designed for the place and its
  * story, see lib/film/prompts.ts locationViewsPrompt) the cuts go to those instead: the generic "behind the location" is a turn
