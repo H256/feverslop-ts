@@ -33,7 +33,9 @@ export type PlanConfig = {
     lyricsLanguage: string,         // ISO 639-1 code, for Whisper and the <d>[Language] tag
     alignLyrics: boolean,           // stems + transcript + real lyric timing - default: on when someone sings
     // clips of one beat that run on without a cut start on the previous clip's last frame: "auto" = the beats the story
-    // planning marked as one continuous take, "always" = every clip but the first of each beat, "never" = every clip is its own cut
+    // planning marked as one continuous take, "always" = every clip but the first of each beat, "never" (default) = every
+    // clip is its own cut. Off by default: a continuing clip starts on whatever the clip before it drifted to, and the
+    // drift (doubled people, displaced wall patches) is carried on and grows - see README "Continuous scenes"
     continuity: 'auto' | 'always' | 'never',
 }
 
@@ -57,7 +59,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
-    continuity: 'auto',
+    continuity: 'never',
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')

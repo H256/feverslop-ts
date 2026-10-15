@@ -233,6 +233,7 @@ await project.syncInputs({
     singerVoice: {value: config.singerVoice, steps: ['story'], assumed: 'auto'},
     lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
     // which beats run on without a cut changes what their shots have to tell
+    // assumed: what a project recorded before the default became "never" ran with - so it is not redone by the new default alone
     continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
 })
 // the sections are named after the lyrics tags
