@@ -8,7 +8,7 @@ import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
-import {asBeatShots, readBeatPlan} from "./lib/shot-plan.ts";
+import {asBeatShots, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -604,11 +604,14 @@ if (plannedBefore) {
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
     type Beat = (typeof beats)[number]
-    const askBlock = (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, problems: string[] = []) => askJson<{ moments: Record<string, unknown> }>({
-        reasoning: 'medium',
+    // one planner call writes at most MOMENT_SHOTS_PER_CALL shots of one beat (see askBlock below): the answer is short, in
+    // lines and not in JSON, so that a broken bracket or a quote in a sentence costs a few shots at most, not a beat
+    type Chunk = { from: number, to: number, total: number, written: unknown[], staging?: string }
+    const planPrompt = (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, problems: string[], chunk: Chunk) => ({
+        reasoning: 'medium' as const,
         // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
-        maxTokens: 32768,
-        input: `${problems.length ? `Your last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}For every story beat below, stage a shot list for a music video: exactly "shotsNeeded" shots, in order, each with one concrete visible action and the people in the picture, where they stand and how they move.
+        maxTokens: 16384,
+        input: `${problems.length ? `Your last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${chunk.from > 0 || chunk.to < chunk.total ? `This call writes ONLY shots ${chunk.from + 1} to ${chunk.to} of the ${chunk.total} that the beat needs ("shotsNeeded")${chunk.from > 0 ? " - the staging and the shots before them are given below, continue from the last of them" : " - write the staging first"}. ` : ''}For the story beat below, stage a shot list for a music video: its "shotsNeeded" shots, in order, each with one concrete visible action and the people in the picture, where they stand and how they move.
 
 Rules:
 - Each shot must show real physical progression from the one before it - never repeat, restate or merely rephrase the previous shot's action, and never describe the camera or a held/static moment.
@@ -649,12 +652,26 @@ Rules:
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
 - A beat may list "singing": "singerIds" are the characters whose voice is the song's vocals, and "singingPerShot" gives one true/false flag per shot of that beat for whether a lyric is actually sung at that point. A singer only sings on shots flagged true. On a shot flagged false they make no sound at all - no singing, crying out, calling, humming or "a voice that joins" - even if the beat's "summary" or "moments" say so (the music there is purely instrumental); show them doing something silent instead (listening, breathing, watching, reacting, standing ready). Characters with no "singing" entry are unaffected.
 
-Answer only with JSON: {"moments": {"<beatId>": {"staging": "", "ends": {"<name>": "where they are and what they do and hold when the beat is over, a phrase with a verb"}, "shots": [{"action": "", "framing": "", "camera": "", "view": "", "hold": false, "characters": [""], "people": {"<name>": {"state": "", "frame": "", "motion": ""}}, "rest": ""}]}}}
-- "ends": for every character of the beat. The next beat starts from it.
+Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown. A field is always one line (no line breaks inside it), "people" entries are the "person:" lines, "characters" are the names separated by commas, "rest" is what everybody in "characters" without a "person:" line does at the same time:
+${chunk.from === 0 ? 'STAGING: <the floor plan of the place for this beat, 2-4 sentences, on one line>\n' : ''}SHOT <number>
+framing: <shot size and angle>
+camera: <one sentence: the movement and its speed>
+view: <where the camera stands and what it looks toward>
+hold: <yes or no>
+characters: <Name>, <Name>
+action: <what happens in the shot, at most two sentences>
+person: <Name> | state: <...> | frame: <...> | motion: <...>
+person: <Name> | state: <...> | frame: <...> | motion: <...>
+rest: <what the others in the picture do>
+(then SHOT <next number> with the same fields, up to shot ${chunk.to})${chunk.to === chunk.total ? `
+ENDS
+end: <Name> | <where they are and what they do and hold when the beat is over, a phrase with a verb>
+(one "end:" line for every character of the beat - the next beat starts from it)` : ''}
 ---
 castProps: ${JSON.stringify(Object.fromEntries(cast.characters.filter(c => c.prop).map(c => [c.id, c.prop])))}
 cast: ${JSON.stringify(cast.characters.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
-${finished ? `Already written - the staging and the end of the beat "${finished.beat.id}", which comes right before the first beat below (do not write it again): ${JSON.stringify({staging: finished.plan.staging, ends: finished.plan.ends, lastShot: finished.plan.shots.at(-1)})}
+${chunk.from > 0 ? `Already written for this beat (do not write it again): ${JSON.stringify({staging: chunk.staging, shots: chunk.written})}
+` : ''}${finished ? `Already written - the staging and the end of the beat "${finished.beat.id}", which comes right before the first beat below (do not write it again): ${JSON.stringify({staging: finished.plan.staging, ends: finished.plan.ends, lastShot: finished.plan.shots.at(-1)})}
 The first beat below follows directly after it: start from where it ends - where everyone stands, what they hold - unless it opens a new scene.
 ` : ''}${after ? `For orientation only - the beat after the last beat below ("${after.id}"): ${after.summary}
 Let the last shot of the last beat below lead toward it, and write nothing for it.
@@ -668,8 +685,34 @@ ${JSON.stringify(block.map(b => ({
             ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
             ...(beatSinging[b.id] ? {singing: beatSinging[b.id]} : {}),
         })))}`,
-        instructions: 'You are a music video director turning story beats into a shot list. Answer only with JSON.',
+        instructions: 'You are a music video director turning story beats into a shot list. Answer only in the line format.',
     })
+    const MOMENT_SHOTS_PER_CALL = 4
+    // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.
+    // A call without a single shot in its answer is asked once more; the beat is then short of those shots (a missing
+    // shot repeats the last one, see readBeatPlan) instead of falling back to its beat moments as a whole
+    const askBlock = async (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, problems: string[] = []) => {
+        const moments: Record<string, unknown> = {}
+        for (const beat of block) {
+            const total = shotCounts[beat.id] ?? 1
+            const raw: { staging?: string, ends?: Record<string, string>, shots: Record<string, unknown>[] } = {shots: []}
+            for (let from = 0; from < total; from += MOMENT_SHOTS_PER_CALL) {
+                const to = Math.min(total, from + MOMENT_SHOTS_PER_CALL)
+                let chunk: ReturnType<typeof parseShotLines> | undefined
+                for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
+                    const parsed = parseShotLines(await ask(planPrompt([beat], from === 0 ? finished : undefined, after, problems, {from, to, total, written: raw.shots, staging: raw.staging})))
+                    if (parsed.shots.length) chunk = parsed
+                    else log.warn(`${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`)
+                }
+                if (!chunk) break
+                if (from === 0) raw.staging = chunk.staging
+                raw.shots.push(...chunk.shots.slice(0, to - from))
+                if (to === total) raw.ends = chunk.ends
+            }
+            moments[beat.id] = raw
+        }
+        return {moments}
+    }
 
     const blockCount = Math.ceil(beats.length / MOMENT_BLOCK_BEATS)
     const blockSize = Math.ceil(beats.length / blockCount) // evenly sized - never a last block with a single beat

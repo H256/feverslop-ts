@@ -164,3 +164,56 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
     const sized = Array.from({length: needed}, (_, j) => shots[Math.min(j, shots.length - 1)]!)
     return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems}
 }
+
+/**
+ * The planner's answer in the line format (index.ts, step 11b) as the object readBeatPlan reads. One field per line:
+ *   STAGING: ...            (first call of a beat)
+ *   SHOT 1
+ *   framing: / camera: / view: / hold: yes|no / characters: A, B / action: ... / rest: ...
+ *   person: A | state: ... | frame: ... | motion: ...
+ *   ENDS
+ *   end: A | where they are when the beat is over
+ * Lines of JSON are no better than a quote in the middle of a sentence, and a broken bracket cost a whole beat; here
+ * a line that does not fit is just skipped. Markdown around a key (bullets, bold, fences) is tolerated.
+ */
+export function parseShotLines(answer: string): { staging?: string, ends: Record<string, string>, shots: Record<string, unknown>[] } {
+    const shots: Record<string, unknown>[] = []
+    const ends: Record<string, string> = {}
+    let staging: string | undefined
+    let current: Record<string, unknown> | undefined
+    let inEnds = false
+    for (const rawLine of answer.split(/\r?\n/)) {
+        const line = rawLine.replace(/^\s*(?:[-*>]\s+|\d+\.\s+)?/, '').replace(/\*\*/g, '').replace(/^`+|`+$/g, '').trim()
+        if (!line || /^```/.test(line)) continue
+        let m: RegExpMatchArray | null
+        if ((m = line.match(/^staging\s*:\s*(.*)$/i))) { staging = m[1]!.trim(); inEnds = false; continue }
+        if (/^shot\s*\d+\s*[:.\-]?\s*$/i.test(line)) {
+            current = {characters: [] as string[], people: {} as Record<string, unknown>}
+            shots.push(current)
+            inEnds = false
+            continue
+        }
+        if (/^ends\s*:?\s*$/i.test(line)) { inEnds = true; current = undefined; continue }
+        if ((m = line.match(/^end\s*:\s*([^|]+?)\s*\|\s*(.+)$/i))) { ends[m[1]!.trim()] = m[2]!.trim(); continue }
+        if (inEnds || !current) continue
+        if ((m = line.match(/^person\s*:\s*(.+)$/i))) {
+            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion)\s*:)/i)
+            const name = parts[0]!.trim()
+            const entry: Record<string, string> = {}
+            for (const part of parts.slice(1)) {
+                const kv = part.match(/^(state|frame|motion)\s*:\s*(.*)$/i)
+                if (kv) entry[kv[1]!.toLowerCase()] = kv[2]!.trim()
+            }
+            if (name) (current.people as Record<string, unknown>)[name] = entry
+            continue
+        }
+        if ((m = line.match(/^(framing|camera|view|hold|characters|action|rest)\s*:\s*(.*)$/i))) {
+            const key = m[1]!.toLowerCase()
+            const value = m[2]!.trim()
+            if (key === 'hold') current.hold = /^(yes|true)\b/i.test(value)
+            else if (key === 'characters') current.characters = value.split(/\s*,\s*|\s+and\s+/).map(v => v.trim()).filter(Boolean)
+            else current[key] = value
+        }
+    }
+    return {...(staging ? {staging} : {}), ends, shots}
+}
