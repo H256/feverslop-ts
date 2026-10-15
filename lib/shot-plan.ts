@@ -141,6 +141,10 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         notes.push(...unison.notes, ...singingNotes(j, people, characters, singers))
         const framing = text(e.framing)
         if (ids.length > MAX_FOREGROUND && !WIDE.test(framing)) notes.push(`shot ${j + 1}: ${ids.length} people in a "${framing || 'shot'}"`)
+        // three or more people: everybody moves (the prompt asks for it) - what the code can tell without reading the
+        // words is a person with an entry of their own and no motion, who is then left standing in the reference pose
+        const motionless = ids.filter(id => people[id] && !people[id]!.motion)
+        if (ids.length >= 3 && motionless.length) notes.push(`shot ${j + 1}: ${motionless.map(id => nameOfId(characters, id)).join(', ')} ${motionless.length > 1 ? 'have' : 'has'} no motion in a shot of ${ids.length} people`)
         return {
             action,
             ...(text(e.framing) ? {framing: text(e.framing)} : {}),
