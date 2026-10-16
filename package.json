@@ -21,7 +21,8 @@
     "film:migrate": "bun tools/film-migrate.ts",
     "leak-scan": "bun tools/leak-scan.ts",
     "stats": "bun tools/stats.ts",
-    "status": "bun tools/status.ts"
+    "status": "bun tools/status.ts",
+    "inspect": "bun tools/inspect.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
