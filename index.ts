@@ -20,6 +20,7 @@ import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
+import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
@@ -896,7 +897,8 @@ const clips = buildClipRequests({
 })
 
 const outputDir = join(project.dir, 'output')
-rmSync(outputDir, {recursive: true, force: true})
+// the output of the run before goes to output/.previous/ - to say below which requests this run changed
+startOutput(outputDir)
 mkdirSync(join(outputDir, 'clips'), {recursive: true})
 mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
@@ -955,6 +957,19 @@ await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
 
 for (const clip of clips) {
     log.box(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section} · ${clip.beatId}`, clip.prompt)
+}
+const changes = requestChanges(outputDir)
+if (changes) {
+    const {changed, added, gone} = changes
+    if (!changed.length && !added.length && !gone.length) log.step('Changes', styles.muted('every request is the same as in the run before'))
+    else {
+        log.step('Changes', [
+            changed.length ? `${changed.length} changed: ${formatSlotRanges(changed)}` : '',
+            added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
+            gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
+        ].filter(Boolean).join(' · '))
+        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(outputDir, PREVIOUS, 'clips', `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
+    }
 }
 
 ////////// RENDERING WITH COMFYUI
