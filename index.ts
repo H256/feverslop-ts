@@ -14,7 +14,7 @@ import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
-import {beatsPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
+import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -606,11 +606,9 @@ for (const slot of clipSlots) {
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
 const beatProps = propActivity ? propActivityPerBeat({slots: clipSlots, mapping, beats, characters: cast.characters}, propActivity) : undefined
 const beatSinging = singingPerBeat({slots: clipSlots, mapping, beats, singing})
-// All beats in one call don't fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So
-// the beats are asked in blocks, one after the other. The cut is only ever between two beats - all clips of a scene
-// belong to one beat, so everything that has to stay continuous is in one call - and a block sees the finished shots of
-// the beat before it and the summary of the beat after it, so a scene change on a block boundary still connects.
-const MOMENT_BLOCK_BEATS = 1
+// One call per beat does not fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So the
+// beats are blocked first, one after the other - the floor plan, where everybody starts and ends, each beat from the end
+// of the one before - and then the shots of every beat are written from its blocking, the beats at once (see step 11b).
 // a beat whose answer stayed unusable has no plan and plays on its beat moments: the next run plans just those beats
 // again, the ones already planned stay as they are
 const plannedBefore = args['legacy-moments'] ? undefined : (() => {
@@ -637,7 +635,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
     // made again, each with its own problems; the other calls keep their first answer. A problem of the whole beat (its
     // shot count) asks every call again - the shots of the calls after it would no longer line up.
     type RawBeat = { staging?: string, ends?: Record<string, string>, shots: Record<string, unknown>[] }
-    const askBlock = async (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, before?: { moments: Record<string, RawBeat>, issues: Record<string, Issue[]> }) => {
+    const askBlock = async (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, before?: { moments: Record<string, RawBeat>, issues: Record<string, Issue[]> }, blocking?: Blocking) => {
         const moments: Record<string, RawBeat> = {}
         for (const beat of block) {
             const total = shotCounts[beat.id] ?? 1
@@ -646,21 +644,22 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
             const calls = plannerCalls(total, MOMENT_SHOTS_PER_CALL, previous ? {issues: before!.issues[beat.id] ?? [], previousShots: previous.shots.length} : undefined)
             for (const {from, to, keep, problems: own} of calls) {
                 if (keep) {
-                    if (from === 0) raw.staging = previous!.staging
+                    if (from === 0) raw.staging = blocking?.staging ?? previous!.staging
                     raw.shots.push(...previous!.shots.slice(from, to))
-                    if (to === total) raw.ends = previous!.ends
+                    if (to === total) raw.ends = blocking?.ends ?? previous!.ends
                     continue
                 }
                 let chunk: ReturnType<typeof parseShotLines> | undefined
                 for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
-                    const parsed = parseShotLines(await ask(planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {from, to, total, written: raw.shots, staging: raw.staging})))
+                    const parsed = parseShotLines(await ask(planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {from, to, total, written: raw.shots, staging: raw.staging, blocking})))
                     if (parsed.shots.length) chunk = parsed
                     else log.warn(`${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`)
                 }
                 if (!chunk) break
-                if (from === 0) raw.staging = chunk.staging
+                // with a blocking, the staging and the ends are the blocking's
+                if (from === 0) raw.staging = blocking?.staging ?? chunk.staging
                 raw.shots.push(...chunk.shots.slice(0, to - from))
-                if (to === total) raw.ends = chunk.ends
+                if (to === total) raw.ends = blocking?.ends ?? chunk.ends
             }
             // tokens of nobody of the cast ({Aldric} for "Aldric Thorne") are mapped by one short call - cheaper than asking the
             // planner again, and nothing reads the words
@@ -683,38 +682,69 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         return {moments}
     }
 
-    const blockCount = Math.ceil(beats.length / MOMENT_BLOCK_BEATS)
-    const blockSize = Math.ceil(beats.length / blockCount) // evenly sized - never a last block with a single beat
     const result: Record<string, BeatShots> = {...plannedBefore}
-    for (let from = 0; from < beats.length; from += blockSize) {
-        const block = beats.slice(from, from + blockSize)
-        if (block.every(b => result[b.id])) continue
-        const before = beats[from - 1]
-        const after = beats[from + blockSize]
-        if (blockCount > 1) log.step(`Beats ${from / blockSize + 1}/${blockCount}`, styles.muted(`${block[0]!.id} - ${block.at(-1)!.id}`))
-        const handover = before && result[before.id] ? {beat: before, plan: result[before.id]!} : undefined
+    const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
+
+    // 1. The blocking, beat after beat - short calls: the floor plan, where everybody starts and ends. Each beat starts
+    //    where the one before it ends, so this is the only part that has to go in order. A beat whose blocking stays
+    //    unusable plans its staging and ends itself, as before.
+    const blockings: Record<string, Blocking> = {}
+    for (const [i, beat] of beats.entries()) {
+        if (result[beat.id]) continue
+        const prev = beats[i - 1]
+        const before = !prev ? undefined
+            : blockings[prev.id] ? {beatId: prev.id, staging: blockings[prev.id]!.staging, ends: blockings[prev.id]!.ends}
+            : result[prev.id] ? {beatId: prev.id, staging: result[prev.id]!.staging, ends: Object.fromEntries(Object.entries(result[prev.id]!.ends ?? {}).map(([id, where]) => [nameOf(id), where]))}
+            : undefined
+        log.step(`Blocking ${i + 1}/${beats.length}`, styles.name(beat.id))
+        for (let attempt = 1; attempt <= 2 && !blockings[beat.id]; attempt++) {
+            const answer = parseShotLines(await ask(blockingPrompt(planContext, beat, before, beats[i + 1])))
+            const texts = [answer.staging ?? '', ...Object.values(answer.starts), ...Object.values(answer.ends)]
+            const {texts: fixed} = await resolveUnknownTokens(texts, cast.characters)
+            let next = 0
+            const blocking: Blocking = {
+                staging: fixed[next++]!,
+                starts: Object.fromEntries(Object.keys(answer.starts).map(who => [who, fixed[next++]!])),
+                ends: Object.fromEntries(Object.keys(answer.ends).map(who => [who, fixed[next++]!])),
+            }
+            // a beat without people (a place alone) has nobody to start or end anywhere
+            const complete = blocking.staging && (!beat.characterIds.length || Object.keys(blocking.ends).length)
+            if (complete) blockings[beat.id] = blocking
+            else log.warn(`${beat.id}: the blocking has no ${blocking.staging ? 'ends' : 'staging'}${attempt < 2 ? ' - asking again' : ' - the shot planning writes them itself'}`)
+        }
+    }
+
+    // 2. The shots of every beat, from its own blocking - the beats no longer wait for each other: as many at once as
+    //    llm.parallel allows
+    const planBeat = async (beat: Beat) => {
+        const block = [beat]
+        const blocking = blockings[beat.id]
+        const after = beats[beats.indexOf(beat) + 1]
+        // without a blocking the beat goes on from the plan of the beat before, if that one is already there
+        const prev = beats[beats.indexOf(beat) - 1]
+        const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
         const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id])}))
-        // a long nested answer now and then has a bracket wrong that cannot be repaired: asked again, twice at most, then the beats of
-        // the block fall back to the legacy spread (a warning says so) instead of the run failing after the blocks that worked
+        // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
+        // legacy spread (a warning says so) instead of the run failing after the beats that worked
         let first: ReturnType<typeof read> | undefined
         let firstAnswer: Awaited<ReturnType<typeof askBlock>> | undefined
         for (let attempt = 1; attempt <= 3 && !first; attempt++) {
             try {
-                firstAnswer = await askBlock(block, handover, after)
+                firstAnswer = await askBlock(block, handover, after, undefined, blocking)
                 first = read(firstAnswer)
             } catch (e) {
-                log.warn(`the answer for ${block[0]!.id} - ${block.at(-1)!.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - these beats keep their beat moments'}`)
+                log.warn(`the answer for ${beat.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`)
             }
         }
-        if (!first) continue
+        if (!first) return
         let reads = first
         // what can be counted (a name that is not in the cast, a singing shot without a singer, a shot that names someone it does not show) is asked once more
         const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
         if (problems.length) {
-            log.warn(`${problems.length} problem(s) in the staged shots - asking once more`)
+            log.warn(`${problems.length} problem(s) in the staged shots of ${beat.id} - asking once more`)
             for (const p of problems) console.log(styles.muted(`        · ${p}`))
             const issues = Object.fromEntries(reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]))
-            const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}).then(read, (e: unknown) => {
+            const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}, blocking).then(read, (e: unknown) => {
                 log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
                 return reads
             })
@@ -725,6 +755,9 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         for (const r of reads) for (const note of r.read?.notes ?? []) console.log(styles.muted(`        · ${r.beat.id}, ${note}`))
         for (const {beat, read: r} of reads) if (r) result[beat.id] = r.plan // a beat without a plan falls back to the legacy spread
     }
+    // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
+    await llmMap(beats.filter(b => !result[b.id] && blockings[b.id]), planBeat)
+    for (const beat of beats.filter(b => !result[b.id] && !blockings[b.id])) await planBeat(beat)
     // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
     // the prompt says - those moments get one rewrite
     // the planner flags them itself ("risky") - no word list decides what counts

@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import type {StoryBeat} from "./project.ts";
-import {type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
+import {blockingPrompt, type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
 
 const beat = {id: 'beat-01', order: 1, summary: 'Runa walks in.', moments: ['Runa walks in.'], locationId: 'hall', characterIds: ['runa'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
 const context: PlanContext = {
@@ -67,5 +67,23 @@ describe('the example shot', () => {
         expect(instructions).not.toContain('Weak:')
         expect(instructions).toContain('One shot as it should be written')
         for (const field of ['framing:', 'size:', 'camera:', 'view:', 'hold:', 'risky:', 'characters:', 'action:', 'person: Kara |', 'rest:']) expect(instructions.split('One shot as it should be written')[1]).toContain(field)
+    })
+})
+
+describe('blocking first, then the shots', () => {
+    test('the blocking call: the same instructions for every beat, the beat before and its ends in the input', () => {
+        const first = blockingPrompt(context, beat, undefined, undefined)
+        const second = blockingPrompt(context, {...beat, id: 'beat-02'}, {beatId: 'beat-01', staging: 'A hall.', ends: {Runa: 'stands at the door'}}, undefined)
+        expect(second.instructions).toBe(first.instructions)
+        expect(first.input).toContain('This is the first beat of the video.')
+        expect(second.input).toContain('"ends":{"Runa":"stands at the door"}')
+        expect(first.reasoning).toBe('low')
+    })
+    test('a shot call with a blocking writes neither the staging nor the ends', () => {
+        const blocking = {staging: 'A hall, the door on the left.', starts: {Runa: 'stands at the door'}, ends: {Runa: 'sits by the fire'}}
+        const {input} = planPrompt(context, [beat], undefined, undefined, [], {from: 4, to: 6, total: 6, written: [], blocking})
+        expect(input).toContain('Blocking of this beat - fixed, keep to it:')
+        expect(input).toContain('write no STAGING line and no ENDS block')
+        expect(input).toContain('the last shot of the beat leaves everybody where the blocking ends them')
     })
 })
