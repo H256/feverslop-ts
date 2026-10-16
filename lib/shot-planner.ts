@@ -197,5 +197,26 @@ ${lyrics}
 story:
 ${story}`,
         instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
+        // the ids can only be ones of the cast - the server keeps the answer to them
+        schema: {
+            type: 'object', additionalProperties: false, required: ['beats'],
+            properties: {beats: {type: 'array', minItems: 1, items: {
+                type: 'object', additionalProperties: false,
+                required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
+                properties: {
+                    summary: {type: 'string'},
+                    moments: {type: 'array', items: {type: 'string'}},
+                    locationId: {enum: locations.map(l => l.id)},
+                    characterIds: {type: 'array', items: {enum: characters.map(c => c.id)}},
+                    intensity: {type: 'number'},
+                    weight: {type: 'integer'},
+                    kind: {enum: ['establish', 'build', 'hit', 'release']},
+                    continuous: {type: 'boolean'},
+                    stateAfter: {type: 'array', items: {type: 'object', additionalProperties: false, required: ['fact', 'place'], properties: {fact: {type: 'string'}, place: {type: 'boolean'}}}},
+                    entrance: {type: 'boolean'},
+                    ...(characters.some(c => c.isGroup) ? {groupSize: {type: 'object', additionalProperties: {type: 'integer'}}} : {}),
+                },
+            }}},
+        },
     }
 }

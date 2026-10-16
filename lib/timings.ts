@@ -66,7 +66,12 @@ function append(timing: Timing) {
     }
 }
 
+// the measurements of this run, for its summary at the end
+const thisRun: Omit<Timing, 'at' | 'v' | 'project'>[] = []
+export const runTimings = () => [...thisRun]
+
 export function recordTiming(timing: Omit<Timing, 'at' | 'v' | 'project'>) {
+    thisRun.push(timing)
     if (!project) return
     append({v: 2, at: new Date().toISOString(), project, ...timing})
 }
