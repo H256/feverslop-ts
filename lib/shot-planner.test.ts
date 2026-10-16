@@ -60,3 +60,12 @@ describe('the fixed layout of the place', () => {
         expect(withLayout.instructions).toBe(without.instructions)
     })
 })
+
+describe('the example shot', () => {
+    test('one complete shot in the answer format instead of weak/strong pairs', () => {
+        const {instructions} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        expect(instructions).not.toContain('Weak:')
+        expect(instructions).toContain('One shot as it should be written')
+        for (const field of ['framing:', 'size:', 'camera:', 'view:', 'hold:', 'risky:', 'characters:', 'action:', 'person: Kara |', 'rest:']) expect(instructions.split('One shot as it should be written')[1]).toContain(field)
+    })
+})
