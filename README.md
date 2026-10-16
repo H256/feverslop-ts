@@ -149,6 +149,7 @@ projects/<project-id>/
   timeline.mlt / .osp the cut as an editable timeline for Shotcut/Kdenlive / OpenShot - written by --export
   gallery.html        overview page of the generated assets (tabs: cast, storyboard, videos) - written by --gallery
   project.json        all generated data, step by step
+  logs/               the whole output of every run, one file per run (<time>.log, without colours)
   output/             generated H3 requests - rewritten on every run; the run before is kept in output/.previous/,
                       and the run lists the requests it changed
 ```

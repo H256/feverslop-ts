@@ -1,7 +1,7 @@
 import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {failRun, log, printBanner, styles} from "./lib/log.ts";
+import {failRun, keepLogIn, log, printBanner, runLogFile, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
@@ -124,6 +124,8 @@ const maxClipSec = MAX_CLIP_SEC
 if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 if (!args['dry-run']) keepTimingsIn(project.dir)
+// everything this run prints, also into the project (the terminal may show less of it) - not for a run that only reads
+if (!args.gallery && !args['dry-run']) keepLogIn(join(project.dir, 'logs', `${versionStamp()}.log`))
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
@@ -1108,6 +1110,7 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
+log.step('Log', runLogFile() ?? '')
 
 /**
  * --dry-run: the steps the run would redo (by --redo, by changed inputs and settings, by gone stems, by changed lyrics
