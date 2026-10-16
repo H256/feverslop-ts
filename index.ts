@@ -1,7 +1,7 @@
 import slugify from "slugify";
 import {existsSync, readdirSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {log, printBanner, styles} from "./lib/log.ts";
+import {failRun, log, printBanner, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
@@ -34,8 +34,8 @@ import {
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
-process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+process.on('unhandledRejection', failRun)
+process.on('uncaughtException', failRun)
 
 printBanner()
 
@@ -49,7 +49,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict]   (--refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--strict] [--debug]   (--debug: the stack trace of a failure · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -71,6 +71,8 @@ const {values: args, positionals} = (() => {
                 'debug-audio': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
                 strict: {type: 'boolean', default: false},
+                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
+                debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
