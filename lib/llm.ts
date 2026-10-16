@@ -113,7 +113,7 @@ function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningS
 export type JsonSchema = Record<string, unknown>
 let chatSchema: boolean | undefined
 
-export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low', schema?: JsonSchema) {
+export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low', schema?: JsonSchema, label?: string) {
     let thinking = ''
     let answer = ''
     let usage: ResponseUsage | undefined
@@ -183,7 +183,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
         keepCall(prompt, started, usage, thinking, 'failed', 'no-end')
         throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
     }
-    log.step('Done', styles.muted(`${countWords(thinking)} words thinking (${reasoning}), ${countWords(answer)} words answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''} · ${suffix(formatDuration(took), formatRate(outputTokens, took))}`))
+    log.step('Done', (label ? `${styles.name(label)} ` : '') + styles.muted(`${countWords(thinking)} words thinking (${reasoning}), ${countWords(answer)} words answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''} · ${suffix(formatDuration(took), formatRate(outputTokens, took))}`))
     // llama.cpp reports a cut-off answer as "completed" - all tokens used up means cut off, too
     const limit = prompt.max_output_tokens
     const truncated = incomplete === 'max_output_tokens' || (!!limit && outputTokens !== undefined && outputTokens >= limit)
@@ -260,6 +260,8 @@ export type AskOptions = {
     images?: string[],
     // askJson only: the shape of the answer - the server keeps the decoding to it (see fetchAndDisplayResponse)
     schema?: JsonSchema,
+    // what the call is for ("beat-03 · shots 5-8") - in the log, where calls running at once cannot be told apart otherwise
+    label?: string,
 }
 
 /** The model finished every attempt without writing an answer - it only thought. */
@@ -271,7 +273,8 @@ export class EmptyAnswerError extends Error {
 
 const emptyAnswerNote = '\n\nKeep your thinking short and then write the answer itself - an empty answer is not acceptable.'
 
-export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images, schema}: AskOptions) {
+export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images, schema, label}: AskOptions) {
+    const of = label ? `${label}: ` : ''
     const requestInput = images?.length
         ? [{role: 'user' as const, content: [{type: 'input_text' as const, text: input}, ...images.map(image_url => ({type: 'input_image' as const, image_url, detail: 'auto' as const}))]}]
         : input
@@ -286,14 +289,14 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     ]
     for (const [i, {limit, level, note}] of attempts.entries()) {
         try {
-            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level, schema)
+            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level, schema, label)
             if (answer.trim()) return answer.trim()
             if (i === attempts.length - 1) throw new EmptyAnswerError(attempts.length)
-            log.warn(`empty answer - the model only thought - asking again with ${attempts[i + 1]!.limit}${attempts[i + 1]!.note ? ' and a shorter-thinking prompt' : ''}`)
+            log.warn(`${of}empty answer - the model only thought - asking again with ${attempts[i + 1]!.limit}${attempts[i + 1]!.note ? ' and a shorter-thinking prompt' : ''}`)
         } catch (e) {
             // only the first cut-off gets a second chance - after that the answer is too long for the model, not just unlucky
             if (!(e instanceof TruncatedError) || i !== 0) throw e
-            log.warn(`${e.message} - asking again with ${attempts[1]!.limit} and a shorter-thinking prompt`)
+            log.warn(`${of}${e.message} - asking again with ${attempts[1]!.limit} and a shorter-thinking prompt`)
         }
     }
     throw new Error('unreachable')
