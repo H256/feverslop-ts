@@ -500,6 +500,27 @@ ${lyrics}
 story:
 ${storyBase}`,
         instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
+        // the ids can only be ones of the cast - the server keeps the answer to them
+        schema: {
+            type: 'object', additionalProperties: false, required: ['beats'],
+            properties: {beats: {type: 'array', minItems: 1, items: {
+                type: 'object', additionalProperties: false,
+                required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
+                properties: {
+                    summary: {type: 'string'},
+                    moments: {type: 'array', items: {type: 'string'}},
+                    locationId: {enum: cast.locations.map(l => l.id)},
+                    characterIds: {type: 'array', items: {enum: cast.characters.map(c => c.id)}},
+                    intensity: {type: 'number'},
+                    weight: {type: 'integer'},
+                    kind: {enum: ['establish', 'build', 'hit', 'release']},
+                    continuous: {type: 'boolean'},
+                    stateAfter: {type: 'array', items: {type: 'string'}},
+                    entrance: {type: 'boolean'},
+                    ...(cast.characters.some(c => c.isGroup) ? {groupSize: {type: 'object', additionalProperties: {type: 'integer'}}} : {}),
+                },
+            }}},
+        },
     })
 
     const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
@@ -807,6 +828,7 @@ Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactl
 ---
 ${JSON.stringify(risky.map(r => r.moment))}`,
             instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
+            schema: {type: 'object', additionalProperties: false, required: ['moments'], properties: {moments: {type: 'array', minItems: risky.length, maxItems: risky.length, items: {type: 'string'}}}},
         })
         if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => {
             const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
@@ -854,6 +876,7 @@ ${JSON.stringify(plan.shots.map((s, n) => ({shot: n, framing: s.framing, camera:
 
 Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length - 1} per shot, in order]} - exactly ${plan.shots.length} numbers.`,
             instructions: 'You are a music video director who chooses the view of a place for each shot. Answer only with JSON.',
+            schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: plan.shots.length, maxItems: plan.shots.length, items: {type: 'integer', minimum: 0, maximum: LOCATION_VIEWS.length - 1}}}},
         }).catch((e: unknown) => {
             log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
             return undefined
@@ -1070,6 +1093,7 @@ ${lyrics}
 story summary:
 ${storySummary}`,
             instructions: 'You are a music video director who casts the singers of a performance video. Answer only with JSON.',
+            schema: {type: 'object', additionalProperties: false, required: ['singers'], properties: {singers: {type: 'array', minItems: 1, maxItems: 3, items: {enum: characters.map(c => c.id)}}}},
         })
         singers = known(picked.singers)
         if (!singers.length) throw new Error(`The LLM picked no singer from the cast (${JSON.stringify(picked.singers)}) - run again, or name the singers in config.json`)
@@ -1089,6 +1113,10 @@ cast: ${castList}
 story summary:
 ${storySummary}`,
                 instructions: 'You match names to the characters of a cast. Answer only with JSON.',
+                schema: {type: 'object', additionalProperties: false, required: ['singers'], properties: {singers: {type: 'array', items: {
+                    type: 'object', additionalProperties: false, required: ['name', 'id'],
+                    properties: {name: {enum: unmatched}, id: {enum: [...characters.map(c => c.id), null]}},
+                }}}},
             })
             for (const m of mapped.singers ?? []) {
                 const [id] = known([m.id])
@@ -1122,6 +1150,10 @@ lines: ${JSON.stringify(lines.map(l => ({line: l.line, section: l.section, text:
 story summary:
 ${storySummary}`,
         instructions: 'You are a music video director who splits a song between its singers. Answer only with JSON.',
+        schema: {type: 'object', additionalProperties: false, required: ['lines'], properties: {lines: {type: 'array', items: {
+            type: 'object', additionalProperties: false, required: ['line', 'singers'],
+            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
+        }}}},
     })
     const byLine = new Map((assigned.lines ?? []).map(l => [l.line, known(l.singers).filter(id => singers.includes(id))]))
     const missing = lines.filter(l => !byLine.get(l.line)?.length)

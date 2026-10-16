@@ -121,6 +121,16 @@ story:
 ${storyBase}
 `,
         instructions: 'You are an expert data extractor for Stories. You receive a Story and extract locations and characters from it. Answer only with the extracted data.',
+        schema: {
+            type: 'object', additionalProperties: false, required: ['characters', 'locations'],
+            properties: {
+                characters: {type: 'array', minItems: 1, items: {
+                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'isGroup', 'alike'],
+                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
+                }},
+                locations: {type: 'array', minItems: 1, items: {type: 'object', additionalProperties: false, required: ['name'], properties: {name: {type: 'string'}}}},
+            },
+        },
     }
 }
 
@@ -138,6 +148,7 @@ ${styleList.map(s => `- ${s.id}: ${s.name}${s.group ? ` [${s.group}]` : ''}`).jo
 story or lyrics:
 ${storyText}`,
         instructions: 'You are a film director choosing the visual style of a music video. Answer only with the JSON.',
+        schema: {type: 'object', additionalProperties: false, required: ['styles'], properties: {styles: {type: 'array', minItems: 1, maxItems: count, items: {enum: styleList.map(s => s.id)}}}},
     }
 }
 
