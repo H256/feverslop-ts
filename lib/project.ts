@@ -159,6 +159,9 @@ export type Project = {
     locationLooks?: Record<string, string>,
     characterDescriptions?: Record<string, string>,   // the looks without the picture, for the clip prompts
     locationDescriptions?: Record<string, string>,
+    // per place, two or three of its fixed features as one short phrase, written by the LLM from the description - repeated
+    // behind the people of every shot, so a shot is not drawn on the grey backdrop of the character pictures
+    locationAnchors?: Record<string, string>,
     beats?: StoryBeat[],
     timeline?: Timeline,
     mapping?: Assignment[],
@@ -167,6 +170,9 @@ export type Project = {
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
 export type StepName = Exclude<keyof Project, 'inputs' | 'partials'>
+
+/** An input whose change redoes steps (lib/inputs.ts); `assumed` is the value it had before fingerprints existed. */
+export type TrackedInput = { value: string | Uint8Array, steps: StepName[], assumed?: string }
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<StepName, StepName[]> = {
@@ -187,6 +193,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     locationLooks: ['cast', 'lookBrief', 'summary'],
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
+    locationAnchors: ['locationDescriptions'],
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
@@ -198,10 +205,14 @@ const dependsOn: Record<StepName, StepName[]> = {
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
 
+const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
+
 export class ProjectStore {
     readonly dir: string
     readonly file: string
     data: Project = {}
+    // the steps generated in this run (not taken from project.json)
+    readonly generated = new Set<StepName>()
 
     constructor(readonly id: string) {
         this.dir = join('projects', id)
@@ -222,12 +233,18 @@ export class ProjectStore {
         if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) throw new Error(`${this.file} must be a JSON object - fix it by hand, or delete it to start over (every step is generated again)`)
     }
 
+    // saves one after the other: elements of a step asked at once (llm.parallel) save as each answer comes in
+    private saving: Promise<void> = Promise.resolve()
+
     // written next to the target first, so a crash mid-write never leaves a truncated project.json
-    async save() {
-        // the process id in the name: two runs saving at once never write into the same temporary file
-        const partial = `${this.file}.${process.pid}.partial`
-        await Bun.write(partial, JSON.stringify(this.data, null, 2))
-        renameSync(partial, this.file)
+    save() {
+        this.saving = this.saving.catch(() => {}).then(async () => {
+            // the process id in the name: two runs saving at once never write into the same temporary file
+            const partial = `${this.file}.${process.pid}.partial`
+            await Bun.write(partial, JSON.stringify(this.data, null, 2))
+            renameSync(partial, this.file)
+        })
+        return this.saving
     }
 
     invalidate(name: StepName) {
@@ -239,24 +256,41 @@ export class ProjectStore {
         }
     }
 
+    /** The inputs that changed since the last run, with the steps each redoes - read-only. */
+    changedInputs(inputs: Record<string, TrackedInput>): { name: string, steps: StepName[] }[] {
+        const previous = this.data.inputs ?? {}
+        const hasSteps = Object.keys(this.data).some(key => key !== 'inputs')
+        return Object.entries(inputs).flatMap(([name, {value, steps, assumed}]) => {
+            const current = fingerprintOf(value)
+            const before = previous[name] ?? (assumed !== undefined && hasSteps ? fingerprintOf(assumed) : current)
+            return before !== current ? [{name, steps}] : []
+        })
+    }
+
+    /** The steps with a result that invalidating these would remove - what invalidate() does, without doing it. */
+    redoneBy(names: StepName[]): StepName[] {
+        const redone = new Set<StepName>()
+        const visit = (name: StepName) => {
+            if (this.data[name] !== undefined) redone.add(name)
+            for (const [step, deps] of Object.entries(dependsOn) as [StepName, StepName[]][]) {
+                if (deps.includes(name) && this.data[step] !== undefined && !redone.has(step)) visit(step)
+            }
+        }
+        for (const name of names) visit(name)
+        return STEP_NAMES.filter(step => redone.has(step))
+    }
+
     /**
      * Redoes the steps built on an input that changed since the last run. Every input is fingerprinted in
      * project.json; `assumed` is the value an input had before fingerprints existed (else it counts as unchanged).
      */
-    async syncInputs(inputs: Record<string, { value: string | Uint8Array, steps: StepName[], assumed?: string }>) {
-        const previous = this.data.inputs ?? {}
-        const current: Record<string, string> = {}
-        const hash = (value: string | Uint8Array) => Bun.hash(value).toString(16)
-        const hasSteps = Object.keys(this.data).some(key => key !== 'inputs')
-        for (const [name, {value, steps, assumed}] of Object.entries(inputs)) {
-            current[name] = hash(value)
-            const before = previous[name] ?? (assumed !== undefined && hasSteps ? hash(assumed) : current[name])
-            if (before !== current[name]) {
-                log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
-                for (const step of steps) this.invalidate(step)
-            }
+    async syncInputs(inputs: Record<string, TrackedInput>) {
+        for (const {name, steps} of this.changedInputs(inputs)) {
+            log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
+            for (const step of steps) this.invalidate(step)
         }
-        if (JSON.stringify(current) !== JSON.stringify(previous)) {
+        const current = Object.fromEntries(Object.entries(inputs).map(([name, {value}]) => [name, fingerprintOf(value)]))
+        if (JSON.stringify(current) !== JSON.stringify(this.data.inputs ?? {})) {
             this.data.inputs = current
             await this.save()
         }
@@ -264,13 +298,14 @@ export class ProjectStore {
 
     // Runs a step unless its result is already in project.json
     async step<K extends StepName>(name: K, title: string, run: () => Promise<NonNullable<Project[K]>>): Promise<NonNullable<Project[K]>> {
-        log.section(title)
         const cached = this.data[name]
         if (cached !== undefined) {
-            log.step('Cached', styles.muted(`from ${this.file} - use --redo=${name} to regenerate`))
+            log.cached(name, title)
             return cached as NonNullable<Project[K]>
         }
+        log.section(title)
         const result = await withStep(name, run)
+        this.generated.add(name)
         this.data[name] = result
         dropPartials(this.data, name)
         await this.save()
