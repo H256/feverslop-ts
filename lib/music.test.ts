@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {buildTimeline, chooseClipStarts, isFightBeat, splitFightSlots} from "./music.ts";
+import {activityRanges, buildTimeline, chooseClipStarts, framePower, isFightBeat, splitFightSlots} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
@@ -80,5 +80,42 @@ describe('buildTimeline', () => {
         expect(slots[0]!.start).toBe(0)
         slots.forEach((s, i) => { if (i) expect(s.start).toBe(slots[i - 1]!.end) })
         expect(slots.at(-1)!.end).toBe(20)
+    })
+})
+
+describe('activityRanges', () => {
+    // 0.05 s frames, bars of 2 s; a drum hit is one loud frame, the rest of the beat is quiet bleed
+    const hop = 0.05, bar = 2
+    const frames = (sec: number, f: (t: number) => number) => Array.from({length: Math.round(sec / hop)}, (_, i) => f(i * hop))
+    const groove = (t: number) => Math.abs(t % 0.5) < hop / 2 ? 1e-2 : 1e-7
+    const silence = () => 1e-9
+
+    test('a groove stays active between its hits', () => {
+        const ranges = activityRanges(frames(20, groove), hop, bar)
+        expect(ranges).toHaveLength(1)
+        expect(ranges[0]!.start).toBe(0)
+        expect(ranges[0]!.end).toBeGreaterThan(19.9)
+    })
+    test('a break of several bars is inactive, its edges blurred by at most half a bar', () => {
+        const ranges = activityRanges(frames(30, t => t >= 10 && t < 20 ? silence() : groove(t)), hop, bar)
+        expect(ranges).toHaveLength(2)
+        expect(ranges[0]!.end).toBeGreaterThanOrEqual(10)
+        expect(ranges[0]!.end).toBeLessThanOrEqual(11.1)
+        expect(ranges[1]!.start).toBeGreaterThanOrEqual(18.9)
+        expect(ranges[1]!.start).toBeLessThanOrEqual(20)
+    })
+    test('a quieter part of the same stem still plays, bleed far below it does not', () => {
+        // 0-10 s loud, 10-20 s 12 dB quieter, 20-30 s 40 dB down (bleed)
+        const ranges = activityRanges(frames(30, t => groove(t) * (t < 10 ? 1 : t < 20 ? 10 ** -1.2 : 1e-4)), hop, bar)
+        expect(ranges).toHaveLength(1)
+        expect(ranges[0]!.end).toBeGreaterThanOrEqual(20)
+        expect(ranges[0]!.end).toBeLessThanOrEqual(21.1)
+    })
+    test('a stem that is only bleed is never active', () => {
+        expect(activityRanges(frames(20, t => groove(t) * 1e-4), hop, bar)).toEqual([])
+        expect(activityRanges([], hop, bar)).toEqual([])
+    })
+    test('framePower is the mean square per frame', () => {
+        expect(framePower(new Float32Array([1, -1, 0.5, 0.5, 9]), 40, 0.05)).toEqual([1, 0.25])
     })
 })

@@ -382,11 +382,11 @@ const propActivity = stems && neededStems.length ? await project.step('propActiv
         const stemFile = allStems[stemName]
         if (!stemFile) continue
         log.step('Analyzing', styles.muted(stemFile))
-        result[stemName] = await stemActivity(join(project.dir, stemFile))
+        result[stemName] = await stemActivity(join(project.dir, stemFile), music.bpm)
     }
     return result
 }) : undefined
-if (propActivity) for (const [stemName, ranges] of Object.entries(propActivity)) log.step('Activity', styles.muted(`${stemName}: ${ranges!.length} range(s) from RMS energy`))
+if (propActivity) for (const [stemName, ranges] of Object.entries(propActivity)) log.step('Activity', styles.muted(`${stemName}: ${ranges!.length} range(s), ${ranges!.reduce((sum, r) => sum + r.end - r.start, 0).toFixed(0)} s active`))
 else if (neededStems.length) log.warn(`${neededStems.length} character(s) have an audible instrument prop, but stems weren't separated (set "alignLyrics": true in config.json) - instruments will be shown playing throughout`)
 
 ////////// CHOOSING THE SINGERS - performance mode only

@@ -16,7 +16,6 @@
 
 usage: uv run tools/vocals.py separate <song.wav> <stems-dir> [model] [only...]
        uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt>
-       uv run tools/vocals.py activity <stem.wav>
        uv run tools/vocals.py draft <vocals.wav> <language>
 
 separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
@@ -39,10 +38,6 @@ transcribe  faster-whisper (CTranslate2) large-v3, the known lyrics as a hotword
             growled/screamed vocals whisper often transcribes nothing at all, but the alignment step can still
             place interpolated words inside a real detected-activity window instead of guessing blind.
             Prints {"words": [{"text", "start", "end", "probability"}], "activity": [{"start", "end"}]} as JSON.
-activity    The same RMS-energy activity detection, run standalone on any stem (e.g. drums.wav, bass.wav,
-            other.wav) - used to ground a band member's on-screen instrument use in whether it is actually
-            audible at that point in the song, instead of playing continuously through every shot.
-            Prints {"activity": [{"start", "end"}]} as JSON.
 draft       For a song whose lyrics are lost (e.g. an old AceStep/Suno generation) - unbiased transcription,
             no lyrics file, no hotwords hint, so purely what whisper actually hears. Prints one timestamped
             line per whisper segment to stdout, meant to be read and hand-edited into a proper lyrics.txt
@@ -356,8 +351,6 @@ if __name__ == "__main__":
         separate(args[0], args[1], args[2] if len(args) > 2 else "htdemucs_ft", args[3:] or None)
     elif command == "transcribe" and len(args) == 3:
         transcribe(*args)
-    elif command == "activity" and len(args) == 1:
-        print(json.dumps({"activity": vocal_activity(*args)}))
     elif command == "draft" and len(args) == 2:
         draft(*args)
     else:
