@@ -297,12 +297,12 @@ export class ProjectStore {
 
     // Runs a step unless its result is already in project.json
     async step<K extends StepName>(name: K, title: string, run: () => Promise<NonNullable<Project[K]>>): Promise<NonNullable<Project[K]>> {
-        log.section(title)
         const cached = this.data[name]
         if (cached !== undefined) {
-            log.step('Cached', styles.muted(`from ${this.file} - use --redo=${name} to regenerate`))
+            log.cached(name, title)
             return cached as NonNullable<Project[K]>
         }
+        log.section(title)
         const result = await withStep(name, run)
         this.generated.add(name)
         this.data[name] = result

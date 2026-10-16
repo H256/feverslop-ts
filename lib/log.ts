@@ -35,8 +35,31 @@ function wrap(text: string, width: number) {
     })
 }
 
+// What the terminal shows: by default the details of a step taken from project.json (its texts, lists and boxes) are
+// left out - they go only into the run's log file (keepLogIn). -v/--verbose shows everything, --show=<step> one step.
+let verbose = false
+let shown = new Set<string>()
+let detailsHidden = false
+
+export function setOutput(options: { verbose?: boolean, show?: Iterable<string> }) {
+    verbose = options.verbose ?? false
+    shown = new Set(options.show ?? [])
+}
+
+/** Whether the details of this step (or of `clips`, the clip prompts) are shown in the terminal. */
+export const showsDetails = (name: string) => verbose || shown.has(name)
+
+/** From now until the next section, details only go into the log file (a cached step, the clip prompts). */
+export function hideDetails(hidden = true) {
+    detailsHidden = hidden && !verbose
+}
+
 // every log line clears the status board first and redraws it after, so the board stays the last line
-function print(line: string) {
+function print(line: string, always = false) {
+    if (detailsHidden && !always) {
+        toLog(`${line}\n`)
+        return
+    }
     clearBoard()
     console.log(line)
     drawBoard()
@@ -62,9 +85,20 @@ export function printBanner() {
 }
 
 export const log = {
-    section: (title: string) => print(`\n${styles.section(`  ${title}  `)}\n`),
+    section: (title: string) => {
+        detailsHidden = false
+        print(`\n${styles.section(`  ${title}  `)}\n`)
+    },
+    /** A step taken from project.json, as one line - its details only go into the log file, unless shown (see setOutput). */
+    cached: (name: string, title: string) => {
+        detailsHidden = false
+        print(`${styles.answer('✔')} ${title} ${styles.muted(`· cached (--redo=${name})`)}`)
+        if (!showsDetails(name)) detailsHidden = true
+    },
+    /** One line of a listing - a detail like log.step. */
+    line: (text: string) => print(text),
     step: (label: string, value: string = '') => print(`${styles.label(`▸ ${label}`)} ${value}`),
-    warn: (message: string) => print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`),
+    warn: (message: string) => print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true),
     box: (title: string, content: string) => {
         const border = styles.border
         const lines = [border(`╭─ `) + styles.label(title) + border(` ${'─'.repeat(Math.max(0, boxWidth - title.length - 1))}╮`)]
@@ -190,6 +224,16 @@ export const suffix = (...parts: (string | undefined | false)[]) => parts.filter
  * into this file, without colour codes and without the redraws of the status line. Opened once per run.
  */
 let logFile: { path: string, fd: number } | undefined
+
+/** Into the log file only - what the terminal leaves out. */
+function toLog(text: string) {
+    if (!logFile) return
+    try {
+        writeSync(logFile.fd, stripVTControlCharacters(text))
+    } catch {
+        // a log that cannot be written is no reason to stop a run
+    }
+}
 
 export function keepLogIn(path: string) {
     mkdirSync(dirname(path), {recursive: true})

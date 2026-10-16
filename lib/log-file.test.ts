@@ -32,4 +32,30 @@ describe('the log of a run', () => {
             rmSync(dir, {recursive: true, force: true})
         }
     })
+
+    test('the details of a cached step: only in the file, unless shown', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'fs-log-'))
+        const file = join(dir, 'run.log')
+        try {
+            const script = (show: string) => `
+                import {keepLogIn, log, setOutput} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
+                keepLogIn(${JSON.stringify(file)})
+                setOutput({show: [${show}]})
+                log.cached('story', '3 · CRAFTING THE STORY')
+                log.box('Story', 'Once upon a time')
+                log.warn('a warning is always shown')
+                log.section('4 · NEXT')
+                log.step('Fresh', 'shown')`
+            const quiet = Bun.spawnSync(['bun', '-e', script('')], {stdout: 'pipe', stderr: 'pipe'}).stdout.toString()
+            expect(quiet).toContain('3 · CRAFTING THE STORY')
+            expect(quiet).not.toContain('Once upon a time')
+            expect(quiet).toContain('a warning is always shown')
+            expect(quiet).toContain('Fresh')
+            expect(readFileSync(file, 'utf8')).toContain('Once upon a time')
+            const shown = Bun.spawnSync(['bun', '-e', script("'story'")], {stdout: 'pipe', stderr: 'pipe'}).stdout.toString()
+            expect(shown).toContain('Once upon a time')
+        } finally {
+            rmSync(dir, {recursive: true, force: true})
+        }
+    })
 })
