@@ -70,3 +70,42 @@ describe('buildClipRequests cast, characters the text names', () => {
         expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman'])
     })
 })
+
+describe('a piece of a fight clip names only the people it has pictures for', () => {
+    const party: Character[] = [
+        {id: 'greta', name: 'Greta', role: 'leader'},
+        {id: 'mira', name: 'Mira', role: 'youngest'},
+        {id: 'kael', name: 'Kael', role: 'warrior'},
+        {id: 'orcs', name: 'Orcs', role: 'crowd', isGroup: true, alike: true},
+    ]
+    const fight = {id: 'b9', order: 1, summary: 'Seven hammers swing against a dozen Orcs. Greta, Mira and Kael sing.', moments: [], locationId: 'cave', characterIds: ['greta', 'mira', 'kael', 'orcs'], intensity: 0.9, weight: 1, kind: 'hit', stateAfter: ['Kael is bleeding'], continuous: false} as unknown as StoryBeat
+    const input = (micro: boolean): Input => ({
+        slots: [{id: 'slot-001', index: 0, section: 'A', start: 0, end: 2, bars: 1, energy: 0.8, lyrics: [], ...(micro ? {micro: true} : {})}],
+        mapping: [{slotId: 'slot-001', beatId: 'b9'}],
+        beats: [fight],
+        characters: party,
+        locations: [{id: 'cave', name: 'Cave'}],
+        characterDescriptions: {greta: 'An old woman.', mira: 'A young woman.', kael: 'A tall woman.', orcs: 'A stocky orc.'},
+        locationDescriptions: {cave: 'A blue-stone cave.'},
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 2, downbeats: [0], barEnergy: [0.8], sections: []},
+        language: 'English',
+        stemsAvailable: false,
+        shotMoments: {b9: {staging: 'Greta stands in front, Mira and Kael behind her in a file.', shots: [{action: 'Greta drives her hammer into the Orcs.', characters: ['greta', 'orcs'], rest: 'Mira parries an orc, Kael shoves another back.'}]}},
+    })
+
+    test('the summary is the shot, no layout, no rest, no fact about somebody without a picture', () => {
+        const clip = buildClipRequests(input(true))[0]!
+        expect(clip.assets.pictures.map(p => p.id)).toEqual(['cave', 'greta', 'orcs'])
+        const text = clip.prompt
+        expect(text).toContain('<Subject 2> drives her hammer into the <Subject 3>.')
+        expect(text).not.toContain('Seven hammers')
+        expect(text).not.toContain('Layout of the place')
+        expect(text).not.toMatch(/Mira|Kael/)
+    })
+    test('a normal clip of the same beat is unchanged: summary and layout name everybody', () => {
+        const clip = buildClipRequests(input(false))[0]!
+        expect(clip.prompt).toContain('Seven hammers swing')
+        expect(clip.prompt).toContain('Layout of the place')
+    })
+})
