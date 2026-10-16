@@ -27,10 +27,6 @@ Rules:
 - Each shot must show real physical progression from the one before it - never repeat, restate or merely rephrase the previous shot's action, and never describe the camera or a held/static moment.
 - Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, the shots must show a real dramatic encounter across the sequence: fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear) - not characters standing and staring.
 - A shot naming only the outcome of contact between two things ("hits the dragon with a sword", "grabs the ledge") reads as flat and unconvincing on screen - describe the mechanics instead: the direction and path of the movement (a low arc from the left, an overhead swing, a lunge), what it meets and how (deflects off armored scales, cuts into flesh, is caught on a raised shield), and the immediate physical reaction (staggers back, sends sparks flying, the blade skids off and rebounds). Do this for every strike, grab, fall or collision a shot describes, not only in combat. A blow has weight: the striker puts the body into it (a step, a twist of the hips, the breath leaving), the one struck shows the force in the whole body (the head snaps, the knees give, the arms fly up) and is moved a step or two at most - they stagger, drop to a knee or fall onto the back; nobody flies several paces, slides or is thrown over an edge by one blow.
-  Weak: "{Kara} hits the dragon with her sword."
-  Strong: "{Kara} swings her sword in a low arc from the right, the blade skidding off the dragon's armored foreleg scales in a shower of sparks."
-  Weak: "{Tom} grabs the ledge as he falls."
-  Strong: "{Tom}'s fingers close around the crumbling ledge, his body swinging hard into the cliff face as his grip catches him."
 - The same applies to any gentler or non-physical contact (a hand on a shoulder, a ghost or spirit reaching for someone): never write a bare "touches" or "reaches for" - name the exact hand/body part and where it lands, whether the contact holds and grips or only brushes, and let the reaction follow logically from THAT contact (goes rigid under the grip, twists to break free, the hand passes through them like mist) rather than defaulting to an unrelated generic reaction such as being shoved or knocked back - only describe a push or shove when something in the shot actually pushes.
 - "castProps" below lists each character's one fixed prop (weapon, tool or instrument), if they have one. That is the exact object they carry for the entire song - always call it by that same name and kind in every shot it appears in (a character's sword must stay a sword and never become a hammer, axe or spear in a later shot, and vice versa), unless the beat's "summary" or "moments" explicitly says they picked up, dropped, lost or swapped it.
 - Characters don't default to facing the camera. When a shot is a reaction - to a threat, a touch, a strike, a sound - say which way the character's body and gaze turn relative to whatever they're reacting to (spins toward it, recoils with their back to the wall, turns away and shields their face, ducks behind another character) instead of leaving them front-on.
@@ -80,7 +76,21 @@ rest: <what the others in the picture do, every character as {Name}>
 (then SHOT <next number> with the same fields, up to the last shot this call writes)
 ENDS - only when the input says that this call writes the last shot of the beat:
 end: <Name> | <where they are and what they do and hold when the beat is over, a phrase with a verb>
-(one "end:" line for every character of the beat - the next beat starts from it)`
+(one "end:" line for every character of the beat - the next beat starts from it)
+
+One shot as it should be written - an invented one, nothing of it belongs to this song, its people or its places:
+SHOT 3
+framing: low-angle medium shot
+size: medium
+camera: the camera tracks sideways up the slope at walking pace, keeping both fighters in the frame
+view: from the left of the pass, below them, looking up the scree toward the ridge
+hold: no
+risky: no
+characters: Kara, Tom, Riders
+action: {Kara} swings her sword in a low arc from the right, the blade skidding off {Tom}'s raised shield in a shower of sparks, and {Tom} staggers back a step, his boot sliding on the loose scree, his eyes on her blade.
+person: Kara | state: braced on the slope a step below Tom, sword drawn back at her right hip | frame: sharp, left of centre, three-quarter view toward Tom, jaw set | motion: steps up into the swing, hips twisting after the blade | singing: no
+person: Tom | state: crouched behind his round shield, a step uphill of Kara | frame: sharp, right of frame, profile toward Kara, brows drawn together | motion: gives a step back up the slope, the shield arm jarred upward | singing: no
+rest: the {Riders} behind them scramble up the scree to either side, one dragging a fallen companion clear of the fight`
 
 /** What the planner knows of the whole song - the same for every call of a run. */
 export type PlanContext = {
