@@ -63,6 +63,9 @@ The file, if you'd rather write it yourself:
 }
 ```
 
+- `llm.parallel` (default 1): how many LLM calls may run at once - set it to the number of slots of the server
+  (`llama-server --parallel N`, vLLM). Only calls that don't depend on each other run at once (the descriptions, the
+  looks of the places, the views of the shots); everything else stays in order.
 - `llm.apiKey` is optional - local servers usually need none. Without `llm.model`, the server's only model is used;
   a server with several models needs one picked.
 - `comfy` entries are a URL, or `{"url", "name", "token"}` / `{"url", "name", "username", "password"}` for a server
@@ -78,6 +81,7 @@ Everything can be overridden, lowest first: the settings file → the project's 
 | `FEVERSLOP_LLM_URL`                    | `--llm-url=`      | the LLM server, with `/v1`                        |
 | `FEVERSLOP_LLM_API_KEY`                | `--llm-key=`      | its API key                                       |
 | `FEVERSLOP_LLM_MODEL`                  | `--llm-model=`    | a model id of the server                          |
+| `FEVERSLOP_LLM_PARALLEL`               | `--llm-parallel=` | LLM calls at once, 1 or more                      |
 | `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
