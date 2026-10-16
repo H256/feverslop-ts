@@ -195,11 +195,11 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
         ? [{role: 'user' as const, content: [{type: 'input_text' as const, text: input}, ...images.map(image_url => ({type: 'input_image' as const, image_url, detail: 'auto' as const}))]}]
         : input
     // A cut-off answer is useless (half a JSON), an empty one even more so - the model spent everything on thinking, which
-    // varies a lot from run to run. So: once more with twice the room; after a second empty answer the prompt is rewritten
-    // (think briefly, then answer) with a low reasoning effort, and the last try gets even more room.
+    // varies a lot from run to run, and a small quant can loop in its thinking - more room at the same effort only
+    // lets it loop longer. So the second try already has the prompt rewritten (think briefly, then answer) with a low
+    // reasoning effort, and the last try gets even more room.
     const attempts = [
         {limit: maxTokens, level: reasoning, note: ''},
-        {limit: maxTokens * 2, level: reasoning, note: ''},
         {limit: maxTokens * 2, level: 'low' as ReasoningStrength, note: emptyAnswerNote},
         {limit: maxTokens * 4, level: 'low' as ReasoningStrength, note: emptyAnswerNote},
     ]
@@ -212,7 +212,7 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
         } catch (e) {
             // only the first cut-off gets a second chance - after that the answer is too long for the model, not just unlucky
             if (!(e instanceof TruncatedError) || i !== 0) throw e
-            log.warn(`${e.message} - asking again with ${attempts[1]!.limit}`)
+            log.warn(`${e.message} - asking again with ${attempts[1]!.limit} and a shorter-thinking prompt`)
         }
     }
     throw new Error('unreachable')
