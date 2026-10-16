@@ -1,6 +1,6 @@
 import {OpenAI} from "openai/client";
 import type {ResponseCreateParamsStreaming} from "openai/resources/responses/responses";
-import {log, startSpinner, styles} from "./log.ts";
+import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
 
 export type LlmSettings = { url?: string, apiKey?: string, model?: string }
 
@@ -83,14 +83,15 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     let thinking = ''
     let answer = ''
     let outputTokens: number | undefined
+    const started = Date.now()
     let incomplete: string | undefined
     // a stream that ends without a terminal event was cut off by the connection or the server - what came before is not an answer
     let finished = false
     prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId()}, reasoning)
 
     const stopSpinner = startSpinner(() => {
-        if (answer) return `${styles.answer('writing')} ${styles.muted(`${answer.length} chars`)}`
-        if (thinking) return `${styles.thinking('thinking')} ${styles.muted(`${thinking.length} chars`)}`
+        if (answer) return `${styles.answer('writing')} ${styles.muted(`${countWords(answer)} words`)}`
+        if (thinking) return `${styles.thinking('thinking')} ${styles.muted(`${countWords(thinking)} words`)}`
         return styles.muted('waiting for model')
     })
     try {
@@ -123,7 +124,8 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
         stopSpinner()
     }
     if (!finished) throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
-    log.step('Done', styles.muted(`${thinking.length} chars thinking (${reasoning}), ${answer.length} chars answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''}`))
+    const took = Date.now() - started
+    log.step('Done', styles.muted(`${countWords(thinking)} words thinking (${reasoning}), ${countWords(answer)} words answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''} · ${suffix(formatDuration(took), formatRate(outputTokens, took))}`))
     // llama.cpp reports a cut-off answer as "completed" - all tokens used up means cut off, too
     const limit = prompt.max_output_tokens
     if (incomplete === 'max_output_tokens' || (limit && outputTokens !== undefined && outputTokens >= limit)) throw new TruncatedError(limit ?? 0)

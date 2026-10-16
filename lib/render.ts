@@ -1,7 +1,7 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join} from "node:path";
-import {log, startSpinner, styles} from "./log.ts";
+import {formatDuration, log, startSpinner, styles} from "./log.ts";
 import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
@@ -58,6 +58,7 @@ export class Renderer implements Disposable {
     readonly remoteDir: string
     private ready?: Promise<Server[]>
     private connected: Server[] = []
+    private renderMs = new Map<string, number>()   // target -> time spent on its ComfyUI job(s)
     private busy = new Set<string>()        // server names
     private waiting: { pin?: string, resolve: (server: Server) => void }[] = []
     private stopQueueNote?: () => void
@@ -198,7 +199,7 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed}}
         })
         await Bun.write(`${target}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt, fingerprint: current}, null, 2))
-        log.step('Saved', picture.file)
+        log.step('Saved', `${picture.file} ${styles.muted(this.took(target))}`)
     }
 
     /**
@@ -285,7 +286,7 @@ export class Renderer implements Disposable {
         await Bun.write(`${target}.json`, JSON.stringify({
             workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
         }, null, 2))
-        log.step('Saved', picture.file)
+        log.step('Saved', `${picture.file} ${styles.muted(this.took(videoTarget))}`)
     }
 
     // Generates input/song.wav with the configured songWorkflow (YuE2 by default). The workflow only saves mp3/flac
@@ -426,7 +427,7 @@ export class Renderer implements Disposable {
             size: `${rendered.width}x${rendered.height}`,
             request: `output/clips/${clip.id}.json`,
         }, null, 2))
-        log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used`)}`)
+        log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used · ${this.took(target)}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)
     }
 
@@ -468,13 +469,21 @@ export class Renderer implements Disposable {
         const home = initial ? this.homeOf(label, initial, servers) : undefined
 
         const server = await this.acquire(home?.name)
+        const started = Date.now()
         try {
             const pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
             await this.downloadResult(label, target, extension, server, pending)
             return pending.meta
         } finally {
+            this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
             this.release(server)
         }
+    }
+
+    /** How long the job(s) for `target` took, queueing for a free server not counted - '' when none ran in this run. */
+    private took(target: string) {
+        const ms = this.renderMs.get(target)
+        return ms ? formatDuration(ms) : ''
     }
 
     // a queued job only exists on its own server - files from before several servers: the first one. undefined
