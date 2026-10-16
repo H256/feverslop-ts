@@ -109,3 +109,61 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain('Layout of the place')
     })
 })
+
+describe('the background of the place', () => {
+    const input = (anchors: Record<string, string> | undefined, beats: StoryBeat[]): Input => ({
+        slots: beats.map((b, n) => ({id: `slot-00${n + 1}`, index: n, section: 'A', start: n * 4, end: n * 4 + 4, bars: 2, energy: 0.5, lyrics: []})),
+        mapping: beats.map((b, n) => ({slotId: `slot-00${n + 1}`, beatId: b.id})),
+        beats,
+        characters,
+        locations: [{id: 'clearing', name: 'Clearing'}],
+        characterDescriptions: {shaman: 'A stocky shaman.', runa: 'A small grey cat.'},
+        locationDescriptions: {clearing: 'A forest clearing, tall pines, a fire pit. Moss on the stones.'},
+        locationAnchors: anchors,
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.5, 0.5], sections: []},
+        language: 'English',
+        stemsAvailable: false,
+    })
+
+    test('the phrase of the place stands behind the people, as written', () => {
+        const clip = buildClipRequests(input({clearing: 'the tall pines and the fire pit'}, [beat]))[0]!
+        expect(clip.prompt).toContain('Behind them: the tall pines and the fire pit.')
+        expect(clip.prompt).not.toContain('still visible behind them')
+    })
+    test('no phrase: no background sentence, and no piece of the description', () => {
+        const clip = buildClipRequests(input(undefined, [beat]))[0]!
+        expect(clip.prompt).not.toContain('Behind them')
+        expect(clip.prompt).not.toContain('still visible behind them')
+    })
+    test('a continuing clip with one person says "is"', () => {
+        const clips = buildClipRequests(input(undefined, [beat, beat]))
+        expect(clips[1]!.prompt).toContain('<Subject 2> is already present')
+    })
+})
+
+describe('more people than reference pictures', () => {
+    const crowd: Character[] = Array.from({length: 10}, (_, n) => ({id: `p${n}`, name: `P${n}`, role: 'villager'}))
+    const input = (count: number): Input => ({
+        slots: [{id: 'slot-001', index: 0, section: 'A', start: 0, end: 4, bars: 2, energy: 0.5, lyrics: []}],
+        mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+        beats: [{...beat, characterIds: crowd.slice(0, count).map(c => c.id)}],
+        characters: crowd,
+        locations: [{id: 'clearing', name: 'Clearing'}],
+        characterDescriptions: Object.fromEntries(crowd.map(c => [c.id, 'A villager.'])),
+        locationDescriptions: {clearing: 'A forest clearing.'},
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.5, 0.5], sections: []},
+        language: 'English',
+        stemsAvailable: false,
+    })
+
+    test('whoever does not fit is listed as dropped', () => {
+        const clip = buildClipRequests(input(10))[0]!
+        expect(clip.assets.pictures).toHaveLength(9)
+        expect(clip.dropped).toEqual(['p8', 'p9'])
+    })
+    test('a clip where everybody fits has no dropped list', () => {
+        expect(buildClipRequests(input(8))[0]!.dropped).toBeUndefined()
+    })
+})
