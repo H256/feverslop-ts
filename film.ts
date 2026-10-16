@@ -30,19 +30,19 @@ import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
 import {ask, configureLlm} from "./lib/llm.ts";
-import {log, printBanner, styles} from "./lib/log.ts";
+import {failRun, log, printBanner, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
 import {validProjectId} from "./lib/project-setup.ts";
 
 import {loadSettings} from "./lib/settings.ts";
 import {shuffledStyles, stylesById} from "./lib/styles.ts";
 
-process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
-process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+process.on('unhandledRejection', failRun)
+process.on('uncaughtException', failRun)
 
 printBanner()
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -58,6 +58,8 @@ const {values: args, positionals} = (() => {
                 'allow-import-gaps': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
                 strict: {type: 'boolean', default: false},
+                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
+                debug: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},

@@ -31,6 +31,7 @@ bun run setup
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
 | `bun run init`          | creates a new project - see [Creating a project](#creating-a-project)        |
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
+| `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt |
 | `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
 | `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |
 | `bun run comfy:convert` | turns a ComfyUI workflow (API export) into a draft workflow file             |
@@ -63,6 +64,9 @@ The file, if you'd rather write it yourself:
 }
 ```
 
+- `llm.parallel` (default 1): how many LLM calls may run at once - set it to the number of slots of the server
+  (`llama-server --parallel N`, vLLM). Only calls that don't depend on each other run at once (the descriptions, the
+  looks of the places, the views of the shots); everything else stays in order.
 - `llm.apiKey` is optional - local servers usually need none. Without `llm.model`, the server's only model is used;
   a server with several models needs one picked.
 - `comfy` entries are a URL, or `{"url", "name", "token"}` / `{"url", "name", "username", "password"}` for a server
@@ -78,6 +82,7 @@ Everything can be overridden, lowest first: the settings file → the project's 
 | `FEVERSLOP_LLM_URL`                    | `--llm-url=`      | the LLM server, with `/v1`                        |
 | `FEVERSLOP_LLM_API_KEY`                | `--llm-key=`      | its API key                                       |
 | `FEVERSLOP_LLM_MODEL`                  | `--llm-model=`    | a model id of the server                          |
+| `FEVERSLOP_LLM_PARALLEL`               | `--llm-parallel=` | LLM calls at once, 1 or more                      |
 | `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
@@ -138,21 +143,25 @@ projects/<project-id>/
   timeline.mlt / .osp the cut as an editable timeline for Shotcut/Kdenlive / OpenShot - written by --export
   gallery.html        overview page of the generated assets (tabs: cast, storyboard, videos) - written by --gallery
   project.json        all generated data, step by step
-  output/             generated H3 requests - rewritten on every run
+  output/             generated H3 requests - rewritten on every run; the run before is kept in output/.previous/,
+                      and the run lists the requests it changed
 ```
 
 Run it:
 
 ```bash
 bun index.ts <project-id>             # the project in projects/<project-id>/ (create one with: bun run init)
-bun index.ts                          # without an id: the author's own project well-of-youth-gothic-trio-260920 (a
-                                       # convenience default in index.ts) - an error listing your projects if there is none
+bun index.ts                          # without an id: pick one of the projects with the arrow keys (most recently changed
+                                       # first) - without a terminal, an error listing them
 bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
+bun index.ts --review                 # stop after the story, the cast, the look and the beats when they were just generated:
+                                       # accept, edit them in $EDITOR (text, or JSON for cast and beats), generate again, or stop
 bun index.ts --render=all             # also render with ComfyUI and assemble <project-id>.mp4, see below
 bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
+bun index.ts --debug                  # a failure shows its stack trace below the error box (or FEVERSLOP_DEBUG=1)
 bun index.ts --debug-audio            # also cut one listenable wav per track and clip into output/audio (not needed for rendering)
 bun index.ts --legacy-moments         # skip step 11b, spread beat.moments across shots the old way
 bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity after editing prop/propStem by hand
@@ -237,6 +246,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 7b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
 | 8  | `locationLooks`  | Krea 2 prompt per location (empty establishing shot)                             | cast, lookBrief, summary     |
 | 8b | `locationDescriptions` | The location look without the establishing shot - no camera, "empty" or medium - for the clip prompts | locationLooks |
+| 8c | `locationAnchors` | Two or three fixed features of each place, as one phrase - kept behind the people of every shot, so no shot falls back to the grey backdrop of the character pictures | locationDescriptions |
 | 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
@@ -250,7 +260,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 ⁵ only with `--render=song`, and only while `input/song.wav` doesn't exist yet - see
 [Generating the song](#generating-the-song)
 
-Steps 1, 3–9 and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
+Steps 1, 3–9 (with 8c) and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
 
 The looks (7, 8) are image prompts for the reference pictures - they put a character on a plain grey background in
 studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
