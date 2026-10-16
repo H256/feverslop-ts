@@ -55,6 +55,8 @@ export type ClipRequest = {
     beatId: string,
     // the clip goes on from the last frame of this clip (`<Picture N>` below, kind 'frame'): it can only be rendered after it
     startsFrom?: string,
+    // characters of the clip's beat or shots that got no picture: more people than the workflow takes reference pictures
+    dropped?: string[],
     shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
     // performance mode: what is sung on screen and by whom, times relative to the clip start
     vocals?: { at: number, end: number, line: number, text: string, singers: { id: string, subject: string, speaker: string }[] }[],
@@ -343,11 +345,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // for them drew two more copies of the singer. A character the text names is in the clip, with its picture
         const stagedText = [staging ?? '', ...state].join(' ')
         const namedIds = shotIds ? [] : characters.filter(c => new RegExp(`\\b(?:${escapeRegExp(c.name)}|${escapeRegExp(c.id)})\\b`, 'i').test(stagedText)).map(c => c.id)
-        const cast = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
+        const wanted = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
             .filter((id, n, all) => all.indexOf(id) === n)
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
-            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
+        // the workflow takes MAX_REFERENCE_IMAGES pictures: whoever does not fit has no picture in this clip - said in the request
+        const cast = wanted.slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
+        const dropped = wanted.slice(cast.length).map(c => c.id)
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -749,6 +753,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             section: slot.section,
             beatId: beat.id,
             ...(startsFrom ? {startsFrom} : {}),
+            ...(dropped.length ? {dropped} : {}),
             shots: shots.map(({focus, singers, moment, starting, continuing, ...shot}) => shot),
             ...(performing ? {
                 vocals: vocals.map(v => ({
