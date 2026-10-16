@@ -333,7 +333,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const singerIds = [...new Set(performed.flatMap(v => v.singerIds))]
         // a piece of a fight clip has only the people of its own shot as references: fewer pictures, nobody to strike by mistake
         const shotIds = slot.micro && flatShotMoments?.length ? new Set(flatShotMoments.flatMap(s => s.characters ?? [])) : undefined
-        const cast = [...singerIds, ...beat.characterIds.filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
+        // a shot plan can stage a character the beat's own list forgot: named in the prompt without a picture, the video
+        // model invents one - so whoever a shot shows is in the cast, with the picture made for them
+        const plannedIds = flatShotMoments?.flatMap(s => s.characters ?? []) ?? []
+        const cast = [...singerIds, ...[...beat.characterIds, ...plannedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
+            .filter((id, n, all) => all.indexOf(id) === n)
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
             .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
