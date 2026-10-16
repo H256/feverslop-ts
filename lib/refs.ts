@@ -52,6 +52,10 @@ Answer only with JSON: {"tokens": [{"token": "<as given, without braces>", "id":
 tokens: ${JSON.stringify(unknown)}
 cast: ${JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role})))}`,
         instructions: 'You match names to the characters of a cast. Answer only with JSON.',
+        schema: {type: 'object', additionalProperties: false, required: ['tokens'], properties: {tokens: {type: 'array', items: {
+            type: 'object', additionalProperties: false, required: ['token', 'id'],
+            properties: {token: {enum: unknown}, id: {enum: [...characters.map(c => c.id), null]}},
+        }}}},
     })
     const mapped: Record<string, string | null> = Object.fromEntries(unknown.map(token => [token, null]))
     for (const entry of answer.tokens ?? []) {

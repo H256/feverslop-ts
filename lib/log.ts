@@ -1,4 +1,6 @@
-import {stripVTControlCharacters, styleText} from "node:util";
+import {closeSync, mkdirSync, openSync, writeSync} from "node:fs";
+import {dirname} from "node:path";
+import {format, stripVTControlCharacters, styleText} from "node:util";
 
 type Format = Parameters<typeof styleText>[0]
 export const style = (format: Format) => (text: string) => styleText(format, text)
@@ -13,7 +15,8 @@ export const styles = {
     border: style('magenta'),
 }
 
-const boxWidth = Math.min(process.stdout.columns ?? 100, 120) - 4
+// a terminal that reports 0 columns (some ptys, CI) gets the width of one without a size
+const boxWidth = Math.min(process.stdout.columns || 100, 120) - 4
 
 function wrap(text: string, width: number) {
     return text.split('\n').flatMap(paragraph => {
@@ -32,8 +35,31 @@ function wrap(text: string, width: number) {
     })
 }
 
+// What the terminal shows: by default the details of a step taken from project.json (its texts, lists and boxes) are
+// left out - they go only into the run's log file (keepLogIn). -v/--verbose shows everything, --show=<step> one step.
+let verbose = false
+let shown = new Set<string>()
+let detailsHidden = false
+
+export function setOutput(options: { verbose?: boolean, show?: Iterable<string> }) {
+    verbose = options.verbose ?? false
+    shown = new Set(options.show ?? [])
+}
+
+/** Whether the details of this step (or of `clips`, the clip prompts) are shown in the terminal. */
+export const showsDetails = (name: string) => verbose || shown.has(name)
+
+/** From now until the next section, details only go into the log file (a cached step, the clip prompts). */
+export function hideDetails(hidden = true) {
+    detailsHidden = hidden && !verbose
+}
+
 // every log line clears the status board first and redraws it after, so the board stays the last line
-function print(line: string) {
+function print(line: string, always = false) {
+    if (detailsHidden && !always) {
+        toLog(`${line}\n`)
+        return
+    }
     clearBoard()
     console.log(line)
     drawBoard()
@@ -58,10 +84,28 @@ export function printBanner() {
     console.log(`  ${styles.muted('TS · video cli')}`)
 }
 
+// the warnings of this run, for its summary at the end
+const warnings: string[] = []
+export const runWarnings = () => [...warnings]
+
 export const log = {
-    section: (title: string) => print(`\n${styles.section(`  ${title}  `)}\n`),
+    section: (title: string) => {
+        detailsHidden = false
+        print(`\n${styles.section(`  ${title}  `)}\n`)
+    },
+    /** A step taken from project.json, as one line - its details only go into the log file, unless shown (see setOutput). */
+    cached: (name: string, title: string) => {
+        detailsHidden = false
+        print(`${styles.answer('✔')} ${title} ${styles.muted(`· cached (--redo=${name})`)}`)
+        if (!showsDetails(name)) detailsHidden = true
+    },
+    /** One line of a listing - a detail like log.step. */
+    line: (text: string) => print(text),
     step: (label: string, value: string = '') => print(`${styles.label(`▸ ${label}`)} ${value}`),
-    warn: (message: string) => print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`),
+    warn: (message: string) => {
+        warnings.push(message)
+        print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true)
+    },
     box: (title: string, content: string) => {
         const border = styles.border
         const lines = [border(`╭─ `) + styles.label(title) + border(` ${'─'.repeat(Math.max(0, boxWidth - title.length - 1))}╮`)]
@@ -81,8 +125,22 @@ export const log = {
     fatal: (message: string): never => errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}]),
 }
 
+/**
+ * The handler for an uncaught failure of a whole run: the message in the red box, and with --debug (or FEVERSLOP_DEBUG=1)
+ * the stack trace below it. The flag is read from the raw arguments - the handlers are set up before parseArgs runs.
+ */
+export function failRun(e: unknown): never {
+    const debug = process.env.FEVERSLOP_DEBUG === '1' || Bun.argv.includes('--debug')
+    if (debug && e instanceof Error && e.stack) {
+        clearBoard()
+        console.error(styles.muted(e.stack))
+    }
+    return log.fatal(e instanceof Error ? e.message : String(e))
+}
+
 function errorBox(heading: string, sections: { text: string, style: (s: string) => string }[]): never {
     clearBoard()
+    if (logFile) sections = [...sections, {text: `The whole run: ${logFile.path}`, style: styles.muted}]
     const border = style('red')
     const title = style(['bold', 'white', 'bgRed'])
     console.error(`\n${border('╭─')}${title(heading)}${border(`${'─'.repeat(Math.max(0, boxWidth - heading.length))}╮`)}`)
@@ -119,7 +177,7 @@ function drawBoard() {
     ]
     let line = `${styles.label(frames[frame++ % frames.length]!)} ${parts.join(styles.muted(' · '))}`
     // a line that wraps can't be cleared with \r any more - cut it to the terminal width
-    const width = (process.stdout.columns ?? 100) - 1
+    const width = (process.stdout.columns || 100) - 1
     if (Bun.stringWidth(line) > width) line = stripVTControlCharacters(line).slice(0, width - 1) + '…'
     process.stdout.write(`\r\x1b[2K${line}`)
     drawn = true
@@ -167,3 +225,55 @@ export const countWords = (text: string) => text.split(/\s+/).filter(Boolean).le
 
 /** Joins the non-empty parts as one short muted suffix: `12.3s · 41 t/s`. */
 export const suffix = (...parts: (string | undefined | false)[]) => parts.filter(Boolean).join(' · ')
+
+/**
+ * The log of a run: everything it prints - console.log/error/warn and direct writes (the prompts of --review) - also goes
+ * into this file, without colour codes and without the redraws of the status line. Opened once per run.
+ */
+let logFile: { path: string, fd: number } | undefined
+
+/** Into the log file only - what the terminal leaves out. */
+function toLog(text: string) {
+    if (!logFile) return
+    try {
+        writeSync(logFile.fd, stripVTControlCharacters(text))
+    } catch {
+        // a log that cannot be written is no reason to stop a run
+    }
+}
+
+export function keepLogIn(path: string) {
+    mkdirSync(dirname(path), {recursive: true})
+    logFile = {path, fd: openSync(path, 'a')}
+    const toFile = (text: string) => {
+        if (!logFile) return
+        // the status line is drawn as "\r" + the line, and cleared with "\r" - neither is part of the log
+        if (text.startsWith('\r') && !text.includes('\n')) return
+        try {
+            writeSync(logFile.fd, stripVTControlCharacters(text).replace(/\r/g, ''))
+        } catch {
+            // a log that cannot be written is no reason to stop a run
+        }
+    }
+    for (const method of ['log', 'error', 'warn', 'info'] as const) {
+        const original = console[method].bind(console)
+        console[method] = (...args: unknown[]) => {
+            original(...args)
+            toFile(`${format(...args)}\n`)
+        }
+    }
+    for (const stream of [process.stdout, process.stderr]) {
+        const original = stream.write.bind(stream) as (chunk: unknown, ...rest: unknown[]) => boolean
+        stream.write = ((chunk: unknown, ...rest: unknown[]) => {
+            if (typeof chunk === 'string' || chunk instanceof Uint8Array) toFile(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+            return original(chunk, ...rest)
+        }) as typeof stream.write
+    }
+    process.on('exit', () => {
+        if (logFile) closeSync(logFile.fd)
+    })
+    return path
+}
+
+/** The file the run logs into, if it keeps one. */
+export const runLogFile = () => logFile?.path
