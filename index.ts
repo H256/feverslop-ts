@@ -8,7 +8,7 @@ import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
-import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
+import {type BeatShots, type Character, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
@@ -35,7 +35,7 @@ import {projectInputs, stepUsed} from "./lib/inputs.ts";
 import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
@@ -466,6 +466,30 @@ const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE 
 })
 for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
+////////// THE LAYOUT OF EACH PLACE - one floor plan per place: every beat there is staged in it, not in a room of its own
+const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT EACH PLACE', async () => {
+    const answers = await llmMap(cast.locations, async (location, i) => {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
+        // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
+        // staging, as before - a broken answer for one place does not stop the run
+        let answer: { layout?: unknown, views?: unknown[] } | undefined
+        for (let attempt = 1; attempt <= 2 && !answer; attempt++) {
+            answer = await project.each('locationLayouts', location.id, options, () => askJson<{ layout?: unknown, views?: unknown[] }>(options)).catch((e: unknown) => {
+                log.warn(`${location.id}: the layout is unusable (${e instanceof Error ? e.message : e})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`)
+                return undefined
+            })
+        }
+        return answer && {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
+    })
+    const layouts: Record<string, LocationLayout> = {}
+    cast.locations.forEach((location, i) => {
+        if (answers[i]) layouts[location.id] = answers[i]
+    })
+    return layouts
+})
+for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
+
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
 const beatCount = Math.max(6, Math.round(music.durationSec / 15))
@@ -678,7 +702,7 @@ if (plannedBefore) {
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
     type Beat = (typeof beats)[number]
-    const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}
+    const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}
     const MOMENT_SHOTS_PER_CALL = 4
     // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.
     // A call without a single shot in its answer is asked once more; the beat is then short of those shots (a missing
@@ -809,7 +833,7 @@ const shotViews = shotMoments && locationView === 'auto' ? await project.step('s
         const answer = await askJson<{ views: unknown[] }>({
             input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
 views (number: what it shows):
-${LOCATION_VIEWS.map((v, n) => `${n}: ${v}`).join('\n')}
+${LOCATION_VIEWS.map((v, n) => `${n}: ${v}${locationLayouts[beat.locationId]?.views[n] ? ` - ${locationLayouts[beat.locationId]!.views[n]}` : ''}`).join('\n')}
 
 The place: ${plan.staging ?? beat.summary}
 shots:

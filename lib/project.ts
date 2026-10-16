@@ -17,6 +17,8 @@ export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
 // so the group has one look and no member variants (a group of recognizably different individuals has them)
 export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, isGroup?: boolean, alike?: boolean }
 export type Location = { id: string, name: string }
+/** The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows. */
+export type LocationLayout = { layout: string, views: string[] }
 
 // A story beat has no timing - it is stretched onto the music later
 export type StoryBeat = {
@@ -162,6 +164,8 @@ export type Project = {
     // per place, two or three of its fixed features as one short phrase, written by the LLM from the description - repeated
     // behind the people of every shot, so a shot is not drawn on the grey backdrop of the character pictures
     locationAnchors?: Record<string, string>,
+    // per place: its fixed floor plan, and what each of the five views of its sheet shows of it - every beat there is staged in it
+    locationLayouts?: Record<string, LocationLayout>,
     beats?: StoryBeat[],
     timeline?: Timeline,
     mapping?: Assignment[],
@@ -194,12 +198,13 @@ const dependsOn: Record<StepName, StepName[]> = {
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
     locationAnchors: ['locationDescriptions'],
+    locationLayouts: ['locationLooks', 'locationDescriptions'],
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
     propActivity: ['stems', 'instrumentStems', 'cast'],
     // the planner stages in the place and with the people the pictures show
-    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions'],
+    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
     shotViews: ['shotMoments'],
 }
 

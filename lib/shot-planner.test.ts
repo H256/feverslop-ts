@@ -50,3 +50,13 @@ describe('the planner sees what the pictures show', () => {
         expect(input).toContain('"Runa":"A girl in a red coat."')
     })
 })
+
+describe('the fixed layout of the place', () => {
+    test('a place with a layout gives it to the planner; a place without one gives only its description', () => {
+        const withLayout = planPrompt({...context, locationLayouts: {hall: {layout: 'The door is on the left, the hearth at the back.', views: []}}}, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        expect(withLayout.input).toContain('"layout":"The door is on the left, the hearth at the back."')
+        const without = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        expect(without.input).not.toContain('"layout"')
+        expect(withLayout.instructions).toBe(without.instructions)
+    })
+})
