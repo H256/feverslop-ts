@@ -422,7 +422,7 @@ const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATIO
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const options = locationLookPrompt(lookBrief, storySummary, location.name)
+        const options = locationLookPrompt(lookBrief, storySummary, location.name, [...new Set(cast.characters.flatMap(c => c.prop ? [c.prop] : []))])
         looks[location.id] = await project.each('locationLooks', location.id, options, () => ask(options))
     }
     return looks
