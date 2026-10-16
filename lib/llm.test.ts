@@ -55,11 +55,11 @@ describe('ask', () => {
         await expect(result).rejects.toBeInstanceOf(TruncatedError)
         expect(requests).toHaveLength(2)
     })
-    test('an empty answer is asked again - the third time with a prompt that asks for short thinking', async () => {
-        const answer = await run([{text: ''}, {text: ''}, {text: 'finally'}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))
+    test('an empty answer is asked again - the second time with a prompt that asks for short thinking', async () => {
+        const answer = await run([{text: ''}, {text: 'finally'}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))
         expect(answer).toBe('finally')
-        expect(requests.map(r => r.max_output_tokens)).toEqual([100, 200, 200])
-        expect(requests[2]!.instructions).toContain('Keep your thinking short')
+        expect(requests.map(r => r.max_output_tokens)).toEqual([100, 200])
+        expect(requests[1]!.instructions).toContain('Keep your thinking short')
         expect(requests[0]!.instructions).not.toContain('Keep your thinking short')
     })
     test('a failed response is an error even when text came before it', async () => {
@@ -69,8 +69,8 @@ describe('ask', () => {
     test('a stream without a terminal event is an error', async () => {
         await expect(run([{text: 'half', noEnd: true}], () => ask({instructions: 'i', input: 'x'}))).rejects.toThrow('without a completed')
     })
-    test('four empty answers are an error', async () => {
-        await expect(run([{text: ''}, {text: ''}, {text: ''}, {text: ''}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))).rejects.toBeInstanceOf(EmptyAnswerError)
+    test('three empty answers are an error', async () => {
+        await expect(run([{text: ''}, {text: ''}, {text: ''}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))).rejects.toBeInstanceOf(EmptyAnswerError)
     })
 })
 
