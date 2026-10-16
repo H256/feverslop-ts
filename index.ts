@@ -28,7 +28,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/style
 import {projectExists, validProjectId} from "./lib/project-setup.ts";
 import {propMissing} from "./lib/prop-check.ts";
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
@@ -440,6 +440,18 @@ const locationDescriptions = await project.step('locationDescriptions', '8b · D
     return descriptions
 })
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
+
+////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
+const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
+    const anchors: Record<string, string> = {}
+    for (const [i, location] of cast.locations.entries()) {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
+        anchors[location.id] = (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
+    }
+    return anchors
+})
+for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
 // What the video model draws wrongly when a story or lyric text is taken at its word - shared by the beats and the shot-moments prompts
 const filmableRules = `Keep to what a camera can really see, with ordinary physics:
@@ -882,6 +894,7 @@ const clips = buildClipRequests({
     characterDescriptions,
     characterDescriptionVariants,
     locationDescriptions,
+    locationAnchors,
     lookBrief,
     music,
     language,
