@@ -4,7 +4,7 @@ import {parseArgs} from "node:util";
 import {failRun, log, printBanner, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
-import {ask, askJson, configureLlm} from "./lib/llm.ts";
+import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
@@ -50,7 +50,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
+             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
              [--refresh=pictures,clips] [--strict] [--debug]   (--debug: the stack trace of a failure · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
@@ -67,6 +67,7 @@ const {values: args, positionals} = (() => {
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
+                'llm-parallel': {type: 'string'},
                 comfy: {type: 'string'},
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
@@ -140,6 +141,7 @@ const settings = await loadSettings({
     llmUrl: args['llm-url'],
     llmApiKey: args['llm-key'],
     llmModel: args['llm-model'],
+    llmParallel: args['llm-parallel'],
     comfy: args.comfy,
 })
 configureLlm(settings.llm)
@@ -410,50 +412,48 @@ for (const c of cast.characters) {
 }
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
+// one call per character, independent of each other - as many at once as llm.parallel allows
 const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
-    const descriptions: Record<string, string> = {}
-    for (const [i, char] of cast.characters.entries()) {
+    const descriptions = await llmMap(cast.characters, (char, i) => {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
         const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
-        descriptions[char.id] = await project.each('characterDescriptions', char.id, options, () => ask(options))
-    }
-    return descriptions
+        return project.each('characterDescriptions', char.id, options, () => ask(options))
+    })
+    return Object.fromEntries(cast.characters.map((char, i) => [char.id, descriptions[i]!]))
 })
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 ////////// CRAFTING LOCATION LOOKS
+// unlike the characters, the places are not contrasted with each other - asked at once, up to llm.parallel
 const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
-    const looks: Record<string, string> = {}
-    for (const [i, location] of cast.locations.entries()) {
+    const looks = await llmMap(cast.locations, (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const options = locationLookPrompt(lookBrief, storySummary, location.name, [...new Set(cast.characters.flatMap(c => c.prop ? [c.prop] : []))])
-        looks[location.id] = await project.each('locationLooks', location.id, options, () => ask(options))
-    }
-    return looks
+        return project.each('locationLooks', location.id, options, () => ask(options))
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
 })
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 ////////// DESCRIBING THE LOCATIONS - the look prompt without the establishing shot (camera, "empty", medium)
 const locationDescriptions = await project.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
-    const descriptions: Record<string, string> = {}
-    for (const [i, location] of cast.locations.entries()) {
+    const descriptions = await llmMap(cast.locations, (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
-        descriptions[location.id] = await project.each('locationDescriptions', location.id, options, () => ask(options))
-    }
-    return descriptions
+        return project.each('locationDescriptions', location.id, options, () => ask(options))
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, descriptions[i]!]))
 })
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 ////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
 const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
-    const anchors: Record<string, string> = {}
-    for (const [i, location] of cast.locations.entries()) {
+    const anchors = await llmMap(cast.locations, async (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
-        anchors[location.id] = (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
-    }
-    return anchors
+        return (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, anchors[i]!]))
 })
 for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
@@ -591,10 +591,10 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
         log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
         descriptions[id] = [
             characterDescriptions[id] ?? '',
-            ...await Promise.all(looks.slice(1).map((look, i) => {
+            ...await llmMap(looks.slice(1), (look, i) => {
                 const options = characterDescriptionPrompt(look)
                 return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
-            })),
+            }),
         ]
     }
     return descriptions
@@ -850,15 +850,12 @@ const locationView = config.sequenceSheets ? config.locationView : -1
 const viewsBefore = project.data.shotViews
 if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
 const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
-    const result: Record<string, number[]> = {}
-    for (const beat of beats) {
+    // the beats don't depend on each other here - asked at once, up to llm.parallel
+    const answers = await llmMap(beats, async (beat): Promise<number[] | undefined> => {
         const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
-        if (!plan) continue
+        if (!plan) return undefined
         const kept = viewsBefore?.[beat.id]
-        if (kept?.length === plan.shots.length) {
-            result[beat.id] = kept
-            continue
-        }
+        if (kept?.length === plan.shots.length) return kept
         const answer = await askJson<{ views: unknown[] }>({
             input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
 views (number: what it shows):
@@ -875,14 +872,18 @@ Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length -
             return undefined
         })
         // not stored: the beat is asked again on the next run instead of keeping the first view for good
-        if (!answer) continue
+        if (!answer) return undefined
         const views = plan.shots.map((_, n) => {
             const v = Number(answer?.views?.[n])
             return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
         })
-        result[beat.id] = views
         console.log(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
-    }
+        return views
+    })
+    const result: Record<string, number[]> = {}
+    beats.forEach((beat, i) => {
+        if (answers[i]) result[beat.id] = answers[i]
+    })
     return result
 }) : undefined
 
