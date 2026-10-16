@@ -1,5 +1,5 @@
 import slugify from "slugify";
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {log, printBanner, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
@@ -25,7 +25,8 @@ import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
-import {projectExists, validProjectId} from "./lib/project-setup.ts";
+import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
+import * as clack from "@clack/prompts";
 import {propMissing} from "./lib/prop-check.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
@@ -96,12 +97,12 @@ if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.j
 const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
 const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
-const DEFAULT_PROJECT = 'well-of-youth-gothic-trio-260920' // author's own current project, pass your own project-id otherwise
-const projectId = positionals[0] ?? DEFAULT_PROJECT
+// without an id: the projects to pick from in a terminal, else the list of them in the usage error
+const projectId = positionals[0] ?? await pickProject()
 if (!validProjectId(projectId)) log.usageError(`"${projectId}" is not a project id - lowercase letters, digits and "-" only (it is the folder name in projects/ and part of the ComfyUI client id)`, usage)
 if (!projectExists(projectId)) {
-    const existing = existsSync('projects') ? readdirSync('projects', {withFileTypes: true}).filter(d => d.isDirectory()).map(d => d.name) : []
-    log.usageError(`${positionals[0] ? `No project "${projectId}" in projects/` : `No project id given, and the author's default project "${DEFAULT_PROJECT}" doesn't exist in projects/`} - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
+    const existing = listProjects()
+    log.usageError(`No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
 }
 const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
@@ -1155,6 +1156,17 @@ For every beat that plays while the song has vocals:
 - the singer(s) of that section are on screen: their ids are in "characterIds".
 - they sing while they act, e.g. "Thorin sings while forging the blade", "Vael sings through the blow she takes from the orc" - the mouth stays in view (three-quarter or profile is fine, looking at what the story has them look at), no hidden faces, no masks or objects over the mouth.
 `
+}
+
+// No project id given: the projects, most recently changed first, to pick one with the arrow keys - without a
+// terminal (scripts, CI) nobody can pick, so the usage error lists them instead
+async function pickProject(): Promise<string> {
+    const projects = listProjects()
+    if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
+    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
+    const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
+    if (clack.isCancel(picked)) process.exit(0)
+    return picked
 }
 
 function energyBar(value: number) {
