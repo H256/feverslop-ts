@@ -336,7 +336,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // a shot plan can stage a character the beat's own list forgot: named in the prompt without a picture, the video
         // model invents one - so whoever a shot shows is in the cast, with the picture made for them
         const plannedIds = flatShotMoments?.flatMap(s => s.characters ?? []) ?? []
-        const cast = [...singerIds, ...[...beat.characterIds, ...plannedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
+        // the same goes for the layout of the place and the continuity facts: "Runa and Floki sit at the fire" with no picture
+        // for them drew two more copies of the singer. A character the text names is in the clip, with its picture
+        const stagedText = [staging ?? '', ...state].join(' ')
+        const namedIds = shotIds ? [] : characters.filter(c => new RegExp(`\\b(?:${escapeRegExp(c.name)}|${escapeRegExp(c.id)})\\b`, 'i').test(stagedText)).map(c => c.id)
+        const cast = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
             .filter((id, n, all) => all.indexOf(id) === n)
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
