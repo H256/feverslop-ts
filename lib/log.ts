@@ -147,11 +147,12 @@ export function startSpinner(getStatus: () => string, options: { note?: boolean 
     }
 }
 
-/** 12.3s under a minute, 3m 05s above - for the "how long did it take" suffixes. */
+/** 12.3s under a minute, 3m 05s above, 1h 40m from an hour - for the "how long did it take" suffixes. */
 export function formatDuration(ms: number) {
     const seconds = ms / 1000
     if (seconds < 60) return `${seconds.toFixed(1)}s`
     const whole = Math.round(seconds)
+    if (whole >= 3600) return `${Math.floor(whole / 3600)}h ${String(Math.floor(whole % 3600 / 60)).padStart(2, '0')}m`
     return `${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, '0')}s`
 }
 

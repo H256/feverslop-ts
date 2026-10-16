@@ -1,6 +1,7 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join} from "node:path";
+import {recordTiming} from "./timings.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
 import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
@@ -199,6 +200,7 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed}}
         })
         await Bun.write(`${target}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt, fingerprint: current}, null, 2))
+        this.keepTiming('picture', this.config.imageWorkflow, target, {resolution: this.config.imageResolution})
         log.step('Saved', `${picture.file} ${styles.muted(this.took(target))}`)
     }
 
@@ -286,6 +288,7 @@ export class Renderer implements Disposable {
         await Bun.write(`${target}.json`, JSON.stringify({
             workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
         }, null, 2))
+        this.keepTiming('picture', this.config.sequenceWorkflow, videoTarget, {frames: SEQUENCE_FRAMES})
         log.step('Saved', `${picture.file} ${styles.muted(this.took(videoTarget))}`)
     }
 
@@ -427,6 +430,7 @@ export class Renderer implements Disposable {
             size: `${rendered.width}x${rendered.height}`,
             request: `output/clips/${clip.id}.json`,
         }, null, 2))
+        this.keepTiming('clip', this.config.videoWorkflow, target, {resolution: this.config.videoResolution, frames: rendered.frames})
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used · ${this.took(target)}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)
     }
@@ -478,6 +482,11 @@ export class Renderer implements Disposable {
             this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
             this.release(server)
         }
+    }
+
+    private keepTiming(kind: 'picture' | 'clip', name: string, target: string, extra: { resolution?: string, frames?: number }) {
+        const ms = this.renderMs.get(target)
+        if (ms) recordTiming({kind, name, seconds: Math.round(ms / 100) / 10, ...extra})
     }
 
     /** How long the job(s) for `target` took, queueing for a free server not counted - '' when none ran in this run. */

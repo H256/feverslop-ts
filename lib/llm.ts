@@ -1,5 +1,6 @@
 import {OpenAI} from "openai/client";
 import type {ResponseCreateParamsStreaming} from "openai/resources/responses/responses";
+import {recordTiming} from "./timings.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
 
 export type LlmSettings = { url?: string, apiKey?: string, model?: string }
@@ -125,6 +126,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     }
     if (!finished) throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
     const took = Date.now() - started
+    recordTiming({kind: 'llm', name: prompt.model ?? '', seconds: took / 1000, ...(outputTokens && took > 0 ? {tokensPerSecond: Math.round(outputTokens / (took / 1000) * 10) / 10} : {})})
     log.step('Done', styles.muted(`${countWords(thinking)} words thinking (${reasoning}), ${countWords(answer)} words answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''} · ${suffix(formatDuration(took), formatRate(outputTokens, took))}`))
     // llama.cpp reports a cut-off answer as "completed" - all tokens used up means cut off, too
     const limit = prompt.max_output_tokens

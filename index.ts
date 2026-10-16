@@ -2,6 +2,7 @@ import slugify from "slugify";
 import {existsSync, readdirSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {log, printBanner, styles} from "./lib/log.ts";
+import {describeEstimate, estimateRemaining, keepTimingsIn, readTimings} from "./lib/timings.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
@@ -106,6 +107,7 @@ const maxClipSec = MAX_CLIP_SEC
 // before the load: a run that writes works from the state it read, so no other run may save in between
 if (!args.gallery) lockProject(project.dir, `project ${project.id}`)
 await project.load()
+keepTimingsIn(project.dir)
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
@@ -966,6 +968,8 @@ if (render.has('images') || render.has('videos')) {
     // everything at once - the renderer runs one job per server and queues the rest
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
+        const todoPictures = pictures.filter(p => !existsSync(join(project.dir, p.file)))
+        log.step('Estimate', styles.muted(describeEstimate('picture', todoPictures.length, estimateRemaining(readTimings(project.dir), 'picture', config.sequenceSheets ? config.sequenceWorkflow : config.imageWorkflow, todoPictures.length, settings.comfy.length))))
         await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
     }
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
@@ -990,6 +994,8 @@ if (render.has('images') || render.has('videos')) {
             }
             if (later.size) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
         }
+        const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, 'videos', `${c.id}.mp4`)))
+        log.step('Estimate', styles.muted(describeEstimate('clip', todoClips.length, estimateRemaining(readTimings(project.dir), 'clip', config.videoWorkflow, todoClips.length, settings.comfy.length))))
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
         await renderAll(clipChains(selected), async chain => {

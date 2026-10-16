@@ -9,6 +9,7 @@ describe('formatDuration', () => {
     test('minutes and padded seconds above', () => {
         expect(formatDuration(185_000)).toBe('3m 05s')
         expect(formatDuration(60_000)).toBe('1m 00s')
+        expect(formatDuration(6_000_000)).toBe('1h 40m')
     })
 })
 
