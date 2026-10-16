@@ -1,7 +1,7 @@
 import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {log, printBanner, styles} from "./lib/log.ts";
+import {failRun, log, printBanner, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
@@ -29,14 +29,14 @@ import {listProjects, projectExists, validProjectId} from "./lib/project-setup.t
 import * as clack from "@clack/prompts";
 import {propMissing} from "./lib/prop-check.ts";
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
-process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+process.on('unhandledRejection', failRun)
+process.on('uncaughtException', failRun)
 
 printBanner()
 
@@ -50,7 +50,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict]   (--refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--strict] [--debug]   (--debug: the stack trace of a failure · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -72,6 +72,8 @@ const {values: args, positionals} = (() => {
                 'debug-audio': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
                 strict: {type: 'boolean', default: false},
+                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
+                debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
@@ -423,7 +425,7 @@ const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATIO
     const looks: Record<string, string> = {}
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const options = locationLookPrompt(lookBrief, storySummary, location.name)
+        const options = locationLookPrompt(lookBrief, storySummary, location.name, [...new Set(cast.characters.flatMap(c => c.prop ? [c.prop] : []))])
         looks[location.id] = await project.each('locationLooks', location.id, options, () => ask(options))
     }
     return looks
@@ -441,6 +443,18 @@ const locationDescriptions = await project.step('locationDescriptions', '8b · D
     return descriptions
 })
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
+
+////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
+const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
+    const anchors: Record<string, string> = {}
+    for (const [i, location] of cast.locations.entries()) {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
+        anchors[location.id] = (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
+    }
+    return anchors
+})
+for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
 // What the video model draws wrongly when a story or lyric text is taken at its word - shared by the beats and the shot-moments prompts
 const filmableRules = `Keep to what a camera can really see, with ordinary physics:
@@ -883,6 +897,7 @@ const clips = buildClipRequests({
     characterDescriptions,
     characterDescriptionVariants,
     locationDescriptions,
+    locationAnchors,
     lookBrief,
     music,
     language,
