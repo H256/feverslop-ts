@@ -146,3 +146,24 @@ export function startSpinner(getStatus: () => string, options: { note?: boolean 
         }
     }
 }
+
+/** 12.3s under a minute, 3m 05s above, 1h 40m from an hour - for the "how long did it take" suffixes. */
+export function formatDuration(ms: number) {
+    const seconds = ms / 1000
+    if (seconds < 60) return `${seconds.toFixed(1)}s`
+    const whole = Math.round(seconds)
+    if (whole >= 3600) return `${Math.floor(whole / 3600)}h ${String(Math.floor(whole % 3600 / 60)).padStart(2, '0')}m`
+    return `${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, '0')}s`
+}
+
+/** "41 t/s" - '' when the count or the time is unknown, so the suffix can be left out silently. */
+export function formatRate(tokens: number | undefined, ms: number) {
+    if (!tokens || ms <= 0) return ''
+    const rate = tokens / (ms / 1000)
+    return `${rate < 10 ? rate.toFixed(1) : Math.round(rate)} t/s`
+}
+
+export const countWords = (text: string) => text.split(/\s+/).filter(Boolean).length
+
+/** Joins the non-empty parts as one short muted suffix: `12.3s · 41 t/s`. */
+export const suffix = (...parts: (string | undefined | false)[]) => parts.filter(Boolean).join(' · ')

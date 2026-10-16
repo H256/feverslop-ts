@@ -1,6 +1,7 @@
 import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "./log.ts";
+import {withStep} from "./timings.ts";
 import {dropPartials, keepEach, type Partials} from "./partials.ts";
 
 // prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
@@ -268,7 +269,7 @@ export class ProjectStore {
             log.step('Cached', styles.muted(`from ${this.file} - use --redo=${name} to regenerate`))
             return cached as NonNullable<Project[K]>
         }
-        const result = await run()
+        const result = await withStep(name, run)
         this.data[name] = result
         dropPartials(this.data, name)
         await this.save()
@@ -277,6 +278,6 @@ export class ProjectStore {
 
     /** One element of a step that asks per element: its answer is kept at once and not asked again for the same input (lib/partials.ts). */
     each<T>(name: StepName, key: string, input: unknown, run: () => Promise<T>): Promise<T> {
-        return keepEach(this.data, () => this.save(), name, key, input, run)
+        return keepEach(this.data, () => this.save(), name, key, input, () => withStep(name, run))
     }
 }

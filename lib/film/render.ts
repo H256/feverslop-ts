@@ -63,7 +63,7 @@ export class FilmRenderer extends Renderer {
         if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')} - run --render=images`)
 
-        const {seed} = await this.render({label: `clip ${clip.id}`, spec}, target, '.mp4', async () => {
+        const {seed} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             const seed = resolveSeed(this.config.seed)
             const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames }

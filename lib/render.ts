@@ -1,7 +1,9 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join} from "node:path";
-import {log, startSpinner, styles} from "./log.ts";
+import {recordTiming, type Timing} from "./timings.ts";
+import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
+import {formatDuration, log, startSpinner, styles} from "./log.ts";
 import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
@@ -29,6 +31,14 @@ async function loadWorkflow<T extends { default: unknown }>(name: string): Promi
     return module
 }
 
+const workflowHashes = new Map<string, string>()
+
+/** A hash of the workflow file - a workflow that was edited is another one for the statistics until it has run once. */
+export async function workflowHash(name: string) {
+    if (!workflowHashes.has(name)) workflowHashes.set(name, Bun.hash(await Bun.file(join(workflowDir, `${name}.ts`)).text()).toString(16))
+    return workflowHashes.get(name)!
+}
+
 // description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
@@ -39,6 +49,12 @@ export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: P
 export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[] }
 
 type Server = ComfyServer & { api: ComfyApi }
+
+/** What a render is, for the log and the statistics: the kind of result and the workflow (config name) that makes it. */
+type RenderWhat = { label: string, spec: RenderSpec, kind: Timing['kind'], workflow: string, resolution?: Timing['resolution'] }
+
+// the nodes ComfyUI reported while a job ran, in order - for the phase times
+type Trace = { classType: string, at: number }[]
 
 /**
  * Whether a recorded job is picked up again on the next run. A failed job stays in ComfyUI's history, so resuming it
@@ -54,10 +70,19 @@ export function resumesJob(state: 'queued' | 'running' | 'finished' | 'failed' |
  * a resumed job waits for the server it was queued on.
  */
 export class Renderer implements Disposable {
+    /** The frames the video workflow really renders for a clip of `frames` (some models only take certain counts). */
+    async plannedFrames(frames: number) {
+        const {renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
+        return renderFrames?.(frames) ?? frames
+    }
+
     // everything of a project goes into its own subfolder of ComfyUI's input/output
     readonly remoteDir: string
     private ready?: Promise<Server[]>
     private connected: Server[] = []
+    private machines = new Map<string, ReturnType<typeof describeMachine>>()   // server name -> GPU and versions
+    private lastModels = new Map<string, string>()   // server name -> the models its last job used (another set means a cold start)
+    private renderMs = new Map<string, number>()   // target -> time spent on its ComfyUI job(s)
     private busy = new Set<string>()        // server names
     private waiting: { pin?: string, resolve: (server: Server) => void }[] = []
     private stopQueueNote?: () => void
@@ -78,7 +103,7 @@ export class Renderer implements Disposable {
     private connect() {
         this.ready ??= (async () => {
             // the SDK would wait forever for a server that isn't there - so every server is asked first
-            const problems = await Promise.all(this.servers.map(server => probeComfy(server).then(() => undefined, (e: Error) => e.message)))
+            const problems = await Promise.all(this.servers.map(server => probeComfy(server).then(stats => void this.machines.set(server.name, describeMachine(stats)), (e: Error) => e.message)))
             const reachable = this.servers.filter((server, i) => {
                 if (problems[i]) log.warn(`ComfyUI ${server.name} (${server.url}) is unreachable - ${problems[i]}`)
                 return !problems[i]
@@ -185,7 +210,7 @@ export class Renderer implements Disposable {
         const current = specId(spec)
         if (existsSync(target) && !this.staleFile('pictures', picture.file, current, [picture.file, `${picture.file}.json`])) return log.step('Exists', styles.muted(picture.file))
 
-        const {seed} = await this.render({label: `${picture.kind} ${picture.id}`, spec}, target, '.png', async () => {
+        const {seed} = await this.render({label: `${picture.kind} ${picture.id}`, spec, kind: 'picture', workflow: this.config.imageWorkflow, resolution: this.config.imageResolution}, target, '.png', async () => {
             const seed = picture.seed ?? resolveSeed(this.config.seed)
             const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
             const result = imageWorkflow({
@@ -198,7 +223,7 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed}}
         })
         await Bun.write(`${target}.json`, JSON.stringify({workflow: this.config.imageWorkflow, seed, resolution: this.config.imageResolution, prompt: picture.prompt, fingerprint: current}, null, 2))
-        log.step('Saved', picture.file)
+        log.step('Saved', `${picture.file} ${styles.muted(this.took(target))}`)
     }
 
     /**
@@ -234,7 +259,7 @@ export class Renderer implements Disposable {
         mkdirSync(join(this.projectDir, dir), {recursive: true})
 
         if (!existsSync(anchorTarget)) {
-            const {seed} = await this.render({label: `${picture.kind} ${picture.id} anchor`, spec: anchor}, anchorTarget, '.png', async () => {
+            const {seed} = await this.render({label: `${picture.kind} ${picture.id} anchor`, spec: anchor, kind: 'picture', workflow: this.config.imageWorkflow, resolution: this.config.imageResolution}, anchorTarget, '.png', async () => {
                 const seed = picture.seed ?? resolveSeed(this.config.seed)
                 const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
                 const result = imageWorkflow({
@@ -250,7 +275,7 @@ export class Renderer implements Disposable {
         }
 
         if (!existsSync(videoTarget)) {
-            const {seed} = await this.render({label: `${picture.kind} ${picture.id} sequence`, spec: sequence}, videoTarget, '.mp4', async () => {
+            const {seed} = await this.render({label: `${picture.kind} ${picture.id} sequence`, spec: sequence, kind: 'picture', workflow: this.config.sequenceWorkflow}, videoTarget, '.mp4', async () => {
                 const seed = resolveSeed(this.config.seed)
                 const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
                 const result = sequenceWorkflow({
@@ -285,7 +310,7 @@ export class Renderer implements Disposable {
         await Bun.write(`${target}.json`, JSON.stringify({
             workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
         }, null, 2))
-        log.step('Saved', picture.file)
+        log.step('Saved', `${picture.file} ${styles.muted(this.took(videoTarget))}`)
     }
 
     // Generates input/song.wav with the configured songWorkflow (YuE2 by default). The workflow only saves mp3/flac
@@ -297,7 +322,7 @@ export class Renderer implements Disposable {
         // deleted after the conversion. ffmpeg detects mp3 or flac from the content, the extension is irrelevant.
         const downloaded = songFile.replace(/\.wav$/, '.generated.audio')
 
-        const {seed, duration} = await this.render({label: 'song', spec: songSpec(brief, this.config)}, downloaded, ['.mp3', '.flac'], async () => {
+        const {seed, duration} = await this.render({label: 'song', spec: songSpec(brief, this.config), kind: 'song', workflow: this.config.songWorkflow}, downloaded, ['.mp3', '.flac'], async () => {
             const seed = resolveSeed(this.config.seed)
             const duration = this.config.songDuration === -1 ? DEFAULT_SONG_DURATION : this.config.songDuration
             const {default: audioWorkflow} = await loadWorkflow<{ default: AudioWorkflow }>(this.config.songWorkflow)
@@ -389,7 +414,7 @@ export class Renderer implements Disposable {
             })
             return {result, uploads, meta: {seed}}
         }
-        let {seed} = await this.render({label: `clip ${clip.id}`, spec}, target, '.mp4', prepare)
+        let {seed} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)
 
         // a clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one
         // that did is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times
@@ -408,8 +433,9 @@ export class Renderer implements Disposable {
             }
             mkdirSync(dirname(put), {recursive: true})
             renameSync(target, put)
+            recordTiming({kind: 'clip', name: this.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'leak'})
             log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
-            seed = (await this.render({label: `clip ${clip.id}`, spec}, target, '.mp4', prepare)).seed
+            seed = (await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)).seed
         }
 
         const rendered = await probeVideo(target)
@@ -426,7 +452,7 @@ export class Renderer implements Disposable {
             size: `${rendered.width}x${rendered.height}`,
             request: `output/clips/${clip.id}.json`,
         }, null, 2))
-        log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used`)}`)
+        log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used · ${this.took(target)}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)
     }
 
@@ -452,14 +478,14 @@ export class Renderer implements Disposable {
      * ComfyUI is still rendering (Ctrl+C, crash, sleep), the next run attaches to that job - or downloads its result
      * if it finished in the meantime - instead of rendering again. Returns the meta of the job that made the file.
      */
-    protected async render<M>(what: string | { label: string, spec: RenderSpec }, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
-        const label = typeof what === 'string' ? what : what.label
+    protected async render<M>(what: RenderWhat, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
+        const label = what.label
         // a fingerprint of what the job is made from: a job queued for another request is not the one to take the result of
-        const request = typeof what === 'string' ? undefined : specId(what.spec)
+        const request = specId(what.spec)
         const servers = await this.connect()
         const pendingFile = `${target}.pending.json`
         let initial = await readPending<M>(pendingFile)
-        if (initial && request !== undefined && initial.request !== undefined && initial.request !== request) {
+        if (initial && initial.request !== undefined && initial.request !== request) {
             const kept = `${target}.pending-${initial.promptId}.json`
             renameSync(pendingFile, kept)
             log.warn(`${label}: the job queued at ${formatClock(initial.queuedAt)} was made from another request than the plan has now - not used (${basename(kept)} keeps it), rendering again`)
@@ -468,13 +494,49 @@ export class Renderer implements Disposable {
         const home = initial ? this.homeOf(label, initial, servers) : undefined
 
         const server = await this.acquire(home?.name)
+        const started = Date.now()
+        const trace: Trace = []
+        let pending: PendingJob<M> | undefined
+        let failure: Error | undefined
         try {
-            const pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
-            await this.downloadResult(label, target, extension, server, pending)
+            pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
+            await this.downloadResult(label, target, extension, server, pending, trace)
             return pending.meta
+        } catch (e) {
+            failure = e instanceof Error ? e : new Error(String(e))
+            throw e
         } finally {
             this.release(server)
+            this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
+            await this.keepRender(what, server, pending, trace, started, failure)
         }
+    }
+
+    /** Keeps the measurement of one job: the setup the graph says, where it ran, queue vs. compute, the phases. Numbers and names only. */
+    private async keepRender(what: RenderWhat, server: Server, job: PendingJob<unknown> | undefined, trace: Trace, started: number, failure?: Error) {
+        // a resumed job was queued before this run: its queue time and phases are not known
+        const fresh = !!job && job.queuedAt >= started
+        const firstNode = trace[0]?.at
+        const queueMs = fresh && firstNode ? Math.max(0, firstNode - job.queuedAt) : undefined
+        const seconds = (Date.now() - started - (queueMs ?? 0)) / 1000
+        const setup = job?.setup
+        recordTiming({
+            kind: what.kind, name: what.workflow, seconds: Math.round(seconds * 10) / 10,
+            ...(failure ? {outcome: 'failed' as const, reason: failure.name} : {}),
+            ...(job?.variant ? {variant: job.variant, workflowHash: await workflowHash(what.workflow)} : {}),
+            ...(setup ? {setup, ...(setup.frames ? {frames: setup.frames} : {}), ...(setup.pixels ? {pixels: setup.pixels} : {})} : {}),
+            server: server.name, ...this.machines.get(server.name),
+            ...(job?.cold !== undefined ? {cold: job.cold} : {}),
+            ...(queueMs !== undefined ? {queueSeconds: Math.round(queueMs / 100) / 10} : {}),
+            ...(fresh && !failure && trace.length ? {phases: accumulatePhases(trace, Date.now())} : {}),
+            ...(what.resolution !== undefined ? {resolution: what.resolution} : {}),
+        })
+    }
+
+    /** How long the job(s) for `target` took, queueing for a free server not counted - '' when none ran in this run. */
+    private took(target: string) {
+        const ms = this.renderMs.get(target)
+        return ms ? formatDuration(ms) : ''
     }
 
     // a queued job only exists on its own server - files from before several servers: the first one. undefined
@@ -519,7 +581,12 @@ export class Renderer implements Disposable {
             throw new Error(`${label}: ComfyUI ${server.name} rejected the workflow - ${details}`)
         })
         const nodes = Object.fromEntries(Object.entries(prompt).map(([id, node]) => [id, node.class_type]))
-        const queuedJob: PendingJob<M> = {promptId: queued.prompt_id, server: {name: server.name, url: server.url}, output, nodes, meta, queuedAt: Date.now(), ...(request !== undefined ? {request} : {})}
+        const {variant, setup} = describeGraph(prompt as unknown as Graph)
+        // the first job on a server after another set of models has to load them: it is kept apart in the statistics
+        const models = JSON.stringify([setup.models, setup.loras])
+        const cold = this.lastModels.get(server.name) !== models
+        this.lastModels.set(server.name, models)
+        const queuedJob: PendingJob<M> = {promptId: queued.prompt_id, server: {name: server.name, url: server.url}, output, nodes, meta, queuedAt: Date.now(), variant, setup, cold, ...(request !== undefined ? {request} : {})}
         // written beside and renamed, so a stop in the middle of the write never leaves half a file behind
         await Bun.write(`${pendingFile}.partial`, JSON.stringify(queuedJob, null, 2))
         renameSync(`${pendingFile}.partial`, pendingFile)
@@ -527,8 +594,8 @@ export class Renderer implements Disposable {
     }
 
     /** Waits for `pending`'s job to finish, then downloads its result to `target` and clears the pending file. */
-    private async downloadResult<M>(label: string, target: string, extension: string | string[], server: Server, pending: PendingJob<M>) {
-        const outputs = await this.waitForJob(label, server, pending)
+    private async downloadResult<M>(label: string, target: string, extension: string | string[], server: Server, pending: PendingJob<M>, trace: Trace) {
+        const outputs = await this.waitForJob(label, server, pending, trace)
 
         // the output node's files, e.g. {images: [...]} for SaveImage, {gifs: [...]} for VHS_VideoCombine
         const files = Object.values(outputs ?? {}).flat().filter((f): f is ImageInfo => typeof (f as ImageInfo)?.filename === 'string')
@@ -556,13 +623,16 @@ export class Renderer implements Disposable {
      * the WebSocket - a connection that drops during an hour-long render changes nothing. The WebSocket only feeds
      * the progress shown on the status board.
      */
-    private async waitForJob(label: string, server: Server, job: PendingJob<unknown>) {
+    private async waitForJob(label: string, server: Server, job: PendingJob<unknown>, trace: Trace) {
         const {api} = server
         let status = 'queued'
         const node = (id: string) => `${job.nodes[id] ?? 'node'} #${id}`
         const off = [
             api.on('executing', event => {
-                if (event.detail.prompt_id === job.promptId && event.detail.node) status = `running ${node(String(event.detail.node))}`
+                if (event.detail.prompt_id === job.promptId && event.detail.node) {
+                    status = `running ${node(String(event.detail.node))}`
+                    trace.push({classType: job.nodes[String(event.detail.node)] ?? 'node', at: Date.now()})
+                }
             }),
             api.on('progress', event => {
                 if (event.detail.prompt_id === job.promptId) status = `running ${node(String(event.detail.node))}, step ${event.detail.value}/${event.detail.max}`
@@ -629,6 +699,9 @@ type PendingJob<M> = {
     nodes: Record<string, string>,            // node id -> class_type, for the progress display
     meta: M,
     queuedAt: number,
+    variant?: string,                         // the id of the graph's knobs and what the graph says (lib/graph.ts) - for the statistics
+    setup?: GraphSetup,
+    cold?: boolean,                           // the first job on that server with these models
 }
 
 const formatClock = (time: number) => new Date(time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
