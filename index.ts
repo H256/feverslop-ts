@@ -1,7 +1,7 @@
 import slugify from "slugify";
 import {existsSync, readdirSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {log, printBanner, styles} from "./lib/log.ts";
+import {keepLogIn, log, printBanner, runLogFile, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
@@ -109,6 +109,8 @@ const maxClipSec = MAX_CLIP_SEC
 if (!args.gallery) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 keepTimingsIn(project.dir)
+// everything this run prints, also into the project (the terminal may show less of it)
+if (!args.gallery) keepLogIn(join(project.dir, 'logs', `${versionStamp()}.log`))
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
@@ -1045,6 +1047,7 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
+log.step('Log', runLogFile() ?? '')
 
 /**
  * The singers from config.json: names or ids matched loosely against the cast, or ["auto"] - the LLM picks the lead

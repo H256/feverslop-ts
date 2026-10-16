@@ -1,4 +1,6 @@
-import {stripVTControlCharacters, styleText} from "node:util";
+import {closeSync, mkdirSync, openSync, writeSync} from "node:fs";
+import {dirname} from "node:path";
+import {format, stripVTControlCharacters, styleText} from "node:util";
 
 type Format = Parameters<typeof styleText>[0]
 export const style = (format: Format) => (text: string) => styleText(format, text)
@@ -13,7 +15,8 @@ export const styles = {
     border: style('magenta'),
 }
 
-const boxWidth = Math.min(process.stdout.columns ?? 100, 120) - 4
+// a terminal that reports 0 columns (some ptys, CI) gets the width of one without a size
+const boxWidth = Math.min(process.stdout.columns || 100, 120) - 4
 
 function wrap(text: string, width: number) {
     return text.split('\n').flatMap(paragraph => {
@@ -83,6 +86,7 @@ export const log = {
 
 function errorBox(heading: string, sections: { text: string, style: (s: string) => string }[]): never {
     clearBoard()
+    if (logFile) sections = [...sections, {text: `The whole run: ${logFile.path}`, style: styles.muted}]
     const border = style('red')
     const title = style(['bold', 'white', 'bgRed'])
     console.error(`\n${border('╭─')}${title(heading)}${border(`${'─'.repeat(Math.max(0, boxWidth - heading.length))}╮`)}`)
@@ -119,7 +123,7 @@ function drawBoard() {
     ]
     let line = `${styles.label(frames[frame++ % frames.length]!)} ${parts.join(styles.muted(' · '))}`
     // a line that wraps can't be cleared with \r any more - cut it to the terminal width
-    const width = (process.stdout.columns ?? 100) - 1
+    const width = (process.stdout.columns || 100) - 1
     if (Bun.stringWidth(line) > width) line = stripVTControlCharacters(line).slice(0, width - 1) + '…'
     process.stdout.write(`\r\x1b[2K${line}`)
     drawn = true
@@ -167,3 +171,45 @@ export const countWords = (text: string) => text.split(/\s+/).filter(Boolean).le
 
 /** Joins the non-empty parts as one short muted suffix: `12.3s · 41 t/s`. */
 export const suffix = (...parts: (string | undefined | false)[]) => parts.filter(Boolean).join(' · ')
+
+/**
+ * The log of a run: everything it prints - console.log/error/warn and direct writes (the prompts of --review) - also goes
+ * into this file, without colour codes and without the redraws of the status line. Opened once per run.
+ */
+let logFile: { path: string, fd: number } | undefined
+
+export function keepLogIn(path: string) {
+    mkdirSync(dirname(path), {recursive: true})
+    logFile = {path, fd: openSync(path, 'a')}
+    const toFile = (text: string) => {
+        if (!logFile) return
+        // the status line is drawn as "\r" + the line, and cleared with "\r" - neither is part of the log
+        if (text.startsWith('\r') && !text.includes('\n')) return
+        try {
+            writeSync(logFile.fd, stripVTControlCharacters(text).replace(/\r/g, ''))
+        } catch {
+            // a log that cannot be written is no reason to stop a run
+        }
+    }
+    for (const method of ['log', 'error', 'warn', 'info'] as const) {
+        const original = console[method].bind(console)
+        console[method] = (...args: unknown[]) => {
+            original(...args)
+            toFile(`${format(...args)}\n`)
+        }
+    }
+    for (const stream of [process.stdout, process.stderr]) {
+        const original = stream.write.bind(stream) as (chunk: unknown, ...rest: unknown[]) => boolean
+        stream.write = ((chunk: unknown, ...rest: unknown[]) => {
+            if (typeof chunk === 'string' || chunk instanceof Uint8Array) toFile(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+            return original(chunk, ...rest)
+        }) as typeof stream.write
+    }
+    process.on('exit', () => {
+        if (logFile) closeSync(logFile.fd)
+    })
+    return path
+}
+
+/** The file the run logs into, if it keeps one. */
+export const runLogFile = () => logFile?.path
