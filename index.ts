@@ -1081,7 +1081,8 @@ ${storySummary}`,
         if (unmatched.length) {
             const mapped = await askJson<{ singers: { name: string, id: string | null }[] }>({
                 input: `config.json names these singers of a music video, but not all of them are spelled like the characters of the cast (another language, a nickname, an epithet). For every name say which character of the cast it means - or null if none does.
-Answer only with JSON: {"singers": [{"name": "<name as given>", "id": "<character id or null>"}]}
+Mind the grammatical gender of the name (German "Schamanin" is the woman, "Schamane" the man) and take the character of that gender, even if another character has the more similar spelling.
+${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": [{"name": "<name as given>", "id": "<character id or null>"}]}
 ---
 names: ${JSON.stringify(unmatched)}
 cast: ${castList}
