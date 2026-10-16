@@ -2,18 +2,19 @@ import slugify from "slugify";
 import {existsSync, readdirSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {log, printBanner, styles} from "./lib/log.ts";
-import {describeEstimate, estimateRemaining, keepTimingsIn, readTimings} from "./lib/timings.ts";
+import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
+import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
-import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
+import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Location, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
-import {clipFingerprint, type PictureJob, Renderer} from "./lib/render.ts";
+import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
@@ -969,7 +970,13 @@ if (render.has('images') || render.has('videos')) {
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
         const todoPictures = pictures.filter(p => !existsSync(join(project.dir, p.file)))
-        log.step('Estimate', styles.muted(describeEstimate('picture', todoPictures.length, estimateRemaining(readTimings(project.dir), 'picture', config.sequenceSheets ? config.sequenceWorkflow : config.imageWorkflow, todoPictures.length, settings.comfy.length))))
+        const pictureWorkflow = config.sequenceSheets ? config.sequenceWorkflow : config.imageWorkflow
+        const pictureHash = await workflowHash(pictureWorkflow)
+        const pictureJobs: RenderJob[] = todoPictures.map(() => ({
+            kind: 'picture', name: pictureWorkflow, workflowHash: pictureHash,
+            ...(config.sequenceSheets ? {frames: SEQUENCE_FRAMES} : {pixels: resolutionPixels(config.imageResolution)}),
+        }))
+        log.step('Estimate', styles.muted(describePrediction(config.sequenceSheets ? 'sheet video' : 'picture', predictJobs(readTimings(), pictureJobs, settings.comfy.map(server => server.name)))))
         await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
     }
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
@@ -986,6 +993,7 @@ if (render.has('images') || render.has('videos')) {
             for (const clip of selected) {
                 const keep = archiveFiles(project.dir, `${clip.id}-${stamp}`, [join('videos', `${clip.id}.mp4`), join('videos', `${clip.id}.mp4.json`), boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
                 log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
+                recordTiming({kind: 'clip', name: config.videoWorkflow, seconds: 0, outcome: 'again', reason: 'again'})
             }
             // a clip that goes on from the last frame of one of these starts on a picture that is gone
             const later = new Set<string>()
@@ -995,7 +1003,11 @@ if (render.has('images') || render.has('videos')) {
             if (later.size) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
         }
         const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, 'videos', `${c.id}.mp4`)))
-        log.step('Estimate', styles.muted(describeEstimate('clip', todoClips.length, estimateRemaining(readTimings(project.dir), 'clip', config.videoWorkflow, todoClips.length, settings.comfy.length))))
+        const clipHash = await workflowHash(config.videoWorkflow)
+        const clipJobs: RenderJob[] = await Promise.all(todoClips.map(async c => ({
+            kind: 'clip' as const, name: config.videoWorkflow, workflowHash: clipHash, frames: await renderer.plannedFrames(c.frames), pixels: resolutionPixels(config.videoResolution),
+        })))
+        log.step('Estimate', styles.muted(describePrediction('clip', predictJobs(readTimings(), clipJobs, settings.comfy.map(server => server.name)))))
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
         await renderAll(clipChains(selected), async chain => {

@@ -1,6 +1,7 @@
 import {OpenAI} from "openai/client";
 import type {ResponseCreateParamsStreaming} from "openai/resources/responses/responses";
-import {recordTiming} from "./timings.ts";
+import {currentStep, readTimings, recordTiming} from "./timings.ts";
+import {predictLlmSeconds} from "./predict.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
 
 export type LlmSettings = { url?: string, apiKey?: string, model?: string }
@@ -83,17 +84,18 @@ function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningS
 export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low') {
     let thinking = ''
     let answer = ''
-    let outputTokens: number | undefined
-    const started = Date.now()
+    let usage: ResponseUsage | undefined
     let incomplete: string | undefined
     // a stream that ends without a terminal event was cut off by the connection or the server - what came before is not an answer
     let finished = false
     prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId()}, reasoning)
+    const started = Date.now()
+    const expected = predictLlmSeconds(readTimings(), prompt.model ?? '', currentStep())
 
     const stopSpinner = startSpinner(() => {
         if (answer) return `${styles.answer('writing')} ${styles.muted(`${countWords(answer)} words`)}`
         if (thinking) return `${styles.thinking('thinking')} ${styles.muted(`${countWords(thinking)} words`)}`
-        return styles.muted('waiting for model')
+        return styles.muted(`waiting for model${expected ? ` (usually ~${formatDuration(expected * 1000)})` : ''}`)
     })
     try {
         const stream = await getClient().responses.create(prompt)
@@ -108,11 +110,11 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
                     break
                 case 'response.completed':
                     finished = true
-                    outputTokens = event.response.usage?.output_tokens
+                    usage = event.response.usage
                     break
                 case 'response.incomplete':
                     finished = true
-                    outputTokens = event.response.usage?.output_tokens
+                    usage = event.response.usage
                     incomplete = event.response.incomplete_details?.reason ?? 'unknown reason'
                     break
                 case 'response.failed':
@@ -121,18 +123,46 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
                     throw new Error(event.message)
             }
         }
+    } catch (e) {
+        keepCall(prompt, started, usage, thinking, 'failed', e instanceof Error ? e.name : 'error')
+        throw e
     } finally {
         stopSpinner()
     }
-    if (!finished) throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
     const took = Date.now() - started
-    recordTiming({kind: 'llm', name: prompt.model ?? '', seconds: took / 1000, ...(outputTokens && took > 0 ? {tokensPerSecond: Math.round(outputTokens / (took / 1000) * 10) / 10} : {})})
+    const outputTokens = usage?.output_tokens
+    if (!finished) {
+        keepCall(prompt, started, usage, thinking, 'failed', 'no-end')
+        throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
+    }
     log.step('Done', styles.muted(`${countWords(thinking)} words thinking (${reasoning}), ${countWords(answer)} words answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''} · ${suffix(formatDuration(took), formatRate(outputTokens, took))}`))
     // llama.cpp reports a cut-off answer as "completed" - all tokens used up means cut off, too
     const limit = prompt.max_output_tokens
-    if (incomplete === 'max_output_tokens' || (limit && outputTokens !== undefined && outputTokens >= limit)) throw new TruncatedError(limit ?? 0)
+    const truncated = incomplete === 'max_output_tokens' || (!!limit && outputTokens !== undefined && outputTokens >= limit)
+    // a cut-off or empty answer is asked for again (ask) - the call is kept as a retry, its tokens were spent all the same
+    keepCall(prompt, started, usage, thinking, truncated ? 'retry' : answer.trim() ? undefined : 'retry', truncated ? 'truncated' : answer.trim() ? undefined : 'empty')
+    if (truncated) throw new TruncatedError(limit ?? 0)
     if (incomplete) log.warn(`the answer is incomplete: ${incomplete}`)
     return {thinking, answer}
+}
+
+type ResponseUsage = { input_tokens?: number, output_tokens?: number, input_tokens_details?: { cached_tokens?: number }, output_tokens_details?: { reasoning_tokens?: number } }
+
+/** Keeps one call in the central timings: durations and the token numbers the endpoint reported - nothing is estimated, and no text. */
+function keepCall(prompt: ResponseCreateParamsStreaming, started: number, usage: ResponseUsage | undefined, thinking: string, outcome?: 'retry' | 'failed', reason?: string) {
+    const ms = Date.now() - started
+    const tokensPerSecond = usage?.output_tokens && ms > 0 ? Math.round(usage.output_tokens / (ms / 1000) * 10) / 10 : undefined
+    const endpoint = settings.url ? new URL(settings.url).host : undefined
+    recordTiming({
+        kind: 'llm', name: prompt.model ?? '', seconds: Math.round(ms / 100) / 10, ...(currentStep() ? {step: currentStep()} : {}),
+        ...(outcome ? {outcome, reason} : {}), ...(endpoint ? {endpoint} : {}),
+        ...(usage?.input_tokens !== undefined ? {promptTokens: usage.input_tokens} : {}),
+        ...(usage?.output_tokens !== undefined ? {completionTokens: usage.output_tokens} : {}),
+        ...(usage?.output_tokens_details?.reasoning_tokens !== undefined ? {reasoningTokens: usage.output_tokens_details.reasoning_tokens} : {}),
+        ...(usage?.input_tokens_details?.cached_tokens !== undefined ? {cachedTokens: usage.input_tokens_details.cached_tokens} : {}),
+        ...(thinking ? {thinkingWords: countWords(thinking)} : {}),
+        ...(tokensPerSecond ? {tokensPerSecond} : {}),
+    })
 }
 
 /** The model hit max_output_tokens - thinking and answer together - before the answer was finished. */

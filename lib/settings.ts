@@ -14,6 +14,8 @@ export type ComfyEntry = string | { url: string, name?: string, token?: string, 
 export type SettingsFile = {
     llm?: { url?: string, apiKey?: string, model?: string },
     comfy?: ComfyEntry[],
+    /** Turns the tokens of `bun run stats` into money: per model id, price per million tokens (the currency is only a label). */
+    prices?: Record<string, { inputPerMillion: number, outputPerMillion: number, currency?: string }>,
 }
 
 export type ComfyServer = { url: string, name: string, credentials?: BasicCredentials | BearerTokenCredentials }
@@ -60,7 +62,7 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object')
 
-    warnUnknownKeys(raw, ['llm', 'comfy'], file)
+    warnUnknownKeys(raw, ['llm', 'comfy', 'prices'], file)
 
     if (raw.llm !== undefined) {
         if (!raw.llm || typeof raw.llm !== 'object' || Array.isArray(raw.llm)) fail('llm must be an object like {"url": …, "apiKey": …, "model": …}')
@@ -73,6 +75,9 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     if (raw.comfy !== undefined) {
         if (!Array.isArray(raw.comfy)) fail(`comfy must be a list of URLs or {"url": …} objects, got ${JSON.stringify(raw.comfy)}`)
         parseComfyEntries(raw.comfy, `${file}: comfy`)
+    }
+    for (const [model, price] of Object.entries(raw.prices ?? {})) {
+        if (typeof price?.inputPerMillion !== 'number' || typeof price?.outputPerMillion !== 'number') fail(`prices.${model} must be like {"inputPerMillion": 0.5, "outputPerMillion": 1.5}`)
     }
     return raw
 }

@@ -19,7 +19,8 @@
     "film:replace-character": "bun tools/film-replace-character.ts",
     "film:gallery": "bun tools/film-gallery.ts",
     "film:migrate": "bun tools/film-migrate.ts",
-    "leak-scan": "bun tools/leak-scan.ts"
+    "leak-scan": "bun tools/leak-scan.ts",
+    "stats": "bun tools/stats.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
