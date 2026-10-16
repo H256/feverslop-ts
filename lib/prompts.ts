@@ -1,5 +1,6 @@
 import type {AskOptions} from "./llm.ts";
 import type {SingerVoice} from "./config.ts";
+import {LOCATION_VIEWS} from "./sequenceSheet.ts";
 
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
@@ -332,5 +333,26 @@ Rules:
 
 Image prompt: ${imagePrompt}`,
         instructions: 'You are an expert editor who turns image prompts into location descriptions. You answer only with the description.',
+    }
+}
+
+// The fixed layout of a place, written once from its look and used by every beat there (the shot planner stages people in
+// it instead of inventing a room per beat), and what each of the five views of its reference sheet shows of it.
+export function locationLayoutPrompt(name: string, look: string, description: string): AskOptions {
+    return {
+        maxTokens: 4096,
+        input: `
+A place of a music video is shown to the video model by a reference picture and by a sheet of five views of it:
+${LOCATION_VIEWS.map((v, n) => `${n}: ${v}`).join('\n')}
+Write the fixed layout of the place, so that every scene there is staged in the same room and every view shows the same place.
+
+Answer only with JSON: {"layout": "...", "views": ["...", "...", "...", "...", "..."]}
+- "layout": 3-5 sentences, the floor plan as seen from the camera of view 0: what is at the back, on the left, on the right and behind the camera, where the entrances are, where the light comes from, and how big the place is. Only what the picture shows, and where it does not show a side, what fits it plainly - nothing that moves, no people.
+- "views": five entries, one per view above, in order: one sentence each with what that view shows of the layout - which features are in it, on which side of its frame.
+
+Place: ${name}
+Image prompt of the reference picture: ${look}
+Description: ${description}`,
+        instructions: 'You are a production designer who writes the fixed floor plan of a film set. Answer only with JSON.',
     }
 }

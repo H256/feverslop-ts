@@ -237,6 +237,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 7b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
 | 8  | `locationLooks`  | Krea 2 prompt per location (empty establishing shot)                             | cast, lookBrief, summary     |
 | 8b | `locationDescriptions` | The location look without the establishing shot - no camera, "empty" or medium - for the clip prompts | locationLooks |
+| 8d | `locationLayouts` | The fixed floor plan of each place and what each of the five views of its sheet shows of it - every beat in the place is staged in it (11b), and the views are chosen by it (11c) | locationLooks, locationDescriptions |
 | 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
