@@ -211,7 +211,8 @@ const dependsOn: Record<StepName, StepName[]> = {
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
-    propActivity: ['stems', 'instrumentStems', 'cast'],
+    // the bar length (music.bpm) is the window the activity is averaged over
+    propActivity: ['stems', 'instrumentStems', 'cast', 'music'],
     // the planner stages in the place and with the people the pictures show
     shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
     shotViews: ['shotMoments'],

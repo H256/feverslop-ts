@@ -251,7 +251,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 5  | `cast`           | Characters and locations with ids, each character's `prop` and, if it's a heard instrument, its `propStem` ⁴ | story |
 | 5a | `instrumentStems` | Guitar/piano separated from `other` with a second, narrower demucs pass, only for `propStem`s that need it ⁴ | stems, cast |
 | 5b | `singing`        | The singers, and who sings which line ²                                          | cast                         |
-| 5c | `propActivity`   | RMS-energy activity ranges per instrument stem claimed by a character ¹ ⁴        | stems, cast                  |
+| 5c | `propActivity`   | Bar-averaged energy activity ranges per instrument stem claimed by a character ¹ ⁴ | stems, cast, music          |
 | 6  | `lookBrief`      | Film look for MiniMax H3: one format and style, palette, camera language - extends `style.txt` if there is one | summary |
 | 7  | `characterLooks` | Krea 2 prompt per character (reference sheet, plain background)                  | cast, lookBrief              |
 | 7b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
@@ -558,9 +558,11 @@ video model showing it played continuously through every shot:
 What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
 [config.json](#configjson) - stems must already be separated):
 
-1. **Instrument activity** (`5c`): the same RMS-energy activity detection used for the vocals stem
-   (`tools/vocals.py activity`) runs on every stem a `propStem` claims (`drums.wav`, `bass.wav`, `other.wav`) -
-   no extra model, just the stems already separated in step `2a`.
+1. **Instrument activity** (`5c`): every stem a `propStem` claims (`drums.wav`, `bass.wav`, `guitar.wav`, …) is
+   decoded with ffmpeg and its energy averaged over one bar, so a groove counts as playing between its hits. A stretch
+   is active where that level is at most 20 dB below the stem's own loud bars and above -50 dBFS (the bleed of the
+   other instruments in a separated stem) - no extra model, just the stems already separated in step `2a`. Projects
+   from before this keep their old ranges until `--redo=propActivity` (which also redoes `shotMoments`).
 2. **Shots** (`11b`): for every beat, each on-screen character with a `propStem` gets one active/inactive flag per
    shot, from whether that stem is active over more than half the shot's estimated duration. The LLM is told to show
    the character actively using the prop only on an active shot - it picks the verb itself (playing, strumming,

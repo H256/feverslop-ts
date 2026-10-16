@@ -1,4 +1,6 @@
-import {join} from "node:path";
+import {rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {basename, join} from "node:path";
 import type {Assignment, Character, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, SlotVocal, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
 import {refineSections, slotVocals} from "./lyrics.ts";
 import {formatTime, round} from "./frames.ts";
@@ -44,11 +46,67 @@ export async function transcribeVocals(vocalsFile: string, language: string, lyr
     return JSON.parse(await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile], 'Transcription'))
 }
 
-// Same RMS-energy activity detection as the vocals transcription uses, run standalone on any stem - grounds a
-// character's on-screen prop use (e.g. a guitarist's playing) in whether that stem is actually audible there
-export async function stemActivity(stemFile: string): Promise<{ start: number, end: number }[]> {
-    const result = JSON.parse(await runVocalsTool(['activity', stemFile], 'Stem activity')) as { activity: { start: number, end: number }[] }
-    return result.activity
+// Instrument activity: where a stem is actually played - grounds a character's on-screen prop use (a guitarist's playing)
+// in whether that stem is audible there. Not the vocal-activity detection of tools/vocals.py: that one wants 0.4 s in a
+// row above a threshold between the stem's own quiet and loud levels - right for a voice with real pauses, but a drum or
+// bass stem drops between its hits and plays through most of a song, so it found the drums of a rock song active for
+// 18 of 215 s, and the band was told to keep their instruments still while they were heard (tides-of-eternal-flame).
+// Here the energy is averaged over one bar - a groove keeps it up between its hits - and held against the stem's own
+// playing level: active where it is at most ACTIVITY_MARGIN_DB below the stem's loud bars, and above the floor where a
+// separated stem only carries the bleed of the others (a vocals stem between its lines sits near -60 dBFS).
+const ACTIVITY_SAMPLE_RATE = 8000
+const ACTIVITY_HOP_SEC = 0.05
+const ACTIVITY_MARGIN_DB = 20
+const ACTIVITY_FLOOR_DB = -50
+
+export async function stemActivity(stemFile: string, bpm: number): Promise<{ start: number, end: number }[]> {
+    const raw = join(tmpdir(), `activity-${process.pid}-${basename(stemFile)}.f32`)
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', stemFile, '-ac', '1', '-ar', String(ACTIVITY_SAMPLE_RATE), '-f', 'f32le', raw], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed to decode ${stemFile}:\n${err}`})
+    try {
+        const samples = new Float32Array(await Bun.file(raw).arrayBuffer())
+        return activityRanges(framePower(samples, ACTIVITY_SAMPLE_RATE, ACTIVITY_HOP_SEC), ACTIVITY_HOP_SEC, 240 / bpm)
+    } finally {
+        rmSync(raw, {force: true})
+    }
+}
+
+/** The mean square of the samples per frame of `hopSec`. */
+export function framePower(samples: Float32Array, sampleRate: number, hopSec: number): number[] {
+    const hop = Math.round(sampleRate * hopSec)
+    const power: number[] = []
+    for (let i = 0; i + hop <= samples.length; i += hop) {
+        let sum = 0
+        for (let k = i; k < i + hop; k++) sum += samples[k]! * samples[k]!
+        power.push(sum / hop)
+    }
+    return power
+}
+
+/**
+ * The stretches where the per-frame power, averaged over one bar around each frame, lies above the stem's own threshold
+ * (see stemActivity). Gaps up to a bar are bridged (a break of a beat or two is still the same playing), stretches
+ * shorter than half a bar are dropped (a single hit or bleed spike). The averaging blurs each edge by up to half a bar.
+ */
+export function activityRanges(power: number[], hopSec: number, barSec: number): { start: number, end: number }[] {
+    if (!power.length) return []
+    const half = Math.max(1, Math.round(barSec / hopSec / 2))
+    const prefix = [0]
+    for (const p of power) prefix.push(prefix.at(-1)! + p)
+    const level = power.map((_, i) => {
+        const from = Math.max(0, i - half), to = Math.min(power.length, i + half + 1)
+        return 10 * Math.log10((prefix[to]! - prefix[from]!) / (to - from) + 1e-12)
+    })
+    const loud = [...level].sort((a, b) => a - b)[Math.floor(0.95 * (level.length - 1))]!
+    const threshold = Math.max(loud - ACTIVITY_MARGIN_DB, ACTIVITY_FLOOR_DB)
+
+    const ranges: { start: number, end: number }[] = []
+    level.forEach((db, i) => {
+        if (db <= threshold) return
+        const last = ranges.at(-1)
+        if (last && i * hopSec - last.end <= barSec) last.end = (i + 1) * hopSec
+        else ranges.push({start: i * hopSec, end: (i + 1) * hopSec})
+    })
+    return ranges.filter(r => r.end - r.start >= barSec / 2).map(r => ({start: round(r.start), end: round(r.end)}))
 }
 
 // progress (and the model downloads on first use) are shown as they happen, stdout is the result
