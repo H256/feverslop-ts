@@ -5,6 +5,7 @@ import {existsSync, readdirSync} from "node:fs";
 import {basename, join} from "node:path";
 import type {Project} from "./project.ts";
 import {boundaryFrameAsset} from "./compose.ts";
+import {plainText} from "./refs.ts";
 
 type Card = { title: string, subtitle?: string, images?: { src: string, label?: string }[], videos?: { src: string, label?: string }[], text?: string, wide?: boolean }
 
@@ -52,7 +53,8 @@ function storyboardCards(dir: string, data: Project): Card[] {
             title: slot.id,
             subtitle: `${slot.section} · ${slot.start.toFixed(1)}s – ${slot.end.toFixed(1)}s`,
             images: [...(first ? [{src: first, label: 'first frame'}] : []), ...(last ? [{src: last, label: 'last frame'}] : [])],
-            text: beat?.summary,
+            // the beats write their characters as {Name} - the page shows the names
+            text: beat?.summary && plainText(beat.summary, data.cast?.characters ?? []),
         }]
     })
 }

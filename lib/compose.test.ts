@@ -109,3 +109,36 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain('Layout of the place')
     })
 })
+
+describe('{Name} tokens', () => {
+    const tokenBeat = {...beat, summary: '{Shaman} drums for {Runa}.', moments: ['{Shaman} drums.'], tokens: true} as StoryBeat
+    const input = (action: string, staging?: string): Input => ({
+        slots: [{id: 'slot-001', index: 0, section: 'A', start: 0, end: 4, bars: 2, energy: 0.5, lyrics: []}],
+        mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+        beats: [tokenBeat],
+        characters,
+        locations: [{id: 'clearing', name: 'Clearing'}],
+        characterDescriptions: {shaman: 'A stocky shaman.', runa: 'A small grey cat.'},
+        locationDescriptions: {clearing: 'A forest clearing.'},
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.5, 0.5], sections: []},
+        language: 'English',
+        stemsAvailable: false,
+        shotMoments: {b1: {tokens: true, ...(staging ? {staging} : {}), shots: [{action, characters: ['shaman']}]}},
+    })
+
+    test('a token is the label of its picture, a plain name stays a word', () => {
+        const clip = buildClipRequests(input('{Shaman} beats the drum while the shaman hums.'))[0]!
+        expect(clip.prompt).toContain('<Subject 2> beats the drum while the shaman hums.')
+        expect(clip.prompt).not.toContain('{')
+    })
+    test('a character the layout names by token is in the clip with its picture', () => {
+        const clip = buildClipRequests(input('{Shaman} drums.', '{Runa} sits by the fire pit.'))[0]!
+        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
+        expect(clip.prompt).toContain('Layout of the place: <Subject 3> sits by the fire pit.')
+    })
+    test('a token that is nobody of the cast is left as its word, without braces', () => {
+        const clip = buildClipRequests(input('{Shaman} nods to {the stranger}.'))[0]!
+        expect(clip.prompt).toContain('<Subject 2> nods to the stranger.')
+    })
+})

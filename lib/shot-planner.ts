@@ -27,10 +27,10 @@ Rules:
 - Each shot must show real physical progression from the one before it - never repeat, restate or merely rephrase the previous shot's action, and never describe the camera or a held/static moment.
 - Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, the shots must show a real dramatic encounter across the sequence: fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear) - not characters standing and staring.
 - A shot naming only the outcome of contact between two things ("hits the dragon with a sword", "grabs the ledge") reads as flat and unconvincing on screen - describe the mechanics instead: the direction and path of the movement (a low arc from the left, an overhead swing, a lunge), what it meets and how (deflects off armored scales, cuts into flesh, is caught on a raised shield), and the immediate physical reaction (staggers back, sends sparks flying, the blade skids off and rebounds). Do this for every strike, grab, fall or collision a shot describes, not only in combat. A blow has weight: the striker puts the body into it (a step, a twist of the hips, the breath leaving), the one struck shows the force in the whole body (the head snaps, the knees give, the arms fly up) and is moved a step or two at most - they stagger, drop to a knee or fall onto the back; nobody flies several paces, slides or is thrown over an edge by one blow.
-  Weak: "Kara hits the dragon with her sword."
-  Strong: "Kara swings her sword in a low arc from the right, the blade skidding off the dragon's armored foreleg scales in a shower of sparks."
-  Weak: "Tom grabs the ledge as he falls."
-  Strong: "Tom's fingers close around the crumbling ledge, his body swinging hard into the cliff face as his grip catches him."
+  Weak: "{Kara} hits the dragon with her sword."
+  Strong: "{Kara} swings her sword in a low arc from the right, the blade skidding off the dragon's armored foreleg scales in a shower of sparks."
+  Weak: "{Tom} grabs the ledge as he falls."
+  Strong: "{Tom}'s fingers close around the crumbling ledge, his body swinging hard into the cliff face as his grip catches him."
 - The same applies to any gentler or non-physical contact (a hand on a shoulder, a ghost or spirit reaching for someone): never write a bare "touches" or "reaches for" - name the exact hand/body part and where it lands, whether the contact holds and grips or only brushes, and let the reaction follow logically from THAT contact (goes rigid under the grip, twists to break free, the hand passes through them like mist) rather than defaulting to an unrelated generic reaction such as being shoved or knocked back - only describe a push or shove when something in the shot actually pushes.
 - "castProps" below lists each character's one fixed prop (weapon, tool or instrument), if they have one. That is the exact object they carry for the entire song - always call it by that same name and kind in every shot it appears in (a character's sword must stay a sword and never become a hammer, axe or spear in a later shot, and vice versa), unless the beat's "summary" or "moments" explicitly says they picked up, dropped, lost or swapped it.
 - Characters don't default to facing the camera. When a shot is a reaction - to a threat, a touch, a strike, a sound - say which way the character's body and gaze turn relative to whatever they're reacting to (spins toward it, recoils with their back to the wall, turns away and shields their face, ducks behind another character) instead of leaving them front-on.
@@ -56,15 +56,15 @@ Rules:
 - A cast entry with "group": true is a crowd in one entry, and the beat says how many of it are there ("groupSize"). Its entry says how it breaks up - at least three different things when it is four or more: who goes first, who hangs back, who is struck and how, who falls or turns, who goes where - so the crowd is never one body doing one thing, and it moves through the place from where the staging says.
 - A fight is an exchange over its shots, not one blow: a blow lands and the shot goes on with what it does (the one hit gives way, the other answers, the first parries, someone comes in from the side) up to the next blow. No "hold at the peak" or "hold the pose" for a fight, and "hold": true is never a fight shot. After a clash the two sides do not stand side by side: one gives ground, falls, flees or is driven back, according to the story.
 - A listener, a bystander or a band member who does not sing stays in the picture whenever the staging has them near the shot, doing something of their own (playing, or moving with the event: a step, a turn, a hand that lifts or grips - never only watching or reacting with the eyes) - and does not sing.
-- In a shot with three or more people in the picture - above all a wide one - nobody just stands there, and a wide shot is not a group portrait. "stays", "holds still", "stands", "watches", "waits" and "looks at" are not what a person does there: only whoever sings, plays or works at one spot stays in place, and even their body does something the camera sees (the weight shifts, the hands work, the head turns to someone). Everybody else has a movement of the body - a step toward or away, a turn, a hand or a tool that lifts, lowers or is passed on, a crouch, a lean - with its direction relative to the others; what they look at belongs to that movement ("steps aside to let Kae pass, eyes on her"), it does not replace it. At least two different people in such a shot change where they are in the place, in different directions or at different moments, and the people at the back move as much as the ones in front.
+- In a shot with three or more people in the picture - above all a wide one - nobody just stands there, and a wide shot is not a group portrait. "stays", "holds still", "stands", "watches", "waits" and "looks at" are not what a person does there: only whoever sings, plays or works at one spot stays in place, and even their body does something the camera sees (the weight shifts, the hands work, the head turns to someone). Everybody else has a movement of the body - a step toward or away, a turn, a hand or a tool that lifts, lowers or is passed on, a crouch, a lean - with its direction relative to the others; what they look at belongs to that movement ("steps aside to let {Kae} pass, eyes on her"), it does not replace it. At least two different people in such a shot change where they are in the place, in different directions or at different moments, and the people at the back move as much as the ones in front.
 - When a singer sings in a shot ("singingPerShot" true), the singer is in "characters", the face and the mouth are in view (three-quarter or profile is right when the singer looks at something: at the opponent, at the others, at the danger - the lens is never the target; not hidden, not too small), and the singing is part of the action: sung through effort, shouted at the other, drawn between breaths, over the blow - a singer in a fight keeps fighting while they sing, reacts with the whole body and does not turn to the lens to perform. The camera may follow the action (track, arc, handheld) as long as the mouth stays in view. Whoever plays an instrument that is audible in the shot ("activePerShot" true) is in it with the instrument in their hands.
 - "framing" is the shot size and angle ("wide shot", "medium close-up", "low-angle medium shot") - what can show everyone "characters" lists - and "camera" is one sentence with the movement and its speed (no times or durations in it - how long a shot is, is not yours to say). Every shot is a new camera position: no two in a row with the same movement, and "view" says where the camera stands and what it looks toward, in terms of the staging, on the same side of the action within one beat unless the story crosses it. "hold" is true for a shot in which nobody moves from where they are and the camera stays: the clip then keeps the framing from the first frame to the last.
-- Name characters by their "name" from "cast" below (not pronouns, and never the "id" that "characterIds"/"castProps" use - it only says who is meant), so every shot reads on its own. Use the name exactly as spelled and capitalized in "cast" - this exact string is what binds the sentence to that character's reference picture later, so a paraphrase ("the orc", "an old woman", "a ghost") leaves the action unanchored to anyone and the wrong on-screen figure ends up performing it. This applies even to a collective/group character (e.g. a cast entry named "Orcs" fighting as several individuals) - still call them "Orcs" in the sentence, never a generic singular like "the orc" or "an orc warrior".
+- Every character in a text field (staging, action, state, frame, motion, rest, camera, view, end) is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there, also a group character acting as several individuals, and never the "id" or a generic stand-in ("the orc", "an old woman") for someone of the cast: the braces bind the sentence to that character's reference picture, so every shot reads on its own. The names in "characters:" and after "person:" and "end:" are plain, without braces.
 - A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
 - A beat may list "singing": "singerIds" are the characters whose voice is the song's vocals, and "singingPerShot" gives one true/false flag per shot of that beat for whether a lyric is actually sung at that point. A singer only sings on shots flagged true. On a shot flagged false they make no sound at all - no singing, crying out, calling, humming or "a voice that joins" - even if the beat's "summary" or "moments" say so (the music there is purely instrumental); show them doing something silent instead (listening, breathing, watching, reacting, standing ready). Characters with no "singing" entry are unaffected.
 
 Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown. A field is always one line (no line breaks inside it), "people" entries are the "person:" lines, "characters" are the names separated by commas, "rest" is what everybody in "characters" without a "person:" line does at the same time:
-STAGING: <the floor plan of the place for this beat, 2-4 sentences, on one line> - only when the input says to write the staging
+STAGING: <the floor plan of the place for this beat, 2-4 sentences, on one line, every character as {Name}> - only when the input says to write the staging
 SHOT <number>
 framing: <shot size and angle>
 size: <wide, medium or close - the size class of the framing>
@@ -73,10 +73,10 @@ view: <where the camera stands and what it looks toward>
 hold: <yes or no>
 risky: <yes only if the action could only be written with a blank or missing face, a stand-in object for a name or feeling, or readable text - else no>
 characters: <Name>, <Name>
-action: <what happens in the shot, at most two sentences>
+action: <what happens in the shot, at most two sentences, every character as {Name}>
 person: <Name> | state: <...> | frame: <...> | motion: <...> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
 person: <Name> | state: <...> | frame: <...> | motion: <...> | singing: <yes or no>
-rest: <what the others in the picture do>
+rest: <what the others in the picture do, every character as {Name}>
 (then SHOT <next number> with the same fields, up to the last shot this call writes)
 ENDS - only when the input says that this call writes the last shot of the beat:
 end: <Name> | <where they are and what they do and hold when the beat is over, a phrase with a verb>
@@ -147,4 +147,55 @@ export function plannerCalls(total: number, perCall: number, again?: { issues: {
         calls.push({from, to, keep: !askAll && !problems.length && again!.previousShots >= to, problems})
     }
     return calls
+}
+
+/**
+ * Step 9: the story broken into beats - no timing yet. `performance`: what the beats must do so the singers can be
+ * lip-synced (empty in clip mode). Every character is written as {Name} (lib/refs.ts).
+ */
+export function beatsPrompt({durationSec, beatCount, characters, locations, lyrics, story, performance}: {
+    durationSec: number, beatCount: number, characters: Character[], locations: Location[], lyrics: string, story: string, performance: string,
+}): AskOptions {
+    return {
+        reasoning: 'medium',
+        // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
+        maxTokens: Math.max(16384, beatCount * 1100),
+        input: `Break the story into story beats for a music video. A beat is one continuous piece of action at ONE location.
+The beats have no timing yet - they are stretched onto the song later, so describe what happens, not how long it takes.
+
+The song is ${Math.round(durationSec)} seconds long. The story is spread evenly over that time, in order from the first second to the last - the song sections do not matter for the beats, a beat does not belong to a verse or a chorus.
+Aim for about ${beatCount} beats that follow the story from start to end, each one with new action - a beat never repeats what an earlier beat already showed.
+
+For every beat give:
+Every character in "summary", "moments" and "stateAfter" is written as their "name" in braces, the whole name exactly as in the character list below - {Thorin Oakenshield}, {Orcs}, never a short form like {Thorin} - also a group character acting as one of its members, and never a generic stand-in ("the orc", "an old woman") for someone of the list: the braces bind the sentence to that character's reference picture.
+- "summary": what visibly happens, 1-3 sentences, present tense, every character as {Name} ("{Kara} lights the torch").
+- "moments": 2-6 short sentences, in order, each one visible action that a camera can film, every character as {Name}. These are spread over the video clips of the beat, so together they must tell the whole beat. Describe the mechanics of any contact between two things, not just the outcome - the direction and path of the movement, what it meets and how, and the immediate physical reaction: not "{Thorin} raises his hammer and strikes the sealed gate." but "{Thorin} swings his hammer in a wide overhead arc, the head crashing into the gate's iron sigil, which cracks and showers sparks across the steps."
+  This applies just as much to a gentle or supernatural contact as to a blow - never write a bare "touches" or "reaches for": say exactly which hand or body part makes contact with which part of the other, whether the grip closes and holds or just brushes past, and what the touched character does in direct response to THAT contact (recoils while still held, wrenches free, goes rigid, the touch passes through them) - not a generic, unrelated reaction like being shoved or knocked back unless something actually pushed them.
+  A character's "prop" (if any is listed for them below) is the one weapon/tool/instrument they carry for the whole story - always call it by the same name and kind (a sword stays a sword, never a hammer or axe in a later beat) unless "stateAfter" explicitly says they traded, lost, dropped or picked up a different one.
+  Say where people are in relation to one another in plain, exact words: beside, behind, in front of, at someone's left, an arm's length from. A person is never on, over or in another person ("stand on her shoulders" is one body standing on another and is drawn that way) unless the story says one carries, lifts or rides the other - for "next to the shoulder" write "beside her, at her shoulder".
+  Bodies don't default to facing the camera: name which way a character is turned or moving relative to whoever or whatever they're reacting to (turns to face it, spins away, presses their back to the wall, ducks behind another character) whenever that's part of the action, especially the instant something touches, strikes at, or startles them.
+  Eyes and attention follow the scene, not the lens: say what a character or creature is looking at (the person it's reaching for, the weapon coming at it, the ground as it falls) - never leave it staring into the camera, and never describe a "look" or "stare" without naming its target, since an untargeted one defaults to a straight-into-camera stare that breaks the scene.
+  Faces react too: name the visible facial reaction the moment produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace) whenever the action calls for one - a beat with no facial reaction described tends to render with a flat, unchanging expression throughout.
+  ${filmableRules}
+- "locationId": exactly one of the location ids below.
+- "characterIds": ids of the characters on screen, only from the list below.
+- "intensity": 0.0 (calm, quiet) to 1.0 (climax), used to match the loudness of the music.
+- "weight": 1-5, how much screen time the beat deserves.
+- "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
+- "continuous": true only if the beat is ONE unbroken take that runs through all its video clips without a cut - the camera and the action simply go on from clip to clip (a long walk through a room, a slow reveal, one action that takes many seconds). Use it sparingly: false (also when omitted) for a beat that is better cut together from several shots and angles.
+- "stateAfter": short facts, every character as {Name}, about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull", and never what a mirror or reflection shows), e.g. "{Thorin}'s hammer is broken", "{Kara} carries a torch". Empty array if nothing changes.
+- "entrance": true only if the summary has somebody arrive, appear or emerge during the beat (the beat's first clip then shows the place before them); false when everybody who is in the beat is already there when it starts.
+- "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
+Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
+${performance}Answer only with JSON: {"beats": [...]}
+---
+characters: ${JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role, ...(c.prop ? {prop: c.prop} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
+locations: ${JSON.stringify(locations.map(l => l.id))}
+lyrics:
+${lyrics}
+---
+story:
+${story}`,
+        instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
+    }
 }

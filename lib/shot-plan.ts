@@ -1,4 +1,5 @@
 import type {BeatShots, Character, ShotPlan, StoryBeat} from "./project.ts";
+import {readTokens, tokenCharacter} from "./refs.ts";
 
 // Reads what the shot planner (step 11b) answered for a beat. Nothing here understands words beyond the cast's own names:
 // the planner reads the story and says who is in each shot and where they stand, the code resolves names to ids, counts,
@@ -18,11 +19,8 @@ export const mentionsCharacter = (value: string, character: Pick<Character, 'nam
 export const asBeatShots = (value: BeatShots | string[]): BeatShots =>
     Array.isArray(value) ? {shots: value.map(action => ({action}))} : value
 
-/** The character the planner meant by this name (exact, case-insensitive), or by the id. */
-const characterOf = (characters: Character[], who: string) => {
-    const wanted = who.trim().toLowerCase()
-    return characters.find(c => c.name.toLowerCase() === wanted || c.id.toLowerCase() === wanted)
-}
+/** The character the planner meant by this name (exact, case-insensitive), or by the id - braces around it are the token's. */
+const characterOf = (characters: Character[], who: string) => tokenCharacter(characters, who.trim().replace(/^\{(.*)\}$/, '$1'))
 
 /**
  * problems: what asking again can fix and a shot cannot do without (a name that is not in the cast, a singing shot without
@@ -82,11 +80,9 @@ function singingNotes(j: number, people: NonNullable<ShotPlan['people']>, charac
 function trimForeground(people: NonNullable<ShotPlan['people']>, action: string, characters: Character[], singing: string[]): { people: NonNullable<ShotPlan['people']>, dropped: string[] } {
     const ids = Object.keys(people)
     if (ids.length <= MAX_FOREGROUND) return {people, dropped: []}
-    const at = (id: string) => {
-        const c = characters.find(x => x.id === id)
-        const i = c ? [c.name, c.id].map(n => action.toLowerCase().indexOf(n.toLowerCase())).filter(k => k >= 0).sort((a, b) => a - b)[0] : undefined
-        return i ?? Number.MAX_SAFE_INTEGER
-    }
+    // in the order of the action's tokens: who it names first, it is about first
+    const named = readTokens(action, characters).ids
+    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
     const ranked = [...ids].sort((a, b) => Number(singing.includes(b)) - Number(singing.includes(a)) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
     const keep = new Set(ranked.slice(0, MAX_FOREGROUND))
     return {people: Object.fromEntries(ids.filter(id => keep.has(id)).map(id => [id, people[id]!])), dropped: ids.filter(id => !keep.has(id))}
@@ -126,9 +122,11 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             people = trimmed.people
             notes.push(`shot ${j + 1}: ${trimmed.dropped.length + MAX_FOREGROUND} people had an own entry - ${trimmed.dropped.map(id => nameOfId(characters, id)).join(', ')} kept without one`)
         }
-        // the shot's text names someone who is not in it: the video model draws a stranger for a name without a picture
-        const written = [action, text(e.view), ...Object.values(people).flatMap(p => [p.state ?? '', p.frame ?? '', p.motion ?? ''])].join(' ')
-        const strangers = onScreen.filter(c => !ids.includes(c.id) && mentionsCharacter(written, c)).map(c => c.name)
+        // the shot's text names someone who is not in it: the video model draws a stranger for a name without a picture -
+        // read from the tokens of the text ({Name}), and a token that is nobody of the cast is asked again
+        const written = readTokens([action, text(e.view), text(e.camera), text(e.rest), ...Object.values(people).flatMap(p => [p.state ?? '', p.frame ?? '', p.motion ?? ''])].join(' '), characters)
+        for (const token of written.unknown) problem(j, `shot ${j + 1}: "{${token}}" is not one of the characters - write the names of the cast in braces, exactly as in "cast"`)
+        const strangers = onScreen.filter(c => !ids.includes(c.id) && written.ids.includes(c.id)).map(c => c.name)
         if (strangers.length) problem(j, `shot ${j + 1}: the text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the text, or put them in the shot`)
         // while a line is sung, a singer is in the picture
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
@@ -169,7 +167,8 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
     // padded or cut below so the run goes on, but the planner is asked again: repeated shots read as "the same action, closer"
     if (shots.length !== needed) problem(undefined, `shot count: needed ${needed}, got ${shots.length}`)
     const sized = Array.from({length: needed}, (_, j) => shots[Math.min(j, shots.length - 1)]!)
-    return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems: issues.map(i => i.message), issues}
+    for (const token of readTokens(text(o?.staging), characters).unknown) problem(0, `the staging: "{${token}}" is not one of the characters - write the names of the cast in braces, exactly as in "cast"`)
+    return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized, tokens: true}, problems: issues.map(i => i.message), issues}
 }
 
 /**
