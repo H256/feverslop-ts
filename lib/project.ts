@@ -236,12 +236,18 @@ export class ProjectStore {
         if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) throw new Error(`${this.file} must be a JSON object - fix it by hand, or delete it to start over (every step is generated again)`)
     }
 
+    // saves one after the other: elements of a step asked at once (llm.parallel) save as each answer comes in
+    private saving: Promise<void> = Promise.resolve()
+
     // written next to the target first, so a crash mid-write never leaves a truncated project.json
-    async save() {
-        // the process id in the name: two runs saving at once never write into the same temporary file
-        const partial = `${this.file}.${process.pid}.partial`
-        await Bun.write(partial, JSON.stringify(this.data, null, 2))
-        renameSync(partial, this.file)
+    save() {
+        this.saving = this.saving.catch(() => {}).then(async () => {
+            // the process id in the name: two runs saving at once never write into the same temporary file
+            const partial = `${this.file}.${process.pid}.partial`
+            await Bun.write(partial, JSON.stringify(this.data, null, 2))
+            renameSync(partial, this.file)
+        })
+        return this.saving
     }
 
     invalidate(name: StepName) {
