@@ -5,6 +5,9 @@ import {type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
 const beat = {id: 'beat-01', order: 1, summary: 'Runa walks in.', moments: ['Runa walks in.'], locationId: 'hall', characterIds: ['runa'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
 const context: PlanContext = {
     characters: [{id: 'runa', name: 'Runa', role: 'a girl'}],
+    locations: [{id: 'hall', name: 'Hall'}],
+    characterDescriptions: {runa: 'A girl in a red coat.'},
+    locationDescriptions: {hall: 'A long stone hall with one door on the left.'},
     continuity: 'never',
     slots: [{id: 'slot-001', index: 0, section: 'A', start: 0, end: 8, bars: 4, energy: 0.8, lyrics: []}],
     mapping: [{slotId: 'slot-001', beatId: 'beat-01'}],
@@ -37,5 +40,13 @@ describe('asked again: only the calls whose shots have a problem', () => {
     test('a problem of the whole beat asks every call again', () => {
         const calls = plannerCalls(10, 4, {issues: [{message: 'shot count: needed 10, got 9'}], previousShots: 9})
         expect(calls.every(c => !c.keep && c.problems.length === 1)).toBe(true)
+    })
+})
+
+describe('the planner sees what the pictures show', () => {
+    test('the descriptions of the place and of the people of the beat are in the input', () => {
+        const {input} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        expect(input).toContain('"hall":{"name":"Hall","description":"A long stone hall with one door on the left."}')
+        expect(input).toContain('"Runa":"A girl in a red coat."')
     })
 })

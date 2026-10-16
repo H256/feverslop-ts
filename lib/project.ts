@@ -198,7 +198,8 @@ const dependsOn: Record<StepName, StepName[]> = {
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
     propActivity: ['stems', 'instrumentStems', 'cast'],
-    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing'],
+    // the planner stages in the place and with the people the pictures show
+    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions'],
     shotViews: ['shotMoments'],
 }
 

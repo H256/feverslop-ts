@@ -678,7 +678,7 @@ if (plannedBefore) {
 const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
     const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
     type Beat = (typeof beats)[number]
-    const planContext: PlanContext = {characters: cast.characters, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}
+    const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}
     const MOMENT_SHOTS_PER_CALL = 4
     // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.
     // A call without a single shot in its answer is asked once more; the beat is then short of those shots (a missing
