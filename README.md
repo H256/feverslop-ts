@@ -238,6 +238,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 7b | `characterDescriptions` | The character look without the reference sheet - no pose, background, light or medium - for the clip prompts | characterLooks |
 | 8  | `locationLooks`  | Krea 2 prompt per location (empty establishing shot)                             | cast, lookBrief, summary     |
 | 8b | `locationDescriptions` | The location look without the establishing shot - no camera, "empty" or medium - for the clip prompts | locationLooks |
+| 8c | `locationAnchors` | Two or three fixed features of each place, as one phrase - kept behind the people of every shot, so no shot falls back to the grey backdrop of the character pictures | locationDescriptions |
 | 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity | story, cast, singing         |
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
@@ -251,7 +252,7 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 ⁵ only with `--render=song`, and only while `input/song.wav` doesn't exist yet - see
 [Generating the song](#generating-the-song)
 
-Steps 1, 3–9 and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
+Steps 1, 3–9 (with 8c) and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
 
 The looks (7, 8) are image prompts for the reference pictures - they put a character on a plain grey background in
 studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
