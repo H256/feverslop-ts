@@ -301,7 +301,9 @@ Image prompt: ${imagePrompt}`,
     }
 }
 
-export function locationLookPrompt(lookBrief: string, storySummary: string, locationName: string): AskOptions {
+// props: the objects the characters carry (Character.prop) - they come into a clip with their owner's picture, so a place
+// that shows one too has it twice in the picture (a knife on the counter and the same knife in the hand)
+export function locationLookPrompt(lookBrief: string, storySummary: string, locationName: string, props: string[] = []): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for an establishing shot of the given location.
@@ -312,7 +314,7 @@ Rules:
 - Natural language, one paragraph, 50-100 words.
 - Start with the medium and style from the film look (e.g. "35mm film photograph of...", "2D anime background painting of...").
 - The location is empty: no people, creatures or characters.
-- Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
+${props.length ? `- These objects belong to the characters and come into the picture with them - the place shows none of them, not even lying around, hanging or leaning somewhere: ${props.map(p => JSON.stringify(p)).join(', ')}.\n` : ''}- Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
 - Describe only visible details: layout, architecture, terrain, materials, props, time of day, weather, light sources, atmosphere like fog, dust or smoke.
 - Describe the place as it looks in this one frame, a state and not a process: no "slowly fading", "visibly shrinking", "walls closing in" or other change over time.
 - Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
@@ -343,5 +345,23 @@ Rules:
 
 Image prompt: ${imagePrompt}`,
         instructions: 'You are an expert editor who turns image prompts into location descriptions. You answer only with the description.',
+    }
+}
+
+// The phrase the clip prompt repeats behind the people of every shot (lib/compose.ts) - chosen by the LLM, so no code has to
+// cut a description into pieces. Fixed features only: whatever can be picked up or moved may be gone or in a hand in a shot.
+export function locationAnchorPrompt(description: string): AskOptions {
+    return {
+        maxTokens: 2048,
+        input: `
+Below is the description of a place from a video prompt. Name two or three of its fixed features that stay visible behind the people in any shot of this place: large parts of the place that never move - walls, openings, built-in furniture, terrain, a light source. Never an object somebody could pick up or carry, never a person or a creature.
+
+Rules:
+- One noun phrase, 6-15 words, lowercase, without a full stop, e.g. "the long stone counter and the hallway to the right".
+- Only features the description names - add nothing.
+- Answer only with the phrase.
+
+Place: ${description}`,
+        instructions: 'You are an expert editor who picks the fixed background features of a place for a video prompt. You answer only with the phrase.',
     }
 }
