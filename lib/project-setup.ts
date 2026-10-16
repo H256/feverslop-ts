@@ -1,6 +1,6 @@
 // Non-interactive helpers shared by tools/init.ts (the wizard) and tools/example.ts (random example projects):
 // where a new project's files go and how they're written - projects/<id>/{input/*, config.json}.
-import {existsSync} from "node:fs";
+import {existsSync, readdirSync, statSync} from "node:fs";
 import {join} from "node:path";
 import type {ProjectConfig} from "./config.ts";
 
@@ -20,6 +20,21 @@ export function projectDir(id: string) {
 
 export function projectExists(id: string) {
     return existsSync(projectDir(id))
+}
+
+/** The project ids in projects/, the most recently changed first (project.json, else the folder itself). */
+export function listProjects(): string[] {
+    if (!existsSync('projects')) return []
+    const changed = (id: string) => {
+        const file = join(projectDir(id), 'project.json')
+        return statSync(existsSync(file) ? file : projectDir(id)).mtimeMs
+    }
+    return readdirSync('projects', {withFileTypes: true})
+        // a project has its input/ folder or a project.json - other folders (collected logs, …) are not one
+        .filter(d => d.isDirectory() && validProjectId(d.name) && (existsSync(join(projectDir(d.name), 'input')) || existsSync(join(projectDir(d.name), 'project.json'))))
+        .map(d => ({id: d.name, changed: changed(d.name)}))
+        .sort((a, b) => b.changed - a.changed)
+        .map(d => d.id)
 }
 
 // a project id is a directory name and part of the ComfyUI client id - keep it filesystem- and URL-safe
