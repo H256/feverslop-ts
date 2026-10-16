@@ -677,8 +677,11 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
                     continue
                 }
                 let chunk: ReturnType<typeof parseShotLines> | undefined
+                // the beats run at once - the label says which beat and which shots a line of the log is about
+                const label = `${beat.id} · shots ${from + 1}-${to} of ${total}`
                 for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
-                    const parsed = parseShotLines(await ask(planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {from, to, total, written: raw.shots, staging: raw.staging, blocking})))
+                    log.step('Shots', styles.name(label))
+                    const parsed = parseShotLines(await ask({...planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {from, to, total, written: raw.shots, staging: raw.staging, blocking}), label}))
                     if (parsed.shots.length) chunk = parsed
                     else log.warn(`${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`)
                 }
@@ -725,7 +728,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
             : undefined
         log.step(`Blocking ${i + 1}/${beats.length}`, styles.name(beat.id))
         for (let attempt = 1; attempt <= 2 && !blockings[beat.id]; attempt++) {
-            const answer = parseShotLines(await ask(blockingPrompt(planContext, beat, before, beats[i + 1])))
+            const answer = parseShotLines(await ask({...blockingPrompt(planContext, beat, before, beats[i + 1]), label: `${beat.id} · blocking`}))
             const texts = [answer.staging ?? '', ...Object.values(answer.starts), ...Object.values(answer.ends)]
             const {texts: fixed} = await resolveUnknownTokens(texts, cast.characters)
             let next = 0
