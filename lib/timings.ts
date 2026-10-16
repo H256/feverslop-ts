@@ -10,7 +10,7 @@ export type Timing = {
     name: string              // the workflow (renders) or the model (LLM calls)
     seconds: number
     tokensPerSecond?: number
-    resolution?: string        // e.g. "1280x720"
+    resolution?: number | string   // as in config.json: a size or "1280x720"
     frames?: number
 }
 

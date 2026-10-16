@@ -484,7 +484,7 @@ export class Renderer implements Disposable {
         }
     }
 
-    private keepTiming(kind: 'picture' | 'clip', name: string, target: string, extra: { resolution?: string, frames?: number }) {
+    private keepTiming(kind: 'picture' | 'clip', name: string, target: string, extra: { resolution?: number | string, frames?: number }) {
         const ms = this.renderMs.get(target)
         if (ms) recordTiming({kind, name, seconds: Math.round(ms / 100) / 10, ...extra})
     }
