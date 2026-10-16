@@ -145,8 +145,8 @@ Run it:
 
 ```bash
 bun index.ts <project-id>             # the project in projects/<project-id>/ (create one with: bun run init)
-bun index.ts                          # without an id: the author's own project well-of-youth-gothic-trio-260920 (a
-                                       # convenience default in index.ts) - an error listing your projects if there is none
+bun index.ts                          # without an id: pick one of the projects with the arrow keys (most recently changed
+                                       # first) - without a terminal, an error listing them
 bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
