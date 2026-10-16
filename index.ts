@@ -1,8 +1,8 @@
 import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {failRun, hideDetails, keepLogIn, log, printBanner, runLogFile, setOutput, showsDetails, styles} from "./lib/log.ts";
-import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
+import {failRun, formatDuration, hideDetails, keepLogIn, log, printBanner, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
+import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
@@ -1118,6 +1118,26 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
+// what this run did: the steps it generated, its LLM calls and renders, its warnings
+log.step('Generated', project.generated.size ? [...project.generated].map(styles.name).join(', ') : styles.muted('nothing - every step was taken from project.json'))
+const measured = runTimings()
+const llmCalls = measured.filter(t => t.kind === 'llm')
+if (llmCalls.length) {
+    const tokens = llmCalls.reduce((sum, t) => sum + (t.completionTokens ?? 0), 0)
+    const retried = llmCalls.filter(t => t.outcome).length
+    log.step('LLM', `${llmCalls.length} call(s), ${formatDuration(llmCalls.reduce((sum, t) => sum + t.seconds, 0) * 1000)}${tokens ? `, ${tokens} tokens written` : ''}${retried ? styles.muted(` · ${retried} cut off, empty or failed and asked again`) : ''}`)
+}
+for (const kind of ['picture', 'clip', 'song'] as const) {
+    const renders = measured.filter(t => t.kind === kind && !t.outcome)
+    if (renders.length) log.step('Rendered', `${renders.length} ${kind}(s), ${formatDuration(renders.reduce((sum, t) => sum + t.seconds, 0) * 1000)}`)
+}
+// the same warning several times (one per clip, one per beat) is one line with its count
+const warned = new Map<string, number>()
+for (const message of runWarnings()) warned.set(message, (warned.get(message) ?? 0) + 1)
+if (warned.size) {
+    log.step('Warnings', `${runWarnings().length}${warned.size > 8 ? styles.muted(` - the first 8 of ${warned.size} different ones, all in the log`) : ''}`)
+    for (const [message, count] of [...warned].slice(0, 8)) log.line(styles.warning(`   ${count > 1 ? `${count}× ` : ''}${message.length > 160 ? `${message.slice(0, 157)}…` : message}`))
+}
 log.step('Log', runLogFile() ?? '')
 
 /**

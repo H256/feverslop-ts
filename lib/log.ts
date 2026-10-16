@@ -84,6 +84,10 @@ export function printBanner() {
     console.log(`  ${styles.muted('TS · video cli')}`)
 }
 
+// the warnings of this run, for its summary at the end
+const warnings: string[] = []
+export const runWarnings = () => [...warnings]
+
 export const log = {
     section: (title: string) => {
         detailsHidden = false
@@ -98,7 +102,10 @@ export const log = {
     /** One line of a listing - a detail like log.step. */
     line: (text: string) => print(text),
     step: (label: string, value: string = '') => print(`${styles.label(`▸ ${label}`)} ${value}`),
-    warn: (message: string) => print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true),
+    warn: (message: string) => {
+        warnings.push(message)
+        print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true)
+    },
     box: (title: string, content: string) => {
         const border = styles.border
         const lines = [border(`╭─ `) + styles.label(title) + border(` ${'─'.repeat(Math.max(0, boxWidth - title.length - 1))}╮`)]
