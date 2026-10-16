@@ -159,6 +159,9 @@ export type Project = {
     locationLooks?: Record<string, string>,
     characterDescriptions?: Record<string, string>,   // the looks without the picture, for the clip prompts
     locationDescriptions?: Record<string, string>,
+    // per place, two or three of its fixed features as one short phrase, written by the LLM from the description - repeated
+    // behind the people of every shot, so a shot is not drawn on the grey backdrop of the character pictures
+    locationAnchors?: Record<string, string>,
     beats?: StoryBeat[],
     timeline?: Timeline,
     mapping?: Assignment[],
@@ -187,6 +190,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     locationLooks: ['cast', 'lookBrief', 'summary'],
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
+    locationAnchors: ['locationDescriptions'],
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
@@ -223,12 +227,18 @@ export class ProjectStore {
         if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) throw new Error(`${this.file} must be a JSON object - fix it by hand, or delete it to start over (every step is generated again)`)
     }
 
+    // saves one after the other: elements of a step asked at once (llm.parallel) save as each answer comes in
+    private saving: Promise<void> = Promise.resolve()
+
     // written next to the target first, so a crash mid-write never leaves a truncated project.json
-    async save() {
-        // the process id in the name: two runs saving at once never write into the same temporary file
-        const partial = `${this.file}.${process.pid}.partial`
-        await Bun.write(partial, JSON.stringify(this.data, null, 2))
-        renameSync(partial, this.file)
+    save() {
+        this.saving = this.saving.catch(() => {}).then(async () => {
+            // the process id in the name: two runs saving at once never write into the same temporary file
+            const partial = `${this.file}.${process.pid}.partial`
+            await Bun.write(partial, JSON.stringify(this.data, null, 2))
+            renameSync(partial, this.file)
+        })
+        return this.saving
     }
 
     invalidate(name: StepName) {

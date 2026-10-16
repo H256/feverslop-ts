@@ -12,7 +12,8 @@ export type ComfyEntry = string | { url: string, name?: string, token?: string, 
 
 // the settings file as written by `bun run setup`
 export type SettingsFile = {
-    llm?: { url?: string, apiKey?: string, model?: string },
+    // parallel: how many LLM calls may run at once - as many as the server has slots (llama-server --parallel N, vLLM); default 1
+    llm?: { url?: string, apiKey?: string, model?: string, parallel?: number },
     comfy?: ComfyEntry[],
     /** Turns the tokens of `bun run stats` into money: per model id, price per million tokens (the currency is only a label). */
     prices?: Record<string, { inputPerMillion: number, outputPerMillion: number, currency?: string }>,
@@ -23,9 +24,9 @@ export type ComfyServer = { url: string, name: string, credentials?: BasicCreden
 export type Source = 'default' | 'file' | 'project' | 'env' | 'flag'
 
 export type Settings = {
-    llm: { url?: string, apiKey?: string, model?: string },
+    llm: { url?: string, apiKey?: string, model?: string, parallel: number },
     comfy: ComfyServer[],
-    sources: { llmUrl: Source, llmApiKey: Source, llmModel: Source, comfy: Source },
+    sources: { llmUrl: Source, llmApiKey: Source, llmModel: Source, llmParallel: Source, comfy: Source },
 }
 
 // everything that beats the settings file - all optional, strings as typed on the command line
@@ -34,6 +35,7 @@ export type SettingsOverrides = {
     llmUrl?: string,
     llmApiKey?: string,
     llmModel?: string,
+    llmParallel?: string,
     comfy?: string,             // comma-separated URLs
 }
 
@@ -66,10 +68,11 @@ export async function readSettingsFile(): Promise<SettingsFile> {
 
     if (raw.llm !== undefined) {
         if (!raw.llm || typeof raw.llm !== 'object' || Array.isArray(raw.llm)) fail('llm must be an object like {"url": …, "apiKey": …, "model": …}')
-        warnUnknownKeys(raw.llm, ['url', 'apiKey', 'model'], file, 'llm.')
+        warnUnknownKeys(raw.llm, ['url', 'apiKey', 'model', 'parallel'], file, 'llm.')
         for (const key of ['url', 'apiKey', 'model'] as const) {
             if (raw.llm[key] !== undefined && typeof raw.llm[key] !== 'string') fail(`llm.${key} must be a string, got ${JSON.stringify(raw.llm[key])}`)
         }
+        if (raw.llm.parallel !== undefined && !(Number.isInteger(raw.llm.parallel) && raw.llm.parallel >= 1)) fail(`llm.parallel must be a whole number of 1 or more, got ${JSON.stringify(raw.llm.parallel)}`)
         if (raw.llm.url) checkUrl(raw.llm.url, `${file}: llm.url`)
     }
     if (raw.comfy !== undefined) {
@@ -94,7 +97,7 @@ export async function saveSettings(settings: SettingsFile) {
 export async function loadSettings(overrides: SettingsOverrides = {}): Promise<Settings> {
     const file = await readSettingsFile()
     const env = process.env
-    const sources: Settings['sources'] = {llmUrl: 'default', llmApiKey: 'default', llmModel: 'default', comfy: 'default'}
+    const sources: Settings['sources'] = {llmUrl: 'default', llmApiKey: 'default', llmModel: 'default', llmParallel: 'default', comfy: 'default'}
 
     // the value of the highest layer that sets it
     const pick = (key: keyof Settings['sources'], layers: [Source, string | undefined][]) => {
@@ -110,6 +113,9 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
     const apiKey = pick('llmApiKey', [['file', file.llm?.apiKey], ['env', env.FEVERSLOP_LLM_API_KEY], ['flag', overrides.llmApiKey]])
     const model = pick('llmModel', [['file', file.llm?.model], ['project', overrides.projectModel], ['env', env.FEVERSLOP_LLM_MODEL], ['flag', overrides.llmModel]])
     if (url && sources.llmUrl !== 'file') checkUrl(url, sources.llmUrl === 'env' ? 'FEVERSLOP_LLM_URL' : '--llm-url')
+    const parallelText = pick('llmParallel', [['file', file.llm?.parallel === undefined ? undefined : String(file.llm.parallel)], ['env', env.FEVERSLOP_LLM_PARALLEL], ['flag', overrides.llmParallel]])
+    const parallel = parallelText === undefined ? 1 : Number(parallelText)
+    if (!Number.isInteger(parallel) || parallel < 1) throw new Error(`${sources.llmParallel === 'env' ? 'FEVERSLOP_LLM_PARALLEL' : '--llm-parallel'}: "${parallelText}" must be a whole number of 1 or more`)
 
     let comfy = parseComfyEntries([defaultComfy], 'default')
     if (file.comfy?.length) {
@@ -125,7 +131,7 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
         comfy = parseComfyEntries(splitList(overrides.comfy), '--comfy')
         sources.comfy = 'flag'
     }
-    return {llm: {url: url && trimSlash(url), apiKey, model}, comfy, sources}
+    return {llm: {url: url && trimSlash(url), apiKey, model, parallel}, comfy, sources}
 }
 
 /** Settings file entries → servers with a unique name each and SDK credentials. */
