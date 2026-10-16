@@ -84,6 +84,19 @@ export const log = {
     fatal: (message: string): never => errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}]),
 }
 
+/**
+ * The handler for an uncaught failure of a whole run: the message in the red box, and with --debug (or FEVERSLOP_DEBUG=1)
+ * the stack trace below it. The flag is read from the raw arguments - the handlers are set up before parseArgs runs.
+ */
+export function failRun(e: unknown): never {
+    const debug = process.env.FEVERSLOP_DEBUG === '1' || Bun.argv.includes('--debug')
+    if (debug && e instanceof Error && e.stack) {
+        clearBoard()
+        console.error(styles.muted(e.stack))
+    }
+    return log.fatal(e instanceof Error ? e.message : String(e))
+}
+
 function errorBox(heading: string, sections: { text: string, style: (s: string) => string }[]): never {
     clearBoard()
     if (logFile) sections = [...sections, {text: `The whole run: ${logFile.path}`, style: styles.muted}]

@@ -4,17 +4,18 @@ import {currentStep, readTimings, recordTiming} from "./timings.ts";
 import {predictLlmSeconds} from "./predict.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
 
-export type LlmSettings = { url?: string, apiKey?: string, model?: string }
+export type LlmSettings = { url?: string, apiKey?: string, model?: string, parallel?: number }
 
 let settings: LlmSettings = {}
 let llmClient: OpenAI | undefined
-let modelId: string | undefined
+let modelId: Promise<string> | undefined
 
 /** Sets the server for the following calls - the connection itself is made on the first call. */
 export function configureLlm(llm: LlmSettings) {
     settings = llm
     llmClient = undefined
     modelId = undefined
+    chatSchema = undefined
 }
 
 // local servers ignore the key, but the OpenAI client needs one
@@ -33,26 +34,50 @@ export async function listModels(url: string, apiKey?: string, timeout?: number)
     return ids
 }
 
-// resolved on first use, so a fully cached project runs without the server
-async function getModelId() {
-    if (!modelId) {
-        const client = getClient()
-        const ids: string[] = []
-        for await (const model of client.models.list()) ids.push(model.id)
-        const list = ids.join(', ') || 'none'
-        if (settings.model) {
-            if (!ids.includes(settings.model)) throw new Error(`The LLM server ${settings.url} has no model "${settings.model}" (it has: ${list}) - pick one with: bun run setup llm-model`)
-            modelId = settings.model
-        } else if (ids.length === 1) {
-            modelId = ids[0]!
-        } else if (!ids.length) {
-            throw new Error(`The LLM server ${settings.url} lists no models - load one on the server`)
-        } else {
-            throw new Error(`Several models on ${settings.url} (${list}) - pick one with: bun run setup llm-model`)
-        }
-        log.step('Model', `${styles.name(modelId)} ${styles.muted(`on ${settings.url}`)}`)
-    }
+// resolved on first use, so a fully cached project runs without the server - once, also when the first calls run at once
+function getModelId() {
+    modelId ??= resolveModelId().catch(e => {
+        modelId = undefined
+        throw e
+    })
     return modelId
+}
+
+async function resolveModelId() {
+    const client = getClient()
+    const ids: string[] = []
+    for await (const model of client.models.list()) ids.push(model.id)
+    const list = ids.join(', ') || 'none'
+    let id: string
+    if (settings.model) {
+        if (!ids.includes(settings.model)) throw new Error(`The LLM server ${settings.url} has no model "${settings.model}" (it has: ${list}) - pick one with: bun run setup llm-model`)
+        id = settings.model
+    } else if (ids.length === 1) {
+        id = ids[0]!
+    } else if (!ids.length) {
+        throw new Error(`The LLM server ${settings.url} lists no models - load one on the server`)
+    } else {
+        throw new Error(`Several models on ${settings.url} (${list}) - pick one with: bun run setup llm-model`)
+    }
+    log.step('Model', `${styles.name(id)} ${styles.muted(`on ${settings.url}${(settings.parallel ?? 1) > 1 ? `, up to ${settings.parallel} calls at once` : ''}`)}`)
+    return id
+}
+
+/**
+ * Runs `run` for every item, as many at once as the server takes (llm.parallel, default 1 = one after the other) - for
+ * calls that don't depend on each other. The results are in the order of the items.
+ */
+export async function llmMap<T, R>(items: T[], run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length)
+    let next = 0
+    const worker = async () => {
+        while (next < items.length) {
+            const i = next++
+            results[i] = await run(items[i]!, i)
+        }
+    }
+    await Promise.all(Array.from({length: Math.min(Math.max(1, settings.parallel ?? 1), items.length)}, worker))
+    return results
 }
 
 export type ReasoningStrength = 'low' | 'medium' | 'high' | 'xhigh'
@@ -81,7 +106,14 @@ function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningS
     return adapter ? adapter.apply(prompt, level) : {...prompt, reasoning: {effort: level}}
 }
 
-export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low') {
+// A JSON schema the answer must follow - the server then constrains the decoding to it, so the JSON cannot break. The
+// Responses API of llama.cpp ignores text.format without a word; its Chat Completions API honours response_format (also
+// with reasoning), so an answer with a schema is asked there. A server that refuses it is asked the plain way for the rest
+// of the run, and the answer is read and repaired as before.
+export type JsonSchema = Record<string, unknown>
+let chatSchema: boolean | undefined
+
+export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low', schema?: JsonSchema) {
     let thinking = ''
     let answer = ''
     let usage: ResponseUsage | undefined
@@ -98,8 +130,24 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
         return styles.muted(`waiting for model${expected ? ` (usually ~${formatDuration(expected * 1000)})` : ''}`)
     })
     try {
-        const stream = await getClient().responses.create(prompt)
-        for await (const event of stream) {
+        const chat = schema && chatSchema !== false && typeof prompt.input === 'string' ? await openChat(prompt, schema) : undefined
+        if (chat) for await (const chunk of chat) {
+            const delta = chunk.choices[0]?.delta as { content?: string | null, reasoning_content?: string | null, reasoning?: string | null } | undefined
+            thinking += delta?.reasoning_content ?? delta?.reasoning ?? ''
+            answer += delta?.content ?? ''
+            const reason = chunk.choices[0]?.finish_reason
+            if (reason) {
+                finished = true
+                if (reason === 'length') incomplete = 'max_output_tokens'
+            }
+            if (chunk.usage) usage = {
+                input_tokens: chunk.usage.prompt_tokens,
+                output_tokens: chunk.usage.completion_tokens,
+                input_tokens_details: {cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens},
+                output_tokens_details: {reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens},
+            }
+        }
+        else for await (const event of await getClient().responses.create(prompt)) {
             switch (event.type) {
                 case 'response.reasoning_text.delta':
                 case 'response.reasoning_summary_text.delta':
@@ -146,6 +194,37 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     return {thinking, answer}
 }
 
+/**
+ * The same request on the Chat Completions API, with the schema as response_format - undefined (and the plain way for the
+ * rest of the run) when the server refuses it.
+ */
+async function openChat(prompt: ResponseCreateParamsStreaming, schema: JsonSchema) {
+    const extra = prompt as ResponseCreateParamsStreaming & { chat_template_kwargs?: unknown }
+    try {
+        const stream = await getClient().chat.completions.create({
+            model: prompt.model!,
+            messages: [
+                ...(prompt.instructions ? [{role: 'system' as const, content: prompt.instructions}] : []),
+                {role: 'user' as const, content: prompt.input as string},
+            ],
+            ...(prompt.max_output_tokens ? {max_tokens: prompt.max_output_tokens} : {}),
+            ...(prompt.reasoning?.effort ? {reasoning_effort: prompt.reasoning.effort as 'low'} : {}),
+            ...(extra.chat_template_kwargs ? {chat_template_kwargs: extra.chat_template_kwargs} : {}),
+            response_format: {type: 'json_schema', json_schema: {name: 'answer', strict: true, schema}},
+            stream: true,
+            stream_options: {include_usage: true},
+        } as Parameters<OpenAI['chat']['completions']['create']>[0] & { stream: true })
+        chatSchema = true
+        return stream
+    } catch (e) {
+        const status = (e as { status?: number }).status
+        if (chatSchema === true || !status || status >= 500) throw e
+        chatSchema = false
+        log.warn(`the LLM server does not take a JSON schema (${status}) - asking without one for the rest of the run`)
+        return undefined
+    }
+}
+
 type ResponseUsage = { input_tokens?: number, output_tokens?: number, input_tokens_details?: { cached_tokens?: number }, output_tokens_details?: { reasoning_tokens?: number } }
 
 /** Keeps one call in the central timings: durations and the token numbers the endpoint reported - nothing is estimated, and no text. */
@@ -179,6 +258,8 @@ export type AskOptions = {
     reasoning?: ReasoningStrength,
     // data URLs (e.g. "data:image/png;base64,...") - only for a vision-capable model; see tools/replace-character.ts
     images?: string[],
+    // askJson only: the shape of the answer - the server keeps the decoding to it (see fetchAndDisplayResponse)
+    schema?: JsonSchema,
 }
 
 /** The model finished every attempt without writing an answer - it only thought. */
@@ -190,7 +271,7 @@ export class EmptyAnswerError extends Error {
 
 const emptyAnswerNote = '\n\nKeep your thinking short and then write the answer itself - an empty answer is not acceptable.'
 
-export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images}: AskOptions) {
+export async function ask({instructions, input, maxTokens = 8192, reasoning = 'low', images, schema}: AskOptions) {
     const requestInput = images?.length
         ? [{role: 'user' as const, content: [{type: 'input_text' as const, text: input}, ...images.map(image_url => ({type: 'input_image' as const, image_url, detail: 'auto' as const}))]}]
         : input
@@ -205,7 +286,7 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     ]
     for (const [i, {limit, level, note}] of attempts.entries()) {
         try {
-            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level)
+            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level, schema)
             if (answer.trim()) return answer.trim()
             if (i === attempts.length - 1) throw new EmptyAnswerError(attempts.length)
             log.warn(`empty answer - the model only thought - asking again with ${attempts[i + 1]!.limit}${attempts[i + 1]!.note ? ' and a shorter-thinking prompt' : ''}`)

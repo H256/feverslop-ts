@@ -495,6 +495,14 @@ describe('shot planning prompt rules', () => {
         expect(instructions).toContain('an elevated view only for a camera that is high above')
         expect(instructions).not.toContain('never by that name')
     })
+    test('the instructions are the same for every scene - the scene and the problems are in the input', async () => {
+        const {coveragePrompt} = await import("./prompts.ts")
+        const first = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', 20, 3)
+        const again = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, ['shot 2 names nobody'])
+        expect(again.instructions).toBe(first.instructions)
+        expect(first.input).toContain('Most shots: 3')
+        expect(again.input).toEndWith('- shot 2 names nobody')
+    })
 })
 
 describe('characters the script has not brought in yet', () => {
