@@ -4,11 +4,11 @@ import {currentStep, readTimings, recordTiming} from "./timings.ts";
 import {predictLlmSeconds} from "./predict.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
 
-export type LlmSettings = { url?: string, apiKey?: string, model?: string }
+export type LlmSettings = { url?: string, apiKey?: string, model?: string, parallel?: number }
 
 let settings: LlmSettings = {}
 let llmClient: OpenAI | undefined
-let modelId: string | undefined
+let modelId: Promise<string> | undefined
 
 /** Sets the server for the following calls - the connection itself is made on the first call. */
 export function configureLlm(llm: LlmSettings) {
@@ -33,26 +33,50 @@ export async function listModels(url: string, apiKey?: string, timeout?: number)
     return ids
 }
 
-// resolved on first use, so a fully cached project runs without the server
-async function getModelId() {
-    if (!modelId) {
-        const client = getClient()
-        const ids: string[] = []
-        for await (const model of client.models.list()) ids.push(model.id)
-        const list = ids.join(', ') || 'none'
-        if (settings.model) {
-            if (!ids.includes(settings.model)) throw new Error(`The LLM server ${settings.url} has no model "${settings.model}" (it has: ${list}) - pick one with: bun run setup llm-model`)
-            modelId = settings.model
-        } else if (ids.length === 1) {
-            modelId = ids[0]!
-        } else if (!ids.length) {
-            throw new Error(`The LLM server ${settings.url} lists no models - load one on the server`)
-        } else {
-            throw new Error(`Several models on ${settings.url} (${list}) - pick one with: bun run setup llm-model`)
-        }
-        log.step('Model', `${styles.name(modelId)} ${styles.muted(`on ${settings.url}`)}`)
-    }
+// resolved on first use, so a fully cached project runs without the server - once, also when the first calls run at once
+function getModelId() {
+    modelId ??= resolveModelId().catch(e => {
+        modelId = undefined
+        throw e
+    })
     return modelId
+}
+
+async function resolveModelId() {
+    const client = getClient()
+    const ids: string[] = []
+    for await (const model of client.models.list()) ids.push(model.id)
+    const list = ids.join(', ') || 'none'
+    let id: string
+    if (settings.model) {
+        if (!ids.includes(settings.model)) throw new Error(`The LLM server ${settings.url} has no model "${settings.model}" (it has: ${list}) - pick one with: bun run setup llm-model`)
+        id = settings.model
+    } else if (ids.length === 1) {
+        id = ids[0]!
+    } else if (!ids.length) {
+        throw new Error(`The LLM server ${settings.url} lists no models - load one on the server`)
+    } else {
+        throw new Error(`Several models on ${settings.url} (${list}) - pick one with: bun run setup llm-model`)
+    }
+    log.step('Model', `${styles.name(id)} ${styles.muted(`on ${settings.url}${(settings.parallel ?? 1) > 1 ? `, up to ${settings.parallel} calls at once` : ''}`)}`)
+    return id
+}
+
+/**
+ * Runs `run` for every item, as many at once as the server takes (llm.parallel, default 1 = one after the other) - for
+ * calls that don't depend on each other. The results are in the order of the items.
+ */
+export async function llmMap<T, R>(items: T[], run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length)
+    let next = 0
+    const worker = async () => {
+        while (next < items.length) {
+            const i = next++
+            results[i] = await run(items[i]!, i)
+        }
+    }
+    await Promise.all(Array.from({length: Math.min(Math.max(1, settings.parallel ?? 1), items.length)}, worker))
+    return results
 }
 
 export type ReasoningStrength = 'low' | 'medium' | 'high' | 'xhigh'

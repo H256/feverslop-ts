@@ -1,10 +1,10 @@
 import slugify from "slugify";
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {log, printBanner, styles} from "./lib/log.ts";
+import {failRun, log, printBanner, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
-import {ask, askJson, configureLlm} from "./lib/llm.ts";
+import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
@@ -20,22 +20,25 @@ import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
+import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
+import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
-import {projectExists, validProjectId} from "./lib/project-setup.ts";
+import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
+import * as clack from "@clack/prompts";
 import {propMissing} from "./lib/prop-check.ts";
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
-process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+process.on('unhandledRejection', failRun)
+process.on('uncaughtException', failRun)
 
 printBanner()
 
@@ -48,8 +51,8 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
-             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict]   (--refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
+             [--refresh=pictures,clips] [--strict] [--debug]   (--debug: the stack trace of a failure · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -65,12 +68,15 @@ const {values: args, positionals} = (() => {
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
+                'llm-parallel': {type: 'string'},
                 comfy: {type: 'string'},
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
                 'debug-audio': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
                 strict: {type: 'boolean', default: false},
+                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
+                debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
@@ -96,12 +102,12 @@ if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.j
 const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
 const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
-const DEFAULT_PROJECT = 'well-of-youth-gothic-trio-260920' // author's own current project, pass your own project-id otherwise
-const projectId = positionals[0] ?? DEFAULT_PROJECT
+// without an id: the projects to pick from in a terminal, else the list of them in the usage error
+const projectId = positionals[0] ?? await pickProject()
 if (!validProjectId(projectId)) log.usageError(`"${projectId}" is not a project id - lowercase letters, digits and "-" only (it is the folder name in projects/ and part of the ComfyUI client id)`, usage)
 if (!projectExists(projectId)) {
-    const existing = existsSync('projects') ? readdirSync('projects', {withFileTypes: true}).filter(d => d.isDirectory()).map(d => d.name) : []
-    log.usageError(`${positionals[0] ? `No project "${projectId}" in projects/` : `No project id given, and the author's default project "${DEFAULT_PROJECT}" doesn't exist in projects/`} - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
+    const existing = listProjects()
+    log.usageError(`No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
 }
 const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
@@ -136,6 +142,7 @@ const settings = await loadSettings({
     llmUrl: args['llm-url'],
     llmApiKey: args['llm-key'],
     llmModel: args['llm-model'],
+    llmParallel: args['llm-parallel'],
     comfy: args.comfy,
 })
 configureLlm(settings.llm)
@@ -406,40 +413,50 @@ for (const c of cast.characters) {
 }
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
+// one call per character, independent of each other - as many at once as llm.parallel allows
 const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
-    const descriptions: Record<string, string> = {}
-    for (const [i, char] of cast.characters.entries()) {
+    const descriptions = await llmMap(cast.characters, (char, i) => {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
         const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
-        descriptions[char.id] = await project.each('characterDescriptions', char.id, options, () => ask(options))
-    }
-    return descriptions
+        return project.each('characterDescriptions', char.id, options, () => ask(options))
+    })
+    return Object.fromEntries(cast.characters.map((char, i) => [char.id, descriptions[i]!]))
 })
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 ////////// CRAFTING LOCATION LOOKS
+// unlike the characters, the places are not contrasted with each other - asked at once, up to llm.parallel
 const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
-    const looks: Record<string, string> = {}
-    for (const [i, location] of cast.locations.entries()) {
+    const looks = await llmMap(cast.locations, (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const options = locationLookPrompt(lookBrief, storySummary, location.name)
-        looks[location.id] = await project.each('locationLooks', location.id, options, () => ask(options))
-    }
-    return looks
+        const options = locationLookPrompt(lookBrief, storySummary, location.name, [...new Set(cast.characters.flatMap(c => c.prop ? [c.prop] : []))])
+        return project.each('locationLooks', location.id, options, () => ask(options))
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
 })
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 ////////// DESCRIBING THE LOCATIONS - the look prompt without the establishing shot (camera, "empty", medium)
 const locationDescriptions = await project.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
-    const descriptions: Record<string, string> = {}
-    for (const [i, location] of cast.locations.entries()) {
+    const descriptions = await llmMap(cast.locations, (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
-        descriptions[location.id] = await project.each('locationDescriptions', location.id, options, () => ask(options))
-    }
-    return descriptions
+        return project.each('locationDescriptions', location.id, options, () => ask(options))
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, descriptions[i]!]))
 })
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
+
+////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
+const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
+    const anchors = await llmMap(cast.locations, async (location, i) => {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
+        return (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, anchors[i]!]))
+})
+for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
 // What the video model draws wrongly when a story or lyric text is taken at its word - shared by the beats and the shot-moments prompts
 const filmableRules = `Keep to what a camera can really see, with ordinary physics:
@@ -575,10 +592,10 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
         log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
         descriptions[id] = [
             characterDescriptions[id] ?? '',
-            ...await Promise.all(looks.slice(1).map((look, i) => {
+            ...await llmMap(looks.slice(1), (look, i) => {
                 const options = characterDescriptionPrompt(look)
                 return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
-            })),
+            }),
         ]
     }
     return descriptions
@@ -834,15 +851,12 @@ const locationView = config.sequenceSheets ? config.locationView : -1
 const viewsBefore = project.data.shotViews
 if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
 const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
-    const result: Record<string, number[]> = {}
-    for (const beat of beats) {
+    // the beats don't depend on each other here - asked at once, up to llm.parallel
+    const answers = await llmMap(beats, async (beat): Promise<number[] | undefined> => {
         const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
-        if (!plan) continue
+        if (!plan) return undefined
         const kept = viewsBefore?.[beat.id]
-        if (kept?.length === plan.shots.length) {
-            result[beat.id] = kept
-            continue
-        }
+        if (kept?.length === plan.shots.length) return kept
         const answer = await askJson<{ views: unknown[] }>({
             input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
 views (number: what it shows):
@@ -859,14 +873,18 @@ Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length -
             return undefined
         })
         // not stored: the beat is asked again on the next run instead of keeping the first view for good
-        if (!answer) continue
+        if (!answer) return undefined
         const views = plan.shots.map((_, n) => {
             const v = Number(answer?.views?.[n])
             return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
         })
-        result[beat.id] = views
         console.log(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
-    }
+        return views
+    })
+    const result: Record<string, number[]> = {}
+    beats.forEach((beat, i) => {
+        if (answers[i]) result[beat.id] = answers[i]
+    })
     return result
 }) : undefined
 
@@ -882,6 +900,7 @@ const clips = buildClipRequests({
     characterDescriptions,
     characterDescriptionVariants,
     locationDescriptions,
+    locationAnchors,
     lookBrief,
     music,
     language,
@@ -895,8 +914,14 @@ const clips = buildClipRequests({
     shotViews,
 })
 
+// more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them
+for (const clip of clips) {
+    if (clip.dropped?.length) log.warn(`${clip.id}: no reference picture left for ${clip.dropped.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')} - the workflow takes ${MAX_REFERENCE_IMAGES} pictures`)
+}
+
 const outputDir = join(project.dir, 'output')
-rmSync(outputDir, {recursive: true, force: true})
+// the output of the run before goes to output/.previous/ - to say below which requests this run changed
+startOutput(outputDir)
 mkdirSync(join(outputDir, 'clips'), {recursive: true})
 mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
@@ -955,6 +980,19 @@ await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
 
 for (const clip of clips) {
     log.box(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section} · ${clip.beatId}`, clip.prompt)
+}
+const changes = requestChanges(outputDir)
+if (changes) {
+    const {changed, added, gone} = changes
+    if (!changed.length && !added.length && !gone.length) log.step('Changes', styles.muted('every request is the same as in the run before'))
+    else {
+        log.step('Changes', [
+            changed.length ? `${changed.length} changed: ${formatSlotRanges(changed)}` : '',
+            added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
+            gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
+        ].filter(Boolean).join(' · '))
+        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(outputDir, PREVIOUS, 'clips', `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
+    }
 }
 
 ////////// RENDERING WITH COMFYUI
@@ -1155,6 +1193,17 @@ For every beat that plays while the song has vocals:
 - the singer(s) of that section are on screen: their ids are in "characterIds".
 - they sing while they act, e.g. "Thorin sings while forging the blade", "Vael sings through the blow she takes from the orc" - the mouth stays in view (three-quarter or profile is fine, looking at what the story has them look at), no hidden faces, no masks or objects over the mouth.
 `
+}
+
+// No project id given: the projects, most recently changed first, to pick one with the arrow keys - without a
+// terminal (scripts, CI) nobody can pick, so the usage error lists them instead
+async function pickProject(): Promise<string> {
+    const projects = listProjects()
+    if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
+    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
+    const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
+    if (clack.isCancel(picked)) process.exit(0)
+    return picked
 }
 
 function energyBar(value: number) {
