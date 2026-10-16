@@ -30,6 +30,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/style
 import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
 import * as clack from "@clack/prompts";
 import {propMissing} from "./lib/prop-check.ts";
+import {reviewed} from "./lib/review.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
@@ -52,7 +53,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict] [--debug]   (--debug: the stack trace of a failure · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--strict] [--debug] [--review]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -79,6 +80,8 @@ const {values: args, positionals} = (() => {
                 debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
+                // stop after story, cast, look and beats when they were just generated: accept, edit, again, stop
+                review: {type: 'boolean', default: false},
             },
         })
     } catch (e) {
@@ -96,6 +99,7 @@ if (unknownRefresh.length) log.usageError(`--refresh: unknown "${unknownRefresh.
 // --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
 if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
+if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
@@ -312,8 +316,9 @@ if (lyricsTiming) {
 }
 
 ////////// CRAFT A STORY FOR THE LYRICS
-const storyBase = await project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea, config.singerVoice)))
-log.box('Story', storyBase)
+const storyBase = await reviewed(project, args.review, 'story',
+    () => project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea, config.singerVoice))),
+    story => log.box('Story', story))
 if (storyBase === 'NO STORY') throw new Error('Neither lyrics nor a story idea given')
 
 ////////// SUMMARIZE THE STORY
@@ -321,7 +326,7 @@ const storySummary = await project.step('summary', '4 · SUMMARIZING THE STORY',
 log.box('Summary', storySummary)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
-const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
+const cast = await reviewed(project, args.review, 'cast', () => project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
     const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
     const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
     const takenCharacters = new Set<string>()
@@ -343,11 +348,12 @@ const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS'
         })),
         locations: extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)})),
     }
+}), cast => {
+    log.step('Characters', styles.muted(`(${cast.characters.length})`))
+    for (const c of cast.characters) console.log(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}`) : ''}`)
+    log.step('Locations', styles.muted(`(${cast.locations.length})`))
+    for (const l of cast.locations) console.log(`   ${styles.name(l.id)}`)
 })
-log.step('Characters', styles.muted(`(${cast.characters.length})`))
-for (const c of cast.characters) console.log(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}`) : ''}`)
-log.step('Locations', styles.muted(`(${cast.locations.length})`))
-for (const l of cast.locations) console.log(`   ${styles.name(l.id)}`)
 
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
@@ -392,8 +398,9 @@ if (singing) {
 }
 
 /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
-const lookBrief = await project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary)))
-log.box('Look brief', lookBrief)
+const lookBrief = await reviewed(project, args.review, 'lookBrief',
+    () => project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary))),
+    look => log.box('Look brief', look))
 
 ////////// CRAFTING CHARACTER LOOKS
 const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARACTER LOOKS', async () => {
@@ -474,7 +481,7 @@ const filmableRules = `Keep to what a camera can really see, with ordinary physi
 const beatCount = Math.max(6, Math.round(music.durationSec / 15))
 // where the last sung word ends - the singer is on screen until then
 const vocalsEnd = Math.max(0, ...(lyricsTiming?.lines.flatMap(l => l.words.map(w => w.end)) ?? []))
-const beats = await project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
+const beats = await reviewed(project, args.review, 'beats', () => project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
     const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>({
         reasoning: 'medium',
         // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
@@ -551,12 +558,13 @@ ${storyBase}`,
             ...(Object.keys(groupSize).length ? {groupSize} : {}),
         }
     })
+}), beats => {
+    for (const beat of beats) {
+        console.log(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
+        console.log(`      ${beat.summary}`)
+        for (const moment of beat.moments) console.log(styles.muted(`        · ${moment}`))
+    }
 })
-for (const beat of beats) {
-    console.log(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
-    console.log(`      ${beat.summary}`)
-    for (const moment of beat.moments) console.log(styles.muted(`        · ${moment}`))
-}
 
 ////////// GENERATING GROUP MEMBER VARIANT LOOKS
 // group characters (cast.characters[].isGroup) that ever show more than one individual on screen at once (beats

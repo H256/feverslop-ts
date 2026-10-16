@@ -205,6 +205,8 @@ export class ProjectStore {
     readonly dir: string
     readonly file: string
     data: Project = {}
+    // the steps generated in this run (not taken from project.json)
+    readonly generated = new Set<StepName>()
 
     constructor(readonly id: string) {
         this.dir = join('projects', id)
@@ -280,6 +282,7 @@ export class ProjectStore {
             return cached as NonNullable<Project[K]>
         }
         const result = await withStep(name, run)
+        this.generated.add(name)
         this.data[name] = result
         dropPartials(this.data, name)
         await this.save()
