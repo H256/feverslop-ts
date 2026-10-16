@@ -110,7 +110,7 @@ async function setupLlm() {
     } else if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) {
         return p.log.info('LLM settings unchanged')
     }
-    file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {})}
+    file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {}), ...(file.llm?.parallel ? {parallel: file.llm.parallel} : {})}
     await save('the LLM server')
 }
 
@@ -229,6 +229,7 @@ async function show() {
     console.log(`  url      ${llm.url ?? styles.muted('not set')} ${source(sources.llmUrl)}`)
     console.log(`  api key  ${llm.apiKey ? maskSecret(llm.apiKey) : styles.muted('none')} ${source(sources.llmApiKey)}`)
     console.log(`  model    ${llm.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.llmModel)}`)
+    console.log(`  parallel ${llm.parallel} ${styles.muted(llm.parallel > 1 ? 'calls at once' : 'call at a time')} ${source(sources.llmParallel)}`)
     console.log(`\nComfyUI ${source(sources.comfy)}`)
     for (const server of comfy) {
         const auth = server.credentials?.type === 'bearer_token' ? ` token ${maskSecret(server.credentials.token)}`
@@ -248,9 +249,10 @@ function printWithoutTerminal() {
   env vars:   FEVERSLOP_LLM_URL=http://localhost:8080/v1
               FEVERSLOP_LLM_API_KEY=…
               FEVERSLOP_LLM_MODEL=<model id>
+              FEVERSLOP_LLM_PARALLEL=2     (as many calls at once as the server has slots, default 1)
               FEVERSLOP_COMFY=http://localhost:8188,http://gpu2.lan:8188
 
-  per run:    bun index.ts --llm-url=… --llm-model=… --comfy=http://a:8188,http://b:8188
+  per run:    bun index.ts --llm-url=… --llm-model=… --llm-parallel=2 --comfy=http://a:8188,http://b:8188
 
   or write ${settingsPath()}:
 ${JSON.stringify(example, null, 2).replace(/^/gm, '    ')}`)
