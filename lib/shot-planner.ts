@@ -124,3 +124,19 @@ This call writes ${chunk.from > 0 || chunk.to < chunk.total ? `ONLY shots ${chun
         instructions: planInstructions,
     }
 }
+
+/**
+ * The calls of one beat: `perCall` shots each. Asked again (`issues` of the first answer, which had `previousShots`
+ * shots), a call whose shots have no problem keeps its first answer, the others are asked with their own problems; a
+ * problem of the whole beat (its shot count) asks every call again - the shots after it would no longer line up.
+ */
+export function plannerCalls(total: number, perCall: number, again?: { issues: { shot?: number, message: string }[], previousShots: number }) {
+    const askAll = !again || again.issues.some(i => i.shot === undefined)
+    const calls: { from: number, to: number, keep: boolean, problems: string[] }[] = []
+    for (let from = 0; from < total; from += perCall) {
+        const to = Math.min(total, from + perCall)
+        const problems = (again?.issues ?? []).filter(i => i.shot === undefined || (i.shot >= from && i.shot < to)).map(i => i.message)
+        calls.push({from, to, keep: !askAll && !problems.length && again!.previousShots >= to, problems})
+    }
+    return calls
+}

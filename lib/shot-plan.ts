@@ -29,7 +29,9 @@ const characterOf = (characters: Character[], who: string) => {
  * its singer, three people in unison). notes: what the code repaired or what is only worth a line in the log - they never
  * cost another planner call, so a rule that is nice to have can not keep the run from going on.
  */
-export type ReadPlan = { plan: BeatShots, problems: string[], notes: string[] }
+export type ReadPlan = { plan: BeatShots, problems: string[], notes: string[], issues: Issue[] }
+/** A problem with the shot it is in (0-based) - none for a problem of the whole beat (its shot count): asked again for those shots only. */
+export type Issue = { shot?: number, message: string }
 
 /** The most people a shot gives an own entry to, and shows at once unless it is a wide shot. */
 export const MAX_FOREGROUND = 4
@@ -94,9 +96,10 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
     const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : undefined
     const rawShots = Array.isArray(raw) ? raw : o && Array.isArray(o.shots) ? o.shots : undefined
     if (!rawShots?.length) return undefined
-    const problems: string[] = []
+    const issues: Issue[] = []
     const notes: string[] = []
     const onScreen = characters.filter(c => beat.characterIds.includes(c.id))
+    const problem = (shot: number | undefined, message: string) => issues.push({...(shot !== undefined ? {shot} : {}), message})
 
     const shots = rawShots.map((entry, j): ShotPlan => {
         const e: Record<string, unknown> = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {action: entry}
@@ -104,7 +107,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         const names = Array.isArray(e.characters) ? e.characters.map(text).filter(Boolean) : []
         const ids = [...new Set(names.flatMap(name => {
             const found = characterOf(characters, name)
-            if (!found) problems.push(`shot ${j + 1}: "${name}" is not one of the characters`)
+            if (!found) problem(j, `shot ${j + 1}: "${name}" is not one of the characters`)
             return found ? [found.id] : []
         }))]
         let people: NonNullable<ShotPlan['people']> = {}
@@ -126,12 +129,12 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         // the shot's text names someone who is not in it: the video model draws a stranger for a name without a picture
         const written = [action, text(e.view), ...Object.values(people).flatMap(p => [p.state ?? '', p.frame ?? '', p.motion ?? ''])].join(' ')
         const strangers = onScreen.filter(c => !ids.includes(c.id) && mentionsCharacter(written, c)).map(c => c.name)
-        if (strangers.length) problems.push(`shot ${j + 1}: the text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the text, or put them in the shot`)
+        if (strangers.length) problem(j, `shot ${j + 1}: the text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the text, or put them in the shot`)
         // while a line is sung, a singer is in the picture
         if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
-            problems.push(`shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
+            problem(j, `shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
         const unison = unisonChecks(j, people, characters)
-        problems.push(...unison.problems)
+        for (const message of unison.problems) problem(j, message)
         notes.push(...unison.notes, ...singingNotes(j, people, characters, singers))
         const size = SIZES.find(s => s === text(e.size).toLowerCase())
         if (ids.length > MAX_FOREGROUND && size !== 'wide') notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
@@ -152,7 +155,9 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             ...(text(e.rest) ? {rest: text(e.rest)} : {}),
         }
     })
-    if (shots.some(s => !s.action)) problems.push('every shot needs an action')
+    shots.forEach((s, j) => {
+        if (!s.action) problem(j, `shot ${j + 1}: every shot needs an action`)
+    })
 
     const ends: Record<string, string> = {}
     if (o?.ends && typeof o.ends === 'object' && !Array.isArray(o.ends)) {
@@ -162,9 +167,9 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         }
     }
     // padded or cut below so the run goes on, but the planner is asked again: repeated shots read as "the same action, closer"
-    if (shots.length !== needed) problems.push(`shot count: needed ${needed}, got ${shots.length}`)
+    if (shots.length !== needed) problem(undefined, `shot count: needed ${needed}, got ${shots.length}`)
     const sized = Array.from({length: needed}, (_, j) => shots[Math.min(j, shots.length - 1)]!)
-    return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems}
+    return {notes, plan: {...(text(o?.staging) ? {staging: text(o?.staging)} : {}), ...(Object.keys(ends).length ? {ends} : {}), shots: sized}, problems: issues.map(i => i.message), issues}
 }
 
 /**

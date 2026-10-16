@@ -12,8 +12,8 @@ import {type BeatShots, type Character, type Location, ProjectStore, type PropSt
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
-import {asBeatShots, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
-import {filmableRules, type PlanContext, planPrompt} from "./lib/shot-planner.ts";
+import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
+import {filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -636,17 +636,28 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
     const MOMENT_SHOTS_PER_CALL = 4
     // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.
     // A call without a single shot in its answer is asked once more; the beat is then short of those shots (a missing
-    // shot repeats the last one, see readBeatPlan) instead of falling back to its beat moments as a whole
-    const askBlock = async (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, problems: string[] = []) => {
-        const moments: Record<string, unknown> = {}
+    // shot repeats the last one, see readBeatPlan) instead of falling back to its beat moments as a whole.
+    // Asked again (`before`: the first answer and what was wrong with it), only the calls whose shots have a problem are
+    // made again, each with its own problems; the other calls keep their first answer. A problem of the whole beat (its
+    // shot count) asks every call again - the shots of the calls after it would no longer line up.
+    type RawBeat = { staging?: string, ends?: Record<string, string>, shots: Record<string, unknown>[] }
+    const askBlock = async (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, before?: { moments: Record<string, RawBeat>, issues: Record<string, Issue[]> }) => {
+        const moments: Record<string, RawBeat> = {}
         for (const beat of block) {
             const total = shotCounts[beat.id] ?? 1
-            const raw: { staging?: string, ends?: Record<string, string>, shots: Record<string, unknown>[] } = {shots: []}
-            for (let from = 0; from < total; from += MOMENT_SHOTS_PER_CALL) {
-                const to = Math.min(total, from + MOMENT_SHOTS_PER_CALL)
+            const raw: RawBeat = {shots: []}
+            const previous = before?.moments[beat.id]
+            const calls = plannerCalls(total, MOMENT_SHOTS_PER_CALL, previous ? {issues: before!.issues[beat.id] ?? [], previousShots: previous.shots.length} : undefined)
+            for (const {from, to, keep, problems: own} of calls) {
+                if (keep) {
+                    if (from === 0) raw.staging = previous!.staging
+                    raw.shots.push(...previous!.shots.slice(from, to))
+                    if (to === total) raw.ends = previous!.ends
+                    continue
+                }
                 let chunk: ReturnType<typeof parseShotLines> | undefined
                 for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
-                    const parsed = parseShotLines(await ask(planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, problems, {from, to, total, written: raw.shots, staging: raw.staging})))
+                    const parsed = parseShotLines(await ask(planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {from, to, total, written: raw.shots, staging: raw.staging})))
                     if (parsed.shots.length) chunk = parsed
                     else log.warn(`${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`)
                 }
@@ -674,9 +685,11 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         // a long nested answer now and then has a bracket wrong that cannot be repaired: asked again, twice at most, then the beats of
         // the block fall back to the legacy spread (a warning says so) instead of the run failing after the blocks that worked
         let first: ReturnType<typeof read> | undefined
+        let firstAnswer: Awaited<ReturnType<typeof askBlock>> | undefined
         for (let attempt = 1; attempt <= 3 && !first; attempt++) {
             try {
-                first = read(await askBlock(block, handover, after))
+                firstAnswer = await askBlock(block, handover, after)
+                first = read(firstAnswer)
             } catch (e) {
                 log.warn(`the answer for ${block[0]!.id} - ${block.at(-1)!.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - these beats keep their beat moments'}`)
             }
@@ -688,7 +701,8 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         if (problems.length) {
             log.warn(`${problems.length} problem(s) in the staged shots - asking once more`)
             for (const p of problems) console.log(styles.muted(`        · ${p}`))
-            const again = await askBlock(block, handover, after, problems).then(read, (e: unknown) => {
+            const issues = Object.fromEntries(reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]))
+            const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}).then(read, (e: unknown) => {
                 log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
                 return reads
             })
