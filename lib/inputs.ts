@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {ProjectConfig} from "./config.ts";
-import type {TrackedInput} from "./project.ts";
+import type {Project, StepName, TrackedInput} from "./project.ts";
 
 // The inputs of a project whose change redoes steps - the files in input/ and the settings of config.json that steps are
 // built on, each with the steps it redoes. One place for index.ts (which redoes them) and bun run status (which only says so).
@@ -42,3 +42,19 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
         fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
     }
 }
+
+/** Whether the pipeline runs a step at all for this project - the others are not missing, they are not used. */
+export function stepUsed(step: StepName, dir: string, data: Project, config: ProjectConfig): boolean {
+    const props = new Set((data.cast?.characters ?? []).flatMap(c => c.propStem ? [c.propStem] : []))
+    switch (step) {
+        case 'songStyle': return existsSync(join(dir, 'input', 'idea.txt'))
+        case 'stems': case 'transcript': case 'lyricsTiming': return config.alignLyrics
+        case 'instrumentStems': return config.alignLyrics && (props.has('guitar') || props.has('piano'))
+        case 'propActivity': return config.alignLyrics && props.size > 0
+        case 'singing': return config.singers.length > 0
+        case 'shotViews': return config.sequenceSheets && config.locationView === 'auto'
+        case 'characterLookVariants': case 'characterDescriptionVariants': return (data.cast?.characters ?? []).some(c => c.isGroup && !c.alike)
+        default: return true
+    }
+}
+

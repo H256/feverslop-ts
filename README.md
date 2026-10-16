@@ -151,6 +151,7 @@ bun index.ts                          # without an id: the author's own project 
 bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
+bun index.ts --redo=beats --render=videos --dry-run   # what this would redo and render (with an estimate) - nothing is done
 bun index.ts --render=all             # also render with ComfyUI and assemble <project-id>.mp4, see below
 bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance

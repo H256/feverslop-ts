@@ -27,7 +27,8 @@ import {loadSettings} from "./lib/settings.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 import {projectExists, validProjectId} from "./lib/project-setup.ts";
 import {propMissing} from "./lib/prop-check.ts";
-import {projectInputs} from "./lib/inputs.ts";
+import {projectInputs, stepUsed} from "./lib/inputs.ts";
+import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
@@ -50,7 +51,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict]   (--refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--strict] [--dry-run]   (--dry-run: what the run would redo and render, nothing is done · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -73,6 +74,8 @@ const {values: args, positionals} = (() => {
                 refresh: {type: 'string', default: ''},
                 strict: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
+                // says what --redo, changed inputs and --render would do, and does nothing
+                'dry-run': {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
             },
         })
@@ -107,17 +110,22 @@ if (!projectExists(projectId)) {
 const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
 // before the load: a run that writes works from the state it read, so no other run may save in between
-if (!args.gallery) lockProject(project.dir, `project ${project.id}`)
+// --dry-run only reads: no lock, nothing saved
+if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
 await project.load()
-keepTimingsIn(project.dir)
+if (!args['dry-run']) keepTimingsIn(project.dir)
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
     log.step('Gallery', `${file} ${styles.muted(Object.entries(counts).map(([tab, n]) => `${tab}: ${n}`).join(' · '))}`)
     process.exit(0)
 }
-for (const step of redoSteps) project.invalidate(step)
-if (project.data.timeline && project.data.timeline.maxClipSec !== maxClipSec) project.invalidate('timeline')
+// a dry run only says what would be redone (see dryRun below)
+const timelineOutdated = project.data.timeline !== undefined && project.data.timeline.maxClipSec !== maxClipSec
+if (!args['dry-run']) {
+    for (const step of redoSteps) project.invalidate(step)
+    if (timelineOutdated) project.invalidate('timeline')
+}
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
 const readInput = async (name: string) => existsSync(project.input(name)) ? (await Bun.file(project.input(name)).text()).trim() : ''
@@ -146,6 +154,10 @@ const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings'
 log.step('LLM', settings.llm.url
     ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
+if (args['dry-run']) {
+    await dryRun()
+    process.exit(0)
+}
 const language = languageName(config.lyricsLanguage)!
 // --render=song always writes wav (see Renderer.renderSong); a hand-supplied song can be wav or mp3
 const generatedSongFile = project.input('song.wav')
@@ -1027,6 +1039,48 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
+
+/**
+ * --dry-run: the steps the run would redo (by --redo, by changed inputs and settings, by gone stems, by changed lyrics
+ * sections or clip length - along the dependencies) and the steps not generated yet, then what --render would render,
+ * with the estimate from the measured timings. The renders are counted from the requests of the last plan run.
+ */
+async function dryRun() {
+    const changed = project.changedInputs(await projectInputs(project.dir, config))
+    const lostStems = (['stems', 'instrumentStems'] as const).filter(step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))))
+    const labels = parseLyricSections(await readInput('lyrics.txt')).map(s => s.label)
+    const sectionsChanged = project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
+    const reasons: [string, StepName[]][] = [
+        ...(redoSteps.length ? [['--redo', redoSteps] as [string, StepName[]]] : []),
+        ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
+        ...lostStems.map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
+        ...(sectionsChanged ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
+        ...(timelineOutdated ? [['the longest clip changed', ['timeline']] as [string, StepName[]]] : []),
+    ]
+    const redone = project.redoneBy(reasons.flatMap(([, steps]) => steps))
+    const missing = STEP_NAMES.filter(step => project.data[step] === undefined && !redone.includes(step) && stepUsed(step, project.dir, project.data, config))
+
+    log.section('DRY RUN - nothing is done')
+    for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
+    log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
+    if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
+
+    if (!render.has('images') && !render.has('videos') && !render.has('final')) return
+    const state = await renderState(project.dir, project.id, config)
+    const servers = settings.comfy.map(s => s.name)
+    if (redone.length || missing.length) log.warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
+    if (render.has('images')) {
+        const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+        log.step('Pictures', state.missingPictures.length ? `${await pictureEstimate(state.missingPictures.length, config, servers)}${stale}` : styles.muted('all rendered'))
+    }
+    if (render.has('videos')) {
+        const only = new Set(args.only.split(',').filter(Boolean))
+        const selected = state.clips.filter(c => !only.size || only.has(c.id))
+        const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+        log.step('Clips', todo.length ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+    }
+    if (render.has('final')) log.step('Final video', state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'))
+}
 
 /**
  * The singers from config.json: names or ids matched loosely against the cast, or ["auto"] - the LLM picks the lead
