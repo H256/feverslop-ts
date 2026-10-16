@@ -448,8 +448,16 @@ const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT 
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
-        const answer = await project.each('locationLayouts', location.id, options, () => askJson<{ layout?: unknown, views?: unknown[] }>(options))
-        layouts[location.id] = {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer.views?.[n] ?? '').trim())}
+        // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
+        // staging, as before - a broken answer for one place does not stop the run
+        let answer: { layout?: unknown, views?: unknown[] } | undefined
+        for (let attempt = 1; attempt <= 2 && !answer; attempt++) {
+            answer = await project.each('locationLayouts', location.id, options, () => askJson<{ layout?: unknown, views?: unknown[] }>(options)).catch((e: unknown) => {
+                log.warn(`${location.id}: the layout is unusable (${e instanceof Error ? e.message : e})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`)
+                return undefined
+            })
+        }
+        if (answer) layouts[location.id] = {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
     }
     return layouts
 })
