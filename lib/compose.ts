@@ -55,6 +55,8 @@ export type ClipRequest = {
     beatId: string,
     // the clip goes on from the last frame of this clip (`<Picture N>` below, kind 'frame'): it can only be rendered after it
     startsFrom?: string,
+    // characters of the clip's beat or shots that got no picture: more people than the workflow takes reference pictures
+    dropped?: string[],
     shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
     // performance mode: what is sung on screen and by whom, times relative to the clip start
     vocals?: { at: number, end: number, line: number, text: string, singers: { id: string, subject: string, speaker: string }[] }[],
@@ -80,6 +82,8 @@ export type Input = {
     // the clip prompt describes a different-looking member than the one in the picture it's bound to
     characterDescriptionVariants?: Record<string, string[]>,
     locationDescriptions: Record<string, string>,
+    // per place the fixed features behind the people of every shot (step locationAnchors) - none: no background sentence
+    locationAnchors?: Record<string, string>,
     lookBrief: string,
     music: MusicMap,
     language: string,           // for <d>[...], e.g. "English"
@@ -328,7 +332,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -348,11 +352,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // the same goes for the layout of the place and the continuity facts: "Runa and Floki sit at the fire" with no picture
         // for them drew two more copies of the singer. A character the text names is in the clip, with its picture
         const namedIds = shotIds ? [] : [...new Set([...idsIn(staging ?? '', planTokens), ...state.flatMap(fact => idsIn(fact, beatTokens))])]
-        const cast = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
+        const wanted = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
             .filter((id, n, all) => all.indexOf(id) === n)
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
-            .slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
+        // the workflow takes MAX_REFERENCE_IMAGES pictures: whoever does not fit has no picture in this clip - said in the request
+        const cast = wanted.slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
+        const dropped = wanted.slice(cast.length).map(c => c.id)
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -559,15 +565,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
 
-        // A couple of concrete, already-authored visual details from the location's own description (skipping
-        // the first comma segment, which just repeats the name) - repeated in every shot with somebody in it, since a
-        // shot with only a location *label* to go on tends to fall back to the characters' own reference pictures'
+        // The fixed features of the place (step locationAnchors, chosen by the LLM) - repeated in every shot with somebody in
+        // it, since a shot with only a location *label* to go on tends to fall back to the characters' own reference pictures'
         // plain grey background instead - observed in practice for solo shots and two-character medium-close-ups, and
         // for groups: three people in a medium close-up and four in a wide shot came out as the reference figures
         // lined up on their grey backdrop (roots-of-the-world), which a group of that size had no anchor against.
-        const locationAnchor = locationSubject
-            ? locationSubject.description.split(',').map(s => s.trim()).filter(Boolean).slice(1, 3).join(', ')
-            : undefined
+        const locationAnchor = locationSubject ? locationAnchors?.[locationSubject.id]?.trim() || undefined : undefined
 
         function buildShotTexts() {
             return shots.map((shot, j) => {
@@ -617,7 +620,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
                 const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, nobody steps closer or away, the camera does not move.' : ''
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor ? ` ${locationAnchor} still visible behind them.` : ''}${holdClause}`
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor ? ` Behind them: ${locationAnchor}.` : ''}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {
@@ -652,7 +655,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ? withLabels(flatShotMoments[0].action, planTokens)
                 : opensScene
                 ? withLabels(beat.summary, beatTokens)
-                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} are` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
+                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
@@ -761,6 +764,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             section: slot.section,
             beatId: beat.id,
             ...(startsFrom ? {startsFrom} : {}),
+            ...(dropped.length ? {dropped} : {}),
             shots: shots.map(({focus, singers, moment, starting, continuing, ...shot}) => shot),
             ...(performing ? {
                 vocals: vocals.map(v => ({
