@@ -159,6 +159,9 @@ export type Project = {
     locationLooks?: Record<string, string>,
     characterDescriptions?: Record<string, string>,   // the looks without the picture, for the clip prompts
     locationDescriptions?: Record<string, string>,
+    // per place, two or three of its fixed features as one short phrase, written by the LLM from the description - repeated
+    // behind the people of every shot, so a shot is not drawn on the grey backdrop of the character pictures
+    locationAnchors?: Record<string, string>,
     beats?: StoryBeat[],
     timeline?: Timeline,
     mapping?: Assignment[],
@@ -187,6 +190,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     locationLooks: ['cast', 'lookBrief', 'summary'],
     characterDescriptions: ['characterLooks'],
     locationDescriptions: ['locationLooks'],
+    locationAnchors: ['locationDescriptions'],
     beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
