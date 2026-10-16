@@ -20,6 +20,10 @@ export type Location = { id: string, name: string }
 /** The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows. */
 export type LocationLayout = { layout: string, views: string[] }
 
+/** A continuity fact of a beat: of the place it happened in, or of the characters its {Name} tokens name. */
+export type Fact = { fact: string, place: boolean }
+export const factText = (fact: string | Fact) => typeof fact === 'string' ? fact : fact.fact
+
 // A story beat has no timing - it is stretched onto the music later
 export type StoryBeat = {
     id: string,
@@ -32,7 +36,9 @@ export type StoryBeat = {
     weight: number,                 // relative screen time
     kind: 'establish' | 'build' | 'hit' | 'release',
     lyricAnchor?: string,           // old projects only - beats follow the song's time, not its sections
-    stateAfter: string[],           // continuity facts that are true after this beat
+    // continuity facts that are true after this beat - a beat planned with tokens says of each whether it is a fact of the
+    // place (it stays there) or of the characters it names ({Name}, they carry it wherever they go); older beats have strings
+    stateAfter: (string | Fact)[],
     // the beat is one unbroken take: each of its clips goes on from the last frame of the one before, with no cut between
     // them (config.continuity). Without it - the default - every clip of the beat is its own cut
     continuous?: boolean,

@@ -8,7 +8,7 @@ import {ask, askJson, configureLlm} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
-import {type BeatShots, type Character, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
+import {type BeatShots, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
@@ -498,16 +498,19 @@ ${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' 
             weight: Math.max(1, Number(beat.weight) || 1),
             continuous: beat.continuous === true,
             entrance: beat.entrance === true,
-            stateAfter: beat.stateAfter ?? [],
+            // each fact with whether it is one of the place; a plain string (the model forgot the object) is read as written
+            stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : []).map((f: unknown): Fact => f && typeof f === 'object'
+                ? {fact: String((f as Record<string, unknown>).fact ?? ''), place: (f as Record<string, unknown>).place === true}
+                : {fact: String(f), place: false}).filter(f => f.fact.trim()),
             ...(Object.keys(groupSize).length ? {groupSize} : {}),
         }
     })
     // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
-    const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(String)])
+    const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(f => f.fact)])
     const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
     if (Object.keys(mapped).length) log.step('Names', Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', '))
     let next = 0
-    return built.map(b => ({...b, summary: fixed[next++]!, moments: b.moments.map(() => fixed[next++]!), stateAfter: b.stateAfter.map(() => fixed[next++]!)}))
+    return built.map(b => ({...b, summary: fixed[next++]!, moments: b.moments.map(() => fixed[next++]!), stateAfter: b.stateAfter.map(f => ({...f, fact: fixed[next++]!}))}))
 })
 for (const beat of beats) {
     console.log(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
