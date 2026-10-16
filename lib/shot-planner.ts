@@ -110,8 +110,56 @@ export type PlanContext = {
 }
 
 // one planner call writes at most a few shots of one beat: the answer is short, in lines and not in JSON, so that a broken
-// bracket or a quote in a sentence costs a few shots at most, not a beat
-export type Chunk = { from: number, to: number, total: number, written: unknown[], staging?: string }
+// bracket or a quote in a sentence costs a few shots at most, not a beat. With the beat's blocking (blockingPrompt) the
+// staging and where everybody starts and ends are fixed, and the call writes only shots
+export type Chunk = { from: number, to: number, total: number, written: unknown[], staging?: string, blocking?: Blocking }
+
+/** Where everybody of a beat is at its start and at its end, and the floor plan - by name, the texts with {Name} tokens. */
+export type Blocking = { staging: string, starts: Record<string, string>, ends: Record<string, string> }
+
+const blockingInstructions = `You are a music video director who blocks a story beat before its shots are planned: the floor plan of the place, where everybody is when the beat starts and where when it is over. Answer only in the line format.
+
+Rules:
+- "STAGING" is the fixed floor plan of the place for this beat, 2-4 sentences: which features are on which side or wall, where the entrances are, where each person or group is when the beat starts and how far apart they are. When the place has a "layout", the staging is that layout - every fixed feature exactly where it puts it - and only adds where the people are. The place is the one its picture shows ("place"): add no window, door, wall or feature its description does not have. Nothing in it moves. Include nobody and nothing the story does not put there.
+- Say every direction as the picture shows it, never as a compass point: "to the left of the frame", "toward the camera", "behind her" - the video model cannot place north or south.
+- "start": for every character of the beat, where they are and what they do and hold when the beat starts, a phrase with a verb. A beat that goes on from the beat before it (the same place, no jump in time) starts where that one ended; a beat that opens a new scene starts where its story puts them.
+- "end": for every character of the beat, where they are and what they do and hold when the beat is over - where its summary and moments take them. The next beat starts from it.
+- A character holds their one prop ("castProps") unless the beat has them drop, lose or swap it.
+- Every character in a text is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there; the name right after "start:" and "end:" is plain, without braces.
+
+Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown:
+STAGING: <the floor plan of the place for this beat, 2-4 sentences, on one line, every character as {Name}>
+START
+start: <Name> | <where they are and what they do and hold when the beat starts>
+(one "start:" line for every character of the beat)
+ENDS
+end: <Name> | <where they are and what they do and hold when the beat is over>
+(one "end:" line for every character of the beat)`
+
+/**
+ * The blocking of one beat - a short call, made beat after beat: each starts where the one before ends (`before`). The
+ * shots of all beats can then be planned at once, every beat from its own fixed blocking.
+ */
+export function blockingPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping}: PlanContext, beat: StoryBeat, before: { beatId: string, staging?: string, ends: Record<string, string> } | undefined, after: StoryBeat | undefined): AskOptions {
+    return {
+        reasoning: 'low',
+        maxTokens: 4096,
+        input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.name, c.prop])))}
+cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
+place (as its reference picture shows it): ${JSON.stringify({name: locations.find(l => l.id === beat.locationId)?.name ?? beat.locationId, description: locationDescriptions[beat.locationId] ?? '', ...(locationLayouts?.[beat.locationId]?.layout ? {layout: locationLayouts[beat.locationId]!.layout} : {})})}
+looks (as their reference pictures show them): ${JSON.stringify(Object.fromEntries(beat.characterIds.map(id => [cast.find(c => c.id === id)?.name ?? id, characterDescriptions[id] ?? ''])))}
+${before ? `The beat right before it ("${before.beatId}") ends like this - this beat starts from it unless it opens a new scene: ${JSON.stringify({staging: before.staging, ends: before.ends})}
+` : 'This is the first beat of the video.\n'}${after ? `For orientation only - the beat after it: ${after.summary}
+` : ''}the beat to block:
+${JSON.stringify({
+            id: beat.id, summary: beat.summary, moments: beat.moments, kind: beat.kind, characterIds: beat.characterIds, locationId: beat.locationId,
+            ...(isContinuous(beat, continuity) ? {continuous: true} : {}),
+            ...(beat.groupSize && Object.keys(beat.groupSize).length ? {groupSize: beat.groupSize} : {}),
+            ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === beat.id) ? {micro: true} : {}),
+        })}`,
+        instructions: blockingInstructions,
+    }
+}
 
 export function planPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}: PlanContext, block: StoryBeat[], finished: { beat: StoryBeat, plan: BeatShots } | undefined, after: StoryBeat | undefined, problems: string[], chunk: Chunk): AskOptions {
     return {
@@ -138,7 +186,11 @@ ${JSON.stringify(block.map(b => ({
             ...(beatSinging[b.id] ? {singing: beatSinging[b.id]} : {}),
         })))}
 
-This call writes ${chunk.from > 0 || chunk.to < chunk.total ? `ONLY shots ${chunk.from + 1} to ${chunk.to} of the ${chunk.total} that the beat needs ("shotsNeeded")` : `all ${chunk.total} shots of the beat`}.${chunk.from === 0 ? ' Write the STAGING line first.' : ' The staging and the shots before them are given above - continue from the last of them, without a STAGING line.'}${chunk.to === chunk.total ? ' This call writes the last shot of the beat: end with the ENDS block.' : ' It does not write the last shot of the beat: no ENDS block.'}${problems.length ? `\n\nYour last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}` : ''}`,
+${chunk.blocking ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(chunk.blocking)}
+
+` : ''}This call writes ${chunk.from > 0 || chunk.to < chunk.total ? `ONLY shots ${chunk.from + 1} to ${chunk.to} of the ${chunk.total} that the beat needs ("shotsNeeded")` : `all ${chunk.total} shots of the beat`}.${chunk.blocking
+            ? ` The staging and where everybody starts and ends are fixed in the blocking above: write no STAGING line and no ENDS block. ${chunk.from === 0 ? 'The first shot starts where the blocking starts them' : 'Continue from the last of the shots above'}${chunk.to === chunk.total ? ', and the last shot of the beat leaves everybody where the blocking ends them' : ''}.`
+            : `${chunk.from === 0 ? ' Write the STAGING line first.' : ' The staging and the shots before them are given above - continue from the last of them, without a STAGING line.'}${chunk.to === chunk.total ? ' This call writes the last shot of the beat: end with the ENDS block.' : ' It does not write the last shot of the beat: no ENDS block.'}`}${problems.length ? `\n\nYour last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}` : ''}`,
         instructions: planInstructions,
     }
 }

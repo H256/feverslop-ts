@@ -1,5 +1,12 @@
 import {describe, expect, test} from "bun:test";
 import {asBeatShots, parseShotLines, readBeatPlan} from "./shot-plan.ts";
+
+describe('the blocking answer', () => {
+    test('staging, starts and ends', () => {
+        const parsed = parseShotLines('STAGING: A hall, the door on the left.\nSTART\nstart: Runa | stands at the door\nENDS\nend: Runa | sits by the fire')
+        expect(parsed).toEqual({staging: 'A hall, the door on the left.', starts: {Runa: 'stands at the door'}, ends: {Runa: 'sits by the fire'}, shots: []})
+    })
+})
 import type {Character, StoryBeat} from "./project.ts";
 
 const cael: Character = {id: 'cael', name: 'Cael', role: 'singer'}
