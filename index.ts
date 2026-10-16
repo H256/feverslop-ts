@@ -1,8 +1,8 @@
 import slugify from "slugify";
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {log, printBanner, styles} from "./lib/log.ts";
-import {keepTimingsIn, readTimings, recordTiming} from "./lib/timings.ts";
+import {failRun, formatDuration, hideDetails, keepLogIn, log, printBanner, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
+import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
@@ -22,22 +22,28 @@ import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
+import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
+import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
-import {projectExists, validProjectId} from "./lib/project-setup.ts";
+import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
+import * as clack from "@clack/prompts";
 import {propMissing} from "./lib/prop-check.ts";
+import {projectInputs, stepUsed} from "./lib/inputs.ts";
+import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
+import {reviewed} from "./lib/review.ts";
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationDescriptionPrompt, locationLayoutPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-process.on('unhandledRejection', e => log.fatal(e instanceof Error ? e.message : String(e)))
-process.on('uncaughtException', e => log.fatal(e instanceof Error ? e.message : String(e)))
+process.on('unhandledRejection', failRun)
+process.on('uncaughtException', failRun)
 
 printBanner()
 
@@ -51,7 +57,7 @@ const MAX_CLIP_SEC = 10 - 17 / FPS
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict]   (--refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--strict] [--debug] [--review] [--dry-run] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -74,14 +80,24 @@ const {values: args, positionals} = (() => {
                 'debug-audio': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
                 strict: {type: 'boolean', default: false},
+                // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
+                debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
+                // says what --redo, changed inputs and --render would do, and does nothing
+                'dry-run': {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
+                // the terminal shows a cached step as one line; -v everything, --show=story,clips the details of those
+                verbose: {type: 'boolean', short: 'v', default: false},
+                show: {type: 'string', default: ''},
+                // stop after story, cast, look and beats when they were just generated: accept, edit, again, stop
+                review: {type: 'boolean', default: false},
             },
         })
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+setOutput({verbose: args.verbose, show: args.show.split(',').filter(Boolean)})
 // --render=all is images, videos and the final video, in that order - "song" is never part of "all", it has to be asked for
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
@@ -93,33 +109,41 @@ if (unknownRefresh.length) log.usageError(`--refresh: unknown "${unknownRefresh.
 // --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
 if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
+if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
 const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
 const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
-const DEFAULT_PROJECT = 'well-of-youth-gothic-trio-260920' // author's own current project, pass your own project-id otherwise
-const projectId = positionals[0] ?? DEFAULT_PROJECT
+// without an id: the projects to pick from in a terminal, else the list of them in the usage error
+const projectId = positionals[0] ?? await pickProject()
 if (!validProjectId(projectId)) log.usageError(`"${projectId}" is not a project id - lowercase letters, digits and "-" only (it is the folder name in projects/ and part of the ComfyUI client id)`, usage)
 if (!projectExists(projectId)) {
-    const existing = existsSync('projects') ? readdirSync('projects', {withFileTypes: true}).filter(d => d.isDirectory()).map(d => d.name) : []
-    log.usageError(`${positionals[0] ? `No project "${projectId}" in projects/` : `No project id given, and the author's default project "${DEFAULT_PROJECT}" doesn't exist in projects/`} - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
+    const existing = listProjects()
+    log.usageError(`No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
 }
 const project = new ProjectStore(projectId)
 const maxClipSec = MAX_CLIP_SEC
 // before the load: a run that writes works from the state it read, so no other run may save in between
-if (!args.gallery) lockProject(project.dir, `project ${project.id}`)
+// --dry-run only reads: no lock, nothing saved
+if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
 await project.load()
-keepTimingsIn(project.dir)
+if (!args['dry-run']) keepTimingsIn(project.dir)
+// everything this run prints, also into the project (the terminal may show less of it) - not for a run that only reads
+if (!args.gallery && !args['dry-run']) keepLogIn(join(project.dir, 'logs', `${versionStamp()}.log`))
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
     log.step('Gallery', `${file} ${styles.muted(Object.entries(counts).map(([tab, n]) => `${tab}: ${n}`).join(' · '))}`)
     process.exit(0)
 }
-for (const step of redoSteps) project.invalidate(step)
-if (project.data.timeline && project.data.timeline.maxClipSec !== maxClipSec) project.invalidate('timeline')
+// a dry run only says what would be redone (see dryRun below)
+const timelineOutdated = project.data.timeline !== undefined && project.data.timeline.maxClipSec !== maxClipSec
+if (!args['dry-run']) {
+    for (const step of redoSteps) project.invalidate(step)
+    if (timelineOutdated) project.invalidate('timeline')
+}
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
 const readInput = async (name: string) => existsSync(project.input(name)) ? (await Bun.file(project.input(name)).text()).trim() : ''
@@ -149,6 +173,10 @@ const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings'
 log.step('LLM', settings.llm.url
     ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
+if (args['dry-run']) {
+    await dryRun()
+    process.exit(0)
+}
 const language = languageName(config.lyricsLanguage)!
 // --render=song always writes wav (see Renderer.renderSong); a hand-supplied song can be wav or mp3
 const generatedSongFile = project.input('song.wav')
@@ -240,27 +268,8 @@ log.step('Mode', config.singers.length
 if (config.alignLyrics && sungLines(lyricSections).length === 0) throw new Error('Aligning the lyrics needs sung lines in input/lyrics.txt - without lyrics, remove "singers" from config.json (clip mode)')
 if (!lyrics && !storyIdea) throw new Error('Neither lyrics nor a story idea given - add input/lyrics.txt or input/story-idea.txt')
 
-// an edited input redoes the steps built on it
-await project.syncInputs({
-    // no "assumed" for these three - unlike the ones below, they never existed before this feature, so there is
-    // no old project to treat as unchanged; on a real first run "previous" is simply undefined and nothing redoes
-    'idea.txt': {value: idea, steps: ['songStyle']},
-    'music-style.txt': {value: musicStyle, steps: ['songStyle']},
-    'song.wav': {value: existsSync(songFile) ? await Bun.file(songFile).bytes() : '', steps: ['music', 'stems']},
-    'lyrics.txt': {value: lyrics, steps: ['story', 'transcript', 'singing', 'songStyle']},
-    'story-idea.txt': {value: storyIdea, steps: ['story']},
-    'style.txt': {value: style, steps: ['lookBrief'], assumed: ''},
-    singers: {value: JSON.stringify(config.singers), steps: ['singing'], assumed: '[]'},
-    singerVoice: {value: config.singerVoice, steps: ['story'], assumed: 'auto'},
-    lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
-    // which beats run on without a cut changes what their shots have to tell
-    // assumed: what a project recorded before the default became "never" ran with - so it is not redone by the new default alone
-    continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
-    // the choice of views is made again when the mode changes - it is only made at all with "auto"
-    locationView: {value: String(config.sequenceSheets ? config.locationView : -1), steps: ['shotViews'], assumed: '-1'},
-    // fight beats cut into one-bar pieces change how many shots a beat has
-    fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
-})
+// an edited input redoes the steps built on it - the inputs and the steps they redo are listed in lib/inputs.ts
+await project.syncInputs(await projectInputs(project.dir, config))
 // the sections are named after the lyrics tags
 if (project.data.music && lyricSections.length && project.data.music.sections.map(s => s.label).join('|') !== lyricSections.map(s => s.label).join('|')) {
     project.invalidate('music')
@@ -276,7 +285,7 @@ const music = await project.step('music', '2 · ANALYZING THE SONG', async () =>
 })
 log.step('Tempo', `${music.bpm} BPM, ${music.downbeats.length} bars, ${Math.round(music.durationSec)}s`)
 for (const s of music.sections) {
-    console.log(`   ${energyBar(s.energy)} ${styles.muted(`${formatTime(s.start)} – ${formatTime(s.end)}`)} ${styles.name(s.label)}`)
+    log.line(`   ${energyBar(s.energy)} ${styles.muted(`${formatTime(s.start)} – ${formatTime(s.end)}`)} ${styles.name(s.label)}`)
 }
 log.step('Sections', styles.muted(config.alignLyrics
     ? 'estimated from audio - refined from the lyrics timing when the song is cut into clips'
@@ -302,15 +311,16 @@ const lyricsTiming = transcript ? await project.step('lyricsTiming', '2c · ALIG
 if (lyricsTiming) {
     for (const line of lyricsTiming.lines) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))
-        console.log(`   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`)
+        log.line(`   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`)
     }
     const unsure = lowConfidence(lyricsTiming)
     if (unsure.length) log.warn(`${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them and fix lyricsTiming in ${project.file} by hand if needed, then --redo=timeline`)
 }
 
 ////////// CRAFT A STORY FOR THE LYRICS
-const storyBase = await project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea, config.singerVoice)))
-log.box('Story', storyBase)
+const storyBase = await reviewed(project, args.review, 'story',
+    () => project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea, config.singerVoice))),
+    story => log.box('Story', story))
 if (storyBase === 'NO STORY') throw new Error('Neither lyrics nor a story idea given')
 
 ////////// SUMMARIZE THE STORY
@@ -318,7 +328,7 @@ const storySummary = await project.step('summary', '4 · SUMMARIZING THE STORY',
 log.box('Summary', storySummary)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
-const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
+const cast = await reviewed(project, args.review, 'cast', () => project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
     const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
     const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
     const takenCharacters = new Set<string>()
@@ -340,11 +350,12 @@ const cast = await project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS'
         })),
         locations: extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)})),
     }
+}), cast => {
+    log.step('Characters', styles.muted(`(${cast.characters.length})`))
+    for (const c of cast.characters) log.line(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}`) : ''}`)
+    log.step('Locations', styles.muted(`(${cast.locations.length})`))
+    for (const l of cast.locations) log.line(`   ${styles.name(l.id)}`)
 })
-log.step('Characters', styles.muted(`(${cast.characters.length})`))
-for (const c of cast.characters) console.log(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}`) : ''}`)
-log.step('Locations', styles.muted(`(${cast.locations.length})`))
-for (const l of cast.locations) console.log(`   ${styles.name(l.id)}`)
 
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
@@ -384,13 +395,14 @@ if (singing) {
     const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
     log.step('Singers', singing.singers.map(id => styles.name(nameOf(id))).join(', '))
     if (singing.singers.length > 1) {
-        for (const line of singing.lines) console.log(`   ${styles.muted(line.singers.map(nameOf).join(' + ').padEnd(24))} ${line.text}`)
+        for (const line of singing.lines) log.line(`   ${styles.muted(line.singers.map(nameOf).join(' + ').padEnd(24))} ${line.text}`)
     }
 }
 
 /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
-const lookBrief = await project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary)))
-log.box('Look brief', lookBrief)
+const lookBrief = await reviewed(project, args.review, 'lookBrief',
+    () => project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary))),
+    look => log.box('Look brief', look))
 
 ////////// CRAFTING CHARACTER LOOKS
 const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARACTER LOOKS', async () => {
@@ -426,7 +438,7 @@ for (const [id, description] of Object.entries(characterDescriptions)) log.box(i
 const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
     const looks = await llmMap(cast.locations, (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const options = locationLookPrompt(lookBrief, storySummary, location.name)
+        const options = locationLookPrompt(lookBrief, storySummary, location.name, [...new Set(cast.characters.flatMap(c => c.prop ? [c.prop] : []))])
         return project.each('locationLooks', location.id, options, () => ask(options))
     })
     return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
@@ -444,10 +456,20 @@ const locationDescriptions = await project.step('locationDescriptions', '8b · D
 })
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
+////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
+const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
+    const anchors = await llmMap(cast.locations, async (location, i) => {
+        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
+        return (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
+    })
+    return Object.fromEntries(cast.locations.map((location, i) => [location.id, anchors[i]!]))
+})
+for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
+
 ////////// THE LAYOUT OF EACH PLACE - one floor plan per place: every beat there is staged in it, not in a room of its own
 const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT EACH PLACE', async () => {
-    const layouts: Record<string, LocationLayout> = {}
-    for (const [i, location] of cast.locations.entries()) {
+    const answers = await llmMap(cast.locations, async (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
         // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
@@ -459,8 +481,12 @@ const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT 
                 return undefined
             })
         }
-        if (answer) layouts[location.id] = {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
-    }
+        return answer && {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
+    })
+    const layouts: Record<string, LocationLayout> = {}
+    cast.locations.forEach((location, i) => {
+        if (answers[i]) layouts[location.id] = answers[i]
+    })
     return layouts
 })
 for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
@@ -470,7 +496,7 @@ for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${
 const beatCount = Math.max(6, Math.round(music.durationSec / 15))
 // where the last sung word ends - the singer is on screen until then
 const vocalsEnd = Math.max(0, ...(lyricsTiming?.lines.flatMap(l => l.words.map(w => w.end)) ?? []))
-const beats = await project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
+const beats = await reviewed(project, args.review, 'beats', () => project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
     // what the beats must do so the singers can be lip-synced - the singers are on screen until the last sung word
     const performance = `${singing ? performanceRules(singing) : ''}
 ${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
@@ -520,12 +546,13 @@ ${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' 
     if (Object.keys(mapped).length) log.step('Names', Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', '))
     let next = 0
     return built.map(b => ({...b, summary: fixed[next++]!, moments: b.moments.map(() => fixed[next++]!), stateAfter: b.stateAfter.map(f => ({...f, fact: fixed[next++]!}))}))
+}), beats => {
+    for (const beat of beats) {
+        log.line(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
+        log.line(`      ${beat.summary}`)
+        for (const moment of beat.moments) log.line(styles.muted(`        · ${moment}`))
+    }
 })
-for (const beat of beats) {
-    console.log(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
-    console.log(`      ${beat.summary}`)
-    for (const moment of beat.moments) console.log(styles.muted(`        · ${moment}`))
-}
 
 ////////// GENERATING GROUP MEMBER VARIANT LOOKS
 // group characters (cast.characters[].isGroup) that ever show more than one individual on screen at once (beats
@@ -579,7 +606,7 @@ if (timeline.aligned) {
     log.step('Sections', styles.muted('from the lyrics timing (estimate from the audio in brackets)'))
     timeline.sections.forEach((s, i) => {
         const estimate = music.sections[i]
-        console.log(`   ${styles.name(s.label.padEnd(12))} ${formatTime(s.start, true)} – ${formatTime(s.end, true)} ${styles.muted(estimate ? `(${formatTime(estimate.start, true)} – ${formatTime(estimate.end, true)})` : '')}`)
+        log.line(`   ${styles.name(s.label.padEnd(12))} ${formatTime(s.start, true)} – ${formatTime(s.end, true)} ${styles.muted(estimate ? `(${formatTime(estimate.start, true)} – ${formatTime(estimate.end, true)})` : '')}`)
     })
     log.step('Sung in clips', `${timeline.slots.filter(s => s.vocals?.length).length} of ${timeline.slots.length}`)
 }
@@ -597,7 +624,7 @@ if (config.fightClips && clipSlots.length !== timeline.slots.length) {
 const beatById = new Map(beats.map(b => [b.id, b]))
 for (const slot of clipSlots) {
     const beat = beatById.get(mapping[slot.index]!.beatId)!
-    console.log(`   ${styles.muted(`${formatTime(slot.start)}`)} ${slot.section.padEnd(12)} ${energyBar(slot.energy)} ${styles.name(beat.id)} ${styles.muted(energyBar(beat.intensity))}`)
+    log.line(`   ${styles.muted(`${formatTime(slot.start)}`)} ${slot.section.padEnd(12)} ${energyBar(slot.energy)} ${styles.name(beat.id)} ${styles.muted(energyBar(beat.intensity))}`)
 }
 
 ////////// REFINING THE MOMENTS TO ONE PER SHOT
@@ -674,7 +701,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
             ].filter(slot => typeof slot.get() === 'string')
             const {texts: fixed, mapped} = await resolveUnknownTokens(slots.map(slot => slot.get() as string), cast.characters)
             if (Object.keys(mapped).length) {
-                console.log(styles.muted(`        · ${beat.id}, names: ${Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', ')}`))
+                log.line(styles.muted(`        · ${beat.id}, names: ${Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', ')}`))
                 slots.forEach((slot, n) => slot.set(fixed[n]!))
             }
             moments[beat.id] = raw
@@ -742,7 +769,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
         if (problems.length) {
             log.warn(`${problems.length} problem(s) in the staged shots of ${beat.id} - asking once more`)
-            for (const p of problems) console.log(styles.muted(`        · ${p}`))
+            for (const p of problems) log.line(styles.muted(`        · ${p}`))
             const issues = Object.fromEntries(reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]))
             const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}, blocking).then(read, (e: unknown) => {
                 log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
@@ -752,7 +779,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
             for (const r of reads) for (const p of r.read?.problems ?? []) log.warn(`${r.beat.id}, ${p}`)
         }
         // what the code repaired or only noted costs no further call - a line in the log, nothing else
-        for (const r of reads) for (const note of r.read?.notes ?? []) console.log(styles.muted(`        · ${r.beat.id}, ${note}`))
+        for (const r of reads) for (const note of r.read?.notes ?? []) log.line(styles.muted(`        · ${r.beat.id}, ${note}`))
         for (const {beat, read: r} of reads) if (r) result[beat.id] = r.plan // a beat without a plan falls back to the legacy spread
     }
     // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
@@ -771,6 +798,7 @@ Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactl
 ---
 ${JSON.stringify(risky.map(r => r.moment))}`,
             instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
+            schema: {type: 'object', additionalProperties: false, required: ['moments'], properties: {moments: {type: 'array', minItems: risky.length, maxItems: risky.length, items: {type: 'string'}}}},
         })
         if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => {
             const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
@@ -783,10 +811,10 @@ ${JSON.stringify(risky.map(r => r.moment))}`,
 if (shotMoments) for (const beat of beats) {
     const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
     if (!plan) continue
-    console.log(`   ${styles.name(beat.id)} ${styles.muted(`${plan.shots.length} shots`)}`)
-    if (plan.staging) console.log(styles.muted(`        staging: ${plan.staging}`))
+    log.line(`   ${styles.name(beat.id)} ${styles.muted(`${plan.shots.length} shots`)}`)
+    if (plan.staging) log.line(styles.muted(`        staging: ${plan.staging}`))
     const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
-    for (const shot of plan.shots) console.log(styles.muted(`        · ${shot.characters?.length ? `[${shot.characters.map(nameOf).join(', ')}] ` : ''}${shot.action}`))
+    for (const shot of plan.shots) log.line(styles.muted(`        · ${shot.characters?.length ? `[${shot.characters.map(nameOf).join(', ')}] ` : ''}${shot.action}`))
 }
 
 ////////// CHOOSING THE VIEW OF THE PLACE - only with "locationView": "auto"
@@ -815,6 +843,7 @@ ${JSON.stringify(plan.shots.map((s, n) => ({shot: n, framing: s.framing, camera:
 
 Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length - 1} per shot, in order]} - exactly ${plan.shots.length} numbers.`,
             instructions: 'You are a music video director who chooses the view of a place for each shot. Answer only with JSON.',
+            schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: plan.shots.length, maxItems: plan.shots.length, items: {type: 'integer', minimum: 0, maximum: LOCATION_VIEWS.length - 1}}}},
         }).catch((e: unknown) => {
             log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
             return undefined
@@ -825,7 +854,7 @@ Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length -
             const v = Number(answer?.views?.[n])
             return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
         })
-        console.log(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
+        log.line(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
         return views
     })
     const result: Record<string, number[]> = {}
@@ -847,6 +876,7 @@ const clips = buildClipRequests({
     characterDescriptions,
     characterDescriptionVariants,
     locationDescriptions,
+    locationAnchors,
     lookBrief,
     music,
     language,
@@ -860,8 +890,14 @@ const clips = buildClipRequests({
     shotViews,
 })
 
+// more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them
+for (const clip of clips) {
+    if (clip.dropped?.length) log.warn(`${clip.id}: no reference picture left for ${clip.dropped.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')} - the workflow takes ${MAX_REFERENCE_IMAGES} pictures`)
+}
+
 const outputDir = join(project.dir, 'output')
-rmSync(outputDir, {recursive: true, force: true})
+// the output of the run before goes to output/.previous/ - to say below which requests this run changed
+startOutput(outputDir)
 mkdirSync(join(outputDir, 'clips'), {recursive: true})
 mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
@@ -918,8 +954,25 @@ await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
     })),
 }, null, 2))
 
+// the prompts are in output/clips/ and in the log file - the terminal shows them with --show=clips (or -v)
+hideDetails(!showsDetails('clips'))
 for (const clip of clips) {
     log.box(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section} · ${clip.beatId}`, clip.prompt)
+}
+hideDetails(false)
+if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${join(project.dir, 'output', 'clips')} (--show=clips prints them here)`))
+const changes = requestChanges(outputDir)
+if (changes) {
+    const {changed, added, gone} = changes
+    if (!changed.length && !added.length && !gone.length) log.step('Changes', styles.muted('every request is the same as in the run before'))
+    else {
+        log.step('Changes', [
+            changed.length ? `${changed.length} changed: ${formatSlotRanges(changed)}` : '',
+            added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
+            gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
+        ].filter(Boolean).join(' · '))
+        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(outputDir, PREVIOUS, 'clips', `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
+    }
 }
 
 ////////// RENDERING WITH COMFYUI
@@ -1010,6 +1063,69 @@ log.step('Timeline', join(outputDir, 'timeline.json'))
 log.step('Requests', join(outputDir, 'clips'))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
+// what this run did: the steps it generated, its LLM calls and renders, its warnings
+log.step('Generated', project.generated.size ? [...project.generated].map(styles.name).join(', ') : styles.muted('nothing - every step was taken from project.json'))
+const measured = runTimings()
+const llmCalls = measured.filter(t => t.kind === 'llm')
+if (llmCalls.length) {
+    const tokens = llmCalls.reduce((sum, t) => sum + (t.completionTokens ?? 0), 0)
+    const retried = llmCalls.filter(t => t.outcome).length
+    log.step('LLM', `${llmCalls.length} call(s), ${formatDuration(llmCalls.reduce((sum, t) => sum + t.seconds, 0) * 1000)}${tokens ? `, ${tokens} tokens written` : ''}${retried ? styles.muted(` · ${retried} cut off, empty or failed and asked again`) : ''}`)
+}
+for (const kind of ['picture', 'clip', 'song'] as const) {
+    const renders = measured.filter(t => t.kind === kind && !t.outcome)
+    if (renders.length) log.step('Rendered', `${renders.length} ${kind}(s), ${formatDuration(renders.reduce((sum, t) => sum + t.seconds, 0) * 1000)}`)
+}
+// the same warning several times (one per clip, one per beat) is one line with its count
+const warned = new Map<string, number>()
+for (const message of runWarnings()) warned.set(message, (warned.get(message) ?? 0) + 1)
+if (warned.size) {
+    log.step('Warnings', `${runWarnings().length}${warned.size > 8 ? styles.muted(` - the first 8 of ${warned.size} different ones, all in the log`) : ''}`)
+    for (const [message, count] of [...warned].slice(0, 8)) log.line(styles.warning(`   ${count > 1 ? `${count}× ` : ''}${message.length > 160 ? `${message.slice(0, 157)}…` : message}`))
+}
+log.step('Log', runLogFile() ?? '')
+
+/**
+ * --dry-run: the steps the run would redo (by --redo, by changed inputs and settings, by gone stems, by changed lyrics
+ * sections or clip length - along the dependencies) and the steps not generated yet, then what --render would render,
+ * with the estimate from the measured timings. The renders are counted from the requests of the last plan run.
+ */
+async function dryRun() {
+    const changed = project.changedInputs(await projectInputs(project.dir, config))
+    const lostStems = (['stems', 'instrumentStems'] as const).filter(step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))))
+    const labels = parseLyricSections(await readInput('lyrics.txt')).map(s => s.label)
+    const sectionsChanged = project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
+    const reasons: [string, StepName[]][] = [
+        ...(redoSteps.length ? [['--redo', redoSteps] as [string, StepName[]]] : []),
+        ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
+        ...lostStems.map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
+        ...(sectionsChanged ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
+        ...(timelineOutdated ? [['the longest clip changed', ['timeline']] as [string, StepName[]]] : []),
+    ]
+    const redone = project.redoneBy(reasons.flatMap(([, steps]) => steps))
+    const missing = STEP_NAMES.filter(step => project.data[step] === undefined && !redone.includes(step) && stepUsed(step, project.dir, project.data, config))
+
+    log.section('DRY RUN - nothing is done')
+    for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
+    log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
+    if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
+
+    if (!render.has('images') && !render.has('videos') && !render.has('final')) return
+    const state = await renderState(project.dir, project.id, config)
+    const servers = settings.comfy.map(s => s.name)
+    if (redone.length || missing.length) log.warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
+    if (render.has('images')) {
+        const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+        log.step('Pictures', state.missingPictures.length ? `${await pictureEstimate(state.missingPictures.length, config, servers)}${stale}` : styles.muted('all rendered'))
+    }
+    if (render.has('videos')) {
+        const only = new Set(args.only.split(',').filter(Boolean))
+        const selected = state.clips.filter(c => !only.size || only.has(c.id))
+        const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+        log.step('Clips', todo.length ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+    }
+    if (render.has('final')) log.step('Final video', state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'))
+}
 
 /**
  * The singers from config.json: names or ids matched loosely against the cast, or ["auto"] - the LLM picks the lead
@@ -1035,6 +1151,7 @@ ${lyrics}
 story summary:
 ${storySummary}`,
             instructions: 'You are a music video director who casts the singers of a performance video. Answer only with JSON.',
+            schema: {type: 'object', additionalProperties: false, required: ['singers'], properties: {singers: {type: 'array', minItems: 1, maxItems: 3, items: {enum: characters.map(c => c.id)}}}},
         })
         singers = known(picked.singers)
         if (!singers.length) throw new Error(`The LLM picked no singer from the cast (${JSON.stringify(picked.singers)}) - run again, or name the singers in config.json`)
@@ -1054,6 +1171,10 @@ cast: ${castList}
 story summary:
 ${storySummary}`,
                 instructions: 'You match names to the characters of a cast. Answer only with JSON.',
+                schema: {type: 'object', additionalProperties: false, required: ['singers'], properties: {singers: {type: 'array', items: {
+                    type: 'object', additionalProperties: false, required: ['name', 'id'],
+                    properties: {name: {enum: unmatched}, id: {enum: [...characters.map(c => c.id), null]}},
+                }}}},
             })
             for (const m of mapped.singers ?? []) {
                 const [id] = known([m.id])
@@ -1087,6 +1208,10 @@ lines: ${JSON.stringify(lines.map(l => ({line: l.line, section: l.section, text:
 story summary:
 ${storySummary}`,
         instructions: 'You are a music video director who splits a song between its singers. Answer only with JSON.',
+        schema: {type: 'object', additionalProperties: false, required: ['lines'], properties: {lines: {type: 'array', items: {
+            type: 'object', additionalProperties: false, required: ['line', 'singers'],
+            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
+        }}}},
     })
     const byLine = new Map((assigned.lines ?? []).map(l => [l.line, known(l.singers).filter(id => singers.includes(id))]))
     const missing = lines.filter(l => !byLine.get(l.line)?.length)
@@ -1120,6 +1245,17 @@ For every beat that plays while the song has vocals:
 - the singer(s) of that section are on screen: their ids are in "characterIds".
 - they sing while they act, e.g. "{Thorin} sings while forging the blade", "{Vael} sings through the blow she takes from the orc" - the mouth stays in view (three-quarter or profile is fine, looking at what the story has them look at), no hidden faces, no masks or objects over the mouth.
 `
+}
+
+// No project id given: the projects, most recently changed first, to pick one with the arrow keys - without a
+// terminal (scripts, CI) nobody can pick, so the usage error lists them instead
+async function pickProject(): Promise<string> {
+    const projects = listProjects()
+    if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
+    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
+    const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
+    if (clack.isCancel(picked)) process.exit(0)
+    return picked
 }
 
 function energyBar(value: number) {

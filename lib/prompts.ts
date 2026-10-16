@@ -122,6 +122,16 @@ story:
 ${storyBase}
 `,
         instructions: 'You are an expert data extractor for Stories. You receive a Story and extract locations and characters from it. Answer only with the extracted data.',
+        schema: {
+            type: 'object', additionalProperties: false, required: ['characters', 'locations'],
+            properties: {
+                characters: {type: 'array', minItems: 1, items: {
+                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'isGroup', 'alike'],
+                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
+                }},
+                locations: {type: 'array', minItems: 1, items: {type: 'object', additionalProperties: false, required: ['name'], properties: {name: {type: 'string'}}}},
+            },
+        },
     }
 }
 
@@ -139,6 +149,7 @@ ${styleList.map(s => `- ${s.id}: ${s.name}${s.group ? ` [${s.group}]` : ''}`).jo
 story or lyrics:
 ${storyText}`,
         instructions: 'You are a film director choosing the visual style of a music video. Answer only with the JSON.',
+        schema: {type: 'object', additionalProperties: false, required: ['styles'], properties: {styles: {type: 'array', minItems: 1, maxItems: count, items: {enum: styleList.map(s => s.id)}}}},
     }
 }
 
@@ -291,7 +302,9 @@ Image prompt: ${imagePrompt}`,
     }
 }
 
-export function locationLookPrompt(lookBrief: string, storySummary: string, locationName: string): AskOptions {
+// props: the objects the characters carry (Character.prop) - they come into a clip with their owner's picture, so a place
+// that shows one too has it twice in the picture (a knife on the counter and the same knife in the hand)
+export function locationLookPrompt(lookBrief: string, storySummary: string, locationName: string, props: string[] = []): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for an establishing shot of the given location.
@@ -302,7 +315,7 @@ Rules:
 - Natural language, one paragraph, 50-100 words.
 - Start with the medium and style from the film look (e.g. "35mm film photograph of...", "2D anime background painting of...").
 - The location is empty: no people, creatures or characters.
-- Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
+${props.length ? `- These objects belong to the characters and come into the picture with them - the place shows none of them, not even lying around, hanging or leaning somewhere: ${props.map(p => JSON.stringify(p)).join(', ')}.\n` : ''}- Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
 - Describe only visible details: layout, architecture, terrain, materials, props, time of day, weather, light sources, atmosphere like fog, dust or smoke.
 - Describe the place as it looks in this one frame, a state and not a process: no "slowly fading", "visibly shrinking", "walls closing in" or other change over time.
 - Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
@@ -336,6 +349,24 @@ Image prompt: ${imagePrompt}`,
     }
 }
 
+// The phrase the clip prompt repeats behind the people of every shot (lib/compose.ts) - chosen by the LLM, so no code has to
+// cut a description into pieces. Fixed features only: whatever can be picked up or moved may be gone or in a hand in a shot.
+export function locationAnchorPrompt(description: string): AskOptions {
+    return {
+        maxTokens: 2048,
+        input: `
+Below is the description of a place from a video prompt. Name two or three of its fixed features that stay visible behind the people in any shot of this place: large parts of the place that never move - walls, openings, built-in furniture, terrain, a light source. Never an object somebody could pick up or carry, never a person or a creature.
+
+Rules:
+- One noun phrase, 6-15 words, lowercase, without a full stop, e.g. "the long stone counter and the hallway to the right".
+- Only features the description names - add nothing.
+- Answer only with the phrase.
+
+Place: ${description}`,
+        instructions: 'You are an expert editor who picks the fixed background features of a place for a video prompt. You answer only with the phrase.',
+    }
+}
+
 // The fixed layout of a place, written once from its look and used by every beat there (the shot planner stages people in
 // it instead of inventing a room per beat), and what each of the five views of its reference sheet shows of it.
 export function locationLayoutPrompt(name: string, look: string, description: string): AskOptions {
@@ -354,5 +385,9 @@ Place: ${name}
 Image prompt of the reference picture: ${look}
 Description: ${description}`,
         instructions: 'You are a production designer who writes the fixed floor plan of a film set. Answer only with JSON.',
+        schema: {
+            type: 'object', additionalProperties: false, required: ['layout', 'views'],
+            properties: {layout: {type: 'string'}, views: {type: 'array', minItems: LOCATION_VIEWS.length, maxItems: LOCATION_VIEWS.length, items: {type: 'string'}}},
+        },
     }
 }
