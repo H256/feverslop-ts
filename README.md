@@ -88,6 +88,11 @@ Everything can be overridden, lowest first: the settings file → the project's 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
 (CI, scripts), `bun run setup` prints these env vars instead of asking.
 
+Answers with a fixed shape (the cast, the beats, the views, the singers, the style shortlist) are asked with a JSON
+schema on the server's Chat Completions API (`response_format`), so the server keeps the answer to that shape and to the
+ids of the cast; the Responses API of llama.cpp ignores a schema. A server that refuses it is asked the plain way, and
+the answer is read and repaired as before.
+
 The LLM server is only contacted when a step actually needs it, and ComfyUI only when something is rendered - a fully
 cached project runs without either.
 
