@@ -42,6 +42,8 @@ export type StoryBeat = {
     // the summary has somebody arrive, appear or emerge during the beat - the beat's own opening clip is then not "everybody
     // is already there". Read from the planner's answer, never from the words of the summary (see compose.ts)
     entrance?: boolean,
+    // the texts name every character as {Name} (lib/refs.ts); a beat from before that has plain names
+    tokens?: boolean,
 }
 
 // One shot as the planner staged it (step 11b): the action, who is in the picture and where/how each of them is. Names are
@@ -60,7 +62,8 @@ export type ShotPlan = {
     rest?: string,                  // what everyone in the shot who has no entry of their own does at the same time, each in their own way
 }
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
-export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[] }
+// tokens: the texts name every character as {Name} (lib/refs.ts); a plan from before that has plain names
+export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[], tokens?: boolean }
 
 export type LyricSection = { label: string, lines: string[] }
 

@@ -13,7 +13,8 @@ import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
-import {filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
+import {resolveUnknownTokens} from "./lib/refs.ts";
+import {beatsPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -496,76 +497,17 @@ const beatCount = Math.max(6, Math.round(music.durationSec / 15))
 // where the last sung word ends - the singer is on screen until then
 const vocalsEnd = Math.max(0, ...(lyricsTiming?.lines.flatMap(l => l.words.map(w => w.end)) ?? []))
 const beats = await reviewed(project, args.review, 'beats', () => project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
-    const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>({
-        reasoning: 'medium',
-        // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
-        maxTokens: Math.max(16384, beatCount * 1100),
-        input: `Break the story into story beats for a music video. A beat is one continuous piece of action at ONE location.
-The beats have no timing yet - they are stretched onto the song later, so describe what happens, not how long it takes.
-
-The song is ${Math.round(music.durationSec)} seconds long. The story is spread evenly over that time, in order from the first second to the last - the song sections do not matter for the beats, a beat does not belong to a verse or a chorus.
-Aim for about ${beatCount} beats that follow the story from start to end, each one with new action - a beat never repeats what an earlier beat already showed.
-
-For every beat give:
-- "summary": what visibly happens, 1-3 sentences, present tense.
-- "moments": 2-6 short sentences, in order, each one visible action that a camera can film. Name characters by their name, exactly as spelled and capitalized in the character list below (including a collective/group character like "Orcs" acting as one individual member of the group - still call them "Orcs", never a generic singular like "the orc"): that exact string is what later binds the sentence to that character's reference picture, so a paraphrase leaves the action unanchored and the wrong figure on screen ends up doing it. These are spread over the video clips of the beat, so together they must tell the whole beat. Describe the mechanics of any contact between two things, not just the outcome - the direction and path of the movement, what it meets and how, and the immediate physical reaction: not "Thorin raises his hammer and strikes the sealed gate." but "Thorin swings his hammer in a wide overhead arc, the head crashing into the gate's iron sigil, which cracks and showers sparks across the steps."
-  This applies just as much to a gentle or supernatural contact as to a blow - never write a bare "touches" or "reaches for": say exactly which hand or body part makes contact with which part of the other, whether the grip closes and holds or just brushes past, and what the touched character does in direct response to THAT contact (recoils while still held, wrenches free, goes rigid, the touch passes through them) - not a generic, unrelated reaction like being shoved or knocked back unless something actually pushed them.
-  A character's "prop" (if any is listed for them below) is the one weapon/tool/instrument they carry for the whole story - always call it by the same name and kind (a sword stays a sword, never a hammer or axe in a later beat) unless "stateAfter" explicitly says they traded, lost, dropped or picked up a different one.
-  Say where people are in relation to one another in plain, exact words: beside, behind, in front of, at someone's left, an arm's length from. A person is never on, over or in another person ("stand on her shoulders" is one body standing on another and is drawn that way) unless the story says one carries, lifts or rides the other - for "next to the shoulder" write "beside her, at her shoulder".
-  Bodies don't default to facing the camera: name which way a character is turned or moving relative to whoever or whatever they're reacting to (turns to face it, spins away, presses their back to the wall, ducks behind another character) whenever that's part of the action, especially the instant something touches, strikes at, or startles them.
-  Eyes and attention follow the scene, not the lens: say what a character or creature is looking at (the person it's reaching for, the weapon coming at it, the ground as it falls) - never leave it staring into the camera, and never describe a "look" or "stare" without naming its target, since an untargeted one defaults to a straight-into-camera stare that breaks the scene.
-  Faces react too: name the visible facial reaction the moment produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace) whenever the action calls for one - a beat with no facial reaction described tends to render with a flat, unchanging expression throughout.
-  ${filmableRules}
-- "locationId": exactly one of the location ids below.
-- "characterIds": ids of the characters on screen, only from the list below.
-- "intensity": 0.0 (calm, quiet) to 1.0 (climax), used to match the loudness of the music.
-- "weight": 1-5, how much screen time the beat deserves.
-- "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
-- "continuous": true only if the beat is ONE unbroken take that runs through all its video clips without a cut - the camera and the action simply go on from clip to clip (a long walk through a room, a slow reveal, one action that takes many seconds). Use it sparingly: false (also when omitted) for a beat that is better cut together from several shots and angles.
-- "stateAfter": short facts about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull", and never what a mirror or reflection shows), e.g. "the hammer is broken", "the party carries a torch". Empty array if nothing changes.
-- "entrance": true only if the summary has somebody arrive, appear or emerge during the beat (the beat's first clip then shows the place before them); false when everybody who is in the beat is already there when it starts.
-- "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
-Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
-${singing ? performanceRules(singing) : ''}
+    // what the beats must do so the singers can be lip-synced - the singers are on screen until the last sung word
+    const performance = `${singing ? performanceRules(singing) : ''}
 ${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
-` : ''}Answer only with JSON: {"beats": [...]}
----
-characters: ${JSON.stringify(cast.characters.map(c => ({id: c.id, role: c.role, ...(c.prop ? {prop: c.prop} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
-locations: ${JSON.stringify(cast.locations.map(l => l.id))}
-lyrics:
-${lyrics}
----
-story:
-${storyBase}`,
-        instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
-        // the ids can only be ones of the cast - the server keeps the answer to them
-        schema: {
-            type: 'object', additionalProperties: false, required: ['beats'],
-            properties: {beats: {type: 'array', minItems: 1, items: {
-                type: 'object', additionalProperties: false,
-                required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
-                properties: {
-                    summary: {type: 'string'},
-                    moments: {type: 'array', items: {type: 'string'}},
-                    locationId: {enum: cast.locations.map(l => l.id)},
-                    characterIds: {type: 'array', items: {enum: cast.characters.map(c => c.id)}},
-                    intensity: {type: 'number'},
-                    weight: {type: 'integer'},
-                    kind: {enum: ['establish', 'build', 'hit', 'release']},
-                    continuous: {type: 'boolean'},
-                    stateAfter: {type: 'array', items: {type: 'string'}},
-                    entrance: {type: 'boolean'},
-                    ...(cast.characters.some(c => c.isGroup) ? {groupSize: {type: 'object', additionalProperties: {type: 'integer'}}} : {}),
-                },
-            }}},
-        },
-    })
+` : ''}`
+    const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>(beatsPrompt({durationSec: music.durationSec, beatCount, characters: cast.characters, locations: cast.locations, lyrics, story: storyBase, performance}))
 
     const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
     const characterIds = new Set(cast.characters.map(c => c.id))
     const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
     const locationIds = cast.locations.map(l => l.id)
-    return extracted.beats.map((beat, i) => {
+    const built = extracted.beats.map((beat, i) => {
         if (!locationIds.includes(beat.locationId)) {
             log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
         }
@@ -578,6 +520,8 @@ ${storyBase}`,
         )
         return {
             ...beat,
+            // written with {Name} tokens (lib/refs.ts) - a beat from before them has plain names
+            tokens: true,
             kind: BEAT_KINDS.includes(beat.kind) ? beat.kind : 'build' as const,
             summary,
             id: `beat-${String(i + 1).padStart(2, '0')}`,
@@ -593,6 +537,12 @@ ${storyBase}`,
             ...(Object.keys(groupSize).length ? {groupSize} : {}),
         }
     })
+    // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
+    const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(String)])
+    const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
+    if (Object.keys(mapped).length) log.step('Names', Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', '))
+    let next = 0
+    return built.map(b => ({...b, summary: fixed[next++]!, moments: b.moments.map(() => fixed[next++]!), stateAfter: b.stateAfter.map(() => fixed[next++]!)}))
 }), beats => {
     for (const beat of beats) {
         log.line(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
@@ -736,6 +686,22 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
                 raw.shots.push(...chunk.shots.slice(0, to - from))
                 if (to === total) raw.ends = chunk.ends
             }
+            // tokens of nobody of the cast ({Aldric} for "Aldric Thorne") are mapped by one short call - cheaper than asking the
+            // planner again, and nothing reads the words
+            const slots: { get: () => unknown, set: (v: string) => void }[] = [
+                {get: () => raw.staging, set: (v: string) => raw.staging = v},
+                ...Object.keys(raw.ends ?? {}).map(who => ({get: () => raw.ends![who], set: (v: string) => raw.ends![who] = v})),
+                ...raw.shots.flatMap(shot => [
+                    ...['action', 'view', 'camera', 'rest'].map(key => ({get: () => shot[key], set: (v: string) => shot[key] = v})),
+                    ...Object.values((shot.people ?? {}) as Record<string, Record<string, unknown>>).flatMap(person =>
+                        ['state', 'frame', 'motion'].map(key => ({get: () => person[key], set: (v: string) => person[key] = v}))),
+                ]),
+            ].filter(slot => typeof slot.get() === 'string')
+            const {texts: fixed, mapped} = await resolveUnknownTokens(slots.map(slot => slot.get() as string), cast.characters)
+            if (Object.keys(mapped).length) {
+                log.line(styles.muted(`        · ${beat.id}, names: ${Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', ')}`))
+                slots.forEach((slot, n) => slot.set(fixed[n]!))
+            }
             moments[beat.id] = raw
         }
         return {moments}
@@ -790,7 +756,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
     if (risky.length) {
         log.warn(`${risky.length} shot moment(s) the planner flagged (blank face, stand-in object, readable text) - rewriting them`)
         const rewritten = await askJson<{ moments: string[] }>({
-            input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead.
+            input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead. Every name in braces ({Kara}) stays exactly as it is, in its braces.
 ${filmableRules}
 Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactly ${risky.length} entries, in the same order.
 ---
@@ -1241,7 +1207,7 @@ Sections with vocals and who sings them: ${[...bySection].map(([section, ids]) =
 Sections without vocals have no singing - the story plays freely there.
 For every beat that plays while the song has vocals:
 - the singer(s) of that section are on screen: their ids are in "characterIds".
-- they sing while they act, e.g. "Thorin sings while forging the blade", "Vael sings through the blow she takes from the orc" - the mouth stays in view (three-quarter or profile is fine, looking at what the story has them look at), no hidden faces, no masks or objects over the mouth.
+- they sing while they act, e.g. "{Thorin} sings while forging the blade", "{Vael} sings through the blow she takes from the orc" - the mouth stays in view (three-quarter or profile is fine, looking at what the story has them look at), no hidden faces, no masks or objects over the mouth.
 `
 }
 

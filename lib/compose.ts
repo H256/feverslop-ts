@@ -1,9 +1,9 @@
 import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
+import {readTokens, replaceTokens} from "./refs.ts";
 import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {formatTimestamp, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
-import {mentionsCharacter} from "./shot-plan.ts";
 import type {ProjectConfig} from "./config.ts";
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
@@ -281,6 +281,14 @@ export function singingPerBeat(
 export function buildClipRequests(input: Input): ClipRequest[] {
     const {slots, mapping, beats, characters, music, shotMoments} = input
     const beatById = new Map(beats.map(b => [b.id, b]))
+    // Who a text is about: the beats and the shot plans write every character as {Name} (lib/refs.ts) and are read by their
+    // tokens. Beats and plans from before the tokens (no "tokens" mark) name characters in plain words - only for those the
+    // names are still looked for in the text, until the project plans them again (--redo=beats)
+    const beatTokens = beats.length > 0 && beats.every(b => b.tokens === true)
+    const legacyNames = (c: { name: string, id: string }) => new RegExp(`\\b(?:${escapeRegExp(c.name)}|${escapeRegExp(c.id)})\\b`, 'gi')
+    const idsIn = (text: string, tokens: boolean) => tokens
+        ? readTokens(text, characters).ids
+        : characters.filter(c => new RegExp(legacyNames(c).source, 'i').test(text)).map(c => c.id)
     // >1 only for a group character (Character.isGroup) - which member image a given clip's subject resolves to
     const memberCounts = computeMemberCounts(beats, characters)
     const requests: ClipRequest[] = []
@@ -307,7 +315,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             shotCursor += shotCount
             // a clip of a continuous beat starts on the last frame of the clip before it
             const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging, view))
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging, view, staged?.tokens === true))
         })
         stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
     }
@@ -324,7 +332,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -343,8 +351,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const plannedIds = flatShotMoments?.flatMap(s => s.characters ?? []) ?? []
         // the same goes for the layout of the place and the continuity facts: "Runa and Floki sit at the fire" with no picture
         // for them drew two more copies of the singer. A character the text names is in the clip, with its picture
-        const stagedText = [staging ?? '', ...state].join(' ')
-        const namedIds = shotIds ? [] : characters.filter(c => new RegExp(`\\b(?:${escapeRegExp(c.name)}|${escapeRegExp(c.id)})\\b`, 'i').test(stagedText)).map(c => c.id)
+        const namedIds = shotIds ? [] : [...new Set([...idsIn(staging ?? '', planTokens), ...state.flatMap(fact => idsIn(fact, beatTokens))])]
         const wanted = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
             .filter((id, n, all) => all.indexOf(id) === n)
             .map(id => characters.find(c => c.id === id))
@@ -463,9 +470,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const energyLevel = slot.energy < 0.4 ? 'low' : slot.energy < 0.7 ? 'mid' : 'high'
         const notes = slot.lyrics.filter(l => l.startsWith('(')).map(l => l.replace(/[()]/g, ''))
 
-        // the story names a character by name or by id ("Der Mann", "der-mann") - both are the character with the picture
-        const names = (s: { name: string, id: string }) => new RegExp(`\\b(?:${escapeRegExp(s.name)}|${escapeRegExp(s.id)})\\b`, 'gi')
-        const withLabels = (text: string) => castSubjects.reduce((t, s) => t.replace(names(s), s.label), text)
+        // a character of the clip becomes its <Subject N>, anybody else their plain name: from the {Name} tokens of the text,
+        // or - in a beat or plan from before them - from the name or id ("Der Mann", "der-mann") written in it
+        const withLabels = (text: string, tokens: boolean) => tokens
+            ? replaceTokens(text, characters, c => castSubjects.find(s => s.id === c.id)?.label ?? c.name)
+            : castSubjects.reduce((t, s) => t.replace(legacyNames(s), s.label), text)
 
         // with vocals, a cut never falls into a sung word
         const cuts = avoidWords(
@@ -477,9 +486,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             let singingShots = 0
             return cuts.map((at, j) => {
                 const plan = flatShotMoments?.[j]
-                const moment = plan?.action ? withLabels(plan.action) : spread(moments, j, shotCount).join(' ')
+                const written = plan?.action ? {text: plan.action, tokens: planTokens} : {text: spread(moments, j, shotCount).join(' '), tokens: beatTokens}
+                const moment = withLabels(written.text, written.tokens)
                 // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
-                const named = castSubjects.find(s => names(s).test(moment))
+                const firstNamed = idsIn(written.text, written.tokens)[0]
+                const named = castSubjects.find(s => s.id === firstNamed)
                 const starting = vocals.filter(v => inShot(j, v.start))
                 const continuing = vocals.filter(v => v.start < at && v.end > at)
                 // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
@@ -497,10 +508,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
                 const framing = goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
-                const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera) : nextCamera(cameraLevel, cameraCursor, lastCamera)
+                const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera, planTokens) : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
                 lastFraming = framing
-                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment: withLabels(moment), starting, continuing}
+                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment, starting, continuing}
             })
         }
 
@@ -597,16 +608,16 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
                     if (!p) return `${s.label}, ${s.name}, in the frame${face}`
-                    return `${s.label}, ${s.name}, ${[p.state, p.frame, p.motion].filter(Boolean).map(t => withLabels(t!)).join('; ') || 'in the frame'}${face}`
+                    return `${s.label}, ${s.name}, ${[p.state, p.frame, p.motion].filter(Boolean).map(t => withLabels(t!, planTokens)).join('; ') || 'in the frame'}${face}`
                 }
                 // who is in the frame without a line of their own is busy with the event too, each in their own way - never
                 // standing by: the video model otherwise lets them wait in their reference pose while the shot's two or
                 // three people act
                 const unstaged = shot.plan ? shot.focus.filter(s => !stagedPeople?.[s.id]) : []
                 const restClause = unstaged.length
-                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro ? withLabels(shot.plan.rest).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, none of them stands idle or only watches`}.`
+                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, none of them stands idle or only watches`}.`
                     : ''
-                const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view)}.` : ''
+                const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
                 const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, nobody steps closer or away, the camera does not move.' : ''
                 const inFrame = shot.focus.length
                     ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor ? ` Behind them: ${locationAnchor}.` : ''}${holdClause}`
@@ -641,9 +652,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // a piece of a fight clip tells what ITS shot does: the beat's summary names everybody ("seven hammers against a
             // dozen orcs"), and the video model fills the people it has no picture for with copies of the ones it has
             const sceneClause = slot.micro && flatShotMoments?.[0]?.action
-                ? withLabels(flatShotMoments[0].action)
+                ? withLabels(flatShotMoments[0].action, planTokens)
                 : opensScene
-                ? withLabels(beat.summary)
+                ? withLabels(beat.summary, beatTokens)
                 : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
@@ -724,10 +735,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
                 ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
                 // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not
-                ...(staging && !slot.micro ? [`Layout of the place: ${withLabels(staging)}`] : []),
+                ...(staging && !slot.micro ? [`Layout of the place: ${withLabels(staging, planTokens)}`] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 // a fact that names somebody without a picture in this piece of a fight is left out
-                ...(state.length ? [`Continuity from earlier scenes: ${state.filter(f => !slot.micro || !characters.some(c => !cast.some(x => x.id === c.id) && mentionsCharacter(f, c))).map(withLabels).join('; ')}.`] : []).filter(line => !(slot.micro && line.endsWith(': .'))),
+                ...(state.length ? [`Continuity from earlier scenes: ${state.filter(f => !slot.micro || idsIn(f, beatTokens).every(id => cast.some(c => c.id === id))).map(f => withLabels(f, beatTokens)).join('; ')}.`] : []).filter(line => !(slot.micro && line.endsWith(': .'))),
                 ...shotTexts,
                 '',
                 'overall_soundscape:',

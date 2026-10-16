@@ -19,12 +19,23 @@ describe('readBeatPlan', () => {
         expect(r.plan.ends).toEqual({cael: 'stands at the shaft'})
     })
     test('asks again for an unknown name, a stranger in the text and a singing shot without a singer', () => {
-        const r = readBeatPlan({shots: [{action: 'Maren swings', characters: ['Cael', 'Nobody']}]}, beat, [cael, maren], 1, {singerIds: ['cael'], singingPerShot: [true]})!
+        const r = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael', 'Nobody']}]}, beat, [cael, maren], 1, {singerIds: ['cael'], singingPerShot: [true]})!
         expect(r.problems.length).toBe(2)
-        const q = readBeatPlan({shots: [{action: 'Maren swings', characters: ['Cael']}]}, beat, [cael, maren], 1)!
+        // who the text is about is read from its tokens - a plain name is plain text
+        const q = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael']}]}, beat, [cael, maren], 1)!
         expect(q.problems[0]).toContain('Maren')
+        expect(readBeatPlan({shots: [{action: 'Maren swings', characters: ['Cael']}]}, beat, [cael, maren], 1)!.problems).toEqual([])
         const none = readBeatPlan({shots: [{action: 'x', characters: ['Maren']}]}, beat, [cael, maren], 1, {singerIds: ['cael'], singingPerShot: [true]})!
         expect(none.problems[0]).toContain('sung')
+    })
+    test('a token that is nobody of the cast is asked again, braces in the characters list are read', () => {
+        const r = readBeatPlan({staging: '{Ghost} by the door', shots: [{action: '{Cael} turns to {Bob}', characters: ['{Cael}']}]}, beat, [cael, maren], 1)!
+        expect(r.plan.shots[0]!.characters).toEqual(['cael'])
+        expect(r.issues).toEqual([
+            {shot: 0, message: 'shot 1: "{Bob}" is not one of the characters - write the names of the cast in braces, exactly as in "cast"'},
+            {shot: 0, message: 'the staging: "{Ghost}" is not one of the characters - write the names of the cast in braces, exactly as in "cast"'},
+        ])
+        expect(r.plan.tokens).toBe(true)
     })
     test('a problem knows its shot; the shot count is a problem of the whole beat', () => {
         const r = readBeatPlan({shots: [{action: 'Cael sings', characters: ['Cael']}, {action: 'x', characters: ['Nobody']}]}, beat, [cael, maren], 3)!
@@ -73,7 +84,7 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
     })
     test('more than four own entries are cut to four by the code: singers first, then the order of the action', () => {
         const people = Object.fromEntries(names.map((n, i) => [n, own(i)]))
-        const r = readBeatPlan({shots: [{action: 'Fay leads, then Edda follows', characters: names, framing: 'wide shot', people}]}, beat, cast, 1, {singerIds: ['dina'], singingPerShot: [true]})!
+        const r = readBeatPlan({shots: [{action: '{Fay} leads, then {Edda} follows', characters: names, framing: 'wide shot', people}]}, beat, cast, 1, {singerIds: ['dina'], singingPerShot: [true]})!
         expect(r.problems).toEqual([])
         expect(Object.keys(r.plan.shots[0]!.people!).sort()).toEqual(['dina', 'edda', 'fay', 'anna'].sort())
         expect(r.plan.shots[0]!.characters).toHaveLength(6)
