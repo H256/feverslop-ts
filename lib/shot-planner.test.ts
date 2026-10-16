@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import type {StoryBeat} from "./project.ts";
-import {type PlanContext, planPrompt} from "./shot-planner.ts";
+import {type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
 
 const beat = {id: 'beat-01', order: 1, summary: 'Runa walks in.', moments: ['Runa walks in.'], locationId: 'hall', characterIds: ['runa'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
 const context: PlanContext = {
@@ -22,5 +22,20 @@ describe('the shot planner prompt', () => {
         expect(first.input).toContain('no ENDS block')
         expect(second.input).toContain('end with the ENDS block')
         expect(second.input).toEndWith('- shot 5: "Bob" is not one of the characters')
+    })
+})
+
+describe('asked again: only the calls whose shots have a problem', () => {
+    test('the first time every call is asked', () => {
+        expect(plannerCalls(10, 4).map(c => [c.from, c.to, c.keep])).toEqual([[0, 4, false], [4, 8, false], [8, 10, false]])
+    })
+    test('a problem in shot 6 asks the second call again, with only its problem', () => {
+        const calls = plannerCalls(10, 4, {issues: [{shot: 5, message: 'shot 6: "Bob" is not one of the characters'}], previousShots: 10})
+        expect(calls.map(c => c.keep)).toEqual([true, false, true])
+        expect(calls[1]!.problems).toEqual(['shot 6: "Bob" is not one of the characters'])
+    })
+    test('a problem of the whole beat asks every call again', () => {
+        const calls = plannerCalls(10, 4, {issues: [{message: 'shot count: needed 10, got 9'}], previousShots: 9})
+        expect(calls.every(c => !c.keep && c.problems.length === 1)).toBe(true)
     })
 })

@@ -26,6 +26,13 @@ describe('readBeatPlan', () => {
         const none = readBeatPlan({shots: [{action: 'x', characters: ['Maren']}]}, beat, [cael, maren], 1, {singerIds: ['cael'], singingPerShot: [true]})!
         expect(none.problems[0]).toContain('sung')
     })
+    test('a problem knows its shot; the shot count is a problem of the whole beat', () => {
+        const r = readBeatPlan({shots: [{action: 'Cael sings', characters: ['Cael']}, {action: 'x', characters: ['Nobody']}]}, beat, [cael, maren], 3)!
+        expect(r.issues).toEqual([
+            {shot: 1, message: 'shot 2: "Nobody" is not one of the characters'},
+            {message: 'shot count: needed 3, got 2'},
+        ])
+    })
     test('an old plan of actions stays usable', () => {
         expect(asBeatShots(['a', 'b']).shots.map(s => s.action)).toEqual(['a', 'b'])
     })
