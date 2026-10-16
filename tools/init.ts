@@ -81,7 +81,10 @@ if (!hasSong) config.songDuration = Number(answer(await p.text({
 
 const customize = answer(await p.confirm({message: 'Customize the project settings (singers, resolution, ...)?', initialValue: false}))
 if (customize) {
-    const singerMode = answer(await p.select({
+    // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
+    const canSing = Boolean(lyrics || idea)
+    if (!canSing) p.log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
+    const singerMode = !canSing ? 'none' : answer(await p.select({
         message: 'Singers',
         options: [
             {value: 'none', label: 'None - the song just plays (clip mode)', hint: 'default'},
