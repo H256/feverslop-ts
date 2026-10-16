@@ -293,7 +293,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     const memberCounts = computeMemberCounts(beats, characters)
     const requests: ClipRequest[] = []
     // continuity facts in story order, with the beat and place they came from - see continuityFor
-    const stateSoFar: { fact: string, beatId: string, locationId: string }[] = []
+    // place: whether the fact is one of the place (undefined: a beat from before the facts said so), ids: whom it names
+    const stateSoFar: { fact: string, beatId: string, locationId: string, place?: boolean, ids: string[] }[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
@@ -306,6 +307,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const staged = shotMoments?.[beat.id] ? asBeatShots(shotMoments[beat.id]!) : undefined
         const flat = staged?.shots
         let shotCursor = 0
+        // who the beat shows - its characters and whoever its shots put in the picture: the facts about them come with them
+        const shown = [...new Set([...beat.characterIds, ...(staged?.shots.flatMap(s => s.characters ?? []) ?? [])])]
 
         scene.forEach((slot, k) => {
             const opensScene = k === 0
@@ -315,20 +318,26 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             shotCursor += shotCount
             // a clip of a continuous beat starts on the last frame of the clip before it
             const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat), opensScene, startsFrom, input, staged?.staging, view, staged?.tokens === true))
+            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat, shown), opensScene, startsFrom, input, staged?.staging, view, staged?.tokens === true))
         })
-        stateSoFar.push(...beat.stateAfter.map(fact => ({fact, beatId: beat.id, locationId: beat.locationId})))
+        stateSoFar.push(...beat.stateAfter.map(fact => typeof fact === 'string'
+            ? {fact, beatId: beat.id, locationId: beat.locationId, ids: []}
+            : {fact: fact.fact, beatId: beat.id, locationId: beat.locationId, place: fact.place, ids: idsIn(fact.fact, true)}))
     }
     return requests
 
     // Every fact of the whole story piles up to 25+ lines that don't belong to the clip's place or contradict it (the
-    // video model draws them in anyway) - a clip gets what happened at its own location and what the beat right
-    // before it left behind, the most recent few. What a mirror shows is not filtered here by words: the beats prompt
-    // and filmableRules already say that a mirror shows the plain reflection of the room and is never a fact of it
-    function continuityFor(beat: StoryBeat) {
+    // video model draws them in anyway). A fact says whose it is: one of a place stays there - a clip at that place gets
+    // it - and one about characters ({Name}) goes with them - a clip that shows them gets it, wherever it happened. A fact
+    // of a beat from before that (a plain string) is taken as before: what happened at the clip's own location and what
+    // the beat right before it left behind. The most recent few. What a mirror shows is not filtered here by words: the
+    // beats prompt and filmableRules already say that a mirror shows the plain reflection of the room and is never a fact of it
+    function continuityFor(beat: StoryBeat, shown: string[]) {
         const previous = beats[beats.findIndex(b => b.id === beat.id) - 1]
         return [...new Set(stateSoFar
-            .filter(s => s.locationId === beat.locationId || s.beatId === previous?.id)
+            .filter(s => s.place === undefined
+                ? s.locationId === beat.locationId || s.beatId === previous?.id
+                : s.place || !s.ids.length ? s.locationId === beat.locationId : s.ids.some(id => shown.includes(id)))
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 

@@ -7,7 +7,8 @@ import type {ClipRequest} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {formatTime} from "../lib/frames.ts";
 import {log, styles} from "../lib/log.ts";
-import type {Project} from "../lib/project.ts";
+import {factText, type Project} from "../lib/project.ts";
+import {plainText} from "../lib/refs.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import {freshness} from "../lib/provenance.ts";
 import {clipFingerprint} from "../lib/render.ts";
@@ -26,6 +27,8 @@ const clip: ClipRequest = await Bun.file(join(clipsDir, `${clipId}.json`)).json(
 const data: Project = existsSync(join(dir, 'project.json')) ? await Bun.file(join(dir, 'project.json')).json() : {}
 const config = await loadProjectConfig(dir)
 const characters = data.cast?.characters ?? []
+// the beats and plans write characters as {Name} - shown here with their plain names
+const plain = (text: string) => plainText(text, characters)
 const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
 const line = (label: string, value: string) => console.log(`${styles.label(label.padEnd(12))} ${value}`)
 
@@ -41,8 +44,8 @@ if (beat) {
     line('Kind', `${beat.kind} · intensity ${beat.intensity} · ${beat.continuous ? 'one unbroken take' : 'cut'}`)
     line('Place', styles.name(beat.locationId))
     line('People', beat.characterIds.map(c => styles.name(nameOf(c))).join(', ') || styles.muted('nobody'))
-    line('Summary', beat.summary)
-    if (beat.stateAfter.length) line('After it', beat.stateAfter.join(' · '))
+    line('Summary', plain(beat.summary))
+    if (beat.stateAfter.length) line('After it', beat.stateAfter.map(f => `${plain(factText(f))}${typeof f === 'object' && f.place ? styles.muted(' (of the place)') : ''}`).join(' · '))
 } else line('Beat', styles.warning(`${clip.beatId} is not in project.json any more - plan the project again`))
 
 const plan = data.shotMoments?.[clip.beatId] && asBeatShots(data.shotMoments[clip.beatId]!)
@@ -50,11 +53,11 @@ if (plan) {
     const earlier = await Promise.all(clipIds.filter(other => other < clip.id).map(other => Bun.file(join(clipsDir, `${other}.json`)).json() as Promise<ClipRequest>))
     const offset = earlier.filter(c => c.beatId === clip.beatId).reduce((sum, c) => sum + c.shots.length, 0)
     log.section(`STAGED SHOTS ${offset + 1}-${offset + clip.shots.length} OF ${plan.shots.length}`)
-    if (plan.staging) line('Staging', plan.staging)
+    if (plan.staging) line('Staging', plain(plan.staging))
     plan.shots.slice(offset, offset + clip.shots.length).forEach((shot, n) => {
         const cut = clip.shots[n]
         console.log(`${styles.name(cut?.label ?? `[Shot ${n + 1}]`)} ${styles.muted(`at ${cut?.at ?? '?'}s · ${shot.framing ?? cut?.framing ?? ''}${shot.hold ? ' · held' : ''}`)}`)
-        console.log(`   ${shot.action}`)
+        console.log(`   ${plain(shot.action)}`)
         if (shot.characters?.length) console.log(styles.muted(`   in the picture: ${shot.characters.map(nameOf).join(', ')}`))
         for (const [person, p] of Object.entries(shot.people ?? {})) console.log(styles.muted(`   ${nameOf(person)}: ${[p.state, p.frame, p.motion].filter(Boolean).join(' | ')}`))
         if (shot.rest) console.log(styles.muted(`   the others: ${shot.rest}`))

@@ -200,3 +200,35 @@ describe('{Name} tokens', () => {
         expect(clip.prompt).toContain('<Subject 2> nods to the stranger.')
     })
 })
+
+describe('a fact goes with whom it is about, or stays at its place', () => {
+    const at = (id: string, locationId: string, characterIds: string[], stateAfter: StoryBeat['stateAfter'] = []) =>
+        ({...beat, id, locationId, characterIds, summary: 'x', moments: ['x'], stateAfter, tokens: true}) as StoryBeat
+    const beats = [
+        at('b1', 'forge', ['shaman'], [{fact: "{Shaman}'s drum is torn", place: false}, {fact: 'the fire burns low', place: true}]),
+        at('b2', 'clearing', ['shaman']),
+        at('b3', 'forge', ['runa']),
+    ]
+    const clips = buildClipRequests({
+        slots: beats.map((b, n) => ({id: `slot-00${n + 1}`, index: n, section: 'A', start: n * 4, end: n * 4 + 4, bars: 2, energy: 0.5, lyrics: []})),
+        mapping: beats.map((b, n) => ({slotId: `slot-00${n + 1}`, beatId: b.id})),
+        beats,
+        characters,
+        locations: [{id: 'forge', name: 'Forge'}, {id: 'clearing', name: 'Clearing'}],
+        characterDescriptions: {shaman: 'A stocky shaman.', runa: 'A small grey cat.'},
+        locationDescriptions: {forge: 'A forge.', clearing: 'A clearing.'},
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 12, downbeats: [0, 2, 4, 6, 8, 10], barEnergy: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], sections: []},
+        language: 'English',
+        stemsAvailable: false,
+    })
+
+    test('the fact about the shaman comes with the shaman to another place, the fact of the forge stays there', () => {
+        expect(clips[1]!.prompt).toContain("Continuity from earlier scenes: <Subject 2>'s drum is torn.")
+        expect(clips[1]!.prompt).not.toContain('the fire burns low')
+    })
+    test('back at the forge without the shaman: the fire, not the drum', () => {
+        expect(clips[2]!.prompt).toContain('Continuity from earlier scenes: the fire burns low.')
+        expect(clips[2]!.prompt).not.toContain('drum is torn')
+    })
+})
