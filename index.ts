@@ -24,6 +24,7 @@ import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
+import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 import {projectExists, validProjectId} from "./lib/project-setup.ts";
 import {propMissing} from "./lib/prop-check.ts";
@@ -894,6 +895,11 @@ const clips = buildClipRequests({
     locationView,
     shotViews,
 })
+
+// more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them
+for (const clip of clips) {
+    if (clip.dropped?.length) log.warn(`${clip.id}: no reference picture left for ${clip.dropped.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')} - the workflow takes ${MAX_REFERENCE_IMAGES} pictures`)
+}
 
 const outputDir = join(project.dir, 'output')
 rmSync(outputDir, {recursive: true, force: true})

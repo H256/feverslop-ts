@@ -109,3 +109,29 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain('Layout of the place')
     })
 })
+
+describe('more people than reference pictures', () => {
+    const crowd: Character[] = Array.from({length: 10}, (_, n) => ({id: `p${n}`, name: `P${n}`, role: 'villager'}))
+    const input = (count: number): Input => ({
+        slots: [{id: 'slot-001', index: 0, section: 'A', start: 0, end: 4, bars: 2, energy: 0.5, lyrics: []}],
+        mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+        beats: [{...beat, characterIds: crowd.slice(0, count).map(c => c.id)}],
+        characters: crowd,
+        locations: [{id: 'clearing', name: 'Clearing'}],
+        characterDescriptions: Object.fromEntries(crowd.map(c => [c.id, 'A villager.'])),
+        locationDescriptions: {clearing: 'A forest clearing.'},
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.5, 0.5], sections: []},
+        language: 'English',
+        stemsAvailable: false,
+    })
+
+    test('whoever does not fit is listed as dropped', () => {
+        const clip = buildClipRequests(input(10))[0]!
+        expect(clip.assets.pictures).toHaveLength(9)
+        expect(clip.dropped).toEqual(['p8', 'p9'])
+    })
+    test('a clip where everybody fits has no dropped list', () => {
+        expect(buildClipRequests(input(8))[0]!.dropped).toBeUndefined()
+    })
+})
