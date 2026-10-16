@@ -143,7 +143,8 @@ end: <Name> | <where they are and what they do and hold when the beat is over>
 export function blockingPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping}: PlanContext, beat: StoryBeat, before: { beatId: string, staging?: string, ends: Record<string, string> } | undefined, after: StoryBeat | undefined): AskOptions {
     return {
         reasoning: 'low',
-        maxTokens: 4096,
+        // even at low the thinking alone takes ~2500 words - 4096 cut off nearly every beat and cost a second call
+        maxTokens: 8192,
         input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.name, c.prop])))}
 cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
 place (as its reference picture shows it): ${JSON.stringify({name: locations.find(l => l.id === beat.locationId)?.name ?? beat.locationId, description: locationDescriptions[beat.locationId] ?? '', ...(locationLayouts?.[beat.locationId]?.layout ? {layout: locationLayouts[beat.locationId]!.layout} : {})})}
