@@ -151,6 +151,9 @@ bun index.ts                          # without an id: the author's own project 
 bun index.ts --render=song            # write song.wav + lyrics.txt from idea.txt first, see below
 bun index.ts --redo=beats             # regenerate a step and everything built on it
 bun index.ts --redo=story,lookBrief   # several at once
+bun index.ts -v                       # every detail in the terminal - by default a cached step is one line and the clip
+                                       # prompts are not printed (the log file in logs/ always has everything)
+bun index.ts --show=cast,clips        # the details of these cached steps, clips = the clip prompts
 bun index.ts --render=all             # also render with ComfyUI and assemble <project-id>.mp4, see below
 bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
