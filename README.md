@@ -31,6 +31,7 @@ bun run setup
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
 | `bun run init`          | creates a new project - see [Creating a project](#creating-a-project)        |
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
+| `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command |
 | `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt |
 | `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
 | `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |

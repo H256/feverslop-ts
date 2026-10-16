@@ -30,6 +30,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/style
 import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
 import * as clack from "@clack/prompts";
 import {propMissing} from "./lib/prop-check.ts";
+import {projectInputs} from "./lib/inputs.ts";
 import {reviewed} from "./lib/review.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt,
@@ -247,27 +248,8 @@ log.step('Mode', config.singers.length
 if (config.alignLyrics && sungLines(lyricSections).length === 0) throw new Error('Aligning the lyrics needs sung lines in input/lyrics.txt - without lyrics, remove "singers" from config.json (clip mode)')
 if (!lyrics && !storyIdea) throw new Error('Neither lyrics nor a story idea given - add input/lyrics.txt or input/story-idea.txt')
 
-// an edited input redoes the steps built on it
-await project.syncInputs({
-    // no "assumed" for these three - unlike the ones below, they never existed before this feature, so there is
-    // no old project to treat as unchanged; on a real first run "previous" is simply undefined and nothing redoes
-    'idea.txt': {value: idea, steps: ['songStyle']},
-    'music-style.txt': {value: musicStyle, steps: ['songStyle']},
-    'song.wav': {value: existsSync(songFile) ? await Bun.file(songFile).bytes() : '', steps: ['music', 'stems']},
-    'lyrics.txt': {value: lyrics, steps: ['story', 'transcript', 'singing', 'songStyle']},
-    'story-idea.txt': {value: storyIdea, steps: ['story']},
-    'style.txt': {value: style, steps: ['lookBrief'], assumed: ''},
-    singers: {value: JSON.stringify(config.singers), steps: ['singing'], assumed: '[]'},
-    singerVoice: {value: config.singerVoice, steps: ['story'], assumed: 'auto'},
-    lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
-    // which beats run on without a cut changes what their shots have to tell
-    // assumed: what a project recorded before the default became "never" ran with - so it is not redone by the new default alone
-    continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
-    // the choice of views is made again when the mode changes - it is only made at all with "auto"
-    locationView: {value: String(config.sequenceSheets ? config.locationView : -1), steps: ['shotViews'], assumed: '-1'},
-    // fight beats cut into one-bar pieces change how many shots a beat has
-    fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
-})
+// an edited input redoes the steps built on it - the inputs and the steps they redo are listed in lib/inputs.ts
+await project.syncInputs(await projectInputs(project.dir, config))
 // the sections are named after the lyrics tags
 if (project.data.music && lyricSections.length && project.data.music.sections.map(s => s.label).join('|') !== lyricSections.map(s => s.label).join('|')) {
     project.invalidate('music')

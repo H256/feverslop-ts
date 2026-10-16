@@ -171,6 +171,9 @@ export type Project = {
 }
 export type StepName = Exclude<keyof Project, 'inputs' | 'partials'>
 
+/** An input whose change redoes steps (lib/inputs.ts); `assumed` is the value it had before fingerprints existed. */
+export type TrackedInput = { value: string | Uint8Array, steps: StepName[], assumed?: string }
+
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<StepName, StepName[]> = {
     songStyle: [],
@@ -200,6 +203,8 @@ const dependsOn: Record<StepName, StepName[]> = {
 }
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
+
+const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
 
 export class ProjectStore {
     readonly dir: string
@@ -250,24 +255,41 @@ export class ProjectStore {
         }
     }
 
+    /** The inputs that changed since the last run, with the steps each redoes - read-only. */
+    changedInputs(inputs: Record<string, TrackedInput>): { name: string, steps: StepName[] }[] {
+        const previous = this.data.inputs ?? {}
+        const hasSteps = Object.keys(this.data).some(key => key !== 'inputs')
+        return Object.entries(inputs).flatMap(([name, {value, steps, assumed}]) => {
+            const current = fingerprintOf(value)
+            const before = previous[name] ?? (assumed !== undefined && hasSteps ? fingerprintOf(assumed) : current)
+            return before !== current ? [{name, steps}] : []
+        })
+    }
+
+    /** The steps with a result that invalidating these would remove - what invalidate() does, without doing it. */
+    redoneBy(names: StepName[]): StepName[] {
+        const redone = new Set<StepName>()
+        const visit = (name: StepName) => {
+            if (this.data[name] !== undefined) redone.add(name)
+            for (const [step, deps] of Object.entries(dependsOn) as [StepName, StepName[]][]) {
+                if (deps.includes(name) && this.data[step] !== undefined && !redone.has(step)) visit(step)
+            }
+        }
+        for (const name of names) visit(name)
+        return STEP_NAMES.filter(step => redone.has(step))
+    }
+
     /**
      * Redoes the steps built on an input that changed since the last run. Every input is fingerprinted in
      * project.json; `assumed` is the value an input had before fingerprints existed (else it counts as unchanged).
      */
-    async syncInputs(inputs: Record<string, { value: string | Uint8Array, steps: StepName[], assumed?: string }>) {
-        const previous = this.data.inputs ?? {}
-        const current: Record<string, string> = {}
-        const hash = (value: string | Uint8Array) => Bun.hash(value).toString(16)
-        const hasSteps = Object.keys(this.data).some(key => key !== 'inputs')
-        for (const [name, {value, steps, assumed}] of Object.entries(inputs)) {
-            current[name] = hash(value)
-            const before = previous[name] ?? (assumed !== undefined && hasSteps ? hash(assumed) : current[name])
-            if (before !== current[name]) {
-                log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
-                for (const step of steps) this.invalidate(step)
-            }
+    async syncInputs(inputs: Record<string, TrackedInput>) {
+        for (const {name, steps} of this.changedInputs(inputs)) {
+            log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
+            for (const step of steps) this.invalidate(step)
         }
-        if (JSON.stringify(current) !== JSON.stringify(previous)) {
+        const current = Object.fromEntries(Object.entries(inputs).map(([name, {value}]) => [name, fingerprintOf(value)]))
+        if (JSON.stringify(current) !== JSON.stringify(this.data.inputs ?? {})) {
             this.data.inputs = current
             await this.save()
         }
