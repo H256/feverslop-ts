@@ -63,13 +63,32 @@ function unisonChecks(j: number, people: NonNullable<ShotPlan['people']>, charac
     return {problems, notes}
 }
 
-/** Someone who does not sing in this shot is marked as singing by the planner: a note - the clip prompt keeps their mouth closed anyway. */
-function singingNotes(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: { singerIds: string[], singingPerShot: boolean[] }): string[] {
-    if (!singers) return []
-    const allowed = singers.singingPerShot[j] ? singers.singerIds : []
-    return Object.entries(people)
-        .filter(([id, p]) => !allowed.includes(id) && p.singing === true)
-        .map(([id]) => `shot ${j + 1}: ${nameOfId(characters, id)} is described singing but does not sing in this shot`)
+/** Who sings in shot j: the singers of the lines sung in it - all of the beat's singers for an input from before singersPerShot. */
+export type ShotSingers = { singerIds: string[], singingPerShot: boolean[], singersPerShot?: string[][] }
+export type ShotProps = { characterId: string, prop: string, activePerShot: boolean[] }[]
+const sungBy = (singers: ShotSingers | undefined, j: number) => singers?.singersPerShot?.[j] ?? (singers?.singingPerShot[j] ? singers.singerIds : [])
+
+/**
+ * What the music says against the people of shot j, by their own "singing:" and "playing:" flags - never by the words of
+ * the text: who sings in it is "singing: yes" and nobody else, whose instrument is heard is "playing: yes" and nobody
+ * else. Asked again once: the clip prompt follows the music, and a plan that says otherwise (a verse of the lead sung "in
+ * tight harmony", a guitar "resting on his thigh" while it is heard) wins over it in the picture.
+ */
+function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: ShotSingers, props?: ShotProps): string[] {
+    const problems: string[] = []
+    const singing = sungBy(singers, j)
+    const who = singing.length ? singing.map(id => nameOfId(characters, id)).join(' and ') : 'nobody'
+    for (const [id, p] of Object.entries(people)) {
+        const name = nameOfId(characters, id)
+        if (p.singing === true && !singing.includes(id)) problems.push(`shot ${j + 1}: ${name} is marked singing, but ${who} sings in this shot - singing: no for ${name}, and no singing, joining in or mouthing the words by ${name} anywhere in the shot`)
+        if (p.singing !== true && singing.includes(id)) problems.push(`shot ${j + 1}: ${name} sings in this shot - singing: yes, the mouth in view, singing into the microphone if ${name} has one`)
+        const instrument = props?.find(e => e.characterId === id)
+        if (!instrument) continue
+        const heard = instrument.activePerShot[j] === true
+        if (heard && p.playing !== true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: yes, and ${name} plays it in the shot, staged however fits the moment`)
+        if (!heard && p.playing === true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is not heard in this shot - playing: no, and ${name} does something else with it or with their hands`)
+    }
+    return problems
 }
 
 /**
@@ -88,7 +107,7 @@ function trimForeground(people: NonNullable<ShotPlan['people']>, action: string,
     return {people: Object.fromEntries(ids.filter(id => keep.has(id)).map(id => [id, people[id]!])), dropped: ids.filter(id => !keep.has(id))}
 }
 
-export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Character[], needed: number, singers?: { singerIds: string[], singingPerShot: boolean[] }): ReadPlan | undefined {
+export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Character[], needed: number, singers?: ShotSingers, props?: ShotProps): ReadPlan | undefined {
     const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : undefined
     const rawShots = Array.isArray(raw) ? raw : o && Array.isArray(o.shots) ? o.shots : undefined
     if (!rawShots?.length) return undefined
@@ -114,10 +133,10 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
                 if (!found || !(text(p.state) || text(p.frame) || text(p.motion))) continue
                 // somebody described but not listed is in the picture too
                 if (!ids.includes(found.id)) ids.push(found.id)
-                people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {}), ...(yes(p.singing) ? {singing: true} : {})}
+                people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {}), ...(yes(p.singing) ? {singing: true} : {}), ...(yes(p.playing) ? {playing: true} : {})}
             }
         }
-        const trimmed = trimForeground(people, action, characters, singers?.singingPerShot[j] ? singers.singerIds : [])
+        const trimmed = trimForeground(people, action, characters, sungBy(singers, j))
         if (trimmed.dropped.length) {
             people = trimmed.people
             notes.push(`shot ${j + 1}: ${trimmed.dropped.length + MAX_FOREGROUND} people had an own entry - ${trimmed.dropped.map(id => nameOfId(characters, id)).join(', ')} kept without one`)
@@ -129,11 +148,12 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         const strangers = onScreen.filter(c => !ids.includes(c.id) && written.ids.includes(c.id)).map(c => c.name)
         if (strangers.length) problem(j, `shot ${j + 1}: the text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the text, or put them in the shot`)
         // while a line is sung, a singer is in the picture
-        if (singers?.singingPerShot[j] && singers.singerIds.length && !singers.singerIds.some(id => ids.includes(id)))
-            problem(j, `shot ${j + 1}: a line is sung in it, but none of the singers is in its characters`)
+        const lineSingers = sungBy(singers, j)
+        if (lineSingers.length && !lineSingers.some(id => ids.includes(id)))
+            problem(j, `shot ${j + 1}: a line of ${lineSingers.map(id => nameOfId(characters, id)).join(' and ')} is sung in it, but they are not in its characters`)
         const unison = unisonChecks(j, people, characters)
-        for (const message of unison.problems) problem(j, message)
-        notes.push(...unison.notes, ...singingNotes(j, people, characters, singers))
+        for (const message of [...unison.problems, ...musicChecks(j, people, characters, singers, props)]) problem(j, message)
+        notes.push(...unison.notes)
         const size = SIZES.find(s => s === text(e.size).toLowerCase())
         if (ids.length > MAX_FOREGROUND && size !== 'wide') notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
         // three or more people: everybody moves (the prompt asks for it) - what the code can tell without reading the
@@ -176,7 +196,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
  *   framing: / size: wide|medium|close / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ...
- *   person: A | state: ... | frame: ... | motion: ... | singing: yes|no
+ *   person: A | state: ... | frame: ... | motion: ... | playing: yes|no | singing: yes|no
  *   START                   (the blocking call)
  *   start: A | where they are when the beat starts
  *   ENDS
@@ -208,11 +228,11 @@ export function parseShotLines(answer: string): { staging?: string, starts: Reco
         if (/^start\s*:?\s*$/i.test(line)) { inEnds = false; current = undefined; continue }
         if (inEnds || !current) continue
         if ((m = line.match(/^person\s*:\s*(.+)$/i))) {
-            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion|singing)\s*:)/i)
+            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion|playing|singing)\s*:)/i)
             const name = parts[0]!.trim()
             const entry: Record<string, string> = {}
             for (const part of parts.slice(1)) {
-                const kv = part.match(/^(state|frame|motion|singing)\s*:\s*(.*)$/i)
+                const kv = part.match(/^(state|frame|motion|playing|singing)\s*:\s*(.*)$/i)
                 if (kv) entry[kv[1]!.toLowerCase()] = kv[2]!.trim()
             }
             if (name) (current.people as Record<string, unknown>)[name] = entry

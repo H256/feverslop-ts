@@ -570,7 +570,7 @@ song, its on-screen use is grounded in whether that instrument is audible at eac
 video model showing it played continuously through every shot:
 
 ```json
-{ "id": "drummer", "name": "Drummer", "role": "…", "prop": "drum kit", "propStem": "drums" }
+{ "id": "drummer", "name": "Drummer", "role": "…", "prop": "drum kit", "propStem": "drums", "propCarried": false, "propInHand": "drumsticks", "propPlace": "stage" }
 ```
 
 - `prop` - any distinctive object a character carries or uses (a weapon, a tool, an instrument, …), named briefly.
@@ -581,6 +581,10 @@ video model showing it played continuously through every shot:
   `"other"` (synth, strings and every other melodic instrument that pass doesn't cover - they share one activity
   signal since Demucs can't split them further). Leave empty for a non-instrument prop, an instrument not heard in
   the song, or whenever the story isn't a band performing live - the whole feature stays off then.
+- `propCarried`, `propInHand`, `propPlace` - `propCarried: false` for a `prop` that is too big or too fixed to be carried
+  (a drum kit, an organ, an anvil): it stands in the location `propPlace` (an id) and is used there. The character
+  picture then shows only `propInHand` (e.g. drumsticks), the location picture shows the object itself at one fixed
+  spot. Unset for a carried prop, which the character picture shows the way it is held while used.
 
 What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
 [config.json](#configjson) - stems must already be separated):

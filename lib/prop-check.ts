@@ -2,6 +2,11 @@
 // cheap check that the look prompt did what it was asked: a prop that is missing from the look is missing from the
 // reference picture, and the clips then show the model's own idea of it - or none.
 
+import type {Character} from "./project.ts";
+
+/** What of a character's prop their picture shows: the prop, or - for one that stands in a place - what they hold of it. */
+export const pictureProp = (c: Pick<Character, 'prop' | 'propCarried' | 'propInHand'>) => c.propCarried === false ? c.propInHand : c.prop
+
 const FILLER = new Set(['a', 'an', 'the', 'of', 'with', 'and', 'in', 'on', 'for', 'her', 'his', 'their', 'its'])
 
 /**
