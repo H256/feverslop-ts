@@ -19,6 +19,7 @@ import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCo
 import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
+import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
@@ -257,7 +258,7 @@ if (!style && project.data.lookBrief === undefined) {
     await Bun.write(project.input('style.txt'), style)
     log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
 }
-const lyricSections = parseLyricSections(lyrics)
+const lyricSections = projectLyricSections(lyrics, project.data.music?.sections.map(s => s.label))
 log.step('Lyrics', lyrics ? styles.muted(`${lyricSections.length} sections: ${lyricSections.map(s => s.label).join(' · ')}`) : styles.muted('(none)'))
 log.step('Story idea', storyIdea || styles.muted('(none)'))
 log.step('Style', style || styles.muted('(none - the look is designed from the story)'))
@@ -1117,7 +1118,7 @@ log.step('Log', runLogFile() ?? '')
 async function dryRun() {
     const changed = project.changedInputs(await projectInputs(project.dir, config))
     const lostStems = (['stems', 'instrumentStems'] as const).filter(step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))))
-    const labels = parseLyricSections(await readInput('lyrics.txt')).map(s => s.label)
+    const labels = projectLyricSections(await readInput('lyrics.txt'), project.data.music?.sections.map(s => s.label)).map(s => s.label)
     const sectionsChanged = project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
     const reasons: [string, StepName[]][] = [
         ...(redoSteps.length ? [['--redo', redoSteps] as [string, StepName[]]] : []),

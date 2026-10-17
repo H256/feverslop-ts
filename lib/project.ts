@@ -73,7 +73,8 @@ export type ShotPlan = {
 // tokens: the texts name every character as {Name} (lib/refs.ts); a plan from before that has plain names
 export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[], tokens?: boolean }
 
-export type LyricSection = { label: string, lines: string[] }
+// notes: the tags right after the heading tag, how the part sounds ("[Low, gravelly vocals]") - see parseLyricSections
+export type LyricSection = { label: string, notes?: string[], lines: string[] }
 
 export type MusicSection = { label: string, start: number, end: number, energy: number }
 export type MusicMap = {
