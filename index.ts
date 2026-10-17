@@ -11,7 +11,7 @@ import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, projectLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
@@ -19,6 +19,7 @@ import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCo
 import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
+import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
