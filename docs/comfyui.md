@@ -163,6 +163,9 @@ The orientation is fixed per kind of render, whichever way round the size is wri
 | locations  | landscape   | 1920×1088             | 1.1 MP at 16:9     | 1920×1088           |
 | videos     | landscape   | 1.1 MP at 16:9        | 1.1 MP at 16:9     | 1920×1088           |
 
+The `h3-ref2video` workflows render at most 1344×768: their turbo LoRA is made for up to 768p. A larger `videoResolution`
+is brought down to that, with a warning (the workflow's `maxResolution`, see [custom workflows](custom-workflows.md)).
+
 `"1088x1920"` and `"1920x1088"` therefore mean the same. Sizes should be multiples of 32 for H3; megapixel values are
 rounded to multiples of 32 by the `ResolutionSelector` node.
 

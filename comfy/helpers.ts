@@ -87,7 +87,19 @@ export type SequenceWorkflow = (opts: SequenceWorkflowOptions) => WorkflowResult
  * video is assembled. Without it, a clip is rendered with exactly the frames it needs.
  */
 export type RenderFrames = (frames: number) => number
-export type VideoWorkflowModule = { default: VideoWorkflow, renderFrames?: RenderFrames }
+/**
+ * Optional export of a video workflow: the largest size its model is made for, landscape. A larger videoResolution is
+ * brought down to it (capResolution) - a LoRA trained up to 768p falls apart above it.
+ */
+export type MaxResolution = `${number}x${number}`
+export type VideoWorkflowModule = { default: VideoWorkflow, renderFrames?: RenderFrames, maxResolution?: MaxResolution }
+
+/** The setting, or `max` when the setting asks for more pixels than `max` has. -1 (the workflow's own size) stays. */
+export function capResolution(setting: Resolution, max: MaxResolution | undefined): Resolution {
+    if (!max || setting === -1) return setting
+    const pixels = (size: string) => size.split('x').map(Number).reduce((a, b) => a * b, 1)
+    return (typeof setting === 'number' ? setting * 1e6 : pixels(setting)) > pixels(max) ? max : setting
+}
 
 /**
  * A value the server didn't list when nodes.ts was generated - an uploaded file, a model installed later.
