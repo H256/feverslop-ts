@@ -80,7 +80,9 @@ export async function llmMap<T, R>(items: T[], run: (item: T, index: number) => 
     return results
 }
 
-export type ReasoningStrength = 'low' | 'medium' | 'high' | 'xhigh'
+// none: no thinking at all, for a call that only picks or copies (a view number, a phrase out of a description) - for a
+// model that cannot switch it off, it is low
+export type ReasoningStrength = 'none' | 'low' | 'medium' | 'high' | 'xhigh'
 
 // Models control their thinking differently - the first matching entry wins,
 // everything else gets the standard `reasoning.effort` field.
@@ -91,19 +93,28 @@ const reasoningAdapters: {
     // Muse Glimmer reads its reasoning effort from the system prompt
     {
         match: /muse/i,
-        apply: (p, level) => ({...p, instructions: `Reasoning strength: ${level}\n\n${p.instructions ?? ''}`})
+        apply: (p, level) => ({...p, instructions: `Reasoning strength: ${level === 'none' ? 'low' : level}\n\n${p.instructions ?? ''}`})
     },
     // Qwen 3.8 reads reasoning_effort from chat_template_kwargs, but only while enable_thinking is also true -
     // thinking is off by default, so reasoning_effort alone is silently ignored (no thinking at all, any level)
     {
         match: /qwen3\.8/i,
-        apply: (p, level) => ({...p, chat_template_kwargs: {enable_thinking: true, reasoning_effort: level}} as ResponseCreateParamsStreaming)
+        apply: (p, level) => ({...p, chat_template_kwargs: level === 'none' ? {enable_thinking: false} : {enable_thinking: true, reasoning_effort: level}} as ResponseCreateParamsStreaming)
+    },
+    // The other Qwen 3 models think by default and take no level: reasoning_effort low and high came out the same with
+    // Qwen3.6-35B-A3B on llama.cpp (~330 tokens of thinking for a one-number question) - only enable_thinking switches it
+    // off, on the Chat Completions and the Responses API alike
+    {
+        match: /qwen3/i,
+        apply: (p, level) => level === 'none'
+            ? {...p, chat_template_kwargs: {enable_thinking: false}} as ResponseCreateParamsStreaming
+            : {...p, reasoning: {effort: level}}
     },
 ]
 
-function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningStrength) {
+export function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningStrength) {
     const adapter = reasoningAdapters.find(a => a.match.test(prompt.model ?? ''))
-    return adapter ? adapter.apply(prompt, level) : {...prompt, reasoning: {effort: level}}
+    return adapter ? adapter.apply(prompt, level) : {...prompt, reasoning: {effort: level === 'none' ? 'low' as const : level}}
 }
 
 // A JSON schema the answer must follow - the server then constrains the decoding to it, so the JSON cannot break. The
@@ -282,10 +293,11 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     // varies a lot from run to run, and a small quant can loop in its thinking - more room at the same effort only
     // lets it loop longer. So the second try already has the prompt rewritten (think briefly, then answer) with a low
     // reasoning effort, and the last try gets even more room.
+    const retryLevel: ReasoningStrength = reasoning === 'none' ? 'none' : 'low'
     const attempts = [
         {limit: maxTokens, level: reasoning, note: ''},
-        {limit: maxTokens * 2, level: 'low' as ReasoningStrength, note: emptyAnswerNote},
-        {limit: maxTokens * 4, level: 'low' as ReasoningStrength, note: emptyAnswerNote},
+        {limit: maxTokens * 2, level: retryLevel, note: emptyAnswerNote},
+        {limit: maxTokens * 4, level: retryLevel, note: emptyAnswerNote},
     ]
     for (const [i, {limit, level, note}] of attempts.entries()) {
         try {

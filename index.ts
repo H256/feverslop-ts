@@ -859,6 +859,9 @@ ${JSON.stringify(plan.shots.map((s, n) => ({shot: n, framing: s.framing, camera:
 
 Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length - 1} per shot, in order]} - exactly ${plan.shots.length} numbers.`,
             instructions: 'You are a music video director who chooses the view of a place for each shot. Answer only with JSON.',
+            // a few numbers per beat: 18.6 min of thinking for the 14 beats of tides-of-eternal-flame, 27 s without it, the
+            // picks differing only where the camera of a shot sits between two views
+            reasoning: 'none',
             schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: plan.shots.length, maxItems: plan.shots.length, items: {type: 'integer', minimum: 0, maximum: LOCATION_VIEWS.length - 1}}}},
         }).catch((e: unknown) => {
             log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)

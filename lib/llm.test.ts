@@ -1,5 +1,5 @@
 import {afterAll, beforeAll, describe, expect, test} from "bun:test";
-import {ask, askJson, configureLlm, EmptyAnswerError, TruncatedError} from "./llm.ts";
+import {applyReasoning, ask, askJson, configureLlm, EmptyAnswerError, TruncatedError} from "./llm.ts";
 
 // A fake server that speaks the part of the OpenAI Responses API the pipelines use (model list, a streamed answer), so ask() and askJson() are
 // tested with their retries - cut-off and empty answers - without a language model.
@@ -89,5 +89,23 @@ describe('askJson', () => {
     })
     test('an answer that is not JSON at all is an error', async () => {
         await expect(run([{text: '{"a": nope}'}], () => askJson({instructions: 'i', input: 'x'}))).rejects.toThrow(/valid JSON/)
+    })
+})
+
+describe('applyReasoning', () => {
+    const prompt = (model: string) => ({model, input: 'x', stream: true as const})
+    test('none switches the thinking of a Qwen 3 model off - it takes no level', () => {
+        expect(applyReasoning(prompt('Qwen3.6-35B-A3B-MTP-GGUF-UD-Q4_K_XL'), 'none')).toMatchObject({chat_template_kwargs: {enable_thinking: false}})
+        expect(applyReasoning(prompt('Qwen3.6-35B-A3B'), 'none')).not.toHaveProperty('reasoning')
+        expect(applyReasoning(prompt('Qwen3.6-35B-A3B'), 'medium')).toMatchObject({reasoning: {effort: 'medium'}})
+        expect(applyReasoning(prompt('Qwen3.6-35B-A3B'), 'medium')).not.toHaveProperty('chat_template_kwargs')
+    })
+    test('Qwen 3.8 keeps its level, and none switches it off', () => {
+        expect(applyReasoning(prompt('qwen3.8-30b'), 'low')).toMatchObject({chat_template_kwargs: {enable_thinking: true, reasoning_effort: 'low'}})
+        expect(applyReasoning(prompt('qwen3.8-30b'), 'none')).toMatchObject({chat_template_kwargs: {enable_thinking: false}})
+    })
+    test('a model that cannot switch it off thinks at low for none', () => {
+        expect(applyReasoning(prompt('gemma-4-26b'), 'none')).toMatchObject({reasoning: {effort: 'low'}})
+        expect(applyReasoning(prompt('muse-glimmer'), 'none').instructions).toContain('Reasoning strength: low')
     })
 })
