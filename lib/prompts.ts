@@ -89,6 +89,8 @@ export function storyPrompt(lyrics: string, storyIdea: string, singerVoice: Sing
 export function summaryPrompt(storyBase: string): AskOptions {
     return {
         maxTokens: 4096,
+        // a shorter retelling, nothing to decide - as good without thinking (tried on tides-of-eternal-flame)
+        reasoning: 'none',
         input: `
 Summarize the story and try to keep locations and characters intact.
 ---
@@ -367,6 +369,9 @@ Image prompt: ${imagePrompt}`,
 export function locationAnchorPrompt(description: string): AskOptions {
     return {
         maxTokens: 2048,
+        // picks a phrase out of the description - with thinking, all three places of tides-of-eternal-flame were cut off at
+        // 2048 tokens first; without it the same phrases in under a second
+        reasoning: 'none',
         input: `
 Below is the description of a place from a video prompt. Name two or three of its fixed features that stay visible behind the people in any shot of this place: large parts of the place that never move - walls, openings, built-in furniture, terrain, a light source. Never an object somebody could pick up or carry, never a person or a creature.
 
