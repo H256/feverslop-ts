@@ -1,4 +1,5 @@
-import {formatDuration} from "./log.ts";
+import {stripVTControlCharacters} from "node:util";
+import {formatDuration, styles} from "./log.ts";
 import {median, percentile} from "./predict.ts";
 import type {Timing} from "./timings.ts";
 
@@ -45,14 +46,42 @@ export const by = {
     step: (t: Timing) => t.kind === 'llm' ? t.step ?? 'unknown step' : undefined,
 } satisfies Record<string, (t: Timing) => string | undefined>
 
+const BAR_WIDTH = 14
+const EIGHTHS = ' ▏▎▍▌▋▊▉█'
+
+/** A bar of `fraction` (0-1) of BAR_WIDTH cells, with eighth blocks for the remainder. */
+export function bar(fraction: number, width = BAR_WIDTH) {
+    const eighths = Math.round(Math.min(Math.max(fraction, 0), 1) * width * 8)
+    const full = Math.floor(eighths / 8)
+    return ('█'.repeat(full) + (eighths % 8 ? EIGHTHS[eighths % 8] : '')).padEnd(width)
+}
+
+/**
+ * One table of a stats group: a bar per row for the median (the slowest median is a full bar), colours for the change
+ * against the reference (green = faster, red = slower) and for what is counted apart. The widths are taken from the
+ * plain text, so the colours never shift a column.
+ */
 export function formatRows(title: string, rows: Row[], reference?: Row) {
     if (!rows.length) return ''
+    const slowest = Math.max(...rows.map(r => r.median), 0)
     const width = Math.max(...rows.map(r => r.key.length), 5)
-    const lines = [title, `  ${'group'.padEnd(width)}  ${'n'.padStart(4)}  ${'median'.padStart(8)}  ${'p90'.padStart(8)}  apart${reference ? '  vs first' : ''}`]
+    const cell = (text: string, w: number, right = false) => right ? text.padStart(w) : text.padEnd(w)
+    const head = [cell('group', width), cell('n', 4, true), cell('median', 8, true), cell('p90', 8, true), ' '.repeat(BAR_WIDTH), cell('apart', 22)]
+    if (reference) head.push('vs first')
+    const lines = [`${styles.label('▌')} ${styles.name(title)}`, `  ${styles.muted(head.join('  '))}`, `  ${styles.border('─'.repeat(stripVTControlCharacters(head.join('  ')).length))}`]
     for (const r of rows) {
         const apart = [r.cold && `${r.cold} cold`, r.outliers && `${r.outliers} outlier`, r.retries && `${r.retries} retry`, r.failed && `${r.failed} failed`].filter(Boolean).join(', ')
         const change = reference && r !== reference ? percentChange(reference, r) : undefined
-        lines.push(`  ${r.key.padEnd(width)}  ${String(r.n).padStart(4)}  ${(r.n ? formatDuration(r.median * 1000) : '-').padStart(8)}  ${(r.n ? formatDuration(r.p90 * 1000) : '-').padStart(8)}  ${apart || '-'}${reference ? `  ${change === undefined ? '' : `${change > 0 ? '+' : ''}${change}%`}` : ''}`)
+        const changeText = change === undefined ? '' : `${change > 0 ? '+' : ''}${change}%`
+        const paint = change === undefined || change === 0 ? styles.muted : change > 0 ? styles.warning : styles.answer
+        const cells = [
+            cell(r.key, width), cell(String(r.n), 4, true),
+            cell(r.n ? formatDuration(r.median * 1000) : '-', 8, true), cell(r.n ? formatDuration(r.p90 * 1000) : '-', 8, true),
+            styles.label(bar(slowest ? r.median / slowest : 0)),
+            cell(apart || '-', 22),
+        ]
+        const failing = r.failed > 0
+        lines.push(`  ${cells.map((c, i) => i === 0 ? styles.name(c) : i === 5 ? (apart ? (failing ? styles.warning : styles.muted)(c) : styles.muted(c)) : c).join('  ')}${reference ? `  ${paint(changeText)}` : ''}`)
     }
     return lines.join('\n')
 }
