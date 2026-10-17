@@ -1,5 +1,5 @@
 import type {Assignment, BeatShots, Character, Location, LocationLayout, Slot, StoryBeat} from "./project.ts";
-import {isContinuous} from "./compose.ts";
+import {type BeatSinging, isContinuous} from "./compose.ts";
 import type {ProjectConfig} from "./config.ts";
 import type {AskOptions} from "./llm.ts";
 
@@ -53,11 +53,12 @@ Rules:
 - A fight is an exchange over its shots, not one blow: a blow lands and the shot goes on with what it does (the one hit gives way, the other answers, the first parries, someone comes in from the side) up to the next blow. No "hold at the peak" or "hold the pose" for a fight, and "hold": true is never a fight shot. After a clash the two sides do not stand side by side: one gives ground, falls, flees or is driven back, according to the story.
 - A listener, a bystander or a band member who does not sing stays in the picture whenever the staging has them near the shot, doing something of their own (playing, or moving with the event: a step, a turn, a hand that lifts or grips - never only watching or reacting with the eyes) - and does not sing.
 - In a shot with three or more people in the picture - above all a wide one - nobody just stands there, and a wide shot is not a group portrait. "stays", "holds still", "stands", "watches", "waits" and "looks at" are not what a person does there: only whoever sings, plays or works at one spot stays in place, and even their body does something the camera sees (the weight shifts, the hands work, the head turns to someone). Everybody else has a movement of the body - a step toward or away, a turn, a hand or a tool that lifts, lowers or is passed on, a crouch, a lean - with its direction relative to the others; what they look at belongs to that movement ("steps aside to let {Kae} pass, eyes on her"), it does not replace it. At least two different people in such a shot change where they are in the place, in different directions or at different moments, and the people at the back move as much as the ones in front.
-- When a singer sings in a shot ("singingPerShot" true), the singer is in "characters", the face and the mouth are in view (three-quarter or profile is right when the singer looks at something: at the opponent, at the others, at the danger - the lens is never the target; not hidden, not too small), and the singing is part of the action: sung through effort, shouted at the other, drawn between breaths, over the blow - a singer in a fight keeps fighting while they sing, reacts with the whole body and does not turn to the lens to perform. The camera may follow the action (track, arc, handheld) as long as the mouth stays in view. Whoever plays an instrument that is audible in the shot ("activePerShot" true) is in it with the instrument in their hands.
+- When a singer sings in a shot (in its "sings"), the singer is in "characters", the face and the mouth are in view (three-quarter or profile is right when the singer looks at something: at the opponent, at the others, at the danger - the lens is never the target; not hidden, not too small), and the singing is part of the action: sung through effort, shouted at the other, drawn between breaths, over the blow - a singer in a fight keeps fighting while they sing, reacts with the whole body and does not turn to the lens to perform. The camera may follow the action (track, arc, handheld) as long as the mouth stays in view. Whoever "plays" in a shot (the beat's "music") is in it, playing.
 - "framing" is the shot size and angle ("wide shot", "medium close-up", "low-angle medium shot") - what can show everyone "characters" lists - and "camera" is one sentence with the movement and its speed (no times or durations in it - how long a shot is, is not yours to say). Every shot is a new camera position: no two in a row with the same movement, and "view" says where the camera stands and what it looks toward, in terms of the staging, on the same side of the action within one beat unless the story crosses it. "hold" is true for a shot in which nobody moves from where they are and the camera stays: the clip then keeps the framing from the first frame to the last.
 - Every character in a text field (staging, action, state, frame, motion, rest, camera, view, end) is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there, also a group character acting as several individuals, and never the "id" or a generic stand-in ("the orc", "an old woman") for someone of the cast: the braces bind the sentence to that character's reference picture, so every shot reads on its own. The names in "characters:" and after "person:" and "end:" are plain, without braces.
-- A beat may list "props": for each entry, "activePerShot" gives one true/false flag per shot of that beat, in order, for whether that character's instrument is actually audible in the song at that point. On a shot where the flag is true, show that character actively using the prop - pick whatever action fits the instrument and the moment (playing, strumming, striking, etc.), your choice of words. On a shot where the flag is false, do not show them actively using it - they hold it still, rest it, set it down, or do something else with their hands instead. Characters with no "props" entry are unaffected by this rule.
-- A beat may list "singing": "singerIds" are the characters whose voice is the song's vocals, and "singingPerShot" gives one true/false flag per shot of that beat for whether a lyric is actually sung at that point. A singer only sings on shots flagged true. On a shot flagged false they make no sound at all - no singing, crying out, calling, humming or "a voice that joins" - even if the beat's "summary" or "moments" say so (the music there is purely instrumental); show them doing something silent instead (listening, breathing, watching, reacting, standing ready). Characters with no "singing" entry are unaffected.
+- A beat may list "music": for each of its shots, in order, who is heard singing in the song at that point ("sings") and whose instrument is heard ("plays"). It is the song itself and it decides, whatever the beat's "summary" or "moments" say.
+- Everybody in a shot's "plays" plays their instrument in that shot: "playing: yes". How is yours to stage, the way that instrument is played and the moment asks for - the body in it (leaning into a riff, turning to another player, stepping forward, lifting it at a peak), never set aside, rested or only held. Everybody else with an instrument is "playing: no" and does something else with it or with their hands.
+- Only the people in a shot's "sings" sing in it: "singing: yes", the mouth open to the words, into the microphone if they have one. Everybody else is "singing: no" and makes no sound with the mouth - in the "action" and "rest" too: no harmonies, no joining in, no crying out, calling or humming, even where the beat's "summary" says they sing together. A shot with nobody in "sings" is purely instrumental: the singers do something silent in it.
 
 Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown. A field is always one line (no line breaks inside it), "people" entries are the "person:" lines, "characters" are the names separated by commas, "rest" is what everybody in "characters" without a "person:" line does at the same time:
 STAGING: <the floor plan of the place for this beat, 2-4 sentences, on one line, every character as {Name}> - only when the input says to write the staging
@@ -70,8 +71,8 @@ hold: <yes or no>
 risky: <yes only if the action could only be written with a blank or missing face, a stand-in object for a name or feeling, or readable text - else no>
 characters: <Name>, <Name>
 action: <what happens in the shot, at most two sentences, every character as {Name}>
-person: <Name> | state: <...> | frame: <...> | motion: <...> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
-person: <Name> | state: <...> | frame: <...> | motion: <...> | singing: <yes or no>
+person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <yes if this person plays their instrument in this shot, else no> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
+person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <yes or no> | singing: <yes or no>
 rest: <what the others in the picture do, every character as {Name}>
 (then SHOT <next number> with the same fields, up to the last shot this call writes)
 ENDS - only when the input says that this call writes the last shot of the beat:
@@ -88,8 +89,8 @@ hold: no
 risky: no
 characters: Kara, Tom, Riders
 action: {Kara} swings her sword in a low arc from the right, the blade skidding off {Tom}'s raised shield in a shower of sparks, and {Tom} staggers back a step, his boot sliding on the loose scree, his eyes on her blade.
-person: Kara | state: braced on the slope a step below Tom, sword drawn back at her right hip | frame: sharp, left of centre, three-quarter view toward Tom, jaw set | motion: steps up into the swing, hips twisting after the blade | singing: no
-person: Tom | state: crouched behind his round shield, a step uphill of Kara | frame: sharp, right of frame, profile toward Kara, brows drawn together | motion: gives a step back up the slope, the shield arm jarred upward | singing: no
+person: Kara | state: braced on the slope a step below Tom, sword drawn back at her right hip | frame: sharp, left of centre, three-quarter view toward Tom, jaw set | motion: steps up into the swing, hips twisting after the blade | playing: no | singing: no
+person: Tom | state: crouched behind his round shield, a step uphill of Kara | frame: sharp, right of frame, profile toward Kara, brows drawn together | motion: gives a step back up the slope, the shield arm jarred upward | playing: no | singing: no
 rest: the {Riders} behind them scramble up the scree to either side, one dragging a fallen companion clear of the fight`
 
 /** What the planner knows of the whole song - the same for every call of a run. */
@@ -106,7 +107,7 @@ export type PlanContext = {
     mapping: Assignment[],
     shotCounts: Record<string, number>,
     beatProps?: Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]>,
-    beatSinging: Record<string, { singerIds: string[], singingPerShot: boolean[] }>,
+    beatSinging: Record<string, BeatSinging>,
 }
 
 // one planner call writes at most a few shots of one beat: the answer is short, in lines and not in JSON, so that a broken
@@ -163,6 +164,19 @@ ${JSON.stringify({
 }
 
 export function planPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}: PlanContext, block: StoryBeat[], finished: { beat: StoryBeat, plan: BeatShots } | undefined, after: StoryBeat | undefined, problems: string[], chunk: Chunk): AskOptions {
+    const nameOf = (id: string) => cast.find(c => c.id === id)?.name ?? id
+    // per shot of the beat, who is heard singing and whose instrument is heard - right in the shot, not as flag lists of the
+    // whole beat next to it: the planner wrote a guitar "resting on his thigh" with every flag of the beat true
+    const musicOf = (b: StoryBeat) => {
+        const props = beatProps?.[b.id] ?? []
+        const singing = beatSinging[b.id]
+        if (!props.length && !singing) return undefined
+        return Array.from({length: shotCounts[b.id] ?? 1}, (_, j) => ({
+            shot: j + 1,
+            sings: (singing?.singersPerShot[j] ?? []).map(nameOf),
+            plays: props.filter(p => p.activePerShot[j]).map(p => nameOf(p.characterId)),
+        }))
+    }
     return {
         reasoning: 'medium',
         // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
@@ -183,8 +197,7 @@ ${JSON.stringify(block.map(b => ({
             ...(b.groupSize && Object.keys(b.groupSize).length ? {groupSize: b.groupSize} : {}),
             ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === b.id) ? {micro: true} : {}),
             shotsNeeded: shotCounts[b.id] ?? 1,
-            ...(beatProps?.[b.id]?.length ? {props: beatProps[b.id]} : {}),
-            ...(beatSinging[b.id] ? {singing: beatSinging[b.id]} : {}),
+            ...(musicOf(b) ? {music: musicOf(b)} : {}),
         })))}
 
 ${chunk.blocking ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(chunk.blocking)}
