@@ -87,3 +87,18 @@ describe('blocking first, then the shots', () => {
         expect(input).toContain('the last shot of the beat leaves everybody where the blocking ends them')
     })
 })
+
+describe('the music of a beat in the planner prompt', () => {
+    test('per shot, who sings and whose instrument is heard - by name', () => {
+        const withMusic: PlanContext = {
+            ...context,
+            characters: [...context.characters, {id: 'kai', name: 'Kai', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}],
+            shotCounts: {'beat-01': 2},
+            beatProps: {'beat-01': [{characterId: 'kai', prop: 'guitar', activePerShot: [true, false]}]},
+            beatSinging: {'beat-01': {singerIds: ['runa', 'kai'], singingPerShot: [true, true], singersPerShot: [['runa'], ['runa', 'kai']]}},
+        }
+        const {input} = planPrompt(withMusic, [{...beat, characterIds: ['runa', 'kai']}], undefined, undefined, [], {from: 0, to: 2, total: 2, written: []})
+        expect(input).toContain('"music":[{"shot":1,"sings":["Runa"],"plays":["Kai"]},{"shot":2,"sings":["Runa","Kai"],"plays":[]}]')
+        expect(input).not.toContain('activePerShot')
+    })
+})

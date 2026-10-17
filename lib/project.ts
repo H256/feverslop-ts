@@ -15,7 +15,9 @@ export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
 // reference images so every member on screen doesn't look identical throughout the video.
 // alike: the members of the group look alike - a species, a pack of one kind of creature, a unit in the same uniform -
 // so the group has one look and no member variants (a group of recognizably different individuals has them)
-export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, isGroup?: boolean, alike?: boolean }
+// propCarried false: the prop stands in a place (propPlace, a location id) and is used there - the character picture shows only
+// what is held of it (propInHand, e.g. drumsticks), the place shows the object itself. Unset: the prop is carried
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, propCarried?: false, propInHand?: string, propPlace?: string, isGroup?: boolean, alike?: boolean }
 export type Location = { id: string, name: string }
 /** The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows. */
 export type LocationLayout = { layout: string, views: string[] }
@@ -64,14 +66,15 @@ export type ShotPlan = {
     size?: 'wide' | 'medium' | 'close', // the shot size as the planner classed it (framing stays its own words)
     risky?: boolean,                // the planner could only write the action with a blank face or a stand-in object: it is rewritten once
     characters?: string[],          // ids of everyone visible in the shot
-    people?: Record<string, { state?: string, frame?: string, motion?: string, singing?: boolean }>,
+    people?: Record<string, { state?: string, frame?: string, motion?: string, singing?: boolean, playing?: boolean }>,
     rest?: string,                  // what everyone in the shot who has no entry of their own does at the same time, each in their own way
 }
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
 // tokens: the texts name every character as {Name} (lib/refs.ts); a plan from before that has plain names
 export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[], tokens?: boolean }
 
-export type LyricSection = { label: string, lines: string[] }
+// notes: the tags right after the heading tag, how the part sounds ("[Low, gravelly vocals]") - see parseLyricSections
+export type LyricSection = { label: string, notes?: string[], lines: string[] }
 
 export type MusicSection = { label: string, start: number, end: number, energy: number }
 export type MusicMap = {

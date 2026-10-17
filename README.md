@@ -135,7 +135,8 @@ Every song is a project folder:
 projects/<project-id>/
   input/
     song.wav          required (or song.mp3), unless generated with --render=song (see Generating the song)
-    lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ... - required, unless generated
+    lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ... and a blank line between sections
+                      (see lyrics.txt below) - required, unless generated
     idea.txt          the song idea for --render=song - required for it, otherwise unused
     music-style.txt   optional - musical direction for --render=song, e.g. genre/instruments/mood
     story-idea.txt    optional
@@ -196,6 +197,32 @@ built on it (and everything built on those):
 | `singers` in `config.json`    | `singing` (and so `beats`)          |
 | `lyricsLanguage`              | `transcript`                        |
 | `continuity` in `config.json` | `shotMoments`                       |
+
+### lyrics.txt
+
+A tag in square brackets starts a section, and **a blank line separates two sections**:
+
+```
+[Verse 1]
+[Low, gravelly vocals]
+The hammers are silent
+The fires have gone cold
+
+[Guitar Solo]
+
+[Bridge]
+Cold as ice and deep as time
+```
+
+- Tags on the lines right after each other are one section: the first names it (`Verse 1`), the others say how it sounds
+  (`Low, gravelly vocals`), the way Suno writes its parts. Read as sections of their own, every description would cut
+  the song at an invented boundary - the song analysis cuts it into exactly as many sections as there are.
+- A section without sung lines (`[Guitar Solo]`) ends with a blank line too. Without it, the tag after it is read as
+  one of its descriptions: `[Intro]` with `[Verse 1]` on the next line is one section, "Intro". A file that leaves out
+  the blank lines between sections is read wrong - that is not detected.
+- `(notes)` in round brackets are not sung.
+- A project whose song was analyzed with one section per tag (before this rule) keeps that reading until
+  `--redo=music`.
 
 ### Generating the song
 
@@ -543,7 +570,7 @@ song, its on-screen use is grounded in whether that instrument is audible at eac
 video model showing it played continuously through every shot:
 
 ```json
-{ "id": "drummer", "name": "Drummer", "role": "…", "prop": "drum kit", "propStem": "drums" }
+{ "id": "drummer", "name": "Drummer", "role": "…", "prop": "drum kit", "propStem": "drums", "propCarried": false, "propInHand": "drumsticks", "propPlace": "stage" }
 ```
 
 - `prop` - any distinctive object a character carries or uses (a weapon, a tool, an instrument, …), named briefly.
@@ -554,6 +581,10 @@ video model showing it played continuously through every shot:
   `"other"` (synth, strings and every other melodic instrument that pass doesn't cover - they share one activity
   signal since Demucs can't split them further). Leave empty for a non-instrument prop, an instrument not heard in
   the song, or whenever the story isn't a band performing live - the whole feature stays off then.
+- `propCarried`, `propInHand`, `propPlace` - `propCarried: false` for a `prop` that is too big or too fixed to be carried
+  (a drum kit, an organ, an anvil): it stands in the location `propPlace` (an id) and is used there. The character
+  picture then shows only `propInHand` (e.g. drumsticks), the location picture shows the object itself at one fixed
+  spot. Unset for a carried prop, which the character picture shows the way it is held while used.
 
 What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
 [config.json](#configjson) - stems must already be separated):

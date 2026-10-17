@@ -43,6 +43,11 @@ export const boundaryFrameAsset = (clipId: string, which: 'ff' | 'lf') => `asset
 // MAX_REF_AUDIOS tracks, not a fixed Audio 1/Audio 2, so this isn't a fixed pair of names any more
 const trackAsset = (clipId: string, stem: string) => `output/audio/${clipId}.${stem}.wav`
 
+// a track mixed of several instrument stems (more players heard in a clip than ref_audio slots): its name, the same for the
+// same stems in any order - also the file it is mixed into (stems/<name>.wav, lib/music.ts mixStems)
+export type MixStem = `mix-${string}`
+export const mixStem = (stems: PropStem[]): MixStem => `mix-${[...stems].sort().join('-')}`
+
 export type ClipRequest = {
     id: string,
     index: number,
@@ -65,7 +70,8 @@ export type ClipRequest = {
         pictures: { label: string, file: string, subject: string, kind: 'character' | 'location' | 'frame', id: string, name: string, description: string }[],
         // stem: which isolated stem this track was cut from (always set - see the Track comment below) -
         // 'song' is the whole, unseparated song, used as the cut/blocking anchor when stems aren't available
-        audio: { label: string, file: string, songStart: number, songEnd: number, stem?: 'vocals' | PropStem | 'song' }[],
+        // mix: the stems a mixed track (stem "mix-...") is made of
+        audio: { label: string, file: string, songStart: number, songEnd: number, stem?: 'vocals' | PropStem | 'song' | MixStem, mix?: PropStem[] }[],
     },
     prompt: string,
 }
@@ -262,18 +268,30 @@ export function propActivityPerBeat(
 // where the song's vocals are actually audible. Without it a beat summary like "the soprano's voice joins" ends up
 // as a rendered singing mouth over an instrumental stretch, since there is no vocals track to contradict it.
 // Beats without singers on screen never appear here.
+// singersPerShot: who of them sings in each shot - the singers of the lines sung in it (singing.lines). The beat's singers
+// alone let the planner give a verse of the lead to the whole band ("they belt the final phrases in tight harmony").
+export type BeatSinging = { singerIds: string[], singingPerShot: boolean[], singersPerShot: string[][] }
 export function singingPerBeat(
     {slots, mapping, beats, singing}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing'>,
-): Record<string, { singerIds: string[], singingPerShot: boolean[] }> {
+): Record<string, BeatSinging> {
     if (!singing) return {}
     const windows = shotWindowsPerBeat({slots, mapping, beats})
     const slotById = new Map(slots.map(s => [s.id, s]))
-    const result: Record<string, { singerIds: string[], singingPerShot: boolean[] }> = {}
+    const result: Record<string, BeatSinging> = {}
     for (const beat of beats) {
         const singerIds = singing.singers.filter(id => beat.characterIds.includes(id))
         if (!singerIds.length) continue
-        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => slotById.get(m.slotId)?.vocals?.map(v => ({start: slotById.get(m.slotId)!.start + v.start, end: slotById.get(m.slotId)!.start + v.end})) ?? [])
-        result[beat.id] = {singerIds, singingPerShot: (windows[beat.id] ?? []).map(w => isActive(w, sung))}
+        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => slotById.get(m.slotId)?.vocals?.map(v => ({
+            start: slotById.get(m.slotId)!.start + v.start,
+            end: slotById.get(m.slotId)!.start + v.end,
+            singers: singing.lines.find(l => l.line === v.line)?.singers ?? singerIds,
+        })) ?? [])
+        const beatWindows = windows[beat.id] ?? []
+        result[beat.id] = {
+            singerIds,
+            singingPerShot: beatWindows.map(w => isActive(w, sung)),
+            singersPerShot: beatWindows.map(w => singerIds.filter(id => isActive(w, sung.filter(s => s.singers.includes(id))))),
+        }
     }
     return result
 }
@@ -450,19 +468,28 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // ever grounds cut/blocking timing (weak_reference, never a performance), goes last. Tested live -
         // drums-first measurably desynced lip movement from the vocals track even though the vocals audio
         // itself was untouched; putting the performance-driving track at <Audio 1> fixed it.
-        type Track = { label: string, stem: 'drums' | PropStem | 'vocals' | 'song', subjects: typeof castSubjects }
+        // parts: a track mixed of several stems (stem "mix-..."), with who plays which of them
+        type Part = { stem: PropStem, subjects: typeof castSubjects }
+        type Track = { label: string, stem: 'drums' | PropStem | 'vocals' | 'song' | MixStem, subjects: typeof castSubjects, parts?: Part[] }
         const clipActive = (stem: PropStem) => (propActivity?.[stem] ?? []).some(r => r.end > slot.start && r.start < slot.end)
         const propGroups = new Map<PropStem, typeof castSubjects>()
         for (const s of castSubjects) if (s.propStem) propGroups.set(s.propStem, [...(propGroups.get(s.propStem) ?? []), s])
 
-        // MAX_REF_AUDIOS: MiniMaxH3ReferenceToVideo only has 3 ref_audio slots (see comfy/helpers.ts) - if a
-        // clip needs more tracks than that, drop instrument stems off the end of the performance-driving ones
-        // (vocals first, then instruments) rather than erroring or overflowing the autogrow inputs. The anchor
-        // always stays: it grounds cut/blocking timing. A dropped subject keeps whatever idle/active staging
-        // text it already gets per shot (see propNote below) - it just loses the audio anchor backing it up.
+        // MAX_REF_AUDIOS: MiniMaxH3ReferenceToVideo only has 3 ref_audio slots (see comfy/helpers.ts). The vocals (lip-sync)
+        // and the drums (cut/blocking timing, and the drummer's playing) always have their own; the other players heard in the
+        // clip share what is left - a track each while there are slots, else the last of them one mix of their stems
+        // (mixStem, made by lib/music.ts mixStems). Dropping the players that did not fit left the bass of a four-piece band
+        // with no audio at all, behind vocals, guitar and the drums. Their activity still comes from each stem on its own.
+        const players: Part[] = [...propGroups].filter(([stem]) => stem !== 'drums' && clipActive(stem)).map(([stem, subjects]) => ({stem, subjects}))
+        const freeSlots = MAX_REF_AUDIOS - 1 - (performing ? 1 : 0)
+        const own = players.length <= freeSlots ? players : players.slice(0, Math.max(0, freeSlots - 1))
+        const mixed = players.slice(own.length)
         const performanceTracks: Track[] = [
             ...(performing ? [{label: '', stem: 'vocals' as const, subjects: singerSubjects}] : []),
-            ...[...propGroups].filter(([stem]) => stem !== 'drums' && clipActive(stem)).map(([stem, subjects]) => ({label: '', stem, subjects})),
+            ...own.map(p => ({label: '', stem: p.stem, subjects: p.subjects})),
+            ...(mixed.length > 1
+                ? [{label: '', stem: mixStem(mixed.map(p => p.stem)), subjects: mixed.flatMap(p => p.subjects), parts: mixed}]
+                : mixed.map(p => ({label: '', stem: p.stem, subjects: p.subjects}))),
         ]
         const anchorTrackDef: Track = stemsAvailable
             ? {label: '', stem: 'drums' as const, subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []}
@@ -653,7 +680,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const appearsIn = (label: string) => shots.filter(s => s.subjects.includes(label)).map(s => s.label).join(', ')
             const songPosition = `${formatTimestamp(slot.start)} to ${formatTimestamp(slot.end)} of the song`
             const seconds = String(Math.round(duration * 10) / 10)
-            const stemName: Record<Track['stem'], string> = {drums: 'drum', vocals: 'vocal', bass: 'bass', guitar: 'guitar', piano: 'piano', other: 'instrumental', song: 'full mix'}
+            const stemName: Record<Exclude<Track['stem'], MixStem>, string> = {drums: 'drum', vocals: 'vocal', bass: 'bass', guitar: 'guitar', piano: 'piano', other: 'instrumental', song: 'full mix'}
+            // a mixed track: who plays which of its stems, and in which span of the song
+            const playersOf = (p: Part) => joinAnd(p.subjects.map(s => s.label))
+            const partSpans = (parts: Part[]) => parts.flatMap(p => {
+                const window = instrumentWindow(p.stem)
+                return window ? [`${playersOf(p)} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)}`] : []
+            })
             // beat.summary is written once for the whole scene and often describes how it opens (a character
             // arriving, emerging, appearing) - correct for the first clip of the scene, but repeating it verbatim
             // in later clips of the same scene tells the model everyone re-enters/re-appears each time, which
@@ -694,9 +727,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? `${t.label} is the ${slot.section} section (${songPosition}) of the song's full mix - used to time the cuts and blocking to the beat.`
                     : t.stem === 'vocals'
                         ? `${t.label} is the isolated lead vocal of the ${slot.section} section (${songPosition}), the voice-timbre reference for ${voices} - but ${voices} only actually sings from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song; outside that span within ${t.label}, keep lips closed and still.`
-                        : (() => {
+                        : t.parts ? (() => {
+                            const spans = partSpans(t.parts)
+                            return `${t.label} is the ${joinAnd(t.parts.map(p => stemName[p.stem]))} layers of the ${slot.section} section (${songPosition}), mixed into one track: the performance reference for ${joinAnd(t.parts.map(p => `${playersOf(p)} (the ${stemName[p.stem]})`))}${spans.length ? ` - but each only actually plays within their own span of the song: ${spans.join(', ')}; outside it, that one keeps the instrument still` : ''}.`
+                        })() : (() => {
                             const window = instrumentWindow(t.stem as PropStem)
-                            return `${t.label} is the isolated ${stemName[t.stem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${window ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)} of the song; outside that span within ${t.label}, keep the instrument still` : ''}.`
+                            return `${t.label} is the isolated ${stemName[t.stem as PropStem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${window ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)} of the song; outside that span within ${t.label}, keep the instrument still` : ''}.`
                         })()
             // retention_analysis line per track
             const trackRetention = (t: Track) => t.stem === 'drums'
@@ -707,6 +743,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
                     : t.stem === 'vocals'
                         ? `${t.label}: partially_copy - its timbre and phrasing drive the lip movements of ${voices}, confined to ${formatTimestamp(vocalsWindow!.start)}-${formatTimestamp(vocalsWindow!.end)}; elsewhere in the clip ${voices} keeps lips closed and still.`
+                        : t.parts ? `${t.label}: partially_copy - ${t.parts.map(p => `its ${stemName[p.stem]} drives the instrument motion of ${playersOf(p)}`).join(', ')}${partSpans(t.parts).length ? ', each confined to their own span' : ''}.`
                         : (() => {
                             const window = instrumentWindow(t.stem as PropStem)
                             return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${window ? `, confined to ${formatTimestamp(window.start)}-${formatTimestamp(window.end)}; elsewhere in the clip ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
@@ -792,7 +829,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ...(startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: boundaryFrameAsset(startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: startsFrom, name: `last frame of ${startsFrom}`, description: ''}] : []),
                 ],
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
-                audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem})),
+                audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem, ...(t.parts ? {mix: t.parts.map(p => p.stem)} : {})})),
             },
             prompt,
         }
