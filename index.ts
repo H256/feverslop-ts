@@ -765,7 +765,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         // without a blocking the beat goes on from the plan of the beat before, if that one is already there
         const prev = beats[beats.indexOf(beat) - 1]
         const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
-        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id])}))
+        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id], beatProps?.[beat.id])}))
         // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
         // legacy spread (a warning says so) instead of the run failing after the beats that worked
         let first: ReturnType<typeof read> | undefined

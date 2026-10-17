@@ -262,18 +262,30 @@ export function propActivityPerBeat(
 // where the song's vocals are actually audible. Without it a beat summary like "the soprano's voice joins" ends up
 // as a rendered singing mouth over an instrumental stretch, since there is no vocals track to contradict it.
 // Beats without singers on screen never appear here.
+// singersPerShot: who of them sings in each shot - the singers of the lines sung in it (singing.lines). The beat's singers
+// alone let the planner give a verse of the lead to the whole band ("they belt the final phrases in tight harmony").
+export type BeatSinging = { singerIds: string[], singingPerShot: boolean[], singersPerShot: string[][] }
 export function singingPerBeat(
     {slots, mapping, beats, singing}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing'>,
-): Record<string, { singerIds: string[], singingPerShot: boolean[] }> {
+): Record<string, BeatSinging> {
     if (!singing) return {}
     const windows = shotWindowsPerBeat({slots, mapping, beats})
     const slotById = new Map(slots.map(s => [s.id, s]))
-    const result: Record<string, { singerIds: string[], singingPerShot: boolean[] }> = {}
+    const result: Record<string, BeatSinging> = {}
     for (const beat of beats) {
         const singerIds = singing.singers.filter(id => beat.characterIds.includes(id))
         if (!singerIds.length) continue
-        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => slotById.get(m.slotId)?.vocals?.map(v => ({start: slotById.get(m.slotId)!.start + v.start, end: slotById.get(m.slotId)!.start + v.end})) ?? [])
-        result[beat.id] = {singerIds, singingPerShot: (windows[beat.id] ?? []).map(w => isActive(w, sung))}
+        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => slotById.get(m.slotId)?.vocals?.map(v => ({
+            start: slotById.get(m.slotId)!.start + v.start,
+            end: slotById.get(m.slotId)!.start + v.end,
+            singers: singing.lines.find(l => l.line === v.line)?.singers ?? singerIds,
+        })) ?? [])
+        const beatWindows = windows[beat.id] ?? []
+        result[beat.id] = {
+            singerIds,
+            singingPerShot: beatWindows.map(w => isActive(w, sung)),
+            singersPerShot: beatWindows.map(w => singerIds.filter(id => isActive(w, sung.filter(s => s.singers.includes(id))))),
+        }
     }
     return result
 }
