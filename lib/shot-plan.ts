@@ -10,6 +10,14 @@ const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 const SIZES = ['wide', 'medium', 'close'] as const
 /** A flag the planner answered: true, or "yes" in the line format. */
 const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
+/** The planner's "playing:" - what the hands do on the instrument (a phrase), a bare "yes", or "no" / nothing. */
+function playingOf(value: unknown): { playing?: true, plays?: string } {
+    if (value === true) return {playing: true}
+    const t = text(value).replace(/^["']+|["'.]+$/g, '').trim()
+    if (!t || /^(no|not|none|false)\b/i.test(t)) return {}
+    const plays = t.replace(/^(yes|true)\b[\s,;:-]*/i, '')
+    return plays ? {playing: true, plays} : {playing: true}
+}
 
 /** Does the text name this character (by name or id, as a whole word)? */
 export const mentionsCharacter = (value: string, character: Pick<Character, 'name' | 'id'>) =>
@@ -69,9 +77,10 @@ export type ShotProps = { characterId: string, prop: string, activePerShot: bool
 const sungBy = (singers: ShotSingers | undefined, j: number) => singers?.singersPerShot?.[j] ?? (singers?.singingPerShot[j] ? singers.singerIds : [])
 
 /**
- * What the music says against the people of shot j, by their own "singing:" and "playing:" flags - never by the words of
- * the text: who sings in it is "singing: yes" and nobody else, whose instrument is heard is "playing: yes" and nobody
- * else. Asked again once: the clip prompt follows the music, and a plan that says otherwise (a verse of the lead sung "in
+ * What the music says against the people of shot j, by their own "singing:" and "playing:" fields - never by the words of
+ * the text: who sings in it is "singing: yes" and nobody else, whose instrument is heard says in "playing:" what the hands
+ * do on it (a bare "yes" is asked again: the flag alone came with an idle motion in about half of the shots) and nobody
+ * else plays. Asked again once: the clip prompt follows the music, and a plan that says otherwise (a verse of the lead sung "in
  * tight harmony", a guitar "resting on his thigh" while it is heard) wins over it in the picture.
  */
 function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, characters: Character[], singers?: ShotSingers, props?: ShotProps): string[] {
@@ -85,7 +94,8 @@ function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, charact
         const instrument = props?.find(e => e.characterId === id)
         if (!instrument) continue
         const heard = instrument.activePerShot[j] === true
-        if (heard && p.playing !== true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: yes, and ${name} plays it in the shot, staged however fits the moment`)
+        if (heard && p.playing !== true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: <what ${name}'s hands do on the ${instrument.prop} in this shot>, and ${name} plays it in the shot, staged however fits the moment`)
+        else if (heard && !p.plays) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: says only yes; write what ${name}'s hands do on the ${instrument.prop} in this shot instead`)
         if (!heard && p.playing === true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is not heard in this shot - playing: no, and ${name} does something else with it or with their hands`)
     }
     return problems
@@ -133,7 +143,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
                 if (!found || !(text(p.state) || text(p.frame) || text(p.motion))) continue
                 // somebody described but not listed is in the picture too
                 if (!ids.includes(found.id)) ids.push(found.id)
-                people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {}), ...(yes(p.singing) ? {singing: true} : {}), ...(yes(p.playing) ? {playing: true} : {})}
+                people[found.id] = {...(text(p.state) ? {state: text(p.state)} : {}), ...(text(p.frame) ? {frame: text(p.frame)} : {}), ...(text(p.motion) ? {motion: text(p.motion)} : {}), ...(yes(p.singing) ? {singing: true} : {}), ...playingOf(p.playing)}
             }
         }
         const trimmed = trimForeground(people, action, characters, sungBy(singers, j))
@@ -196,7 +206,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
  *   framing: / size: wide|medium|close / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ...
- *   person: A | state: ... | frame: ... | motion: ... | playing: yes|no | singing: yes|no
+ *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no
  *   START                   (the blocking call)
  *   start: A | where they are when the beat starts
  *   ENDS

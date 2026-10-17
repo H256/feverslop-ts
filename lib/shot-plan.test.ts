@@ -117,11 +117,22 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         const shot = (playing: string) => ({action: 'Anna', characters: ['Anna'], people: {Anna: {state: 'at the front', motion: 'steps forward', playing}}})
         const wrong = readBeatPlan({shots: [shot('no'), shot('yes')]}, beat, cast, 2, undefined, props)!
         expect(wrong.issues.map(i => i.shot)).toEqual([0, 1])
-        expect(wrong.problems[0]).toContain("Anna's guitar is heard in this shot - playing: yes")
+        expect(wrong.problems[0]).toContain("Anna's guitar is heard in this shot - playing: <what Anna's hands do on the guitar in this shot>")
         expect(wrong.problems[1]).toContain("Anna's guitar is not heard in this shot - playing: no")
-        const right = readBeatPlan({shots: [shot('yes'), shot('no')]}, beat, cast, 2, undefined, props)!
+        const right = readBeatPlan({shots: [shot('picks a fast run, the fretting hand sliding up the neck.'), shot('no')]}, beat, cast, 2, undefined, props)!
         expect(right.problems).toEqual([])
-        expect(right.plan.shots[0]!.people!.anna!.playing).toBe(true)
+        expect(right.plan.shots[0]!.people!.anna).toMatchObject({playing: true, plays: 'picks a fast run, the fretting hand sliding up the neck'})
+        expect(right.plan.shots[1]!.people!.anna!.playing).toBeUndefined()
+    })
+    test('a heard instrument with only "yes" is asked again for what the hands do', () => {
+        const props = [{characterId: 'anna', prop: 'guitar', activePerShot: [true, true]}]
+        const shot = (playing: string) => ({action: 'Anna', characters: ['Anna'], people: {Anna: {state: 'at the front', motion: 'steps forward', playing}}})
+        const r = readBeatPlan({shots: [shot('yes'), shot('yes, strums the chords hard')]}, beat, cast, 2, undefined, props)!
+        expect(r.issues.map(i => i.shot)).toEqual([0])
+        expect(r.problems[0]).toContain("playing: says only yes; write what Anna's hands do on the guitar")
+        expect(r.plan.shots[0]!.people!.anna).toMatchObject({playing: true})
+        expect(r.plan.shots[0]!.people!.anna!.plays).toBeUndefined()
+        expect(r.plan.shots[1]!.people!.anna!.plays).toBe('strums the chords hard')
     })
 })
 
