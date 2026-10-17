@@ -1,4 +1,4 @@
-import {rmSync} from "node:fs";
+import {existsSync, rmSync, statSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {basename, join} from "node:path";
 import type {Assignment, Character, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, SlotVocal, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
@@ -120,6 +120,14 @@ async function runVocalsTool(args: string[], what: string) {
 // Cuts the clip's part out of the song - it becomes the clip's <Audio 1>
 export async function cutAudio(songFile: string, start: number, end: number, outFile: string) {
     await runProcess(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed for ${outFile}:\n${err}`})
+}
+
+// Several instrument stems as one track (a mixed <Audio N>, lib/compose.ts mixStem): summed, not averaged - amix would lower each
+// part by the number of inputs, and a separated stem is no louder than its part of the song. Made again only when a stem is newer.
+export async function mixStems(files: string[], outFile: string): Promise<string> {
+    if (existsSync(outFile) && files.every(f => statSync(f).mtimeMs <= statSync(outFile).mtimeMs)) return outFile
+    await runProcess(['ffmpeg', '-y', '-v', 'error', ...files.flatMap(f => ['-i', f]), '-filter_complex', `amix=inputs=${files.length}:duration=longest:normalize=0`, '-c:a', 'pcm_s16le', outFile], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed to mix ${outFile}:\n${err}`})
+    return outFile
 }
 
 /**

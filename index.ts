@@ -11,7 +11,7 @@ import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
@@ -903,6 +903,15 @@ const outputDir = join(project.dir, 'output')
 startOutput(outputDir)
 mkdirSync(join(outputDir, 'clips'), {recursive: true})
 mkdirSync(join(outputDir, 'audio'), {recursive: true})
+
+// a track mixed of several instrument stems (lib/compose.ts mixStem) is a stem file of its own, made once per set of stems -
+// uploaded and trimmed like any other stem
+for (const audio of clips.flatMap(c => c.assets.audio)) {
+    if (!audio.mix || !audio.stem || stemFiles[audio.stem]) continue
+    const sources = audio.mix.map(stem => stemFiles[stem])
+    if (sources.some(f => !f)) continue
+    stemFiles[audio.stem] = await mixStems(sources as string[], join(project.dir, 'stems', `${audio.stem}.wav`))
+}
 
 for (const clip of clips) {
     await Bun.write(join(outputDir, 'clips', `${clip.id}.json`), JSON.stringify(clip, null, 2))
