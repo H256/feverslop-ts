@@ -11,7 +11,7 @@ import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, projectLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
@@ -257,7 +257,7 @@ if (!style && project.data.lookBrief === undefined) {
     await Bun.write(project.input('style.txt'), style)
     log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
 }
-const lyricSections = parseLyricSections(lyrics)
+const lyricSections = projectLyricSections(lyrics, project.data.music?.sections.map(s => s.label))
 log.step('Lyrics', lyrics ? styles.muted(`${lyricSections.length} sections: ${lyricSections.map(s => s.label).join(' · ')}`) : styles.muted('(none)'))
 log.step('Story idea', storyIdea || styles.muted('(none)'))
 log.step('Style', style || styles.muted('(none - the look is designed from the story)'))
@@ -1096,7 +1096,7 @@ log.step('Log', runLogFile() ?? '')
 async function dryRun() {
     const changed = project.changedInputs(await projectInputs(project.dir, config))
     const lostStems = (['stems', 'instrumentStems'] as const).filter(step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))))
-    const labels = parseLyricSections(await readInput('lyrics.txt')).map(s => s.label)
+    const labels = projectLyricSections(await readInput('lyrics.txt'), project.data.music?.sections.map(s => s.label)).map(s => s.label)
     const sectionsChanged = project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
     const reasons: [string, StepName[]][] = [
         ...(redoSteps.length ? [['--redo', redoSteps] as [string, StepName[]]] : []),

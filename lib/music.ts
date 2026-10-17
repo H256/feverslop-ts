@@ -7,16 +7,38 @@ import {formatTime, round} from "./frames.ts";
 import {log} from "./log.ts";
 import {runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 
-// "[Verse 1]\nline\nline" -> [{label: 'Verse 1', lines: [...]}]
-export function parseLyricSections(lyrics: string): LyricSection[] {
+/**
+ * "[Verse 1]\n[Low, gravelly vocals]\nline\nline" -> [{label: 'Verse 1', notes: ['Low, gravelly vocals'], lines: [...]}]
+ * Tags on lines right after each other - no lyric line and no blank line between them - are one section: the first names
+ * it, the others say how it sounds (the way Suno writes a part). Read one section per tag, a description became a section
+ * of its own with an invented boundary, since the song analysis cuts the song into exactly as many sections as there are
+ * labels. A blank line or a lyric line ends the run of tags: "[Guitar Solo]\n\n[Bridge]" are two sections.
+ * perTag: one section per tag, as it was read before - for a project whose song analysis was made with those labels.
+ */
+export function parseLyricSections(lyrics: string, perTag = false): LyricSection[] {
     const sections: LyricSection[] = []
+    let afterTag = false
     for (const raw of lyrics.split('\n')) {
         const line = raw.trim()
         const tag = line.match(/^\[(.+)]$/)
-        if (tag) sections.push({label: tag[1]!.trim(), lines: []})
+        if (tag && afterTag && !perTag) (sections.at(-1)!.notes ??= []).push(tag[1]!.trim())
+        else if (tag) sections.push({label: tag[1]!.trim(), lines: []})
         else if (line) sections.at(-1)?.lines.push(line)
+        afterTag = Boolean(tag)
     }
     return sections
+}
+
+/**
+ * The sections of a project's lyrics: read per tag, as before, while its song analysis (`analyzed`, the labels of music.sections)
+ * was made with those labels - else every project with a heading and description tags would analyze its song again on the
+ * next run, and redo everything built on it (beats, shots, clips). --redo=music reads them as one section.
+ */
+export function projectLyricSections(lyrics: string, analyzed?: string[]): LyricSection[] {
+    const sections = parseLyricSections(lyrics)
+    const perTag = parseLyricSections(lyrics, true)
+    const analyzedWith = (read: LyricSection[]) => analyzed !== undefined && read.map(s => s.label).join('|') === analyzed.join('|')
+    return !analyzedWith(sections) && analyzedWith(perTag) ? perTag : sections
 }
 
 export async function analyzeSong(songFile: string, labels: string[]): Promise<MusicMap> {

@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {activityRanges, buildTimeline, chooseClipStarts, framePower, isFightBeat, splitFightSlots} from "./music.ts";
+import {activityRanges, buildTimeline, chooseClipStarts, framePower, isFightBeat, parseLyricSections, projectLyricSections, splitFightSlots} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
@@ -117,5 +117,32 @@ describe('activityRanges', () => {
     })
     test('framePower is the mean square per frame', () => {
         expect(framePower(new Float32Array([1, -1, 0.5, 0.5, 9]), 40, 0.05)).toEqual([1, 0.25])
+    })
+})
+
+
+describe('parseLyricSections', () => {
+    const lyrics = '[Intro]\n[Low drone]\n[Wind]\n\n[Verse 1]\n[Gravelly vocals]\nThe hammers are silent\nThe fires have gone cold\n\n[Guitar Solo]\n\n[Bridge]\nCold as ice\n'
+    test('tags right after each other are one section, the first names it and the others are its notes', () => {
+        expect(parseLyricSections(lyrics)).toEqual([
+            {label: 'Intro', notes: ['Low drone', 'Wind'], lines: []},
+            {label: 'Verse 1', notes: ['Gravelly vocals'], lines: ['The hammers are silent', 'The fires have gone cold']},
+            {label: 'Guitar Solo', lines: []},
+            {label: 'Bridge', lines: ['Cold as ice']},
+        ])
+    })
+    test('a lyric line ends the run of tags: a tag after it starts a section', () => {
+        expect(parseLyricSections('[Intro]\n[Choir]\nOne line\n[Blastbeats]\n\n[Verse 1]\nx').map(s => s.label)).toEqual(['Intro', 'Blastbeats', 'Verse 1'])
+    })
+    test('without the blank line, the next tag is a note of the section before - the documented rule', () => {
+        expect(parseLyricSections('[Intro]\n[Verse 1]\nx')).toEqual([{label: 'Intro', notes: ['Verse 1'], lines: ['x']}])
+    })
+    test('a project analyzed with one section per tag keeps that reading, any other gets the sections', () => {
+        const perTag = ['Intro', 'Low drone', 'Wind', 'Verse 1', 'Gravelly vocals', 'Guitar Solo', 'Bridge']
+        const sections = ['Intro', 'Verse 1', 'Guitar Solo', 'Bridge']
+        expect(parseLyricSections(lyrics, true).map(s => s.label)).toEqual(perTag)
+        expect(projectLyricSections(lyrics, perTag).map(s => s.label)).toEqual(perTag)
+        expect(projectLyricSections(lyrics, undefined).map(s => s.label)).toEqual(sections)
+        expect(projectLyricSections(lyrics, sections).map(s => s.label)).toEqual(sections)
     })
 })
