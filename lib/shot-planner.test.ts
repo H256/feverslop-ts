@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import type {StoryBeat} from "./project.ts";
-import {blockingPrompt, type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
+import {beatsPrompt, blockingPrompt, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
 
 const beat = {id: 'beat-01', order: 1, summary: 'Runa walks in.', moments: ['Runa walks in.'], locationId: 'hall', characterIds: ['runa'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
 const context: PlanContext = {
@@ -100,5 +100,30 @@ describe('the music of a beat in the planner prompt', () => {
         const {input} = planPrompt(withMusic, [{...beat, characterIds: ['runa', 'kai']}], undefined, undefined, [], {from: 0, to: 2, total: 2, written: []})
         expect(input).toContain('"music":[{"shot":1,"sings":["Runa"],"plays":["Kai"]},{"shot":2,"sings":["Runa","Kai"],"plays":[]}]')
         expect(input).not.toContain('activePerShot')
+    })
+})
+
+describe('musicStretches - the music along the way for the beats', () => {
+    // 60 s at 120 bpm: a bar every 2 s, quiet first half, loud second half
+    const music = {durationSec: 60, downbeats: Array.from({length: 30}, (_, i) => i * 2), barEnergy: Array.from({length: 30}, (_, i) => i < 15 ? 0.2 : 0.8)}
+    test('one line per stretch with its time and mean loudness', () => {
+        expect(musicStretches(music, 2)).toEqual(['0:00-0:30 loudness 0.20', '0:30-1:00 loudness 0.80'])
+    })
+    test('whose instrument is heard over most of a stretch', () => {
+        const players = [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 60}]}, {name: 'Mara', prop: 'drum kit', ranges: [{start: 25, end: 60}]}]
+        expect(musicStretches(music, 3, players)).toEqual([
+            "0:00-0:20 loudness 0.20 · heard: Kael's guitar",
+            "0:20-0:40 loudness 0.50 · heard: Kael's guitar, Mara's drum kit",
+            "0:40-1:00 loudness 0.80 · heard: Kael's guitar, Mara's drum kit",
+        ])
+        expect(musicStretches(music, 1, [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 5}]}])[0]).toContain('heard: none of the instruments')
+    })
+    test('the beats prompt carries them and the rules that follow them', () => {
+        const args = {durationSec: 60, beatCount: 2, characters: [{id: 'kael', name: 'Kael', role: 'guitarist'}], locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
+        const input = beatsPrompt({...args, stretches: musicStretches(music, 2, [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 60}]}])}).input
+        expect(input).toContain("0:30-1:00 loudness 0.80 · heard: Kael's guitar")
+        expect(input).toContain('the last beats are a last surge, not an aftermath')
+        expect(input).toContain('nobody lowers, rests, sets down or silences an instrument that is still heard')
+        expect(beatsPrompt(args).input).not.toContain('The music along the way')
     })
 })

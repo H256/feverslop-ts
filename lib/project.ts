@@ -212,7 +212,8 @@ const dependsOn: Record<StepName, StepName[]> = {
     locationDescriptions: ['locationLooks'],
     locationAnchors: ['locationDescriptions'],
     locationLayouts: ['locationLooks', 'locationDescriptions'],
-    beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming'],
+    // the loudness and the instruments heard along the song (musicStretches) shape the story's curve
+    beats: ['story', 'cast', 'singing', 'music', 'lyricsTiming', 'propActivity'],
     timeline: ['music', 'lyricsTiming'],
     mapping: ['beats', 'timeline'],
     // the bar length (music.bpm) is the window the activity is averaged over
