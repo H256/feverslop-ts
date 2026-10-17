@@ -585,18 +585,25 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             (prop: string) => `holds the ${prop} against their side, hand resting still on its body`,
         ]
 
-        // Deterministic fallback for prop activity: step 9b writes one moment sentence per shot and can't know
-        // ahead of time who pickFocus ends up putting in frame here - so a focused character's stem-bound prop
-        // can go unaddressed even though 9b was given the same activity data. For anyone left unaddressed, state
-        // their prop's real audio state plainly, using their own prop name - never a fixed verb per instrument.
-        function propNote(focus: typeof castSubjects, start: number, end: number, moment: string, shotIndex: number): string {
+        // The prop's real audio state, stated plainly with the character's own prop name - never a fixed verb per instrument.
+        // Whoever's stem is heard in the shot always gets it, whatever the moment says: a moment that names the player
+        // can still leave them idle ("presses her palms against the rails" while the drums are heard). The planner's
+        // "playing:" phrase - what the hands do on it - is the sentence when there is one. An unheard prop gets a still
+        // pose only when the moment does not name its player, whose action the pose would contradict.
+        function propNote(focus: typeof castSubjects, start: number, end: number, moment: string, shotIndex: number, people?: ShotPlan['people']): string {
             if (!propActivity) return ''
             const notes = focus
-                .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length && !moment.includes(s.label))
-                .map(s => {
-                    if (isActive({start, end}, propActivity[s.propStem!]!)) return `${s.label}, ${s.name}, is actively using the ${s.prop} right now.`
+                .filter(s => s.propStem && s.prop && propActivity[s.propStem]?.length)
+                .flatMap(s => {
+                    if (isActive({start, end}, propActivity[s.propStem!]!)) {
+                        const plays = people?.[s.id]?.plays?.replace(/[.\s]+$/, '')
+                        return [plays
+                            ? `${s.label}, ${s.name}, plays the ${s.prop} through the whole shot: ${withLabels(plays, planTokens)}.`
+                            : `${s.label}, ${s.name}, is actively using the ${s.prop} right now.`]
+                    }
+                    if (moment.includes(s.label)) return []
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
-                    return `${s.label}, ${s.name}, ${poses[shotIndex % poses.length]!(s.prop!)}.`
+                    return [`${s.label}, ${s.name}, ${poses[shotIndex % poses.length]!(s.prop!)}.`]
                 })
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
@@ -611,7 +618,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildShotTexts() {
             return shots.map((shot, j) => {
                 const moment = j > 0 && shot.moment === shots[j - 1]!.moment ? `The same action continues, seen closer: ${shot.moment}` : shot.moment
-                const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment, j)
+                const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment, j, shot.plan?.people)
                 // a singer in frame while nobody sings (an instrumental stretch, or between lines) gets a concrete mouth
                 // position, same reasoning as the idle prop poses - the story text may still say they "cry out". Only the
                 // lip-sync is ruled out, not the emotion: eyes, brows and posture stay free to follow the shot

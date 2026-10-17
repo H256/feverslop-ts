@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import {buildClipRequests} from "./compose.ts";
-import type {Character, StoryBeat} from "./project.ts";
+import type {Character, ShotPlan, StoryBeat} from "./project.ts";
 
 const beat = {id: 'b1', order: 1, summary: 'They play.', moments: ['They play.'], locationId: 'clearing', characterIds: [], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
 
@@ -11,7 +11,7 @@ describe('audio tracks of a band', () => {
         {id: 'bss', name: 'Bss', role: 'bassist', prop: 'bass', propStem: 'bass'},
         {id: 'drm', name: 'Drm', role: 'drummer', prop: 'drum kit', propStem: 'drums'},
     ]
-    const clip = (ids: string[], sung: boolean) => buildClipRequests({
+    const clip = (ids: string[], sung: boolean, shot: ShotPlan = {action: 'They play.', characters: ids}) => buildClipRequests({
         slots: [{id: 'slot-001', index: 0, section: 'Chorus', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: [], ...(sung ? {vocals: [{line: 0, text: 'la la', start: 0.2, end: 3.5, words: []}]} : {})}],
         mapping: [{slotId: 'slot-001', beatId: 'b1'}],
         beats: [{...beat, characterIds: ids}],
@@ -25,7 +25,7 @@ describe('audio tracks of a band', () => {
         stemsAvailable: true,
         propActivity: {guitar: [{start: 0, end: 4}], bass: [{start: 0, end: 4}], drums: [{start: 0, end: 4}]},
         ...(sung ? {singing: {singers: ['lead'], lines: [{line: 0, text: 'la la', singers: ['lead']}]}} : {}),
-        shotMoments: {b1: {shots: [{action: 'They play.', characters: ids}]}},
+        shotMoments: {b1: {shots: [shot]}},
     })[0]!
 
     test('vocals, the drums, and guitar and bass mixed into the one slot left', () => {
@@ -38,5 +38,13 @@ describe('audio tracks of a band', () => {
     test('without singing, guitar and bass each have their own track', () => {
         const c = clip(['gtr', 'bss', 'drm'], false)
         expect(c.assets.audio.map(a => a.stem)).toEqual(['guitar', 'bass', 'drums'])
+    })
+    test('a heard player always gets the playing sentence, with the hands the planner wrote, even when the moment names them', () => {
+        const c = clip(['gtr', 'drm'], false, {
+            action: 'Gtr leans toward Drm, who presses her palms on the rails.', characters: ['gtr', 'drm'],
+            people: {gtr: {state: 'at the front', motion: 'leans toward Drm', playing: true, plays: 'strums hard downstrokes, the fretting hand gripping a chord.'}, drm: {state: 'behind the kit', motion: 'sways', playing: true}},
+        })
+        expect(c.prompt).toContain('<Subject 2>, Gtr, plays the guitar through the whole shot: strums hard downstrokes, the fretting hand gripping a chord.')
+        expect(c.prompt).toContain('<Subject 3>, Drm, is actively using the drum kit right now.')
     })
 })

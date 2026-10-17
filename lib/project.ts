@@ -66,7 +66,8 @@ export type ShotPlan = {
     size?: 'wide' | 'medium' | 'close', // the shot size as the planner classed it (framing stays its own words)
     risky?: boolean,                // the planner could only write the action with a blank face or a stand-in object: it is rewritten once
     characters?: string[],          // ids of everyone visible in the shot
-    people?: Record<string, { state?: string, frame?: string, motion?: string, singing?: boolean, playing?: boolean }>,
+    // plays: what the hands do on the instrument in this shot, as the planner wrote it in "playing:" (a plan from before has only playing: true)
+    people?: Record<string, { state?: string, frame?: string, motion?: string, singing?: boolean, playing?: boolean, plays?: string }>,
     rest?: string,                  // what everyone in the shot who has no entry of their own does at the same time, each in their own way
 }
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
