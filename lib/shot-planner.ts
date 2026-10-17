@@ -28,7 +28,7 @@ Rules:
 - Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, the shots must show a real dramatic encounter across the sequence: fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear) - not characters standing and staring.
 - A shot naming only the outcome of contact between two things ("hits the dragon with a sword", "grabs the ledge") reads as flat and unconvincing on screen - describe the mechanics instead: the direction and path of the movement (a low arc from the left, an overhead swing, a lunge), what it meets and how (deflects off armored scales, cuts into flesh, is caught on a raised shield), and the immediate physical reaction (staggers back, sends sparks flying, the blade skids off and rebounds). Do this for every strike, grab, fall or collision a shot describes, not only in combat. A blow has weight: the striker puts the body into it (a step, a twist of the hips, the breath leaving), the one struck shows the force in the whole body (the head snaps, the knees give, the arms fly up) and is moved a step or two at most - they stagger, drop to a knee or fall onto the back; nobody flies several paces, slides or is thrown over an edge by one blow.
 - The same applies to any gentler or non-physical contact (a hand on a shoulder, a ghost or spirit reaching for someone): never write a bare "touches" or "reaches for" - name the exact hand/body part and where it lands, whether the contact holds and grips or only brushes, and let the reaction follow logically from THAT contact (goes rigid under the grip, twists to break free, the hand passes through them like mist) rather than defaulting to an unrelated generic reaction such as being shoved or knocked back - only describe a push or shove when something in the shot actually pushes.
-- "castProps" below lists each character's one fixed prop (weapon, tool or instrument), if they have one. That is the exact object they carry for the entire song - always call it by that same name and kind in every shot it appears in (a character's sword must stay a sword and never become a hammer, axe or spear in a later shot, and vice versa), unless the beat's "summary" or "moments" explicitly says they picked up, dropped, lost or swapped it.
+- "castProps" below lists each character's one fixed prop (weapon, tool or instrument), if they have one. That is the exact object they carry for the entire song - or, where castProps says it stands in a place, the one they use there and never carry - always call it by that same name and kind in every shot it appears in (a character's sword must stay a sword and never become a hammer, axe or spear in a later shot, and vice versa), unless the beat's "summary" or "moments" explicitly says they picked up, dropped, lost or swapped it.
 - Characters don't default to facing the camera. When a shot is a reaction - to a threat, a touch, a strike, a sound - say which way the character's body and gaze turn relative to whatever they're reacting to (spins toward it, recoils with their back to the wall, turns away and shields their face, ducks behind another character) instead of leaving them front-on.
 - Whoever or whatever a shot is about must be looking at something in the scene, never at the lens: name the target of every look or stare (the person they're threatening, the blade coming at them, the ground below) - an eye-line with no named target defaults to a dead-on stare into the camera, especially on a push-in, which reads as breaking the scene rather than being part of it.
 - Name the visible facial reaction the shot's action produces (jaw clenching, eyes widening, a grin, brows drawing together, a grimace, a flicker of relief) whenever the moment calls for one - a shot with no facial reaction described tends to render with the same flat expression as every other shot of that character.
@@ -124,7 +124,7 @@ Rules:
 - Say every direction as the picture shows it, never as a compass point: "to the left of the frame", "toward the camera", "behind her" - the video model cannot place north or south.
 - "start": for every character of the beat, where they are and what they do and hold when the beat starts, a phrase with a verb. A beat that goes on from the beat before it (the same place, no jump in time) starts where that one ended; a beat that opens a new scene starts where its story puts them.
 - "end": for every character of the beat, where they are and what they do and hold when the beat is over - where its summary and moments take them. The next beat starts from it.
-- A character holds their one prop ("castProps") unless the beat has them drop, lose or swap it.
+- A character holds their one prop ("castProps") unless the beat has them drop, lose or swap it; a prop that stands in a place stays there, and they are at it to use it.
 - Every character in a text is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there; the name right after "start:" and "end:" is plain, without braces.
 
 Answer in exactly this line format and nothing else - one field per line, no JSON, no markdown:
@@ -136,6 +136,11 @@ ENDS
 end: <Name> | <where they are and what they do and hold when the beat is over>
 (one "end:" line for every character of the beat)`
 
+// a prop that stands in a place (a drum kit) is used there and never carried along - said with the prop wherever it is listed
+export const castProp = (c: Character, locations: Location[]) => c.propCarried === false
+    ? `${c.prop} (stands in ${locations.find(l => l.id === c.propPlace)?.name ?? 'the place where it is used'} and is used there${c.propInHand ? `, with ${c.propInHand} in the hands` : ''} - never carried)`
+    : c.prop!
+
 /**
  * The blocking of one beat - a short call, made beat after beat: each starts where the one before ends (`before`). The
  * shots of all beats can then be planned at once, every beat from its own fixed blocking.
@@ -145,7 +150,7 @@ export function blockingPrompt({characters: cast, locations, characterDescriptio
         reasoning: 'low',
         // even at low the thinking alone takes ~2500 words - 4096 cut off nearly every beat and cost a second call
         maxTokens: 8192,
-        input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.name, c.prop])))}
+        input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.name, castProp(c, locations)])))}
 cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
 place (as its reference picture shows it): ${JSON.stringify({name: locations.find(l => l.id === beat.locationId)?.name ?? beat.locationId, description: locationDescriptions[beat.locationId] ?? '', ...(locationLayouts?.[beat.locationId]?.layout ? {layout: locationLayouts[beat.locationId]!.layout} : {})})}
 looks (as their reference pictures show them): ${JSON.stringify(Object.fromEntries(beat.characterIds.map(id => [cast.find(c => c.id === id)?.name ?? id, characterDescriptions[id] ?? ''])))}
@@ -167,7 +172,7 @@ export function planPrompt({characters: cast, locations, characterDescriptions, 
         reasoning: 'medium',
         // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
         maxTokens: 16384,
-        input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.id, c.prop])))}
+        input: `castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.id, castProp(c, locations)])))}
 cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
 ${chunk.from > 0 ? `Already written for this beat (do not write it again): ${JSON.stringify({staging: chunk.staging, shots: chunk.written})}
 ` : ''}${finished ? `Already written - the staging and the end of the beat "${finished.beat.id}", which comes right before the first beat below (do not write it again): ${JSON.stringify({staging: finished.plan.staging, ends: finished.plan.ends, lastShot: finished.plan.shots.at(-1)})}
@@ -252,7 +257,7 @@ Every character in "summary", "moments" and the facts of "stateAfter" is written
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, recoiling, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.
 ${performance}Answer only with JSON: {"beats": [...]}
 ---
-characters: ${JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role, ...(c.prop ? {prop: c.prop} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
+characters: ${JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role, ...(c.prop ? {prop: castProp(c, locations)} : {}), ...(c.isGroup ? {isGroup: true} : {})})))}
 locations: ${JSON.stringify(locations.map(l => l.id))}
 lyrics:
 ${lyrics}

@@ -106,13 +106,16 @@ You need to extract all characters and their role in the story.
 Furthermore you need to extract all locations from the story.
 Answer only with JSON in this format:
 {
-    "characters": [{"name": "", "role": "", "prop": "", "propStem": "", "isGroup": false, "alike": false}],
+    "characters": [{"name": "", "role": "", "prop": "", "propStem": "", "propCarried": true, "propInHand": "", "propPlace": "", "isGroup": false, "alike": false}],
     "locations": [{"name": ""}]
 }
 The rules for characters are: A character is a person or creature in the story. They have a name and a role. The role is a short description of what the character does in the story, including every fact about how they look that the story itself states (size, species, number of eyes or limbs, colors) - written once, so that every later description agrees with it.
 A party, crew, band or family of a countable size that stays together through the story ("the seven", "the three sisters", "the other five", a four-piece band) is never one entry: every member is their own character, with their own name (invent short ones the story does not give), their own role and, where they carry something, their own prop. An image and a video model draw one entry as one person copied several times, so one entry for "the other five" ends up as five identical people. Only an anonymous multitude (a crowd, an army, a village, a pack of creatures, a species) is one "isGroup" entry. As a rule: up to about six named or counted individuals are separate characters.
 Additionally, for every character:
 - "prop": if the character visibly carries or uses one distinctive physical object throughout the story (a weapon, tool, musical instrument, etc.), name it briefly (e.g. "electric guitar", "iron sword", "drum kit"). It is one specific object, named as exactly what it is ("a hand torch", "a short sword"), never a collective word like "tool", "weapon" or "instrument": an image and a video model fill a vague word with the most familiar object, and "iron tool" becomes a pickaxe. You may invent the object, but if the story or its title names something the characters carry (a torch, a lantern, a map), that is the prop before anything of your own, and it fits the era, the place and the style of the story - a descent into a cave does not make miners of its characters. Companions of one party do not all carry the same object: each gets a different kind of the same family where the story names only one (a hammer, a long-shafted war hammer and a spiked mace-hammer are three different props), so that they are told apart at a glance. The protagonist's prop is the most distinctive and the most striking of them (a named or ornate weapon, an object the story builds up), never the plainest. Every visible member of a band must get their actual instrument here, including drummers and other backing musicians, not just the lead. Leave it an empty string if the character carries nothing distinctive.
+- "propCarried": true when the character has "prop" on them while using it - in the hands, on a strap, on the back or the belt. false when it is too big or too fixed to be carried and stands somewhere the character goes to use it (a drum kit, an organ, an anvil, a loom). true when "prop" is empty.
+- "propInHand": only when "propCarried" is false - what the character holds in the hands while using it (drumsticks, a smith's hammer), or an empty string when they use it with bare hands. An empty string otherwise.
+- "propPlace": only when "propCarried" is false - the name of the location, exactly as in your "locations", where it stands. An empty string otherwise.
 - "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "guitar" for any electric/acoustic guitar, "piano" for piano/keys, "other" for anything else melodic (synth, strings, etc. - only when none of the above fit). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
 - "isGroup": true if this entry is an anonymous collective acting as one individual member of a group (e.g. "Orcs", "Miners", "Townspeople", an army, a band's backing dancers) rather than a single named person - several of it can appear on screen at once and nobody in it needs to be recognized again. false for a single person or creature, even a memorable one, and false for each member of a counted party (see above).
 - "alike": only for a group ("isGroup" true): true if its members look alike - a species or kind of creature, a pack, a unit in the same uniform: it is then drawn once, with one look. false if its members are recognizably different individuals (a crowd of townspeople, a mob). A species is never a group of different-looking individuals.
@@ -126,8 +129,8 @@ ${storyBase}
             type: 'object', additionalProperties: false, required: ['characters', 'locations'],
             properties: {
                 characters: {type: 'array', minItems: 1, items: {
-                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'isGroup', 'alike'],
-                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
+                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'propCarried', 'propInHand', 'propPlace', 'isGroup', 'alike'],
+                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, propCarried: {type: 'boolean'}, propInHand: {type: 'string'}, propPlace: {type: 'string'}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
                 }},
                 locations: {type: 'array', minItems: 1, items: {type: 'object', additionalProperties: false, required: ['name'], properties: {name: {type: 'string'}}}},
             },
@@ -193,17 +196,25 @@ ${storySummary}`,
 
 // What a character picture must not leave to the video model: a part of the body that is not described is drawn
 // from nothing (bare legs under a vest), and a prop that is not in the picture is redrawn as the most familiar object.
+// The prop is shown the way it is held while used, whatever it is: a rule written for weapons ("its head or blade and its
+// haft/grip ... hold and swing") drew a guitar held by the neck like a club, a bass like a spear and a drummer with a hand
+// drum on a haft, and the video model keeps the pose of the picture. A prop that stands in a place (propCarried false) is
+// not in the picture at all - only what is held of it.
 const bodyRules = '- Head to toe: name what covers the torso, the legs and the feet (trousers, skirt, robe, boots ...) - no part of the body is left undescribed, because a video model invents whatever is missing.\n'
-const propRule = (prop?: string) => prop
-    ? `- The character carries "${prop}": show exactly that object, held in the hand the pose allows, described by its kind, its head or blade and its haft/grip. It is of a size and length a person can hold and swing with that hand or both hands - never a pole or staff-like proportion, never a different kind of tool or weapon.\n`
-    : ''
+type PropOf = { prop?: string, propCarried?: false, propInHand?: string }
+const propRule = ({prop, propCarried, propInHand}: PropOf) => !prop ? ''
+    : propCarried === false
+        ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it` : 'their hands are empty'}.\n`
+        : `- The character carries "${prop}": show exactly that object, held or worn the way the character holds it while using it, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one.\n`
+// the prop as the character JSON of a look prompt names it: what is in the picture
+const propField = ({prop, propCarried, propInHand}: PropOf) => !prop ? {} : propCarried === false ? (propInHand ? {inHand: propInHand} : {}) : {prop}
 
 // otherLooks: the already-designed reference prompts of the rest of the cast (built earlier in the same loop) -
 // without them, two characters with a similar role/archetype (e.g. "loyal companion") reliably converge on
 // near-identical builds, palettes and wardrobes, which a reference-to-video model then can't tell apart on
 // screen and swaps mid-shot. Forcing a comparison against what already exists is what actually spreads them out;
 // asking each character to be "distinctive" in isolation does not, since every character looks distinctive alone.
-export function characterLookPrompt(lookBrief: string, char: { name: string, role: string, prop?: string }, otherLooks: { name: string, look: string }[] = []): AskOptions {
+export function characterLookPrompt(lookBrief: string, char: { name: string, role: string } & PropOf, otherLooks: { name: string, look: string }[] = []): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for a character reference sheet of the given character.
@@ -218,13 +229,13 @@ Rules:
 - Describe exactly ONE character, even if the name is plural.
 - Full body, standing, facing the camera, in front of a plain grey neutral background, so the image can be reused as a reference.
 - Describe only visible details: face, age, build, skin, hair, clothing, materials, colors, accessories, and how the light falls on them.
-${bodyRules}${propRule(char.prop)}- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
+${bodyRules}${propRule(char)}- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
 - No mood labels without visible evidence, no text or lettering in the image.
 - Answer only with the prompt.
 
 Film look: ${lookBrief}
 Character:
-${JSON.stringify({name: char.name, role: char.role, ...(char.prop ? {prop: char.prop} : {})})}${otherLooks.length ? `
+${JSON.stringify({name: char.name, role: char.role, ...propField(char)})}${otherLooks.length ? `
 Already-designed cast (for silhouette contrast only - do not copy or borrow their specific colors/props):
 ${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}` : ''}`,
         instructions: 'You are an expert character designer who writes prompts for the Krea 2 image model. You answer only with the prompt.',
@@ -235,7 +246,7 @@ ${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}` : ''}`,
 // individual belonging to the same group, contrasted against the group's own already-designed members instead of
 // against the rest of the cast (characterLookPrompt's otherLooks). Without this every member renders from the
 // same one reference image and reads as the same person duplicated across a shot.
-export function characterVariantLookPrompt(lookBrief: string, char: { name: string, role: string, prop?: string }, existingMembers: string[]): AskOptions {
+export function characterVariantLookPrompt(lookBrief: string, char: { name: string, role: string } & PropOf, existingMembers: string[]): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for a character reference sheet of ONE individual member of the group below.
@@ -249,12 +260,12 @@ Rules:
 - Describe exactly ONE individual, not the group collectively.
 - Full body, standing, facing the camera, in front of a plain grey neutral background, so the image can be reused as a reference.
 - Describe only visible details: face, age, build, skin, hair, clothing, materials, colors, accessories, and how the light falls on them.
-${bodyRules}${propRule(char.prop)}- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
+${bodyRules}${propRule(char)}- Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
 - No mood labels without visible evidence, no text or lettering in the image.
 - Answer only with the prompt.
 
 Film look: ${lookBrief}
-Group: ${JSON.stringify({name: char.name, role: char.role, ...(char.prop ? {prop: char.prop} : {})})}
+Group: ${JSON.stringify({name: char.name, role: char.role, ...propField(char)})}
 Already-designed members of this same group (for contrast - make this one visibly different from each of them):
 ${existingMembers.map((look, i) => `- Member ${i + 1}: ${look}`).join('\n')}`,
         instructions: 'You are an expert character designer who writes prompts for the Krea 2 image model. You answer only with the prompt.',
@@ -304,7 +315,9 @@ Image prompt: ${imagePrompt}`,
 
 // props: the objects the characters carry (Character.prop) - they come into a clip with their owner's picture, so a place
 // that shows one too has it twice in the picture (a knife on the counter and the same knife in the hand)
-export function locationLookPrompt(lookBrief: string, storySummary: string, locationName: string, props: string[] = []): AskOptions {
+// standing: the props that stand in this place and are used there (propCarried false, e.g. a drum kit) - no character picture
+// shows them, so the place has to, at one fixed spot
+export function locationLookPrompt(lookBrief: string, storySummary: string, locationName: string, props: string[] = [], standing: string[] = []): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for an establishing shot of the given location.
@@ -315,7 +328,7 @@ Rules:
 - Natural language, one paragraph, 50-100 words.
 - Start with the medium and style from the film look (e.g. "35mm film photograph of...", "2D anime background painting of...").
 - The location is empty: no people, creatures or characters.
-${props.length ? `- These objects belong to the characters and come into the picture with them - the place shows none of them, not even lying around, hanging or leaning somewhere: ${props.map(p => JSON.stringify(p)).join(', ')}.\n` : ''}- Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
+${props.length ? `- These objects belong to the characters and come into the picture with them - the place shows none of them, not even lying around, hanging or leaning somewhere: ${props.map(p => JSON.stringify(p)).join(', ')}.\n` : ''}${standing.length ? `- These objects stand in the place, ready to be used - each one exactly once, complete, at one fixed spot where it is clearly seen: ${standing.map(p => JSON.stringify(p)).join(', ')}.\n` : ''}- Wide establishing shot; state the camera position and framing (e.g. "low-angle wide shot from the cave entrance").
 - Describe only visible details: layout, architecture, terrain, materials, props, time of day, weather, light sources, atmosphere like fog, dust or smoke.
 - Describe the place as it looks in this one frame, a state and not a process: no "slowly fading", "visibly shrinking", "walls closing in" or other change over time.
 - Keep the medium/style name itself (e.g. "35mm film photograph"), but never call for film grain, noise, motion blur, chromatic aberration, VHS/scan artifacts or similar degrading texture, even if the film look mentions them - sharp focus and crisp detail throughout.
