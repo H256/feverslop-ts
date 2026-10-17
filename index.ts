@@ -31,7 +31,7 @@ import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
 import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
 import * as clack from "@clack/prompts";
-import {propMissing} from "./lib/prop-check.ts";
+import {pictureProp, propMissing} from "./lib/prop-check.ts";
 import {projectInputs, stepUsed} from "./lib/inputs.ts";
 import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
@@ -329,7 +329,7 @@ log.box('Summary', storySummary)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
 const cast = await reviewed(project, args.review, 'cast', () => project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
-    const extracted = await askJson<{ characters: (Omit<Character, 'id'> & { propStem?: string })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
+    const extracted = await askJson<{ characters: (Omit<Character, 'id' | 'propCarried'> & { propStem?: string, propCarried?: boolean })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
     const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
     const takenCharacters = new Set<string>()
     const takenLocations = new Set<string>()
@@ -339,6 +339,9 @@ const cast = await reviewed(project, args.review, 'cast', () => project.step('ca
         taken.add(id)
         return id
     }
+    const locations = extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)}))
+    // the place a prop stands in, by the name the answer gives it - the only place when there is just one
+    const placeOf = (name: string | undefined) => locations.find(l => l.name === name || l.id === toId(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
     return {
         // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
         characters: extracted.characters.map(c => ({
@@ -347,12 +350,17 @@ const cast = await reviewed(project, args.review, 'cast', () => project.step('ca
             ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
+            ...(c.prop && c.propCarried === false ? {
+                propCarried: false as const,
+                ...(c.propInHand ? {propInHand: c.propInHand} : {}),
+                ...(placeOf(c.propPlace) ? {propPlace: placeOf(c.propPlace)} : {}),
+            } : {}),
         })),
-        locations: extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)})),
+        locations,
     }
 }), cast => {
     log.step('Characters', styles.muted(`(${cast.characters.length})`))
-    for (const c of cast.characters) log.line(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}`) : ''}`)
+    for (const c of cast.characters) log.line(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}${c.propCarried === false ? ` - stands in ${c.propPlace ?? '?'}${c.propInHand ? `, in hand: ${c.propInHand}` : ''}` : ''}`) : ''}`)
     log.step('Locations', styles.muted(`(${cast.locations.length})`))
     for (const l of cast.locations) log.line(`   ${styles.name(l.id)}`)
 })
@@ -418,7 +426,8 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 // a prop the look does not name is not in the reference picture - the clips would show the model's own idea of it
 for (const c of cast.characters) {
-    if (c.prop && characterLooks[c.id] && propMissing(characterLooks[c.id]!, c.prop)) log.warn(`${c.id}: the look does not show its prop "${c.prop}" - redo characterLooks, or edit the look in ${project.file} by hand`)
+    const shown = pictureProp(c)
+    if (shown && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown)) log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
 }
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
@@ -438,7 +447,9 @@ for (const [id, description] of Object.entries(characterDescriptions)) log.box(i
 const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
     const looks = await llmMap(cast.locations, (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const options = locationLookPrompt(lookBrief, storySummary, location.name, [...new Set(cast.characters.flatMap(c => c.prop ? [c.prop] : []))])
+        const options = locationLookPrompt(lookBrief, storySummary, location.name,
+            [...new Set(cast.characters.flatMap(c => c.prop && c.propCarried !== false ? [c.prop] : []))],
+            [...new Set(cast.characters.flatMap(c => c.prop && c.propCarried === false && c.propPlace === location.id ? [c.prop] : []))])
         return project.each('locationLooks', location.id, options, () => ask(options))
     })
     return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
@@ -572,7 +583,8 @@ const characterLookVariants = await project.step('characterLookVariants', '9c ·
             looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => ask(options)))
         }
         variants[char.id] = looks
-        if (char.prop) looks.forEach((look, i) => { if (propMissing(look, char.prop!)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${char.prop}"`) })
+        const shown = pictureProp(char)
+        if (shown) looks.forEach((look, i) => { if (propMissing(look, shown)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${shown}"`) })
     }
     return variants
 })
@@ -753,7 +765,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         // without a blocking the beat goes on from the plan of the beat before, if that one is already there
         const prev = beats[beats.indexOf(beat) - 1]
         const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
-        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id])}))
+        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id], beatProps?.[beat.id])}))
         // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
         // legacy spread (a warning says so) instead of the run failing after the beats that worked
         let first: ReturnType<typeof read> | undefined
@@ -1222,10 +1234,11 @@ ${storySummary}`,
         instructions: 'You are a music video director who splits a song between its singers. Answer only with JSON.',
         schema: {type: 'object', additionalProperties: false, required: ['lines'], properties: {lines: {type: 'array', items: {
             type: 'object', additionalProperties: false, required: ['line', 'singers'],
-            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
+            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, uniqueItems: true, items: {enum: singers}}},
         }}}},
     })
-    const byLine = new Map((assigned.lines ?? []).map(l => [l.line, known(l.singers).filter(id => singers.includes(id))]))
+    // a model that loops repeats a singer in a line ("lyra, kaelen, lyra, ...") - each sings it once
+    const byLine = new Map((assigned.lines ?? []).map(l => [l.line, [...new Set(known(l.singers).filter(id => singers.includes(id)))]]))
     const missing = lines.filter(l => !byLine.get(l.line)?.length)
     if (missing.length) log.warn(`${missing.length} line(s) got no singer - sung by ${singers[0]}`)
     return {singers, lines: lines.map(l => ({line: l.line, text: l.text, singers: byLine.get(l.line)?.length ? byLine.get(l.line)! : [singers[0]!]}))}

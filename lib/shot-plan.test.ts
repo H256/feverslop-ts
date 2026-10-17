@@ -90,7 +90,8 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.notes).toEqual([])
     })
     test('more than four own entries are cut to four by the code: singers first, then the order of the action', () => {
-        const people = Object.fromEntries(names.map((n, i) => [n, own(i)]))
+        const people: Record<string, Record<string, string>> = Object.fromEntries(names.map((n, i) => [n, own(i)]))
+        people.Dina = {...people.Dina, singing: 'yes'}
         const r = readBeatPlan({shots: [{action: '{Fay} leads, then {Edda} follows', characters: names, framing: 'wide shot', people}]}, beat, cast, 1, {singerIds: ['dina'], singingPerShot: [true]})!
         expect(r.problems).toEqual([])
         expect(Object.keys(r.plan.shots[0]!.people!).sort()).toEqual(['dina', 'edda', 'fay', 'anna'].sort())
@@ -102,11 +103,25 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.problems).toEqual([])
         expect(r.notes[0]).toContain('5 people')
     })
-    test('somebody who does not sing is marked as singing by the planner: a note', () => {
-        const r = readBeatPlan({shots: [{action: 'They march', characters: ['Anna', 'Bea'], people: {Anna: {state: 'leads', motion: 'marches', singing: 'yes'}, Bea: {state: 'follows', motion: 'marches', singing: 'yes'}}}]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true]})!
-        expect(r.problems).toEqual([])
-        expect(r.notes).toHaveLength(1)
-        expect(r.notes[0]).toContain('Bea')
+    test('somebody who does not sing is marked as singing by the planner: asked again', () => {
+        const r = readBeatPlan({shots: [{action: 'They march', characters: ['Anna', 'Bea'], people: {Anna: {state: 'leads', motion: 'marches on', singing: 'yes'}, Bea: {state: 'follows', motion: 'falls back', singing: 'yes'}}}]}, beat, cast, 1, {singerIds: ['anna', 'bea'], singingPerShot: [true], singersPerShot: [['anna']]})!
+        expect(r.problems).toHaveLength(1)
+        expect(r.problems[0]).toContain('Bea is marked singing, but Anna sings in this shot')
+    })
+    test('a singer of the shot marked as not singing is asked again', () => {
+        const r = readBeatPlan({shots: [{action: 'Anna leads', characters: ['Anna'], people: {Anna: {state: 'leads', motion: 'marches', singing: 'no'}}}]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true], singersPerShot: [['anna']]})!
+        expect(r.problems[0]).toContain('Anna sings in this shot - singing: yes')
+    })
+    test('an instrument that is heard is played, one that is not heard is not', () => {
+        const props = [{characterId: 'anna', prop: 'guitar', activePerShot: [true, false]}]
+        const shot = (playing: string) => ({action: 'Anna', characters: ['Anna'], people: {Anna: {state: 'at the front', motion: 'steps forward', playing}}})
+        const wrong = readBeatPlan({shots: [shot('no'), shot('yes')]}, beat, cast, 2, undefined, props)!
+        expect(wrong.issues.map(i => i.shot)).toEqual([0, 1])
+        expect(wrong.problems[0]).toContain("Anna's guitar is heard in this shot - playing: yes")
+        expect(wrong.problems[1]).toContain("Anna's guitar is not heard in this shot - playing: no")
+        const right = readBeatPlan({shots: [shot('yes'), shot('no')]}, beat, cast, 2, undefined, props)!
+        expect(right.problems).toEqual([])
+        expect(right.plan.shots[0]!.people!.anna!.playing).toBe(true)
     })
 })
 
@@ -124,15 +139,16 @@ describe('readBeatPlan - no word lists', () => {
         expect(r.plan.shots[1]!.size).toBeUndefined()
         expect(r.plan.shots[1]!.risky).toBeUndefined()
     })
-    test('a person marked as singing in a shot where nobody sings is a note', () => {
+    test('a person marked as singing in a shot where nobody sings is asked again', () => {
         const r = readBeatPlan({shots: [{action: 'Anna waits', characters: ['Anna'], people: {Anna: {state: 'stands', motion: 'sways', singing: 'yes'}}}]}, beat, [a], 1, {singerIds: [], singingPerShot: [false]})!
-        expect(r.notes.some(n => n.includes('does not sing'))).toBe(true)
+        expect(r.problems.some(p => p.includes('but nobody sings in this shot'))).toBe(true)
         expect(r.plan.shots[0]!.people!.a!.singing).toBe(true)
     })
     test('the line format carries size, risky and singing', () => {
-        const parsed = parseShotLines('SHOT 1\nframing: wide shot\nsize: wide\nrisky: yes\ncharacters: Anna\naction: x\nperson: Anna | state: s | frame: f | motion: m | singing: yes')
+        const parsed = parseShotLines('SHOT 1\nframing: wide shot\nsize: wide\nrisky: yes\ncharacters: Anna\naction: x\nperson: Anna | state: s | frame: f | motion: m | playing: yes | singing: yes')
         expect(parsed.shots[0]).toMatchObject({size: 'wide', risky: true})
         expect((parsed.shots[0]!.people as Record<string, Record<string, string>>).Anna!.singing).toBe('yes')
+        expect((parsed.shots[0]!.people as Record<string, Record<string, string>>).Anna!.playing).toBe('yes')
     })
     test('directions as the picture shows them are fine', () => {
         const r = readBeatPlan({shots: [{action: 'Anna turns to the orc on the right of the frame', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing the orc', motion: 'steps toward the camera'}}}]}, beat, [a], 1)!

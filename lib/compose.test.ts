@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {buildClipRequests, type Input} from "./compose.ts";
+import {buildClipRequests, type Input, singingPerBeat} from "./compose.ts";
 import type {Character, StoryBeat} from "./project.ts";
 
 const characters: Character[] = [
@@ -230,5 +230,21 @@ describe('a fact goes with whom it is about, or stays at its place', () => {
     test('back at the forge without the shaman: the fire, not the drum', () => {
         expect(clips[2]!.prompt).toContain('Continuity from earlier scenes: the fire burns low.')
         expect(clips[2]!.prompt).not.toContain('drum is torn')
+    })
+})
+
+describe('singingPerBeat', () => {
+    test('per shot, the singers of the lines sung in it - not all singers of the beat', () => {
+        const beat = {id: 'b1', order: 1, summary: 's', moments: ['m'], locationId: 'hall', characterIds: ['lead', 'band'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
+        const slot = {id: 'slot-001', index: 0, section: 'Verse', start: 0, end: 8, bars: 4, energy: 0.3, lyrics: [], vocals: [
+            {line: 0, text: 'a verse line', start: 0.2, end: 3.5, words: []},
+            {line: 1, text: 'a refrain line', start: 4.2, end: 7.8, words: []},
+        ]}
+        const singing = {singers: ['lead', 'band'], lines: [{line: 0, text: 'a verse line', singers: ['lead']}, {line: 1, text: 'a refrain line', singers: ['lead', 'band']}]}
+        const result = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing})
+        const shots = result.b1!.singersPerShot
+        expect(shots.length).toBeGreaterThanOrEqual(2)
+        expect(shots[0]).toEqual(['lead'])
+        expect(shots.at(-1)).toEqual(['lead', 'band'])
     })
 })
