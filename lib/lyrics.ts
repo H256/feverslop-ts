@@ -337,11 +337,14 @@ export function refineSections(music: MusicMap, lyricSections: LyricSection[], t
             const sungBefore = timing.lines.filter(l => l.sectionIndex < i).at(-1)
             const lower = sungBefore ? snapUp(sungBefore.end) : 0
             const upper = vocalStart.slice(i + 1).find(t => t !== undefined) ?? music.durationSec
-            // right after a sung section it starts where those vocals end, whatever the section is (a solo, an interlude, a
-            // break): the acoustic estimate is only a guess inside the gap, and it put one 40 s late (tides-of-eternal-flame),
-            // its clips labelled as the chorus before it and staged with singing. A second section without vocals in a row
-            // keeps its estimate, and an estimate outside the gap is wrong - the section then starts right after the vocals too
-            const afterSung = linesOf(i - 1).length > 0
+            // a section without lyrics right after a sung one starts where those vocals end, whatever it is (a solo, an
+            // interlude, a break): the acoustic estimate is only a guess inside the gap, and it put one 40 s late
+            // (tides-of-eternal-flame), its clips labelled as the chorus before it and staged with singing. Only after a last
+            // line that was really heard - an interpolated one says nothing about where the vocals end. A sung section whose
+            // first line was not heard, and a second section without lyrics in a row, keep the estimate; an estimate outside
+            // the gap is wrong - the section then starts right after the vocals before it too
+            const lastBefore = linesOf(i - 1).at(-1)
+            const afterSung = !linesOf(i).length && lastBefore !== undefined && lastBefore.confidence > 0
             start = !afterSung && section.start >= lower && section.start <= upper - barSec ? section.start : lower
         }
         // at least a bar per section
