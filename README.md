@@ -659,6 +659,10 @@ bun index.ts --redo=characterLookVariants
 - Without alignment, a section's lyric lines are spread evenly over its clips.
 - The alignment is only as good as Whisper's hearing: growled, heavily layered or very fast vocals are recognized
   worse. Lines with low confidence have interpolated times - check them.
+- A word Whisper heard twice (an echo, a backing voice, a repeat) can be matched to the wrong place. When more than 4
+  bars of silence part it from the rest of its line, it is put right next to the rest as a guess, so neither the line
+  nor its section starts or ends bars away. Projects aligned before keep the old times until `--redo=lyricsTiming`
+  (which also redoes the beats and everything after them).
 - If not a single lyric word is found in the transcript (a wrong `lyricsLanguage`, vocals that are too distorted, a
   song without singing), the alignment stops the run with an error instead of falling back to estimated times - with
   no heard word there is nothing to anchor an estimate to. Check `lyricsLanguage` and listen to `stems/vocals.wav`.

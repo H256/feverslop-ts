@@ -308,7 +308,7 @@ if (transcript) {
     if (transcript.activity) log.step('Vocal activity', styles.muted(`${transcript.activity.length} range(s) from RMS energy, independent of whisper`))
 }
 
-const lyricsTiming = transcript ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity)) : undefined
+const lyricsTiming = transcript ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity, music.bpm)) : undefined
 if (lyricsTiming) {
     for (const line of lyricsTiming.lines) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))

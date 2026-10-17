@@ -20,6 +20,8 @@ const ADLIB_MIN_WORD_PROBABILITY = 0.3
 const GUESS_MIN_ACTIVE = 0.4    // share of a guessed (never heard) word that has to lie inside vocal activity - else nobody sings it
 const ADLIB_REPLACES_BELOW = 0.5 // a lyric line that was mostly not heard gives way to ad-libs sung over it
 const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
+const LINE_GAP_BARS = 4         // more silence than this between two words of one line: one of them was matched somewhere else
+                                // (largest real gap inside a line over the projects folder: 3.55 bars, the wrong ones 4.2 to 30)
 
 export type SungLine = { line: number, sectionIndex: number, section: string, text: string, words: string[] }
 
@@ -66,9 +68,9 @@ export function similarity(a: string, b: string) {
  * audio, independent of whisper) when given - growled/screamed vocals whisper can't transcribe still show up
  * there, so an unheard word lands inside a real singing window instead of spread blindly across a whole gap.
  * `sections` (the estimate from the audio) is optional and only breaks ties - e.g. which of three identical
- * choruses a heard chorus belongs to.
+ * choruses a heard chorus belongs to. `bpm` gives the bar for keepTogether.
  */
-export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord[], sections?: MusicSection[], activity?: ActivityRange[]): LyricsTiming {
+export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord[], sections?: MusicSection[], activity?: ActivityRange[], bpm?: number): LyricsTiming {
     const lines = sungLines(lyricSections)
     const lyric = lines.flatMap(line => line.words.map(text => ({text, norm: normalizeWord(text), line: line.line, sectionIndex: line.sectionIndex})))
     const transcript = clampToActivity(dropLoops(heard), activity).map(w => ({...w, norm: normalizeWord(w.text)})).filter(w => w.norm)
@@ -140,7 +142,7 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
     }
     let k = 0
     const timedLines: TimedLine[] = lines.map(line => {
-        const words = timed.slice(k, k += line.words.length)
+        const words = keepTogether(timed.slice(k, k += line.words.length), bpm ? LINE_GAP_BARS * 240 / bpm : Infinity)
         return {
             line: line.line,
             sectionIndex: line.sectionIndex,
@@ -170,6 +172,32 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
         out.splice(before + 1, 0, {...adlib, line: lines.length + n, sectionIndex: anchor.sectionIndex, section: anchor.section})
     })
     return {lines: out}
+}
+
+/**
+ * The words of one line are sung together: where more than `maxGap` seconds of silence part them, a word was matched to
+ * the same word sung somewhere else (the first word of a bridge right after the chorus before it, 27 bars early - the
+ * line's start, and with it the section's, moved there). The line is split at such gaps and keeps the part with the
+ * most heard words (the first on a tie); the words of the other parts are put right before or after it, as guesses
+ * (sim 0) - the vocal activity then decides whether they are sung there, like any word that was not heard.
+ */
+export function keepTogether<W extends { start: number, end: number, sim: number }>(words: W[], maxGap: number): W[] {
+    const parts: W[][] = [[]]
+    words.forEach((w, i) => {
+        if (i > 0 && w.start - words[i - 1]!.end > maxGap) parts.push([])
+        parts.at(-1)!.push(w)
+    })
+    if (parts.length === 1) return words
+    const heardIn = (part: W[]) => part.filter(w => w.sim > 0).length
+    const kept = parts.reduce((best, part) => heardIn(part) > heardIn(best) ? part : best)
+    const at = parts.indexOf(kept)
+    const before = parts.slice(0, at).flat()
+    const after = parts.slice(at + 1).flat()
+    return [
+        ...before.map((w, i) => ({...w, sim: 0, start: round(kept[0]!.start - (before.length - i) * TYPICAL_WORD_SEC), end: round(kept[0]!.start - (before.length - i - 1) * TYPICAL_WORD_SEC)})),
+        ...kept,
+        ...after.map((w, i) => ({...w, sim: 0, start: round(kept.at(-1)!.end + i * TYPICAL_WORD_SEC), end: round(kept.at(-1)!.end + (i + 1) * TYPICAL_WORD_SEC)})),
+    ]
 }
 
 /**
