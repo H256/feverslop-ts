@@ -13,6 +13,7 @@ import {clipChains, renderAll} from "./lib/batch.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
+import {playingCases, playingIssues} from "./lib/playing-check.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
@@ -769,15 +770,28 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         // without a blocking the beat goes on from the plan of the beat before, if that one is already there
         const prev = beats[beats.indexOf(beat) - 1]
         const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
-        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => block.map(beat => ({beat, read: readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id], beatProps?.[beat.id])}))
+        // what can be counted is read by the code; whether a heard player's hand phrase plays at all is read by one short
+        // call per beat (lib/playing-check.ts) - its "no" is a problem of that shot like the others
+        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => Promise.all(block.map(async beat => {
+            const read = readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id], beatProps?.[beat.id])
+            const idle = read ? await playingIssues(playingCases(read.plan.shots, beatProps?.[beat.id], cast.characters)).catch((e: unknown) => {
+                log.warn(`${beat.id}: the check of the hand phrases failed (${e instanceof Error ? e.message : e}) - they stay unchecked`)
+                return []
+            }) : []
+            if (read) for (const issue of idle) {
+                read.issues.push(issue)
+                read.problems.push(issue.message)
+            }
+            return {beat, read}
+        }))
         // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
         // legacy spread (a warning says so) instead of the run failing after the beats that worked
-        let first: ReturnType<typeof read> | undefined
+        let first: Awaited<ReturnType<typeof read>> | undefined
         let firstAnswer: Awaited<ReturnType<typeof askBlock>> | undefined
         for (let attempt = 1; attempt <= 3 && !first; attempt++) {
             try {
                 firstAnswer = await askBlock(block, handover, after, undefined, blocking)
-                first = read(firstAnswer)
+                first = await read(firstAnswer)
             } catch (e) {
                 log.warn(`the answer for ${beat.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`)
             }

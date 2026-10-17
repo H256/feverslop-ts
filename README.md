@@ -599,7 +599,9 @@ What happens, only when at least one character has a `propStem` **and** the lyri
    the character actively using the prop only on an active shot - it picks the verb itself (playing, strumming,
    striking, …), nothing here is a fixed word list - and to have them hold it still, rest it or otherwise occupy
    their hands on an inactive one. On an active shot its `playing:` field says what the hands do on the instrument
-   (a short phrase); a bare "yes", or "no" for a heard instrument, is asked again once. The clip prompt then always
+   (a short phrase); a bare "yes", or "no" for a heard instrument, is asked again once. Whether the phrase and the
+   motion really play it - not "sticks held rigid" or "pick hand frozen over the strings" - is read by one short LLM
+   call per beat, thinking off (`lib/playing-check.ts`); a "no" is asked again once like the other problems. The clip prompt then always
    states the playing for everyone whose stem is heard in the shot, with that phrase - also when the shot's action
    names them doing something else. Plans from before keep a generic "is actively using the …" until
    `--redo=shotMoments`.
