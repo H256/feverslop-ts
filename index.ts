@@ -14,7 +14,7 @@ import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
-import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
+import {beatsPrompt, type Blocking, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -513,7 +513,10 @@ const beats = await reviewed(project, args.review, 'beats', () => project.step('
     const performance = `${singing ? performanceRules(singing) : ''}
 ${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
 ` : ''}`
-    const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>(beatsPrompt({durationSec: music.durationSec, beatCount, characters: cast.characters, locations: cast.locations, lyrics, story: storyBase, performance}))
+    // the music along the way - loudness and whose instrument is heard - so the story's curve follows the song's
+    const players = cast.characters.flatMap(c => c.prop && c.propStem && propActivity?.[c.propStem] ? [{name: c.name, prop: c.prop, ranges: propActivity[c.propStem]!}] : [])
+    const stretches = musicStretches(music, beatCount, players)
+    const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>(beatsPrompt({durationSec: music.durationSec, beatCount, characters: cast.characters, locations: cast.locations, lyrics, story: storyBase, performance, stretches}))
 
     const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
     const characterIds = new Set(cast.characters.map(c => c.id))

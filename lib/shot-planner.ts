@@ -1,7 +1,8 @@
-import type {Assignment, BeatShots, Character, Location, LocationLayout, Slot, StoryBeat} from "./project.ts";
+import type {Assignment, BeatShots, Character, Location, LocationLayout, MusicMap, Slot, StoryBeat} from "./project.ts";
 import {type BeatSinging, isContinuous} from "./compose.ts";
 import type {ProjectConfig} from "./config.ts";
 import type {AskOptions} from "./llm.ts";
+import {formatTime} from "./frames.ts";
 
 // The shot planner of the music pipeline (step 11b): the prompt of one call, which writes up to four shots of one beat.
 
@@ -230,23 +231,51 @@ export function plannerCalls(total: number, perCall: number, again?: { issues: {
     return calls
 }
 
+/** Whose instrument is heard when: a character with a stem-bound prop and the active ranges of that stem. */
+export type Player = { name: string, prop: string, ranges: { start: number, end: number }[] }
+
+/**
+ * The song in `count` equal stretches, one per line: the time, how loud the music is there (the mean bar energy, 0 = the
+ * quietest bar of the song, 1 = the loudest) and whose instrument is heard over most of it. The beats are spread evenly
+ * over the song, so stretch n is about where beat n falls - the beats' intensity can follow the music.
+ */
+export function musicStretches(music: Pick<MusicMap, 'durationSec' | 'downbeats' | 'barEnergy'>, count: number, players: Player[] = []): string[] {
+    const n = Math.max(1, count)
+    return Array.from({length: n}, (_, i) => {
+        const start = i * music.durationSec / n
+        const end = (i + 1) * music.durationSec / n
+        const bars = music.downbeats.flatMap((t, k) => t >= start && t < end && music.barEnergy[k] !== undefined ? [music.barEnergy[k]!] : [])
+        // a stretch shorter than a bar: the bar it lies in
+        const nearest = music.downbeats.findLastIndex(t => t <= start)
+        const energy = bars.length ? bars.reduce((sum, e) => sum + e, 0) / bars.length : music.barEnergy[Math.max(0, nearest)] ?? 0
+        const heard = players.filter(p => p.ranges.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0) > (end - start) / 2)
+        return `${formatTime(start)}-${formatTime(end)} loudness ${energy.toFixed(2)}${players.length ? ` · heard: ${heard.length ? heard.map(p => `${p.name}'s ${p.prop}`).join(', ') : 'none of the instruments'}` : ''}`
+    })
+}
+
 /**
  * Step 9: the story broken into beats - no timing yet. `performance`: what the beats must do so the singers can be
- * lip-synced (empty in clip mode). Every character is written as {Name} (lib/refs.ts).
+ * lip-synced (empty in clip mode). `stretches`: the song's loudness and instruments along the way (musicStretches) - the
+ * story's ups and downs follow it. Every character is written as {Name} (lib/refs.ts).
  */
-export function beatsPrompt({durationSec, beatCount, characters, locations, lyrics, story, performance}: {
-    durationSec: number, beatCount: number, characters: Character[], locations: Location[], lyrics: string, story: string, performance: string,
+export function beatsPrompt({durationSec, beatCount, characters, locations, lyrics, story, performance, stretches = []}: {
+    durationSec: number, beatCount: number, characters: Character[], locations: Location[], lyrics: string, story: string, performance: string, stretches?: string[],
 }): AskOptions {
     return {
         reasoning: 'medium',
-        // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
-        maxTokens: Math.max(16384, beatCount * 1100),
+        // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top - and matching the music along
+        // the way takes more of it (tides-of-eternal-flame: 15750 of 16384 for 14 beats)
+        maxTokens: Math.max(16384, beatCount * 1400),
         input: `Break the story into story beats for a music video. A beat is one continuous piece of action at ONE location.
 The beats have no timing yet - they are stretched onto the song later, so describe what happens, not how long it takes.
 
 The song is ${Math.round(durationSec)} seconds long. The story is spread evenly over that time, in order from the first second to the last - the song sections do not matter for the beats, a beat does not belong to a verse or a chorus.
 Aim for about ${beatCount} beats that follow the story from start to end, each one with new action - a beat never repeats what an earlier beat already showed.
-
+${stretches.length ? `
+The music along the way, in ${stretches.length} equal stretches - beat n falls about where stretch n is:
+${stretches.join('\n')}
+The story's ups and downs follow the music: a beat's "intensity" is about the loudness where it falls, its climax goes where the music is loudest, and calm moments only where the music is quiet. The story winds down only where the music does - while the music is still loud near the end, the last beats are a last surge, not an aftermath.${stretches.some(s => s.includes(' · heard: ')) ? ' Whoever\'s instrument is heard in a stretch plays it there: nobody lowers, rests, sets down or silences an instrument that is still heard.' : ''}
+` : ''}
 For every beat give:
 Every character in "summary", "moments" and the facts of "stateAfter" is written as their "name" in braces, the whole name exactly as in the character list below - {Thorin Oakenshield}, {Orcs}, never a short form like {Thorin} - also a group character acting as one of its members, and never a generic stand-in ("the orc", "an old woman") for someone of the list: the braces bind the sentence to that character's reference picture.
 - "summary": what visibly happens, 1-3 sentences, present tense, every character as {Name} ("{Kara} lights the torch").
