@@ -4,7 +4,7 @@ import {basename, dirname, extname, join} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
-import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
@@ -74,6 +74,15 @@ export class Renderer implements Disposable {
     async plannedFrames(frames: number) {
         const {renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
         return renderFrames?.(frames) ?? frames
+    }
+
+    private resolutionNoted = false
+    /** Says once per run that videoResolution is above the size the workflow's model is made for - it is rendered as set all the same. */
+    protected noteResolution(recommended: RecommendedResolution | undefined) {
+        if (this.resolutionNoted || !aboveRecommended(this.config.videoResolution, recommended)) return
+        this.resolutionNoted = true
+        const [width, height] = recommended!.split('x').map(Number) as [number, number]
+        log.warn(`official recommended resolution is ${(width * height / 2 ** 20).toFixed(2)} MP (${recommended}) for this turbo workflow (${this.config.videoWorkflow}) - videoResolution ${JSON.stringify(this.config.videoResolution)} is rendered as set`)
     }
 
     // everything of a project goes into its own subfolder of ComfyUI's input/output
@@ -389,7 +398,8 @@ export class Renderer implements Disposable {
                 {from: stemFiles.song!, to: songRemote},
             ]
             const seed = resolveSeed(this.config.seed)
-            const {default: videoWorkflow, renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
+            const {default: videoWorkflow, renderFrames, recommendedResolution} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
+            this.noteResolution(recommendedResolution)
 
             // Render at least the clip's frames, in a length the model accepts. The audio starts exactly on
             // the clip's first frame and covers the whole render, so the extra frames at the end follow the

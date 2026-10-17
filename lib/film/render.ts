@@ -1,6 +1,6 @@
 import {existsSync, mkdirSync, readFileSync, statSync} from "node:fs";
 import {dirname, join} from "node:path";
-import {type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
+import {type RecommendedResolution, type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
@@ -66,7 +66,8 @@ export class FilmRenderer extends Renderer {
         const {seed} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             const seed = resolveSeed(this.config.seed)
-            const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames }
+            const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames, recommendedResolution?: RecommendedResolution }
+            this.noteResolution(module.recommendedResolution)
 
             // Rendered at least as long as the clip needs, in a length the model accepts - the frames after the clip's own
             // are cut off again when the film is assembled

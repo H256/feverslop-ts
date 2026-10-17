@@ -1,8 +1,11 @@
 // Originally exported from ComfyUI as r2v_audio_fullmix_guide_1-pass_turbo.json (see README's "Workflows" section)
-import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
 export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
+
+// the size the turbo LoRA is made for (768p) - a larger videoResolution is rendered all the same, with a warning
+export const recommendedResolution: RecommendedResolution = '1344x768'
 
 export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult {
     const wf = new WorkflowBuilder()
@@ -11,6 +14,9 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
     const unet = wf.UNETLoader({unet_name: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors', weight_dtype: 'default'})
     const model = wf.LoraLoaderModelOnly({lora_name: 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', strength_model: 1, model: unet.MODEL})
+    // the turbo LoRA is tuned for 8 steps of euler/simple with these shifts (video 12, audio 3) - the official
+    // recommendation; it ran beta57 without a shift before
+    const shifted = wf.MiniMaxH3SigmaShift({model: model.MODEL, shift_video: 12, shift_audio: 3})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     // Multi-track audio: one <Audio N> per stem actually audible on screen (see lib/compose.ts). opts.audios
@@ -67,11 +73,11 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
         : guided
 
     // int8 attention through comfy-kitchen: ~25% faster sampling on the Radeon. Only the guider gets it - the scheduler just needs the sigma schedule
-    const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
+    const attention = wf.ModelAttentionBackend({model: shifted.MODEL, attention: 'comfy kitchen attention'})
     const guider = wf.BasicGuider({model: attention.model, conditioning: pinned.positive})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
-    const sigmas = wf.BasicScheduler({scheduler: 'beta57', steps: 8, denoise: 1, model: model.MODEL})
+    const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: 8, denoise: 1, model: shifted.MODEL})
     const sampled = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,
         guider: guider.GUIDER,
