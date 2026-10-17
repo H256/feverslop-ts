@@ -39,14 +39,20 @@ table(`Renders by ${dimension}`, groupRows(renders, by[dimension as 'variant']))
 table('LLM calls by model', groupRows(timings.filter(t => t.kind === 'llm'), by.model))
 
 const prices = (await readSettingsFile()).prices ?? {}
+const num = (n: number) => n.toLocaleString('en-US')
 const tokenTable = (title: string, key: (t: (typeof timings)[number]) => string) => {
     const sums = sumTokens(timings, key)
     if (!sums.size) return
-    console.log(title)
-    for (const [name, sum] of [...sums].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const rows = [...sums].sort((a, b) => a[0].localeCompare(b[0]))
+    const width = Math.max(...rows.map(([name]) => name.length), 5)
+    const head = `${'group'.padEnd(width)}  ${'calls'.padStart(5)}  ${'in'.padStart(10)}  ${'cached'.padStart(10)}  ${'out'.padStart(10)}  ${'reasoning'.padStart(10)}`
+    console.log(`${styles.label('▌')} ${styles.name(title)}`)
+    console.log(`  ${styles.muted(head)}
+  ${styles.border('─'.repeat(head.length))}`)
+    for (const [name, sum] of rows) {
         // calls without usage have no token numbers - the sums only cover the ones that reported them
         const money = cost(sum, prices[name] as Price | undefined)
-        console.log(`  ${name.padEnd(28)} ${String(sum.calls).padStart(4)} calls  ${sum.prompt} in (${sum.cached} cached)  ${sum.completion} out (${sum.reasoning} reasoning)${money === undefined ? '' : `  ≈ ${money.toFixed(2)} ${(prices[name] as Price).currency ?? ''}`}`)
+        console.log(`  ${styles.name(name.padEnd(width))}  ${String(sum.calls).padStart(5)}  ${num(sum.prompt).padStart(10)}  ${styles.muted(num(sum.cached).padStart(10))}  ${num(sum.completion).padStart(10)}  ${styles.thinking(num(sum.reasoning).padStart(10))}${money === undefined ? '' : `  ${styles.answer(`≈ ${money.toFixed(2)} ${(prices[name] as Price).currency ?? ''}`)}`}`)
     }
     console.log()
 }
