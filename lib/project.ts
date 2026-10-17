@@ -15,7 +15,9 @@ export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
 // reference images so every member on screen doesn't look identical throughout the video.
 // alike: the members of the group look alike - a species, a pack of one kind of creature, a unit in the same uniform -
 // so the group has one look and no member variants (a group of recognizably different individuals has them)
-export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, isGroup?: boolean, alike?: boolean }
+// propCarried false: the prop stands in a place (propPlace, a location id) and is used there - the character picture shows only
+// what is held of it (propInHand, e.g. drumsticks), the place shows the object itself. Unset: the prop is carried
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, propCarried?: false, propInHand?: string, propPlace?: string, isGroup?: boolean, alike?: boolean }
 export type Location = { id: string, name: string }
 /** The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows. */
 export type LocationLayout = { layout: string, views: string[] }
