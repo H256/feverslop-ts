@@ -78,7 +78,7 @@ export class FilmRenderer extends Renderer {
                 ...(this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${filmBoundaryFrame(clip.startsFrom)}`} : {}),
                 frames,
                 seed,
-                resolution: await this.videoResolution(),
+                resolution: this.config.videoResolution,
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}

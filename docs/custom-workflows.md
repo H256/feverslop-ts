@@ -97,18 +97,6 @@ FeverSlop TS calls it with the frames the clip needs and passes the result as `o
 off in the final video. Without `renderFrames`, `opts.frames` is exactly what the clip needs. Details:
 [frame-exact timing](comfyui.md#the-final-video-and-frame-exact-timing).
 
-It can also export `maxResolution`, the largest size its model is made for (landscape):
-
-```ts
-import type {MaxResolution} from "../helpers.ts";
-
-// a LoRA trained up to 768p
-export const maxResolution: MaxResolution = '1344x768'
-```
-
-A `videoResolution` that asks for more pixels (a larger megapixel number or `"WxH"`) is brought down to it, with one
-warning per run. `-1`, the workflow's own size, is left as it is.
-
 The uploads, running the job and the download are done by FeverSlop TS - a workflow only builds the graph. Everything
 a workflow needs from the project comes in through `opts`.
 

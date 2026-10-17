@@ -1,11 +1,8 @@
 // Originally exported from ComfyUI as r2v_audio_fullmix_guide_1-pass_turbo.json (see README's "Workflows" section)
-import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type MaxResolution, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
 export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
-
-// the largest size the turbo LoRA is made for (768p) - a larger videoResolution is brought down to it
-export const maxResolution: MaxResolution = '1344x768'
 
 export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult {
     const wf = new WorkflowBuilder()
@@ -14,8 +11,8 @@ export default function h3Ref2Video(opts: VideoWorkflowOptions): WorkflowResult 
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
     const unet = wf.UNETLoader({unet_name: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors', weight_dtype: 'default'})
     const model = wf.LoraLoaderModelOnly({lora_name: 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', strength_model: 1, model: unet.MODEL})
-    // the turbo LoRA is tuned for 8 steps of euler/simple with these shifts (video 12, audio 3), at up to 768p (maxResolution) -
-    // the official recommendation; it ran beta57 without a shift before
+    // the turbo LoRA is tuned for 8 steps of euler/simple with these shifts (video 12, audio 3) - the official
+    // recommendation; it ran beta57 without a shift before
     const shifted = wf.MiniMaxH3SigmaShift({model: model.MODEL, shift_video: 12, shift_audio: 3})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'cpu'})
 

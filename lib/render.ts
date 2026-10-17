@@ -4,7 +4,7 @@ import {basename, dirname, extname, join} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
-import {type AudioWorkflow, capResolution, type ImageWorkflow, type Resolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {type AudioWorkflow, type ImageWorkflow, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
@@ -74,21 +74,6 @@ export class Renderer implements Disposable {
     async plannedFrames(frames: number) {
         const {renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
         return renderFrames?.(frames) ?? frames
-    }
-
-    private resolutionWarned = false
-    /**
-     * The size the video workflow gets: videoResolution, brought down to the largest size the workflow's model is made for
-     * (its maxResolution export) - said once per run. The fingerprints keep the setting itself: the same setting gives the same size.
-     */
-    protected async videoResolution(): Promise<Resolution> {
-        const {maxResolution} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
-        const capped = capResolution(this.config.videoResolution, maxResolution)
-        if (capped !== this.config.videoResolution && !this.resolutionWarned) {
-            this.resolutionWarned = true
-            log.warn(`videoResolution ${JSON.stringify(this.config.videoResolution)} is more than ${this.config.videoWorkflow} is made for - the clips are rendered at ${capped}`)
-        }
-        return capped
     }
 
     // everything of a project goes into its own subfolder of ComfyUI's input/output
@@ -424,7 +409,7 @@ export class Renderer implements Disposable {
                 frames,
                 duration: secondsAt(frames),
                 seed,
-                resolution: await this.videoResolution(),
+                resolution: this.config.videoResolution,
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}
