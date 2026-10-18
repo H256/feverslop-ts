@@ -133,7 +133,7 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.plan.shots[0]!.people!.anna).toMatchObject({playing: true})
         expect(r.plan.shots[0]!.people!.anna!.plays).toBeUndefined()
         expect(r.plan.shots[1]!.people!.anna!.plays).toBe('strums the chords hard')
-    })
+    })
     test('a framing that cannot hold its people is asked again - close two, medium three, wide any', () => {
         const shot = (size: string, n: number) => ({action: 'They play', size, characters: names.slice(0, n), people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)]))})
         const r = readBeatPlan({shots: [shot('close', 3), shot('medium', 4), shot('medium', 3), shot('wide', 4)]}, beat, cast, 4)!
