@@ -81,6 +81,17 @@ export type SequenceWorkflowOptions = {
 }
 export type SequenceWorkflow = (opts: SequenceWorkflowOptions) => WorkflowResult
 
+// More frames for a rendered clip (frame interpolation) - see lib/interpolate.ts. The clip is cut into its shots first: a
+// piece never runs over a cut, so no frames are made between two shots.
+export type InterpolationWorkflowOptions = {
+    video: string,                              // ComfyUI input name of the rendered clip
+    pieces: { start: number, frames: number }[], // the shots of the clip in its frames, back to back from frame 0
+    model: string,                              // a file in ComfyUI's models/frame_interpolation/
+    multiplier: number,                         // frames out per frame in - the output runs at FPS * multiplier
+    filenamePrefix: string,
+}
+export type InterpolationWorkflow = (opts: InterpolationWorkflowOptions) => WorkflowResult
+
 /**
  * Optional export of a video workflow: the frame count to render for a clip that needs `frames`.
  * Models that only accept some lengths round up here; the extra frames are cut off when the final

@@ -23,6 +23,7 @@
     "film:gallery": "bun tools/film-gallery.ts",
     "film:migrate": "bun tools/film-migrate.ts",
     "leak-scan": "bun tools/leak-scan.ts",
+    "interpolate": "bun tools/interpolate.ts",
     "stats": "bun tools/stats.ts",
     "status": "bun tools/status.ts",
     "inspect": "bun tools/inspect.ts"

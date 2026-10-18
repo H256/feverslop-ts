@@ -4,7 +4,7 @@ import {basename, dirname, extname, join} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
-import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
@@ -12,6 +12,8 @@ import {extractFrame, probeVideo} from "./assemble.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
 import {anchorSpec, clipSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
+import {fileFingerprint} from "./provenance.ts";
+import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
 import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
@@ -464,6 +466,32 @@ export class Renderer implements Disposable {
         }, null, 2))
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used · ${this.took(target)}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)
+    }
+
+    /**
+     * A rendered clip with `multiplier` times its frames (frame interpolation, comfy/workflows/frame-interpolate.ts), written
+     * to `target` at FPS * multiplier. Only the frames the final video uses, cut into the clip's shots where the picture cuts. Rendered again when
+     * the clip, its cuts, the model or the multiplier changed.
+     */
+    async renderInterpolation(clip: { id: string, frames: number, shots?: { at: number }[] }, model: string, multiplier: number, target: string) {
+        const video = join(this.projectDir, 'videos', `${clip.id}.mp4`)
+        if (!existsSync(video)) throw new Error(`${clip.id}: videos/${clip.id}.mp4 is not rendered yet`)
+        // the cuts as the picture has them - the model cuts near the planned time, not on it (lib/interpolate.ts)
+        const pieces = shotPieces(clip.frames, shotCuts(clip.frames, (clip.shots ?? []).map(s => s.at), await sceneScores(video)))
+        const spec: RenderSpec = {kind: 'interpolation', id: clip.id, parts: [fileFingerprint(video), pieces, model, multiplier]}
+        if (existsSync(target) && freshness(target, specId(spec)) === 'current') return log.step('Exists', basename(target))
+        mkdirSync(dirname(target), {recursive: true})
+        await this.render({label: `interpolation ${clip.id}`, spec, kind: 'interpolation', workflow: 'frame-interpolate'}, target, '.mp4', async () => {
+            const remote = `${this.remoteDir}/videos/${clip.id}.mp4`
+            const {default: interpolate} = await loadWorkflow<{ default: InterpolationWorkflow }>('frame-interpolate')
+            const result = interpolate({video: remote, pieces, model, multiplier, filenamePrefix: `${this.remoteDir}/interpolated/${clip.id}`})
+            return {result, uploads: [{from: video, to: remote}], meta: {}}
+        })
+        const rendered = await probeVideo(target)
+        const expected = clip.frames * multiplier
+        if (rendered.frames !== expected) log.warn(`${basename(target)} has ${rendered.frames} frames, ${expected} expected`)
+        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'frame-interpolate', model, multiplier, pieces, frames: rendered.frames, fps: rendered.fps, fingerprint: specId(spec)}, null, 2))
+        log.step('Saved', `${basename(target)} ${styles.muted(`${rendered.frames} frames at ${rendered.fps} fps · ${this.took(target)}`)}`)
     }
 
     /**
