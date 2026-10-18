@@ -47,4 +47,9 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('<Subject 2>, Gtr, plays the guitar through the whole shot: strums hard downstrokes, the fretting hand gripping a chord.')
         expect(c.prompt).toContain('<Subject 3>, Drm, is actively using the drum kit right now.')
     })
+    test('a player no shot shows is heard off camera - the drum track times the cuts, it drives no drumming', () => {
+        const c = clip(['lead', 'gtr', 'drm'], true, {action: 'Lead sings to Gtr.', characters: ['lead', 'gtr'], people: {gtr: {state: 'at the front', motion: 'steps in', playing: true, plays: 'strums'}}})
+        expect(c.prompt).toContain('is the isolated drum layer of the Chorus section')
+        expect(c.prompt).not.toContain("drumming")
+    })
 })
