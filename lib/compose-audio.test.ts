@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {buildClipRequests} from "./compose.ts";
+import {activeSpan, buildClipRequests} from "./compose.ts";
 import type {Character, ShotPlan, StoryBeat} from "./project.ts";
 
 const beat = {id: 'b1', order: 1, summary: 'They play.', moments: ['They play.'], locationId: 'clearing', characterIds: [], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
@@ -46,5 +46,20 @@ describe('audio tracks of a band', () => {
         })
         expect(c.prompt).toContain('<Subject 2>, Gtr, plays the guitar through the whole shot: strums hard downstrokes, the fretting hand gripping a chord.')
         expect(c.prompt).toContain('<Subject 3>, Drm, is actively using the drum kit right now.')
+    })
+    test('an instrument heard for part of the shot plays only then - in the clip’s own time, held still after', () => {
+        expect(activeSpan({start: 0, end: 4}, [{start: 0, end: 1.3}])).toEqual({start: 0, end: 1.3})
+        expect(activeSpan({start: 0, end: 4}, [{start: -2, end: 3.9}])).toBeUndefined()
+        expect(activeSpan({start: 0, end: 4}, [{start: 5, end: 6}])).toBeUndefined()
+        const c = buildClipRequests({
+            slots: [{id: 'slot-001', index: 0, section: 'Bridge', start: 10, end: 14, bars: 2, energy: 0.8, lyrics: []}],
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+            beats: [{...beat, characterIds: ['gtr']}],
+            characters: band, locations: [{id: 'clearing', name: 'Stage'}], characterDescriptions: {}, locationDescriptions: {}, lookBrief: '',
+            music: {bpm: 120, durationSec: 20, downbeats: [10, 12], barEnergy: [0.8, 0.8], sections: []}, language: 'English', stemsAvailable: true,
+            propActivity: {guitar: [{start: 10, end: 11.3}], drums: [{start: 0, end: 20}]},
+            shotMoments: {b1: {shots: [{action: 'Gtr plays.', characters: ['gtr'], people: {gtr: {state: 'at the front', motion: 'steps in', playing: true, plays: 'strums a last chord'}}}]}},
+        })[0]!
+        expect(c.prompt).toContain('<Subject 2>, Gtr, plays the guitar from 00:00.000 to 00:01.300: strums a last chord - after that the guitar is held still.')
     })
 })

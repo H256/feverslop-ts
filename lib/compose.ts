@@ -238,6 +238,19 @@ function isActive(window: { start: number, end: number }, ranges: { start: numbe
     return overlap >= duration * 0.2 || overlap >= MIN_ACTIVE_SEC
 }
 
+/**
+ * Where within a window a stem is heard: from the first to the last of its active ranges there - undefined when that is
+ * (nearly) the whole window. A shot counts as active from a fifth of it on (isActive), so a riff that stops after a
+ * second must not be said to go on "through the whole shot".
+ */
+export function activeSpan(window: { start: number, end: number }, ranges: { start: number, end: number }[]): { start: number, end: number } | undefined {
+    const inside = ranges.filter(r => r.end > window.start && r.start < window.end)
+    if (!inside.length) return undefined
+    const start = Math.max(window.start, Math.min(...inside.map(r => r.start)))
+    const end = Math.min(window.end, Math.max(...inside.map(r => r.end)))
+    return end - start >= (window.end - window.start) * 0.9 ? undefined : {start, end}
+}
+
 // Per beat, for every on-screen character whose prop is a musical instrument the song's stems were analyzed for:
 // one active/inactive flag per shot of that beat, in shot order - grounding for step 9b so it only writes a
 // character actively playing/using their prop when that instrument is actually audible at that point in the song.
@@ -597,9 +610,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 .flatMap(s => {
                     if (isActive({start, end}, propActivity[s.propStem!]!)) {
                         const plays = people?.[s.id]?.plays?.replace(/[.\s]+$/, '')
+                        // heard for part of the shot only: when, in the clip's own time, and held still before or after
+                        const span = activeSpan({start, end}, propActivity[s.propStem!]!)
+                        const when = span ? `from ${formatTimestamp(span.start - slot.start)} to ${formatTimestamp(span.end - slot.start)}` : 'through the whole shot'
+                        const still = span ? ` - ${span.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still` : ''
                         return [plays
-                            ? `${s.label}, ${s.name}, plays the ${s.prop} through the whole shot: ${withLabels(plays, planTokens)}.`
-                            : `${s.label}, ${s.name}, is actively using the ${s.prop} right now.`]
+                            ? `${s.label}, ${s.name}, plays the ${s.prop} ${when}: ${withLabels(plays, planTokens)}${still}.`
+                            : `${s.label}, ${s.name}, ${span ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`]
                     }
                     if (moment.includes(s.label)) return []
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
