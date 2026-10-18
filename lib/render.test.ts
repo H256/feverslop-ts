@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
-import {aboveRecommended} from "../comfy/helpers.ts";
-import {passOneSize} from "../comfy/h3-two-pass.ts";
+import {aboveRecommended, pixelSize} from "../comfy/helpers.ts";
+import {twoPassSizes} from "../comfy/h3-two-pass.ts";
 import {resumesJob} from "./render.ts";
 
 test('a job that is queued, running or finished is resumed', () => {
@@ -37,18 +37,37 @@ describe('the turbo workflows', () => {
     })
 })
 
+describe('the size of a render', () => {
+    test("megapixels give the sizes ComfyUI's ResolutionSelector gave - computed here, the same on every server", () => {
+        expect(pixelSize(2, 'landscape', 0.4)).toEqual({width: 1920, height: 1088})
+        expect(pixelSize(0.5, 'landscape', 0.4)).toEqual({width: 960, height: 544})
+        expect(pixelSize(1.2, 'landscape', 0.4)).toEqual({width: 1504, height: 832})
+        expect(pixelSize(-1, 'portrait', 0.4)).toEqual({width: 480, height: 864})
+        expect(pixelSize('720x1280', 'landscape', 0.4)).toEqual({width: 1280, height: 720})
+    })
+    test('a clip workflow says the size it renders at - no size node on the server', async () => {
+        for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass']) {
+            const module = await import(`../comfy/workflows/${name}.ts`)
+            const {workflow, output, size} = module.default({prompt: 'p', pictures: ['a.png'], audios: ['d.wav'], song: 's.wav', songStart: 0, frames: 22, duration: 1, seed: 1, resolution: 1.2, filenamePrefix: 'x'})
+            expect(size).toEqual({width: 1504, height: 832})
+            const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow) as { class_type: string }[]
+            expect(nodes.some(n => n.class_type === 'ResolutionSelector')).toBe(false)
+        }
+    })
+})
+
 describe('the two-pass workflow', () => {
-    test('pass 1 renders half the width and height of the final size - the upscaler doubles both', () => {
-        expect(passOneSize(-1)).toBe(0.5)
-        expect(passOneSize(1.2)).toBe(0.3)
-        expect(passOneSize('1920x1088')).toBe('960x544')
+    test('the final size is the one every workflow computes, pass 1 renders half its width and height', () => {
+        expect(twoPassSizes(-1)).toEqual({final: {width: 1920, height: 1088}, first: {width: 960, height: 544}})
+        expect(twoPassSizes(1.2)).toEqual({final: pixelSize(1.2, 'landscape', 0.4), first: {width: 768, height: 416}})
+        expect(twoPassSizes('1920x1088')).toEqual({final: {width: 1920, height: 1088}, first: {width: 960, height: 544}})
     })
     test('base model for 20 steps, the latent x2, then 2 turbo steps at denoise 0.2 - the guides set again on the large latent', async () => {
         const module = await import('../comfy/workflows/h3-ref2video-2pass.ts')
         const {workflow, output} = module.default({prompt: 'p', pictures: ['a.png'], audios: ['d.wav'], song: 's.wav', startFrame: 'f.png', songStart: 0, frames: 22, duration: 1, seed: 1, resolution: -1, filenamePrefix: 'x'})
         const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow) as { class_type: string, inputs: Record<string, unknown> }[]
         expect(nodes.filter(n => n.class_type === 'BasicScheduler').map(n => n.inputs)).toMatchObject([{steps: 20, denoise: 1}, {steps: 2, denoise: 0.2}])
-        expect(nodes.find(n => n.class_type === 'MinimaxH3LatentUpscaler3D')?.inputs).toMatchObject({mode: 'scale by multiplier', 'mode.scale': 2})
+        expect(nodes.find(n => n.class_type === 'MinimaxH3LatentUpscaler3D')?.inputs).toMatchObject({mode: 'target dimensions', 'mode.width': 1920, 'mode.height': 1088})
         expect(nodes.filter(n => n.class_type === 'MiniMaxH3AddGuide')).toHaveLength(4)
         expect(nodes.filter(n => n.class_type === 'SamplerCustomAdvanced')).toHaveLength(2)
     })

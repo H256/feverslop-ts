@@ -6,8 +6,8 @@ export {FPS} from "../lib/frames.ts";
 
 /**
  * -1 keep the workflow's own resolution
- * 1.1        megapixels, through a ResolutionSelector node
- * "1920x1088" fixed size, through two PrimitiveInt nodes
+ * 1.1        megapixels, 16:9 or 9:16 in multiples of 32 (as ComfyUI's ResolutionSelector) - computed here, see pixelSize
+ * "1920x1088" fixed size
  */
 export type Resolution = -1 | number | `${number}x${number}`
 export type Orientation = 'portrait' | 'landscape'
@@ -21,7 +21,9 @@ export const MAX_REF_AUDIOS = 3
 
 // The contract of a workflow file in comfy/workflows/ - see docs/custom-workflows.md.
 // Its default export takes these options and returns the graph plus the node whose files are downloaded.
-export type WorkflowResult = { workflow: WorkflowBuilder, output: string }
+// size: what the output is rendered at, when the workflow knows it - lib/render.ts checks the file against it
+export type WorkflowResult = { workflow: WorkflowBuilder, output: string, size?: PixelSize }
+export type PixelSize = { width: number, height: number }
 
 export type ImageWorkflowOptions = {
     prompt: string,
@@ -138,24 +140,34 @@ export function resolveSeed(seed: number) {
     return seed === -1 ? Math.floor(Math.random() * 2 ** 48) : seed
 }
 
+// Python's round(): half to even - the same sizes as ComfyUI's ResolutionSelector, which pixelSize replaces
+const roundHalfEven = (x: number) => Math.abs(x % 1) === 0.5 ? 2 * Math.round(x / 2) : Math.round(x)
+
 /**
- * Width and height for a resolution setting - node outputs, typed to go straight into width/height widgets.
- * The result always has the requested orientation, whatever way round the setting was written.
+ * The size a resolution setting renders at, in pixels. Computed here and not by a ResolutionSelector node on the server: a
+ * server with another ComfyUI version could compute another size, and every server has to deliver the same - a clip of
+ * another size is scaled in the final video. Megapixels as ComfyUI counts them (1 MP = 1024x1024), 16:9 or 9:16, in
+ * multiples of 32. The result always has the requested orientation, whatever way round the setting was written.
  */
-export function resolution(workflow: WorkflowBuilder, setting: Resolution, orientation: Orientation, workflowDefault: Exclude<Resolution, -1>): { width: number, height: number } {
+export function pixelSize(setting: Resolution, orientation: Orientation, workflowDefault: Exclude<Resolution, -1>): PixelSize {
     const value = setting === -1 ? workflowDefault : setting
-
+    let long: number, short: number
     if (typeof value === 'number') {
-        const selector = workflow.ResolutionSelector({
-            aspect_ratio: orientation === 'portrait' ? '9:16 (Portrait Widescreen)' : '16:9 (Widescreen)',
-            megapixels: value,
-            multiple: 32,
-        })
-        return {width: widget(selector.width), height: widget(selector.height)}
+        const scale = Math.sqrt(value * 1024 * 1024 / (16 * 9))
+        long = roundHalfEven(16 * scale / 32) * 32
+        short = roundHalfEven(9 * scale / 32) * 32
+    } else {
+        const [a, b] = value.split('x').map(Number) as [number, number]
+        ;[long, short] = a >= b ? [a, b] : [b, a]
     }
+    return orientation === 'landscape' ? {width: long, height: short} : {width: short, height: long}
+}
 
-    const [a, b] = value.split('x').map(Number) as [number, number]
-    const [long, short] = a >= b ? [a, b] : [b, a]
-    const [width, height] = orientation === 'landscape' ? [long, short] : [short, long]
-    return {width: widget(workflow.PrimitiveInt({value: width}).INT), height: widget(workflow.PrimitiveInt({value: height}).INT)}
+/**
+ * Width and height for a resolution setting - node outputs, typed to go straight into width/height widgets, and the
+ * same size in pixels (`pixels`) for the workflow's result.
+ */
+export function resolution(workflow: WorkflowBuilder, setting: Resolution, orientation: Orientation, workflowDefault: Exclude<Resolution, -1>): { width: number, height: number, pixels: PixelSize } {
+    const pixels = pixelSize(setting, orientation, workflowDefault)
+    return {width: widget(workflow.PrimitiveInt({value: pixels.width}).INT), height: widget(workflow.PrimitiveInt({value: pixels.height}).INT), pixels}
 }
