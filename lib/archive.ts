@@ -6,7 +6,10 @@ import {basename, join} from "node:path";
  * is still wanted: to compare, or to put back (move the files back to where they were). Files that do not exist are skipped.
  */
 export function archiveFiles(projectDir: string, name: string, files: string[]) {
-    const keep = join(projectDir, 'old', 'attempts', name)
+    // two put-aways within one second (the time in the name) each get a folder of their own - a folder moved onto one that
+    // is already there fails on Windows
+    let keep = join(projectDir, 'old', 'attempts', name)
+    for (let n = 2; existsSync(keep); n++) keep = join(projectDir, 'old', 'attempts', `${name}-${n}`)
     mkdirSync(keep, {recursive: true})
     for (const file of files) {
         const from = join(projectDir, file)

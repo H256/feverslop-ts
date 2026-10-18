@@ -37,6 +37,10 @@ import {pictureProp, propMissing} from "./lib/prop-check.ts";
 import {projectInputs, stepUsed} from "./lib/inputs.ts";
 import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
+import {CASTING_FILE, copyCasting, copyKey, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./lib/casting.ts";
+import {type LibraryAsset, libraryDir, libraryIds, readLibraryAsset} from "./lib/library.ts";
+import {assetPaths, type AssetKind} from "./lib/asset-import.ts";
+import {redoAfter} from "./lib/project.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
@@ -367,6 +371,53 @@ const cast = await reviewed(project, args.review, 'cast', () => project.step('ca
     for (const l of cast.locations) log.line(`   ${styles.name(l.id)}`)
 })
 
+////////// CASTING - who plays each role and which picture each place has: the project's own or a library asset
+// (casting.json, written once here and then only read - lib/casting.ts). A library asset is copied into the project, so
+// the project stays complete without the library; its texts stand in for the look and description steps below.
+const library = await libraryDir()
+if (writeCastingOnce(project.dir, cast)) log.step('Casting', styles.muted(`${CASTING_FILE} written - every character and place "project:"; "library:<id>" in it takes a library asset instead`))
+const casting = resolveCasting(readCastingFile(project.dir), cast, (kind, id) => libraryIds(library, kind).includes(id))
+for (const warning of casting.warnings) log.warn(warning)
+if (casting.errors.length) throw new Error(`${casting.errors.join('\n')}\nNothing was made - fix ${join(project.dir, CASTING_FILE)} (or put the asset into the library: bun run export-asset / create-asset)`)
+// copyKey -> the library asset that plays it
+const castLibrary = new Map<string, LibraryAsset>()
+for (const entry of casting.entries) castLibrary.set(copyKey(entry.kind, entry.id), (await readLibraryAsset(library, entry.kind, entry.libraryId))!)
+const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id))
+{
+    // a role that went back to "project:": the library pictures are put away, the project makes its own again
+    const dropped = droppedCopies(project.data.castingCopies ?? {}, casting.entries)
+    for (const key of dropped) {
+        const [kind, id] = key.split(':') as [AssetKind, string]
+        const {picture, sheet} = assetPaths(kind, id)
+        archiveFiles(project.dir, `${id}-library-${versionStamp()}`, [picture, `${picture}.json`, sheet])
+        log.warn(`${id} is "project:" again - the library pictures are put away in old/attempts; its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`)
+    }
+    const {copied, copies} = copyCasting(project.dir, library, casting.entries, project.data.castingCopies)
+    for (const entry of copied) log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
+    if (Object.keys(copies).length) project.data.castingCopies = copies
+    else delete project.data.castingCopies
+    if (copied.length || dropped.length) await project.save()
+    // the picture fits the role? the prop the role has is named in the asset's description
+    for (const entry of casting.entries.filter(e => e.kind === 'character')) {
+        const role = cast.characters.find(c => c.id === entry.id)!
+        const shown = pictureProp(role)
+        if (shown && propMissing(casted('character', entry.id)!.description, shown)) log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
+    }
+}
+// the steps below that a library asset stands in for: its texts replace theirs, also in a step kept from an earlier run
+// (the entry was changed since) - what was planned with the old ones is named at the end
+const castChanged = new Set<StepName>()
+function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>, pick: (asset: LibraryAsset) => T | undefined) {
+    for (const [key, asset] of castLibrary) {
+        if (!key.startsWith(`${kind}:`)) continue
+        const id = key.slice(kind.length + 1)
+        const value = pick(asset)
+        if (value === undefined || JSON.stringify(values[id]) === JSON.stringify(value)) continue
+        values[id] = value
+        castChanged.add(step)
+    }
+}
+
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
 const neededInstrumentStems = neededStems.filter((s): s is 'guitar' | 'piano' => s === 'guitar' || s === 'piano')
@@ -419,36 +470,47 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
     const looks: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
+        const fromLibrary = casted('character', char.id)
+        if (fromLibrary) {
+            looks[char.id] = fromLibrary.description
+            continue
+        }
         const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         const options = characterLookPrompt(lookBrief, char, otherLooks)
         looks[char.id] = await project.each('characterLooks', char.id, options, () => ask(options))
     }
     return looks
 })
+castTexts('characterLooks', 'character', characterLooks, asset => asset.description)
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 // a prop the look does not name is not in the reference picture - the clips would show the model's own idea of it
 for (const c of cast.characters) {
     const shown = pictureProp(c)
-    if (shown && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown)) log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
+    if (shown && !casted('character', c.id) && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown)) log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
 }
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
 // one call per character, independent of each other - as many at once as llm.parallel allows
 const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
-    const descriptions = await llmMap(cast.characters, (char, i) => {
+    const descriptions = await llmMap(cast.characters, async (char, i) => {
         log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
+        const fromLibrary = casted('character', char.id)
+        if (fromLibrary) return fromLibrary.description
         const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
         return project.each('characterDescriptions', char.id, options, () => ask(options))
     })
     return Object.fromEntries(cast.characters.map((char, i) => [char.id, descriptions[i]!]))
 })
+castTexts('characterDescriptions', 'character', characterDescriptions, asset => asset.description)
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 ////////// CRAFTING LOCATION LOOKS
 // unlike the characters, the places are not contrasted with each other - asked at once, up to llm.parallel
 const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
-    const looks = await llmMap(cast.locations, (location, i) => {
+    const looks = await llmMap(cast.locations, async (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const fromLibrary = casted('location', location.id)
+        if (fromLibrary) return fromLibrary.description
         const options = locationLookPrompt(lookBrief, storySummary, location.name,
             [...new Set(cast.characters.flatMap(c => c.prop && c.propCarried !== false ? [c.prop] : []))],
             [...new Set(cast.characters.flatMap(c => c.prop && c.propCarried === false && c.propPlace === location.id ? [c.prop] : []))])
@@ -456,34 +518,43 @@ const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATIO
     })
     return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
 })
+castTexts('locationLooks', 'location', locationLooks, asset => asset.description)
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 ////////// DESCRIBING THE LOCATIONS - the look prompt without the establishing shot (camera, "empty", medium)
 const locationDescriptions = await project.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
-    const descriptions = await llmMap(cast.locations, (location, i) => {
+    const descriptions = await llmMap(cast.locations, async (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const fromLibrary = casted('location', location.id)
+        if (fromLibrary) return fromLibrary.description
         const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
         return project.each('locationDescriptions', location.id, options, () => ask(options))
     })
     return Object.fromEntries(cast.locations.map((location, i) => [location.id, descriptions[i]!]))
 })
+castTexts('locationDescriptions', 'location', locationDescriptions, asset => asset.description)
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 ////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
 const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
     const anchors = await llmMap(cast.locations, async (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const fromLibrary = casted('location', location.id)?.anchors
+        if (fromLibrary) return fromLibrary
         const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
         return (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
     })
     return Object.fromEntries(cast.locations.map((location, i) => [location.id, anchors[i]!]))
 })
+castTexts('locationAnchors', 'location', locationAnchors, asset => asset.anchors)
 for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
 
 ////////// THE LAYOUT OF EACH PLACE - one floor plan per place: every beat there is staged in it, not in a room of its own
 const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT EACH PLACE', async () => {
     const answers = await llmMap(cast.locations, async (location, i) => {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
+        const fromLibrary = casted('location', location.id)?.layout
+        if (fromLibrary) return fromLibrary
         const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
         // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
         // staging, as before - a broken answer for one place does not stop the run
@@ -502,6 +573,14 @@ const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT 
     })
     return layouts
 })
+castTexts('locationLayouts', 'location', locationLayouts, asset => asset.layout)
+if (castChanged.size) {
+    await project.save()
+    // a changed casting.json after the plan was made: what was made from the old texts is named, not redone (it costs)
+    // every step a library asset stands in for counts as changed: redoing one of them would only ask the LLM for what the library gives
+    const redo = redoAfter(['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions', 'locationAnchors', 'locationLayouts'], project.data)
+    if (redo.length) log.warn(`${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${projectId} --redo=${redo.join(',')}`)
+}
 for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
 
 ////////// BREAKING THE STORY INTO BEATS
