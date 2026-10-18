@@ -71,5 +71,5 @@ export default function h3Ref2VideoFilmBeta(opts: FilmVideoWorkflowOptions): Wor
     // widgets VHS only adds for the h264 format
     withInputs(wf, video, {pix_fmt: 'yuv420p', crf: 19, save_metadata: true, trim_to_audio: false})
 
-    return {workflow: wf, output: video.__id}
+    return {workflow: wf, output: video.__id, size: size.pixels}
 }

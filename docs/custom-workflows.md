@@ -150,7 +150,7 @@ What the converter does for you:
 - names every node after its type and id, e.g. `kSampler_53` or `vAEDecode_54`, and connects outputs by name
   (`vAEDecode_54.IMAGE`) - rename the variables as you like
 - wraps values the server doesn't list in `dyn(…)` - file names like uploaded images, see [dyn](#dyn)
-- wraps node outputs that go into a widget in `widget(…)` - e.g. a `ResolutionSelector` into `width`, see
+- wraps node outputs that go into a widget in `widget(…)` - e.g. a `PrimitiveInt` into `width`, see
   [widget](#widget)
 - puts inputs the node types don't know into `withInputs(…)` - see [withInputs](#withinputs)
 - casts outputs of wildcard sockets like `VRAMCleanup` with `as never`, see [afterCleanup](#aftercleanup)
@@ -271,11 +271,13 @@ All in `comfy/helpers.ts`. `WorkflowBuilder` is exported from there too, so a wo
 ### resolution
 
 ```ts
-resolution(wf, setting, orientation, workflowDefault): {width, height}
+resolution(wf, setting, orientation, workflowDefault): {width, height, pixels}
 ```
 
-Turns a resolution setting into width and height for the workflow and adds the nodes it needs: a
-`ResolutionSelector` for megapixels, two `PrimitiveInt` for `"WxH"`. The result always has the given orientation.
+Turns a resolution setting into width and height for the workflow: two `PrimitiveInt` nodes, the size computed by
+`pixelSize` (megapixels as ComfyUI's `ResolutionSelector` counts them, but the same on every server). The result always
+has the given orientation. A video workflow returns `pixels` as `size` in its result (`{workflow, output, size}`): the
+clip is checked against it after the render, and one of another size fails instead of being scaled in the final video.
 Pass `width` and `height` to whatever takes the size (`EmptyLatentImage`, a video node, …) - they are typed as numbers,
 so they fit widget inputs.
 

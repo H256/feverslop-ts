@@ -1,6 +1,6 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
-import type {Resolution} from "../comfy/helpers.ts";
+import type {Aspect, Resolution} from "../comfy/helpers.ts";
 import {warnUnknownKeys} from "./log.ts";
 
 // projects/<id>/config.json - documented in docs/comfyui.md
@@ -8,6 +8,7 @@ export type RenderConfig = {
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
+    videoAspect: Aspect,            // the clips' aspect ratio, "16:9" (default), "9:16", "2:1", "2:3", ...
     imageWorkflow: string,          // file name in comfy/workflows/, without .ts
     videoWorkflow: string,
     songAudio: boolean,             // final video: the original song replaces the clips' own audio
@@ -61,6 +62,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
+    videoAspect: '16:9',
     imageWorkflow: 'kroma-image',
     videoWorkflow: 'h3-ref2video',
     songAudio: true,
@@ -107,6 +109,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
             fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
         }
     }
+    if (!/^[1-9]\d*:[1-9]\d*$/.test(String(config.videoAspect))) fail(`videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(config.videoAspect)}`)
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
