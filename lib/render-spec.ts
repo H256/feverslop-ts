@@ -16,7 +16,9 @@ export type RenderSpec = {
 export const specId = (spec: RenderSpec) => spec.fixed ?? fingerprint(...spec.parts)
 
 type ImageConfig = { imageWorkflow: string, imageResolution: unknown }
-type VideoConfig = { videoWorkflow: string, videoResolution: unknown }
+// videoAspect only when it is not the default - the clips of a project from before it do not go stale
+type VideoConfig = { videoWorkflow: string, videoResolution: unknown, videoAspect?: string }
+const aspectPart = (config: VideoConfig) => config.videoAspect && config.videoAspect !== '16:9' ? [config.videoAspect] : []
 
 /** A reference picture: what its prompt, workflow and size say. */
 export const pictureSpec = (picture: { id: string, prompt: string }, config: ImageConfig): RenderSpec =>
@@ -49,7 +51,7 @@ export function clipSpec(
     return {
         kind: 'clip', id: clip.id,
         parts: [
-            clip.prompt, clip.frames, config.videoWorkflow, config.videoResolution,
+            clip.prompt, clip.frames, config.videoWorkflow, config.videoResolution, ...aspectPart(config),
             clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
             clip.assets.audio.map(a => [a.stem, a.songStart, a.songEnd]),
             predecessorId(projectDir, clip.startsFrom),

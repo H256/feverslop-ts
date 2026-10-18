@@ -31,7 +31,7 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -97,5 +97,5 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
     // widgets VHS only adds for the h264 format
     withInputs(wf, video, {pix_fmt: 'yuv420p', crf: 19, save_metadata: true, trim_to_audio: false})
 
-    return {workflow: wf, output: video.__id}
+    return {workflow: wf, output: video.__id, size: size.pixels}
 }

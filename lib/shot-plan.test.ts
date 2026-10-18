@@ -141,6 +141,21 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.problems[0]).toContain('shot 1: 3 people (Anna, Bea, Cora) in a close shot, which holds at most 2')
         expect(r.problems[1]).toContain('in a medium shot, which holds at most 3')
     })
+    test('an overfull shot names who leaves it - the singers and the heard players stay, then who the action names first', () => {
+        // a guitar solo: nobody sings, guitar, bass and drums are heard - the singer of the band is the one to go
+        const props = ['bea', 'cora', 'dina'].map(id => ({characterId: id, prop: 'drum', activePerShot: [true, true]}))
+        const four = ['Anna', 'Bea', 'Cora', 'Dina']
+        const shot = (size: string, action: string) => ({action, size, characters: four, people: Object.fromEntries(four.map((name, k) => [name, {...own(k), playing: name === 'Anna' ? 'no' : 'hits it hard'}]))})
+        const solo = readBeatPlan({shots: [shot('medium', '{Anna} sways next to {Cora}'), shot('close', '{Dina} drives the beat, {Bea} answers')]}, beat, cast, 2, undefined, props)!
+        expect(solo.problems[0]).toContain('the shot is about Bea, Cora, Dina: take Anna out of its "characters" and "people" and do not name them in its "action" or "rest"')
+        expect(solo.problems[0]).not.toContain('wide shot')
+        // two heard players have to go from a close shot: a wide shot is offered too
+        expect(solo.problems[1]).toContain('the shot is about Bea, Dina: take Anna, Cora out')
+        expect(solo.problems[1]).toContain('or make it a wide shot, since Cora is heard in it')
+        // a line is sung: the singer stays, whatever the action names first
+        const sung = readBeatPlan({shots: [shot('close', '{Dina} drums, {Bea} plays')]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true]}, props.map(p => ({...p, activePerShot: [false]})))!
+        expect(sung.problems.find(p => p.includes('holds at most'))).toContain('the shot is about Anna, Dina: take Bea, Cora out')
+    })
 })
 
 describe('readBeatPlan - no word lists', () => {
