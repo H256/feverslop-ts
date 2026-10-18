@@ -1,5 +1,5 @@
 // The two passes of the h3-ref2video-2pass workflows, shared so the Radeon and the RTX variant cannot drift apart.
-// Recipe of the vrgamedevgirl Video Builder (minimax/h3_settings_defaults.json, branch Beta2.0), see issue #288:
+// The recipe (issue #288):
 // pass 1 - the base model without the turbo LoRA, 20 steps res_multistep/simple, at a quarter of the final pixels;
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the turbo LoRA, 2 steps, denoise 0.2, at the final size.
 import type {NodeRef} from "@saintno/comfyui-sdk";

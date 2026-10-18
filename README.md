@@ -469,7 +469,7 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `krea2-image`   | image | `image_t2i_startframe_krea_v1.json`                |
 | `h3-ref2video`  | video | `r2v_audio_fullmix_guide_1-pass_turbo.json`        |
 | `h3-ref2video-full` | video | `h3-ref2video` without the turbo LoRA, as the non-turbo branch of ComfyUI's template `video_minimax_h3_r2v`: res_multistep, simple, 20 steps, no shift - about 2.5× the sampling time, more detail for people far from the camera: `"videoWorkflow": "h3-ref2video-full"` |
-| `h3-ref2video-2pass` | video | two passes (recipe of the vrgamedevgirl Video Builder, #288): the base model for 20 steps at a quarter of the final pixels, the video latent x2 with `MinimaxH3LatentUpscaler3D` (`minimax_h3_latent_upscaler_3d_bf16`), then 2 turbo steps at denoise 0.2 at the final size, song and first frame anchored again on the large latent. `videoResolution` is the final size (`-1` = 2 MP, pass 1 at 0.5 MP): `"videoWorkflow": "h3-ref2video-2pass"` |
+| `h3-ref2video-2pass` | video | two passes: the base model for 20 steps at a quarter of the final pixels, the video latent x2 with `MinimaxH3LatentUpscaler3D` (`minimax_h3_latent_upscaler_3d_bf16`), then 2 turbo steps at denoise 0.2 at the final size, song and first frame anchored again on the large latent. `videoResolution` is the final size (`-1` = 2 MP, pass 1 at 0.5 MP): `"videoWorkflow": "h3-ref2video-2pass"` |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
 
 ¹ The export JSON is only a one-time input to `bun run comfy:convert` (see below); it isn't kept in the repo, only
