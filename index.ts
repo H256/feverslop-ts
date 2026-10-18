@@ -10,6 +10,7 @@ import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
+import {multiplierFor} from "./lib/interpolate.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
@@ -1172,6 +1173,19 @@ if (render.has('final')) {
     }
     const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
+
+    // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot - a job per
+    // clip, kept in videos/interpolated/ and made again only when the clip, its cuts or the model change
+    if (config.finalFps !== FPS) {
+        const multiplier = multiplierFor(config.finalFps)!
+        log.step('Frame rate', `${config.finalFps} fps - ${config.interpolationModel}, x${multiplier} per shot`)
+        using smoother = new Renderer(project.id, project.dir, config, settings.comfy)
+        const files = clips.map(c => join(project.dir, 'videos', 'interpolated', `${c.id}.mp4`))
+        await renderAll(clips.map((clip, i) => ({clip, file: files[i]!})), ({clip, file}) => smoother.renderInterpolation(clip, config.interpolationModel, multiplier, file))
+        const smooth = join(project.dir, `${project.id}-${config.finalFps}fps.mp4`)
+        const more = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target: smooth, interpolated: {files, multiplier, fps: config.finalFps}})
+        log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
+    }
 }
 
 ////////// EXPORTING THE TIMELINE FOR A VIDEO EDITOR

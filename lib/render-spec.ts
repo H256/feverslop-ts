@@ -7,7 +7,7 @@ import {fileFingerprint, fingerprint, recordedFingerprint} from "./provenance.ts
 // The seed is deliberately not part of it: another seed is the same request, rendered again.
 
 export type RenderSpec = {
-    kind: 'picture' | 'anchor' | 'sequence' | 'sheet' | 'song' | 'clip',
+    kind: 'picture' | 'anchor' | 'sequence' | 'sheet' | 'song' | 'clip' | 'interpolation',
     id: string,                     // what it is called: the character, the place, the clip
     parts: unknown[],               // the inputs that decide the id, in a fixed order
     fixed?: string,                 // a file the user put in place: its content is its id

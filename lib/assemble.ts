@@ -70,19 +70,28 @@ export async function extractFrame(video: string, index: number, target: string)
  * The clips own consecutive ranges of the song's frame grid, so every clip starts on exactly the frame
  * its audio started on during generation, and the song can be laid under the whole video unchanged.
  */
-export async function assembleFinal({clips, projectDir, songFile, songAudio, target}: {
+export async function assembleFinal({clips, projectDir, songFile, songAudio, target, interpolated}: {
     clips: ClipRequest[],
     projectDir: string,
     songFile: string,
     songAudio: boolean,     // true: the original song is the soundtrack, false: the clips' own audio
     target: string,
+    // the clips with more frames (lib/interpolate.ts): `multiplier` times their frames at FPS * multiplier, the video saved at `fps`
+    interpolated?: { files: string[], multiplier: number, fps: number },
 }) {
-    const files = clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
+    const m = interpolated?.multiplier ?? 1
+    const outFps = interpolated?.fps ?? FPS
+    if (interpolated && !songAudio) throw new Error('the interpolated clips are silent - a final video at another frame rate needs "songAudio": true')
+    const files = interpolated?.files ?? clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
     if (missing.length) throw new Error(`Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`)
 
     const infos = await Promise.all(files.map(probeVideo))
     clips.forEach((clip, i) => {
+        if (interpolated) {
+            if (infos[i]!.frames < clip.frames * m) throw new Error(`${files[i]} has ${infos[i]!.frames} frames, ${clip.frames * m} expected - delete it and run again`)
+            return
+        }
         if (framesOnGrid(infos[i]!) < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${framesOnGrid(infos[i]!)} frames (at ${FPS} fps), but the clip needs ${clip.frames} - delete it and render again`)
         if (!songAudio && !infos[i]!.hasAudio) throw new Error(`videos/${clip.id}.mp4 has no audio - set "songAudio": true in config.json`)
     })
@@ -112,15 +121,17 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     if (resized) log.warn(`${resized} clip(s) have another size than ${width}x${height} and are scaled`)
 
     // a clip at another frame rate would play at the wrong speed once its frames are counted on the 24 fps grid
-    const resampled = infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
+    const resampled = interpolated ? 0 : infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
     if (resampled) log.warn(`${resampled} clip(s) have another frame rate than ${FPS} fps and are resampled`)
 
     const filters = clips.map((clip, i) => [
-        `[${i}:v]${Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
+        `[${i}:v]${!interpolated && Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames * m},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
         ...(songAudio ? [] : [`[${i}:a]atrim=end=${secondsAt(clip.frames)},asetpts=PTS-STARTPTS[a${i}]`]),
     ].join(';'))
     const concatInputs = clips.map((_, i) => songAudio ? `[v${i}]` : `[v${i}][a${i}]`).join('')
-    filters.push(`${concatInputs}concat=n=${clips.length}:v=1:a=${songAudio ? 0 : 1}${songAudio ? '[v]' : '[v][a]'}`)
+    // more frames: all clips at FPS * multiplier, then down to the frame rate of the video (60 fps: every 2nd of 120)
+    const concatOut = interpolated ? `[vc];[vc]fps=${outFps}[v]` : songAudio ? '[v]' : '[v][a]'
+    filters.push(`${concatInputs}concat=n=${clips.length}:v=1:a=${songAudio ? 0 : 1}${concatOut}`)
 
     const partial = `${target}.partial.mp4`
     const args = [
@@ -129,14 +140,15 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
         ...(songAudio ? ['-i', songFile] : []),
         '-filter_complex', filters.join(';'),
         '-map', '[v]', '-map', songAudio ? `${clips.length}:a:0` : '[a]',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(FPS),
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(outFps),
         '-c:a', 'aac', '-b:a', '320k',
         '-movflags', '+faststart',
         partial,
     ]
 
     let frame = 0
-    const stopSpinner = startSpinner(() => `${styles.name('ffmpeg')} ${styles.muted(`frame ${frame} / ${totalFrames}`)}`)
+    const outFrames = Math.round(totalFrames * outFps / FPS)
+    const stopSpinner = startSpinner(() => `${styles.name('ffmpeg')} ${styles.muted(`frame ${frame} / ${outFrames}`)}`)
     try {
         const proc = Bun.spawn(args, {stdout: 'pipe', stderr: 'pipe'})
         const stderr = new Response(proc.stderr).text()
@@ -151,6 +163,6 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     renameSync(partial, target)
 
     const result = await probeVideo(target)
-    if (result.frames !== totalFrames) log.warn(`final video has ${result.frames} frames, expected ${totalFrames}`)
-    return {frames: result.frames, width, height, seconds: secondsAt(result.frames)}
+    if (Math.abs(result.frames - outFrames) > 1) log.warn(`final video has ${result.frames} frames, expected ${outFrames}`)
+    return {frames: result.frames, width, height, seconds: result.frames / outFps}
 }
