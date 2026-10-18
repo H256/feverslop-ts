@@ -449,12 +449,13 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `leakRetries`                         | `0` (default) = off; `1` or more = a clip that came out as the reference pictures lined up on their grey backdrop is rendered again with another seed, that many times at most (needs `"seed": -1`). Already rendered clips: `bun run leak-scan <project-id>` - see `docs/comfyui.md` |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
+| `videoAspect`                         | the clips' aspect ratio: `"16:9"` (default, landscape), `"9:16"` (portrait), `"2:1"`, `"2:3"`, … - megapixels are computed in it, a `"WIDTHxHEIGHT"` keeps its own ratio and is turned to its orientation |
 | `imageWorkflow`, `videoWorkflow`, `songWorkflow` | a workflow file in `comfy/workflows/`, without `.ts`                                              |
 | `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `songAudio`                           | final video: `true` = the original song replaces the clips' audio (default), `false` = keep the clips' audio |
 
-Characters are always portrait, locations and videos landscape - whichever way round the size is written. Videos are
-always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
+Characters are always portrait, locations landscape - whichever way round the size is written. Videos are landscape
+unless `videoAspect` says otherwise, and always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
 
 ### Workflows
 

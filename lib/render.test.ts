@@ -45,6 +45,24 @@ describe('the size of a render', () => {
         expect(pixelSize(-1, 'portrait', 0.4)).toEqual({width: 480, height: 864})
         expect(pixelSize('720x1280', 'landscape', 0.4)).toEqual({width: 1280, height: 720})
     })
+    test('videoAspect: landscape by default, portrait or any ratio when set - megapixels computed in it, a size kept and turned to it', () => {
+        expect(pixelSize(2, '16:9', 0.4)).toEqual(pixelSize(2, 'landscape', 0.4))
+        expect(pixelSize(2, '9:16', 0.4)).toEqual({width: 1088, height: 1920})
+        expect(pixelSize(1, '2:3', 0.4)).toEqual({width: 832, height: 1248})
+        expect(pixelSize(1, '2:1', 0.4)).toEqual({width: 1440, height: 736})
+        expect(pixelSize('1920x1088', '9:16', 0.4)).toEqual({width: 1088, height: 1920})
+        expect(pixelSize('1920x960', '16:9', 0.4)).toEqual({width: 1920, height: 960})
+        expect(pixelSize('1024x1536', '2:3', 0.4)).toEqual({width: 1024, height: 1536})
+        expect(pixelSize('1024x768', '1:1', 0.4)).toEqual({width: 1024, height: 768})
+    })
+    test('the clip workflows render in the aspect they are given', async () => {
+        for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass']) {
+            const module = await import(`../comfy/workflows/${name}.ts`)
+            const {size} = module.default({prompt: 'p', pictures: ['a.png'], audios: ['d.wav'], song: 's.wav', songStart: 0, frames: 22, duration: 1, seed: 1, resolution: 2, aspect: '9:16', filenamePrefix: 'x'})
+            expect(size).toEqual({width: 1088, height: 1920})
+        }
+        expect(twoPassSizes(2, '9:16')).toEqual({final: {width: 1088, height: 1920}, first: {width: 544, height: 960}})
+    })
     test('a clip workflow says the size it renders at - no size node on the server', async () => {
         for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass']) {
             const module = await import(`../comfy/workflows/${name}.ts`)
