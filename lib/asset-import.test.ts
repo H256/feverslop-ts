@@ -29,7 +29,7 @@ const sheet = (id: string) => ({
 describe('importPlan / importAsset', () => {
     test('every file of the asset, renamed to the target id - sidecars and unfinished renders left out', () => {
         const source = project({...sheet('kaelen'), 'assets/sequence/characters/kaelen/anchor.png.partial.png': 'x', 'assets/sequence/characters/kaelen/sequence.mp4.pending.json': '{}'})
-        expect(importPlan(source, 'kaelen', 'kael', 'character').map(f => [f.to, f.sidecar])).toEqual([
+        expect(importPlan(source, 'kaelen', 'kael', 'character').map(f => [f.to, f.pin])).toEqual([
             ['assets/characters/kael.png', true],
             ['assets/sequence/characters/kael/anchor.png', true],
             ['assets/sequence/characters/kael/frames/frame_00.png', false],
@@ -43,7 +43,7 @@ describe('importPlan / importAsset', () => {
         const done = importAsset(source, 'tides-a', 'kaelen', target, 'kael', 'character')
         expect(done.copied).toBe(5)
         expect(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png'), 'utf8')).toBe('anchor')
-        expect(JSON.parse(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png.json'), 'utf8'))).toEqual({source: 'user', pinned: true, note: 'imported from tides-a/assets/sequence/characters/kaelen/anchor.png'})
+        expect(JSON.parse(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png.json'), 'utf8'))).toEqual({source: 'user', pinned: true, note: 'copied from tides-a/assets/sequence/characters/kaelen/anchor.png'})
         // the old sheet is gone from its place, frame_05 with it - the new one has only its own frames
         expect(existsSync(join(target, 'assets/sequence/characters/kael/frames/frame_05.png'))).toBe(false)
         expect(readdirSync(join(target, done.putAway!)).sort()).toEqual(['kael', 'kael.png', 'kael.png.json'])

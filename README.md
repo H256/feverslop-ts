@@ -681,6 +681,25 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
   the tool warns when the description does not name the prop, or gives another gender than the story. Group members
   are not imported one by one; use `replace-character` for them.
 
+### The asset library
+
+Finished characters and places that every project can take - the same band in every song, the same stage - live in
+`library/` next to `projects/` (another folder: `"library": "D:/my-library"` in the settings file, or the env var
+`FEVERSLOP_LIBRARY`). A project always gets a copy, so it stays complete without the library.
+
+```bash
+bun run export-asset tides-of-eternal-flame-261017 kael                     # into the library as "kael"
+bun run export-asset tides-of-eternal-flame-261017 underwater-basilica-and-temple-stage --as=temple-stage
+bun run import-asset new-song guitarist --from=library:kael                # from the library into a project
+```
+
+- `export-asset` copies the picture and the whole sheet with the texts that go with them: the description, for a place
+  its background features and floor plan. An asset already in the library is never overwritten - `--as=<id>` gives the
+  new one another id. The project must have rendered the pictures and written the description.
+- In the library: `library/<characters|locations>/<id>/asset.json` (name, description, background features, floor plan,
+  where it came from), `picture.png` (the sheet) and `sheet/` (anchor, sequence video, frames).
+- `import-asset` offers the library as a source, before the projects; its description is the one in `asset.json`.
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix
