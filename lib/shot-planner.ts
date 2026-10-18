@@ -1,4 +1,4 @@
-import type {Assignment, BeatShots, Character, Location, LocationLayout, MusicMap, Slot, StoryBeat} from "./project.ts";
+import type {Assignment, BeatShots, Blocking, Character,Location, LocationLayout, MusicMap, Slot, StoryBeat} from "./project.ts";
 import {type BeatSinging, isContinuous} from "./compose.ts";
 import type {ProjectConfig} from "./config.ts";
 import type {AskOptions} from "./llm.ts";
@@ -115,9 +115,6 @@ export type PlanContext = {
 // bracket or a quote in a sentence costs a few shots at most, not a beat. With the beat's blocking (blockingPrompt) the
 // staging and where everybody starts and ends are fixed, and the call writes only shots
 export type Chunk = { from: number, to: number, total: number, written: unknown[], staging?: string, blocking?: Blocking }
-
-/** Where everybody of a beat is at its start and at its end, and the floor plan - by name, the texts with {Name} tokens. */
-export type Blocking = { staging: string, starts: Record<string, string>, ends: Record<string, string> }
 
 const blockingInstructions = `You are a music video director who blocks a story beat before its shots are planned: the floor plan of the place, where everybody is when the beat starts and where when it is over. Answer only in the line format.
 

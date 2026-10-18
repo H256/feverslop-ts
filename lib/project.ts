@@ -73,6 +73,8 @@ export type ShotPlan = {
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
 // tokens: the texts name every character as {Name} (lib/refs.ts); a plan from before that has plain names
 export type BeatShots = { staging?: string, ends?: Record<string, string>, shots: ShotPlan[], tokens?: boolean }
+/** Where everybody of a beat is at its start and at its end, and the floor plan - by name, the texts with {Name} tokens. */
+export type Blocking = { staging: string, starts: Record<string, string>, ends: Record<string, string> }
 
 // notes: the tags right after the heading tag, how the part sounds ("[Low, gravelly vocals]") - see parseLyricSections
 export type LyricSection = { label: string, notes?: string[], lines: string[] }
@@ -183,7 +185,10 @@ export type Project = {
     timeline?: Timeline,
     mapping?: Assignment[],
     propActivity?: PropActivity,
-    shotViews?: Record<string, number[]>,   // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
+    // beatId -> the floor plan of the beat and where everybody starts and ends (step 11a), each beat from the end of the one
+    // before - the shots are planned from it. A beat whose blocking stayed unusable has no entry: its shots plan their own staging
+    blocking?: Record<string, Blocking>,
+    shotViews?: Record<string, number[]>,  // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
 export type StepName = Exclude<keyof Project, 'inputs' | 'partials'>
@@ -218,8 +223,10 @@ const dependsOn: Record<StepName, StepName[]> = {
     mapping: ['beats', 'timeline'],
     // the bar length (music.bpm) is the window the activity is averaged over
     propActivity: ['stems', 'instrumentStems', 'cast', 'music'],
+    // the floor plan of each beat, in the place and with the people the pictures show (the clips of a fight beat: timeline, mapping)
+    blocking: ['beats', 'timeline', 'mapping', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
     // the planner stages in the place and with the people the pictures show
-    shotMoments: ['beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
+    shotMoments: ['blocking', 'beats', 'timeline', 'mapping', 'propActivity', 'singing', 'characterDescriptions', 'locationDescriptions', 'locationLayouts'],
     shotViews: ['shotMoments'],
 }
 

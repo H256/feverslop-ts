@@ -175,7 +175,7 @@ bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) an
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
 bun index.ts --debug                  # a failure shows its stack trace below the error box (or FEVERSLOP_DEBUG=1)
 bun index.ts --debug-audio            # also cut one listenable wav per track and clip into output/audio (not needed for rendering)
-bun index.ts --legacy-moments         # skip step 11b, spread beat.moments across shots the old way
+bun index.ts --legacy-moments         # skip steps 11a and 11b, spread beat.moments across shots the old way
 bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity after editing prop/propStem by hand
 ```
 
@@ -196,7 +196,7 @@ built on it (and everything built on those):
 | `style.txt`                   | `lookBrief`                         |
 | `singers` in `config.json`    | `singing` (and so `beats`)          |
 | `lyricsLanguage`              | `transcript`                        |
-| `continuity` in `config.json` | `shotMoments`                       |
+| `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
 
 ### lyrics.txt
 
@@ -289,7 +289,8 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity - the intensity follows the song's loudness and the instruments heard along the way | story, cast, singing, music, lyricsTiming, propActivity |
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
-| 11b | `shotMoments`   | The staged shots per beat: floor plan, then per shot the action, who is in the picture and where they stand and move, replacing `beat.moments` ³ | beats, timeline, mapping, propActivity |
+| 11a | `blocking`      | The floor plan per beat and where everybody starts and ends, each beat from the end of the one before - one short call per beat, in order ³ ⁶ | beats, timeline, mapping, characterDescriptions, locationDescriptions, locationLayouts |
+| 11b | `shotMoments`   | The staged shots per beat, from its blocking: per shot the action, who is in the picture and where they stand and move, replacing `beat.moments` - the beats at once; `--redo=shotMoments` keeps the blocking ³ | blocking, beats, timeline, mapping, propActivity, singing, characterDescriptions, locationDescriptions, locationLayouts |
 | 12 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
 ¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings ·
@@ -297,9 +298,12 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 ⁴ only when at least one character's `prop` is a musical instrument actually heard in the song - see
 [Band members and instruments](#band-members-and-instruments) ·
 ⁵ only with `--render=song`, and only while `input/song.wav` doesn't exist yet - see
-[Generating the song](#generating-the-song)
+[Generating the song](#generating-the-song) ·
+⁶ made only when the shots are planned - a project whose shots were planned before the step existed keeps them and
+has no blocking until `--redo=shotMoments` (or anything that redoes it). A beat whose blocking stays unusable plans its
+own staging in 11b
 
-Steps 1, 3–9 (with 8c) and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
+Steps 1, 3–9 (with 8c), 11a and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
 
 The looks (7, 8) are image prompts for the reference pictures - they put a character on a plain grey background in
 studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
@@ -404,7 +408,7 @@ moments of the beat are written to follow each other without a restart. What fol
   rendered yet is skipped with a warning - run `--render=videos` again.
 - Rendering a clip again leaves the clips after it starting on its old last frame; the next run warns about each (delete
   `videos/<id>.mp4` to render it again).
-- A changed `continuity` redoes `shotMoments`.
+- A changed `continuity` redoes `blocking` and `shotMoments`.
 - As a reference picture the frame carries the room and the people, but not the exact pose and framing of the frame:
   the clip may start from a different position. `pinStartFrame` (on by default) locks it to the frame at frame 0 (`MiniMaxH3AddGuide`
   with the image); a clip then starts on the exact frame the one before ends on. With `pinStartFrame` the frame is
