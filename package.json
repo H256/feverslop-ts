@@ -9,6 +9,7 @@
     "init": "bun tools/init.ts",
     "example": "bun tools/example.ts",
     "replace-character": "bun tools/replace-character.ts",
+    "import-asset": "bun tools/import-asset.ts",
     "styles:doc": "bun tools/styles-doc.ts",
     "typecheck": "bun tools/typecheck.ts",
     "test": "bun test",

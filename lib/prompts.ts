@@ -296,6 +296,27 @@ Character: ${JSON.stringify({name: char.name, role: char.role})}`,
     }
 }
 
+// For tools/import-asset.ts: a place described straight from its picture - same output shape and rules as
+// locationDescriptionPrompt, so the result drops straight into locationDescriptions.
+export function locationImageDescriptionPrompt(imageDataUrl: string, name: string): AskOptions {
+    return {
+        input: `
+The attached image is the reference picture of the place below. Describe what the place looks like, for a video prompt where characters act in it and the camera moves freely - so only say what the place looks like, nothing about the picture itself.
+
+Keep: layout, architecture, terrain, materials, props, time of day, weather, light sources and atmosphere like fog, dust or smoke.
+Leave out: the medium and style (e.g. "35mm film photograph of"), the camera position and framing, that the place is empty or has no people, film grain and anything else about the picture rather than the place.
+
+Rules:
+- One or two sentences, 30-60 words, starting with the place (e.g. "a vaulted stone forge with ...").
+- Only details actually visible in the image - do not invent anything not shown.
+- Answer only with the description.
+
+Place: ${JSON.stringify(name)}`,
+        images: [imageDataUrl],
+        instructions: 'You are an expert editor who writes location descriptions from a reference image. You answer only with the description.',
+    }
+}
+
 export function characterDescriptionPrompt(imagePrompt: string): AskOptions {
     return {
         input: `
