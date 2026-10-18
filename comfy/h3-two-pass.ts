@@ -3,21 +3,22 @@
 // pass 1 - the base model without the turbo LoRA, 20 steps res_multistep/simple, at a quarter of the final pixels;
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the turbo LoRA, 2 steps, denoise 0.2, at the final size.
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, dyn, MAX_REFERENCE_IMAGES, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
+import {afterCleanup, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
 
-/** Pass 1's size: half the width and half the height of the final size - the upscaler doubles both. */
-export function passOneSize(setting: Resolution): Exclude<Resolution, -1> {
-    const final = setting === -1 ? TWO_PASS_DEFAULT : setting
-    if (typeof final === 'number') return final / 4
+/**
+ * The final size is what videoResolution asks for, exactly as every other workflow computes it (pixelSize) - the upscaler
+ * is given it as its target. Pass 1 renders half its width and half its height, in multiples of 32.
+ */
+export function twoPassSizes(setting: Resolution, aspect: Aspect = '16:9'): { final: PixelSize, first: PixelSize } {
+    const final = pixelSize(setting, aspect, TWO_PASS_DEFAULT)
     const half = (n: number) => Math.max(32, Math.round(n / 2 / 32) * 32)
-    const [w, h] = final.split('x').map(Number) as [number, number]
-    return `${half(w)}x${half(h)}`
+    return {final, first: {width: half(final.width), height: half(final.height)}}
 }
 
-export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO"> }
+export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO">, size: PixelSize }
 
 export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name: string): TwoPassResult {
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
@@ -35,7 +36,8 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, passOneSize(opts.resolution), 'landscape', TWO_PASS_DEFAULT / 4)
+    const sizes = twoPassSizes(opts.resolution, opts.aspect)
+    const size = resolution(wf, `${sizes.first.width}x${sizes.first.height}`, opts.aspect ?? 'landscape', TWO_PASS_DEFAULT)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -76,7 +78,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
         latent_image: references.LATENT,
     })
 
-    // x2: the upscaler takes the video half of the AV latent only; the audio half goes on as it is.
+    // x2, to exactly the final size: the upscaler takes the video half of the AV latent only; the audio half goes on as it is.
     // device 'cuda' on both machines: a ROCm build of PyTorch serves the AMD card as "cuda" too, while 'rocm' is refused by a CUDA build
     // The upscaler loads its model past ComfyUI's memory management, so ComfyUI frees nothing for it: with pass 1's UNet
     // (~20 GB) still loaded it ran out of memory on a 32 GB Radeon. Unload first - pass 2 loads the UNet again from RAM.
@@ -84,14 +86,14 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
     const upscaled = wf.MinimaxH3LatentUpscaler3D({
         latent: split.video_latent,
         model_name: 'minimax_h3_latent_upscaler_3d_bf16.safetensors',
-        mode: dyn('scale by multiplier'),
+        mode: dyn('target dimensions'),
         align: 32,
         enable_temporal_chunking: true,
         force_unload: true,
         device: 'cuda',
         precision: 'bf16',
     })
-    withInputs(wf, upscaled, {'mode.scale': 2})
+    withInputs(wf, upscaled, {'mode.width': sizes.final.width, 'mode.height': sizes.final.height})
     const large = wf.LTXVConcatAVLatent({video_latent: upscaled.latent as NodeRef<"LATENT">, audio_latent: split.audio_latent}).latent
 
     // pass 2: the turbo LoRA with its shifts (as h3-ref2video), a short refine of the upscaled latent
@@ -107,5 +109,5 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
     })
 
     const images = wf.VAEDecode({samples: afterCleanup(wf, second.output, {offload_model: true, offload_cache: false}), vae: videoVae.VAE}).IMAGE
-    return {images, song: song.AUDIO}
+    return {images, song: song.AUDIO, size: sizes.final}
 }

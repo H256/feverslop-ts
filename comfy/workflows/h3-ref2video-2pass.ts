@@ -9,7 +9,7 @@ export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(
 
 export default function h3Ref2Video2Pass(opts: VideoWorkflowOptions): WorkflowResult {
     const wf = new WorkflowBuilder()
-    const {images, song} = h3TwoPass(wf, opts, 'h3-ref2video-2pass')
+    const {images, song, size} = h3TwoPass(wf, opts, 'h3-ref2video-2pass')
 
     const video = wf.VHS_VideoCombine({
         images,
@@ -24,5 +24,5 @@ export default function h3Ref2Video2Pass(opts: VideoWorkflowOptions): WorkflowRe
     // widgets VHS only adds for the h264 format
     withInputs(wf, video, {pix_fmt: 'yuv420p', crf: 19, save_metadata: true, trim_to_audio: false})
 
-    return {workflow: wf, output: video.__id}
+    return {workflow: wf, output: video.__id, size}
 }
