@@ -8,6 +8,8 @@ import {readTokens, tokenCharacter} from "./refs.ts";
 export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 const SIZES = ['wide', 'medium', 'close'] as const
+/** How many people a shot of a size class holds - the planner prompt says the same (lib/shot-planner.ts). */
+const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {close: 2, medium: 3, wide: undefined}
 /** A flag the planner answered: true, or "yes" in the line format. */
 const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
 /** The planner's "playing:" - what the hands do on the instrument (a phrase), a bare "yes", or "no" / nothing. */
@@ -165,7 +167,11 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         for (const message of [...unison.problems, ...musicChecks(j, people, characters, singers, props)]) problem(j, message)
         notes.push(...unison.notes)
         const size = SIZES.find(s => s === text(e.size).toLowerCase())
-        if (ids.length > MAX_FOREGROUND && size !== 'wide') notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
+        // a framing that cannot hold its people: the video model squeezes them together - it pulled a drummer away from
+        // her kit, dropped the singer and shrank the faces when a "medium close-up" had all four of a band in it
+        const room = size ? SHOT_ROOM[size] : undefined
+        if (room !== undefined && ids.length > room) problem(j, `shot ${j + 1}: ${ids.length} people (${ids.map(id => nameOfId(characters, id)).join(', ')}) in a ${size} shot, which holds at most ${room} - leave out who the shot is not about (heard is not seen), or make it a wide shot`)
+        else if (ids.length > MAX_FOREGROUND && size !== 'wide') notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
         // three or more people: everybody moves (the prompt asks for it) - what the code can tell without reading the
         // words is a person with an entry of their own and no motion, who is then left standing in the reference pose
         const motionless = ids.filter(id => people[id] && !people[id]!.motion)

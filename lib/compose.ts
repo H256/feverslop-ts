@@ -486,7 +486,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         type Track = { label: string, stem: 'drums' | PropStem | 'vocals' | 'song' | MixStem, subjects: typeof castSubjects, parts?: Part[] }
         const clipActive = (stem: PropStem) => (propActivity?.[stem] ?? []).some(r => r.end > slot.start && r.start < slot.end)
         const propGroups = new Map<PropStem, typeof castSubjects>()
-        for (const s of castSubjects) if (s.propStem) propGroups.set(s.propStem, [...(propGroups.get(s.propStem) ?? []), s])
+        // a player no shot of the clip shows is heard off camera: their track drives nobody's hands (a "performance
+        // reference for <Subject 5>'s drumming" put the drummer into every clip, without her kit)
+        const shown = (id: string) => !plannedIds.length || plannedIds.includes(id) || singerIds.includes(id)
+        for (const s of castSubjects) if (s.propStem && shown(s.id)) propGroups.set(s.propStem, [...(propGroups.get(s.propStem) ?? []), s])
 
         // MAX_REF_AUDIOS: MiniMaxH3ReferenceToVideo only has 3 ref_audio slots (see comfy/helpers.ts). The vocals (lip-sync)
         // and the drums (cut/blocking timing, and the drummer's playing) always have their own; the other players heard in the
