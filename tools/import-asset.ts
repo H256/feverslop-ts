@@ -4,17 +4,16 @@
 // the plan built on the old one is printed as a --redo, not done.
 // usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]
 import * as p from "@clack/prompts";
-import {existsSync, readdirSync, readFileSync, rmSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {type AssetKind, type AssetLayout, assetIds, assetPaths, copyAsset} from "../lib/asset-import.ts";
 import {libraryDir, libraryIds, libraryLayout, readLibraryAsset} from "../lib/library.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {genderNote} from "../lib/gender-check.ts";
-import {ask, configureLlm} from "../lib/llm.ts";
+import {configureLlm} from "../lib/llm.ts";
+import {describePicture} from "../lib/describe-picture.ts";
 import {printBanner, styles} from "../lib/log.ts";
-import {runProcess} from "../lib/process.ts";
 import {pictureProp, propMissing} from "../lib/prop-check.ts";
-import {characterImageDescriptionPrompt, locationImageDescriptionPrompt} from "../lib/prompts.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
 import {type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
 import {loadSettings} from "../lib/settings.ts";
@@ -204,22 +203,17 @@ async function fromPicture(): Promise<string | undefined> {
     if (!image) return undefined
     const settings = await loadSettings({projectModel: config.llm.model})
     configureLlm(settings.llm)
-    const small = `${image}.vision.png`
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', image, '-vf', 'scale=512:-1', small], {errorMessage: err => `ffmpeg could not downscale ${image}:\n${err}`})
-    const url = `data:image/png;base64,${Buffer.from(await Bun.file(small).arrayBuffer()).toString('base64')}`
-    rmSync(small, {force: true})
     p.log.step('Asking the vision model - can take a while')
     try {
         const character = data.cast?.characters.find(c => c.id === target.id)
-        const text = (await ask(character ? characterImageDescriptionPrompt(url, character) : locationImageDescriptionPrompt(url, target.name))).trim()
+        const text = await describePicture(image, character ? {kind: 'character', name: character.name, role: character.role} : {kind: 'location', name: target.name})
         if (text) p.log.message(text)
-        return text || undefined
+        return text
     } catch (e) {
         p.log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
         return undefined
     }
 }
-
 
 function fail(message: string): never {
     p.cancel(message)

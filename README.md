@@ -700,6 +700,20 @@ bun run import-asset new-song guitarist --from=library:kael                # fro
   where it came from), `picture.png` (the sheet) and `sheet/` (anchor, sequence video, frames).
 - `import-asset` offers the library as a source, before the projects; its description is the one in `asset.json`.
 
+**A new library asset from a picture** - no project needed:
+
+```bash
+bun run create-asset character singer-red --anchor=pictures/singer.png --name="Elara" --role="lead singer"
+bun run create-asset location temple-stage --anchor=pictures/stage.png --like=tides-of-eternal-flame-261017
+```
+
+- The picture becomes the anchor as it is. A vision-capable model describes it - shown and editable before it is kept;
+  `--description=…` gives your own instead (and runs without a terminal).
+- A place also gets its background features and its floor plan, with the same prompts a project uses.
+- ComfyUI renders the reference sheet (sequence video, frames, picture) from the anchor - with the render settings of
+  the project given with `--like`, else the defaults. It is made in `library/.work/` and moved into the library when it
+  is done; an id the library already has is refused before anything is made.
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix

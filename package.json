@@ -11,6 +11,7 @@
     "replace-character": "bun tools/replace-character.ts",
     "import-asset": "bun tools/import-asset.ts",
     "export-asset": "bun tools/export-asset.ts",
+    "create-asset": "bun tools/create-asset.ts",
     "styles:doc": "bun tools/styles-doc.ts",
     "typecheck": "bun tools/typecheck.ts",
     "test": "bun test",
