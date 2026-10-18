@@ -43,7 +43,7 @@ export async function workflowHash(name: string) {
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
 /** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
-export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'>) =>
+export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect'>>) =>
     specId(clipSpec(clip, projectDir, config))
 
 export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[] }
@@ -420,6 +420,7 @@ export class Renderer implements Disposable {
                 duration: secondsAt(frames),
                 seed,
                 resolution: this.config.videoResolution,
+                aspect: this.config.videoAspect,
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed, ...(result.size ? {size: result.size} : {})}}
@@ -454,13 +455,14 @@ export class Renderer implements Disposable {
         // another size is put away and fails, instead of being used
         if (expected && (rendered.width !== expected.width || rendered.height !== expected.height)) {
             const keep = archiveFiles(this.projectDir, `size-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, [file])
-            throw new Error(`${file} came out at ${rendered.width}x${rendered.height}, ${this.config.videoWorkflow} renders ${JSON.stringify(this.config.videoResolution)} at ${expected.width}x${expected.height} - put away in ${keep}; the server that rendered it computes another size`)
+            throw new Error(`${file} came out at ${rendered.width}x${rendered.height}, ${this.config.videoWorkflow} renders ${JSON.stringify(this.config.videoResolution)} (${this.config.videoAspect}) at ${expected.width}x${expected.height} - put away in ${keep}; the server that rendered it computes another size`)
         }
         if (rendered.frames < clip.frames) log.warn(`${file} has ${rendered.frames} frames, the clip needs ${clip.frames} - delete it and render again`)
         await Bun.write(`${target}.json`, JSON.stringify({
             workflow: this.config.videoWorkflow,
             seed,
             resolution: this.config.videoResolution,
+            ...(this.config.videoAspect !== '16:9' ? {aspect: this.config.videoAspect} : {}),
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final video

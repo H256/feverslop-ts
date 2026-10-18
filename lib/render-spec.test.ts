@@ -67,6 +67,9 @@ describe('clip specs', () => {
         expect(specId(clipSpec(clip({frames: 101}), dir, video))).not.toBe(base)
         expect(specId(clipSpec(clip(), dir, {...video, videoWorkflow: 'other'}))).not.toBe(base)
         expect(specId(clipSpec(clip(), dir, {...video, videoResolution: '1x1'}))).not.toBe(base)
+        // the default aspect leaves the id as it was; another one makes the clip stale
+        expect(specId(clipSpec(clip(), dir, {...video, videoAspect: '16:9'}))).toBe(base)
+        expect(specId(clipSpec(clip(), dir, {...video, videoAspect: '9:16'}))).not.toBe(base)
         writeFileSync(join(dir, 'assets/a.png'), 'changed')
         expect(specId(clipSpec(clip(), dir, video))).not.toBe(base)
         // a seed is no input of a spec at all: the same request rendered again is the same request

@@ -118,6 +118,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `videoResolution` | `-1`             | see [Resolution](#resolution)                                                           |
 | `imageWorkflow`   | `"kroma-image"`  | a file name in `comfy/workflows/`, without `.ts` - `"krea2-image"` for the previous one |
 | `videoWorkflow`   | `"h3-ref2video"` | a file name in `comfy/workflows/`, without `.ts`                                        |
+| `videoAspect`     | `"16:9"`         | the clips' aspect ratio - `"9:16"` for portrait clips, or any ratio like `"2:1"`, `"2:3"`; see the table below |
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
 | `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
 | `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |
@@ -155,13 +156,15 @@ again.
 | a number, e.g. `1.1` | megapixels                             | computed by the pipeline (16:9 or 9:16, multiples of 32, as ComfyUI's `ResolutionSelector`), two `PrimitiveInt` nodes |
 | `"WIDTHxHEIGHT"`, e.g. `"1920x1088"` | a fixed size           | two `PrimitiveInt` nodes, connected to the width and height inputs |
 
-The orientation is fixed per kind of render, whichever way round the size is written:
+The orientation is fixed per kind of render, whichever way round the size is written - for videos it follows `videoAspect`:
 
 | Render     | Orientation | `-1` means            | `1.1` means        | `"1920x1088"` means |
 |------------|-------------|-----------------------|--------------------|---------------------|
 | characters | portrait    | 1088×1920             | 1.1 MP at 9:16     | 1088×1920           |
 | locations  | landscape   | 1920×1088             | 1.1 MP at 16:9     | 1920×1088           |
 | videos     | landscape   | 1.1 MP at 16:9        | 1.1 MP at 16:9     | 1920×1088           |
+| videos, `"videoAspect": "9:16"` | portrait | 0.4 MP at 9:16 | 1.1 MP at 9:16 | 1088×1920 |
+| videos, `"videoAspect": "2:3"`  | portrait | 0.4 MP at 2:3  | 1.1 MP at 2:3  | 1088×1920 (its own ratio, turned upright) |
 
 `"1088x1920"` and `"1920x1088"` therefore mean the same. Sizes should be multiples of 32 for H3; megapixel values are
 rounded to multiples of 32. The pipeline computes the size itself, not a node on the server: with several servers every

@@ -3,7 +3,7 @@
 // pass 1 - the base model without the turbo LoRA, 20 steps res_multistep/simple, at a quarter of the final pixels;
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the turbo LoRA, 2 steps, denoise 0.2, at the final size.
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
+import {afterCleanup, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
@@ -12,8 +12,8 @@ export const TWO_PASS_DEFAULT = 2
  * The final size is what videoResolution asks for, exactly as every other workflow computes it (pixelSize) - the upscaler
  * is given it as its target. Pass 1 renders half its width and half its height, in multiples of 32.
  */
-export function twoPassSizes(setting: Resolution): { final: PixelSize, first: PixelSize } {
-    const final = pixelSize(setting, 'landscape', TWO_PASS_DEFAULT)
+export function twoPassSizes(setting: Resolution, aspect: Aspect = '16:9'): { final: PixelSize, first: PixelSize } {
+    const final = pixelSize(setting, aspect, TWO_PASS_DEFAULT)
     const half = (n: number) => Math.max(32, Math.round(n / 2 / 32) * 32)
     return {final, first: {width: half(final.width), height: half(final.height)}}
 }
@@ -36,8 +36,8 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const sizes = twoPassSizes(opts.resolution)
-    const size = resolution(wf, `${sizes.first.width}x${sizes.first.height}`, 'landscape', TWO_PASS_DEFAULT)
+    const sizes = twoPassSizes(opts.resolution, opts.aspect)
+    const size = resolution(wf, `${sizes.first.width}x${sizes.first.height}`, opts.aspect ?? 'landscape', TWO_PASS_DEFAULT)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
