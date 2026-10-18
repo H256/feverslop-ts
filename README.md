@@ -658,6 +658,29 @@ bun index.ts --redo=characterLookVariants
 <project-id>` walks through swapping in your own image and description interactively; see
 [docs/comfyui.md → replace-character](docs/comfyui.md#replace-character).
 
+### Taking a character or place from another project
+
+A character or a place that is already finished in another project - the same band in the next song, another version
+of the same video - is copied over instead of rendered again:
+
+```bash
+bun run import-asset <project-id>                                          # asks for everything
+bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kaelen
+```
+
+- The picture (`assets/<kind>s/<id>.png`) and the whole reference sheet (`assets/sequence/<kind>s/<id>/`: anchor,
+  sequence video, frames) are copied and renamed to the id the character or place has in this project. The copies are
+  pinned (`"source": "user"` in their `.json`): never reported stale, never rendered again. The project's own pictures of
+  it go to `old/attempts/` - nothing is deleted. No GPU, no render.
+- The description used in the clip prompts is asked for: the other project's (written for exactly this picture), this
+  project's own, or written from the picture by a vision-capable model. A place also takes the other project's
+  background features and floor plan (with what each view of its sheet shows) when it has them.
+- The plan built on the old texts stays as it is - the tool prints the `--redo` that makes it again (e.g.
+  `--redo=shotMoments`), the clips already rendered with the old pictures are listed (they count as stale).
+- The project must be planned (`project.json` with the cast). The character keeps this project's name, role and prop -
+  the tool warns when the description does not name the prop, or gives another gender than the story. Group members
+  are not imported one by one; use `replace-character` for them.
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix

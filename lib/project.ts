@@ -232,6 +232,27 @@ const dependsOn: Record<StepName, StepName[]> = {
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
 
+/**
+ * The --redo for data changed by hand (an imported picture's texts): the steps with a result that read one of `changed`,
+ * without those another of them redoes anyway. The changed steps themselves are never in it - redoing one would ask the
+ * language model again and overwrite what was put there.
+ */
+export function redoAfter(changed: StepName[], data: Partial<Record<StepName, unknown>>): StepName[] {
+    const readers = STEP_NAMES.filter(step => data[step] !== undefined && !changed.includes(step) && dependsOn[step].some(dep => changed.includes(dep)))
+    const downstream = (from: StepName): Set<StepName> => {
+        const seen = new Set<StepName>()
+        const visit = (name: StepName) => {
+            for (const step of STEP_NAMES) if (dependsOn[step].includes(name) && !seen.has(step)) {
+                seen.add(step)
+                visit(step)
+            }
+        }
+        visit(from)
+        return seen
+    }
+    return readers.filter(step => !readers.some(other => other !== step && downstream(other).has(step)))
+}
+
 const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
 
 export class ProjectStore {
