@@ -1,12 +1,17 @@
 import {describe, expect, test} from "bun:test";
 import {aboveRecommended, pixelSize} from "../comfy/helpers.ts";
 import {twoPassSizes} from "../comfy/h3-two-pass.ts";
-import {resumesJob} from "./render.ts";
+import {dispatchOrder, resumesJob} from "./render.ts";
 
 test('a job that is queued, running or finished is resumed', () => {
     expect(resumesJob('queued')).toBe(true)
     expect(resumesJob('running')).toBe(true)
     expect(resumesJob('finished')).toBe(true)
+})
+
+test('a job already queued on a server gets it before the new renders - it only has to be fetched', () => {
+    const waiting = [{id: 'slot-003'}, {id: 'slot-001', pin: '5090'}, {id: 'slot-004'}, {id: 'slot-002', pin: 'radeon'}]
+    expect(dispatchOrder(waiting).map(w => w.id)).toEqual(['slot-001', 'slot-002', 'slot-003', 'slot-004'])
 })
 
 test('a failed job is queued anew, not resumed', () => {

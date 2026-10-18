@@ -59,6 +59,13 @@ type RenderWhat = { label: string, spec: RenderSpec, kind: Timing['kind'], workf
 type Trace = { classType: string, at: number }[]
 
 /**
+ * Who gets a free server first: a waiter pinned to one (a job already queued there, resumed from an earlier run) before
+ * any new render - its server is doing that job anyway, the run only has to fetch it. In the order they came otherwise.
+ * Without this a stopped run's finished jobs were only fetched at the end of the next one: every free server went to a new clip.
+ */
+export const dispatchOrder = <T extends { pin?: string }>(waiting: T[]) => [...waiting.filter(w => w.pin), ...waiting.filter(w => !w.pin)]
+
+/**
  * Whether a recorded job is picked up again on the next run. A failed job stays in ComfyUI's history, so resuming it
  * would report the same error again for ever, whatever was changed since (the workflow, the config, a freed GPU) -
  * only a job that is queued, running or finished is worth waiting for.
@@ -175,7 +182,7 @@ export class Renderer implements Disposable {
     }
 
     private dispatch() {
-        for (const waiter of [...this.waiting]) {
+        for (const waiter of dispatchOrder(this.waiting)) {
             const free = this.connected.find(s => !this.busy.has(s.name) && (!waiter.pin || s.name === waiter.pin))
             if (!free) continue
             this.busy.add(free.name)
