@@ -134,6 +134,13 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.plan.shots[0]!.people!.anna!.plays).toBeUndefined()
         expect(r.plan.shots[1]!.people!.anna!.plays).toBe('strums the chords hard')
     })
+    test('a framing that cannot hold its people is asked again - close two, medium three, wide any', () => {
+        const shot = (size: string, n: number) => ({action: 'They play', size, characters: names.slice(0, n), people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)]))})
+        const r = readBeatPlan({shots: [shot('close', 3), shot('medium', 4), shot('medium', 3), shot('wide', 4)]}, beat, cast, 4)!
+        expect(r.issues.map(i => i.shot)).toEqual([0, 1])
+        expect(r.problems[0]).toContain('shot 1: 3 people (Anna, Bea, Cora) in a close shot, which holds at most 2')
+        expect(r.problems[1]).toContain('in a medium shot, which holds at most 3')
+    })
 })
 
 describe('readBeatPlan - no word lists', () => {

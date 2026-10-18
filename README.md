@@ -605,7 +605,10 @@ What happens, only when at least one character has a `propStem` **and** the lyri
    their hands on an inactive one. On an active shot its `playing:` field says what the hands do on the instrument
    (a short phrase); a bare "yes", or "no" for a heard instrument, is asked again once. Whether the phrase and the
    motion really play it - not "sticks held rigid" or "pick hand frozen over the strings" - is read by one short LLM
-   call per beat, thinking off (`lib/playing-check.ts`); a "no" is asked again once like the other problems. The clip prompt then always
+   call per beat, thinking off (`lib/playing-check.ts`); a "no" is asked again once like the other problems.
+   Being heard puts nobody in the picture: a shot shows who it is about, the other players are heard off camera
+   (their track then drives nobody's hands). Someone whose instrument stands in the place is only in a shot together
+   with it. A close shot holds at most two people, a medium shot three - a plan with more is asked again once. The clip prompt then always
    states the playing for everyone whose stem is heard in the shot, with that phrase - also when the shot's action
    names them doing something else. Plans from before keep a generic "is actively using the …" until
    `--redo=shotMoments`.
