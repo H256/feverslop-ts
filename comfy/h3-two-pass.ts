@@ -78,7 +78,9 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
 
     // x2: the upscaler takes the video half of the AV latent only; the audio half goes on as it is.
     // device 'cuda' on both machines: a ROCm build of PyTorch serves the AMD card as "cuda" too, while 'rocm' is refused by a CUDA build
-    const split = wf.LTXVSeparateAVLatent({av_latent: first.output})
+    // The upscaler loads its model past ComfyUI's memory management, so ComfyUI frees nothing for it: with pass 1's UNet
+    // (~20 GB) still loaded it ran out of memory on a 32 GB Radeon. Unload first - pass 2 loads the UNet again from RAM.
+    const split = wf.LTXVSeparateAVLatent({av_latent: afterCleanup(wf, first.output, {offload_model: true, offload_cache: false})})
     const upscaled = wf.MinimaxH3LatentUpscaler3D({
         latent: split.video_latent,
         model_name: 'minimax_h3_latent_upscaler_3d_bf16.safetensors',
