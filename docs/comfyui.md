@@ -118,6 +118,8 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `videoResolution` | `-1`             | see [Resolution](#resolution)                                                           |
 | `imageWorkflow`   | `"kroma-image"`  | a file name in `comfy/workflows/`, without `.ts` - `"krea2-image"` for the previous one |
 | `videoWorkflow`   | `"h3-ref2video"` | a file name in `comfy/workflows/`, without `.ts`                                        |
+| `finalFps`        | `24`             | `60` (or 48, 30, …): a second final video at that rate, the clips interpolated shot by shot (`comfy/workflows/frame-interpolate.ts`, ComfyUI's own `FrameInterpolate`) |
+| `interpolationModel` | `"rife_v4.26_heavy.safetensors"` | a file in `models/frame_interpolation/` - RIFE 4.25/4.26 or `film_net_fp16.safetensors`, from Hugging Face `Comfy-Org/frame_interpolation`; on every server that renders |
 | `songAudio`       | `true`           | final video: `true` = the original song as soundtrack, `false` = the clips' own audio   |
 | `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
 | `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |

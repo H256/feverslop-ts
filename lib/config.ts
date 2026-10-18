@@ -2,6 +2,8 @@ import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Resolution} from "../comfy/helpers.ts";
 import {warnUnknownKeys} from "./log.ts";
+import {FPS} from "./frames.ts";
+import {multiplierFor} from "./interpolate.ts";
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
@@ -27,6 +29,10 @@ export type RenderConfig = {
     // a clip that came out as the reference pictures lined up on their grey backdrop (see lib/leak.ts) is rendered again,
     // with another seed, up to this many times. 0 = off: the check costs a little, a render again costs a whole clip
     leakRetries: number,
+    // the frame rate of a second final video, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by
+    // frame interpolation (lib/interpolate.ts, a ComfyUI job per clip). 24 (default) = off
+    finalFps: number,
+    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
@@ -71,6 +77,8 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     pinStartFrame: true,
     fightClips: false,
     leakRetries: 0,
+    finalFps: 24,
+    interpolationModel: 'rife_v4.26_heavy.safetensors',
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
@@ -110,6 +118,10 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
+    if (!Number.isInteger(config.finalFps) || config.finalFps < FPS || (config.finalFps !== FPS && !multiplierFor(config.finalFps))) {
+        fail(`finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(config.finalFps)}`)
+    }
+    if (typeof config.interpolationModel !== 'string' || !config.interpolationModel.trim()) fail(`interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(config.interpolationModel)}`)
     if (!Number.isInteger(config.leakRetries) || config.leakRetries < 0) fail(`leakRetries must be a whole number, 0 or more, got ${JSON.stringify(config.leakRetries)}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {

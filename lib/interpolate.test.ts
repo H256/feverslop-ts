@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {shotCuts, shotPieces} from "./interpolate.ts";
+import {multiplierFor, shotCuts, shotPieces} from "./interpolate.ts";
 
 const scores = (frames: number, hits: Record<number, number>) => Array.from({length: frames}, (_, i) => hits[i] ?? 0.01)
 
@@ -22,5 +22,14 @@ describe('shotPieces', () => {
     test('the cuts give pieces back to back over the frames the final video uses', () => {
         expect(shotPieces(192, [0, 91])).toEqual([{start: 0, frames: 91}, {start: 91, frames: 101}])
         expect(shotPieces(100, [])).toEqual([{start: 0, frames: 100}])
+    })
+})
+
+describe('multiplierFor - the frame rates the final video can have', () => {
+    test('60 fps is x5 (120, every 2nd), 48 is x2, 30 is x5 (every 4th) - 25 is out of reach', () => {
+        expect(multiplierFor(60)).toBe(5)
+        expect(multiplierFor(48)).toBe(2)
+        expect(multiplierFor(30)).toBe(5)
+        expect(multiplierFor(25)).toBeUndefined()
     })
 })

@@ -7,6 +7,15 @@ import {runProcess} from "./process.ts";
 // at 91). So the cuts are read from the picture: ffmpeg's scene score of every frame, the planned time only as the place
 // to look.
 
+/**
+ * The interpolation for a frame rate of the final video: frames x multiplier at FPS x multiplier, every n-th of them kept -
+ * the smallest multiplier up to 8 that gives the rate (60 fps: x5 = 120, every 2nd). undefined: no such multiplier.
+ */
+export function multiplierFor(fps: number): number | undefined {
+    for (let m = 2; m <= 8; m++) if ((FPS * m) % fps === 0 && FPS * m >= fps) return m
+    return undefined
+}
+
 /** How far from the planned frame a cut is looked for - half a second either way. */
 const NEAR_PLAN = Math.round(FPS / 2)
 /** The scene score a frame needs near a planned cut to be that cut (0-1: how much the picture changes from the frame before). */
