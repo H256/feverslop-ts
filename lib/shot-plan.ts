@@ -119,6 +119,29 @@ function trimForeground(people: NonNullable<ShotPlan['people']>, action: string,
     return {people: Object.fromEntries(ids.filter(id => keep.has(id)).map(id => [id, people[id]!])), dropped: ids.filter(id => !keep.has(id))}
 }
 
+/** Whose instrument is heard in shot j. */
+const heardIn = (props: ShotProps | undefined, j: number) => (props ?? []).filter(p => p.activePerShot[j] === true).map(p => p.characterId)
+
+/**
+ * A shot with more people than its size holds. "Leave out who the shot is not about" was not enough - the planner kept all
+ * four of a band in medium shots, and a singer in a guitar solo sang in it with her mouth wide open. So the code picks who
+ * stays, from the data alone: who sings in the shot, whose instrument is heard, then who the action names first - and the
+ * problem names the others, heard off camera. If someone who sings or is heard has to go, a wide shot is offered instead.
+ */
+function crowdedShot(j: number, ids: string[], size: string, room: number, action: string, characters: Character[], singing: string[], heard: string[]): string {
+    const named = readTokens(action, characters).ids
+    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
+    const rank = (id: string) => singing.includes(id) ? 0 : heard.includes(id) ? 1 : 2
+    const ranked = [...ids].sort((a, b) => rank(a) - rank(b) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+    const names = (list: string[]) => list.map(id => nameOfId(characters, id)).join(', ')
+    const keep = ids.filter(id => ranked.indexOf(id) < room)
+    const leave = ids.filter(id => ranked.indexOf(id) >= room)
+    const needed = leave.filter(id => rank(id) < 2)
+    return `shot ${j + 1}: ${ids.length} people (${names(ids)}) in a ${size} shot, which holds at most ${room} - the shot is about ${names(keep)}: ` +
+        `take ${names(leave)} out of its "characters" and "people" and do not name them in its "action" or "rest" - heard is not seen, they are off camera` +
+        (needed.length ? `; or make it a wide shot, since ${names(needed)} ${needed.length > 1 ? 'are' : 'is'} heard in it` : '')
+}
+
 export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Character[], needed: number, singers?: ShotSingers, props?: ShotProps): ReadPlan | undefined {
     const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : undefined
     const rawShots = Array.isArray(raw) ? raw : o && Array.isArray(o.shots) ? o.shots : undefined
@@ -170,7 +193,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         // a framing that cannot hold its people: the video model squeezes them together - it pulled a drummer away from
         // her kit, dropped the singer and shrank the faces when a "medium close-up" had all four of a band in it
         const room = size ? SHOT_ROOM[size] : undefined
-        if (room !== undefined && ids.length > room) problem(j, `shot ${j + 1}: ${ids.length} people (${ids.map(id => nameOfId(characters, id)).join(', ')}) in a ${size} shot, which holds at most ${room} - leave out who the shot is not about (heard is not seen), or make it a wide shot`)
+        if (room !== undefined && ids.length > room) problem(j, crowdedShot(j, ids, size!, room, action, characters, sungBy(singers, j), heardIn(props, j)))
         else if (ids.length > MAX_FOREGROUND && size !== 'wide') notes.push(`shot ${j + 1}: ${ids.length} people in a "${text(e.framing) || 'shot'}" (size ${size ?? 'not given'})`)
         // three or more people: everybody moves (the prompt asks for it) - what the code can tell without reading the
         // words is a person with an entry of their own and no motion, who is then left standing in the reference pose
