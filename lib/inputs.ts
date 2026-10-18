@@ -35,11 +35,11 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
         lyricsLanguage: {value: config.lyricsLanguage, steps: ['transcript'], assumed: 'en'},
         // which beats run on without a cut changes what their shots have to tell
         // assumed: what a project recorded before the default became "never" ran with - so it is not redone by the new default alone
-        continuity: {value: config.continuity, steps: ['shotMoments'], assumed: 'auto'},
+        continuity: {value: config.continuity, steps: ['blocking'], assumed: 'auto'},
         // the choice of views is made again when the mode changes - it is only made at all with "auto"
         locationView: {value: String(config.sequenceSheets ? config.locationView : -1), steps: ['shotViews'], assumed: '-1'},
         // fight beats cut into one-bar pieces change how many shots a beat has
-        fightClips: {value: String(config.fightClips), steps: ['shotMoments'], assumed: 'false'},
+        fightClips: {value: String(config.fightClips), steps: ['blocking'], assumed: 'false'},
     }
 }
 
@@ -53,6 +53,8 @@ export function stepUsed(step: StepName, dir: string, data: Project, config: Pro
         case 'propActivity': return config.alignLyrics && props.size > 0
         case 'singing': return config.singers.length > 0
         case 'shotViews': return config.sequenceSheets && config.locationView === 'auto'
+        // made only when the shots are planned: shots planned before the step existed stay without it
+        case 'blocking': return data.blocking !== undefined || data.shotMoments === undefined
         case 'characterLookVariants': case 'characterDescriptionVariants': return (data.cast?.characters ?? []).some(c => c.isGroup && !c.alike)
         default: return true
     }
