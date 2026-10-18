@@ -150,6 +150,8 @@ export type Assignment = { slotId: string, beatId: string }
 export type Project = {
     inputs?: Record<string, string>, // fingerprints of the input files and settings - not a step
     partials?: Partials,             // answers of a running step, one per element (lib/partials.ts) - not a step
+    // which library asset each role or place of casting.json was copied from, in which version (lib/casting.ts) - not a step
+    castingCopies?: Record<string, { library: string, fingerprint: string }>,
     // The YuE2 style/tags prompt written for lyrics.txt (music-style.txt is the optional direction hint for it) -
     // lyrics.txt itself isn't cached here, it's a plain input file like story-idea.txt, generated once into
     // existence and then treated as fixed (delete it, or edit it, to get a new one - see index.ts)
@@ -191,7 +193,7 @@ export type Project = {
     shotViews?: Record<string, number[]>,  // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
-export type StepName = Exclude<keyof Project, 'inputs' | 'partials'>
+export type StepName = Exclude<keyof Project, 'inputs' | 'partials' | 'castingCopies'>
 
 /** An input whose change redoes steps (lib/inputs.ts); `assumed` is the value it had before fingerprints existed. */
 export type TrackedInput = { value: string | Uint8Array, steps: StepName[], assumed?: string }

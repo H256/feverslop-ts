@@ -714,6 +714,43 @@ bun run create-asset location temple-stage --anchor=pictures/stage.png --like=ti
   the project given with `--like`, else the defaults. It is made in `library/.work/` and moved into the library when it
   is done; an id the library already has is refused before anything is made.
 
+### casting.json - who plays each role
+
+Right after the cast step (5) the first run writes `projects/<id>/casting.json` - every character and place the
+story has, each played by the project itself:
+
+```json
+{
+  "characters": {"elara": "project:elara", "kael": "project:kael"},
+  "locations": {"stage": "project:stage"}
+}
+```
+
+The pipeline never writes it again: from then on it is yours, and only read. Change an entry to a library asset and
+the next run uses it:
+
+```json
+"kael": "library:kael-red"
+```
+
+- `project:<id>` - as always: the project makes the look, the description and the picture of it when they are missing.
+- `library:<id>` - the library asset is copied into the project once, renamed to the role's id and pinned (never
+  rendered again); the project's own pictures of it go to `old/attempts/`. Its description - for a place also its
+  background features and floor plan - is used instead of making one; no look, no picture is made for it. The role
+  keeps its name, role, prop and voice from the story; a library picture that does not name the role's prop is warned
+  about. `project.json` remembers which version was copied (`castingCopies`): the next runs copy nothing while the
+  entry and the library asset stay the same.
+- A `library:` entry the library does not have, or an entry that is neither `project:` nor `library:`, stops the run
+  before anything is made - a typo never generates a picture.
+- Characters and places without an entry run as `project:` (named in the log); an entry for nobody of the cast is warned
+  about on every run; a group character is always made by the project.
+- Back to `project:` - the library pictures are put away in `old/attempts/`, the run names the `--redo` that makes the
+  role's own look and description.
+- Changed after the shots were planned: the plan was made with the old texts - the run names the `--redo` that plans
+  again (it is not done by itself, it costs). Cheapest is to cast right after the first run with `--review`, before the
+  shot planning.
+- Deleting `casting.json` writes it again on the next run, every entry `project:`.
+
 ## Known limits
 
 - Section boundaries are estimated from the audio unless the lyrics are aligned. Check them against the song and fix
