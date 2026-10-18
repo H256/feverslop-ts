@@ -17,6 +17,8 @@ export type SettingsFile = {
     comfy?: ComfyEntry[],
     /** Turns the tokens of `bun run stats` into money: per model id, price per million tokens (the currency is only a label). */
     prices?: Record<string, { inputPerMillion: number, outputPerMillion: number, currency?: string }>,
+    /** The asset library (lib/library.ts) - default: library/ in the working directory. */
+    library?: string,
 }
 
 export type ComfyServer = { url: string, name: string, credentials?: BasicCredentials | BearerTokenCredentials }
@@ -64,7 +66,8 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object')
 
-    warnUnknownKeys(raw, ['llm', 'comfy', 'prices'], file)
+    warnUnknownKeys(raw, ['llm', 'comfy', 'prices', 'library'], file)
+    if (raw.library !== undefined && (typeof raw.library !== 'string' || !raw.library.trim())) fail(`library must be a folder path, got ${JSON.stringify(raw.library)}`)
 
     if (raw.llm !== undefined) {
         if (!raw.llm || typeof raw.llm !== 'object' || Array.isArray(raw.llm)) fail('llm must be an object like {"url": …, "apiKey": …, "model": …}')

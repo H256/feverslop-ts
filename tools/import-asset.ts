@@ -2,11 +2,12 @@
 // renamed to the id it has here - instead of rendering it again. Nothing is rendered: the copied files are pinned (never
 // reported stale), the old ones go to old/attempts/. The description that goes with the picture is chosen here; what
 // the plan built on the old one is printed as a --redo, not done.
-// usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>]]
+// usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]
 import * as p from "@clack/prompts";
 import {existsSync, readdirSync, readFileSync, rmSync} from "node:fs";
 import {join} from "node:path";
-import {type AssetKind, assetIds, assetPaths, importAsset} from "../lib/asset-import.ts";
+import {type AssetKind, type AssetLayout, assetIds, assetPaths, copyAsset} from "../lib/asset-import.ts";
+import {libraryDir, libraryIds, libraryLayout, readLibraryAsset} from "../lib/library.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {ask, configureLlm} from "../lib/llm.ts";
@@ -15,10 +16,10 @@ import {runProcess} from "../lib/process.ts";
 import {pictureProp, propMissing} from "../lib/prop-check.ts";
 import {characterImageDescriptionPrompt, locationImageDescriptionPrompt} from "../lib/prompts.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
-import {type Project, redoAfter, type StepName} from "../lib/project.ts";
+import {type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
 import {loadSettings} from "../lib/settings.ts";
 
-const usage = 'usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>]]'
+const usage = 'usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]'
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.error(`This needs a terminal to ask in - ${usage}`)
     process.exit(1)
@@ -59,53 +60,82 @@ const target = wantedId
         options: targets.map((t, n) => ({value: String(n), label: `${t.name} ${styles.muted(`(${t.kind} · ${t.id})`)}`})),
     })))]!
 
-// 2. where it comes from: a project with a finished asset of that kind
-const [fromProject, fromId] = from?.split(':') ?? []
-const sources = listProjects().filter(other => other !== id && assetIds(projectDir(other), target.kind).length)
-if (!sources.length) fail(`No other project has a finished ${target.kind} to import`)
-const sourceProject = fromProject
-    ? (sources.includes(fromProject) ? fromProject : fail(`projects/${fromProject} has no finished ${target.kind}s`))
-    : answer(await p.select({
-        message: `Project to take the ${target.kind} from`,
-        // the ones with an asset of the same id or name first - the same character in another version of the song
-        options: [...sources].sort((a, b) => Number(hasMatch(b)) - Number(hasMatch(a))).map(s => ({value: s, label: `${s}${hasMatch(s) ? styles.muted(' · same id or name') : ''}`})),
-    }))
-const sourceDir = projectDir(sourceProject)
-const sourceData: Partial<Project> = existsSync(join(sourceDir, 'project.json')) ? await Bun.file(join(sourceDir, 'project.json')).json() : {}
-const nameIn = (assetId: string) => entries(sourceData as Project).find(e => e.kind === target.kind && e.id === assetId)?.name
-const available = assetIds(sourceDir, target.kind)
+// 2. where it comes from: the library, or another project with a finished asset of that kind
+type Source = {
+    label: string, dir: string, ids: string[], layout: (assetId: string) => AssetLayout,
+    name: (assetId: string) => string | undefined, description: (assetId: string) => string | undefined,
+    anchors: (assetId: string) => string | undefined, floorPlan: (assetId: string) => LocationLayout | undefined,
+}
+const library = await libraryDir()
+const libraryRecords = Object.fromEntries(await Promise.all(libraryIds(library, target.kind).map(async l => [l, (await readLibraryAsset(library, target.kind, l))!] as const)))
+const librarySource: Source = {
+    label: 'the library', dir: library, ids: Object.keys(libraryRecords), layout: l => libraryLayout(target.kind, l),
+    name: l => libraryRecords[l]?.name, description: l => libraryRecords[l]?.description,
+    anchors: l => libraryRecords[l]?.anchors, floorPlan: l => libraryRecords[l]?.layout,
+}
+const projectSource = (project: string): Source => {
+    const sourceDir = projectDir(project)
+    const other: Partial<Project> = existsSync(join(sourceDir, 'project.json')) ? JSON.parse(readFileSync(join(sourceDir, 'project.json'), 'utf8')) : {}
+    return {
+        label: project, dir: sourceDir, ids: assetIds(sourceDir, target.kind), layout: a => assetPaths(target.kind, a),
+        name: a => entries(other as Project).find(e => e.kind === target.kind && e.id === a)?.name,
+        description: a => (target.kind === 'character' ? other.characterDescriptions : other.locationDescriptions)?.[a],
+        anchors: a => other.locationAnchors?.[a], floorPlan: a => other.locationLayouts?.[a],
+    }
+}
+const [fromWhere, fromId] = from?.split(':') ?? []
+const projects = listProjects().filter(other => other !== id && assetIds(projectDir(other), target.kind).length)
+if (!projects.length && !librarySource.ids.length) fail(`Neither the library nor another project has a finished ${target.kind} to import`)
+const matches = (source: Source) => source.ids.some(a => a === target.id || source.name(a) === target.name)
+const source: Source = fromWhere === 'library'
+    ? librarySource
+    : fromWhere
+        ? (projects.includes(fromWhere) ? projectSource(fromWhere) : fail(`projects/${fromWhere} has no finished ${target.kind}s`))
+        : await (async () => {
+            const choice = answer(await p.select({
+                message: `Where to take the ${target.kind} from`,
+                // the library first, then the projects with an asset of the same id or name - the same character in another version of the song
+                options: [
+                    ...(librarySource.ids.length ? [{value: 'library:', label: `The library ${styles.muted(`(${librarySource.ids.length} ${target.kind}s)`)}`}] : []),
+                    ...projects.map(projectSource).sort((a, b) => Number(matches(b)) - Number(matches(a))).map(s => ({value: s.label, label: `${s.label}${matches(s) ? styles.muted(' · same id or name') : ''}`})),
+                ],
+            }))
+            return choice === 'library:' ? librarySource : projectSource(choice)
+        })()
 const sourceId = fromId
-    ? (available.includes(fromId) ? fromId : fail(`projects/${sourceProject} has no ${target.kind} "${fromId}": ${available.join(', ')}`))
+    ? (source.ids.includes(fromId) ? fromId : fail(`${source.label} has no ${target.kind} "${fromId}": ${source.ids.join(', ') || 'none'}`))
     : answer(await p.select({
-        message: `${target.kind === 'character' ? 'Character' : 'Location'} of ${sourceProject}`,
-        initialValue: available.find(a => a === target.id || nameIn(a) === target.name) ?? available[0],
-        options: available.map(a => ({value: a, label: `${nameIn(a) ?? a} ${styles.muted(`(${a})`)}`})),
+        message: `${target.kind === 'character' ? 'Character' : 'Location'} of ${source.label}`,
+        initialValue: source.ids.find(a => a === target.id || source.name(a) === target.name) ?? source.ids[0],
+        options: source.ids.map(a => ({value: a, label: `${source.name(a) ?? a} ${styles.muted(`(${a})`)}`})),
     }))
+const fromLibrary = source === librarySource
+const sourceLabel = fromLibrary ? `library:${sourceId}` : `${source.label}/${sourceId}`
 
 const {picture, sheet} = assetPaths(target.kind, target.id)
 const replacing = [picture, sheet].some(f => existsSync(join(dir, f)))
 if (!answer(await p.confirm({
-    message: `Copy ${sourceProject}/${sourceId} to ${target.id}${replacing ? ` - the current pictures of ${target.name} are put away in old/attempts/` : ''}?`,
+    message: `Copy ${sourceLabel} to ${target.id}${replacing ? ` - the current pictures of ${target.name} are put away in old/attempts/` : ''}?`,
     initialValue: true,
 }))) {
     p.cancel('Cancelled - nothing was changed')
     process.exit(0)
 }
-const done = importAsset(sourceDir, sourceProject, sourceId, dir, target.id, target.kind)
+const done = copyAsset({dir: source.dir, layout: source.layout(sourceId), label: fromLibrary ? 'library' : source.label}, {dir, layout: assetPaths(target.kind, target.id), archiveName: target.id})
 p.log.success(`Copied ${done.copied} file(s) to ${sheet}${existsSync(join(dir, picture)) ? ` and ${picture}` : ''} - pinned, never rendered again`)
 if (done.putAway) p.log.step(`The old pictures are in ${done.putAway}`)
 
 // 3. the description that goes with the picture
 const config = await loadProjectConfig(dir)
 const descriptions = target.kind === 'character' ? (data.characterDescriptions ??= {}) : (data.locationDescriptions ??= {})
-const theirs = (target.kind === 'character' ? sourceData.characterDescriptions : sourceData.locationDescriptions)?.[sourceId]
+const theirs = source.description(sourceId)
 const ours = descriptions[target.id]
 const mode = answer(await p.select({
     message: 'Description used in the clip prompts',
     options: [
-        ...(theirs ? [{value: 'source', label: `${sourceProject}'s - written for this picture`, hint: theirs.slice(0, 80)}] : []),
+        ...(theirs ? [{value: 'source', label: `${fromLibrary ? 'The library' : source.label}: written for this picture`, hint: theirs.slice(0, 80)}] : []),
         {value: 'vision', label: 'Write it from the picture (vision-capable LLM)'},
-        ...(ours ? [{value: 'keep', label: `Keep ${id}'s own`, hint: ours.slice(0, 80)}] : []),
+        ...(ours ? [{value: 'keep', label: `Keep the one of ${id}`, hint: ours.slice(0, 80)}] : []),
     ],
 }))
 let description = mode === 'source' ? theirs : mode === 'keep' ? ours : await fromPicture()
@@ -118,17 +148,17 @@ if (description && description !== ours) {
 
 // a place's background features and floor plan describe its picture too - taken along when the source has them
 if (target.kind === 'location') {
-    const anchor = sourceData.locationAnchors?.[sourceId]
+    const anchor = source.anchors(sourceId)
     if (anchor && anchor !== data.locationAnchors?.[target.id]) {
         (data.locationAnchors ??= {})[target.id] = anchor
         changed.push('locationAnchors')
     }
-    const layout = sourceData.locationLayouts?.[sourceId]
+    const layout = source.floorPlan(sourceId)
     if (layout && JSON.stringify(layout) !== JSON.stringify(data.locationLayouts?.[target.id])) {
         (data.locationLayouts ??= {})[target.id] = layout
         changed.push('locationLayouts')
     }
-    if (anchor || layout) p.log.step(`Took ${[anchor && 'the background features', layout && 'the floor plan with its views'].filter(Boolean).join(' and ')} along from ${sourceProject}`)
+    if (anchor || layout) p.log.step(`Took ${[anchor && 'the background features', layout && 'the floor plan with its views'].filter(Boolean).join(' and ')} along from ${source.label}`)
 }
 if (changed.length) {
     await Bun.write(file, JSON.stringify(data, null, 2))
@@ -190,11 +220,6 @@ async function fromPicture(): Promise<string | undefined> {
     }
 }
 
-function hasMatch(project: string) {
-    const other: Partial<Project> = existsSync(join(projectDir(project), 'project.json')) ? JSON.parse(readFileSync(join(projectDir(project), 'project.json'), 'utf8')) : {}
-    const names = new Set(entries(other as Project).filter(e => e.kind === target.kind).map(e => e.name))
-    return assetIds(projectDir(project), target.kind).includes(target.id) || names.has(target.name)
-}
 
 function fail(message: string): never {
     p.cancel(message)
