@@ -214,6 +214,7 @@ built on it (and everything built on those):
 | `lyricsLanguage`              | `transcript`                        |
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
 | `fightClips`                  | `blocking` (and so `shotMoments`)   |
+| `vocalGap`                    | `timeline` (and everything after it) |
 | `locationView`, `sequenceSheets` | `shotViews`                      |
 
 ### lyrics.txt
@@ -481,6 +482,7 @@ Settings per project, all optional - read at every run and checked field by fiel
   "pinStartFrame": true,
   "locationView": "auto",
   "fightClips": false,
+  "vocalGap": 1.5,
   "leakRetries": 0,
   "seed": -1,
   "imageResolution": -1,
@@ -511,6 +513,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `contextFrames`                       | `0` (default) = off; `22` or `39` (5 + 17·k) = a continuing clip starts on that many of the last frames of the clip before instead of its one last frame - the movement goes on, not only the pose. The clip is rendered that much longer at the head (~0.9 / 1.6 s), the head is cut off again; replaces `pinStartFrame` for those clips. Needs `continuity` - see [Continuous scenes](#continuous-scenes) |
 | `locationView`                        | `"auto"` (default) = the shot planning chooses one of the five views of the place for every shot (step `shotViews`, 11c) and a clip gets the one of its first shot as its place picture; `-1` = the whole reference sheet (all five views side by side - the video model shows that back as a grid with a black patch in the first seconds), `0`-`4` = that one view for every clip (front, right, behind, left, wide). Needs the sequence sheets (`sequenceSheets`, on by default) - without them the picture is the plain one. The choice is made from the text of the plan and the names of the views, never from the pictures: a language model that cannot read images is enough, and it is deliberately kept that way |
 | `fightClips`                          | `false` (default) = fight beats are cut like every beat; `true` = the clips of a fight beat (a "hit" with a crowd of creatures) are cut into one-bar pieces with one shot each and only the people of the shot as references - see `docs/comfyui.md` |
+| `vocalGap`                            | `1.5` (default) = a clip whose singing starts more than 1.5 s after its start is cut where the voice comes in (on the downbeat right before it when that is within 0.3 s), one whose singing stops more than 1.5 s before its end is cut where it stops - the silence becomes a clip of its own, and two silent pieces next to each other one clip. A generation that opens on seconds of silence starts the lip movement early, whatever the prompt says. More clips: 42 instead of 33 on tides. `0` = off. Needs the lyrics timing (`alignLyrics`); a project made before keeps its clips until `--redo=timeline` |
 | `leakRetries`                         | `0` (default) = off; `1` or more = a clip that came out as the reference pictures lined up on their grey backdrop is rendered again with another seed, that many times at most (needs `"seed": -1`). Already rendered clips: `bun run leak-scan <project-id>` - see `docs/comfyui.md` |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
@@ -519,14 +522,14 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `sequenceSheets`                      | `true` (default) = every character and place gets a multi-angle reference sheet (a turnaround video, sampled into frames) instead of one flat picture - see [docs/comfyui.md](docs/comfyui.md#reference-sheets); `false` = one plain picture each, cheaper while trying things out |
 | `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `finalFps`                            | `24` (default) = one final video at 24 fps; `60` (or `48`, `30`, …) = also `<project>-60fps.mp4`: every clip gets more frames by frame interpolation on ComfyUI, shot by shot (never across a cut - the cuts are read from the picture), kept in `videos/interpolated/`. A ComfyUI job per clip (~1 min for an 8 s clip at 1080p on an RTX 5090) |
-| `finish`                              | `false` (default) = off; `true` = a light grade and sharpen of the final video(s), written as `<name>-finished.mp4` next to them: black level 0.025, white level 0.98, contrast and saturation 1.03, CAS sharpen 0.4 (the "mild" one - stronger looked overdone on tides); `{"sharpen": 0.3}` changes single fields (`blackLevel`, `whiteLevel`, `contrast`, `saturation`, `sharpen`). The clips come out with lifted blacks (level ~29 instead of 16), whatever the prompt says about haze |
+| `finish`                              | `false` (default) = off; `true` = a light grade and sharpen of the final video(s), written as `<name>-finished.mp4` next to them: black level 0.025, white level 0.98, contrast and saturation 1.03, CAS sharpen 0.4 (the "mild" one - stronger looked overdone on tides); `{"sharpen": 0.3}` changes single fields (`blackLevel`, `whiteLevel`, `contrast`, `saturation`, `sharpen`). The clips come out with lifted blacks (level ~29 instead of 16), whatever the prompt says about haze. Off in `true`, to be switched on as fields: `colorMatch` (0-1) = every clip that part of the way to one reference in black, white and mean color, so the cuts do not jump - the reference is the median of all clips, or the clip `colorReference` names (`"slot-014"`); 1 removes the jumps, but also the mood of a darker or warmer scene, 0.5 halves them (tides: the mean jump of black + white at a cut 11.3 -> 5.6). `grain` (0-100, ~3 is light) = film grain over everything, last |
 | `interpolationModel`                  | the model for `finalFps`, a file in ComfyUI's `models/frame_interpolation/`: `"rife_v4.26_heavy.safetensors"` (default), any RIFE 4.25/4.26 or `"film_net_fp16.safetensors"` - from Hugging Face `Comfy-Org/frame_interpolation` |
 | `songAudio`                           | final video: `true` = the original song replaces the clips' audio (default), `false` = keep the clips' audio |
 
 Characters are always portrait, locations landscape - whichever way round the size is written. Videos are landscape
 unless `videoAspect` says otherwise, and always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
 
-The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView` and `fightClips` change
+The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips` and `vocalGap` change
 the plan (see the table of inputs under [Usage](#usage)); all others only change how it is rendered.
 
 ### Workflows

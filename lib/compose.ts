@@ -38,6 +38,9 @@ export function computeMemberCounts(beats: StoryBeat[], characters: Character[])
     return counts
 }
 // the first (ff) and last (lf) frame a rendered clip contributes to the final video - for extending clips later (fflf2va)
+// a sung word at least this long is a held note (see the shot texts)
+export const HELD_NOTE_SEC = 1
+
 export const boundaryFrameAsset = (clipId: string, which: 'ff' | 'lf') => `assets/clips/${clipId}_${which}.png`
 // one file per stem per clip, e.g. output/audio/slot-006.guitar.wav - a clip can have anywhere from 1 to
 // MAX_REF_AUDIOS tracks, not a fixed Audio 1/Audio 2, so this isn't a fixed pair of names any more
@@ -748,7 +751,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
                     const lines = shot.starting.map((v, n) => ` At ${clipTime(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
-                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${othersClause}${propClause}`.trim()
+                    // a long held note: the mouth flaps open and shut on it unless told to hold one shape
+                    const shotEnd = cuts[j + 1] ?? duration
+                    const held = [...shot.continuing, ...shot.starting].flatMap(v => v.words
+                        .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
+                        .map(w => ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, only the jaw and the throat move slightly, the mouth does not open and close again.`))
+                        .join('')
+                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length

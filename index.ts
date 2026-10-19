@@ -698,7 +698,7 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
 ////////// CUTTING THE SONG INTO CLIPS
 // switched alignLyrics on or off since the timeline was built
 if (project.data.timeline && (project.data.timeline.aligned ?? false) !== Boolean(lyricsTiming)) project.invalidate('timeline')
-const timeline = await project.step('timeline', '10 · CUTTING THE SONG INTO CLIPS', async () => buildTimeline(music, lyricSections, maxClipSec, lyricsTiming))
+const timeline = await project.step('timeline', '10 · CUTTING THE SONG INTO CLIPS', async () => buildTimeline(music, lyricSections, maxClipSec, lyricsTiming, config.vocalGap))
 log.step('Clips', `${timeline.slots.length} clips of ${timeline.barsPerSlot} bars (${(timeline.barsPerSlot * 240 / music.bpm).toFixed(1)}s) - max ${timeline.maxClipSec}s`)
 if (timeline.aligned) {
     log.step('Sections', styles.muted('from the lyrics timing (estimate from the audio in brackets)'))
@@ -1177,9 +1177,12 @@ if (render.has('final')) {
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
     // the light grade and sharpen ("finish"): a copy next to each final video, which itself stays as it is
     const finishing = finishOf(config.finish)
+    // where each clip is in the final video - the same seconds at every frame rate
+    const spans = clips.map(c => ({id: c.id, start: secondsAt(c.frameStart), end: secondsAt(c.frameStart + c.frames)}))
     const finish = async (video: string) => {
         if (!finishing) return
-        log.step('Finished', `${await finishVideo(video, finishing)} ${styles.muted(finishFilter(finishing))}`)
+        const done = await finishVideo(video, finishing, spans)
+        log.step('Finished', `${done.file} ${styles.muted(finishing.colorMatch > 0 ? `${finishFilter(finishing)}, ${spans.length} clips matched ${finishing.colorMatch} of the way to ${finishing.colorReference || 'their median'}` : done.filter)}`)
     }
     await finish(target)
 
