@@ -6,13 +6,14 @@ import {accumulatePhases, describeGraph, describeMachine, type Graph, type Graph
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
 import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
-import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
+import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo, trimHead} from "./assemble.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
 import {anchorSpec, clipSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
+import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
 import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
@@ -414,7 +415,7 @@ export class Renderer implements Disposable {
             // the clip's first frame and covers the whole render, so the extra frames at the end follow the
             // real song too - they are cut off again when the final video is assembled.
             // context frames: the last frames of the clip before go in at the start, the render begins that much earlier
-            const lead = context?.frames ?? 0
+            const lead = context ? context.frames + CONTEXT_SETTLE : 0
             const frames = renderFrames?.(clip.frames + lead) ?? clip.frames + lead
             if (frames < clip.frames + lead) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames + lead}) returned only ${frames} frames`)
             if (context) uploads.push({from: context.file, to: `${this.remoteDir}/${context.asset}`})
@@ -465,7 +466,13 @@ export class Renderer implements Disposable {
 
         // the head of a clip rendered with context frames is the clip before again: cut off, so the file starts on this
         // clip's own first frame like every other one
-        if (context) await trimHead(target, context.frames)
+        if (context) {
+            await trimHead(target, context.frames + CONTEXT_SETTLE)
+            // drawn on its own, the clip has its own exposure: matched as a whole to the last frames of the clip before, so
+            // the cut that is no cut shows no step in brightness or color (lib/colormatch.ts)
+            const filter = await matchColors(target, context.video, context.used - 4, context.used - 1)
+            log.line(styles.muted(`        · ${clip.id}: colors matched to ${clip.startsFrom} - ${filter}`))
+        }
         const rendered = await probeVideo(target)
         // every server has to deliver the size asked for - a clip of another size is scaled in the final video. The sizes
         // are computed by the workflow file, not by the server (comfy/helpers.ts, pixelSize); what still comes out at
@@ -519,23 +526,25 @@ export class Renderer implements Disposable {
     }
 
     /**
-     * The last `wanted` frames the clip `id` gives the final video, as a short video for the guide of the next clip - fewer
-     * when the clip is shorter (5 + 17·k, at least 5). undefined when the clip is not rendered: the next clip is skipped.
+     * `wanted` frames of the end of the clip `id`, as a short video for the guide of the next clip: they end CONTEXT_SETTLE
+     * frames before the last frame the clip gives the final video - those are drawn again after the batch and cut off with
+     * the head, so the flash right after the batch is never seen. Fewer when the clip is shorter (5 + 17·k, at least 5).
+     * undefined when the clip is not rendered: the next clip is skipped.
      */
-    private async contextOf(id: string, wanted: number): Promise<{ file: string, asset: string, frames: number } | undefined> {
+    private async contextOf(id: string, wanted: number): Promise<{ file: string, asset: string, frames: number, video: string, used: number } | undefined> {
         const video = join(this.projectDir, 'videos', `${id}.mp4`)
         const sidecar = `${video}.json`
         if (!existsSync(video) || !existsSync(sidecar)) return undefined
         const used = (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
-        let frames = Math.min(wanted, used)
+        let frames = Math.min(wanted, used - CONTEXT_SETTLE)
         while (frames > 5 && frames % 17 !== 5) frames--
         if (frames < 5) return undefined
         const asset = `assets/clips/${id}_tail${frames}.mp4`
         const file = join(this.projectDir, asset)
         mkdirSync(dirname(file), {recursive: true})
-        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `trim=start_frame=${used - frames}:end_frame=${used},setpts=PTS-STARTPTS`, '-an', '-c:v', 'libx264', '-crf', '10', '-pix_fmt', 'yuv420p', file],
+        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `trim=start_frame=${used - CONTEXT_SETTLE - frames}:end_frame=${used - CONTEXT_SETTLE},setpts=PTS-STARTPTS`, '-an', '-c:v', 'libx264', '-crf', '10', '-pix_fmt', 'yuv420p', file],
             {errorMessage: err => `ffmpeg could not cut the last ${frames} frames of ${id}:\n${err}`})
-        return {file, asset, frames}
+        return {file, asset, frames, video, used}
     }
 
     /**

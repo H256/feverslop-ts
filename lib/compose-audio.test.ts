@@ -91,8 +91,8 @@ describe('audio tracks of a band', () => {
         const [first, second] = build(22)
         expect(first!.prompt).not.toContain('end of the previous clip')
         expect(second!.startsFrom).toBe('slot-001')
-        expect(second!.prompt).toContain('Its first 0.92 seconds are the end of the previous clip, given as its frames')
-        expect(second!.prompt).toContain('At 00:02.917, the shot cuts to')
+        expect(second!.prompt).toContain('Its first 1.04 seconds are the end of the previous clip, given as its frames')
+        expect(second!.prompt).toContain('At 00:03.042, the shot cuts to')
         expect(build(0)[1]!.prompt).toContain('At 00:02.000, the shot cuts to')
     })
     test('a hands shot shows both hands and the instrument, never the face - and pulls in no singer', () => {

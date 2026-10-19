@@ -45,6 +45,12 @@ const trackAsset = (clipId: string, stem: string) => `output/audio/${clipId}.${s
 
 // a track mixed of several instrument stems (more players heard in a clip than ref_audio slots): its name, the same for the
 // same stems in any order - also the file it is mixed into (stems/<name>.wav, lib/music.ts mixStems)
+/**
+ * Context frames (config.contextFrames): the frame batch of the clip before ends this many frames before that clip's end,
+ * and these frames are rendered again and cut off with the head. The first frames the model draws after the batch flash
+ * brighter (tides slot-014: two frames at 86 against 81 before and 77 after) - they fall into the part that is cut off.
+ */
+export const CONTEXT_SETTLE = 3
 export type MixStem = `mix-${string}`
 export const mixStem = (stems: PropStem[]): MixStem => `mix-${[...stems].sort().join('-')}`
 
@@ -529,7 +535,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // Shots: more cuts with more energy, cut on downbeats
         // with context frames the video starts that much earlier: the frames of the clip before, then this clip's own time
-        const lead = startsFrom && contextFrames ? contextFrames / FPS : 0
+        const lead = startsFrom && contextFrames ? (contextFrames + CONTEXT_SETTLE) / FPS : 0
         const clipTime = (t: number) => formatTimestamp(t + lead)
         const duration = round(slot.end - slot.start + lead)
         const shotCount = shotCountFor(slot, beat, opensScene)
