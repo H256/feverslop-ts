@@ -90,6 +90,24 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('plays the guitar from 00:00.000 to 00:00.500 and from 00:01.000 to 00:01.300: hits a chord - in between and outside these times the guitar is held still.')
     })
 
+    test('the track definitions keep a silent stretch in the middle of a clip - the band does not play through it (#325)', () => {
+        // tides slot-025: an a-cappella line of the bridge, the band heard only at the start and the end of the clip
+        const c = buildClipRequests({
+            slots: [{id: 'slot-001', index: 0, section: 'Bridge', start: 160, end: 168, bars: 4, energy: 0.5, lyrics: []}],
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+            beats: [{...beat, characterIds: ['bss', 'drm']}],
+            characters: band, locations: [{id: 'clearing', name: 'Stage'}], characterDescriptions: {}, locationDescriptions: {}, lookBrief: '',
+            music: {bpm: 120, durationSec: 200, downbeats: [160, 162, 164, 166], barEnergy: [0.5, 0.5, 0.5, 0.5], sections: []}, language: 'English', stemsAvailable: true,
+            propActivity: {bass: [{start: 150, end: 162.9}, {start: 165.9, end: 200}], drums: [{start: 0, end: 163.6}, {start: 165.9, end: 200}]},
+            shotMoments: {b1: {shots: [{action: 'They play.', characters: ['bss', 'drm']}]}},
+        })[0]!
+        expect(c.prompt).toContain('<Subject 2> only actually plays from 02:40.000 to 02:43.100 and from 02:45.700 to 02:48.000 of the song; between and outside these spans within <Audio 1>, keep the instrument still.')
+        expect(c.prompt).toContain('confined to 02:40.000-02:43.100 and 02:45.700-02:48.000; between and outside these spans <Subject 2> keeps the instrument still')
+        expect(c.prompt).toContain("<Subject 3>'s drumming - used to time the cuts and blocking to the beat as well; <Subject 3> only actually plays from 02:40.000 to 02:43.800 and from 02:45.700 to 02:48.000 of the song, between and outside these spans the drums are held still.")
+        expect(c.prompt).toContain('drive the drumming motion of <Subject 3>, confined to 02:40.000-02:43.800 and 02:45.700-02:48.000')
+        expect(c.prompt).not.toContain('from 02:40.000 to 02:48.000')
+    })
+
     test('context frames: a continuing clip is longer at the head by them, every time in its prompt moves by them', () => {
         const build = (contextFrames: number) => buildClipRequests({
             slots: [0, 1].map(k => ({id: `slot-00${k + 1}`, index: k, section: 'Chorus', start: 4 * k, end: 4 * k + 4, bars: 2, energy: 0.8, lyrics: []})),
