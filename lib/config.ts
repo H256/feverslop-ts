@@ -4,6 +4,7 @@ import type {Aspect, Resolution} from "../comfy/helpers.ts";
 import {warnUnknownKeys} from "./log.ts";
 import {FPS} from "./frames.ts";
 import {multiplierFor} from "./interpolate.ts";
+import {type Finish, finishOf, finishProblem, MILD_FINISH} from "./finish.ts";
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
@@ -33,7 +34,10 @@ export type RenderConfig = {
     // the frame rate of a second final video, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by
     // frame interpolation (lib/interpolate.ts, a ComfyUI job per clip). 24 (default) = off
     finalFps: number,
-    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    interpolationModel: string,
+    // a light grade and sharpen of the final video(s), written as <name>-finished.mp4 next to them (lib/finish.ts):
+    // false (default) = off, true = the mild one, an object = the mild one with its fields replaced
+    finish: boolean | Partial<Finish>,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
@@ -81,6 +85,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     leakRetries: 0,
     finalFps: 24,
     interpolationModel: 'rife_v4.26_heavy.safetensors',
+    finish: false,
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
@@ -124,6 +129,14 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (!Number.isInteger(config.finalFps) || config.finalFps < FPS || (config.finalFps !== FPS && !multiplierFor(config.finalFps))) {
         fail(`finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(config.finalFps)}`)
     }
+    if (typeof config.finish !== 'boolean') {
+        if (!config.finish || typeof config.finish !== 'object' || Array.isArray(config.finish)) fail(`finish must be true, false or an object like {"sharpen": 0.3}, got ${JSON.stringify(config.finish)}`)
+        const unknown = Object.keys(config.finish).filter(k => !(k in MILD_FINISH))
+        if (unknown.length) fail(`finish: unknown field(s) ${unknown.join(', ')} - known are ${Object.keys(MILD_FINISH).join(', ')}`)
+    }
+    const finishing = finishOf(config.finish)
+    const finishWrong = finishing && finishProblem(finishing)
+    if (finishWrong) fail(`finish: ${finishWrong}`)
     if (typeof config.interpolationModel !== 'string' || !config.interpolationModel.trim()) fail(`interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(config.interpolationModel)}`)
     if (!Number.isInteger(config.leakRetries) || config.leakRetries < 0) fail(`leakRetries must be a whole number, 0 or more, got ${JSON.stringify(config.leakRetries)}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)

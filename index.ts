@@ -11,6 +11,7 @@ import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {multiplierFor} from "./lib/interpolate.ts";
+import {finishFilter, finishOf, finishVideo} from "./lib/finish.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
@@ -1173,6 +1174,13 @@ if (render.has('final')) {
     }
     const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
+    // the light grade and sharpen ("finish"): a copy next to each final video, which itself stays as it is
+    const finishing = finishOf(config.finish)
+    const finish = async (video: string) => {
+        if (!finishing) return
+        log.step('Finished', `${await finishVideo(video, finishing)} ${styles.muted(finishFilter(finishing))}`)
+    }
+    await finish(target)
 
     // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot - a job per
     // clip, kept in videos/interpolated/ and made again only when the clip, its cuts or the model change
@@ -1185,6 +1193,7 @@ if (render.has('final')) {
         const smooth = join(project.dir, `${project.id}-${config.finalFps}fps.mp4`)
         const more = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target: smooth, interpolated: {files, multiplier, fps: config.finalFps}})
         log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
+        await finish(smooth)
     }
 }
 
