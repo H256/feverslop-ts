@@ -25,7 +25,8 @@ describe('props in the pictures', () => {
     test('the place shows what stands in it and none of the carried props', () => {
         const {input} = locationLookPrompt('look', 'story', 'The stage', ['electric guitar'], ['drum kit'])
         expect(input).toContain('the place shows none of them, not even lying around, hanging or leaning somewhere: "electric guitar"')
-        expect(input).toContain('These objects stand in the place, ready to be used - each one exactly once, complete, at one fixed spot where it is clearly seen: "drum kit"')
+        expect(input).toContain('These objects stand in the place, ready to be used - each one exactly once, complete, at one fixed spot where it is clearly seen (a musical instrument with all the parts a player uses')
+        expect(input).toContain('a stool behind it): "drum kit"')
     })
     test('the planner reads a standing prop as used where it stands', () => {
         expect(castProp(drummer, stage)).toBe('drum kit (stands in The stage and is used there, with drumsticks in the hands - never carried)')
