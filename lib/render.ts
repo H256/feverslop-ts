@@ -81,6 +81,18 @@ const PROBE_TIMEOUT_MS = 10_000
  * would report the same error again for ever, whatever was changed since (the workflow, the config, a freed GPU) -
  * only a job that is queued, running or finished is worth waiting for.
  */
+/**
+ * The status board line of a job after a poll of the server: what the last WebSocket event said ("running KSampler #3, step
+ * 4/8") stays; without one, the poll decides - "running" or how many jobs are ahead. A resumed job heard no event yet, and
+ * a two-pass step takes minutes: it showed "queued" while it ran (#337).
+ */
+export function boardStatus(state: 'queued' | 'running' | 'finished' | 'failed' | 'unknown', current: string, ahead?: number): string {
+    if (current.startsWith('running')) return current
+    if (state === 'running') return 'running'
+    if (state === 'queued') return `queued, ${ahead ?? 0} job(s) ahead`
+    return current
+}
+
 export function resumesJob(state: 'queued' | 'running' | 'finished' | 'failed' | 'unknown'): boolean {
     return state === 'queued' || state === 'running' || state === 'finished'
 }
@@ -883,8 +895,8 @@ export class Renderer implements Disposable {
                 if (state === 'queued' && !status.startsWith('running')) {
                     const queue = await api.getQueue().catch(() => undefined)
                     const ahead = queue ? queue.queue_running.length + queue.queue_pending.findIndex(item => item[1] === job.promptId) : 0
-                    status = `queued, ${ahead} job(s) ahead`
-                }
+                    status = boardStatus(state, status, ahead)
+                } else if (silentSince === undefined) status = boardStatus(state, status)
                 missing = state === 'unknown' ? missing + 1 : 0
                 if (missing >= 3) throw new Error(`${label}: the job disappeared from ${server.name} (restarted?) - run again to render it again`)
                 await Bun.sleep(5000)
