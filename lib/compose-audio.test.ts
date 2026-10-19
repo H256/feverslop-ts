@@ -90,6 +90,23 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('plays the guitar from 00:00.000 to 00:00.500 and from 00:01.000 to 00:01.300: hits a chord - in between and outside these times the guitar is held still.')
     })
 
+    test('a player of a prop that stands in a place is only ever at it - one person, not also the standing figure of the picture (#327)', () => {
+        const kit: Character = {id: 'drm', name: 'Drm', role: 'drummer', prop: 'drum kit', propStem: 'drums', propCarried: false, propInHand: 'drumsticks'}
+        const c = buildClipRequests({
+            slots: [{id: 'slot-001', index: 0, section: 'Chorus', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: []}],
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+            beats: [{...beat, characterIds: ['gtr', 'drm']}],
+            characters: [band[1]!, kit], locations: [{id: 'clearing', name: 'Stage'}], characterDescriptions: {}, locationDescriptions: {}, lookBrief: '',
+            music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.8, 0.8], sections: []}, language: 'English', stemsAvailable: true,
+            propActivity: {guitar: [{start: 0, end: 4}], drums: [{start: 0, end: 4}]},
+            shotMoments: {b1: {shots: [{action: 'They play.', characters: ['gtr', 'drm']}]}},
+        })[0]!
+        expect(c.prompt).toContain('In the video <Subject 3> is only ever at the drum kit, where it stands, to play it - one person, never also a standing figure like the one in <Picture 3>.')
+        expect(c.prompt).toContain('and so is its standing pose - Drm is only at the drum kit')
+        // a carried instrument is in the picture as it is played: nothing of this
+        expect(c.prompt.match(/is only ever at the/g)).toHaveLength(1)
+    })
+
     test('context frames: a continuing clip is longer at the head by them, every time in its prompt moves by them', () => {
         const build = (contextFrames: number) => buildClipRequests({
             slots: [0, 1].map(k => ({id: `slot-00${k + 1}`, index: k, section: 'Chorus', start: 4 * k, end: 4 * k + 4, bars: 2, energy: 0.8, lyrics: []})),
