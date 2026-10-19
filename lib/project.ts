@@ -69,6 +69,7 @@ export type ShotPlan = {
     // plays: what the hands do on the instrument in this shot, as the planner wrote it in "playing:" (a plan from before has only playing: true)
     people?: Record<string, { state?: string, frame?: string, motion?: string, singing?: boolean, playing?: boolean, plays?: string }>,
     rest?: string,                  // what everyone in the shot who has no entry of their own does at the same time, each in their own way
+    hands?: string,                 // id of the player the shot is about: their hands on the instrument, both hands and the instrument in the frame, the face out of it
 }
 // A beat's shots: the fixed layout of the place, where everybody is when the beat is over (the next beat starts from it)
 // tokens: the texts name every character as {Name} (lib/refs.ts); a plan from before that has plain names
