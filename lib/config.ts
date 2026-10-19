@@ -31,6 +31,9 @@ export type RenderConfig = {
     // the clips of a fight beat (a "hit" with a crowd of creatures in it) are cut into one-bar pieces with one shot each,
     // and a piece has only the people of its shot as references - see splitFightSlots in lib/music.ts. Off by default
     fightClips: boolean,
+    // seconds: a clip whose singing starts (or stops) more than this after its start (before its end) is cut there, so the
+    // silence is a clip of its own and no lip movement starts early - see splitAtVocalGaps in lib/music.ts. 0 = off
+    vocalGap: number,
     // a clip that came out as the reference pictures lined up on their grey backdrop (see lib/leak.ts) is rendered again,
     // with another seed, up to this many times. 0 = off: the check costs a little, a render again costs a whole clip
     leakRetries: number,
@@ -86,6 +89,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     pinStartFrame: true,
     contextFrames: 0,
     fightClips: false,
+    vocalGap: 1.5,
     leakRetries: 0,
     finalFps: 24,
     interpolationModel: 'rife_v4.26_heavy.safetensors',
@@ -130,6 +134,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (!Number.isInteger(config.contextFrames) || config.contextFrames < 0 || (config.contextFrames > 0 && config.contextFrames % 17 !== 5)) fail(`contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(config.contextFrames)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
+    if (typeof config.vocalGap !== 'number' || config.vocalGap < 0) fail(`vocalGap must be 0 (off) or a number of seconds like 1.5, got ${JSON.stringify(config.vocalGap)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
     if (!Number.isInteger(config.finalFps) || config.finalFps < FPS || (config.finalFps !== FPS && !multiplierFor(config.finalFps))) {
         fail(`finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(config.finalFps)}`)
