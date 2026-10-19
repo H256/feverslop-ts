@@ -257,9 +257,10 @@ export class Renderer implements Disposable {
         const target = join(this.projectDir, picture.file)
 
         const dir = `assets/sequence/${picture.kind}s/${picture.id}`
-        const anchorFile = join(dir, 'anchor.png')
+        // with / also on Windows: anchorFile goes to the server as part of a path (a Linux ComfyUI refused "assets\sequence\…")
+        const anchorFile = `${dir}/anchor.png`
         const anchorTarget = join(this.projectDir, anchorFile)
-        const videoFile = join(dir, 'sequence.mp4')
+        const videoFile = `${dir}/sequence.mp4`
         const videoTarget = join(this.projectDir, videoFile)
         const {prompt: sequencePrompt, beatTimes} = picture.kind === 'character'
             ? characterSequencePrompt(picture.description)
