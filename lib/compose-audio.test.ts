@@ -132,6 +132,24 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('The hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the guitar fill the frame; the face is out of the frame.')
         expect(c.shots[0]!.subjects).not.toContain(c.assets.pictures.find(p => p.id === 'lead')?.subject)
     })
+    test('a player without hands: the close-up and the still pose use what it has - nobody is given hands', () => {
+        const donut: Character = {id: 'gtr', name: 'Glaze', role: 'a donut on guitar', prop: 'guitar', propStem: 'guitar', hands: 'sprinkle-covered arms'}
+        const build = (heard: boolean, shot: ShotPlan) => buildClipRequests({
+            slots: [{id: 'slot-001', index: 0, section: 'Chorus', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: []}],
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+            beats: [{...beat, characterIds: ['gtr']}],
+            characters: [donut], locations: [{id: 'clearing', name: 'Stage'}], characterDescriptions: {}, locationDescriptions: {}, lookBrief: '',
+            music: {bpm: 120, durationSec: 20, downbeats: [0, 2], barEnergy: [0.8, 0.8], sections: []}, language: 'English', stemsAvailable: true,
+            propActivity: {guitar: heard ? [{start: 0, end: 4}] : [{start: 10, end: 12}], drums: [{start: 0, end: 20}]},
+            shotMoments: {b1: {shots: [shot]}},
+        })[0]!.prompt
+        const closeUp = build(true, {action: '{Glaze} picks a run.', characters: ['gtr'], hands: 'gtr', people: {gtr: {state: 'at the front', motion: 'leans in', playing: true, plays: 'picks a run'}}})
+        expect(closeUp).toContain('extreme close-up of the sprinkle-covered arms of <Subject 2>, Glaze, on the guitar')
+        expect(closeUp).toContain('The sprinkle-covered arms - what strikes, picks or strums and what holds, frets or presses - and the body of the guitar fill the frame')
+        const still = build(false, {action: 'The stage glows.', characters: ['gtr']})
+        expect(still).toContain('<Subject 2>, Glaze, rests the sprinkle-covered arms flat on the body of the guitar, motionless.')
+        expect(still).not.toMatch(/\bhands?\b/)
+    })
     test('a drummer no shot shows is heard off camera - the drum track gives its slot to the players', () => {
         const c = clip(['lead', 'gtr', 'bss', 'drm'], true, {action: 'Lead sings to Gtr and Bss.', characters: ['lead', 'gtr', 'bss'], people: {gtr: {state: 'at the front', motion: 'steps in', playing: true, plays: 'strums'}, bss: {state: 'beside him', motion: 'leans in', playing: true, plays: 'thumbs the low string'}}})
         expect(c.assets.audio.map(a => a.stem)).toEqual(['vocals', 'guitar', 'bass'])

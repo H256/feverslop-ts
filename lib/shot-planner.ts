@@ -1,4 +1,5 @@
 import type {Assignment, BeatShots, Blocking, Character,Location, LocationLayout, MusicMap, Slot, StoryBeat} from "./project.ts";
+import {handsOf} from "./project.ts";
 import {type BeatSinging, isContinuous} from "./compose.ts";
 import type {ProjectConfig} from "./config.ts";
 import type {AskOptions} from "./llm.ts";
@@ -58,7 +59,7 @@ Rules:
 - "framing" is the shot size and angle ("wide shot", "medium close-up", "low-angle medium shot") - what can show everyone "characters" lists. A close shot shows at most two people and a medium shot at most three, near each other; people far apart from each other are only together in a wide shot, or each in a shot of their own. In a wide shot the faces are small: whatever lives on a face (singing, a look, a reaction) is a medium or close shot - and "camera" is one sentence with the movement and its speed (no times or durations in it - how long a shot is, is not yours to say). Every shot is a new camera position: no two in a row with the same movement, and "view" says where the camera stands and what it looks toward, in terms of the staging, on the same side of the action within one beat unless the story crosses it. "hold" is true for a shot in which nobody moves from where they are and the camera stays: the clip then keeps the framing from the first frame to the last.
 - Every character in a text field (staging, action, state, frame, motion, rest, camera, view, end) is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there, also a group character acting as several individuals, and never the "id" or a generic stand-in ("the orc", "an old woman") for someone of the cast: the braces bind the sentence to that character's reference picture, so every shot reads on its own. The names in "characters:" and after "person:" and "end:" are plain, without braces.
 - A beat may list "music": for each of its shots, in order, who is heard singing in the song at that point ("sings") and whose instrument is heard ("plays"). It is the song itself and it decides, whatever the beat's "summary" or "moments" say.
-- Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands do on that instrument in this shot, the way it is played and the moment asks for, as a short phrase - never just "yes". Their "motion" is the rest of the body playing along (leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. Everybody else with an instrument is "playing: no" and does something else with it or with their hands.
+- Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, the way it is played and the moment asks for, as a short phrase - never just "yes". Their "motion" is the rest of the body playing along (leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. Everybody else with an instrument is "playing: no" and does something else with it or with their hands.
 - A shot can be about a player's hands instead of a face: "hands" names that one player, whose instrument is heard in the shot, and they are alone in "characters" - a close view of both hands at work and the instrument between them: the hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the instrument, the face out of the frame. Use it where the story idea asks for close views of the playing, or where the music is about one instrument (a solo, a riff, a fill) - never for someone who only holds an instrument. Every other shot is "hands: no".
 - Someone whose instrument stands in the place (the cast says it "stands in" a place and is used there, never carried) is only in a shot together with it: at it, the instrument in the frame with them, never in front of it or away from it. A shot that cannot show the instrument - a medium or close shot of people elsewhere in the place - leaves them out; they are heard off camera.
 - Only the people in a shot's "sings" sing in it: "singing: yes", the mouth open to the words, into the microphone if they have one. Everybody else is "singing: no" and makes no sound with the mouth - in the "action" and "rest" too: no harmonies, no joining in, no crying out, calling or humming, even where the beat's "summary" says they sing together. A shot with nobody in "sings" is purely instrumental: the singers do something silent in it.
@@ -74,8 +75,8 @@ hold: <yes or no>
 risky: <yes only if the action could only be written with a blank or missing face, a stand-in object for a name or feeling, or readable text - else no>
 characters: <Name>, <Name>
 action: <what happens in the shot, at most two sentences, every character as {Name}>
-person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <what the hands do on their instrument in this shot, a short phrase, if this person plays it - else no> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
-person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <what the hands do on the instrument, or no> | singing: <yes or no>
+person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <what the hands (or what the cast gives instead) do on their instrument in this shot, a short phrase, if this person plays it - else no> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
+person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <what the hands (or what the cast gives instead) do on the instrument, or no> | singing: <yes or no>
 rest: <what the others in the picture do, every character as {Name}>
 hands: <the one player whose hands on the instrument the shot shows, or no>
 (then SHOT <next number> with the same fields, up to the last shot this call writes)
@@ -141,8 +142,8 @@ end: <Name> | <where they are and what they do and hold when the beat is over>
 
 // a prop that stands in a place (a drum kit) is used there and never carried along - said with the prop wherever it is listed
 export const castProp = (c: Character, locations: Location[]) => c.propCarried === false
-    ? `${c.prop} (stands in ${locations.find(l => l.id === c.propPlace)?.name ?? 'the place where it is used'} and is used there${c.propInHand ? `, with ${c.propInHand} in the hands` : ''} - never carried)`
-    : c.prop!
+    ? `${c.prop} (stands in ${locations.find(l => l.id === c.propPlace)?.name ?? 'the place where it is used'} and is used there${c.propInHand ? `, with ${c.propInHand} in the ${handsOf(c)}` : ''}${c.propInHand || handsOf(c) === 'hands' ? '' : `, with the ${handsOf(c)}`} - never carried)`
+    : `${c.prop!}${handsOf(c) === 'hands' ? '' : ` (held and used with the ${handsOf(c)})`}`
 
 /**
  * The blocking of one beat - a short call, made beat after beat: each starts where the one before ends (`before`). The

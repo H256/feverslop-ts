@@ -17,7 +17,10 @@ export type PropStem = 'drums' | 'bass' | 'other' | 'guitar' | 'piano'
 // so the group has one look and no member variants (a group of recognizably different individuals has them)
 // propCarried false: the prop stands in a place (propPlace, a location id) and is used there - the character picture shows only
 // what is held of it (propInHand, e.g. drumsticks), the place shows the object itself. Unset: the prop is carried
-export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, propCarried?: false, propInHand?: string, propPlace?: string, isGroup?: boolean, alike?: boolean }
+// hands: what the character holds and plays things with, when it is not hands ("paws", "tentacles") - see handsOf
+export type Character = { id: string, name: string, role: string, prop?: string, propStem?: PropStem, propCarried?: false, propInHand?: string, propPlace?: string, isGroup?: boolean, alike?: boolean, hands?: string }
+/** What a character holds and plays things with, as a plural noun: "hands" unless the cast says otherwise (a creature, a donut). */
+export const handsOf = (c: { hands?: string }) => c.hands?.trim() || 'hands'
 export type Location = { id: string, name: string }
 /** The fixed floor plan of a place (step locationLayouts) and, per view of its sheet (LOCATION_VIEWS), what that view shows. */
 export type LocationLayout = { layout: string, views: string[] }

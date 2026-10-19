@@ -1,4 +1,5 @@
 import type {BeatShots, Character, ShotPlan, StoryBeat} from "./project.ts";
+import {handsOf} from "./project.ts";
 import {readTokens, tokenCharacter} from "./refs.ts";
 
 // Reads what the shot planner (step 11b) answered for a beat. Nothing here understands words beyond the cast's own names:
@@ -96,9 +97,9 @@ function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, charact
         const instrument = props?.find(e => e.characterId === id)
         if (!instrument) continue
         const heard = instrument.activePerShot[j] === true
-        if (heard && p.playing !== true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: <what ${name}'s hands do on the ${instrument.prop} in this shot>, and ${name} plays it in the shot, staged however fits the moment`)
-        else if (heard && !p.plays) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: says only yes; write what ${name}'s hands do on the ${instrument.prop} in this shot instead`)
-        if (!heard && p.playing === true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is not heard in this shot - playing: no, and ${name} does something else with it or with their hands`)
+        if (heard && p.playing !== true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: <what ${name}'s ${handsOf(characters.find(c => c.id === id) ?? {})} do on the ${instrument.prop} in this shot>, and ${name} plays it in the shot, staged however fits the moment`)
+        else if (heard && !p.plays) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is heard in this shot - playing: says only yes; write what ${name}'s ${handsOf(characters.find(c => c.id === id) ?? {})} do on the ${instrument.prop} in this shot instead`)
+        if (!heard && p.playing === true) problems.push(`shot ${j + 1}: ${name}'s ${instrument.prop} is not heard in this shot - playing: no, and ${name} does something else with it or with their ${handsOf(characters.find(c => c.id === id) ?? {})}`)
     }
     return problems
 }

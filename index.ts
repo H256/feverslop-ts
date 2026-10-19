@@ -43,6 +43,7 @@ import {CASTING_FILE, copyCasting, copyKey, droppedCopies, readCastingFile, reso
 import {type LibraryAsset, libraryDir, libraryIds, readLibraryAsset} from "./lib/library.ts";
 import {assetPaths, type AssetKind} from "./lib/asset-import.ts";
 import {redoAfter} from "./lib/project.ts";
+import {handsOf} from "./lib/project.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, propInUsePrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
@@ -356,6 +357,8 @@ const cast = await reviewed(project, args.review, 'cast', () => project.step('ca
             id: uniqueId(toId(c.name), takenCharacters), name: c.name, role: c.role,
             ...(c.isGroup === true ? {isGroup: true} : {}),
             ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
+            // only when it is not hands - a project planned before keeps hands for everybody
+            ...(c.hands?.trim() && c.hands.trim().toLowerCase() !== 'hands' ? {hands: c.hands.trim()} : {}),
             ...(c.prop ? {prop: c.prop} : {}),
             ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
             ...(c.prop && c.propCarried === false ? {
@@ -475,11 +478,11 @@ async function lookWithPropInUse(char: Character, options: AskOptions): Promise<
     const look = await ask(options)
     const prop = pictureProp(char)
     if (!prop) return look
-    const first = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(look, prop)).catch(() => undefined)
+    const first = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(look, prop, handsOf(char))).catch(() => undefined)
     if (!first || first.inUse) return look
     log.warn(`${char.id}: the look shows the ${prop} not in use (${first.why}) - asking once more`)
-    const again = await ask({...options, input: `${options.input}\n\nThe last look you wrote shows the ${prop} not in use: ${first.why} Show it held in the position it has while it is used, with each hand where it is at work on it.`})
-    const second = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(again, prop)).catch(() => undefined)
+    const again = await ask({...options, input: `${options.input}\n\nThe last look you wrote shows the ${prop} not in use: ${first.why} Show it held in the position it has while it is used, with each of the ${handsOf(char)} where it is at work on it.`})
+    const second = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(again, prop, handsOf(char))).catch(() => undefined)
     if (second && !second.inUse) log.warn(`${char.id}: the look still shows the ${prop} not in use (${second.why}) - the clips will keep that pose; edit the look in ${project.file} by hand, then --redo=characterLooks`)
     return again
 }
