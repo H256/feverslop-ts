@@ -77,6 +77,24 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('plays the guitar from 00:00.000 to 00:00.500 and from 00:01.000 to 00:01.300: hits a chord - in between and outside these times the guitar is held still.')
     })
 
+    test('context frames: a continuing clip is longer at the head by them, every time in its prompt moves by them', () => {
+        const build = (contextFrames: number) => buildClipRequests({
+            slots: [0, 1].map(k => ({id: `slot-00${k + 1}`, index: k, section: 'Chorus', start: 4 * k, end: 4 * k + 4, bars: 2, energy: 0.8, lyrics: []})),
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}, {slotId: 'slot-002', beatId: 'b1'}],
+            beats: [{...beat, characterIds: ['gtr']}],
+            characters: band, locations: [{id: 'clearing', name: 'Stage'}], characterDescriptions: {}, locationDescriptions: {}, lookBrief: '',
+            music: {bpm: 120, durationSec: 8, downbeats: [0, 2, 4, 6], barEnergy: [0.8, 0.8, 0.8, 0.8], sections: []}, language: 'English', stemsAvailable: true,
+            propActivity: {guitar: [{start: 0, end: 8}], drums: [{start: 0, end: 8}]},
+            continuity: 'always', pinStartFrame: true, contextFrames,
+            shotMoments: {b1: {shots: [0, 1, 2, 3].map(n => ({action: `{Gtr} plays, part ${n}.`, characters: ['gtr']}))}},
+        })
+        const [first, second] = build(22)
+        expect(first!.prompt).not.toContain('end of the previous clip')
+        expect(second!.startsFrom).toBe('slot-001')
+        expect(second!.prompt).toContain('Its first 1.04 seconds are the end of the previous clip, given as its frames')
+        expect(second!.prompt).toContain('At 00:03.042, the shot cuts to')
+        expect(build(0)[1]!.prompt).toContain('At 00:02.000, the shot cuts to')
+    })
     test('a hands shot shows both hands and the instrument, never the face - and pulls in no singer', () => {
         const c = clip(['lead', 'gtr'], true, {action: '{Gtr} picks a fast run.', characters: ['gtr'], hands: 'gtr', people: {gtr: {state: 'at the front', motion: 'leans in', playing: true, plays: 'picks a fast run'}}})
         expect(c.prompt).toContain('extreme close-up of the hands of <Subject')

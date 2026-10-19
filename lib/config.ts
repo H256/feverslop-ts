@@ -25,6 +25,9 @@ export type RenderConfig = {
     // a continuing clip (config.continuity) is also pinned to the last frame of the clip before it as its first frame
     // (MiniMaxH3AddGuide), not only given it as a reference picture
     pinStartFrame: boolean,
+    // a continuing clip starts on this many of the last frames of the clip before (0 = off, else 5 + 17·k: 22, 39) instead
+    // of its one last frame: rendered that much longer, the motion goes on, the head is cut off again (lib/render.ts)
+    contextFrames: number,
     // the clips of a fight beat (a "hit" with a crowd of creatures in it) are cut into one-bar pieces with one shot each,
     // and a piece has only the people of its shot as references - see splitFightSlots in lib/music.ts. Off by default
     fightClips: boolean,
@@ -81,6 +84,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     sequenceSheets: true,
     sequenceWorkflow: 'h3-sequence-to-sheet',
     pinStartFrame: true,
+    contextFrames: 0,
     fightClips: false,
     leakRetries: 0,
     finalFps: 24,
@@ -124,6 +128,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     }
     if (!/^[1-9]\d*:[1-9]\d*$/.test(String(config.videoAspect))) fail(`videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(config.videoAspect)}`)
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
+    if (!Number.isInteger(config.contextFrames) || config.contextFrames < 0 || (config.contextFrames > 0 && config.contextFrames % 17 !== 5)) fail(`contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(config.contextFrames)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
     if (!Number.isInteger(config.finalFps) || config.finalFps < FPS || (config.finalFps !== FPS && !multiplierFor(config.finalFps))) {

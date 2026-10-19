@@ -95,3 +95,18 @@ describe('the two-pass workflow', () => {
         expect(nodes.filter(n => n.class_type === 'SamplerCustomAdvanced')).toHaveLength(2)
     })
 })
+
+describe('context frames in the clip workflows', () => {
+    test('a start clip is loaded as a frame batch and locked to frame 0, in both passes of the two-pass workflow', async () => {
+        for (const [name, guides] of [['h3-ref2video', 1], ['h3-ref2video-2pass', 2]] as const) {
+            const module = await import(`../comfy/workflows/${name}.ts`)
+            const {workflow, output} = module.default({prompt: 'p', pictures: ['a.png'], audios: ['d.wav'], song: 's.wav', startClip: 'tail.mp4', songStart: 0, frames: 39, duration: 2, seed: 1, resolution: 1.2, filenamePrefix: 'x'})
+            const nodes = workflow.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>
+            const load = Object.entries(nodes).find(([, n]) => n.class_type === 'VHS_LoadVideo')!
+            expect(load[1].inputs.video).toBe('tail.mp4')
+            const imageGuides = Object.values(nodes).filter(n => n.class_type === 'MiniMaxH3AddGuide' && Array.isArray(n.inputs.image) && (n.inputs.image as unknown[])[0] === load[0])
+            expect(imageGuides).toHaveLength(guides)
+            expect(Object.values(nodes).some(n => n.class_type === 'LoadImage' && n.inputs.image === 'tail.mp4')).toBe(false)
+        }
+    })
+})

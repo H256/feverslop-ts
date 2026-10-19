@@ -2,7 +2,7 @@
 // branch) - res_multistep, simple, 20 steps, no CFG (BasicGuider) and no sigma shift. About 2.5x the sampling time of the
 // 8-step turbo, for more detail, prompt adherence and motion - a person far from the camera has a face here.
 // Everything else (references, audio tracks, the song guide, the pinned first frame) is the same as h3-ref2video.
-import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, startImages, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
 export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
@@ -65,8 +65,9 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
     // A continuing clip's first frame (opts.startFrame) is a ref image like any other above - references only carry
     // identity and place, the pose and framing of the last frame of the clip before get lost. The same node that locks
     // the audio at frame 0 takes an image: that one is the clip's actual first frame.
-    const pinned = opts.startFrame
-        ? wf.MiniMaxH3AddGuide({positive: guided.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE})
+    const start = startImages(wf, opts)
+    const pinned = start
+        ? wf.MiniMaxH3AddGuide({positive: guided.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: start})
         : guided
 
     // int8 attention through comfy-kitchen: ~25% faster sampling on the Radeon. Only the guider gets it - the scheduler just needs the sigma schedule

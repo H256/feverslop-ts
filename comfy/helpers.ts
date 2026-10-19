@@ -70,6 +70,9 @@ export type VideoWorkflowOptions = {
     // ComfyUI input name of the picture the video has to start on (a continuing clip's first frame, config.pinStartFrame):
     // locked to frame 0 with MiniMaxH3AddGuide instead of only being one of the loose reference pictures
     startFrame?: string,
+    // ComfyUI input name of a short video: the last frames of the clip before (config.contextFrames), all of them locked to
+    // the start of this clip with MiniMaxH3AddGuide - the motion goes on, not only the pose. Instead of startFrame
+    startClip?: string,
     songStart: number,          // seconds - exactly on the clip's first frame, for every track in `audios`
     frames: number,             // frames to render, already a length the model accepts (see renderFrames)
     duration: number,           // frames / FPS - the audio to trim, covering the whole render
@@ -79,6 +82,16 @@ export type VideoWorkflowOptions = {
     filenamePrefix: string,
 }
 export type VideoWorkflow = (opts: VideoWorkflowOptions) => WorkflowResult
+
+/**
+ * What a continuing clip starts on, as images for MiniMaxH3AddGuide at frame 0: the frames of opts.startClip (the last
+ * frames of the clip before - the node places a batch of 5 + 17·k as consecutive frames) or the one picture opts.startFrame.
+ */
+export function startImages(wf: WorkflowBuilder, opts: Pick<VideoWorkflowOptions, 'startFrame' | 'startClip'>): NodeRef<"IMAGE"> | undefined {
+    if (opts.startClip) return wf.VHS_LoadVideo({video: dyn(opts.startClip), force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1}).IMAGE
+    if (opts.startFrame) return wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE
+    return undefined
+}
 
 // A short, silent turnaround video from one still image - the reference-sheet pipeline's video step (see
 // lib/sequenceSheet.ts). Not a VideoWorkflow: no ref_images/audio, one first_frame image drives the whole clip.

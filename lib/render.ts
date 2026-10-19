@@ -1,18 +1,19 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
-import {existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync} from "node:fs";
+import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
 import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
-import {boundaryFrameAsset, type ClipRequest} from "./compose.ts";
+import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
-import {extractFrame, probeVideo} from "./assemble.ts";
+import {extractFrame, probeVideo, trimHead} from "./assemble.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
 import {anchorSpec, clipSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
+import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
 import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
@@ -413,18 +414,21 @@ export class Renderer implements Disposable {
             // Render at least the clip's frames, in a length the model accepts. The audio starts exactly on
             // the clip's first frame and covers the whole render, so the extra frames at the end follow the
             // real song too - they are cut off again when the final video is assembled.
-            const frames = renderFrames?.(clip.frames) ?? clip.frames
-            if (frames < clip.frames) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames}) returned only ${frames} frames`)
+            // context frames: the last frames of the clip before go in at the start, the render begins that much earlier
+            const lead = context ? context.frames + CONTEXT_SETTLE : 0
+            const frames = renderFrames?.(clip.frames + lead) ?? clip.frames + lead
+            if (frames < clip.frames + lead) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames + lead}) returned only ${frames} frames`)
+            if (context) uploads.push({from: context.file, to: `${this.remoteDir}/${context.asset}`})
             const result = videoWorkflow({
                 prompt: clip.prompt,
                 // a pinned first frame (config.pinStartFrame) goes in as the guide only - as a reference picture too it is blended in twice
-                pictures: clip.assets.pictures.filter(p => !(this.config.pinStartFrame && p.kind === 'frame')).map(p => `${this.remoteDir}/${p.file}`),
+                pictures: clip.assets.pictures.filter(p => !((this.config.pinStartFrame || context) && p.kind === 'frame')).map(p => `${this.remoteDir}/${p.file}`),
                 audios: clip.assets.audio.map(a => `${this.remoteDir}/stems/${a.stem}.wav`),
                 ...(withVocals ? {vocals: `${this.remoteDir}/stems/vocals.wav`} : {}),
                 // the full mix, locked into the AV latent via MiniMaxH3AddGuide - see comfy/workflows/h3-ref2video.ts
                 song: songRemote,
-                ...(this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${boundaryFrameAsset(clip.startsFrom, 'lf')}`} : {}),
-                songStart: secondsAt(clip.frameStart),
+                ...(context ? {startClip: `${this.remoteDir}/${context.asset}`} : this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${boundaryFrameAsset(clip.startsFrom, 'lf')}`} : {}),
+                songStart: secondsAt(clip.frameStart - lead),
                 frames,
                 duration: secondsAt(frames),
                 seed,
@@ -434,6 +438,8 @@ export class Renderer implements Disposable {
             })
             return {result, uploads, meta: {seed, ...(result.size ? {size: result.size} : {})}}
         }
+        // context frames (config.contextFrames): the tail of the clip before, cut out now so the job is made from it
+        const context = clip.startsFrom && this.config.contextFrames > 0 ? await this.contextOf(clip.startsFrom, this.config.contextFrames) : undefined
         let {seed, size: expected} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)
 
         // a clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one
@@ -458,6 +464,15 @@ export class Renderer implements Disposable {
             seed = (await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)).seed
         }
 
+        // the head of a clip rendered with context frames is the clip before again: cut off, so the file starts on this
+        // clip's own first frame like every other one
+        if (context) {
+            await trimHead(target, context.frames + CONTEXT_SETTLE)
+            // drawn on its own, the clip has its own exposure: matched as a whole to the last frames of the clip before, so
+            // the cut that is no cut shows no step in brightness or color (lib/colormatch.ts)
+            const filter = await matchColors(target, context.video, context.used - 4, context.used - 1)
+            log.line(styles.muted(`        · ${clip.id}: colors matched to ${clip.startsFrom} - ${filter}`))
+        }
         const rendered = await probeVideo(target)
         // every server has to deliver the size asked for - a clip of another size is scaled in the final video. The sizes
         // are computed by the workflow file, not by the server (comfy/helpers.ts, pixelSize); what still comes out at
@@ -508,6 +523,28 @@ export class Renderer implements Disposable {
         if (rendered.frames !== expected) log.warn(`${basename(target)} has ${rendered.frames} frames, ${expected} expected`)
         await Bun.write(`${target}.json`, JSON.stringify({workflow: 'frame-interpolate', model, multiplier, pieces, frames: rendered.frames, fps: rendered.fps, fingerprint: specId(spec)}, null, 2))
         log.step('Saved', `${basename(target)} ${styles.muted(`${rendered.frames} frames at ${rendered.fps} fps · ${this.took(target)}`)}`)
+    }
+
+    /**
+     * `wanted` frames of the end of the clip `id`, as a short video for the guide of the next clip: they end CONTEXT_SETTLE
+     * frames before the last frame the clip gives the final video - those are drawn again after the batch and cut off with
+     * the head, so the flash right after the batch is never seen. Fewer when the clip is shorter (5 + 17·k, at least 5).
+     * undefined when the clip is not rendered: the next clip is skipped.
+     */
+    private async contextOf(id: string, wanted: number): Promise<{ file: string, asset: string, frames: number, video: string, used: number } | undefined> {
+        const video = join(this.projectDir, 'videos', `${id}.mp4`)
+        const sidecar = `${video}.json`
+        if (!existsSync(video) || !existsSync(sidecar)) return undefined
+        const used = (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
+        let frames = Math.min(wanted, used - CONTEXT_SETTLE)
+        while (frames > 5 && frames % 17 !== 5) frames--
+        if (frames < 5) return undefined
+        const asset = `assets/clips/${id}_tail${frames}.mp4`
+        const file = join(this.projectDir, asset)
+        mkdirSync(dirname(file), {recursive: true})
+        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `trim=start_frame=${used - CONTEXT_SETTLE - frames}:end_frame=${used - CONTEXT_SETTLE},setpts=PTS-STARTPTS`, '-an', '-c:v', 'libx264', '-crf', '10', '-pix_fmt', 'yuv420p', file],
+            {errorMessage: err => `ffmpeg could not cut the last ${frames} frames of ${id}:\n${err}`})
+        return {file, asset, frames, video, used}
     }
 
     /**

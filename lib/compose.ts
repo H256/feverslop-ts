@@ -2,7 +2,7 @@ import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
 import {readTokens, replaceTokens} from "./refs.ts";
 import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
-import {formatTimestamp, frameAt, round} from "./frames.ts";
+import {formatTimestamp, FPS, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
 
@@ -45,6 +45,12 @@ const trackAsset = (clipId: string, stem: string) => `output/audio/${clipId}.${s
 
 // a track mixed of several instrument stems (more players heard in a clip than ref_audio slots): its name, the same for the
 // same stems in any order - also the file it is mixed into (stems/<name>.wav, lib/music.ts mixStems)
+/**
+ * Context frames (config.contextFrames): the frame batch of the clip before ends this many frames before that clip's end,
+ * and these frames are rendered again and cut off with the head. The first frames the model draws after the batch flash
+ * brighter (tides slot-014: two frames at 86 against 81 before and 77 after) - they fall into the part that is cut off.
+ */
+export const CONTEXT_SETTLE = 3
 export type MixStem = `mix-${string}`
 export const mixStem = (stems: PropStem[]): MixStem => `mix-${[...stems].sort().join('-')}`
 
@@ -105,6 +111,9 @@ export type Input = {
     // config.pinStartFrame: a continuing clip gets the last frame of the clip before it as its pinned first frame
     // (the render passes it to the workflow separately) - it is then not one of the reference pictures
     pinStartFrame?: boolean,
+    // config.contextFrames: a continuing clip starts on that many last frames of the clip before - its video is that much
+    // longer at the head, so every time in the prompt moves by it
+    contextFrames?: number,
     // config.locationView: a clip's place picture is one view of the location's sheet (0-4): this one for every clip, or
     // with "auto" the one the shot planning chose for the first shot of the clip (shotViews); -1 or none = the sheet
     locationView?: number | 'auto',
@@ -375,7 +384,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s)
@@ -525,7 +534,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const vocalsTrack = performing ? tracks.find(t => t.stem === 'vocals') : undefined
 
         // Shots: more cuts with more energy, cut on downbeats
-        const duration = round(slot.end - slot.start)
+        // with context frames the video starts that much earlier: the frames of the clip before, then this clip's own time
+        const lead = startsFrom && contextFrames ? (contextFrames + CONTEXT_SETTLE) / FPS : 0
+        const clipTime = (t: number) => formatTimestamp(t + lead)
+        const duration = round(slot.end - slot.start + lead)
         const shotCount = shotCountFor(slot, beat, opensScene)
         const bars = music.downbeats.filter(t => t >= slot.start - 0.05 && t < slot.end - 0.05)
         const energyLevel = slot.energy < 0.4 ? 'low' : slot.energy < 0.7 ? 'mid' : 'high'
@@ -627,7 +639,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         const plays = people?.[s.id]?.plays?.replace(/[.\s]+$/, '')
                         // heard for part of the shot only: when, in the clip's own time, and held still before or after
                         const spans = activeSpans({start, end}, propActivity[s.propStem!]!)
-                        const when = spans ? spans.map(span => `from ${formatTimestamp(span.start - slot.start)} to ${formatTimestamp(span.end - slot.start)}`).join(' and ') : 'through the whole shot'
+                        const when = spans ? spans.map(span => `from ${clipTime(span.start - slot.start)} to ${clipTime(span.end - slot.start)}`).join(' and ') : 'through the whole shot'
                         const still = !spans ? ''
                             : spans.length > 1 ? ` - in between and outside these times the ${s.prop} is held still`
                             : ` - ${spans[0]!.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still`
@@ -672,14 +684,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
                 // fill the frame, where the playing is easiest to keep in time with its track
                 const opening = shot.hands
-                    ? `${shot.label} ${j === 0 ? 'An' : `At ${formatTimestamp(shot.at)}, the shot cuts to an`} extreme close-up of the hands of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. The hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
+                    ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the hands of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. The hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
                     : j === 0
                     ? onSinger
                         ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                         : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                     // repeats the location on every cut, not just the first shot - otherwise a shot with no location
                     // callout tends to fall back to the character reference pictures' plain grey background
-                    : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                    : `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                 const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
                 // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
                 // plan keeps the fixed positions
@@ -709,7 +721,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
                     // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
-                    const lines = shot.starting.map((v, n) => ` At ${formatTimestamp(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
+                    const lines = shot.starting.map((v, n) => ` At ${clipTime(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
                     return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${silentClause}${othersClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
@@ -743,7 +755,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ? withLabels(flatShotMoments[0].action, planTokens)
                 : opensScene
                 ? withLabels(beat.summary, beatTokens)
-                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
+                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${lead ? ` Its first ${lead.toFixed(2)} seconds are the end of the previous clip, given as its frames: the picture, the people and their movement go on from them without a cut, and [Shot 1] continues from there.` : ''}${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
