@@ -4,7 +4,7 @@ import {parseArgs} from "node:util";
 import {failRun, formatDuration, hideDetails, keepLogIn, log, printBanner, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
-import {ask, askJson, configureLlm, llmMap} from "./lib/llm.ts";
+import {ask, askJson, type AskOptions, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
@@ -44,7 +44,7 @@ import {type LibraryAsset, libraryDir, libraryIds, readLibraryAsset} from "./lib
 import {assetPaths, type AssetKind} from "./lib/asset-import.ts";
 import {redoAfter} from "./lib/project.ts";
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
+    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, propInUsePrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
 
@@ -468,6 +468,22 @@ const lookBrief = await reviewed(project, args.review, 'lookBrief',
     look => log.box('Look brief', look))
 
 ////////// CRAFTING CHARACTER LOOKS
+// The video model keeps the pose of the reference picture: a prop the picture shows at rest is never used in a clip, whatever
+// the clip prompt says (tides: a bass that "rests against her waist" - the bassist stood still in every clip, #323). The LLM
+// reads the look; a prop not in use is asked for once more, then it is a warning.
+async function lookWithPropInUse(char: Character, options: AskOptions): Promise<string> {
+    const look = await ask(options)
+    const prop = pictureProp(char)
+    if (!prop) return look
+    const first = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(look, prop)).catch(() => undefined)
+    if (!first || first.inUse) return look
+    log.warn(`${char.id}: the look shows the ${prop} not in use (${first.why}) - asking once more`)
+    const again = await ask({...options, input: `${options.input}\n\nThe last look you wrote shows the ${prop} not in use: ${first.why} Show it held in the position it has while it is used, with each hand where it is at work on it.`})
+    const second = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(again, prop)).catch(() => undefined)
+    if (second && !second.inUse) log.warn(`${char.id}: the look still shows the ${prop} not in use (${second.why}) - the clips will keep that pose; edit the look in ${project.file} by hand, then --redo=characterLooks`)
+    return again
+}
+
 const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARACTER LOOKS', async () => {
     const looks: Record<string, string> = {}
     for (const [i, char] of cast.characters.entries()) {
@@ -479,7 +495,7 @@ const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARA
         }
         const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         const options = characterLookPrompt(lookBrief, char, otherLooks)
-        looks[char.id] = await project.each('characterLooks', char.id, options, () => ask(options))
+        looks[char.id] = await project.each('characterLooks', char.id, options, () => lookWithPropInUse(char, options))
     }
     return looks
 })
