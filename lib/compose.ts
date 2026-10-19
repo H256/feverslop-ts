@@ -425,7 +425,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildSubjects() {
             const base = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
-                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike, hands: handsOf(c)})),
+                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike, hands: handsOf(c),
+                    // a prop that stands in a place (a drum kit) is not in the picture: the picture shows the player standing
+                    // with what they hold of it - a model given only that drew the player twice, at the kit and standing (#327)
+                    stationary: c.propCarried === false && c.prop ? c.prop : undefined})),
             ].map((s, n) => {
                 const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
                 const variant = members > 1 ? slot.index % members : 0
@@ -879,7 +882,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     : s.isGroup
                         // several individuals, not one: a group is never described as a single person
                         ? `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                        : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
+                        : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}${s.kind === 'character' && s.stationary ? ` In the video ${s.label} is only ever at the ${s.stationary}, where it stands, to ${s.propStem ? 'play' : 'use'} it - one person, never also a standing figure like the one in ${s.picture}.` : ''}`.trim()),
                 ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd([locationSubject, ...castSubjects].filter(s => s !== undefined).map(s => s.label))}.`] : []),
                 ...tracks.map(trackDefinition),
                 '',
@@ -889,7 +892,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'retention_analysis:',
                 ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
                     ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                    : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`}`),
+                    : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded${s.stationary ? `, and so is its standing pose - ${s.name} is only at the ${s.stationary}` : ''}, but expression is free to follow the shot's action.`}`),
                 ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
