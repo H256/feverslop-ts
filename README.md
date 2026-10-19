@@ -408,6 +408,36 @@ bun index.ts --render=videos --only=slot-005 --again   # slot-005 once more, wit
 
 How it works in detail: [docs/comfyui.md](docs/comfyui.md#the-final-video-and-frame-exact-timing).
 
+#### Finishing (`finish`)
+
+With `"finish"` set, a finished copy is written next to every final video (`<name>-finished.mp4`, also for the
+`finalFps` one); the video itself stays as it is. ffmpeg only, no ComfyUI. In this order:
+
+1. **Color match** (`colorMatch`, 0-1, off by default): the clips come out with their own exposure and tint, so a cut can
+   jump in brightness. Every clip is measured in the joined video (black and white of the luma, mean of the chroma,
+   every 6th frame, not the frames right at a cut) and moved that part of the way to one reference - the median of all
+   clips, or the clip `colorReference` names. `1` removes the jumps, but also the mood of a darker or warmer scene;
+   `0.5` halves them.
+2. **Grade:** black level, white level, contrast, saturation - against the lifted blacks the clips come out with.
+3. **Sharpen:** ffmpeg `cas`.
+4. **Grain** (`grain`, 0-100, off by default, ~3 is light): film grain over everything, after the sharpen.
+
+```json
+"finish": true
+"finish": {"colorMatch": 0.5, "grain": 3}
+"finish": {"colorMatch": 1, "colorReference": "slot-014", "sharpen": 0.3}
+```
+
+`true` is the "mild" finish (black level 0.025, white level 0.98, contrast and saturation 1.03, CAS 0.4, no color match,
+no grain); an object is the mild one with its own fields replaced. Measured on tides (53-87 s, slots 012-018), the mean
+jump of black + white at a cut:
+
+| Finish                      | mean | max  |
+|-----------------------------|------|------|
+| mild                        | 11.3 | 31.3 |
+| mild + `colorMatch` 0.5     | 5.6  | 15.6 |
+| mild + `colorMatch` 1       | 0.5  | 0.6  |
+
 ### Continuous scenes
 
 Every clip is rendered on its own, from the location sheet and the character pictures - so two clips of the same room
@@ -522,7 +552,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `sequenceSheets`                      | `true` (default) = every character and place gets a multi-angle reference sheet (a turnaround video, sampled into frames) instead of one flat picture - see [docs/comfyui.md](docs/comfyui.md#reference-sheets); `false` = one plain picture each, cheaper while trying things out |
 | `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `finalFps`                            | `24` (default) = one final video at 24 fps; `60` (or `48`, `30`, …) = also `<project>-60fps.mp4`: every clip gets more frames by frame interpolation on ComfyUI, shot by shot (never across a cut - the cuts are read from the picture), kept in `videos/interpolated/`. A ComfyUI job per clip (~1 min for an 8 s clip at 1080p on an RTX 5090) |
-| `finish`                              | `false` (default) = off; `true` = a light grade and sharpen of the final video(s), written as `<name>-finished.mp4` next to them: black level 0.025, white level 0.98, contrast and saturation 1.03, CAS sharpen 0.4 (the "mild" one - stronger looked overdone on tides); `{"sharpen": 0.3}` changes single fields (`blackLevel`, `whiteLevel`, `contrast`, `saturation`, `sharpen`). The clips come out with lifted blacks (level ~29 instead of 16), whatever the prompt says about haze. Off in `true`, to be switched on as fields: `colorMatch` (0-1) = every clip that part of the way to one reference in black, white and mean color, so the cuts do not jump - the reference is the median of all clips, or the clip `colorReference` names (`"slot-014"`); 1 removes the jumps, but also the mood of a darker or warmer scene, 0.5 halves them (tides: the mean jump of black + white at a cut 11.3 -> 5.6). `grain` (0-100, ~3 is light) = film grain over everything, last |
+| `finish`                              | `false` (default) = off; `true` = a light grade and sharpen of the final video(s), written as `<name>-finished.mp4` next to them: black level 0.025, white level 0.98, contrast and saturation 1.03, CAS sharpen 0.4 (the "mild" one - stronger looked overdone on tides); `{"sharpen": 0.3}` changes single fields (`blackLevel`, `whiteLevel`, `contrast`, `saturation`, `sharpen`, `colorMatch`, `colorReference`, `grain`) - see [Finishing](#finishing-finish). The clips come out with lifted blacks (level ~29 instead of 16), whatever the prompt says about haze. Off in `true`, to be switched on as fields: `colorMatch` (0-1) = every clip that part of the way to one reference in black, white and mean color, so the cuts do not jump - the reference is the median of all clips, or the clip `colorReference` names (`"slot-014"`); 1 removes the jumps, but also the mood of a darker or warmer scene, 0.5 halves them (tides: the mean jump of black + white at a cut 11.3 -> 5.6). `grain` (0-100, ~3 is light) = film grain over everything, last |
 | `interpolationModel`                  | the model for `finalFps`, a file in ComfyUI's `models/frame_interpolation/`: `"rife_v4.26_heavy.safetensors"` (default), any RIFE 4.25/4.26 or `"film_net_fp16.safetensors"` - from Hugging Face `Comfy-Org/frame_interpolation` |
 | `songAudio`                           | final video: `true` = the original song replaces the clips' audio (default), `false` = keep the clips' audio |
 
