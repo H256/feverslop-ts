@@ -67,6 +67,16 @@ type Trace = { classType: string, at: number }[]
 export const dispatchOrder = <T extends { pin?: string }>(waiting: T[]) => [...waiting.filter(w => w.pin), ...waiting.filter(w => !w.pin)]
 
 /**
+ * The server a waiter gets: the first one that is free and not down - with a pin only that one, unless it is down (a job
+ * resumed on a server that has gone away is rendered again elsewhere).
+ */
+export const pickServer = <S extends { name: string }>(servers: S[], busy: Set<string>, down: Set<string>, pin?: string) =>
+    servers.find(s => !busy.has(s.name) && !down.has(s.name) && (!pin || down.has(pin) || s.name === pin))
+
+// how long a server may take to answer the question whether it is there at all, after a job on it failed
+const PROBE_TIMEOUT_MS = 10_000
+
+/**
  * Whether a recorded job is picked up again on the next run. A failed job stays in ComfyUI's history, so resuming it
  * would report the same error again for ever, whatever was changed since (the workflow, the config, a freed GPU) -
  * only a job that is queued, running or finished is worth waiting for.
@@ -119,7 +129,10 @@ export class Renderer implements Disposable {
     private lastModels = new Map<string, string>()   // server name -> the models its last job used (another set means a cold start)
     private renderMs = new Map<string, number>()   // target -> time spent on its ComfyUI job(s)
     private busy = new Set<string>()        // server names
-    private waiting: { pin?: string, resolve: (server: Server) => void }[] = []
+    // servers that stopped answering in this run (a crashed ComfyUI behind its proxy): no job goes to them any more, or the
+    // next jobs fail on them one after the other the moment they get them - 33 of 41 clips of tribal-261019 (#331)
+    private down = new Set<string>()
+    private waiting: { pin?: string, resolve: (server: Server) => void, reject: (error: Error) => void }[] = []
     private stopQueueNote?: () => void
     /** What is rendered again although it exists, when it is stale: "pictures" and/or "clips" (--refresh) - the old ones are put away in old/attempts. */
     refresh = new Set<string>()
@@ -185,12 +198,41 @@ export class Renderer implements Disposable {
         })
     }
 
-    // the first free server - with a pin only that one
+    // the first free server - with a pin only that one (see pickServer)
     private acquire(pin?: string) {
-        return new Promise<Server>(resolve => {
-            this.waiting.push({pin, resolve})
+        return new Promise<Server>((resolve, reject) => {
+            if (this.connected.length && this.connected.every(s => this.down.has(s.name))) return reject(this.allDown())
+            this.waiting.push({pin, resolve, reject})
             this.dispatch()
         })
+    }
+
+    private allDown() {
+        return new Error(`no ComfyUI server answers any more (${[...this.down].join(', ')}) - start them again and run again; finished files are kept, the rest goes on from there`)
+    }
+
+    /** Whether a server still answers at all - asked after a job on it failed. */
+    private async answers(server: Server): Promise<boolean> {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), PROBE_TIMEOUT_MS) })
+        try {
+            return await Promise.race([server.api.getSystemStats().then(() => true, () => false), timeout])
+        } finally {
+            clearTimeout(timer)
+        }
+    }
+
+    /** No job goes to `server` any more in this run; with no server left, everybody still waiting is told so. */
+    private markDown(server: Server) {
+        if (this.down.has(server.name)) return
+        this.down.add(server.name)
+        const left = this.connected.filter(s => !this.down.has(s.name)).map(s => s.name)
+        log.warn(`ComfyUI ${server.name} (${server.url}) does not answer - no more jobs go to it in this run${left.length ? `, they go to ${left.join(', ')}` : ''}. Start it again and run again to use it`)
+        if (!left.length) {
+            for (const waiter of this.waiting.splice(0)) waiter.reject(this.allDown())
+            return
+        }
+        this.dispatch()
     }
 
     private release(server: Server) {
@@ -200,7 +242,7 @@ export class Renderer implements Disposable {
 
     private dispatch() {
         for (const waiter of dispatchOrder(this.waiting)) {
-            const free = this.connected.find(s => !this.busy.has(s.name) && (!waiter.pin || s.name === waiter.pin))
+            const free = pickServer(this.connected, this.busy, this.down, waiter.pin)
             if (!free) continue
             this.busy.add(free.name)
             this.waiting.splice(this.waiting.indexOf(waiter), 1)
@@ -599,24 +641,36 @@ export class Renderer implements Disposable {
             log.warn(`${label}: the job queued at ${formatClock(initial.queuedAt)} was made from another request than the plan has now - not used (${basename(kept)} keeps it), rendering again`)
             initial = undefined
         }
-        const home = initial ? this.homeOf(label, initial, servers) : undefined
+        // a server that went down in this run is not a home any more: the job is rendered again elsewhere
+        let home = initial ? this.homeOf(label, initial, servers.filter(s => !this.down.has(s.name))) : undefined
 
-        const server = await this.acquire(home?.name)
-        const started = Date.now()
-        const trace: Trace = []
-        let pending: PendingJob<M> | undefined
-        let failure: Error | undefined
-        try {
-            pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
-            await this.downloadResult(label, target, extension, server, pending, trace)
-            return pending.meta
-        } catch (e) {
-            failure = e instanceof Error ? e : new Error(String(e))
-            throw e
-        } finally {
-            this.release(server)
-            this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
-            await this.keepRender(what, server, pending, trace, started, failure)
+        for (;;) {
+            const server = await this.acquire(home?.name)
+            const started = Date.now()
+            const trace: Trace = []
+            let pending: PendingJob<M> | undefined
+            let failure: Error | undefined
+            let again = false
+            try {
+                pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
+                await this.downloadResult(label, target, extension, server, pending, trace)
+                return pending.meta
+            } catch (e) {
+                failure = e instanceof Error ? e : new Error(String(e))
+                // a failure on a server that does not answer any more is the server's, not the job's: it is taken out of
+                // the run and the job goes to another one - unless there is none left
+                if (!(await this.answers(server))) {
+                    this.markDown(server)
+                    again = this.connected.some(s => !this.down.has(s.name))
+                    if (again) log.warn(`${label}: rendered again on another server (${failure.message.slice(0, 160)})`)
+                }
+                if (!again) throw e
+            } finally {
+                this.release(server)
+                this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
+                await this.keepRender(what, server, pending, trace, started, failure)
+            }
+            home = undefined
         }
     }
 

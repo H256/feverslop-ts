@@ -1,7 +1,7 @@
 import {describe, expect, test} from "bun:test";
 import {aboveRecommended, pixelSize} from "../comfy/helpers.ts";
 import {twoPassSizes} from "../comfy/h3-two-pass.ts";
-import {dispatchOrder, resumesJob} from "./render.ts";
+import {dispatchOrder, pickServer, resumesJob} from "./render.ts";
 
 test('a job that is queued, running or finished is resumed', () => {
     expect(resumesJob('queued')).toBe(true)
@@ -12,6 +12,20 @@ test('a job that is queued, running or finished is resumed', () => {
 test('a job already queued on a server gets it before the new renders - it only has to be fetched', () => {
     const waiting = [{id: 'slot-003'}, {id: 'slot-001', pin: '5090'}, {id: 'slot-004'}, {id: 'slot-002', pin: 'radeon'}]
     expect(dispatchOrder(waiting).map(w => w.id)).toEqual(['slot-001', 'slot-002', 'slot-003', 'slot-004'])
+})
+
+test('a server that went down gets no job - and a job pinned to it goes to another one (#331)', () => {
+    const servers = [{name: 'radeon'}, {name: '5090'}]
+    const none = new Set<string>()
+    expect(pickServer(servers, none, none)?.name).toBe('radeon')
+    expect(pickServer(servers, none, new Set(['radeon']))?.name).toBe('5090')
+    // the free down server is never taken, even when it is the only free one
+    expect(pickServer(servers, new Set(['5090']), new Set(['radeon']))).toBeUndefined()
+    // pinned to a server that is up: only that one
+    expect(pickServer(servers, none, none, '5090')?.name).toBe('5090')
+    expect(pickServer(servers, new Set(['5090']), none, '5090')).toBeUndefined()
+    // pinned to a down server: any other
+    expect(pickServer(servers, none, new Set(['radeon']), 'radeon')?.name).toBe('5090')
 })
 
 test('a failed job is queued anew, not resumed', () => {
