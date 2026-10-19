@@ -77,9 +77,14 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('plays the guitar from 00:00.000 to 00:00.500 and from 00:01.000 to 00:01.300: hits a chord - in between and outside these times the guitar is held still.')
     })
 
-    test('a player no shot shows is heard off camera - the drum track times the cuts, it drives no drumming', () => {
-        const c = clip(['lead', 'gtr', 'drm'], true, {action: 'Lead sings to Gtr.', characters: ['lead', 'gtr'], people: {gtr: {state: 'at the front', motion: 'steps in', playing: true, plays: 'strums'}}})
-        expect(c.prompt).toContain('is the isolated drum layer of the Chorus section')
-        expect(c.prompt).not.toContain("drumming")
+    test('a drummer no shot shows is heard off camera - the drum track gives its slot to the players', () => {
+        const c = clip(['lead', 'gtr', 'bss', 'drm'], true, {action: 'Lead sings to Gtr and Bss.', characters: ['lead', 'gtr', 'bss'], people: {gtr: {state: 'at the front', motion: 'steps in', playing: true, plays: 'strums'}, bss: {state: 'beside him', motion: 'leans in', playing: true, plays: 'thumbs the low string'}}})
+        expect(c.assets.audio.map(a => a.stem)).toEqual(['vocals', 'guitar', 'bass'])
+        expect(c.prompt).not.toContain('drum')
+        expect(c.prompt).toContain('cut in 2 shots on the downbeats of the music')
+    })
+    test('a drummer in the picture keeps the drum track - the other players share what is left', () => {
+        const c = clip(['lead', 'gtr', 'bss', 'drm'], true)
+        expect(c.assets.audio.map(a => a.stem)).toEqual(['vocals', 'mix-bass-guitar', 'drums'])
     })
 })

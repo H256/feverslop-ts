@@ -500,7 +500,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // (mixStem, made by lib/music.ts mixStems). Dropping the players that did not fit left the bass of a four-piece band
         // with no audio at all, behind vocals, guitar and the drums. Their activity still comes from each stem on its own.
         const players: Part[] = [...propGroups].filter(([stem]) => stem !== 'drums' && clipActive(stem)).map(([stem, subjects]) => ({stem, subjects}))
-        const freeSlots = MAX_REF_AUDIOS - 1 - (performing ? 1 : 0)
+        // No drummer in the picture: the drum track only times the cuts, and the whole song is locked into the latent for that
+        // already (MiniMaxH3AddGuide in the clip workflows) - its slot goes to the players, so bass and guitar keep a track
+        // each instead of one mix (tides: the bass was heard and the bassist did not play, the mix could not tell them apart).
+        // A clip with nothing else to give keeps the drums: a workflow needs at least one track.
+        const drummerShown = clipActive('drums') && (propGroups.get('drums')?.length ?? 0) > 0
+        const anchorKept = !stemsAvailable || drummerShown || (!performing && !players.length)
+        const freeSlots = MAX_REF_AUDIOS - (anchorKept ? 1 : 0) - (performing ? 1 : 0)
         const own = players.length <= freeSlots ? players : players.slice(0, Math.max(0, freeSlots - 1))
         const mixed = players.slice(own.length)
         const performanceTracks: Track[] = [
@@ -513,7 +519,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const anchorTrackDef: Track = stemsAvailable
             ? {label: '', stem: 'drums' as const, subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []}
             : {label: '', stem: 'song' as const, subjects: []}
-        const tracks = [...performanceTracks.slice(0, MAX_REF_AUDIOS - 1), anchorTrackDef]
+        const tracks = [...performanceTracks.slice(0, MAX_REF_AUDIOS - (anchorKept ? 1 : 0)), ...(anchorKept ? [anchorTrackDef] : [])]
         tracks.forEach((t, n) => t.label = `<Audio ${n + 1}>`)
         const anchorTrack = tracks.find(t => t.stem === 'drums' || t.stem === 'song')
         const vocalsTrack = performing ? tracks.find(t => t.stem === 'vocals') : undefined
