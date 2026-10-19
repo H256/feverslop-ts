@@ -768,7 +768,7 @@ if (plannedBefore) {
     delete project.data.shotViews
 }
 const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
-const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging}
+const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook: lookBrief}
 // The blocking, beat after beat - short calls: the floor plan, where everybody starts and ends. Each beat starts where the
 // one before it ends, so this is the only part that has to go in order. A step of its own: --redo=shotMoments plans the shots
 // again on the same floor plans. A beat whose blocking stays unusable has no entry and plans its staging and ends itself.

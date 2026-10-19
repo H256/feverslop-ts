@@ -49,6 +49,14 @@ describe('the planner sees what the pictures show', () => {
         expect(input).toContain('"hall":{"name":"Hall","description":"A long stone hall with one door on the left."}')
         expect(input).toContain('"Runa":"A girl in a red coat."')
     })
+    test('the film look is in the input, and the framing follows it - not "everyone the beat has" (#333)', () => {
+        const {input, instructions} = planPrompt({...context, filmLook: 'Dark night close-ups by firelight.'}, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        expect(input).toContain("film look (the director's style - the shot sizes, the camera and the light of the shots follow it): Dark night close-ups by firelight.")
+        expect(instructions).toContain('chosen by what the shot is about and by the "film look" in the input')
+        expect(instructions).not.toContain('what can show everyone')
+        // a project without a look brief plans as before, without the line
+        expect(planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []}).input).not.toContain('film look')
+    })
 })
 
 describe('the fixed layout of the place', () => {
