@@ -497,14 +497,25 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // Same idea as vocalsWindow, for an instrument track: a clip-wide "partially_copy" claim outweighs the
         // per-shot idle notes below when the instrument is only active in some of this clip's shots (e.g. a
         // guitarist who picks the guitar up partway through) - state the real window explicitly.
-        const instrumentWindow = (stem: PropStem) => {
-            const ranges = (propActivity?.[stem] ?? []).filter(r => r.end > slot.start && r.start < slot.end)
-            if (!ranges.length) return undefined
+        // Where in the clip an instrument is heard, in song time: every span of its own, a little wider - undefined when it is
+        // heard (nearly) all through the clip. One window from the first to the last moment it is heard lost a silent stretch
+        // in between: in an a-cappella line in the middle of a clip the band played on (tides slot-025, #325)
+        const instrumentSpans = (stem: PropStem) => {
             const pad = 0.2
-            const from = Math.min(...ranges.map(r => r.start))
-            const to = Math.max(...ranges.map(r => r.end))
-            return {start: round(Math.max(slot.start, from - pad)), end: round(Math.min(slot.end, to + pad))}
+            const ranges = (propActivity?.[stem] ?? []).map(r => ({start: r.start - pad, end: r.end + pad}))
+            return activeSpans({start: slot.start, end: slot.end}, ranges)
+                ?.reduce<{ start: number, end: number }[]>((all, r) => {
+                    const last = all.at(-1)
+                    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end)
+                    else all.push({...r})
+                    return all
+                }, [])
+                .map(r => ({start: round(r.start), end: round(r.end)}))
         }
+        // "from 02:40.287 to 02:42.650 and from 02:46.450 to 02:48.229", and the same as "02:40.287-02:42.650 and 02:46.450-02:48.229"
+        const spanText = (spans: { start: number, end: number }[]) => spans.map(r => `from ${formatTimestamp(r.start)} to ${formatTimestamp(r.end)}`).join(' and ')
+        const spanRanges = (spans: { start: number, end: number }[]) => spans.map(r => `${formatTimestamp(r.start)}-${formatTimestamp(r.end)}`).join(' and ')
+        const stillText = (spans: { start: number, end: number }[]) => spans.length > 1 ? 'between and outside these spans' : 'outside that span'
 
         // Multi-track audio: one <Audio N> per stem actually audible on screen, cut to the clip's full length
         // (never a narrower window - a short snippet has no clear position inside an 8.5s latent unless it
@@ -780,9 +791,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // a mixed track: who plays which of its stems, and in which span of the song
             const playersOf = (p: Part) => joinAnd(p.subjects.map(s => s.label))
             const partSpans = (parts: Part[]) => parts.flatMap(p => {
-                const window = instrumentWindow(p.stem)
-                return window ? [`${playersOf(p)} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)}`] : []
+                const spans = instrumentSpans(p.stem)
+                return spans ? [`${playersOf(p)} ${spanText(spans)}`] : []
             })
+            // the drummer's own spans, as for any other player - the drum track is there for the cuts in any case
+            const drumSpans = (t: Track) => t.subjects.length ? instrumentSpans('drums') : undefined
             // beat.summary is written once for the whole scene and often describes how it opens (a character
             // arriving, emerging, appearing) - correct for the first clip of the scene, but repeating it verbatim
             // in later clips of the same scene tells the model everyone re-enters/re-appears each time, which
@@ -818,22 +831,28 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
             // subject_definitions line per track: what it is and, for an instrument/vocal track, who it drives
             const trackDefinition = (t: Track) => t.stem === 'drums'
-                ? `${t.label} is the isolated drum layer of the ${slot.section} section (${songPosition})${t.subjects.length ? `, the performance reference for ${joinAnd(t.subjects.map(s => s.label))}'s drumming` : ''} - used to time the cuts and blocking to the beat${t.subjects.length ? ' as well' : ''}.`
+                ? (() => {
+                    const spans = drumSpans(t)
+                    return `${t.label} is the isolated drum layer of the ${slot.section} section (${songPosition})${t.subjects.length ? `, the performance reference for ${joinAnd(t.subjects.map(s => s.label))}'s drumming` : ''} - used to time the cuts and blocking to the beat${t.subjects.length ? ' as well' : ''}${spans ? `; ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} ${spanText(spans)} of the song, ${stillText(spans)} the drums are held still` : ''}.`
+                })()
                 : t.stem === 'song'
                     ? `${t.label} is the ${slot.section} section (${songPosition}) of the song's full mix - used to time the cuts and blocking to the beat.`
                     : t.stem === 'vocals'
                         ? `${t.label} is the isolated lead vocal of the ${slot.section} section (${songPosition}), the voice-timbre reference for ${voices} - but ${voices} only actually sings from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song; outside that span within ${t.label}, keep lips closed and still.`
                         : t.parts ? (() => {
                             const spans = partSpans(t.parts)
-                            return `${t.label} is the ${joinAnd(t.parts.map(p => stemName[p.stem]))} layers of the ${slot.section} section (${songPosition}), mixed into one track: the performance reference for ${joinAnd(t.parts.map(p => `${playersOf(p)} (the ${stemName[p.stem]})`))}${spans.length ? ` - but each only actually plays within their own span of the song: ${spans.join(', ')}; outside it, that one keeps the instrument still` : ''}.`
+                            return `${t.label} is the ${joinAnd(t.parts.map(p => stemName[p.stem]))} layers of the ${slot.section} section (${songPosition}), mixed into one track: the performance reference for ${joinAnd(t.parts.map(p => `${playersOf(p)} (the ${stemName[p.stem]})`))}${spans.length ? ` - but each only actually plays within their own spans of the song: ${spans.join('; ')}; outside them, that one keeps the instrument still` : ''}.`
                         })() : (() => {
-                            const window = instrumentWindow(t.stem as PropStem)
-                            return `${t.label} is the isolated ${stemName[t.stem as PropStem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${window ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} from ${formatTimestamp(window.start)} to ${formatTimestamp(window.end)} of the song; outside that span within ${t.label}, keep the instrument still` : ''}.`
+                            const spans = instrumentSpans(t.stem as PropStem)
+                            return `${t.label} is the isolated ${stemName[t.stem as PropStem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${spans ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} ${spanText(spans)} of the song; ${stillText(spans)} within ${t.label}, keep the instrument still` : ''}.`
                         })()
             // retention_analysis line per track
             const trackRetention = (t: Track) => t.stem === 'drums'
                 ? t.subjects.length
-                    ? `${t.label}: partially_copy - its rhythm and hits drive the drumming motion of ${joinAnd(t.subjects.map(s => s.label))}; it also grounds the cut and blocking timing for the whole scene.`
+                    ? (() => {
+                        const spans = drumSpans(t)
+                        return `${t.label}: partially_copy - its rhythm and hits drive the drumming motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the drums still` : ''}; it also grounds the cut and blocking timing for the whole scene.`
+                    })()
                     : `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
                 : t.stem === 'song'
                     ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
@@ -841,8 +860,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         ? `${t.label}: partially_copy - its timbre and phrasing drive the lip movements of ${voices}, confined to ${formatTimestamp(vocalsWindow!.start)}-${formatTimestamp(vocalsWindow!.end)}; elsewhere in the clip ${voices} keeps lips closed and still.`
                         : t.parts ? `${t.label}: partially_copy - ${t.parts.map(p => `its ${stemName[p.stem]} drives the instrument motion of ${playersOf(p)}`).join(', ')}${partSpans(t.parts).length ? ', each confined to their own span' : ''}.`
                         : (() => {
-                            const window = instrumentWindow(t.stem as PropStem)
-                            return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${window ? `, confined to ${formatTimestamp(window.start)}-${formatTimestamp(window.end)}; elsewhere in the clip ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
+                            const spans = instrumentSpans(t.stem as PropStem)
+                            return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
                         })()
 
             return [
