@@ -1,6 +1,6 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
-import {basename, dirname, extname, join} from "node:path";
+import {basename, dirname, extname, join, posix} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
@@ -79,6 +79,22 @@ export function resumesJob(state: 'queued' | 'running' | 'finished' | 'failed' |
  * Renders on one or more ComfyUI servers, one job per server at a time: each render takes the first free server,
  * a resumed job waits for the server it was queued on.
  */
+/**
+ * A path on the ComfyUI server written with a backslash - in an upload's target or anywhere in the workflow - or undefined.
+ * The servers are Windows and Linux: path.join gives \ on Windows, which only a Windows ComfyUI takes. Every path that
+ * goes to a server is built with /.
+ */
+export function backslashedRemotePath(uploads: { to: string }[], prompt: unknown): string | undefined {
+    const upload = uploads.find(u => u.to.includes('\\'))
+    if (upload) return upload.to
+    const found = (value: unknown): string | undefined => {
+        if (typeof value === 'string') return value.startsWith('feverslop-ts/') && value.includes('\\') ? value : undefined
+        if (value && typeof value === 'object') for (const v of Object.values(value)) { const hit = found(v); if (hit) return hit }
+        return undefined
+    }
+    return found(prompt)
+}
+
 export class Renderer implements Disposable {
     /** The frames the video workflow really renders for a clip of `frames` (some models only take certain counts). */
     async plannedFrames(frames: number) {
@@ -661,12 +677,14 @@ export class Renderer implements Disposable {
 
         log.step('Rendering', `${styles.name(label)} ${styles.muted(`@${server.name}`)}`)
         const {result: {workflow, output}, uploads, meta} = await prepare()
+        const prompt = workflow.build({outputs: {result: output}}).workflow
+        const backslashed = backslashedRemotePath(uploads, prompt)
+        if (backslashed) throw new Error(`${label}: a path on the server is written with \\ - ${backslashed}. A Linux ComfyUI refuses it; build it with /, not path.join`)
         for (const upload of uploads) {
-            // into ComfyUI's input folder, under the same name the workflow loads
-            const uploaded = await api.uploadImage(Bun.file(upload.from), basename(upload.to), {subfolder: dirname(upload.to), override: true})
+            // into ComfyUI's input folder, under the same name the workflow loads - split with /, whatever system this runs on
+            const uploaded = await api.uploadImage(Bun.file(upload.from), posix.basename(upload.to), {subfolder: posix.dirname(upload.to), override: true})
             if (!uploaded) throw new Error(`${label}: upload of ${upload.from} to ${server.name} failed`)
         }
-        const prompt = workflow.build({outputs: {result: output}}).workflow
         const queued = await api.queuePrompt(null, prompt).catch(async (error: unknown) => {
             // ComfyUI answers an invalid graph with 400 and the node errors
             const details = error instanceof Response ? await error.text() : String(error)
