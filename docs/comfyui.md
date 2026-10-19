@@ -182,6 +182,21 @@ being scaled in the final video.
 scaled up 2× to 1088×1920 (characters; 1920×1088 for locations), and `imageResolution` sets the size of the first
 pass - `"1088x1920"` gives a 2176×3840 picture.
 
+`h3-ref2video-2pass` is the other way round: `videoResolution` is the **final** size, and the first pass renders half
+its width and half its height - a quarter of the pixels; the latent upscaler brings it to the final size. To pick the
+first pass, give four times its megapixels:
+
+| `videoResolution` | pass 1 | final | measured (8 s clip, 192 frames) |
+|-------------------|--------|-------|---------------------------------|
+| `-1` or `2`       | 960×544 (0.5 MP) | 1920×1088 | RTX 5090: pass 1 2:35, pass 2 2:20 - 6:47 in all; Radeon R9700: 16:45 |
+| `2.4`             | 1056×592 (0.6 MP) | 2112×1184 | not measured |
+| `1.2`             | 768×416 (0.3 MP) | 1504×832 | not measured |
+
+Pass 2 at the final size is the expensive part: at 2 MP the UNet no longer fits next to the activations of a 32 GB card
+and is partly moved to RAM (70 s per step on the 5090, 172 s on the R9700), so a larger final size costs a lot more
+time and may not fit on the Radeon at all. A first pass at another size than half the final one (0.6 MP before a
+2 MP clip) is not possible yet - the upscaler always doubles.
+
 Video frame rate is always 24 fps.
 
 ### Song audio
