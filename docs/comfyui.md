@@ -125,8 +125,12 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `sequenceSheets`  | `true`           | `true` = every character/location gets a multi-angle reference sheet instead of one flat hero image - see [Reference sheets](#reference-sheets); `false` = the old single-picture render |
 | `sequenceWorkflow`| `"h3-sequence-to-sheet"` | a file name in `comfy/workflows/`, without `.ts`                                |
 | `pinStartFrame`   | `true`           | continuing clips (README: [Continuous scenes](../README.md#continuous-scenes)): `true` = the clip is locked to the last frame of the clip before it as its real first frame (`MiniMaxH3AddGuide` with `image`, `h3-ref2video` only), `false` = that frame is only one of the reference pictures |
-| `fightClips`      | `false`          | `true` = the clips of a fight beat (kind `hit` with a crowd of creatures in it) are cut into one-bar pieces of about two seconds, one shot each, and a piece has only the people of its shot as references - more clips, shorter, and the opponent is always in the picture. The planner stages such a beat as single blows and reactions (`micro`). Changing it redoes `shotMoments` |
+| `fightClips`      | `false`          | `true` = the clips of a fight beat (kind `hit` with a crowd of creatures in it) are cut into one-bar pieces of about two seconds, one shot each, and a piece has only the people of its shot as references - more clips, shorter, and the opponent is always in the picture. The planner stages such a beat as single blows and reactions (`micro`). Changing it redoes `blocking` (and so `shotMoments`) |
 | `leakRetries`     | `0`              | a rendered clip that came out as the reference pictures lined up on their grey studio backdrop (seed-dependent, rare) is put away in `old/leaks/` and rendered again with another seed, up to this many times. `0` = off. Needs `"seed": -1`. `bun run leak-scan <project-id>` looks through the clips already rendered and prints the command to render the flagged ones again |
+| `songWorkflow`    | `"yue2-song"`    | `--render=song`: a file name in `comfy/workflows/`, without `.ts` |
+| `songDuration`    | `-1`             | `--render=song`: an upper bound in seconds for the generated song, `-1` = the workflow's own (360 s) |
+| `continuity`      | `"never"`        | `"auto"` = the beats marked continuous run on without a cut, `"always"` = every clip but the first of each beat starts on the last frame of the one before - read [Continuous scenes](../README.md#continuous-scenes) first. Changing it redoes `blocking` |
+| `locationView`    | `"auto"`         | which view of a place's reference sheet a clip gets: `"auto"` = chosen per shot (step `shotViews`), `-1` = the whole sheet, `0`-`4` = front, right, behind, left, wide for every clip. Needs `sequenceSheets` |
 | `singers`         | `[]`             | who sings on screen: `[]` = nobody (clip mode), `["auto"]` = the LLM picks, `["Thorin"]` = names or ids - see [Singing characters](../README.md#singing-characters) |
 | `singerVoice`     | `"auto"`         | voice of the song: `"auto"` = as the story has it, `"female"` / `"male"` = everybody who sings is a woman / man, `"mixed"` = a duet of one woman and one man; the story is written around them and the cast follows (changes the story, so everything after it redoes) |
 | `lyricsLanguage`  | `"en"`           | language code of the lyrics, for Whisper and the `<d>[English]` lyrics tag               |
@@ -134,7 +138,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 
 Changing `singerVoice` after pictures were rendered: existing pictures are kept (a picture that exists is not rendered again), so delete the old character pictures to get the new cast.
 
-The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`) change the plan, the others only the render. The
+The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`) change the plan, the others only the render. The
 config is read and checked at every run - a wrong value stops with a message naming the field, an unknown field
 (a typo like `"singer"`) gets a warning.
 
@@ -274,7 +278,10 @@ wizard). Walks through:
 ### Workflows
 
 `imageWorkflow`, `videoWorkflow` and `sequenceWorkflow` pick the workflow file used for rendering. The included ones
-are `kroma-image` (default) and `krea2-image` for pictures, `h3-ref2video` and `h3-sequence-to-sheet`. Any file in `comfy/workflows/` that follows the
+are `kroma-image` (default) and `krea2-image` for pictures; `h3-ref2video` (default), `h3-ref2video-full`,
+`h3-ref2video-2pass` and `h3-ref2video-cpu-clip` for clips; `h3-sequence-to-sheet` for the reference sheets and
+`yue2-song` for the song (see the table in the [README](../README.md#workflows)). `frame-interpolate` is used for
+`finalFps` and is not chosen in `config.json`. Any file in `comfy/workflows/` that follows the
 workflow contract can be used - see [custom-workflows.md](custom-workflows.md). Different projects can use different
 workflows.
 
