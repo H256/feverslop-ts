@@ -67,15 +67,17 @@ directions (a lost line stops the run, `--allow-import-gaps` goes on anyway).
 | 1 | `brief`      | Title, dialogue language, logline, genre, tone, setting | – |
 | 2 | `outline`    | Idea only: characters (look and voice) and scenes with planned seconds | brief |
 | 3 | `screenplay` | Idea: writes the script from the outline. Screenplay: structures it - **every line of dialogue is checked against the source** and asked again if the model reworded one | brief, outline |
+| 3b | `scriptNotes` | What the script contradicts itself in. The pipeline's own script (an idea) is repaired in up to 2 rounds; a handed-in screenplay is only reported - it is the writer's - unless `--fix-script` asks for the repair (up to 3 rounds) | screenplay |
 | 4 | `cast`       | Characters (aliases = every cue the script uses, look, voice, voice-only for a narrator) and locations; every speaker and slugline must resolve. Extras, crowds and ghosts are scene description, not characters | screenplay |
 | 5 | `summary`    | Short summary, for the look design | screenplay |
 | 6 | `lookBrief`  | The film look - extends `style.txt` | summary |
 | 7 | `characterLooks`, `characterDescriptions` | Krea 2 prompt per character who is seen, and the description without the picture's pose and background for the clip prompts | cast, lookBrief |
 | 8 | `locationLooks`, `locationDescriptions` | the same for the locations | cast, lookBrief, summary |
-| 8c | `subtitles` | Only with `--render=final` and `"subtitles": "en"` (a language code) in config.json: every line that is not in that language, translated | screenplay |
+| 8c | `locationViews` | Only with `"locationViews": true`: the floor plan and the five views of every location sheet, designed for the place - see [Location views](#location-views) | cast, locationDescriptions |
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json`, `output/timeline.edl` (the film as an edit decision list for an editor: DaVinci Resolve, Premiere, … - the clips cut as the assembled film cuts them) | coverage |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
+| 12a | `subtitles` | Only with `--render=final` and `"subtitles": "en"` (a language code) in config.json: every line that is not in that language, translated | screenplay |
 | 12 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
 
 Steps 6-8 use the music-video pipeline's look prompts unchanged; the script's own description of a character is passed in
@@ -91,6 +93,12 @@ Dialogue is never translated or reworded: a screenplay keeps its language, an id
 
 The run prints a rough running time and clip count (about 2.5 spoken words per second, ~3 s per action) - a guess, to
 compare with the target before anything expensive is rendered.
+
+Flags beyond the quick start: `--fix-script` (repair a handed-in screenplay, see 3b), `--refresh=pictures,clips`
+(render the pictures and clips made from an older plan again - the old ones go to `old/attempts/`), `--strict` (the
+film refuses such stale clips instead of listing them), `--scenes=s6,s7` with `--redo=coverage` (only these scenes are planned
+again - the shots of the others and their rendered clips stay), `--allow-import-gaps` (see [Creating a film](#creating-a-film)),
+`--debug` (the stack trace of a failure) and the `--llm-*` / `--comfy=` overrides of the [README](../README.md#setup).
 
 ## Clips and prompts
 

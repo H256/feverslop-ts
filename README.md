@@ -33,6 +33,17 @@ bun run setup
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
 | `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command |
 | `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt |
+| `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
+| `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
+| `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
+| `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
+| `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
+| `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
+| `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
+| `bun run film:init`, `bun film.ts <id>` | the short-film pipeline - see [docs/film.md](docs/film.md) |
+| `bun run styles:doc`    | regenerates [docs/style-examples.md](docs/style-examples.md) from `lib/styles.ts` |
+| `bun run site:build`    | builds the documentation site in `site/dist/` from the README and `docs/` |
+| `bun test`              | the unit tests |
 | `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
 | `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |
 | `bun run comfy:convert` | turns a ComfyUI workflow (API export) into a draft workflow file             |
@@ -105,6 +116,10 @@ cached project runs without either.
   troubleshooting
 - [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
 - [docs/film.md](docs/film.md) – the experimental short-film pipeline (`bun run film:init`, `bun film.ts`): idea or screenplay → film
+- [docs/recipes.md](docs/recipes.md) – short answers to common tasks: fix one clip, portrait video, 60 fps, cheap iteration, the same band in every song
+- [docs/style-examples.md](docs/style-examples.md) – every built-in style, to copy into `style.txt`
+- [docs/minimax-h3-video-prompt-writing-guide.md](docs/minimax-h3-video-prompt-writing-guide.md) – the prompt format the clip requests follow
+- [docs/development.md](docs/development.md) – for working on the code: layout, adding a step, tests, principles
 
 ## Creating a project
 
@@ -188,15 +203,18 @@ built on it (and everything built on those):
 
 | Changed                       | Redoes                              |
 |-------------------------------|-------------------------------------|
-| `idea.txt`                    | `songBrief`                         |
-| `music-style.txt`             | `songBrief`                         |
+| `idea.txt`                    | `songStyle`                         |
+| `music-style.txt`             | `songStyle`                         |
 | `song.wav`/`song.mp3`         | `music`, `stems`                    |
-| `lyrics.txt`                  | `story`, `transcript`, `singing`    |
+| `lyrics.txt`                  | `story`, `transcript`, `singing`, `songStyle` |
 | `story-idea.txt`              | `story`                             |
 | `style.txt`                   | `lookBrief`                         |
 | `singers` in `config.json`    | `singing` (and so `beats`)          |
+| `singerVoice`                 | `story` (and everything after it)   |
 | `lyricsLanguage`              | `transcript`                        |
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
+| `fightClips`                  | `blocking` (and so `shotMoments`)   |
+| `locationView`, `sequenceSheets` | `shotViews`                      |
 
 ### lyrics.txt
 
@@ -226,23 +244,23 @@ Cold as ice and deep as time
 
 ### Generating the song
 
-Without `input/song.wav` (and `input/lyrics.txt`), `--render=song` writes both from `input/idea.txt` before the rest
-of the pipeline runs:
+Without `input/song.wav`, `--render=song` writes it from `input/idea.txt` before the rest of the pipeline runs:
 
-1. **Song brief** (step `1`, `songBrief`) - an LLM turns `idea.txt` (+ optional `music-style.txt`, the target length
-   from `songDuration` in `config.json`, and `lyricsLanguage`) into a YuE2 `style` prompt (comma-separated genre,
-   instruments, mood, vocal gender, vocal tone) and `lyrics` with section tags. Both are written back to
-   `lyrics.txt` and `music-style.txt` - each only if it doesn't already exist yet, so a hand-written file is never
-   overwritten, and the generated style stays around to read, tweak or reuse (e.g. `--redo=songBrief` after editing
-   it, to keep your own style but get new lyrics for it).
-2. **Song audio** (step `1a`) - renders the song with the YuE2 ComfyUI workflow (`songWorkflow` in `config.json`,
+1. **Lyrics** (step `1`, not cached) - only when `input/lyrics.txt` doesn't exist: an LLM writes lyrics with section
+   tags from `idea.txt`, the target length (`songDuration` in `config.json`) and `lyricsLanguage`, into
+   `input/lyrics.txt`. From then on `lyrics.txt` is a plain input like `story-idea.txt` - edit it, or delete it to get
+   new lyrics.
+2. **Musical style** (step `1a`, `songStyle`) - an LLM turns the lyrics (+ optional `music-style.txt`) into a YuE2
+   `style` prompt (comma-separated genre, instruments, mood, vocal gender, vocal tone). It is written to
+   `music-style.txt` only if that file doesn't exist yet, so a hand-written one is never overwritten. Redone whenever
+   `idea.txt`, `music-style.txt` or `lyrics.txt` changed, or with `--redo=songStyle`.
+3. **Song audio** (step `1b`) - renders the song with the YuE2 ComfyUI workflow (`songWorkflow` in `config.json`,
    default `yue2-song`) and writes `input/song.wav`. `songDuration` (default: the workflow's own, 360s) is only an
    upper bound - the model decides the actual song length.
 
-`--render=song` is a no-op once `input/song.wav` exists - delete it (and `lyrics.txt`, if it should be rewritten too)
-and run `--render=song` again to generate a new song. `--redo=songBrief` alone rewrites just the brief (style and
-lyrics) without touching an existing `song.wav`. Without `idea.txt`, the pipeline behaves exactly as before:
-`song.wav` and `lyrics.txt` must be supplied by hand.
+Once `input/song.wav` exists, `--render=song` renders it again only when the lyrics or the style changed in this run.
+To get a new song: edit `music-style.txt` or `lyrics.txt` (or delete `lyrics.txt` for new lyrics) and run
+`--render=song` again. Without `idea.txt`, `song.wav` and `lyrics.txt` must be supplied by hand.
 
 ### Style
 
@@ -267,8 +285,9 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 
 | # | Step (`--redo=`) | What it does                                                                     | Built on                     |
 |---|------------------|----------------------------------------------------------------------------------|------------------------------|
-| 1  | `songBrief`      | YuE2 `style` prompt and `lyrics` from `idea.txt` (+ optional `music-style.txt`) ⁵ | –                            |
-| 1a | –                | Song audio rendered with the YuE2 workflow → `input/song.wav` ⁵                   | songBrief                    |
+| 1  | –                | Lyrics from `idea.txt` → `input/lyrics.txt`, only when there is none ⁵            | –                            |
+| 1a | `songStyle`      | YuE2 `style` prompt from the lyrics (+ optional `music-style.txt`) ⁵              | –                            |
+| 1b | –                | Song audio rendered with the YuE2 workflow → `input/song.wav` ⁵                   | songStyle                    |
 | 2  | `music`          | BPM, downbeats, energy per bar, song sections named after the lyrics tags         | –                            |
 | 2a | `stems`          | demucs `htdemucs_ft` → `stems/{vocals,drums,bass,other}.wav` ¹                    | –                            |
 | 2b | `transcript`     | Whisper large-v3 on `vocals.wav`, word timestamps, the lyrics as prompt ¹         | stems                        |
@@ -287,10 +306,13 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 | 8c | `locationAnchors` | Two or three fixed features of each place, as one phrase - kept behind the people of every shot, so no shot falls back to the grey backdrop of the character pictures | locationDescriptions |
 | 8d | `locationLayouts` | The fixed floor plan of each place and what each of the five views of its sheet shows of it - every beat in the place is staged in it (11b), and the views are chosen by it (11c) | locationLooks, locationDescriptions |
 | 9  | `beats`          | Story beats without timing: moments, location, characters, intensity, continuity - the intensity follows the song's loudness and the instruments heard along the way | story, cast, singing, music, lyricsTiming, propActivity |
+| 9c | `characterLookVariants` | One look prompt per member of a group character, each visibly different - see [Group characters](#group-characters) ⁷ | characterLooks, beats |
+| 9d | `characterDescriptionVariants` | The member looks without the reference sheet, one per member, for the clip prompts ⁷ | characterLookVariants, characterDescriptions |
 | 10 | `timeline`       | Song cut into clips on downbeats, as many bars as fit into `MAX_CLIP_SEC`; with the lyrics timing, real section starts and the words sung in every clip | music, lyricsTiming |
 | 11 | `mapping`        | Beats stretched over the clips in story order, matching intensity to energy      | beats, timeline              |
 | 11a | `blocking`      | The floor plan per beat and where everybody starts and ends, each beat from the end of the one before - one short call per beat, in order ³ ⁶ | beats, timeline, mapping, characterDescriptions, locationDescriptions, locationLayouts |
 | 11b | `shotMoments`   | The staged shots per beat, from its blocking: per shot the action, who is in the picture and where they stand and move, replacing `beat.moments` - the beats at once; `--redo=shotMoments` keeps the blocking ³ | blocking, beats, timeline, mapping, propActivity, singing, characterDescriptions, locationDescriptions, locationLayouts |
+| 11c | `shotViews`     | Per shot the view of the place's reference sheet (front, right, behind, left, wide) it is in, from the text of the plan ⁸ | shotMoments |
 | 12 | –                | MiniMax H3 requests, built deterministically, never cached                       | everything                   |
 
 ¹ only when the lyrics are aligned (`alignLyrics`, on when someone sings) · ² only when someone sings ·
@@ -301,9 +323,12 @@ actually renders such a slot as 10.13 s, see [The final video](#the-final-video)
 [Generating the song](#generating-the-song) ·
 ⁶ made only when the shots are planned - a project whose shots were planned before the step existed keeps them and
 has no blocking until `--redo=shotMoments` (or anything that redoes it). A beat whose blocking stays unusable plans its
-own staging in 11b
+own staging in 11b ·
+⁷ only for a group character (`isGroup`) that is not `alike` ·
+⁸ only with `"locationView": "auto"` (the default) and `sequenceSheets`
 
-Steps 1, 3–9 (with 8c), 11a and 11b use the LLM (5b only for `"auto"` or several singers), all others are plain code.
+Steps 1, 1a, 3–9 (with 8c, 8d, 9c, 9d), 11a, 11b and 11c use the LLM (5b only for `"auto"` or several singers), all others
+are plain code.
 
 The looks (7, 8) are image prompts for the reference pictures - they put a character on a plain grey background in
 studio light, a location in an empty wide shot. That must not end up in the videos, so the clip prompts define every
@@ -423,15 +448,25 @@ Settings per project, all optional - read at every run and checked field by fiel
   "singers": [],
   "singerVoice": "auto",
   "lyricsLanguage": "en",
+  "alignLyrics": false,
   "continuity": "never",
+  "pinStartFrame": true,
+  "locationView": "auto",
+  "fightClips": false,
+  "leakRetries": 0,
   "seed": -1,
   "imageResolution": -1,
   "videoResolution": -1,
+  "videoAspect": "16:9",
   "imageWorkflow": "kroma-image",
   "videoWorkflow": "h3-ref2video",
+  "sequenceSheets": true,
+  "sequenceWorkflow": "h3-sequence-to-sheet",
   "songWorkflow": "yue2-song",
   "songDuration": -1,
   "songAudio": true,
+  "finalFps": 24,
+  "interpolationModel": "rife_v4.26_heavy.safetensors",
   "llm": {}
 }
 ```
@@ -440,6 +475,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 |---------------------------------------|-----------------------------------------------------------------------------------------------------------|
 | `llm`                                 | `{"model": "…"}` = another model of the LLM server for this project; default `{}` = the one from the [settings](#setup) |
 | `singers`                             | `[]` = clip mode (default), `["auto"]` = the LLM picks the lead singer, `["Thorin", "brenna"]` = these characters, by name or id - see [Singing characters](#singing-characters) |
+| `singerVoice`                         | voice of the song: `"auto"` (default) = as the story has it, `"female"` / `"male"` = everybody who sings is a woman / man, `"mixed"` = a duet of one woman and one man. The story is written around it - changing it redoes the story and everything after it |
 | `lyricsLanguage`                      | language of the lyrics as a code, `"en"` (default), `"de"`, … - for Whisper, the `<d>[English]` lyrics tag, and the song brief (`--render=song`) |
 | `alignLyrics`                         | `true` = stems, transcript and real lyric timing; default: `true` when someone sings, else `false`. Set it to `true` in clip mode to place the lyric cues at the right moments |
 | `continuity`                          | `"never"` (default) = every clip is its own cut, `"auto"` = the beats the story planning marked `continuous` run on without a cut, `"always"` = every clip but the first of each beat starts on the last frame of the clip before it. Off by default: the picture drifts from clip to clip and the next one starts on the drift - see [Continuous scenes](#continuous-scenes) |
@@ -450,7 +486,8 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
 | `videoAspect`                         | the clips' aspect ratio: `"16:9"` (default, landscape), `"9:16"` (portrait), `"2:1"`, `"2:3"`, … - megapixels are computed in it, a `"WIDTHxHEIGHT"` keeps its own ratio and is turned to its orientation |
-| `imageWorkflow`, `videoWorkflow`, `songWorkflow` | a workflow file in `comfy/workflows/`, without `.ts`                                              |
+| `imageWorkflow`, `videoWorkflow`, `songWorkflow`, `sequenceWorkflow` | a workflow file in `comfy/workflows/`, without `.ts` - see [Workflows](#workflows) |
+| `sequenceSheets`                      | `true` (default) = every character and place gets a multi-angle reference sheet (a turnaround video, sampled into frames) instead of one flat picture - see [docs/comfyui.md](docs/comfyui.md#reference-sheets); `false` = one plain picture each, cheaper while trying things out |
 | `songDuration`                        | `--render=song`: an upper bound in seconds for the generated song - the model decides the actual length; `-1` = the workflow's own default (360s for `yue2-song`) |
 | `finalFps`                            | `24` (default) = one final video at 24 fps; `60` (or `48`, `30`, …) = also `<project>-60fps.mp4`: every clip gets more frames by frame interpolation on ComfyUI, shot by shot (never across a cut - the cuts are read from the picture), kept in `videos/interpolated/`. A ComfyUI job per clip (~1 min for an 8 s clip at 1080p on an RTX 5090) |
 | `interpolationModel`                  | the model for `finalFps`, a file in ComfyUI's `models/frame_interpolation/`: `"rife_v4.26_heavy.safetensors"` (default), any RIFE 4.25/4.26 or `"film_net_fp16.safetensors"` - from Hugging Face `Comfy-Org/frame_interpolation` |
@@ -458,6 +495,9 @@ Settings per project, all optional - read at every run and checked field by fiel
 
 Characters are always portrait, locations landscape - whichever way round the size is written. Videos are landscape
 unless `videoAspect` says otherwise, and always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
+
+The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView` and `fightClips` change
+the plan (see the table of inputs under [Usage](#usage)); all others only change how it is rendered.
 
 ### Workflows
 
@@ -473,7 +513,11 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `h3-ref2video`  | video | `r2v_audio_fullmix_guide_1-pass_turbo.json`        |
 | `h3-ref2video-full` | video | `h3-ref2video` without the turbo LoRA, as the non-turbo branch of ComfyUI's template `video_minimax_h3_r2v`: res_multistep, simple, 20 steps, no shift - about 2.5× the sampling time, more detail for people far from the camera: `"videoWorkflow": "h3-ref2video-full"` |
 | `h3-ref2video-2pass` | video | two passes: the base model for 20 steps at a quarter of the final pixels, the video latent x2 with `MinimaxH3LatentUpscaler3D` (`minimax_h3_latent_upscaler_3d_bf16`), then 2 turbo steps at denoise 0.2 at the final size, song and first frame anchored again on the large latent. `videoResolution` is the final size (`-1` = 2 MP, pass 1 at 0.5 MP): `"videoWorkflow": "h3-ref2video-2pass"` |
+| `h3-ref2video-cpu-clip` | video | `h3-ref2video` with the text encoder on the CPU - for a GPU whose VRAM doesn't hold the encoder next to the model |
+| `h3-sequence-to-sheet` | sequence | the turnaround video of a reference sheet (`sequenceWorkflow`, default) |
+| `frame-interpolate` | interpolation | RIFE/FILM frame interpolation per shot, for `finalFps` (not set in `config.json`, always this one) |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
+| `h3-ref2video-film`, `h3-ref2video-film-beta` | video | the short-film pipeline's clips, without audio input - see [docs/film.md](docs/film.md) |
 
 ¹ The export JSON is only a one-time input to `bun run comfy:convert` (see below); it isn't kept in the repo, only
 the generated `.ts` file under `comfy/workflows/` is.
@@ -758,6 +802,50 @@ the next run uses it:
   again (it is not done by itself, it costs). Cheapest is to cast right after the first run with `--review`, before the
   shot planning.
 - Deleting `casting.json` writes it again on the next run, every entry `project:`.
+
+### The asset tools at a glance
+
+| Command | Needs | Does |
+|---------|-------|------|
+| `bun run replace-character <project-id>` | a terminal, a planned project | your own picture (and description) for one character or group member of the project |
+| `bun run import-asset <project-id> [<id>] [--from=<project>[:<id>] \| --from=library:<id>]` | a terminal, a planned project | a finished character or place from another project or the library, copied and pinned |
+| `bun run export-asset <project-id> <id> [--as=<library id>]` | rendered pictures and a description | the character or place into the library |
+| `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
+| `casting.json` | - | which roles of a project are played by library assets, on every run |
+
+- **Describing a picture needs a vision-capable model** on the LLM server - `replace-character`, `import-asset` (when
+  asked to write the description from the picture) and `create-asset` send the picture to it. Without one, type the
+  description (`--description=…` for `create-asset`), or take the one that came with the asset.
+- **A place from your own picture:** `replace-character` is for characters only. Make the place a library asset with
+  `bun run create-asset location <id> --anchor=<picture>`, then cast it in `casting.json`
+  (`"<place id>": "library:<id>"`) or take it in with `import-asset … --from=library:<id>`.
+- After every tool the plan built on the old texts stays as it is - the tool prints the `--redo` that plans again, and
+  clips rendered with the old picture count as stale (`--render=videos --refresh=clips`).
+
+## Measuring and comparing
+
+Every render and every LLM call is timed into one file for all projects, `timings.jsonl` next to the settings file
+(another one: `FEVERSLOP_TIMINGS=<path>`). It holds numbers and names only - never a prompt, an answer or a picture.
+`--dry-run` and `bun run status` take their time estimates from it.
+
+```bash
+bun run stats                                   # medians, p90, cold starts and outliers per workflow, token sums
+bun run stats --by=resolution --kind=clip       # clips only, by resolution (also: --by=workflow|variant|server)
+bun run stats --project=<id> --compare          # one project; the first row is the reference, the others in percent
+```
+
+Token sums become money with `prices` in the settings file, per model id (the currency is just a label):
+
+```json
+{"prices": {"Muse-Glimmer-30B-GGUF": {"inputPerMillion": 0.2, "outputPerMillion": 0.6, "currency": "EUR"}}}
+```
+
+Before switching `finalFps` on, compare interpolation models on a few rendered clips - each model writes its own file
+into `videos/interpolated/`, with a 60 fps copy with the song under it to watch:
+
+```bash
+bun run interpolate <project-id> --only=slot-018 --model=rife_v4.26_heavy.safetensors,film_net_fp16.safetensors
+```
 
 ## Known limits
 
