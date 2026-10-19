@@ -40,6 +40,9 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
         locationView: {value: String(config.sequenceSheets ? config.locationView : -1), steps: ['shotViews'], assumed: '-1'},
         // fight beats cut into one-bar pieces change how many shots a beat has
         fightClips: {value: String(config.fightClips), steps: ['blocking'], assumed: 'false'},
+        // a silent lead-in or tail cut off into a clip of its own changes the clips
+        // assumed: the default - a project made before is not cut anew by the new setting alone
+        vocalGap: {value: String(config.vocalGap), steps: ['timeline'], assumed: '1.5'},
     }
 }
 

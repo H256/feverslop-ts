@@ -570,6 +570,13 @@ The sung lines are placed at the times from `lyricsTiming` in `project.json`. If
 moment, check that line's time first (the run prints a table with confidences) and fix it by hand, then
 `--redo=timeline` and render the clip again. Lines with low confidence have interpolated times.
 
+Two things in the timeline and the prompt help the mouth:
+- **No long silence inside a singing clip** (`vocalGap`, 1.5 s by default): "keep lips closed outside the span" does not
+  hold when a clip opens on seconds of silence - the singing starts early. Such a clip is cut where the voice comes in,
+  a long silent tail where it stops; the silence is rendered as a clip of its own.
+- **Held notes:** a sung word of a second or more gets its own sentence in the shot - one open vowel shape held, only
+  jaw and throat moving - or the mouth flaps open and shut on it. The length comes from `lyricsTiming`, nothing else.
+
 **Uploads and results pile up on the server.**
 Every render uploads its pictures and the song to `input/feverslop-ts/<project-id>/` and saves its result under
 `output/feverslop-ts/<project-id>/`. Uploads of the same file overwrite each other, but results are kept. Clean these

@@ -35,6 +35,19 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('mixed into one track')
         expect(c.prompt).toContain('its guitar drives the instrument motion of <Subject 3>, its bass drives the instrument motion of <Subject 4>')
     })
+    test('a long held note gets one held mouth shape, short words none', () => {
+        const c = buildClipRequests({
+            slots: [{id: 'slot-001', index: 0, section: 'Chorus', start: 0, end: 4, bars: 2, energy: 0.8, lyrics: [], vocals: [{line: 0, text: 'la flame', start: 0.2, end: 3.5, words: [{text: 'la', start: 0.2, end: 0.6}, {text: 'flame', start: 0.8, end: 3.5}]}]}],
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+            beats: [{...beat, characterIds: ['lead']}],
+            characters: band, locations: [{id: 'clearing', name: 'Stage'}], characterDescriptions: {}, locationDescriptions: {}, lookBrief: '',
+            music: {bpm: 120, durationSec: 4, downbeats: [0, 2], barEnergy: [0.8, 0.8], sections: []}, language: 'English', stemsAvailable: true,
+            singing: {singers: ['lead'], lines: [{line: 0, text: 'la flame', singers: ['lead']}]},
+            shotMoments: {b1: {shots: [{action: 'Lead sings.', characters: ['lead']}]}},
+        })[0]!
+        expect(c.prompt).toContain('From 00:00.800 to 00:02.000, <Subject 2> (S1) holds the long note of "flame": one open vowel shape held')
+        expect(c.prompt).not.toContain('note of "la"')
+    })
     test('without singing, guitar and bass each have their own track', () => {
         const c = clip(['gtr', 'bss', 'drm'], false)
         expect(c.assets.audio.map(a => a.stem)).toEqual(['guitar', 'bass', 'drums'])
