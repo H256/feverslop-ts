@@ -419,7 +419,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // picture, which the video model resolved by drifting the whole shot toward whichever member the text
         // described.
         function buildSubjects() {
-            const subjects = [
+            const base = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
                 ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike})),
             ].map((s, n) => {
@@ -432,10 +432,31 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // how many of a group the beat shows together (Beat.groupSize) - stated in the subject definition so the
                 // video model does not pick the number itself (it drew six of "the other five")
                 const count = s.kind === 'character' && s.isGroup ? beat.groupSize?.[s.id] : undefined
-                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description, count}
+                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description, count, companions: [] as string[], companionOf: undefined as string | undefined}
             })
+            // A group the beat shows several of at once (Beat.groupSize > 1) gets more of its member pictures, each a subject of
+            // its own next to the group's: with one picture for all of them, two of the group in one frame came out as the same
+            // person (#9). The text still names the group by its own subject; wherever it is in the frame, these are named with
+            // it. Only the picture slots left over are used - a member of a group gives way before anybody else.
+            let free = MAX_REFERENCE_IMAGES - base.length - (startsFrom && !pinStartFrame ? 1 : 0)
+            const companions: typeof base = []
+            for (const s of base) {
+                const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
+                if (s.kind !== 'character' || !s.isGroup || s.alike || !s.count || s.count < 2 || members < 2) continue
+                const first = slot.index % members
+                for (let m = 1; m < Math.min(s.count, members) && free > 0; m++, free--) {
+                    const n = base.length + companions.length + 1
+                    const variant = (first + m) % members
+                    companions.push({
+                        ...s, label: `<Subject ${n}>`, picture: `<Picture ${n}>`, pictureId: groupMemberId(s.id, variant),
+                        description: characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? '', companions: [], companionOf: s.label,
+                    })
+                    s.companions.push(`<Subject ${n}>`)
+                }
+            }
+            const subjects = [...base, ...companions]
             const locationSubject = subjects.find(s => s.kind === 'location')
-            const castSubjects = subjects.filter(s => s.kind === 'character')
+            const castSubjects = base.filter(s => s.kind === 'character')
 
             // speaker ids (S1), (S2), ... in the order the singers first sing in this clip
             const singerSubjects = singerIds.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
@@ -587,7 +608,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera, planTokens) : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
                 lastFraming = framing
-                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, hands: player, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment, starting, continuing}
+                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, hands: player, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.flatMap(s => [s.label, ...s.companions])], focus, singers: singersInShot, moment, starting, continuing}
             })
         }
 
@@ -696,7 +717,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
                 // plan keeps the fixed positions
                 const stagedPeople = shot.plan?.people
-                const personInFrame = (s: typeof shot.focus[number], n: number) => {
+                // the other members of a group the frame shows several of (see buildSubjects), right next to it
+                const together = (s: typeof shot.focus[number]) => s.companions.length
+                    ? `, with ${joinAnd(s.companions)} beside ${s.companions.length > 1 ? 'them' : 'it'} - ${s.companions.length > 1 ? `${s.companions.length} more` : 'another one'} of the ${s.name}, each the one in their own picture`
+                    : ''
+                const personInFrame = (s: typeof shot.focus[number], n: number) => `${personAlone(s, n)}${together(s)}`
+                const personAlone = (s: typeof shot.focus[number], n: number) => {
                     const p = stagedPeople?.[s.id]
                     const face = shot.singers.includes(s) ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
@@ -811,6 +837,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'subject_definitions:',
                 ...subjects.map(s => s.kind === 'location'
                     ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+                    : s.companionOf
+                        ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                    : s.isGroup && s.companions.length
+                        ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                     // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
                     // appearance - a subject definition that says a character "plays" something reads as a
                     // standing trait to the video model, and it keeps them miming that action even in shots

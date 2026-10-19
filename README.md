@@ -722,6 +722,12 @@ screen - in every shot, from the first appearance to the last - looked exactly t
    the same way the main cast is already pushed apart from each other.
 3. **Shots** (`12`): each clip rotates through a group's member pictures instead of resolving every shot to the same
    file, so the group doesn't render from one single shared face for the whole video.
+4. **Several at once** (`12`): a beat whose `groupSize` is more than 1 gets that many member pictures in its clips (as
+   many as there are), each a subject of its own - `<Subject 2>` is the group and the member in `<Picture 2>`,
+   `<Subject 3>` "another one of the Orcs" in `<Picture 3>`, and so on. With one picture, two of the group in one frame
+   came out as the same person. The text names the group by its own subject; wherever it is in the frame, the others
+   are named with it ("with <Subject 3> and <Subject 4> beside them"). They only take the picture slots left over (9 in
+   all) - a member gives way before anybody else. A group of one look (`alike`) or one of them at a time stays one subject.
 
 **A species is one look.** Member variants are only for groups of recognizably different individuals (a crew of miners, a
 crowd). A kind of creature - mole-men, a pack of wolves, a unit in one uniform - is flagged `"isGroup": true, "alike": true`:
