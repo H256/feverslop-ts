@@ -56,6 +56,34 @@ describe('readBeatPlan', () => {
     })
 })
 
+describe('hands - a shot of a player\'s hands on the instrument', () => {
+    const cast: Character[] = [
+        {id: 'lead', name: 'Lead', role: 'singer'},
+        {id: 'gtr', name: 'Gtr', role: 'guitarist', prop: 'guitar', propStem: 'guitar'},
+    ]
+    const beat = {id: 'b1', characterIds: ['lead', 'gtr']} as StoryBeat
+    const props = [{characterId: 'gtr', prop: 'guitar', activePerShot: [true, false]}]
+    test('is read from its line, "no" is none', () => {
+        const parsed = parseShotLines('SHOT 1\nframing: close\ncharacters: Gtr\naction: {Gtr} plays.\nhands: Gtr\nSHOT 2\nframing: wide\ncharacters: Gtr\naction: {Gtr} plays.\nhands: no')
+        expect(parsed.shots.map(s => s.hands)).toEqual(['Gtr', undefined])
+    })
+    test('names the player alone, while the instrument is heard - a singer of the line need not be in it', () => {
+        const shot = {action: '{Gtr} picks a fast run.', characters: ['Gtr'], hands: 'Gtr', people: {Gtr: {state: 'at the front', motion: 'leans in', playing: 'picks a fast run'}}}
+        const r = readBeatPlan({shots: [shot, {action: '{Lead} sings.', characters: ['Lead']}]}, beat, cast, 2, {singerIds: ['lead'], singingPerShot: [true, true]}, props)!
+        expect(r.problems).toEqual([])
+        expect(r.plan.shots[0]!.hands).toBe('gtr')
+    })
+    test('someone without an instrument, an instrument not heard, or more people in it are asked again', () => {
+        const r = readBeatPlan({shots: [
+            {action: '{Lead} waits.', characters: ['Lead'], hands: 'Lead'},
+            {action: '{Gtr} plays.', characters: ['Gtr', 'Lead'], hands: 'Gtr'},
+        ]}, beat, cast, 2, undefined, props)!
+        expect(r.problems.some(p => p.includes('Lead plays no instrument of the song'))).toBe(true)
+        expect(r.problems.some(p => p.includes("Gtr's guitar is not heard in this shot"))).toBe(true)
+        expect(r.problems.some(p => p.includes('a shot of the hands has Gtr alone in "characters"'))).toBe(true)
+    })
+})
+
 describe('readBeatPlan - checks that ask again and checks that only note', () => {
     const names = ['Anna', 'Bea', 'Cora', 'Dina', 'Edda', 'Fay']
     const cast: Character[] = [...names.map(name => ({id: name.toLowerCase(), name, role: 'x'})), {id: 'orcs', name: 'Orcs', role: 'crowd', isGroup: true, alike: true}]

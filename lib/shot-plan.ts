@@ -182,9 +182,19 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
         for (const token of written.unknown) problem(j, `shot ${j + 1}: "{${token}}" is not one of the characters - write the names of the cast in braces, exactly as in "cast"`)
         const strangers = onScreen.filter(c => !ids.includes(c.id) && written.ids.includes(c.id)).map(c => c.name)
         if (strangers.length) problem(j, `shot ${j + 1}: the text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the text, or put them in the shot`)
+        // a shot of a player's hands on the instrument (hands:): that one player, whose instrument is heard in it - the
+        // code checks what it can count; the face is out of the frame, so a singer of the line need not be in it
+        const handsOf = text(e.hands) ? characterOf(characters, text(e.hands)) : undefined
+        if (text(e.hands) && !handsOf) problem(j, `shot ${j + 1}: hands: "${text(e.hands)}" is not one of the characters`)
+        if (handsOf) {
+            const name = handsOf.name
+            if (!handsOf.prop || !handsOf.propStem) problem(j, `shot ${j + 1}: hands: ${name} plays no instrument of the song - a hands shot is about a player's hands on their instrument`)
+            else if (props && !heardIn(props, j).includes(handsOf.id)) problem(j, `shot ${j + 1}: hands: ${name}'s ${handsOf.prop} is not heard in this shot - a hands shot shows an instrument while it is heard`)
+            if (ids.length !== 1 || ids[0] !== handsOf.id) problem(j, `shot ${j + 1}: hands: ${name} - a shot of the hands has ${name} alone in "characters"`)
+        }
         // while a line is sung, a singer is in the picture
         const lineSingers = sungBy(singers, j)
-        if (lineSingers.length && !lineSingers.some(id => ids.includes(id)))
+        if (!handsOf && lineSingers.length && !lineSingers.some(id => ids.includes(id)))
             problem(j, `shot ${j + 1}: a line of ${lineSingers.map(id => nameOfId(characters, id)).join(' and ')} is sung in it, but they are not in its characters`)
         const unison = unisonChecks(j, people, characters)
         for (const message of [...unison.problems, ...musicChecks(j, people, characters, singers, props)]) problem(j, message)
@@ -210,6 +220,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
             ...(ids.length ? {characters: ids} : {}),
             ...(Object.keys(people).length ? {people} : {}),
             ...(text(e.rest) ? {rest: text(e.rest)} : {}),
+            ...(handsOf ? {hands: handsOf.id} : {}),
         }
     })
     shots.forEach((s, j) => {
@@ -234,7 +245,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  * The planner's answer in the line format (index.ts, step 11b) as the object readBeatPlan reads. One field per line:
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
- *   framing: / size: wide|medium|close / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ...
+ *   framing: / size: wide|medium|close / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ... / hands: A|no
  *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no
  *   START                   (the blocking call)
  *   start: A | where they are when the beat starts
@@ -277,11 +288,12 @@ export function parseShotLines(answer: string): { staging?: string, starts: Reco
             if (name) (current.people as Record<string, unknown>)[name] = entry
             continue
         }
-        if ((m = line.match(/^(framing|size|camera|view|hold|risky|characters|action|rest)\s*:\s*(.*)$/i))) {
+        if ((m = line.match(/^(framing|size|camera|view|hold|risky|characters|action|rest|hands)\s*:\s*(.*)$/i))) {
             const key = m[1]!.toLowerCase()
             const value = m[2]!.trim()
             if (key === 'hold') current.hold = /^(yes|true)\b/i.test(value)
             else if (key === 'risky') current.risky = /^(yes|true)\b/i.test(value)
+            else if (key === 'hands') { if (!/^(no|none|-)?\s*$/i.test(value)) current.hands = value }
             else if (key === 'characters') current.characters = value.split(/\s*,\s*|\s+and\s+/).map(v => v.trim()).filter(Boolean)
             else current[key] = value
         }
