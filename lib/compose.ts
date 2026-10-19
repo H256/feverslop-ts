@@ -239,16 +239,19 @@ function isActive(window: { start: number, end: number }, ranges: { start: numbe
 }
 
 /**
- * Where within a window a stem is heard: from the first to the last of its active ranges there - undefined when that is
- * (nearly) the whole window. A shot counts as active from a fifth of it on (isActive), so a riff that stops after a
- * second must not be said to go on "through the whole shot".
+ * When within a window a stem is heard: its active ranges there, each cut to the window - undefined when together they
+ * cover (nearly) the whole window. A shot counts as active from a fifth of it on (isActive), so a riff that stops after a
+ * second must not be said to go on "through the whole shot" - and neither must one heard only at the start and the end
+ * of a shot with a pause between (tides 2:42: 0.3 s, three seconds of silence, 0.4 s).
  */
-export function activeSpan(window: { start: number, end: number }, ranges: { start: number, end: number }[]): { start: number, end: number } | undefined {
-    const inside = ranges.filter(r => r.end > window.start && r.start < window.end)
+export function activeSpans(window: { start: number, end: number }, ranges: { start: number, end: number }[]): { start: number, end: number }[] | undefined {
+    const inside = ranges
+        .map(r => ({start: Math.max(window.start, r.start), end: Math.min(window.end, r.end)}))
+        .filter(r => r.end > r.start)
+        .sort((a, b) => a.start - b.start)
     if (!inside.length) return undefined
-    const start = Math.max(window.start, Math.min(...inside.map(r => r.start)))
-    const end = Math.min(window.end, Math.max(...inside.map(r => r.end)))
-    return end - start >= (window.end - window.start) * 0.9 ? undefined : {start, end}
+    const heard = inside.reduce((sum, r) => sum + r.end - r.start, 0)
+    return heard >= (window.end - window.start) * 0.9 ? undefined : inside
 }
 
 // Per beat, for every on-screen character whose prop is a musical instrument the song's stems were analyzed for:
@@ -614,12 +617,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     if (isActive({start, end}, propActivity[s.propStem!]!)) {
                         const plays = people?.[s.id]?.plays?.replace(/[.\s]+$/, '')
                         // heard for part of the shot only: when, in the clip's own time, and held still before or after
-                        const span = activeSpan({start, end}, propActivity[s.propStem!]!)
-                        const when = span ? `from ${formatTimestamp(span.start - slot.start)} to ${formatTimestamp(span.end - slot.start)}` : 'through the whole shot'
-                        const still = span ? ` - ${span.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still` : ''
+                        const spans = activeSpans({start, end}, propActivity[s.propStem!]!)
+                        const when = spans ? spans.map(span => `from ${formatTimestamp(span.start - slot.start)} to ${formatTimestamp(span.end - slot.start)}`).join(' and ') : 'through the whole shot'
+                        const still = !spans ? ''
+                            : spans.length > 1 ? ` - in between and outside these times the ${s.prop} is held still`
+                            : ` - ${spans[0]!.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still`
                         return [plays
                             ? `${s.label}, ${s.name}, plays the ${s.prop} ${when}: ${withLabels(plays, planTokens)}${still}.`
-                            : `${s.label}, ${s.name}, ${span ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`]
+                            : `${s.label}, ${s.name}, ${spans ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`]
                     }
                     if (moment.includes(s.label)) return []
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
