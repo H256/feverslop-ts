@@ -201,13 +201,33 @@ ${storySummary}`,
 // The prop is shown the way it is held while used, whatever it is: a rule written for weapons ("its head or blade and its
 // haft/grip ... hold and swing") drew a guitar held by the neck like a club, a bass like a spear and a drummer with a hand
 // drum on a haft, and the video model keeps the pose of the picture. A prop that stands in a place (propCarried false) is
-// not in the picture at all - only what is held of it.
+// not in the picture at all - only what is held of it. "The way it is held while used" alone still gave a bass that
+// "rests against her waist", hanging neck down with no hand on it - and a bassist who never played in any clip (#323):
+// the hands are named, at work on it.
 const bodyRules = '- Head to toe: name what covers the torso, the legs and the feet (trousers, skirt, robe, boots ...) - no part of the body is left undescribed, because a video model invents whatever is missing.\n'
 type PropOf = { prop?: string, propCarried?: false, propInHand?: string }
 const propRule = ({prop, propCarried, propInHand}: PropOf) => !prop ? ''
     : propCarried === false
-        ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it` : 'their hands are empty'}.\n`
-        : `- The character carries "${prop}": show exactly that object, held or worn the way the character holds it while using it, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one.\n`
+        ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, the hands in their working grip` : 'their hands are empty'}.\n`
+        : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each hand is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
+/**
+ * Whether a finished look shows the character's prop in use - read by the LLM, not by a list of words: "rests against her
+ * waist", "slung on her back" and "held by the neck at her side" are all the prop at rest, and so is the pose in the picture.
+ */
+export function propInUsePrompt(look: string, prop: string): AskOptions {
+    return {
+        label: 'prop in use',
+        instructions: `You read the prompt of a reference picture of one character. It is used to make video clips, and the video model keeps the pose of the picture.
+
+Does the picture show "${prop}" in use - held in the position it has while it is used, with the hands on it where they are at work? It is not in use when it rests, hangs, leans, is slung aside, lowered, carried by one end at the side, or no hand is on it, and when the prompt does not say how it is held.
+
+Answer as JSON: "inUse" true or false, and "why" - one short sentence on how the prompt has it held.`,
+        input: look,
+        maxTokens: 1024,
+        schema: {type: 'object', additionalProperties: false, required: ['inUse', 'why'], properties: {inUse: {type: 'boolean'}, why: {type: 'string'}}},
+    }
+}
+
 // the prop as the character JSON of a look prompt names it: what is in the picture
 const propField = ({prop, propCarried, propInHand}: PropOf) => !prop ? {} : propCarried === false ? (propInHand ? {inHand: propInHand} : {}) : {prop}
 

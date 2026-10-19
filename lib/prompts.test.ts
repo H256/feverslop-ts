@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {characterLookPrompt, locationLookPrompt} from "./prompts.ts";
+import {characterLookPrompt, locationLookPrompt, propInUsePrompt} from "./prompts.ts";
 import {pictureProp} from "./prop-check.ts";
 import {castProp} from "./shot-planner.ts";
 
@@ -8,11 +8,18 @@ const guitarist = {id: 'kaelen', name: 'Kaelen', role: 'guitarist', prop: 'elect
 const stage = [{id: 'stage', name: 'The stage'}]
 
 describe('props in the pictures', () => {
-    test('a carried prop is shown the way it is held while used, with no weapon parts asked for', () => {
+    test('a carried prop is shown in use, the hands named at work on it, with no weapon parts asked for', () => {
         const {input} = characterLookPrompt('look', guitarist)
-        expect(input).toContain('"electric guitar": show exactly that object, held or worn the way the character holds it while using it')
+        expect(input).toContain('"electric guitar": show exactly that object')
+        expect(input).toContain('It is in use in the picture: held in the position it has while it is used, and say where each hand is on it, at work - never resting, hanging down')
         expect(input).not.toContain('blade')
         expect(input).toContain('"prop":"electric guitar"')
+    })
+    test('the check of a finished look asks the LLM whether the prop is in use - true or false and why', () => {
+        const options = propInUsePrompt('A bass guitar rests against her waist.', 'bass guitar')
+        expect(options.input).toBe('A bass guitar rests against her waist.')
+        expect(options.instructions).toContain('Does the picture show "bass guitar" in use')
+        expect(options.schema).toMatchObject({required: ['inUse', 'why']})
     })
     test('a prop that stands in a place is not in the character picture - only what is held of it', () => {
         const {input} = characterLookPrompt('look', drummer)
