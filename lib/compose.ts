@@ -549,7 +549,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
                 // staged by the planner: who is in the picture is its call, the singers of this shot are kept in
                 const planned = plan?.characters?.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
-                const focus = planned?.length
+                // a shot of a player's hands on the instrument (plan.hands): that player alone - the face is out of the frame,
+                // so the singer of the line is not pulled in
+                const player = plan?.hands ? castSubjects.find(s => s.id === plan.hands && s.prop) : undefined
+                const focus = player ? [player] : planned?.length
                     ? [...new Set([...singersInShot, ...planned])]
                     : opensScene && j === 0
                         ? [...new Set([...singersInShot, ...castSubjects])]
@@ -558,12 +561,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // a clip that goes on from the last frame of the one before has no cut at its start: the camera move and the
                 // framing of that frame go on too, or the picture is seamless and the motion reverses (dolly in -> crane up)
                 const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
-                const framing = goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                const framing = player ? 'extreme close-up of the hands' : goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
                 const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera, planTokens) : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
                 lastFraming = framing
-                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment, starting, continuing}
+                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, hands: player, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.map(s => s.label)], focus, singers: singersInShot, moment, starting, continuing}
             })
         }
 
@@ -654,7 +657,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent: no singing, no mouth movement, no sound from ${others.length > 1 ? 'them' : 'it'}.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
-                const opening = j === 0
+                const where = (still: boolean) => locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, the ${locationSubject.name}` : ''
+                // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
+                // fill the frame, where the playing is easiest to keep in time with its track
+                const opening = shot.hands
+                    ? `${shot.label} ${j === 0 ? 'An' : `At ${formatTimestamp(shot.at)}, the shot cuts to an`} extreme close-up of the hands of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. The hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
+                    : j === 0
                     ? onSinger
                         ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                         : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`

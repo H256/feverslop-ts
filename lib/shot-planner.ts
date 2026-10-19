@@ -59,6 +59,7 @@ Rules:
 - Every character in a text field (staging, action, state, frame, motion, rest, camera, view, end) is written as their "name" from "cast" in braces - {Kara}, {Orcs} - exactly as spelled there, also a group character acting as several individuals, and never the "id" or a generic stand-in ("the orc", "an old woman") for someone of the cast: the braces bind the sentence to that character's reference picture, so every shot reads on its own. The names in "characters:" and after "person:" and "end:" are plain, without braces.
 - A beat may list "music": for each of its shots, in order, who is heard singing in the song at that point ("sings") and whose instrument is heard ("plays"). It is the song itself and it decides, whatever the beat's "summary" or "moments" say.
 - Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands do on that instrument in this shot, the way it is played and the moment asks for, as a short phrase - never just "yes". Their "motion" is the rest of the body playing along (leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. Everybody else with an instrument is "playing: no" and does something else with it or with their hands.
+- A shot can be about a player's hands instead of a face: "hands" names that one player, whose instrument is heard in the shot, and they are alone in "characters" - a close view of both hands at work and the instrument between them: the hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the instrument, the face out of the frame. Use it where the story idea asks for close views of the playing, or where the music is about one instrument (a solo, a riff, a fill) - never for someone who only holds an instrument. Every other shot is "hands: no".
 - Someone whose instrument stands in the place (the cast says it "stands in" a place and is used there, never carried) is only in a shot together with it: at it, the instrument in the frame with them, never in front of it or away from it. A shot that cannot show the instrument - a medium or close shot of people elsewhere in the place - leaves them out; they are heard off camera.
 - Only the people in a shot's "sings" sing in it: "singing: yes", the mouth open to the words, into the microphone if they have one. Everybody else is "singing: no" and makes no sound with the mouth - in the "action" and "rest" too: no harmonies, no joining in, no crying out, calling or humming, even where the beat's "summary" says they sing together. A shot with nobody in "sings" is purely instrumental: the singers do something silent in it.
 
@@ -76,6 +77,7 @@ action: <what happens in the shot, at most two sentences, every character as {Na
 person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <what the hands do on their instrument in this shot, a short phrase, if this person plays it - else no> | singing: <yes if this person sings or moves their mouth to the lyrics in this shot, else no>
 person: <Name> | state: <...> | frame: <...> | motion: <...> | playing: <what the hands do on the instrument, or no> | singing: <yes or no>
 rest: <what the others in the picture do, every character as {Name}>
+hands: <the one player whose hands on the instrument the shot shows, or no>
 (then SHOT <next number> with the same fields, up to the last shot this call writes)
 ENDS - only when the input says that this call writes the last shot of the beat:
 end: <Name> | <where they are and what they do and hold when the beat is over, a phrase with a verb>
@@ -93,7 +95,8 @@ characters: Kara, Tom, Riders
 action: {Kara} swings her sword in a low arc from the right, the blade skidding off {Tom}'s raised shield in a shower of sparks, and {Tom} staggers back a step, his boot sliding on the loose scree, his eyes on her blade.
 person: Kara | state: braced on the slope a step below Tom, sword drawn back at her right hip | frame: sharp, left of centre, three-quarter view toward Tom, jaw set | motion: steps up into the swing, hips twisting after the blade | playing: no | singing: no
 person: Tom | state: crouched behind his round shield, a step uphill of Kara | frame: sharp, right of frame, profile toward Kara, brows drawn together | motion: gives a step back up the slope, the shield arm jarred upward | playing: no | singing: no
-rest: the {Riders} behind them scramble up the scree to either side, one dragging a fallen companion clear of the fight`
+rest: the {Riders} behind them scramble up the scree to either side, one dragging a fallen companion clear of the fight
+hands: no`
 
 /** What the planner knows of the whole song - the same for every call of a run. */
 export type PlanContext = {

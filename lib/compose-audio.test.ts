@@ -63,6 +63,12 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('<Subject 2>, Gtr, plays the guitar from 00:00.000 to 00:01.300: strums a last chord - after that the guitar is held still.')
     })
 
+    test('a hands shot shows both hands and the instrument, never the face - and pulls in no singer', () => {
+        const c = clip(['lead', 'gtr'], true, {action: '{Gtr} picks a fast run.', characters: ['gtr'], hands: 'gtr', people: {gtr: {state: 'at the front', motion: 'leans in', playing: true, plays: 'picks a fast run'}}})
+        expect(c.prompt).toContain('extreme close-up of the hands of <Subject')
+        expect(c.prompt).toContain('The hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the guitar fill the frame; the face is out of the frame.')
+        expect(c.shots[0]!.subjects).not.toContain(c.assets.pictures.find(p => p.id === 'lead')?.subject)
+    })
     test('a player no shot shows is heard off camera - the drum track times the cuts, it drives no drumming', () => {
         const c = clip(['lead', 'gtr', 'drm'], true, {action: 'Lead sings to Gtr.', characters: ['lead', 'gtr'], people: {gtr: {state: 'at the front', motion: 'steps in', playing: true, plays: 'strums'}}})
         expect(c.prompt).toContain('is the isolated drum layer of the Chorus section')
