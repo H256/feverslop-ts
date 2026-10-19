@@ -1,10 +1,32 @@
 import {describe, expect, test} from "bun:test";
-import {activityRanges, buildTimeline, chooseClipStarts, framePower, isFightBeat, parseLyricSections, projectLyricSections, splitFightSlots} from "./music.ts";
+import {activityRanges, buildTimeline, chooseClipStarts, splitAtVocalGaps, framePower, isFightBeat, parseLyricSections, projectLyricSections, splitFightSlots} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
 // bars every 3 s; a word runs 5.5-6.5 (over the boundary at 6) and a pause lies at 9
 const timing = {lines: [{line: 0, section: 's', sectionIndex: 0, text: 'a b', start: 3.2, end: 8.5, confidence: 1, words: [word('a', 3.2, 5.0), word('b', 5.5, 6.5), word('c', 6.8, 8.5)]}]} as unknown as LyricsTiming
+
+describe('splitAtVocalGaps', () => {
+    const sung = (words: [number, number][]) => ({lines: [{line: 0, section: 's', sectionIndex: 0, text: '', start: words[0]![0], end: words.at(-1)![1], confidence: 1, words: words.map(([s, e]) => word('x', s, e))}]}) as unknown as LyricsTiming
+    const edges = (slots: { start: number, end: number }[]) => slots.map(s => [s.start, s.end])
+    test('a clip whose singing starts late is cut on the downbeat right before the voice comes in', () => {
+        const out = splitAtVocalGaps([{start: 0, end: 8, bars: 4}], sung([[4.1, 5], [5.2, 7.5]]), [0, 2, 4, 6], 1.5, 9.3, 2)
+        expect(edges(out)).toEqual([[0, 4], [4, 8]])
+    })
+    test('without a downbeat close to it, the cut is just before the first word', () => {
+        const out = splitAtVocalGaps([{start: 0, end: 8, bars: 4}], sung([[3, 5], [5.2, 7.5]]), [0, 2, 4, 6], 1.5, 9.3, 2)
+        expect(edges(out)).toEqual([[0, 2.9], [2.9, 8]])
+    })
+    test('a long silent tail and the silent lead-in of the next clip become one clip', () => {
+        const out = splitAtVocalGaps([{start: 0, end: 8, bars: 4}, {start: 8, end: 16, bars: 4}], sung([[0.2, 2], [2.1, 3.5], [12, 14]]), [0, 2, 4, 6, 8, 10, 12, 14], 1.5, 9.3, 2)
+        expect(edges(out)).toEqual([[0, 3.7], [3.7, 12], [12, 14], [14, 16]])
+    })
+    test('a short lead-in or gap 0 leaves the clips alone', () => {
+        const slots = [{start: 0, end: 8, bars: 4}]
+        expect(edges(splitAtVocalGaps(slots, sung([[1, 7.8]]), [0, 2, 4, 6], 1.5, 9.3, 2))).toEqual([[0, 8]])
+        expect(splitAtVocalGaps(slots, sung([[4.1, 7.8]]), [0, 2, 4, 6], 0, 9.3, 2)).toBe(slots)
+    })
+})
 
 describe('chooseClipStarts', () => {
     test('does not cut a sung word in two when another bar boundary is free', () => {

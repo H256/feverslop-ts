@@ -193,7 +193,60 @@ export function chooseClipStarts(barTimes: number[], sectionStart: number, secti
     return starts
 }
 
-export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], maxClipSec: number, timing?: LyricsTiming): Timeline {
+// the shortest clip a split at a vocal gap leaves - below it the clip stays as it is
+const MIN_GAP_CLIP_SEC = 1
+// a cut before the voice comes in lands on the downbeat right before it when that is this close, else just before the word
+const DOWNBEAT_SNAP_SEC = 0.3
+const ONSET_LEAD_SEC = 0.1
+// after the last word the mouth closes: the cut comes a moment later
+const RELEASE_SEC = 0.2
+
+/**
+ * config.vocalGap: a clip in which the singing starts more than `gap` seconds after its start is cut where the voice comes
+ * in, and one in which it stops more than `gap` seconds before its end is cut where it stops. A generation that opens on
+ * seconds of silence starts the lip movement early, whatever the prompt says about closed lips - the silence gets a clip
+ * of its own. A cut before the voice lands on the downbeat right before it when that is close. Two silent pieces next to
+ * each other (the tail of one clip, the lead-in of the next) become one clip when it fits into maxClipSec.
+ */
+export function splitAtVocalGaps<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(slots: T[], timing: LyricsTiming, downbeats: number[], gap: number, maxClipSec: number, barSec: number): T[] {
+    if (gap <= 0) return slots
+    const words = timing.lines.flatMap(l => l.words)
+    const piece = (slot: T, start: number, end: number) => ({...slot, start, end, bars: Math.max(1, Math.round((end - start) / barSec))})
+    const pieces: { slot: T, silent: boolean }[] = []
+    for (const slot of slots) {
+        const sung = words.filter(w => w.start >= slot.start - 0.05 && w.start < slot.end)
+        if (!sung.length) {
+            pieces.push({slot, silent: true})
+            continue
+        }
+        let start = slot.start
+        const onset = sung[0]!.start
+        const before = downbeats.find(d => d <= onset && d > onset - DOWNBEAT_SNAP_SEC)
+        const into = before ?? round(onset - ONSET_LEAD_SEC)
+        if (onset - start > gap && into - start >= MIN_GAP_CLIP_SEC && slot.end - into >= MIN_GAP_CLIP_SEC) {
+            pieces.push({slot: piece(slot, start, into), silent: true})
+            start = into
+        }
+        const stop = Math.max(...sung.map(w => w.end))
+        const after = downbeats.find(d => d >= stop && d < stop + DOWNBEAT_SNAP_SEC)
+        const out = after ?? round(stop + RELEASE_SEC)
+        if (slot.end - stop > gap && out - start >= MIN_GAP_CLIP_SEC && slot.end - out >= MIN_GAP_CLIP_SEC) {
+            pieces.push({slot: piece(slot, start, out), silent: false}, {slot: piece(slot, out, slot.end), silent: true})
+        } else {
+            pieces.push({slot: start === slot.start ? slot : piece(slot, start, slot.end), silent: false})
+        }
+    }
+    // a silent piece next to a silent piece: one clip, if it fits
+    const merged: typeof pieces = []
+    for (const p of pieces) {
+        const last = merged.at(-1)
+        if (last?.silent && p.silent && p.slot.end - last.slot.start <= maxClipSec) last.slot = piece(last.slot, last.slot.start, p.slot.end)
+        else merged.push({...p})
+    }
+    return merged.map(p => p.slot)
+}
+
+export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], maxClipSec: number, timing?: LyricsTiming, vocalGap = 0): Timeline {
     const barSec = 240 / music.bpm
     const barsPerSlot = 2 ** Math.floor(Math.log2(Math.max(1, Math.floor(maxClipSec / barSec))))
     const slots: Slot[] = []
@@ -280,10 +333,13 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
             }))
         })
 
+        // a long silence before the singing starts or after it stops is a clip of its own (config.vocalGap)
+        const split = timing ? splitAtVocalGaps(sized, timing, music.downbeats, vocalGap, maxClipSec, barSec) : sized
         // the fallback without word timing: the section's lines spread evenly over its clips
         const lines = lyricSections[sectionIndex]?.lines ?? []
-        lines.forEach((line, i) => sized[Math.floor(i * sized.length / lines.length)]!.lyrics.push(line))
-        slots.push(...sized)
+        split.forEach(slot => slot.lyrics = [])
+        lines.forEach((line, i) => split[Math.floor(i * split.length / lines.length)]!.lyrics.push(line))
+        slots.push(...split)
     })
 
     slots.forEach((slot, i) => {
