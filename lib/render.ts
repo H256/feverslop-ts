@@ -70,8 +70,8 @@ export const dispatchOrder = <T extends { pin?: string }>(waiting: T[]) => [...w
  * The server a waiter gets: the first one that is free and not down - with a pin only that one, unless it is down (a job
  * resumed on a server that has gone away is rendered again elsewhere).
  */
-export const pickServer = <S extends { name: string }>(servers: S[], busy: Set<string>, down: Set<string>, pin?: string) =>
-    servers.find(s => !busy.has(s.name) && !down.has(s.name) && (!pin || down.has(pin) || s.name === pin))
+export const pickServer = <S extends { name: string }>(servers: S[], busy: Set<string>, down: Set<string>, pin?: string, held: ReadonlyMap<string, number> = new Map()) =>
+    servers.find(s => !busy.has(s.name) && !down.has(s.name) && (pin ? down.has(pin) || s.name === pin : !held.get(s.name)))
 
 // how long a server may take to answer the question whether it is there at all, after a job on it failed
 const PROBE_TIMEOUT_MS = 10_000
@@ -132,6 +132,11 @@ export class Renderer implements Disposable {
     // servers that stopped answering in this run (a crashed ComfyUI behind its proxy): no job goes to them any more, or the
     // next jobs fail on them one after the other the moment they get them - 33 of 41 clips of tribal-261019 (#331)
     private down = new Set<string>()
+    // A server held for the jobs of an earlier run recorded on it (announceResumes): a new job does not get it until those
+    // have taken it or turned out not to be resumable. All renders start at once and whoever asks first gets a server - a
+    // new clip, with no pending file to read, asked first, and a finished job of the run before waited hours (#335)
+    private held = new Map<string, number>()       // server name -> jobs still to come for it
+    private announced = new Map<string, string>()  // target -> the server it is held on
     private waiting: { pin?: string, resolve: (server: Server) => void, reject: (error: Error) => void }[] = []
     private stopQueueNote?: () => void
     /** What is rendered again although it exists, when it is stale: "pictures" and/or "clips" (--refresh) - the old ones are put away in old/attempts. */
@@ -198,6 +203,32 @@ export class Renderer implements Disposable {
         })
     }
 
+    /**
+     * Before the renders start: every target with a job of an earlier run recorded in its pending file holds that server for
+     * it - see `held`. Only for renders that will ask for a server; the hold goes with settle().
+     */
+    async announceResumes(targets: string[]) {
+        const servers = await this.connect()
+        for (const target of targets) {
+            const pending = await readPending<unknown>(`${target}.pending.json`)
+            const name = pending?.server?.name ?? (pending ? this.servers[0]?.name : undefined)
+            if (!name || !servers.some(s => s.name === name) || this.announced.has(target)) continue
+            this.announced.set(target, name)
+            this.held.set(name, (this.held.get(name) ?? 0) + 1)
+        }
+    }
+
+    /** The job of `target` has its server, or will not resume: the hold of announceResumes goes. */
+    settle(target: string) {
+        const name = this.announced.get(target)
+        if (!name) return
+        this.announced.delete(target)
+        const left = (this.held.get(name) ?? 1) - 1
+        if (left > 0) this.held.set(name, left)
+        else this.held.delete(name)
+        this.dispatch()
+    }
+
     // the first free server - with a pin only that one (see pickServer)
     private acquire(pin?: string) {
         return new Promise<Server>((resolve, reject) => {
@@ -242,7 +273,7 @@ export class Renderer implements Disposable {
 
     private dispatch() {
         for (const waiter of dispatchOrder(this.waiting)) {
-            const free = pickServer(this.connected, this.busy, this.down, waiter.pin)
+            const free = pickServer(this.connected, this.busy, this.down, waiter.pin, this.held)
             if (!free) continue
             this.busy.add(free.name)
             this.waiting.splice(this.waiting.indexOf(waiter), 1)
@@ -643,9 +674,30 @@ export class Renderer implements Disposable {
         }
         // a server that went down in this run is not a home any more: the job is rendered again elsewhere
         let home = initial ? this.homeOf(label, initial, servers.filter(s => !this.down.has(s.name))) : undefined
+        if (!home) this.settle(target)
+
+        // a job already finished on its server needs no free one: only its result is fetched
+        if (home && initial && await this.jobState(home, initial.promptId) === 'finished') {
+            this.settle(target)
+            const started = Date.now()
+            const trace: Trace = []
+            log.step('Resuming', `${styles.name(label)} ${styles.muted(`@${home.name}, job ${initial.promptId}, queued at ${formatClock(initial.queuedAt)}, finished`)}`)
+            let failure: Error | undefined
+            try {
+                await this.downloadResult(label, target, extension, home, initial, trace)
+                return initial.meta
+            } catch (e) {
+                failure = e instanceof Error ? e : new Error(String(e))
+                throw e
+            } finally {
+                this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
+                await this.keepRender(what, home, initial, trace, started, failure)
+            }
+        }
 
         for (;;) {
             const server = await this.acquire(home?.name)
+            this.settle(target)
             const started = Date.now()
             const trace: Trace = []
             let pending: PendingJob<M> | undefined

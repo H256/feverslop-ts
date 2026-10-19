@@ -1174,8 +1174,18 @@ if (render.has('images') || render.has('videos')) {
         log.step('Estimate', styles.muted(describePrediction('clip', predictJobs(readTimings(), clipJobs, settings.comfy.map(server => server.name)))))
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
-        await renderAll(clipChains(selected), async chain => {
-            for (const clip of chain) await renderer.renderClip(clip, stemFiles)
+        // the jobs an earlier run left queued on a server get it before any new clip does (#335) - the head of each chain
+        // asks for a server at once; a later clip of a chain waits for the one before it and holds nothing
+        const chains = clipChains(selected)
+        const videoOf = (c: { id: string }) => join(project.dir, 'videos', `${c.id}.mp4`)
+        await renderer.announceResumes(chains.map(chain => chain[0]!).filter(c => todoClips.includes(c)).map(videoOf))
+        await renderAll(chains, async chain => {
+            try {
+                for (const clip of chain) await renderer.renderClip(clip, stemFiles)
+            } finally {
+                // a clip that ends without asking for a server (it exists, it is skipped, it failed early) holds none
+                renderer.settle(videoOf(chain[0]!))
+            }
         })
     }
 }

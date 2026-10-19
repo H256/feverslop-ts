@@ -28,6 +28,19 @@ test('a server that went down gets no job - and a job pinned to it goes to anoth
     expect(pickServer(servers, none, new Set(['radeon']), 'radeon')?.name).toBe('5090')
 })
 
+test('a server held for the job of an earlier run gets no new job - the resumed one still gets it (#335)', () => {
+    const servers = [{name: 'radeon'}, {name: '5090'}]
+    const none = new Set<string>()
+    const held = new Map([['5090', 2]])
+    // a new clip goes past the held 5090, to the free Radeon - or waits
+    expect(pickServer(servers, none, none, undefined, held)?.name).toBe('radeon')
+    expect(pickServer(servers, new Set(['radeon']), none, undefined, held)).toBeUndefined()
+    // the job recorded on the 5090 gets it
+    expect(pickServer(servers, none, none, '5090', held)?.name).toBe('5090')
+    // nothing held: as before
+    expect(pickServer(servers, new Set(['radeon']), none)?.name).toBe('5090')
+})
+
 test('a failed job is queued anew, not resumed', () => {
     expect(resumesJob('failed')).toBe(false)
 })
