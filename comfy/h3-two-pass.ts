@@ -3,7 +3,7 @@
 // pass 1 - the base model without the turbo LoRA, 20 steps res_multistep/simple, at a quarter of the final pixels;
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the turbo LoRA, 2 steps, denoise 0.2, at the final size.
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
+import {afterCleanup, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
@@ -55,7 +55,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
         ...Object.fromEntries(tracks.map((track, i) => [`ref_audios.ref_audio_${i}`, track.AUDIO])),
     })
     const song = wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song)}).AUDIO, start_index: opts.songStart, duration: opts.duration})
-    const startFrame = opts.startFrame ? wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE : undefined
+    const startFrame = startImages(wf, opts)
 
     // The guides are keyframes on the latent's own grid (comfy/ldm/minimax/model.py): a pinned frame encoded for pass 1
     // does not fit the upscaled latent, so each pass anchors the song and the first frame on its own latent. The

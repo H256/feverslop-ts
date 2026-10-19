@@ -1002,7 +1002,8 @@ const clips = buildClipRequests({
     propActivity,
     stemsAvailable: Boolean(stems),
     continuity: config.continuity,
-    pinStartFrame: config.pinStartFrame,
+    pinStartFrame: config.pinStartFrame || config.contextFrames > 0,
+    contextFrames: config.contextFrames,
     locationView,
     shotViews,
 })

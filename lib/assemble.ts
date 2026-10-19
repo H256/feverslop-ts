@@ -56,6 +56,16 @@ export async function probeDuration(file: string): Promise<number> {
     return seconds
 }
 
+/** Cuts the first `frames` frames off a video, its sound with them - written next to it first, then put in its place. */
+export async function trimHead(video: string, frames: number) {
+    const partial = video.replace(/\.mp4$/, '.trim.mp4')
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video,
+        '-vf', `trim=start_frame=${frames},setpts=PTS-STARTPTS`, '-af', `atrim=start=${secondsAt(frames)},asetpts=PTS-STARTPTS`,
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '256k', partial],
+        {errorMessage: err => `ffmpeg could not cut the first ${frames} frames off ${video}:\n${err}`})
+    renameSync(partial, video)
+}
+
 /** Saves frame `index` (0-based) of a video as a PNG - written next to the target first, like the downloads. */
 export async function extractFrame(video: string, index: number, target: string) {
     const partial = target.replace(/\.png$/, '.partial.png')

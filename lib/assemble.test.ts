@@ -38,3 +38,19 @@ describe('assembleFinal with interpolated clips', () => {
         expect(info.hasAudio).toBe(true)
     })
 })
+
+describe('trimHead', () => {
+    test('cuts the first frames off a clip, the sound with them', async () => {
+        const {mkdtempSync} = await import("node:fs")
+        const {tmpdir} = await import("node:os")
+        const {join} = await import("node:path")
+        const {probeVideo, trimHead} = await import("./assemble.ts")
+        const video = join(mkdtempSync(join(tmpdir(), 'trim-')), 'clip.mp4')
+        const p = Bun.spawn(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=64x36:rate=24', '-f', 'lavfi', '-i', 'sine=duration=3', '-frames:v', '61', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', video], {stderr: 'pipe'})
+        expect(await p.exited).toBe(0)
+        await trimHead(video, 22)
+        const info = await probeVideo(video)
+        expect(info.frames).toBe(39)
+        expect(info.hasAudio).toBe(true)
+    })
+})
