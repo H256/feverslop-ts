@@ -375,6 +375,11 @@ that server. If that server is gone from the settings or doesn't answer, the fil
 a warning); the old job, if it is still running, finishes on its own. Pending files from before several servers have
 no server - they are resumed on the first one.
 
+When a run starts, the jobs an earlier run left on a server come first: before any clip is queued, the pending files
+are read and each server is held for the jobs recorded on it - a new clip does not get it until they have taken it (or
+turned out not to resume). A job that is already finished needs no free server at all: its result is downloaded at
+once. Before this, a new clip could grab the server first, and a finished job waited behind it for hours.
+
 Several servers can also be one machine with several GPUs - one ComfyUI instance per GPU, each on its own port
 (`--cuda-device 1 --port 8189`). The same server listed twice doesn't render faster: ComfyUI runs its queue one job at
 a time.
