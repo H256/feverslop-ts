@@ -36,8 +36,9 @@ The wizard asks, in order:
      later with the `yue2-song` workflow
 3. **Lyrics and/or a story idea** - required with an existing song (at least one of the two); optional when
    generating the song (the lyrics are written from the idea automatically otherwise)
-4. **Visual style** (optional) - e.g. "gothic, candlelit, desaturated"
-5. **Customize settings?** - No → defaults (clip mode, the workflow's own resolution). Yes → singer mode (none / the
+4. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md)
+5. **Target song length** - only when the song is generated; empty = the workflow's own default
+6. **Customize settings?** - No → defaults (clip mode, the workflow's own resolution). Yes → singer mode (none / the
    LLM decides / named characters), language, image/video resolution
 
 For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
@@ -65,7 +66,7 @@ Writes `input/lyrics.txt` + `input/song.wav`. Listen to it under `projects/<id>/
 bun index.ts <id> --render=all
 ```
 
-= pictures (Krea 2) + clips (MiniMax H3) + `<project-id>.mp4`. Needs a reachable ComfyUI server (`bun run setup comfy`).
+= reference pictures (`kroma-image`) + clips (MiniMax H3) + `<project-id>.mp4`. Needs a reachable ComfyUI server (`bun run setup comfy`).
 
 ## 5. Listen to the result
 
@@ -76,6 +77,21 @@ bun index.ts <id>                                  # just planning, nothing rend
 bun index.ts <id> --render=images                  # pictures only
 bun index.ts <id> --render=videos --only=slot-001  # a single clip
 ```
+
+## 6. Look before you render
+
+Rendering is the expensive part - these commands show what you are about to pay for:
+
+```bash
+bun run status <id>                              # steps done or redone next, renders missing or stale, the next command
+bun index.ts <id> --render=videos --dry-run      # what this run would redo and render, with a time estimate
+bun index.ts <id> --review                       # stop after story, cast, look and beats: accept, edit in $EDITOR, redo
+bun run inspect <id> slot-007                    # one clip: its beat and shots, pictures, audio, render state, prompt
+bun index.ts <id> --gallery                      # gallery.html: cast, storyboard, videos at a glance
+```
+
+A good order for a new project: plan with `--review`, then `--render=images` and check the pictures in the gallery,
+then `--render=videos --only=slot-001` for one clip, then the rest. More: [recipes.md](recipes.md).
 
 ## Doing it again / differently
 
