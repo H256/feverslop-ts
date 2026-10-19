@@ -1,7 +1,7 @@
 import {describe, expect, test} from "bun:test";
 import {aboveRecommended, pixelSize} from "../comfy/helpers.ts";
 import {twoPassSizes} from "../comfy/h3-two-pass.ts";
-import {dispatchOrder, pickServer, resumesJob} from "./render.ts";
+import {boardStatus, dispatchOrder, pickServer, resumesJob} from "./render.ts";
 
 test('a job that is queued, running or finished is resumed', () => {
     expect(resumesJob('queued')).toBe(true)
@@ -39,6 +39,13 @@ test('a server held for the job of an earlier run gets no new job - the resumed 
     expect(pickServer(servers, none, none, '5090', held)?.name).toBe('5090')
     // nothing held: as before
     expect(pickServer(servers, new Set(['radeon']), none)?.name).toBe('5090')
+})
+
+test('a job the server says is running shows as running, even before its first progress event (#337)', () => {
+    expect(boardStatus('running', 'queued')).toBe('running')
+    expect(boardStatus('running', 'running KSampler #3, step 1/2')).toBe('running KSampler #3, step 1/2')
+    expect(boardStatus('queued', 'queued', 2)).toBe('queued, 2 job(s) ahead')
+    expect(boardStatus('unknown', 'queued')).toBe('queued')
 })
 
 test('a failed job is queued anew, not resumed', () => {
