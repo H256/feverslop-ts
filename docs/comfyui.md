@@ -363,6 +363,11 @@ With more than one ComfyUI server in the settings, the renders are spread over t
    `⠋ 2 running · clip slot-003 @gpu1 running KSampler #3, step 4/8 · clip slot-004 @gpu2 queued · 1 queued`, and
    every `Rendering`, `Resuming` and `Saved` line names the server.
 4. If one render fails, the others run to the end; the run stops afterwards with the errors.
+5. **A server that goes down in the middle of a run** (its ComfyUI crashed, the proxy answers "Bad Gateway"): after a
+   failed job the server is asked for `/system_stats` again (10 s). If it does not answer, it is out for the rest of
+   the run - one warning, no job goes to it any more, and the clip that failed is rendered again on another server.
+   Before this, every following clip went to the dead server and failed at once (33 of 41 on tribal-261019). With no
+   server left the run stops. A server that answers keeps the failure as a failure (a refused graph, a workflow error).
 
 Each server gets its own client id, `feverslop-ts-<project-id>-<name>` - stable, so the progress of a resumed job still
 arrives after a restart. A job's `.pending.json` records its server (name and URL), and a resumed job waits for exactly
