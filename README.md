@@ -803,6 +803,25 @@ the next run uses it:
   shot planning.
 - Deleting `casting.json` writes it again on the next run, every entry `project:`.
 
+### The asset tools at a glance
+
+| Command | Needs | Does |
+|---------|-------|------|
+| `bun run replace-character <project-id>` | a terminal, a planned project | your own picture (and description) for one character or group member of the project |
+| `bun run import-asset <project-id> [<id>] [--from=<project>[:<id>] \| --from=library:<id>]` | a terminal, a planned project | a finished character or place from another project or the library, copied and pinned |
+| `bun run export-asset <project-id> <id> [--as=<library id>]` | rendered pictures and a description | the character or place into the library |
+| `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
+| `casting.json` | - | which roles of a project are played by library assets, on every run |
+
+- **Describing a picture needs a vision-capable model** on the LLM server - `replace-character`, `import-asset` (when
+  asked to write the description from the picture) and `create-asset` send the picture to it. Without one, type the
+  description (`--description=…` for `create-asset`), or take the one that came with the asset.
+- **A place from your own picture:** `replace-character` is for characters only. Make the place a library asset with
+  `bun run create-asset location <id> --anchor=<picture>`, then cast it in `casting.json`
+  (`"<place id>": "library:<id>"`) or take it in with `import-asset … --from=library:<id>`.
+- After every tool the plan built on the old texts stays as it is - the tool prints the `--redo` that plans again, and
+  clips rendered with the old picture count as stale (`--render=videos --refresh=clips`).
+
 ## Measuring and comparing
 
 Every render and every LLM call is timed into one file for all projects, `timings.jsonl` next to the settings file
