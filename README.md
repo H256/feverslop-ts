@@ -439,6 +439,34 @@ moments of the beat are written to follow each other without a restart. What fol
   with the image); a clip then starts on the exact frame the one before ends on. With `pinStartFrame` the frame is
   **not** also one of the reference pictures (the same image twice made the model blend it in a second time, shifted).
 
+#### Context frames (`contextFrames`)
+
+One pinned frame carries the pose, not the movement: the people of a continuing clip start moving anew. With
+`"contextFrames": 22` (or `39`; 5 + 17·k) a continuing clip starts on the **last frames** of the clip before instead:
+
+- they are cut out of the clip before as a short video (`assets/clips/<id>_tail<n>.mp4`) and locked to the start of the
+  new clip as a frame batch (`MiniMaxH3AddGuide`, ComfyUI's own nodes - the node places 5 + 17·k frames as consecutive
+  frames); the two-pass workflow sets them in both passes
+- the batch ends 3 frames before the end of the clip before (`CONTEXT_SETTLE`): the first frames the model draws after
+  a batch flash brighter, and those fall into the part that is cut off
+- the clip is rendered that much longer at the head (22 + 3 frames ≈ 1 s), every time in its prompt moves by it, and the
+  head is cut off again after the render - the file starts on the clip's own first frame, the final video, the boundary
+  frames and the frame interpolation are unchanged
+- drawn on its own the clip has its own exposure: it is matched as a whole to the last 4 frames of the clip before -
+  black and white of the luma, the mean of the chroma (`lib/colormatch.ts`, ffmpeg `lutyuv`)
+
+It replaces `pinStartFrame` for those clips and is **off by default** (`0`). Measured on tides-of-eternal-flame (same
+seed, two-pass, two transitions):
+
+| | pinned last frame | 22 context frames |
+|---|---|---|
+| brightness across the transition | steps by 3-4 levels (81 → 79, 75 → 72) | no step after the color match (81 → 81.6, 75 → 75.0) |
+| movement after the transition | in the guitar solo restless: frame-to-frame change 7-8 against 5 in the clip before | goes on as before (3-5) |
+| the transition itself | the exact last frame - no jump | a small jump in position: the model draws the overlap a little differently |
+| render time | as the clip | ~1 s more to render: 9-15 min instead of 7 for an 8 s two-pass clip on the RTX 5090 (shared GPU) |
+
+Worth it where people move through the transition (a solo, a walk); for a still group shot the pinned frame is as good.
+
 ### config.json
 
 Settings per project, all optional - read at every run and checked field by field:
