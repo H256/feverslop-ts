@@ -11,9 +11,18 @@ describe('props in the pictures', () => {
     test('a carried prop is shown in use, the hands named at work on it, with no weapon parts asked for', () => {
         const {input} = characterLookPrompt('look', guitarist)
         expect(input).toContain('"electric guitar": show exactly that object')
-        expect(input).toContain('It is in use in the picture: held in the position it has while it is used, and say where each hand is on it, at work - never resting, hanging down')
+        expect(input).toContain('It is in use in the picture: held in the position it has while it is used, and say where each of the hands is on it, at work - never resting, hanging down')
         expect(input).not.toContain('blade')
         expect(input).toContain('"prop":"electric guitar"')
+    })
+    test('a character without hands is given none - the look, the check and the planner use what it has', () => {
+        const donut = {id: 'glaze', name: 'Glaze', role: 'a talking donut, the bassist', prop: 'bass guitar', hands: 'sprinkle-covered arms'}
+        expect(characterLookPrompt('look', donut).input).toContain('say where each of the sprinkle-covered arms is on it, at work')
+        expect(propInUsePrompt('look', 'bass guitar', 'sprinkle-covered arms').instructions).toContain("with the character's sprinkle-covered arms on it")
+        expect(castProp(donut, stage)).toBe('bass guitar (held and used with the sprinkle-covered arms)')
+        expect(castProp({...drummer, hands: 'tentacles'}, stage)).toBe('drum kit (stands in The stage and is used there, with drumsticks in the tentacles - never carried)')
+        // a person: nothing changes
+        expect(castProp(guitarist, stage)).toBe('electric guitar')
     })
     test('the check of a finished look asks the LLM whether the prop is in use - true or false and why', () => {
         const options = propInUsePrompt('A bass guitar rests against her waist.', 'bass guitar')

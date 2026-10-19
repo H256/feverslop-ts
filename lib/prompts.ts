@@ -1,5 +1,6 @@
 import type {AskOptions} from "./llm.ts";
 import type {SingerVoice} from "./config.ts";
+import {handsOf} from "./project.ts";
 import {LOCATION_VIEWS} from "./sequenceSheet.ts";
 
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
@@ -108,15 +109,16 @@ You need to extract all characters and their role in the story.
 Furthermore you need to extract all locations from the story.
 Answer only with JSON in this format:
 {
-    "characters": [{"name": "", "role": "", "prop": "", "propStem": "", "propCarried": true, "propInHand": "", "propPlace": "", "isGroup": false, "alike": false}],
+    "characters": [{"name": "", "role": "", "prop": "", "propStem": "", "propCarried": true, "propInHand": "", "propPlace": "", "hands": "hands", "isGroup": false, "alike": false}],
     "locations": [{"name": ""}]
 }
 The rules for characters are: A character is a person or creature in the story. They have a name and a role. The role is a short description of what the character does in the story, including every fact about how they look that the story itself states (size, species, number of eyes or limbs, colors) - written once, so that every later description agrees with it.
 A party, crew, band or family of a countable size that stays together through the story ("the seven", "the three sisters", "the other five", a four-piece band) is never one entry: every member is their own character, with their own name (invent short ones the story does not give), their own role and, where they carry something, their own prop. An image and a video model draw one entry as one person copied several times, so one entry for "the other five" ends up as five identical people. Only an anonymous multitude (a crowd, an army, a village, a pack of creatures, a species) is one "isGroup" entry. As a rule: up to about six named or counted individuals are separate characters.
 Additionally, for every character:
 - "prop": if the character visibly carries or uses one distinctive physical object throughout the story (a weapon, tool, musical instrument, etc.), name it briefly (e.g. "electric guitar", "iron sword", "drum kit"). It is one specific object, named as exactly what it is ("a hand torch", "a short sword"), never a collective word like "tool", "weapon" or "instrument": an image and a video model fill a vague word with the most familiar object, and "iron tool" becomes a pickaxe. You may invent the object, but if the story or its title names something the characters carry (a torch, a lantern, a map), that is the prop before anything of your own, and it fits the era, the place and the style of the story - a descent into a cave does not make miners of its characters. Companions of one party do not all carry the same object: each gets a different kind of the same family where the story names only one (a hammer, a long-shafted war hammer and a spiked mace-hammer are three different props), so that they are told apart at a glance. The protagonist's prop is the most distinctive and the most striking of them (a named or ornate weapon, an object the story builds up), never the plainest. Every visible member of a band must get their actual instrument here, including drummers and other backing musicians, not just the lead. A musical instrument is named as the real instrument it is, by its everyday name, with at most a word of color or material in front ("a red drum kit", "a jade-green bass guitar") - never turned into another kind of thing ("war-drum kit", "coral-and-obsidian drums", "flame harp"): the video model plays an instrument it knows, and one it does not know it draws as decoration and has the player hit the air. Leave it an empty string if the character carries nothing distinctive.
-- "propCarried": true when the character has "prop" on them while using it - in the hands, on a strap, on the back or the belt. false when it is too big or too fixed to be carried and stands somewhere the character goes to use it (a drum kit, an organ, an anvil, a loom). true when "prop" is empty.
-- "propInHand": only when "propCarried" is false - what the character holds in the hands while using it (drumsticks, a smith's hammer), or an empty string when they use it with bare hands. An empty string otherwise.
+- "propCarried": true when the character has "prop" on them while using it - held, on a strap, on the back or the belt. false when it is too big or too fixed to be carried and stands somewhere the character goes to use it (a drum kit, an organ, an anvil, a loom). true when "prop" is empty.
+- "propInHand": only when "propCarried" is false - what the character holds while using it (drumsticks, a smith's hammer), or an empty string when they use it with nothing in their grip. An empty string otherwise.
+- "hands": what the character holds and uses things with, as a plural noun - "hands" for a person, else what its body has for it ("paws", "claws", "tentacles", "wings"), so nobody is given hands the story does not give them.
 - "propPlace": only when "propCarried" is false - the name of the location, exactly as in your "locations", where it stands. An empty string otherwise.
 - "propStem": only when "prop" is a musical instrument whose sound is actually part of the song (i.e. this is a band performing the song on screen) - which layer of the song's audio it belongs to: "drums" for a drum kit, "bass" for a bass guitar, "guitar" for any electric/acoustic guitar, "piano" for piano/keys, "other" for anything else melodic (synth, strings, etc. - only when none of the above fit). Leave it an empty string for a prop that is not a musical instrument, for an instrument that is not actually heard in the song, or whenever the story is not a band performing live.
 - "isGroup": true if this entry is an anonymous collective acting as one individual member of a group (e.g. "Orcs", "Miners", "Townspeople", an army, a band's backing dancers) rather than a single named person - several of it can appear on screen at once and nobody in it needs to be recognized again. false for a single person or creature, even a memorable one, and false for each member of a counted party (see above).
@@ -131,8 +133,8 @@ ${storyBase}
             type: 'object', additionalProperties: false, required: ['characters', 'locations'],
             properties: {
                 characters: {type: 'array', minItems: 1, items: {
-                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'propCarried', 'propInHand', 'propPlace', 'isGroup', 'alike'],
-                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, propCarried: {type: 'boolean'}, propInHand: {type: 'string'}, propPlace: {type: 'string'}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
+                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'propCarried', 'propInHand', 'propPlace', 'hands', 'isGroup', 'alike'],
+                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, propCarried: {type: 'boolean'}, propInHand: {type: 'string'}, propPlace: {type: 'string'}, hands: {type: 'string'}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
                 }},
                 locations: {type: 'array', minItems: 1, items: {type: 'object', additionalProperties: false, required: ['name'], properties: {name: {type: 'string'}}}},
             },
@@ -203,23 +205,23 @@ ${storySummary}`,
 // drum on a haft, and the video model keeps the pose of the picture. A prop that stands in a place (propCarried false) is
 // not in the picture at all - only what is held of it. "The way it is held while used" alone still gave a bass that
 // "rests against her waist", hanging neck down with no hand on it - and a bassist who never played in any clip (#323):
-// the hands are named, at work on it.
+// what it is held with is named, at work on it - the character's own "hands" (handsOf), which need not be hands.
 const bodyRules = '- Head to toe: name what covers the torso, the legs and the feet (trousers, skirt, robe, boots ...) - no part of the body is left undescribed, because a video model invents whatever is missing.\n'
-type PropOf = { prop?: string, propCarried?: false, propInHand?: string }
-const propRule = ({prop, propCarried, propInHand}: PropOf) => !prop ? ''
+type PropOf = { prop?: string, propCarried?: false, propInHand?: string, hands?: string }
+const propRule = ({prop, propCarried, propInHand, hands}: PropOf) => !prop ? ''
     : propCarried === false
-        ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, the hands in their working grip` : 'their hands are empty'}.\n`
-        : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each hand is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
+        ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, in the working grip of their ${handsOf({hands})}` : `nothing is in their ${handsOf({hands})}`}.\n`
+        : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each of the ${handsOf({hands})} is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
 /**
  * Whether a finished look shows the character's prop in use - read by the LLM, not by a list of words: "rests against her
  * waist", "slung on her back" and "held by the neck at her side" are all the prop at rest, and so is the pose in the picture.
  */
-export function propInUsePrompt(look: string, prop: string): AskOptions {
+export function propInUsePrompt(look: string, prop: string, hands = 'hands'): AskOptions {
     return {
         label: 'prop in use',
         instructions: `You read the prompt of a reference picture of one character. It is used to make video clips, and the video model keeps the pose of the picture.
 
-Does the picture show "${prop}" in use - held in the position it has while it is used, with the hands on it where they are at work? It is not in use when it rests, hangs, leans, is slung aside, lowered, carried by one end at the side, or no hand is on it, and when the prompt does not say how it is held.
+Does the picture show "${prop}" in use - held in the position it has while it is used, with the character's ${hands} on it where they are at work? It is not in use when it rests, hangs, leans, is slung aside, lowered, carried by one end at the side, or nothing of the ${hands} is on it, and when the prompt does not say how it is held.
 
 Answer as JSON: "inUse" true or false, and "why" - one short sentence on how the prompt has it held.`,
         input: look,

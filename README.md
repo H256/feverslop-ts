@@ -700,7 +700,11 @@ video model showing it played continuously through every shot:
 - `propCarried`, `propInHand`, `propPlace` - `propCarried: false` for a `prop` that is too big or too fixed to be carried
   (a drum kit, an organ, an anvil): it stands in the location `propPlace` (an id) and is used there. The character
   picture then shows only `propInHand` (e.g. drumsticks), the location picture shows the object itself at one fixed
-  spot. Unset for a carried prop, which the character picture shows the way it is held while used.
+  spot. Unset for a carried prop, which the character picture shows in use - held the way it is while used, with
+  each of its `hands` named where it is at work (the LLM checks the finished look and asks once more if not).
+- `hands` - what the character holds and plays things with, when it is not hands: `"paws"`, `"tentacles"`,
+  `"sprinkle-covered arms"` for a donut. The look, the shot planning, the idle poses and the close-up of the playing
+  use it, so nobody is given hands the story does not give them. Unset = hands (every project planned before).
 
 What happens, only when at least one character has a `propStem` **and** the lyrics are aligned (`alignLyrics`, see
 [config.json](#configjson) - stems must already be separated):
