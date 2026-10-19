@@ -105,6 +105,8 @@ describe('audio tracks of a band', () => {
         expect(c.prompt).toContain('and so is its standing pose - Drm is only at the drum kit')
         // a carried instrument is in the picture as it is played: nothing of this
         expect(c.prompt.match(/is only ever at the/g)).toHaveLength(1)
+    })
+
     test('the track definitions keep a silent stretch in the middle of a clip - the band does not play through it (#325)', () => {
         // tides slot-025: an a-cappella line of the bridge, the band heard only at the start and the end of the clip
         const c = buildClipRequests({
