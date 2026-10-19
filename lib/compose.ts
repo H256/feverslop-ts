@@ -2,6 +2,7 @@ import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
 import {readTokens, replaceTokens} from "./refs.ts";
 import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
+import {handsOf} from "./project.ts";
 import {formatTimestamp, FPS, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
@@ -424,7 +425,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildSubjects() {
             const base = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
-                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike,
+                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike, hands: handsOf(c),
                     // a prop that stands in a place (a drum kit) is not in the picture: the picture shows the player standing
                     // with what they hold of it - a model given only that drew the player twice, at the kit and standing (#327)
                     stationary: c.propCarried === false && c.prop ? c.prop : undefined})),
@@ -620,7 +621,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // a clip that goes on from the last frame of the one before has no cut at its start: the camera move and the
                 // framing of that frame go on too, or the picture is seamless and the motion reverses (dolly in -> crane up)
                 const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
-                const framing = player ? 'extreme close-up of the hands' : goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                const framing = player ? `extreme close-up of the ${player.hands}` : goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
                 const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera, planTokens) : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
@@ -641,26 +642,28 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // "not playing" / "hands off it" reads as a negation to the video model, which tends to render the
         // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
         // position actually stops the miming. Rotated for variety across shots, never the same phrase twice
-        // running. Phrased without assuming human anatomy or clothing (no "pocket", no "hip") - the performer
-        // behind a propStem isn't always a person in a jacket. Split by whether the instrument is carried
-        // (guitar, bass, ...) or stationary (drums, piano - nobody "holds" a drum kit at their side).
-        const idlePropPoses: Partial<Record<PropStem, ((prop: string) => string)[]>> = {
+        // running. Phrased without assuming human anatomy or clothing (no "pocket", no "hip", and the character's own
+        // "hands" - handsOf: paws, tentacles) - the performer behind a propStem isn't always a person in a jacket. Split
+        // by whether the instrument is carried (guitar, bass, ...) or stationary (drums, piano - nobody "holds" a drum kit
+        // at their side).
+        type Pose = (prop: string, hands: string) => string
+        const idlePropPoses: Partial<Record<PropStem, Pose[]>> = {
             drums: [
-                (prop: string) => `sits at the ${prop}, hands resting on the heads, motionless`,
-                (prop: string) => `stands behind the ${prop}, sticks resting on it, still`,
-                (prop: string) => `keeps still at the ${prop}, hands quiet on the rims`,
+                (prop, hands) => `sits at the ${prop}, ${hands} resting on the heads, motionless`,
+                (prop) => `stands behind the ${prop}, sticks resting on it, still`,
+                (prop, hands) => `keeps still at the ${prop}, ${hands} quiet on the rims`,
             ],
             piano: [
-                (prop: string) => `sits at the ${prop}, hands resting on the keys, motionless`,
-                (prop: string) => `stands beside the ${prop}, hands resting on its edge, still`,
-                (prop: string) => `keeps still at the ${prop}, hands quiet on the keys`,
+                (prop, hands) => `sits at the ${prop}, ${hands} resting on the keys, motionless`,
+                (prop, hands) => `stands beside the ${prop}, ${hands} resting on its edge, still`,
+                (prop, hands) => `keeps still at the ${prop}, ${hands} quiet on the keys`,
             ],
         }
-        const idlePropPosesDefault = [
-            (prop: string) => `rests a hand flat on the body of the ${prop}, motionless`,
-            (prop: string) => `lets the ${prop} hang from its strap, one hand resting still on its body`,
-            (prop: string) => `keeps a hand resting quietly on the body of the ${prop}, unmoving`,
-            (prop: string) => `holds the ${prop} against their side, hand resting still on its body`,
+        const idlePropPosesDefault: Pose[] = [
+            (prop, hands) => `rests the ${hands} flat on the body of the ${prop}, motionless`,
+            (prop, hands) => `lets the ${prop} hang from its strap, the ${hands} resting still on its body`,
+            (prop, hands) => `keeps the ${hands} resting quietly on the body of the ${prop}, unmoving`,
+            (prop, hands) => `holds the ${prop} against their side, the ${hands} resting still on its body`,
         ]
 
         // The prop's real audio state, stated plainly with the character's own prop name - never a fixed verb per instrument.
@@ -687,7 +690,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     }
                     if (moment.includes(s.label)) return []
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
-                    return [`${s.label}, ${s.name}, ${poses[shotIndex % poses.length]!(s.prop!)}.`]
+                    return [`${s.label}, ${s.name}, ${poses[shotIndex % poses.length]!(s.prop!, s.hands)}.`]
                 })
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
@@ -722,7 +725,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
                 // fill the frame, where the playing is easiest to keep in time with its track
                 const opening = shot.hands
-                    ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the hands of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. The hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
+                    ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the ${shot.hands.hands} of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. ${shot.hands.hands === 'hands' ? 'The hand that strikes, picks or strums, the hand that holds, frets or presses,' : `The ${shot.hands.hands} - what strikes, picks or strums and what holds, frets or presses -`} and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
                     : j === 0
                     ? onSinger
                         ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
@@ -825,7 +828,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const idleAtOpen = opensScene
                 ? castSubjects
                     .filter(s => s.propStem && s.prop && propActivity?.[s.propStem]?.length && !isActive({start: slot.start, end: slot.end}, propActivity[s.propStem]!))
-                    .map(s => `${s.label} ${(idlePropPoses[s.propStem!] ?? idlePropPosesDefault)[0]!(s.prop!)}`)
+                    .map(s => `${s.label} ${(idlePropPoses[s.propStem!] ?? idlePropPosesDefault)[0]!(s.prop!, s.hands)}`)
                 : []
             const sceneClauseFull = sceneClause + (idleAtOpen.length ? ` ${joinAnd(idleAtOpen)}.` : '')
 
