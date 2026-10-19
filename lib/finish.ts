@@ -1,4 +1,5 @@
 import {renameSync} from "node:fs";
+import {colorMatchFilter, type Span} from "./colormatch.ts";
 import {runProcess} from "./process.ts";
 
 // The finishing pass of the final video (issue #291): the clips come out a little milky - the darkest tenth of a frame sits at
@@ -12,10 +13,14 @@ export type Finish = {
     contrast: number,       // ffmpeg eq: 1 = unchanged
     saturation: number,     // ffmpeg eq: 1 = unchanged
     sharpen: number,        // ffmpeg cas strength 0-1, 0 = off
+    // every clip this part of the way (0-1) to one reference in black, white and mean color, so the cuts do not jump - 0 = off
+    colorMatch: number,
+    colorReference: string, // the clip id of that reference, e.g. "slot-014" - '' = the median of all clips
+    grain: number,          // film grain over everything, last (ffmpeg noise strength, 0-100), 0 = off
 }
 
 /** "mild" - the strongest grade that still looked right on tides-261017 (black level, contrast, saturation, CAS 0.4). */
-export const MILD_FINISH: Finish = {blackLevel: 0.025, whiteLevel: 0.98, contrast: 1.03, saturation: 1.03, sharpen: 0.4}
+export const MILD_FINISH: Finish = {blackLevel: 0.025, whiteLevel: 0.98, contrast: 1.03, saturation: 1.03, sharpen: 0.4, colorMatch: 0, colorReference: '', grain: 0}
 
 /** The finish of a config value: true = the mild one, an object = the mild one with its fields replaced. */
 export const finishOf = (value: boolean | Partial<Finish>): Finish | undefined =>
@@ -23,36 +28,48 @@ export const finishOf = (value: boolean | Partial<Finish>): Finish | undefined =
 
 /** What is wrong with a finish setting - ffmpeg refuses these values - or undefined. */
 export function finishProblem(f: Finish): string | undefined {
-    for (const key of ['blackLevel', 'whiteLevel', 'sharpen'] as const) {
+    for (const key of ['blackLevel', 'whiteLevel', 'sharpen', 'colorMatch'] as const) {
         if (!Number.isFinite(f[key]) || f[key] < 0 || f[key] > 1) return `${key} must be between 0 and 1, got ${JSON.stringify(f[key])}`
     }
     if (f.blackLevel >= f.whiteLevel) return `blackLevel (${f.blackLevel}) must be below whiteLevel (${f.whiteLevel})`
     for (const key of ['contrast', 'saturation'] as const) {
         if (!Number.isFinite(f[key]) || f[key] <= 0) return `${key} must be a positive number, 1 = unchanged, got ${JSON.stringify(f[key])}`
     }
+    if (!Number.isFinite(f.grain) || f.grain < 0 || f.grain > 100) return `grain must be between 0 and 100, got ${JSON.stringify(f.grain)}`
+    if (typeof f.colorReference !== 'string') return `colorReference must be a clip id like "slot-014" or "", got ${JSON.stringify(f.colorReference)}`
     return undefined
 }
 
-/** The ffmpeg filter chain of a finish. */
-export function finishFilter(f: Finish): string {
+/**
+ * The ffmpeg filter chain of a finish: the clips matched to each other first (`match`, colorMatchFilter), then the grade
+ * and the sharpen, the grain last - sharpened grain is harsh.
+ */
+export function finishFilter(f: Finish, match?: string): string {
     const lv = (k: 'imin' | 'imax', v: number) => ['r', 'g', 'b'].map(c => `${c}${k}=${v}`).join(':')
     return [
+        ...(match ? [match] : []),
         `colorlevels=${lv('imin', f.blackLevel)}:${lv('imax', f.whiteLevel)}`,
         `eq=contrast=${f.contrast}:saturation=${f.saturation}`,
         ...(f.sharpen > 0 ? [`cas=strength=${f.sharpen}`] : []),
+        ...(f.grain > 0 ? [`noise=alls=${f.grain}:allf=t+u`] : []),
     ].join(',')
 }
 
 /** `<name>.mp4` -> `<name>-finished.mp4` */
 export const finishedName = (video: string) => video.replace(/\.mp4$/, '-finished.mp4')
 
-/** Writes the finished copy of a video next to it; the sound is copied as it is. */
-export async function finishVideo(video: string, f: Finish): Promise<string> {
+/**
+ * Writes the finished copy of a video next to it; the sound is copied as it is. `spans`: where each clip is in the video, in
+ * seconds - needed for the color match. Returns the file and the filter chain used.
+ */
+export async function finishVideo(video: string, f: Finish, spans: Span[] = []): Promise<{ file: string, filter: string }> {
     const target = finishedName(video)
     const partial = `${target}.partial.mp4`
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', finishFilter(f),
+    const match = f.colorMatch > 0 && spans.length ? await colorMatchFilter(video, spans, f.colorMatch, f.colorReference || undefined) : undefined
+    const filter = finishFilter(f, match)
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', filter,
         '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', partial],
         {errorMessage: err => `ffmpeg could not finish ${video}:\n${err}`})
     renameSync(partial, target)
-    return target
+    return {file: target, filter}
 }
