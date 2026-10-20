@@ -1,7 +1,8 @@
 // The two passes of the h3-ref2video-2pass workflows, shared so the Radeon and the RTX variant cannot drift apart.
 // The recipe (issue #288):
 // pass 1 - the base model without the turbo LoRA, 20 steps res_multistep/simple, at a quarter of the final pixels;
-// the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the turbo LoRA, 2 steps, denoise 0.2, at the final size.
+// the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the base model again, euler/beta, 4 steps, denoise 0.2, with a
+// noise of its own, at the final size (#343).
 import type {NodeRef} from "@saintno/comfyui-sdk";
 import {afterCleanup, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
 
@@ -96,15 +97,15 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
     withInputs(wf, upscaled, {'mode.width': sizes.final.width, 'mode.height': sizes.final.height})
     const large = wf.LTXVConcatAVLatent({video_latent: upscaled.latent as NodeRef<"LATENT">, audio_latent: split.audio_latent}).latent
 
-    // pass 2: the turbo LoRA with its shifts (as h3-ref2video), a short refine of the upscaled latent
-    const lora = wf.LoraLoaderModelOnly({lora_name: 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors', strength_model: 1, model: unet.MODEL})
-    const shifted = wf.MiniMaxH3SigmaShift({model: lora.MODEL, shift_video: 12, shift_audio: 3})
-    const turbo = wf.ModelAttentionBackend({model: shifted.MODEL, attention: 'comfy kitchen attention'})
+    // pass 2: a short refine of the upscaled latent with the base model - no turbo LoRA, no sigma shift. With the turbo
+    // LoRA (2 steps, simple) large faces kept a crosshatch on the skin; the base model at euler/beta over 4 steps weakened
+    // it and kept the detail, better than an upscale in pixels (Lanczos or an AI model), which went soft (#343). Its own
+    // noise, seed + 1: the noise of pass 1 again on the large latent repeats its pattern.
     const second = wf.SamplerCustomAdvanced({
-        noise: noise.NOISE,
-        guider: wf.BasicGuider({model: turbo.model, conditioning: guide(large)}).GUIDER,
+        noise: wf.RandomNoise({noise_seed: opts.seed + 1}).NOISE,
+        guider: wf.BasicGuider({model: base.model, conditioning: guide(large)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: 'euler'}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: 'simple', steps: 2, denoise: 0.2, model: shifted.MODEL}).SIGMAS,
+        sigmas: wf.BasicScheduler({scheduler: 'beta', steps: 4, denoise: 0.2, model: unet.MODEL}).SIGMAS,
         latent_image: large,
     })
 
