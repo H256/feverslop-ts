@@ -1,5 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, phaseOf} from "./graph.ts";
+import frameInterpolate from "../comfy/workflows/frame-interpolate.ts";
 
 // a small video graph like the H3 workflows: loaders, a turbo LoRA, a sampler, size and frames through primitive nodes
 const graph = (options: { lora?: boolean, prompt?: string, seed?: number, frames?: number, refs?: number, steps?: number } = {}): Graph => {
@@ -49,6 +50,14 @@ describe('variant id', () => {
     test('a changed knob is another variant', () => {
         expect(variant({lora: false})).not.toBe(variant())
         expect(variant({steps: 4})).not.toBe(variant())
+    })
+    test('a frame interpolation is one variant per model and multiplier, whatever clip and shots it gets', () => {
+        const interpolate = (video: string, pieces: { start: number, frames: number }[], multiplier = 2, model = 'rife49.pth') =>
+            describeGraph(frameInterpolate({video, pieces, model, multiplier, filenamePrefix: `interpolated/${video}`}).workflow.build({outputs: {}}).workflow as unknown as Graph).variant
+        const one = interpolate('slot-001.mp4', [{start: 0, frames: 118}])
+        expect(interpolate('slot-027.mp4', [{start: 0, frames: 40}, {start: 40, frames: 33}, {start: 73, frames: 12}])).toBe(one)
+        expect(interpolate('slot-001.mp4', [{start: 0, frames: 118}], 3)).not.toBe(one)
+        expect(interpolate('slot-001.mp4', [{start: 0, frames: 118}], 2, 'film_net_fp32.pt')).not.toBe(one)
     })
 })
 

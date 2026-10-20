@@ -25,7 +25,8 @@ export type GraphDescription = { variant: string, setup: GraphSetup }
 
 const modelFile = /\.(safetensors|ckpt|gguf|pt|pth|bin|sft)$/i
 // the inputs that change from job to job without being a knob: they stay out of the variant id
-const volatileKeys = /^(seed|noise_seed|prompt|text|string|value|lyrics|tags|image|audio|filename_prefix|start_index|duration|width|height|length|frames|num_frames|megapixels|aspect_ratio)$/i
+// (video: the clip a frame interpolation loads, batch_index: where a shot of it starts)
+const volatileKeys = /^(seed|noise_seed|prompt|text|string|value|lyrics|tags|image|audio|video|filename_prefix|start_index|batch_index|duration|width|height|length|frames|num_frames|megapixels|aspect_ratio)$/i
 // nodes that only carry the job's own data (and whose number varies with it)
 const dataNodes = /^(Primitive|LoadImage|LoadAudio|TrimAudioDuration)/
 
