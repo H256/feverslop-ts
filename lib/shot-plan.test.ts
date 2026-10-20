@@ -169,6 +169,13 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.problems[0]).toContain('shot 1: 3 people (Anna, Bea, Cora) in a close shot, which holds at most 2')
         expect(r.problems[1]).toContain('in a medium shot, which holds at most 3')
     })
+    test('an extreme close-up holds one person - two in it are asked again, one is fine (#339)', () => {
+        const shot = (size: string, n: number) => ({action: 'They play', size, characters: names.slice(0, n), people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)]))})
+        const r = readBeatPlan({shots: [shot('extreme', 2), shot('extreme', 1)]}, beat, cast, 2)!
+        expect(r.issues.map(i => i.shot)).toEqual([0])
+        expect(r.problems[0]).toContain('shot 1: 2 people (Anna, Bea) in an extreme close-up, which holds at most 1')
+        expect(r.plan.shots[1]!.size).toBe('extreme')
+    })
     test('an overfull shot names who leaves it - the singers and the heard players stay, then who the action names first', () => {
         // a guitar solo: nobody sings, guitar, bass and drums are heard - the singer of the band is the one to go
         const props = ['bea', 'cora', 'dina'].map(id => ({characterId: id, prop: 'drum', activePerShot: [true, true]}))
