@@ -42,9 +42,33 @@ export const by = {
     variant: (t: Timing) => t.kind === 'llm' ? undefined : `${t.name} #${t.variant ?? 'unknown'}`,
     resolution: (t: Timing) => t.kind === 'llm' ? undefined : `${t.name} ${t.variant ? `#${t.variant} ` : ''}${t.frames && t.frames > 1 ? `${t.frames} frames ` : ''}${t.pixels ? `${(t.pixels / 1e6).toFixed(2)} MP` : String(t.resolution ?? '?')}`,
     server: (t: Timing) => t.kind === 'llm' ? undefined : t.server ? `${t.server}${t.gpu ? ` (${t.gpu})` : ''}` : 'unknown server',
+    // the card a job ran on - two servers with the same card are one row; a server that did not report it by its name
+    gpu: (t: Timing) => t.kind === 'llm' ? undefined : t.gpu ?? t.server ?? 'unknown gpu',
     model: (t: Timing) => t.kind === 'llm' ? t.name : undefined,
     step: (t: Timing) => t.kind === 'llm' ? t.step ?? 'unknown step' : undefined,
 } satisfies Record<string, (t: Timing) => string | undefined>
+
+export type Dimension = keyof typeof by
+const JOIN = ' · '
+
+/** A key of several dimensions ("variant,gpu"): a row per combination, the parts joined - none when one part has none. */
+export function byAll(dimensions: Dimension[]) {
+    return (t: Timing) => {
+        const parts = dimensions.map(d => by[d](t))
+        return parts.some(p => p === undefined) ? undefined : parts.join(JOIN)
+    }
+}
+
+/**
+ * The reference row for --compare: grouped by one dimension the first row of the table; by several, the first row with
+ * the same first part that has numbers - so with "variant,gpu" every card is compared with the first card of the same
+ * variant that has warm jobs.
+ */
+export function referenceOf(rows: Row[], dimensions: number): (row: Row) => Row | undefined {
+    if (dimensions < 2) return () => rows[0]
+    const head = (r: Row) => r.key.split(JOIN)[0]
+    return row => rows.find(r => r.n > 0 && head(r) === head(row))
+}
 
 const BAR_WIDTH = 14
 const EIGHTHS = ' ▏▎▍▌▋▊▉█'
@@ -61,17 +85,19 @@ export function bar(fraction: number, width = BAR_WIDTH) {
  * against the reference (green = faster, red = slower) and for what is counted apart. The widths are taken from the
  * plain text, so the colours never shift a column.
  */
-export function formatRows(title: string, rows: Row[], reference?: Row) {
+export function formatRows(title: string, rows: Row[], reference?: Row | ((row: Row) => Row | undefined)) {
     if (!rows.length) return ''
     const slowest = Math.max(...rows.map(r => r.median), 0)
     const width = Math.max(...rows.map(r => r.key.length), 5)
     const cell = (text: string, w: number, right = false) => right ? text.padStart(w) : text.padEnd(w)
     const head = [cell('group', width), cell('n', 4, true), cell('median', 8, true), cell('p90', 8, true), ' '.repeat(BAR_WIDTH), cell('apart', 22)]
+    const against = typeof reference === 'function' ? reference : () => reference
     if (reference) head.push('vs first')
     const lines = [`${styles.label('▌')} ${styles.name(title)}`, `  ${styles.muted(head.join('  '))}`, `  ${styles.border('─'.repeat(stripVTControlCharacters(head.join('  ')).length))}`]
     for (const r of rows) {
         const apart = [r.cold && `${r.cold} cold`, r.outliers && `${r.outliers} outlier`, r.retries && `${r.retries} retry`, r.failed && `${r.failed} failed`].filter(Boolean).join(', ')
-        const change = reference && r !== reference ? percentChange(reference, r) : undefined
+        const first = against(r)
+        const change = first && r !== first ? percentChange(first, r) : undefined
         const changeText = change === undefined ? '' : `${change > 0 ? '+' : ''}${change}%`
         const paint = change === undefined || change === 0 ? styles.muted : change > 0 ? styles.warning : styles.answer
         const cells = [
