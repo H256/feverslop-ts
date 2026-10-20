@@ -195,7 +195,11 @@ bun index.ts --redo=propActivity,shotMoments   # re-check instrument activity af
 ```
 
 Finished steps are cached in `project.json` and skipped on the next run - a run that breaks halfway continues where it
-stopped. You can edit `project.json` by hand (a story beat, a look prompt, a section time) and run again; the H3
+stopped. The steps that ask the LLM once per element keep each answer the moment it is there (`partials` in
+`project.json`): the looks per character and place, and the shot planning (`shotMoments`) per beat. A run stopped in
+the middle of such a step (Ctrl+C, the computer shut down) goes on from the kept answers - **run it again without
+`--redo`**; `--redo=…` drops them and asks everything anew. A kept answer is only used for the same question: a beat
+whose blocking, music or film look changed is planned again. You can edit `project.json` by hand (a story beat, a look prompt, a section time) and run again; the H3
 requests are always rebuilt from the current data.
 
 Edited inputs are noticed: `project.json` keeps a fingerprint of every input, and a changed one redoes the steps
