@@ -66,7 +66,7 @@ export type ShotPlan = {
     camera?: string,
     view?: string,                  // where the camera stands and what it looks toward, in terms of the staging
     hold?: boolean,                 // nobody moves and the camera does not: same framing from the first frame to the last
-    size?: 'wide' | 'medium' | 'close', // the shot size as the planner classed it (framing stays its own words)
+    size?: 'wide' | 'medium' | 'close' | 'extreme', // the shot size as the planner classed it (framing stays its own words)
     risky?: boolean,                // the planner could only write the action with a blank face or a stand-in object: it is rewritten once
     characters?: string[],          // ids of everyone visible in the shot
     // plays: what the hands do on the instrument in this shot, as the planner wrote it in "playing:" (a plan from before has only playing: true)
