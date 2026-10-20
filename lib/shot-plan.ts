@@ -8,9 +8,14 @@ import {readTokens, tokenCharacter} from "./refs.ts";
 
 export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
-const SIZES = ['wide', 'medium', 'close'] as const
-/** How many people a shot of a size class holds - the planner prompt says the same (lib/shot-planner.ts). */
-const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {close: 2, medium: 3, wide: undefined}
+const SIZES = ['wide', 'medium', 'close', 'extreme'] as const
+/**
+ * How many people a shot of a size class holds - the planner prompt says the same (lib/shot-planner.ts). The class is the
+ * planner's own reading of its framing: it classed a "medium close-up" as medium, so three people passed in it, and an
+ * extreme close-up held as many as a close shot - 27 crowded close shots in tribal-261019 (#339). The prompt now says
+ * what each class is, and an extreme close-up is a class of its own.
+ */
+const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {extreme: 1, close: 2, medium: 3, wide: undefined}
 /** A flag the planner answered: true, or "yes" in the line format. */
 const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
 /** The planner's "playing:" - what the hands do on the instrument (a phrase), a bare "yes", or "no" / nothing. */
@@ -138,7 +143,7 @@ function crowdedShot(j: number, ids: string[], size: string, room: number, actio
     const keep = ids.filter(id => ranked.indexOf(id) < room)
     const leave = ids.filter(id => ranked.indexOf(id) >= room)
     const needed = leave.filter(id => rank(id) < 2)
-    return `shot ${j + 1}: ${ids.length} people (${names(ids)}) in a ${size} shot, which holds at most ${room} - the shot is about ${names(keep)}: ` +
+    return `shot ${j + 1}: ${ids.length} people (${names(ids)}) in ${size === 'extreme' ? 'an extreme close-up' : `a ${size} shot`}, which holds at most ${room} - the shot is about ${names(keep)}: ` +
         `take ${names(leave)} out of its "characters" and "people" and do not name them in its "action" or "rest" - heard is not seen, they are off camera` +
         (needed.length ? `; or make it a wide shot, since ${names(needed)} ${needed.length > 1 ? 'are' : 'is'} heard in it` : '')
 }
@@ -246,7 +251,7 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  * The planner's answer in the line format (index.ts, step 11b) as the object readBeatPlan reads. One field per line:
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
- *   framing: / size: wide|medium|close / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ... / hands: A|no
+ *   framing: / size: wide|medium|close|extreme / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ... / hands: A|no
  *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no
  *   START                   (the blocking call)
  *   start: A | where they are when the beat starts
