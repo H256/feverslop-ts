@@ -119,11 +119,13 @@ describe('the two-pass workflow', () => {
         expect(twoPassSizes(1.2)).toEqual({final: pixelSize(1.2, 'landscape', 0.4), first: {width: 768, height: 416}})
         expect(twoPassSizes('1920x1088')).toEqual({final: {width: 1920, height: 1088}, first: {width: 960, height: 544}})
     })
-    test('base model for 20 steps, the latent x2, then 2 turbo steps at denoise 0.2 - the guides set again on the large latent', async () => {
+    test('base model for 20 steps, the latent x2, then the base model again for 4 steps at denoise 0.2 - no turbo LoRA, its own noise, the guides set again on the large latent', async () => {
         const module = await import('../comfy/workflows/h3-ref2video-2pass.ts')
         const {workflow, output} = module.default({prompt: 'p', pictures: ['a.png'], audios: ['d.wav'], song: 's.wav', startFrame: 'f.png', songStart: 0, frames: 22, duration: 1, seed: 1, resolution: -1, filenamePrefix: 'x'})
         const nodes = Object.values(workflow.build({outputs: {result: output}}).workflow) as { class_type: string, inputs: Record<string, unknown> }[]
-        expect(nodes.filter(n => n.class_type === 'BasicScheduler').map(n => n.inputs)).toMatchObject([{steps: 20, denoise: 1}, {steps: 2, denoise: 0.2}])
+        expect(nodes.filter(n => n.class_type === 'BasicScheduler').map(n => n.inputs)).toMatchObject([{scheduler: 'simple', steps: 20, denoise: 1}, {scheduler: 'beta', steps: 4, denoise: 0.2}])
+        expect(nodes.filter(n => n.class_type === 'LoraLoaderModelOnly' || n.class_type === 'MiniMaxH3SigmaShift')).toHaveLength(0)
+        expect(nodes.filter(n => n.class_type === 'RandomNoise').map(n => n.inputs.noise_seed)).toEqual([1, 2])
         expect(nodes.find(n => n.class_type === 'MinimaxH3LatentUpscaler3D')?.inputs).toMatchObject({mode: 'target dimensions', 'mode.width': 1920, 'mode.height': 1088})
         expect(nodes.filter(n => n.class_type === 'MiniMaxH3AddGuide')).toHaveLength(4)
         expect(nodes.filter(n => n.class_type === 'SamplerCustomAdvanced')).toHaveLength(2)

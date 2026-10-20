@@ -189,7 +189,7 @@ first pass, give four times its megapixels:
 
 | `videoResolution` | pass 1 | final | measured (8 s clip, 192 frames) |
 |-------------------|--------|-------|---------------------------------|
-| `-1` or `2`       | 960×544 (0.5 MP) | 1920×1088 | RTX 5090: pass 1 2:35, pass 2 2:20 - 6:47 in all; Radeon R9700: 16:45 |
+| `-1` or `2`       | 960×544 (0.5 MP) | 1920×1088 | RTX 5090: pass 1 2:35, pass 2 2:20 - 6:47 in all; Radeon R9700: 16:45 (both with the old pass 2 of 2 turbo steps; pass 2 now has 4 steps - about 22 s each on the 5090 at 2 MP for a 4 s clip, about 3 min each on the R9700) |
 | `2.4`             | 1056×592 (0.6 MP) | 2112×1184 | not measured |
 | `1.2`             | 768×416 (0.3 MP) | 1504×832 | not measured |
 
