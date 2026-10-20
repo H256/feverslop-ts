@@ -26,6 +26,29 @@ export async function keepEach<T>(
     return value
 }
 
+/**
+ * As keepEach, for an element that can end without an answer (undefined): only an answer is kept, so the next run asks
+ * again for an element that had none - the shot planning of a beat whose answers stayed unusable (index.ts, step 11b).
+ */
+export async function keepFound<T>(
+    data: { partials?: Partials },
+    save: () => Promise<void>,
+    step: string, key: string, input: unknown, run: () => Promise<T | undefined>,
+): Promise<T | undefined> {
+    const wanted = fingerprint(input)
+    const kept = data.partials?.[step]?.[key]
+    if (kept && kept.fingerprint === wanted) {
+        log.step('Kept', styles.muted(`${step} · ${key} - planned in an earlier run`))
+        return kept.value as T
+    }
+    const value = await run()
+    if (value === undefined) return undefined
+    const partials = data.partials ??= {}
+    ;(partials[step] ??= {})[key] = {fingerprint: wanted, value}
+    await save()
+    return value
+}
+
 /** The kept answers of a step are dropped - when the step is done, or redone. */
 export function dropPartials(data: { partials?: Partials }, step: string) {
     if (!data.partials?.[step]) return

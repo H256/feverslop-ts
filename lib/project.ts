@@ -2,7 +2,7 @@ import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "./log.ts";
 import {withStep} from "./timings.ts";
-import {dropPartials, keepEach, type Partials} from "./partials.ts";
+import {dropPartials, keepEach, keepFound, type Partials} from "./partials.ts";
 
 // prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
 // propStem: only set when the prop is a musical instrument audible in the song - which stem its sound belongs to,
@@ -369,5 +369,10 @@ export class ProjectStore {
     /** One element of a step that asks per element: its answer is kept at once and not asked again for the same input (lib/partials.ts). */
     each<T>(name: StepName, key: string, input: unknown, run: () => Promise<T>): Promise<T> {
         return keepEach(this.data, () => this.save(), name, key, input, () => withStep(name, run))
+    }
+
+    /** As each(), for an element that can end without an answer: that one is not kept, the next run asks again. */
+    eachFound<T>(name: StepName, key: string, input: unknown, run: () => Promise<T | undefined>): Promise<T | undefined> {
+        return keepFound(this.data, () => this.save(), name, key, input, () => withStep(name, run))
     }
 }

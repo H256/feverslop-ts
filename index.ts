@@ -862,14 +862,23 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
     const blocked = blockings ?? {}
 
     // The shots of every beat, from its own blocking (step 11a) - the beats do not wait for each other: as many at once as
-    // llm.parallel allows
+    // llm.parallel allows. Each beat's plan is kept in project.json the moment it is there: a run stopped after beat 11 of
+    // 14 lost all eleven (#340). Its key is the first question the planner gets for the beat - the beat, its blocking, the
+    // handover, the film look, its music, the cast and the place - so a beat built on anything else is planned again. After
+    // a stop, a run without --redo goes on from the kept beats; --redo=shotMoments drops them.
     const planBeat = async (beat: Beat) => {
-        const block = [beat]
         const blocking = blocked[beat.id]
         const after = beats[beats.indexOf(beat) + 1]
         // without a blocking the beat goes on from the plan of the beat before, if that one is already there
         const prev = beats[beats.indexOf(beat) - 1]
         const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
+        const total = shotCounts[beat.id] ?? 1
+        const {instructions, input} = planPrompt(planContext, [beat], handover, after, [], {from: 0, to: Math.min(total, MOMENT_SHOTS_PER_CALL), total, written: [], blocking})
+        const plan = await project.eachFound('shotMoments', beat.id, {instructions, input}, () => planShots(beat, blocking, after, handover))
+        if (plan) result[beat.id] = plan // a beat without a plan falls back to the legacy spread
+    }
+    const planShots = async (beat: Beat, blocking: Blocking | undefined, after: Beat | undefined, handover: { beat: Beat, plan: BeatShots } | undefined): Promise<BeatShots | undefined> => {
+        const block = [beat]
         // what can be counted is read by the code; whether a heard player's hand phrase plays at all is read by one short
         // call per beat (lib/playing-check.ts) - its "no" is a problem of that shot like the others
         const read = (answer: Awaited<ReturnType<typeof askBlock>>) => Promise.all(block.map(async beat => {
@@ -896,7 +905,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
                 log.warn(`the answer for ${beat.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`)
             }
         }
-        if (!first) return
+        if (!first) return undefined
         let reads = first
         // what can be counted (a name that is not in the cast, a singing shot without a singer, a shot that names someone it does not show) is asked once more
         const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
@@ -913,7 +922,7 @@ const shotMoments = args['legacy-moments'] ? undefined : await project.step('sho
         }
         // what the code repaired or only noted costs no further call - a line in the log, nothing else
         for (const r of reads) for (const note of r.read?.notes ?? []) log.line(styles.muted(`        · ${r.beat.id}, ${note}`))
-        for (const {beat, read: r} of reads) if (r) result[beat.id] = r.plan // a beat without a plan falls back to the legacy spread
+        return reads[0]?.read?.plan
     }
     // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
     await llmMap(beats.filter(b => !result[b.id] && blocked[b.id]), planBeat)
