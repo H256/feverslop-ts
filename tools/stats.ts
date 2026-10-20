@@ -1,20 +1,24 @@
 // Statistics over every measured picture, clip and LLM call of all projects (the central timings file, see
 // lib/timings.ts): medians, p90, cold starts and outliers apart, token sums, optional prices from the settings file.
-// usage: bun run stats [--by=workflow|variant|resolution|server] [--kind=clip|picture|song] [--project=<id>] [--compare]
-//   --compare  the first row of every table is the reference, the others show the change against it in percent
+// usage: bun run stats [--by=variant,gpu] [--kind=clip|picture|song] [--project=<id>] [--compare]
+//   --by       workflow, variant, resolution, server or gpu - several joined with a comma, a row per combination
+//              (default: variant,gpu - the same variant on every card it ran on)
+//   --compare  the first row of every table is the reference, the others show the change against it in percent; by
+//              several dimensions the first row with the same first part (variant,gpu: every card against the first
+//              card of the same variant)
 import {existsSync, readdirSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {printBanner, styles} from "../lib/log.ts";
 import {cost, type Price, sumTokens} from "../lib/predict.ts";
-import {by, formatRows, groupRows} from "../lib/stats.ts";
+import {by, byAll, type Dimension, formatRows, groupRows, referenceOf} from "../lib/stats.ts";
 import {readSettingsFile} from "../lib/settings.ts";
 import {migrateProjectTimings, readTimings, timingsFile} from "../lib/timings.ts";
 
 const {values} = parseArgs({args: Bun.argv.slice(2), options: {by: {type: 'string'}, kind: {type: 'string'}, project: {type: 'string'}, compare: {type: 'boolean'}}})
-const dimension = values.by ?? 'variant'
-if (!(dimension in by) || ['model', 'step'].includes(dimension)) {
-    console.error(`usage: bun run stats [--by=workflow|variant|resolution|server] [--kind=clip|picture|song] [--project=<id>] [--compare]`)
+const dimensions = (values.by ?? 'variant,gpu').split(',').map(d => d.trim()) as Dimension[]
+if (dimensions.some(d => !(d in by) || ['model', 'step'].includes(d))) {
+    console.error(`usage: bun run stats [--by=workflow|variant|resolution|server|gpu, several joined with a comma] [--kind=clip|picture|song] [--project=<id>] [--compare]`)
     process.exit(1)
 }
 
@@ -31,11 +35,11 @@ printBanner()
 console.log(styles.muted(`${timings.length} measurements from ${new Set(timings.map(t => t.project)).size} project(s) in ${timingsFile()} - medians of warm jobs; cold starts and outliers are counted apart, never mixed in\n`))
 
 const renders = timings.filter(t => t.kind !== 'llm' && (!values.kind || t.kind === values.kind))
-const table = (title: string, rows: ReturnType<typeof groupRows>) => {
-    const text = formatRows(title, rows, values.compare ? rows[0] : undefined)
+const table = (title: string, rows: ReturnType<typeof groupRows>, dimensionCount = 1) => {
+    const text = formatRows(title, rows, values.compare ? referenceOf(rows, dimensionCount) : undefined)
     if (text) console.log(text + '\n')
 }
-table(`Renders by ${dimension}`, groupRows(renders, by[dimension as 'variant']))
+table(`Renders by ${dimensions.join(' and ')}`, groupRows(renders, byAll(dimensions)), dimensions.length)
 table('LLM calls by model', groupRows(timings.filter(t => t.kind === 'llm'), by.model))
 
 const prices = (await readSettingsFile()).prices ?? {}

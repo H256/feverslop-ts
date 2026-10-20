@@ -906,9 +906,11 @@ Every render and every LLM call is timed into one file for all projects, `timing
 `--dry-run` and `bun run status` take their time estimates from it.
 
 ```bash
-bun run stats                                   # medians, p90, cold starts and outliers per workflow, token sums
-bun run stats --by=resolution --kind=clip       # clips only, by resolution (also: --by=workflow|variant|server)
-bun run stats --project=<id> --compare          # one project; the first row is the reference, the others in percent
+bun run stats                                   # medians, p90, cold starts and outliers per variant and GPU, token sums
+bun run stats --compare                         # every GPU against the first GPU of the same variant, in percent
+bun run stats --by=resolution --kind=clip       # clips only, by resolution (also: workflow|variant|server|gpu, several
+                                                # joined with a comma, e.g. --by=workflow,gpu)
+bun run stats --project=<id> --compare --by=variant   # one project; the first row is the reference, the others in percent
 ```
 
 Token sums become money with `prices` in the settings file, per model id (the currency is just a label):
