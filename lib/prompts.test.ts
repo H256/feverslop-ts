@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {characterLookPrompt, locationLookPrompt, propInUsePrompt} from "./prompts.ts";
+import {characterLookPrompt, locationLookPrompt, propInUsePrompt, songLyricsPrompt, songStylePrompt} from "./prompts.ts";
 import {pictureProp} from "./prop-check.ts";
 import {castProp} from "./shot-planner.ts";
 
@@ -47,5 +47,17 @@ describe('props in the pictures', () => {
     test('the planner reads a standing prop as used where it stands', () => {
         expect(castProp(drummer, stage)).toBe('drum kit (stands in The stage and is used there, with drumsticks in the hands - never carried)')
         expect(castProp(guitarist, stage)).toBe('electric guitar')
+    })
+})
+
+describe('the singer voice in a generated song', () => {
+    test('a given voice is the vocal tag of the style and the point of view of the lyrics', () => {
+        expect(songStylePrompt('[Verse]\nla', '', 'English', 'female').input).toContain('The vocal gender tag is exactly "female vocal"')
+        expect(songStylePrompt('[Verse]\nla', '', 'English', 'mixed').input).toContain('"male and female vocals, duet"')
+        expect(songLyricsPrompt('a lighthouse', 'English', undefined, 'male').input).toContain('Sung by a man: write it from his point of view')
+    })
+    test('"auto" leaves the voice to the LLM', () => {
+        expect(songStylePrompt('[Verse]\nla', '', 'English').input).not.toContain('vocal gender tag is exactly')
+        expect(songLyricsPrompt('a lighthouse', 'English').input).not.toContain('Sung by')
     })
 })
