@@ -42,11 +42,13 @@ The wizard asks, in order:
    sung in that voice, and the story casts its singers to match it
 5. **Lyrics and/or a story idea** - required with an existing song (at least one of the two); with a generated song
    only a story idea, optional
-6. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md); "← back" in
+6. **Who is seen singing** - only with lyrics (or an idea that writes them): nobody (clip mode), the LLM picks the
+   singers, or named characters (`singers`). With a voice given, "the LLM picks" is the default; with a duet, named
+   singers are exactly two
+7. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md); "← back" in
    the list returns to the level above; a picked style is shown in full and taken only on "Take it"
-7. **Target song length** - only when the song is generated; empty = the workflow's own default
-8. **Customize settings?** - No → defaults (clip mode, the default workflows and their own resolution). Yes → singer
-   mode (none / the LLM decides / named characters), image workflow (`kroma-image`, `krea2-image`), video
+8. **Target song length** - only when the song is generated; empty = the workflow's own default
+9. **Customize settings?** - No → defaults (the default workflows and their own resolution). Yes → image workflow (`kroma-image`, `krea2-image`), video
    workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video resolution
 
 For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
