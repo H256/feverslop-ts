@@ -1,7 +1,11 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import type {FilmProject} from "../lib/film/types.ts";
+cli('film:gallery')
+
 
 // bun run film:gallery - films/index.html: every film of films/ on one page - the film to watch, its cast and places, and the files of the plan.
 // A static page with relative links: open it from the disk, nothing is served.
@@ -58,4 +62,5 @@ ${films.length ? films.map(card).join('\n') : '<p class="muted">No films yet - c
 `
 const target = join(FILMS_DIR, 'index.html')
 writeFileSync(target, html)
-console.log(`${target}: ${films.length} film${films.length === 1 ? '' : 's'}`)
+log.info(`${target}: ${films.length} film${films.length === 1 ? '' : 's'}`)
+log.output(target)

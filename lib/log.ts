@@ -3,7 +3,7 @@ import {dirname} from "node:path";
 import {format, stripVTControlCharacters, styleText} from "node:util";
 
 type Format = Parameters<typeof styleText>[0]
-export const style = (format: Format) => (text: string) => styleText(format, text)
+export const style = (format: Format) => (text: string) => process.env.NO_COLOR !== undefined || !process.stdout.isTTY ? text : styleText(format, text)
 export const styles = {
     section: style(['bold', 'white', 'bgMagenta']),
     label: style(['bold', 'magenta']),
@@ -16,18 +16,28 @@ export const styles = {
 }
 
 // a terminal that reports 0 columns (some ptys, CI) gets the width of one without a size
-const boxWidth = Math.min(process.stdout.columns || 100, 120) - 4
+const boxColumns = () => Math.max(1, Math.min(process.stdout.columns || 100, 120) - 4)
 
 function wrap(text: string, width: number) {
     return text.split('\n').flatMap(paragraph => {
         const lines: string[] = []
         let line = ''
-        for (const word of paragraph.split(' ')) {
-            if (line && line.length + word.length + 1 > width) {
+        for (const word of stripVTControlCharacters(paragraph).split(' ')) {
+            if (line && Bun.stringWidth(line + ' ' + word) > width) {
                 lines.push(line)
                 line = word
             } else {
                 line = line ? `${line} ${word}` : word
+            }
+            while (Bun.stringWidth(line) > width) {
+                let part = ''
+                for (const char of line) {
+                    if (Bun.stringWidth(part + char) > width) break
+                    part += char
+                }
+                if (!part) { part = [...line][0]! }
+                lines.push(part)
+                line = line.slice(part.length)
             }
         }
         lines.push(line)
@@ -40,9 +50,21 @@ function wrap(text: string, width: number) {
 let verbose = false
 let shown = new Set<string>()
 let detailsHidden = false
+let quiet = false
+let json = false
+let debug = false
+let errorHint = ''
+
+export function configureOutput(options: {quiet?: boolean, json?: boolean, debug?: boolean, hint?: string}) {
+    quiet = options.quiet ?? false
+    json = options.json ?? false
+    debug = options.debug ?? false
+    errorHint = options.hint ?? ''
+}
+export const jsonOutput = () => json
 
 export function setOutput(options: { verbose?: boolean, show?: Iterable<string> }) {
-    verbose = options.verbose ?? false
+    verbose = options.verbose ?? verbose
     shown = new Set(options.show ?? [])
 }
 
@@ -55,13 +77,14 @@ export function hideDetails(hidden = true) {
 }
 
 // every log line clears the status board first and redraws it after, so the board stays the last line
-function print(line: string, always = false) {
-    if (detailsHidden && !always) {
+function print(line: string, always = false, diagnostic = false) {
+    if (json || (!diagnostic && (quiet || (detailsHidden && !always)))) {
         toLog(`${line}\n`)
         return
     }
     clearBoard()
-    console.log(line)
+    if (diagnostic) console.error(line)
+    else console.log(line)
     drawBoard()
 }
 
@@ -73,22 +96,67 @@ export function warnUnknownKeys(obj: object, allowed: string[], where: string, p
 
 /** The "FEVERSLOP" ASCII logo, printed once at the start of the interactive CLIs - silent when not in a terminal. */
 export function printBanner() {
-    if (!process.stdout.isTTY) return
-    const logo = [
-        '╔═╗╔═╗╦  ╦╔═╗╦═╗╔═╗╦  ╔═╗╔═╗',
-        '╠╣ ║╣ ╚╗╔╝║╣ ╠╦╝╚═╗║  ║ ║╠═╝',
-        '╚  ╚═╝ ╚╝ ╚═╝╩╚═╚═╝╩═╝╚═╝╩  ',
-    ]
-    console.log()
-    for (const line of logo) console.log(`  ${styles.name(line)}`)
-    console.log(`  ${styles.muted('TS · video cli')}`)
+    if (!process.stdout.isTTY || quiet || json || bannerPrinted) return
+    bannerPrinted = true
+    print(bannerLines(process.stdout.columns || 100).map(line => styles.name(line)).join('\n'), true)
+}
+let bannerPrinted = false
+
+/** A six-line ASCII wordmark, with a stacked version for ordinary terminals. */
+export function bannerLines(width: number): string[] {
+    const letters: Record<string, string[]> = {
+        F: [' ______', '|  ____|', '| |__  ', '|  __| ', '| |    ', '|_|    '],
+        E: [' ______', '|  ____|', '| |__  ', '|  __| ', '| |____', '|______|'],
+        V: ['__      __', '\\ \\    / /', ' \\ \\  / / ', '  \\ \\/ /  ', '   \\  /   ', '    \\/    '],
+        R: [' _____ ', '|  __ \\', '| |__) |', '|  _  /', '| | \\ \\', '|_|  \\_\\'],
+        S: ['  _____', ' / ____|', '| (___ ', ' \\___ \\', ' ____) |', '|_____/'],
+        L: [' _     ', '| |    ', '| |    ', '| |    ', '| |____', '|______|'],
+        O: ['  ____ ', ' / __ \\', '| |  | |', '| |  | |', '| |__| |', ' \\____/'],
+        P: [' _____ ', '|  __ \\', '| |__) |', '|  ___/', '| |    ', '|_|    '],
+    }
+    const word = (text: string) => Array.from({length: 6}, (_, row) => [...text].map(c => {
+        const glyph = letters[c]!
+        return glyph[row]!.padEnd(Math.max(...glyph.map(line => line.length)))
+    }).join(' ').trimEnd())
+    const wide = word('FEVERSLOP')
+    const stacked = [...word('FEVER'), '', ...word('SLOP')]
+    const lines = Math.max(...wide.map(l => l.length)) <= width ? wide
+        : Math.max(...stacked.map(l => l.length)) <= width ? stacked : ['FEVERSLOP']
+    return [...lines, 'STORIES INTO MOTION / TS VIDEO CLI'].map(line => fitLine(line, width))
+}
+
+/** Clip by terminal cells, not UTF-16 offsets (emoji and CJK can use two cells). */
+export function fitLine(text: string, width: number) {
+    if (width <= 0) return ''
+    if (Bun.stringWidth(text) <= width) return text
+    let result = ''
+    for (const char of stripVTControlCharacters(text)) {
+        if (Bun.stringWidth(result + char) > width - 1) break
+        result += char
+    }
+    return result + '…'
 }
 
 // the warnings of this run, for its summary at the end
 const warnings: string[] = []
 export const runWarnings = () => [...warnings]
+const result: {output?: string, next?: string, cancelled?: boolean} = {}
+export const runResult = () => ({...result})
 
 export const log = {
+    /** Human output which must not inherit a cached step's hidden-detail state. */
+    info: (...args: unknown[]) => print(format(...args), true),
+    prompt: (message: string) => print(message, true, true),
+    error: (...args: unknown[]) => {
+        const message = format(...args)
+        if (json) console.error(JSON.stringify({error: message, hint: errorHint || undefined}))
+        else print(`${styles.warning('✗ Failed')} ${message}${errorHint ? `\n${errorHint}` : ''}`, true, true)
+    },
+    json: (value: unknown) => console.log(JSON.stringify(value, null, 2)),
+    success: (message: string) => print(`${styles.answer('✔ Done')} ${message}`, true),
+    next: (command: string) => { result.next = command; print(`${styles.label('→ Next')} ${command}`, true) },
+    output: (path: string) => { result.output = path; print(`${styles.label('▸ Output')} ${path}`, true) },
+    cancel: (message: string) => { result.cancelled = true; print(`${styles.warning('⊘ Cancelled')} ${message}`, true, true) },
     section: (title: string) => {
         detailsHidden = false
         print(`\n${styles.section(`  ${title}  `)}\n`)
@@ -101,12 +169,17 @@ export const log = {
     },
     /** One line of a listing - a detail like log.step. */
     line: (text: string) => print(text),
-    step: (label: string, value: string = '') => print(`${styles.label(`▸ ${label}`)} ${value}`),
+    step: (label: string, value: string = '') => {
+        if (label === 'Saved' || label === 'Output') result.output = stripVTControlCharacters(value)
+        print(`${styles.label(`▸ ${label}`)} ${value}`)
+    },
     warn: (message: string) => {
         warnings.push(message)
-        print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true)
+        print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true, true)
     },
     box: (title: string, content: string) => {
+        const boxWidth = boxColumns()
+        title = fitLine(title, Math.max(1, boxWidth - 1))
         const border = styles.border
         const lines = [border(`╭─ `) + styles.label(title) + border(` ${'─'.repeat(Math.max(0, boxWidth - title.length - 1))}╮`)]
         for (const line of wrap(content.trim(), boxWidth)) {
@@ -130,8 +203,8 @@ export const log = {
  * the stack trace below it. The flag is read from the raw arguments - the handlers are set up before parseArgs runs.
  */
 export function failRun(e: unknown): never {
-    const debug = process.env.FEVERSLOP_DEBUG === '1' || Bun.argv.includes('--debug')
-    if (debug && e instanceof Error && e.stack) {
+    const showDebug = debug || process.env.FEVERSLOP_DEBUG === '1' || Bun.argv.includes('--debug')
+    if (showDebug && !json && e instanceof Error && e.stack) {
         clearBoard()
         console.error(styles.muted(e.stack))
     }
@@ -140,7 +213,17 @@ export function failRun(e: unknown): never {
 
 function errorBox(heading: string, sections: { text: string, style: (s: string) => string }[]): never {
     clearBoard()
+    if (json) {
+        console.error(JSON.stringify({error: sections[0]?.text, usage: sections[1]?.text, hint: errorHint || undefined, log: logFile?.path}))
+        process.exit(1)
+    }
     if (logFile) sections = [...sections, {text: `The whole run: ${logFile.path}`, style: styles.muted}]
+    if (errorHint) sections = [...sections, {text: errorHint, style: styles.muted}]
+    if (!process.stderr.isTTY) {
+        console.error(`${heading.trim()}\n${sections.map(s => s.text).join('\n')}`)
+        process.exit(1)
+    }
+    const boxWidth = boxColumns()
     const border = style('red')
     const title = style(['bold', 'white', 'bgRed'])
     console.error(`\n${border('╭─')}${title(heading)}${border(`${'─'.repeat(Math.max(0, boxWidth - heading.length))}╮`)}`)
@@ -162,37 +245,40 @@ const board = new Set<BoardEntry>()
 const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 let frame = 0
 let timer: ReturnType<typeof setInterval> | undefined
-let drawn = false
+let drawn = 0
 
 function drawBoard() {
-    if (!process.stdout.isTTY) return
+    if (!process.stdout.isTTY || quiet || json) return
     const elapsed = (entry: BoardEntry) => styles.muted(`${((Date.now() - entry.start) / 1000).toFixed(1)}s`)
     const running = [...board].filter(e => !e.note).map(e => [e.status(), e] as const).filter(([status]) => status)
     const notes = [...board].filter(e => e.note).map(e => e.status()).filter(Boolean)
     if (!running.length && !notes.length) return
-    const parts = [
-        ...(running.length > 1 ? [`${running.length} running`] : []),
-        ...running.map(([status, entry]) => `${status} ${elapsed(entry)}`),
-        ...notes.map(note => styles.muted(note)),
-    ]
-    let line = `${styles.label(frames[frame++ % frames.length]!)} ${parts.join(styles.muted(' · '))}`
-    // a line that wraps can't be cleared with \r any more - cut it to the terminal width
+    // A bounded board retains concurrent jobs instead of truncating all but the first.
     const width = (process.stdout.columns || 100) - 1
-    if (Bun.stringWidth(line) > width) line = stripVTControlCharacters(line).slice(0, width - 1) + '…'
-    process.stdout.write(`\r\x1b[2K${line}`)
-    drawn = true
+    const limit = Math.max(1, Math.min(6, (process.stdout.rows || 24) - 5))
+    const entries = running.map(([status, entry]) => `  ${status} ${elapsed(entry)}`)
+    const visible = entries.slice(0, Math.max(0, limit - 1))
+    const hidden = entries.length - visible.length
+    const lines = [`${styles.label(frames[frame++ % frames.length]!)} ${running.length} running${notes.length ? ` · ${notes.join(' · ')}` : ''}${hidden ? ` · ${hidden} more active` : ''}`, ...visible].map(line => fitLine(line, width))
+    clearBoard()
+    boardWrite = true
+    process.stdout.write(lines.join('\n'))
+    boardWrite = false
+    drawn = lines.length
 }
 
 function clearBoard() {
-    if (drawn) process.stdout.write('\r\x1b[2K')
-    drawn = false
+    boardWrite = true
+    if (drawn) process.stdout.write(`\r\x1b[2K${'\x1b[1A\r\x1b[2K'.repeat(drawn - 1)}`)
+    boardWrite = false
+    drawn = 0
 }
 
 /** Adds an entry to the status board - returns the function that removes it again. */
 export function startSpinner(getStatus: () => string, options: { note?: boolean } = {}) {
     const entry: BoardEntry = {status: getStatus, start: Date.now(), note: options.note ?? false}
     board.add(entry)
-    if (process.stdout.isTTY) timer ??= setInterval(drawBoard, 80)
+    if (process.stdout.isTTY && !quiet && !json) timer ??= setInterval(drawBoard, 100)
     return () => {
         board.delete(entry)
         clearBoard()
@@ -231,6 +317,7 @@ export const suffix = (...parts: (string | undefined | false)[]) => parts.filter
  * into this file, without colour codes and without the redraws of the status line. Opened once per run.
  */
 let logFile: { path: string, fd: number } | undefined
+let boardWrite = false
 
 /** Into the log file only - what the terminal leaves out. */
 function toLog(text: string) {
@@ -246,7 +333,7 @@ export function keepLogIn(path: string) {
     mkdirSync(dirname(path), {recursive: true})
     logFile = {path, fd: openSync(path, 'a')}
     const toFile = (text: string) => {
-        if (!logFile) return
+        if (!logFile || boardWrite) return
         // the status line is drawn as "\r" + the line, and cleared with "\r" - neither is part of the log
         if (text.startsWith('\r') && !text.includes('\n')) return
         try {

@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Converts a ComfyUI workflow in API format into a draft workflow file for comfy/workflows/.
 // usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video|audio [--force] [--comfy=http://host:8188]
 // See docs/custom-workflows.md for the steps after the conversion.
@@ -8,6 +10,8 @@ import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {fetchNodeList, nodeServer} from "./node-list.ts";
+cli('comfy:convert')
+
 
 const {values: args, positionals: [source, name]} = parseArgs({
     args: Bun.argv.slice(2),
@@ -15,12 +19,12 @@ const {values: args, positionals: [source, name]} = parseArgs({
     options: {kind: {type: 'string', default: 'image'}, force: {type: 'boolean', default: false}, comfy: {type: 'string'}},
 })
 if (!source || !name || !['image', 'video', 'audio', 'sequence'].includes(args.kind)) {
-    console.error('usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video|audio|sequence [--force] [--comfy=http://host:8188]')
+    log.error('usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video|audio|sequence [--force] [--comfy=http://host:8188]')
     process.exit(1)
 }
 const target = join(import.meta.dir, 'workflows', `${name}.ts`)
 if (existsSync(target) && !args.force) {
-    console.error(`${target} exists - use --force to overwrite`)
+    log.error(`${target} exists - use --force to overwrite`)
     process.exit(1)
 }
 
@@ -28,7 +32,7 @@ type ApiNode = { class_type: string, inputs: Record<string, unknown>, _meta?: { 
 const json = await Bun.file(source).json()
 const graph: Record<string, ApiNode> = json.prompt ?? json
 if (Object.values(graph).some(n => typeof n?.class_type !== 'string')) {
-    console.error(`${source} is not in API format - export it with "Export (API)" in ComfyUI`)
+    log.error(`${source} is not in API format - export it with "Export (API)" in ComfyUI`)
     process.exit(1)
 }
 
@@ -37,7 +41,7 @@ const objectInfo = await fetchNodeList(await nodeServer(args.comfy))
 // builder method per node type, as cfli named them: "easy saveText" -> EasySaveText
 const nodesFile = join(import.meta.dir, 'nodes.ts')
 if (!existsSync(nodesFile)) {
-    console.error('comfy/nodes.ts is missing - run: bun run comfy:types')
+    log.error('comfy/nodes.ts is missing - run: bun run comfy:types')
     process.exit(1)
 }
 // every method starts with `this.addNode("<class_type>", inputs)` on its first line
@@ -134,4 +138,4 @@ ${outputNodes.length > 1 ? `    // output nodes: ${outputNodes.map(variable).joi
 }
 `
 await Bun.write(target, code)
-console.log(`Wrote ${target} (${Object.keys(graph).length} nodes${output ? `, output ${variable(output)}` : ''})`)
+log.info(`Wrote ${target} (${Object.keys(graph).length} nodes${output ? `, output ${variable(output)}` : ''})`)

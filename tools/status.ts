@@ -1,3 +1,4 @@
+import {cli} from '../lib/cli.ts';
 // Where a project stands: which steps are done, which an edited input or setting will redo on the next run, which
 // pictures and clips are rendered, missing or stale, and the command that comes next. Read-only - no lock, no LLM, no
 // ComfyUI; the render estimate comes from the measured timings.
@@ -12,6 +13,8 @@ import {log, styles} from "../lib/log.ts";
 import {ProjectStore, STEP_NAMES} from "../lib/project.ts";
 import {projectExists} from "../lib/project-setup.ts";
 import {loadSettings} from "../lib/settings.ts";
+cli('status')
+
 
 const usage = 'usage: bun run status <project-id> [--json]'
 const {values: args, positionals} = (() => {
@@ -67,7 +70,7 @@ if (toPlan.length || !clips.length) {
 }
 
 if (args.json) {
-    console.log(JSON.stringify({
+    log.json({
         project: project.id,
         changedInputs: changed,
         steps,
@@ -75,7 +78,7 @@ if (args.json) {
         clips: {total: clips.length, missing: missingClips.map(c => c.id), stale: staleClips.map(c => c.id)},
         finalVideo: finalState === 'missing' ? 'missing' : finalState === 'current' ? 'current' : 'older than the clips',
         next,
-    }, null, 2))
+    })
     process.exit(0)
 }
 
@@ -87,9 +90,9 @@ for (const step of lostStems) log.step('Gone', `${styles.name(step)} ${styles.mu
 const width = Math.max(...steps.map(s => s.step.length)) + 4
 const perLine = Math.max(1, Math.floor(((process.stdout.columns || 100) - 2) / width))
 for (let i = 0; i < steps.length; i += perLine) {
-    console.log(steps.slice(i, i + perLine).map(({step, state}) => `${mark[state]} ${(state === 'unused' ? styles.muted : (t: string) => t)(step.padEnd(width - 2))}`).join(''))
+    log.info(steps.slice(i, i + perLine).map(({step, state}) => `${mark[state]} ${(state === 'unused' ? styles.muted : (t: string) => t)(step.padEnd(width - 2))}`).join(''))
 }
-console.log(styles.muted(`✔ done · ⟳ redone by the next run · ✗ not generated yet · – not used by this project`))
+log.info(styles.muted(`✔ done · ⟳ redone by the next run · ✗ not generated yet · – not used by this project`))
 
 log.section('RENDERS')
 log.step('Pictures', pictures.length ? `${pictures.length - missingPictures.length} of ${pictures.length} rendered${missingPictures.length ? styles.muted(` - missing: ${missingPictures.map(p => p.id).join(', ')}`) : ''}` : styles.muted('no plan yet'))
@@ -98,6 +101,7 @@ log.step('Final video', finalState === 'missing' ? styles.muted('not assembled y
 
 log.section('NEXT')
 if (next.command) {
-    log.step('Next', `${next.command} ${styles.muted(`- ${next.why}`)}`)
+    log.info(styles.muted(next.why))
+    log.next(next.command)
     if (next.estimate) log.step('Estimate', styles.muted(next.estimate))
 } else log.step('Done', styles.muted(next.why))

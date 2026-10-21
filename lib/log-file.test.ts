@@ -23,6 +23,7 @@ describe('the log of a run', () => {
             const text = readFileSync(file, 'utf8')
             expect(text).toContain('▸ Step one\n')
             expect(text).toContain('plain 2\n')
+            expect(text.match(/plain 2/g)).toHaveLength(1)
             expect(text).toContain('▸ Warning careful')
             expect(text).toContain('broken')
             expect(text).toContain(`The whole run: ${file}`)
@@ -46,10 +47,11 @@ describe('the log of a run', () => {
                 log.warn('a warning is always shown')
                 log.section('4 · NEXT')
                 log.step('Fresh', 'shown')`
-            const quiet = Bun.spawnSync(['bun', '-e', script('')], {stdout: 'pipe', stderr: 'pipe'}).stdout.toString()
+            const child = Bun.spawnSync(['bun', '-e', script('')], {stdout: 'pipe', stderr: 'pipe'})
+            const quiet = child.stdout.toString()
             expect(quiet).toContain('3 · CRAFTING THE STORY')
             expect(quiet).not.toContain('Once upon a time')
-            expect(quiet).toContain('a warning is always shown')
+            expect(child.stderr.toString()).toContain('a warning is always shown')
             expect(quiet).toContain('Fresh')
             expect(readFileSync(file, 'utf8')).toContain('Once upon a time')
             const shown = Bun.spawnSync(['bun', '-e', script("'story'")], {stdout: 'pipe', stderr: 'pipe'}).stdout.toString()
@@ -58,4 +60,27 @@ describe('the log of a run', () => {
             rmSync(dir, {recursive: true, force: true})
         }
     })
+})
+
+test('concurrent TTY board stays out of the persisted log', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fs-board-'))
+    const file = join(dir, 'run.log')
+    try {
+        const child = Bun.spawnSync(['bun', '-e', `
+            import {keepLogIn, log, startSpinner} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
+            Object.defineProperty(process.stdout, 'isTTY', {value: true})
+            Object.defineProperty(process.stdout, 'columns', {value: 60})
+            keepLogIn(${JSON.stringify(file)})
+            const a = startSpinner(() => 'clip-one running')
+            const b = startSpinner(() => 'clip-two loading')
+            await Bun.sleep(120)
+            log.info('persistent event')
+            a(); b()
+        `], {stdout: 'pipe', stderr: 'pipe'})
+        expect(child.exitCode).toBe(0)
+        expect(child.stdout.toString()).toContain('clip-one running')
+        expect(child.stdout.toString()).toContain('clip-two loading')
+        const saved = readFileSync(file, 'utf8')
+        expect(saved).toBe('persistent event\n')
+    } finally { rmSync(dir, {recursive: true, force: true}) }
 })

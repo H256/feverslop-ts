@@ -1,3 +1,4 @@
+import {cli} from '../lib/cli.ts';
 // One clip on one screen: the beat and the staged shots it comes from, its pictures and audio tracks, whether it is
 // rendered (and from the request it has now), and the prompt itself. Read-only - no lock, no LLM, no ComfyUI.
 // usage: bun run inspect <project-id> <clip-id>
@@ -6,13 +7,15 @@ import {join} from "node:path";
 import type {ClipRequest} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {formatTime} from "../lib/frames.ts";
-import {log, styles} from "../lib/log.ts";
+import {jsonOutput, log, styles} from "../lib/log.ts";
 import {factText, type Project} from "../lib/project.ts";
 import {plainText} from "../lib/refs.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import {freshness} from "../lib/provenance.ts";
 import {clipFingerprint} from "../lib/render.ts";
 import {asBeatShots} from "../lib/shot-plan.ts";
+cli('inspect')
+
 
 const usage = 'usage: bun run inspect <project-id> <clip-id>'
 const [id, clipId] = Bun.argv.slice(2)
@@ -26,11 +29,22 @@ if (!clipId || !clipIds.includes(clipId)) log.usageError(`${clipId ? `No clip "$
 const clip: ClipRequest = await Bun.file(join(clipsDir, `${clipId}.json`)).json()
 const data: Project = existsSync(join(dir, 'project.json')) ? await Bun.file(join(dir, 'project.json')).json() : {}
 const config = await loadProjectConfig(dir)
+if (jsonOutput()) {
+    const video = join(dir, 'videos', `${clip.id}.mp4`)
+    log.json({
+        project: id, clip,
+        beat: data.beats?.find(b => b.id === clip.beatId) ?? null,
+        plan: data.shotMoments?.[clip.beatId] ?? null,
+        references: clip.assets.pictures.map(p => ({...p, exists: existsSync(join(dir, p.file))})),
+        render: {file: video, state: existsSync(video) ? freshness(video, clipFingerprint(clip, dir, config)) : 'missing'},
+    })
+    process.exit(0)
+}
 const characters = data.cast?.characters ?? []
 // the beats and plans write characters as {Name} - shown here with their plain names
 const plain = (text: string) => plainText(text, characters)
 const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
-const line = (label: string, value: string) => console.log(`${styles.label(label.padEnd(12))} ${value}`)
+const line = (label: string, value: string) => log.info(`${styles.label(label.padEnd(12))} ${value}`)
 
 log.section(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section}`)
 line('Length', `${clip.duration}s, ${clip.frames} frames from frame ${clip.frameStart}`)
@@ -56,23 +70,23 @@ if (plan) {
     if (plan.staging) line('Staging', plain(plan.staging))
     plan.shots.slice(offset, offset + clip.shots.length).forEach((shot, n) => {
         const cut = clip.shots[n]
-        console.log(`${styles.name(cut?.label ?? `[Shot ${n + 1}]`)} ${styles.muted(`at ${cut?.at ?? '?'}s · ${shot.framing ?? cut?.framing ?? ''}${shot.hold ? ' · held' : ''}`)}`)
-        console.log(`   ${plain(shot.action)}`)
-        if (shot.characters?.length) console.log(styles.muted(`   in the picture: ${shot.characters.map(nameOf).join(', ')}`))
-        for (const [person, p] of Object.entries(shot.people ?? {})) console.log(styles.muted(`   ${nameOf(person)}: ${[p.state, p.frame, p.motion].filter(Boolean).join(' | ')}`))
-        if (shot.rest) console.log(styles.muted(`   the others: ${shot.rest}`))
+        log.info(`${styles.name(cut?.label ?? `[Shot ${n + 1}]`)} ${styles.muted(`at ${cut?.at ?? '?'}s · ${shot.framing ?? cut?.framing ?? ''}${shot.hold ? ' · held' : ''}`)}`)
+        log.info(`   ${plain(shot.action)}`)
+        if (shot.characters?.length) log.info(styles.muted(`   in the picture: ${shot.characters.map(nameOf).join(', ')}`))
+        for (const [person, p] of Object.entries(shot.people ?? {})) log.info(styles.muted(`   ${nameOf(person)}: ${[p.state, p.frame, p.motion].filter(Boolean).join(' | ')}`))
+        if (shot.rest) log.info(styles.muted(`   the others: ${shot.rest}`))
     })
 } else {
     log.section('SHOTS')
-    for (const shot of clip.shots) console.log(`${styles.name(shot.label)} ${styles.muted(`at ${shot.at}s · ${shot.framing} · ${shot.camera}`)}`)
+    for (const shot of clip.shots) log.info(`${styles.name(shot.label)} ${styles.muted(`at ${shot.at}s · ${shot.framing} · ${shot.camera}`)}`)
 }
 
 log.section('REFERENCES')
 for (const picture of clip.assets.pictures) {
     const there = existsSync(join(dir, picture.file))
-    console.log(`${styles.name(picture.label.padEnd(12))} ${picture.kind.padEnd(9)} ${picture.name.padEnd(24)} ${there ? styles.muted(picture.file) : styles.warning(`${picture.file} - missing`)}`)
+    log.info(`${styles.name(picture.label.padEnd(12))} ${picture.kind.padEnd(9)} ${picture.name.padEnd(24)} ${there ? styles.muted(picture.file) : styles.warning(`${picture.file} - missing`)}`)
 }
-for (const audio of clip.assets.audio) console.log(`${styles.name(audio.label.padEnd(12))} audio     ${(audio.stem ?? '').padEnd(24)} ${styles.muted(`${audio.songStart}s - ${audio.songEnd}s of the song`)}`)
+for (const audio of clip.assets.audio) log.info(`${styles.name(audio.label.padEnd(12))} audio     ${(audio.stem ?? '').padEnd(24)} ${styles.muted(`${audio.songStart}s - ${audio.songEnd}s of the song`)}`)
 
 log.section('RENDER')
 const video = join(dir, 'videos', `${clip.id}.mp4`)

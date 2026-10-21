@@ -1,3 +1,4 @@
+import {cli} from '../lib/cli.ts';
 // Gives rendered clips of a project more frames with ComfyUI's frame interpolation, to compare models before the final
 // video uses it (issue #291): each clip is cut into its shots (never interpolated across a cut), every model given makes
 // its own file in videos/interpolated/ - at FPS * multiplier, and a 60 fps copy with the song under it to watch.
@@ -8,11 +9,13 @@ import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {loadProjectConfig} from "../lib/config.ts";
 import {FPS, secondsAt} from "../lib/frames.ts";
-import {log, printBanner} from "../lib/log.ts";
+import {log} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import {Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
+cli('interpolate')
+
 
 const usage = 'usage: bun run interpolate <project-id> --only=slot-001,... --model=<file in models/frame_interpolation>,... [--multiplier=5] [--comfy=http://host:8188]'
 const {values: args, positionals: [id]} = parseArgs({
@@ -23,7 +26,7 @@ const only = args.only.split(',').filter(Boolean)
 const models = args.model.split(',').filter(Boolean)
 const multiplier = Number(args.multiplier)
 if (!id || !projectExists(id) || !only.length || !models.length || !Number.isInteger(multiplier) || multiplier < 2) {
-    console.error(`${usage}${id && !projectExists(id) ? `\nprojects/${id} does not exist` : ''}`)
+    log.error(`${usage}${id && !projectExists(id) ? `\nprojects/${id} does not exist` : ''}`)
     process.exit(1)
 }
 const dir = projectDir(id)
@@ -32,7 +35,6 @@ const settings = await loadSettings({projectModel: config.llm.model, ...(args.co
 // the song as index.ts finds it: generated or supplied as input/song.wav, or supplied as input/song.mp3
 const song = ['song.wav', 'song.mp3'].map(f => join(dir, 'input', f)).find(existsSync)
 
-printBanner()
 using renderer = new Renderer(id, dir, config, settings.comfy)
 for (const clipId of only) {
     const requestFile = join(dir, 'output', 'clips', `${clipId}.json`)

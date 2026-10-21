@@ -26,6 +26,9 @@ bun install
 bun run setup
 ```
 
+All TypeScript tools support `--help`, `--verbose`, `--debug`, `--quiet` and `--banner`.
+See [CLI output and recovery](docs/cli.md) for logging, JSON output and terminal behavior.
+
 | Script                  | What it does                                                                 |
 |-------------------------|------------------------------------------------------------------------------|
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |

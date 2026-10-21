@@ -1,13 +1,17 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Sets up the LLM server and the ComfyUI servers - writes the global settings file (see the README, section "Setup").
 // usage: bun run setup [llm | llm-model | comfy | show]
 import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {listModels} from "../lib/llm.ts";
-import {printBanner, styles} from "../lib/log.ts";
+import {styles} from "../lib/log.ts";
 import {
     type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, maskSecret, normalizeUrl,
     parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source,
 } from "../lib/settings.ts";
+cli('setup')
+
 
 const commands = {
     all: 'everything below, in order',
@@ -18,8 +22,8 @@ const commands = {
 }
 const command = (Bun.argv[2] ?? 'all') as keyof typeof commands
 if (!(command in commands)) {
-    console.error(`usage: bun run setup [${Object.keys(commands).filter(c => c !== 'all').join(' | ')}]\n`)
-    for (const [name, what] of Object.entries(commands)) console.error(`  ${(name === 'all' ? '(none)' : name).padEnd(10)} ${what}`)
+    log.error(`usage: bun run setup [${Object.keys(commands).filter(c => c !== 'all').join(' | ')}]\n`)
+    for (const [name, what] of Object.entries(commands)) log.error(`  ${(name === 'all' ? '(none)' : name).padEnd(10)} ${what}`)
     process.exit(1)
 }
 
@@ -33,17 +37,16 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
 }
 
 const file = await readSettingsFile()
-printBanner()
-p.intro(`feverslop-ts setup ${styles.muted(settingsPath())}`)
+log.section(`feverslop-ts setup ${styles.muted(settingsPath())}`)
 if (command === 'all' || command === 'llm') await setupLlm()
 if (command === 'llm-model') await setupModel()
 if (command === 'all' || command === 'comfy') await setupComfy()
-p.outro('Done - see the result with: bun run setup show')
+log.success('Done - see the result with: bun run setup show')
 
 // cancelled with Ctrl+C / Esc: stop without saving the current part
 function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel('Cancelled - nothing more saved')
+        log.cancel('Cancelled - nothing more saved')
         process.exit(1)
     }
     return value as Exclude<T, symbol>
@@ -51,7 +54,7 @@ function answer<T>(value: T): Exclude<T, symbol> {
 
 async function save(what: string) {
     await saveSettings(file)
-    p.log.success(`Saved ${what} to ${settingsPath()}`)
+    log.success(`Saved ${what} to ${settingsPath()}`)
 }
 
 function validateUrl(value?: string) {
@@ -78,7 +81,7 @@ async function fetchModels(url: string, apiKey?: string) {
 
 async function selectModel(ids: string[], current?: string) {
     if (!ids.length) {
-        p.log.warn('The server lists no models - load one, then run: bun run setup llm-model')
+        log.warn('The server lists no models - load one, then run: bun run setup llm-model')
         return undefined
     }
     return answer(await p.select({
@@ -90,7 +93,7 @@ async function selectModel(ids: string[], current?: string) {
 }
 
 async function setupLlm() {
-    p.log.step('LLM server - any OpenAI-compatible server with the Responses API')
+    log.info('LLM server - any OpenAI-compatible server with the Responses API')
     const url = normalizeUrl(answer(await p.text({
         message: 'URL (with /v1)',
         placeholder: 'http://localhost:8080/v1',
@@ -108,7 +111,7 @@ async function setupLlm() {
     if (ids) {
         model = await selectModel(ids, model)
     } else if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) {
-        return p.log.info('LLM settings unchanged')
+        return log.info('LLM settings unchanged')
     }
     file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {}), ...(file.llm?.parallel ? {parallel: file.llm.parallel} : {})}
     await save('the LLM server')
@@ -118,10 +121,10 @@ async function setupModel() {
     // the effective server - it may come from an env var
     const {llm, sources} = await loadSettings()
     if (!llm.url) {
-        p.log.error('No LLM server configured - run: bun run setup llm')
+        log.error('No LLM server configured - run: bun run setup llm')
         process.exit(1)
     }
-    if (sources.llmModel === 'env') p.log.warn('FEVERSLOP_LLM_MODEL is set - it overrides the model saved here')
+    if (sources.llmModel === 'env') log.warn('FEVERSLOP_LLM_MODEL is set - it overrides the model saved here')
     const ids = await fetchModels(llm.url, llm.apiKey)
     if (!ids) process.exit(1)
     const model = await selectModel(ids, llm.model)
@@ -131,8 +134,8 @@ async function setupModel() {
 }
 
 async function setupComfy() {
-    p.log.step('ComfyUI servers - pictures and clips are rendered on all of them in parallel')
-    if (process.env.FEVERSLOP_COMFY || process.env.COMFY) p.log.warn('FEVERSLOP_COMFY / COMFY is set - it overrides the servers saved here')
+    log.info('ComfyUI servers - pictures and clips are rendered on all of them in parallel')
+    if (process.env.FEVERSLOP_COMFY || process.env.COMFY) log.warn('FEVERSLOP_COMFY / COMFY is set - it overrides the servers saved here')
     while (true) {
         const entries = file.comfy ?? []
         const servers = entries.length ? parseComfyEntries(entries, 'comfy') : []
@@ -164,7 +167,7 @@ async function setupComfy() {
 }
 
 async function showComfyStatus(servers: ComfyServer[]) {
-    if (!servers.length) return p.log.info(`No servers saved - ${defaultComfy} is used`)
+    if (!servers.length) return log.info(`No servers saved - ${defaultComfy} is used`)
     const spinner = p.spinner()
     spinner.start(`Testing ${servers.length} server(s)`)
     const results = await Promise.all(servers.map(s => probeComfy(s).then(describeDevices, (e: Error) => new Error(e.message))))
@@ -224,19 +227,19 @@ async function show() {
     const path = settingsPath()
     const {llm, comfy, sources} = await loadSettings()
     const source = (s: Source) => styles.muted(`(${s === 'file' ? 'settings file' : s})`)
-    console.log(`Settings file: ${path}${existsSync(path) ? '' : styles.muted(' (none yet - run: bun run setup)')}\n`)
-    console.log('LLM')
-    console.log(`  url      ${llm.url ?? styles.muted('not set')} ${source(sources.llmUrl)}`)
-    console.log(`  api key  ${llm.apiKey ? maskSecret(llm.apiKey) : styles.muted('none')} ${source(sources.llmApiKey)}`)
-    console.log(`  model    ${llm.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.llmModel)}`)
-    console.log(`  parallel ${llm.parallel} ${styles.muted(llm.parallel > 1 ? 'calls at once' : 'call at a time')} ${source(sources.llmParallel)}`)
-    console.log(`\nComfyUI ${source(sources.comfy)}`)
+    log.info(`Settings file: ${path}${existsSync(path) ? '' : styles.muted(' (none yet - run: bun run setup)')}\n`)
+    log.info('LLM')
+    log.info(`  url      ${llm.url ?? styles.muted('not set')} ${source(sources.llmUrl)}`)
+    log.info(`  api key  ${llm.apiKey ? maskSecret(llm.apiKey) : styles.muted('none')} ${source(sources.llmApiKey)}`)
+    log.info(`  model    ${llm.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.llmModel)}`)
+    log.info(`  parallel ${llm.parallel} ${styles.muted(llm.parallel > 1 ? 'calls at once' : 'call at a time')} ${source(sources.llmParallel)}`)
+    log.info(`\nComfyUI ${source(sources.comfy)}`)
     for (const server of comfy) {
         const auth = server.credentials?.type === 'bearer_token' ? ` token ${maskSecret(server.credentials.token)}`
             : server.credentials?.type === 'basic' ? ` user ${server.credentials.username}, password ${maskSecret(server.credentials.password)}` : ''
-        console.log(`  ${server.name.padEnd(20)} ${server.url}${styles.muted(auth)}`)
+        log.info(`  ${server.name.padEnd(20)} ${server.url}${styles.muted(auth)}`)
     }
-    console.log(styles.muted('\nOverrides, lowest first: settings file → project config.json ("llm": {"model": …}) → env vars → flags'))
+    log.info(styles.muted('\nOverrides, lowest first: settings file → project config.json ("llm": {"model": …}) → env vars → flags'))
 }
 
 function printWithoutTerminal() {
@@ -244,7 +247,7 @@ function printWithoutTerminal() {
         llm: {url: 'http://localhost:8080/v1', apiKey: '…', model: '<model id>'},
         comfy: [defaultComfy, {url: 'https://gpu2.lan:8188', name: 'gpu2', token: '…'}],
     }
-    console.log(`No terminal to ask in - set the values instead:
+    log.info(`No terminal to ask in - set the values instead:
 
   env vars:   FEVERSLOP_LLM_URL=http://localhost:8080/v1
               FEVERSLOP_LLM_API_KEY=…

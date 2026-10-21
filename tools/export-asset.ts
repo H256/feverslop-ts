@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Puts a finished character or place of a project into the asset library (lib/library.ts) - its picture, its whole
 // reference sheet and the texts that go with them - so any project can take it (import-asset, casting.json). Nothing is
 // rendered; an asset already in the library is never overwritten.
@@ -8,13 +10,15 @@ import {type AssetKind, assetIds, assetPaths, copyAsset} from "../lib/asset-impo
 import {libraryDir, libraryFolder, libraryIdPattern, libraryLayout, readLibraryAsset, writeLibraryAsset} from "../lib/library.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {Project} from "../lib/project.ts";
+cli('export-asset')
+
 
 const usage = 'usage: bun run export-asset <project-id> <character or location id> [--as=<library id>]'
 const args = Bun.argv.slice(2)
 const as = args.find(a => a.startsWith('--as='))?.slice('--as='.length)
 const [id, assetId] = args.filter(a => !a.startsWith('--'))
 const fail = (message: string): never => {
-    console.error(message)
+    log.error(message)
     process.exit(1)
 }
 if (!id || !assetId) fail(usage)
@@ -49,5 +53,6 @@ writeLibraryAsset(library, {
     source: `${id}/${assetId}`,
     created: new Date().toISOString().slice(0, 10),
 })
-console.log(`${(character ?? location)!.name} is in the library as ${kind} "${libraryId}" (${copied} files): ${join(library, libraryFolder(kind, libraryId))}`)
-console.log(`Take it into a project with: bun run import-asset <project-id> <id there> --from=library:${libraryId}`)
+log.info(`${(character ?? location)!.name} is in the library as ${kind} "${libraryId}" (${copied} files): ${join(library, libraryFolder(kind, libraryId))}`)
+log.output(join(library, libraryFolder(kind, libraryId)))
+log.next(`bun run import-asset <project-id> <asset-id> --from=library:${libraryId}`)

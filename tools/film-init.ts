@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Creates a new short film: asks for a story idea or a screenplay (any language), a visual style and, if wanted, the
 // film's settings - then writes films/<id>/ and prints the command to run it.
 // usage: bun run film:init
@@ -6,12 +8,14 @@ import {loadFilmConfig, filmDefaults, type FilmConfig} from "../lib/film/config.
 import {filmExists, writeFilm} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import {languageName} from "../lib/config.ts";
-import {printBanner, styles} from "../lib/log.ts";
+import {styles} from "../lib/log.ts";
 import {validProjectId} from "../lib/project-setup.ts";
 import {answer, askResolution, askStyle, askText} from "../lib/wizard.ts";
+cli('film:init')
+
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.log(`No terminal to ask in - create ${FILMS_DIR}/<id>/input/ by hand instead:
+    log.error(`No terminal to ask in - create ${FILMS_DIR}/<id>/input/ by hand instead:
   input/idea.txt          a story idea, in any language - developed into a screenplay
   input/screenplay.txt    or a screenplay, in any language - adopted as it is (wins if both exist)
   input/style.txt         optional visual style - see docs/style-examples.md
@@ -19,8 +23,7 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
     process.exit(1)
 }
 
-printBanner()
-p.intro('feverslop-ts · new short film')
+log.section('feverslop-ts · new short film')
 
 const id = answer(await p.text({
     message: 'Film id (used as the directory name)',
@@ -75,9 +78,10 @@ if (customize) {
     config.videoResolution = await askResolution('Video resolution')
 }
 
-p.log.step(`Writing ${styles.muted(`${FILMS_DIR}/${id}/`)}`)
+log.info(`Writing ${styles.muted(`${FILMS_DIR}/${id}/`)}`)
 await writeFilm(id, {...(kind === 'idea' ? {idea: text} : {screenplay: text}), style, config})
 // the file is checked once, here, so a typo in the written settings shows up now and not on the first run
 await loadFilmConfig(`${FILMS_DIR}/${id}`)
 
-p.outro(`Created - run it with:\n\n  bun film.ts ${id}\n`)
+log.output(`${FILMS_DIR}/${id}/`)
+log.next(`bun film.ts ${id}`)
