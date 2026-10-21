@@ -53,7 +53,9 @@ The wizard asks, in order:
     it is generated and no length was given); *Quality* (`h3-ref2video-2pass`, 2 MP); *Custom* → image workflow
     (`kroma-image`, `krea2-image`), video workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video
     resolution, and `continuity`: never (default), where the story marks one unbroken take, or always - a continuing
-    clip starts on the last frame of the one before, read [Continuous scenes](../README.md#continuous-scenes) first
+    clip starts on the last frame of the one before, read [Continuous scenes](../README.md#continuous-scenes) first.
+    With continuity on, `contextFrames`: the clip starts on the last frame (default), or on the last 22 or 39 frames of
+    the clip before, so the movement goes on and not only the pose
 11. **Summary** - all answers at a glance: *Write* it, *Change* one of them (the questions that depend on it are asked
     again too - a new song source asks the lyrics/story and the singers again), or *Cancel*
 12. **Start it now?** - *Only generate the song now* (a generated song only, preselected - listen to it before the long

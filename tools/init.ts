@@ -51,11 +51,12 @@ type Answers = {
     imageResolution: Resolution
     videoResolution: Resolution
     continuity: ProjectConfig['continuity']
+    contextFrames: number
 }
 const a = {
     singerMode: 'none', singerNames: [], language: defaults.lyricsLanguage, singerVoice: defaults.singerVoice, videoAspect: defaults.videoAspect,
     preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
-    continuity: defaults.continuity,
+    continuity: defaults.continuity, contextFrames: defaults.contextFrames,
 } as unknown as Answers
 const hasSong = () => a.songSource === 'file'
 // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
@@ -250,7 +251,7 @@ const steps: Record<string, Step> = {
     render: {
         label: () => 'Render settings',
         summary: () => a.preset === 'custom'
-            ? `${a.imageWorkflow} (${resolutionText(a.imageResolution)}), ${a.videoWorkflow} (${resolutionText(a.videoResolution)})${a.continuity === 'never' ? '' : `, continuity ${a.continuity}`}`
+            ? `${a.imageWorkflow} (${resolutionText(a.imageResolution)}), ${a.videoWorkflow} (${resolutionText(a.videoResolution)})${a.continuity === 'never' ? '' : `, continuity ${a.continuity}${a.contextFrames ? ` on ${a.contextFrames} frames` : ''}`}`
             : ({defaults: 'defaults', quick: 'quick test', quality: 'quality - two-pass at 2 MP'})[a.preset],
         ask: async () => {
             a.preset = answer(await p.select({
@@ -281,7 +282,22 @@ const steps: Record<string, Step> = {
                     {value: 'always' as const, label: 'Always - every clip but a beat\'s first goes on from the one before'},
                 ],
             }))
-            if (a.continuity !== 'never') log.info(styles.muted('A continuing clip starts on the last frame of the clip before - a drift in it (a double, a sliding wall patch) carries on. Suits shots with real movement, not a held pose.'))
+            if (a.continuity === 'never') {
+                a.contextFrames = 0
+                return
+            }
+            log.info(styles.muted('A continuing clip starts on the last frame of the clip before - a drift in it (a double, a sliding wall patch) carries on. Suits shots with real movement, not a held pose.'))
+            // one pinned frame carries the pose, the last frames of the clip before also the movement (README
+            // "Context frames") - the model takes 5 + 17·k of them, each clip is rendered that much longer at the head
+            a.contextFrames = answer(await p.select({
+                message: 'A continuing clip starts on',
+                initialValue: a.contextFrames,
+                options: [
+                    {value: 0, label: 'The last frame of the clip before', hint: 'default - the pose goes on, the movement starts anew'},
+                    {value: 22, label: 'Its last 22 frames', hint: 'the movement goes on - each clip rendered ~1 s longer'},
+                    {value: 39, label: 'Its last 39 frames', hint: 'each clip rendered ~1.6 s longer'},
+                ],
+            }))
         },
     },
 }
@@ -331,6 +347,7 @@ if (a.preset === 'custom') {
     if (a.imageResolution !== -1) config.imageResolution = a.imageResolution
     if (a.videoResolution !== -1) config.videoResolution = a.videoResolution
     if (a.continuity !== defaults.continuity) config.continuity = a.continuity
+    if (a.contextFrames !== defaults.contextFrames) config.contextFrames = a.contextFrames
 }
 
 const id = a.id
