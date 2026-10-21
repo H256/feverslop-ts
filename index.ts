@@ -195,12 +195,14 @@ const idea = await readInput('idea.txt')
 const musicStyleInput = await readInput('music-style.txt')
 const lyricsBeforeSong = await readInput('lyrics.txt')
 if (render.has('song')) {
-    if (!idea) throw new Error('--render=song needs a song idea in input/idea.txt')
+    // lyrics of your own are set to music as they are - an idea is only needed to have the LLM write them
+    if (!idea && !lyricsBeforeSong) throw new Error('--render=song needs a song idea in input/idea.txt or lyrics of your own in input/lyrics.txt')
 
-    // A hand-edit (or a deletion) of idea.txt/music-style.txt/lyrics.txt since the last run needs a new style this
-    // run already - read-only, so the fingerprints it compares against are only recorded once, by the main
+    // A hand-edit (or a deletion) of idea.txt/music-style.txt/lyrics.txt or a new singerVoice since the last run needs a
+    // new style this run already - read-only, so the fingerprints it compares against are only recorded once, by the main
     // syncInputs() call further down, once this run's final lyrics.txt content is known.
-    if (inputChangedSinceLastRun('idea.txt', idea) || inputChangedSinceLastRun('music-style.txt', musicStyleInput) || inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong)) {
+    if (inputChangedSinceLastRun('idea.txt', idea) || inputChangedSinceLastRun('music-style.txt', musicStyleInput) || inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong)
+        || inputChangedSinceLastRun('singerVoice', config.singerVoice)) {
         project.invalidate('songStyle')
     }
 
@@ -209,7 +211,7 @@ if (render.has('song')) {
     const lyricsExisted = existsSync(project.input('lyrics.txt'))
     if (!lyricsExisted) {
         log.section('1 · WRITING THE LYRICS')
-        const generatedLyrics = await ask(songLyricsPrompt(idea, language, config.songDuration === -1 ? undefined : config.songDuration))
+        const generatedLyrics = await ask(songLyricsPrompt(idea, language, config.songDuration === -1 ? undefined : config.songDuration, config.singerVoice))
         log.box('Lyrics', generatedLyrics)
         await Bun.write(project.input('lyrics.txt'), generatedLyrics)
         project.invalidate('songStyle') // fresh lyrics need a style written to match them
@@ -218,7 +220,7 @@ if (render.has('song')) {
 
     // STYLE - redone whenever the lyrics or music-style.txt changed since the style currently cached was written
     const styleWasCached = project.data.songStyle !== undefined
-    const songStyle = await project.step('songStyle', '1a · WRITING THE MUSICAL STYLE', () => ask(songStylePrompt(songLyrics, musicStyleInput, language)))
+    const songStyle = await project.step('songStyle', '1a · WRITING THE MUSICAL STYLE', () => ask(songStylePrompt(songLyrics, musicStyleInput, language, config.singerVoice)))
     log.box('Style', songStyle)
     if (!existsSync(project.input('music-style.txt'))) await Bun.write(project.input('music-style.txt'), songStyle)
 
@@ -287,7 +289,7 @@ if (project.data.stems && Object.values(project.data.stems).some(file => !exists
 if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('instrumentStems')
 
 ////////// ANALYZE THE SONG
-if (!existsSync(songFile)) throw new Error(`No song found at ${project.input('song.wav')} or ${project.input('song.mp3')}${idea ? ' - run with --render=song to generate one from input/idea.txt' : ''}`)
+if (!existsSync(songFile)) throw new Error(`No song found at ${project.input('song.wav')} or ${project.input('song.mp3')}${idea || lyrics ? ` - run with --render=song to generate one from input/${idea ? 'idea.txt' : 'lyrics.txt'}` : ''}`)
 const music = await project.step('music', '2 · ANALYZING THE SONG', async () => {
     log.step('Analyzing', styles.muted(`${songFile} - beats, bars and ${lyricSections.length} sections`))
     return analyzeSong(songFile, lyricSections.map(s => s.label))

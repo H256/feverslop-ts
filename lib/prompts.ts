@@ -10,7 +10,7 @@ import {LOCATION_VIEWS} from "./sequenceSheet.ts";
 // style (music-style.txt) is redone around it, or vice versa (see songStylePrompt).
 // durationSec: an upper bound (config.json songDuration) - the model decides the actual song length, so this only
 // shapes how many sections/lines the lyrics get, it doesn't force an exact length
-export function songLyricsPrompt(idea: string, language: string, durationSec?: number): AskOptions {
+export function songLyricsPrompt(idea: string, language: string, durationSec?: number, singerVoice: SingerVoice = 'auto'): AskOptions {
     return {
         maxTokens: 4096,
         input: `Write song lyrics from this idea for a music video, for the YuE2 text-to-music model.
@@ -24,7 +24,7 @@ Rules:
 - Write every repeated chorus out in full - never shorthand like "(repeat chorus)".
 - Keep the syllable count identical when a line repeats.
 - Nothing but section tags and sung words - no production notes like "(drums build)", no title, no hyphenated syllable forcing.
-- Written in ${language}.
+- Written in ${language}.${voiceRules(singerVoice).lyrics}
 
 Answer only with the lyrics.`,
         instructions: 'You are a songwriter. Answer only with the lyrics, nothing else.',
@@ -34,7 +34,7 @@ Answer only with the lyrics.`,
 // The YuE2 style/tags prompt for a given (fixed) set of lyrics - written or rewritten around whatever is
 // currently in lyrics.txt, so correcting the lyrics by hand and asking for a new style still gets one that fits.
 // musicStyle: the optional direction from music-style.txt - a hint to follow, not the final YuE2 caption itself.
-export function songStylePrompt(lyrics: string, musicStyle: string, language: string): AskOptions {
+export function songStylePrompt(lyrics: string, musicStyle: string, language: string, singerVoice: SingerVoice = 'auto'): AskOptions {
     return {
         maxTokens: 2048,
         input: `Write a YuE2 style/tags prompt that fits these song lyrics.
@@ -47,7 +47,7 @@ Rules:
 - Comma-separated tags, in this order: genre, instruments, mood, vocal gender, vocal tone. Order matters - earlier tags get more weight.
 - Add a tempo tag (e.g. "88 BPM" or "upbeat") when tempo matters to the song.
 - If ${language} isn't English, add it as its own tag (e.g. "Japanese", "Mandarin", "German").
-- "No <instrument>" tags exclude an instrument that would otherwise be implied.
+- "No <instrument>" tags exclude an instrument that would otherwise be implied.${voiceRules(singerVoice).songStyle}
 - Read like a musician's or producer's description of a playable song, not mood prose.
 
 Answer only with the style prompt.`,
@@ -56,15 +56,21 @@ Answer only with the style prompt.`,
 }
 
 /**
- * What config.singerVoice adds to the story, cast and singer prompts ('' for "auto"). The story is told around the
- * singers from its first sentence on, so the cast and every look built on it follow.
+ * What config.singerVoice adds to the song (lyrics, YuE2 style), story, cast and singer prompts ('' for "auto"). A
+ * generated song is sung in that voice, and the story is told around the singers from its first sentence on, so the
+ * cast and every look built on it follow.
  */
 export function voiceRules(voice: SingerVoice) {
-    if (voice === 'auto') return {story: '', cast: '', pick: ''}
+    if (voice === 'auto') return {lyrics: '', songStyle: '', story: '', cast: '', pick: ''}
     const who = voice === 'mixed'
         ? 'two singers, one woman and one man (a duet - the lines are split between them or sung together)'
         : `${voice === 'female' ? 'women' : 'men'} - every character who sings is ${voice}`
     return {
+        lyrics: voice === 'mixed'
+            ? '\n- A duet of a woman and a man: write it for two voices that answer each other.'
+            : `\n- Sung by a ${voice === 'female' ? 'woman' : 'man'}: write it from ${voice === 'female' ? 'her' : 'his'} point of view.`,
+        // the vocal gender tag is given, not left to the LLM - YuE2 sings in the voice the tags name
+        songStyle: `\n- The vocal gender tag is exactly "${voice === 'mixed' ? 'male and female vocals, duet' : `${voice} vocal`}", whatever the lyrics suggest.`,
         story: `\n- The song is sung by ${who}. Write them as such from the first sentence on (consistent pronouns, no gender change later), whatever the lyrics or the story idea suggest.`,
         cast: `- The song is sung by ${who}. State their gender in the role (e.g. "a young woman who ..."), even if the story text says otherwise. Other characters are not affected.\n`,
         pick: voice === 'mixed'

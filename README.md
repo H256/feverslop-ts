@@ -127,9 +127,10 @@ cached project runs without either.
 bun run init
 ```
 
-An interactive wizard, in the same style as `bun run setup`: it asks whether you already have the song (an audio
-file to copy in) or want one generated from a song idea, whether you have lyrics and/or a story idea, an optional
-visual style, and whether to use the project defaults or customize settings like singers or resolution. It then
+An interactive wizard, in the same style as `bun run setup`: it asks for the song (an audio file to copy in, or one
+to generate from a song idea or from lyrics of your own), who sings it (a woman, a man, a duet, or left open), lyrics
+and/or a story idea, an optional visual style, and whether to use the project defaults or customize settings like
+singers, image/video workflow or resolution. It then
 writes `projects/<id>/` and prints the `bun index.ts` command to run.
 
 ```bash
@@ -152,7 +153,7 @@ projects/<project-id>/
     song.wav          required (or song.mp3), unless generated with --render=song (see Generating the song)
     lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ... and a blank line between sections
                       (see lyrics.txt below) - required, unless generated
-    idea.txt          the song idea for --render=song - required for it, otherwise unused
+    idea.txt          the song idea for --render=song - required for it unless lyrics.txt is given, otherwise unused
     music-style.txt   optional - musical direction for --render=song, e.g. genre/instruments/mood
     story-idea.txt    optional
     style.txt         optional - the film's style, e.g. "dark gothic oil painting, heavy chiaroscuro"
@@ -214,7 +215,7 @@ built on it (and everything built on those):
 | `story-idea.txt`              | `story`                             |
 | `style.txt`                   | `lookBrief`                         |
 | `singers` in `config.json`    | `singing` (and so `beats`)          |
-| `singerVoice`                 | `story` (and everything after it)   |
+| `singerVoice`                 | `story` (and everything after it), `songStyle` |
 | `lyricsLanguage`              | `transcript`                        |
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
 | `fightClips`                  | `blocking` (and so `shotMoments`)   |
@@ -249,23 +250,25 @@ Cold as ice and deep as time
 
 ### Generating the song
 
-Without `input/song.wav`, `--render=song` writes it from `input/idea.txt` before the rest of the pipeline runs:
+Without `input/song.wav`, `--render=song` writes it from `input/idea.txt` - or from lyrics of your own in
+`input/lyrics.txt`, without an idea - before the rest of the pipeline runs:
 
 1. **Lyrics** (step `1`, not cached) - only when `input/lyrics.txt` doesn't exist: an LLM writes lyrics with section
    tags from `idea.txt`, the target length (`songDuration` in `config.json`) and `lyricsLanguage`, into
-   `input/lyrics.txt`. From then on `lyrics.txt` is a plain input like `story-idea.txt` - edit it, or delete it to get
+   `input/lyrics.txt`. With `singerVoice` set they are written for that voice. From then on `lyrics.txt` is a plain input like `story-idea.txt` - edit it, or delete it to get
    new lyrics.
 2. **Musical style** (step `1a`, `songStyle`) - an LLM turns the lyrics (+ optional `music-style.txt`) into a YuE2
-   `style` prompt (comma-separated genre, instruments, mood, vocal gender, vocal tone). It is written to
+   `style` prompt (comma-separated genre, instruments, mood, vocal gender, vocal tone) - the vocal gender is the one
+   `singerVoice` gives, unless it is `"auto"`. It is written to
    `music-style.txt` only if that file doesn't exist yet, so a hand-written one is never overwritten. Redone whenever
-   `idea.txt`, `music-style.txt` or `lyrics.txt` changed, or with `--redo=songStyle`.
+   `idea.txt`, `music-style.txt`, `lyrics.txt` or `singerVoice` changed, or with `--redo=songStyle`.
 3. **Song audio** (step `1b`) - renders the song with the YuE2 ComfyUI workflow (`songWorkflow` in `config.json`,
    default `yue2-song`) and writes `input/song.wav`. `songDuration` (default: the workflow's own, 360s) is only an
    upper bound - the model decides the actual song length.
 
 Once `input/song.wav` exists, `--render=song` renders it again only when the lyrics or the style changed in this run.
 To get a new song: edit `music-style.txt` or `lyrics.txt` (or delete `lyrics.txt` for new lyrics) and run
-`--render=song` again. Without `idea.txt`, `song.wav` and `lyrics.txt` must be supplied by hand.
+`--render=song` again. Without `idea.txt` and `lyrics.txt`, `song.wav` must be supplied by hand.
 
 ### Style
 

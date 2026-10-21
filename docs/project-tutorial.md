@@ -30,16 +30,22 @@ bun run init
 The wizard asks, in order:
 
 1. **Project id** - the directory name, e.g. `rusty-crown-legend`
-2. **Do you already have the song?**
-   - Yes → give the path to a `.wav`/`.mp3` file, it's copied to `input/song.wav`
-   - No → type a song idea (or read it from a file), plus an optional musical-style hint; the song is generated
-     later with the `yue2-song` workflow
-3. **Lyrics and/or a story idea** - required with an existing song (at least one of the two); optional when
-   generating the song (the lyrics are written from the idea automatically otherwise)
-4. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md)
-5. **Target song length** - only when the song is generated; empty = the workflow's own default
-6. **Customize settings?** - No → defaults (clip mode, the workflow's own resolution). Yes → singer mode (none / the
-   LLM decides / named characters), language, image/video resolution
+2. **The song**
+   - an audio file → give the path to a `.wav`/`.mp3` file, it's copied to `input/song.wav`
+   - generate it from a song idea → type the idea (or read it from a file); the LLM writes the lyrics
+   - generate it from your own lyrics → type them (or read them from a file); they are set to music as they are
+
+   Both generated kinds get an optional musical-style hint; the song is generated later with the `yue2-song` workflow
+3. **Who sings** - leave it open, a woman, a man or a duet (`singerVoice` in `config.json`). A generated song is
+   sung in that voice, and the story casts its singers to match it
+4. **Lyrics and/or a story idea** - required with an existing song (at least one of the two); with a generated song
+   only a story idea, optional
+5. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md); "← back" in
+   the list returns to the level above
+6. **Target song length** - only when the song is generated; empty = the workflow's own default
+7. **Customize settings?** - No → defaults (clip mode, the default workflows and their own resolution). Yes → singer
+   mode (none / the LLM decides / named characters), language, image workflow (`kroma-image`, `krea2-image`), video
+   workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video resolution
 
 For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
 file*.

@@ -1,11 +1,12 @@
-// Creates a new project: asks for the song (or a song idea to generate one), lyrics and/or a story idea, and
-// whether to customize the project settings - then writes projects/<id>/ and prints the command to run it.
+// Creates a new project: asks for the song (an audio file, or one to generate from a song idea or from lyrics of your
+// own), who sings it, lyrics and/or a story idea, and whether to customize the project settings - then writes
+// projects/<id>/ and prints the command to run it.
 // usage: bun run init
 import * as p from "@clack/prompts";
-import {existsSync} from "node:fs";
+import {existsSync, readdirSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
-import {defaults, languageName, type ProjectConfig} from "../lib/config.ts";
+import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {printBanner, styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
 import {STYLES} from "../lib/styles.ts";
@@ -13,7 +14,7 @@ import {STYLES} from "../lib/styles.ts";
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.log(`No terminal to ask in - create projects/<id>/input/ by hand instead:
   input/song.wav or song.mp3      a song you already have
-  input/idea.txt                  or a song idea, for: bun index.ts <id> --render=song
+  input/idea.txt                  or a song idea, for: bun index.ts <id> --render=song (lyrics.txt alone works too)
   input/lyrics.txt and/or input/story-idea.txt   at least one, unless idea.txt writes the lyrics for you
   input/style.txt                 optional visual style - see docs/style-examples.md (picked from the list if missing)
   config.json                     optional - see docs/comfyui.md`)
@@ -33,11 +34,20 @@ const id = answer(await p.text({
     },
 }))
 
-const hasSong = answer(await p.confirm({message: 'Do you already have the song (an audio file)?', initialValue: true}))
+const songSource = answer(await p.select({
+    message: 'The song',
+    options: [
+        {value: 'file', label: 'I have it as an audio file', hint: 'wav or mp3'},
+        {value: 'idea', label: 'Generate it from a song idea', hint: 'the LLM writes the lyrics'},
+        {value: 'lyrics', label: 'Generate it from my own lyrics', hint: 'set to music as they are'},
+    ],
+}))
+const hasSong = songSource === 'file'
 
 let songFile: string | undefined
 let idea: string | undefined
 let musicStyle: string | undefined
+let lyrics: string | undefined
 if (hasSong) {
     songFile = answer(await p.text({
         message: 'Path to the audio file (wav or mp3)',
@@ -48,15 +58,33 @@ if (hasSong) {
         },
     }))
 } else {
-    p.log.step('No song yet - it will be generated with the yue2-song workflow from a song idea')
-    idea = await askText('Song idea', {required: true})
+    p.log.step(`No song yet - it will be generated with the ${defaults.songWorkflow} workflow`)
+    if (songSource === 'idea') idea = await askText('Song idea', {required: true})
+    else {
+        p.log.info(styles.muted('Section tags on their own line - [Verse], [Chorus], [Bridge], ... - and a blank line between sections'))
+        lyrics = await askText('Lyrics', {required: true})
+    }
     musicStyle = await askText('Musical style hint (genre, mood, instruments - optional, the LLM invents one otherwise)')
 }
 
-// lyrics/story: required when there's already a song (index.ts throws otherwise) - when generating one from an
-// idea, index.ts writes lyrics.txt itself, but a story idea on top still helps the story stay close to what you want
+// who sings: a generated song is sung in that voice (the YuE2 tags), and the story casts its singers to match it
+const config: Partial<ProjectConfig> = {}
+const singerVoice = answer(await p.select<SingerVoice>({
+    message: hasSong ? 'Who sings in the song?' : 'Who should sing the song?',
+    options: [
+        {value: 'auto', label: hasSong ? 'Leave it open' : 'Leave it to the LLM', hint: hasSong ? 'the story decides - also for an instrumental' : 'the LLM picks the voice'},
+        {value: 'female', label: 'A woman', hint: 'female vocals'},
+        {value: 'male', label: 'A man', hint: 'male vocals'},
+        {value: 'mixed', label: 'A duet - a woman and a man'},
+    ],
+}))
+if (singerVoice !== defaults.singerVoice) config.singerVoice = singerVoice
+
+// lyrics/story: required when there's already a song (index.ts throws otherwise) - when generating one, the lyrics are
+// there (given, or written by index.ts from the idea), but a story idea on top still helps the story stay close to
+// what you want
 const lyricsChoice = answer(await p.select({
-    message: hasSong ? 'Lyrics and/or a story idea (at least one)' : 'A story idea on top of the generated lyrics? (optional)',
+    message: hasSong ? 'Lyrics and/or a story idea (at least one)' : `A story idea on top of the ${idea ? 'generated ' : ''}lyrics? (optional)`,
     options: hasSong ? [
         {value: 'lyrics', label: 'Lyrics'},
         {value: 'story', label: 'Story idea'},
@@ -66,12 +94,11 @@ const lyricsChoice = answer(await p.select({
         {value: 'none', label: 'No - let the lyrics carry the story'},
     ],
 }))
-const lyrics = lyricsChoice === 'lyrics' || lyricsChoice === 'both' ? await askText('Lyrics', {required: true}) : undefined
+if (lyricsChoice === 'lyrics' || lyricsChoice === 'both') lyrics = await askText('Lyrics', {required: true})
 const storyIdea = lyricsChoice === 'story' || lyricsChoice === 'both' ? await askText('Story idea', {required: true}) : undefined
 const style = await askStyle()
 
 // project settings
-const config: Partial<ProjectConfig> = {}
 if (!hasSong) config.songDuration = Number(answer(await p.text({
     message: 'Target song length in seconds (the workflow\'s own default otherwise)',
     placeholder: 'default',
@@ -79,7 +106,7 @@ if (!hasSong) config.songDuration = Number(answer(await p.text({
     validate: value => !value || (Number.isFinite(Number(value)) && Number(value) > 0) ? undefined : 'a positive number, or empty',
 }))) || undefined
 
-const customize = answer(await p.confirm({message: 'Customize the project settings (singers, resolution, ...)?', initialValue: false}))
+const customize = answer(await p.confirm({message: 'Customize the project settings (singers, language, workflows, resolution)?', initialValue: false}))
 if (customize) {
     // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
     const canSing = Boolean(lyrics || idea)
@@ -108,9 +135,19 @@ if (customize) {
     }))
     if (language !== defaults.lyricsLanguage) config.lyricsLanguage = language
 
+    const imageWorkflow = await askWorkflow('Image workflow', 'image')
+    if (imageWorkflow !== defaults.imageWorkflow) config.imageWorkflow = imageWorkflow
+    const videoWorkflow = await askWorkflow('Video workflow', 'video')
+    if (videoWorkflow !== defaults.videoWorkflow) config.videoWorkflow = videoWorkflow
+
     config.imageResolution = await askResolution('Image resolution')
-    config.videoResolution = await askResolution('Video resolution')
+    // the two-pass workflow takes videoResolution as its final size, pass 1 renders a quarter of it
+    config.videoResolution = await askResolution(videoWorkflow.endsWith('-2pass') ? 'Video resolution (the final size - pass 1 renders a quarter of it)' : 'Video resolution')
 }
+
+// the default resolution of the workflow is not stored - a later change of workflow keeps its own default
+if (config.imageResolution === -1) delete config.imageResolution
+if (config.videoResolution === -1) delete config.videoResolution
 
 p.log.step(`Writing ${styles.muted(`projects/${id}/`)}`)
 await writeProject(id, {songFile, idea, lyrics, storyIdea, style, musicStyle, config})
@@ -145,32 +182,68 @@ async function askText(label: string, options: { required?: boolean } = {}): Pro
     return multiline(label)
 }
 
-/** The film style for input/style.txt: typed, read from a file, taken from the built-in list - or left to the first run. */
+/**
+ * The film style for input/style.txt: typed, read from a file, taken from the built-in list - or left to the first run.
+ * The list goes kind of style -> style, and "← back" on each level returns to the one above.
+ */
 async function askStyle(): Promise<string | undefined> {
-    const mode = answer(await p.select({
-        message: 'Visual style',
-        options: [
-            {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
-            {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
-            {value: 'type', label: 'Type it now'},
-            {value: 'file', label: 'Read from a file'},
-        ],
-    }))
-    if (mode === 'skip') return undefined
-    if (mode === 'file') {
-        const path = answer(await p.text({message: 'File path', validate: v => v && existsSync(v) ? undefined : 'file not found'}))
-        return (await Bun.file(path).text()).trim()
-    }
-    if (mode === 'type') return multiline('Visual style')
+    const BACK = '\0back'
+    const back = {value: BACK, label: '← back'}
+    while (true) {
+        const mode = answer(await p.select({
+            message: 'Visual style',
+            options: [
+                {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
+                {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
+                {value: 'type', label: 'Type it now'},
+                {value: 'file', label: 'Read from a file'},
+            ],
+        }))
+        if (mode === 'skip') return undefined
+        if (mode === 'file') {
+            const path = answer(await p.text({message: 'File path', validate: v => v && existsSync(v) ? undefined : 'file not found'}))
+            return (await Bun.file(path).text()).trim()
+        }
+        if (mode === 'type') return multiline('Visual style')
 
-    const groups = [...new Set(STYLES.map(s => s.group))]
-    const group = answer(await p.select({message: 'Kind of style', options: groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`}))}))
-    const picked = answer(await p.select({
-        message: group,
-        maxItems: 12,
-        options: STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})),
+        const groups = [...new Set(STYLES.map(s => s.group))]
+        while (true) {
+            const group = answer(await p.select({
+                message: 'Kind of style',
+                options: [...groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`})), back],
+            }))
+            if (group === BACK) break
+            const picked = answer(await p.select({
+                message: group,
+                maxItems: 12,
+                options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
+            }))
+            if (picked !== BACK) return STYLES.find(s => s.id === picked)!.text
+        }
+    }
+}
+
+// what the workflows in comfy/workflows/ are for - one that isn't listed here is still offered, without a hint
+const WORKFLOW_HINTS: Record<string, string> = {
+    'kroma-image': 'Kroma turbo, half size + 2x refine',
+    'krea2-image': 'Krea 2, one pass',
+    'h3-ref2video': 'MiniMax H3, one pass with the turbo LoRA - fastest',
+    'h3-ref2video-full': 'MiniMax H3 base model, 20 steps - ~2.5x slower, more detail and motion',
+    'h3-ref2video-2pass': 'MiniMax H3 in two passes - quarter size, latent x2, short refine',
+    'h3-ref2video-cpu-clip': 'one pass, text encoder on the CPU - for less VRAM',
+}
+
+/** An image or video workflow from comfy/workflows/ - the film pipeline's own and the helper ones are not offered. */
+async function askWorkflow(label: string, kind: 'image' | 'video'): Promise<string> {
+    const fallback = kind === 'image' ? defaults.imageWorkflow : defaults.videoWorkflow
+    const names = readdirSync(workflowDir).filter(f => f.endsWith('.ts')).map(f => f.slice(0, -3))
+        .filter(n => kind === 'image' ? n.endsWith('-image') : n.includes('ref2video') && !n.includes('-film'))
+        .sort((a, b) => Number(b === fallback) - Number(a === fallback) || a.localeCompare(b))
+    return answer(await p.select({
+        message: label,
+        initialValue: fallback,
+        options: names.map(n => ({value: n, label: n, hint: [WORKFLOW_HINTS[n], n === fallback ? 'default' : ''].filter(Boolean).join(' · ') || undefined})),
     }))
-    return STYLES.find(s => s.id === picked)!.text
 }
 
 /**
