@@ -50,10 +50,13 @@ type Answers = {
     videoWorkflow: string
     imageResolution: Resolution
     videoResolution: Resolution
+    continuity: ProjectConfig['continuity']
+    contextFrames: number
 }
 const a = {
     singerMode: 'none', singerNames: [], language: defaults.lyricsLanguage, singerVoice: defaults.singerVoice, videoAspect: defaults.videoAspect,
     preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
+    continuity: defaults.continuity, contextFrames: defaults.contextFrames,
 } as unknown as Answers
 const hasSong = () => a.songSource === 'file'
 // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
@@ -248,7 +251,7 @@ const steps: Record<string, Step> = {
     render: {
         label: () => 'Render settings',
         summary: () => a.preset === 'custom'
-            ? `${a.imageWorkflow} (${resolutionText(a.imageResolution)}), ${a.videoWorkflow} (${resolutionText(a.videoResolution)})`
+            ? `${a.imageWorkflow} (${resolutionText(a.imageResolution)}), ${a.videoWorkflow} (${resolutionText(a.videoResolution)})${a.continuity === 'never' ? '' : `, continuity ${a.continuity}${a.contextFrames ? ` on ${a.contextFrames} frames` : ''}`}`
             : ({defaults: 'defaults', quick: 'quick test', quality: 'quality - two-pass at 2 MP'})[a.preset],
         ask: async () => {
             a.preset = answer(await p.select({
@@ -258,7 +261,7 @@ const steps: Record<string, Step> = {
                     {value: 'defaults' as const, label: 'Defaults', hint: `${defaults.imageWorkflow}, ${defaults.videoWorkflow}, the workflows' own resolution`},
                     {value: 'quick' as const, label: 'Quick test', hint: `flat pictures instead of reference sheets, 0.5 MP clips${hasSong() ? '' : ', a 60 s song unless a length was given'}`},
                     {value: 'quality' as const, label: 'Quality', hint: 'two-pass clips at 2 MP - slower'},
-                    {value: 'custom' as const, label: 'Custom', hint: 'image/video workflow and resolution, one by one'},
+                    {value: 'custom' as const, label: 'Custom', hint: 'image/video workflow, resolution and continuity, one by one'},
                 ],
             }))
             if (a.preset !== 'custom') return
@@ -267,6 +270,34 @@ const steps: Record<string, Step> = {
             a.imageResolution = await askResolution('Image resolution')
             // the two-pass workflow takes videoResolution as its final size, pass 1 renders a quarter of it
             a.videoResolution = await askResolution(a.videoWorkflow.endsWith('-2pass') ? 'Video resolution (the final size - pass 1 renders a quarter of it)' : 'Video resolution')
+            // clips that run on without a cut: a continuing clip starts on the last frame of the one before, so a take
+            // can be longer than one clip - and whatever that clip drifted to is where the next one starts (README
+            // "Continuous scenes"), hence off by default
+            a.continuity = answer(await p.select({
+                message: 'Clips that run on without a cut (continuity)',
+                initialValue: a.continuity,
+                options: [
+                    {value: 'never' as const, label: 'Never - every clip is its own cut', hint: 'default'},
+                    {value: 'auto' as const, label: 'Where the story marks one unbroken take', hint: 'a long walk, a slow reveal'},
+                    {value: 'always' as const, label: 'Always - every clip but a beat\'s first goes on from the one before'},
+                ],
+            }))
+            if (a.continuity === 'never') {
+                a.contextFrames = 0
+                return
+            }
+            log.info(styles.muted('A continuing clip starts on the last frame of the clip before - a drift in it (a double, a sliding wall patch) carries on. Suits shots with real movement, not a held pose.'))
+            // one pinned frame carries the pose, the last frames of the clip before also the movement (README
+            // "Context frames") - the model takes 5 + 17·k of them, each clip is rendered that much longer at the head
+            a.contextFrames = answer(await p.select({
+                message: 'A continuing clip starts on',
+                initialValue: a.contextFrames,
+                options: [
+                    {value: 0, label: 'The last frame of the clip before', hint: 'default - the pose goes on, the movement starts anew'},
+                    {value: 22, label: 'Its last 22 frames', hint: 'the movement goes on - each clip rendered ~1 s longer'},
+                    {value: 39, label: 'Its last 39 frames', hint: 'each clip rendered ~1.6 s longer'},
+                ],
+            }))
         },
     },
 }
@@ -315,6 +346,8 @@ if (a.preset === 'custom') {
     // the default resolution of the workflow is not stored - a later change of workflow keeps its own default
     if (a.imageResolution !== -1) config.imageResolution = a.imageResolution
     if (a.videoResolution !== -1) config.videoResolution = a.videoResolution
+    if (a.continuity !== defaults.continuity) config.continuity = a.continuity
+    if (a.contextFrames !== defaults.contextFrames) config.contextFrames = a.contextFrames
 }
 
 const id = a.id
