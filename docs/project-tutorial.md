@@ -43,7 +43,7 @@ The wizard asks, in order:
 5. **Lyrics and/or a story idea** - required with an existing song (at least one of the two); with a generated song
    only a story idea, optional
 6. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md); "← back" in
-   the list returns to the level above
+   the list returns to the level above; a picked style is shown in full and taken only on "Take it"
 7. **Target song length** - only when the song is generated; empty = the workflow's own default
 8. **Customize settings?** - No → defaults (clip mode, the default workflows and their own resolution). Yes → singer
    mode (none / the LLM decides / named characters), image workflow (`kroma-image`, `krea2-image`), video
