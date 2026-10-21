@@ -55,6 +55,8 @@ The wizard asks, in order:
     resolution
 11. **Summary** - all answers at a glance: *Write* it, *Change* one of them (the questions that depend on it are asked
     again too - a new song source asks the lyrics/story and the singers again), or *Cancel*
+12. **Start it now?** - *Only generate the song now* (a generated song only, preselected - listen to it before the long
+    render), *Start the whole run now*, or *Not now*. The command is printed in any case
 
 For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
 file*.

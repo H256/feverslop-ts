@@ -132,7 +132,8 @@ to generate from a song idea or from lyrics of your own), the language of the ly
 duet, or left open), lyrics and/or a story idea, who is seen singing, an optional visual style, the
 aspect ratio of the video, and render settings: the defaults, a quick-test or a quality preset, or image/video
 workflow and resolution one by one. A summary at the end lets you change any answer before it
-writes `projects/<id>/` and prints the `bun index.ts` command to run.
+writes `projects/<id>/`, prints the `bun index.ts` command to run and offers to start it (the whole run, or only a
+generated song to listen to first).
 
 ```bash
 bun run example
