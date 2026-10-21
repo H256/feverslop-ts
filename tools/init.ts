@@ -318,8 +318,28 @@ const id = a.id
 p.log.step(`Writing ${styles.muted(`projects/${id}/`)}`)
 await writeProject(id, {songFile: a.songFile, idea: a.idea, lyrics: a.ownLyrics ?? a.lyrics, storyIdea: a.storyIdea, style: a.style, musicStyle: a.musicStyle, config})
 
+// start it right away - the whole run, or only the song to listen to first (a generated song is the cheap step to judge
+// before hours of rendering); the command is printed either way, for later
 const render = hasSong() ? 'images,videos,final' : 'song,images,videos,final'
-p.outro(`Created - run it with:\n\n  bun index.ts ${id} --render=${render}\n`)
+const start = answer(await p.select({
+    message: 'Start it now?',
+    initialValue: hasSong() ? 'no' : 'song',
+    options: [
+        ...(hasSong() ? [] : [{value: 'song', label: 'Only generate the song now', hint: 'listen to it first'}]),
+        {value: 'all', label: 'Start the whole run now', hint: `--render=${render}`},
+        {value: 'no', label: 'Not now'},
+    ],
+}))
+if (start === 'no') {
+    p.outro(`Created - run it with:\n\n  bun index.ts ${id} --render=${render}\n`)
+    process.exit(0)
+}
+const run = start === 'song' ? 'song' : render
+p.outro(`Created - running bun index.ts ${id} --render=${run}`)
+const result = Bun.spawnSync(['bun', 'index.ts', id, `--render=${run}`], {stdio: ['inherit', 'inherit', 'inherit']})
+if (result.exitCode === 0 && start === 'song') console.log(`\nSong ready - listen to projects/${id}/input/song.wav, then continue with:\n\n  bun index.ts ${id} --render=images,videos,final\n`)
+if (result.exitCode !== 0) console.log(`\nThe run stopped - start it again with:\n\n  bun index.ts ${id} --render=${run}\n`)
+process.exit(result.exitCode ?? 1)
 
 /** The first line of a text, cut to a few words - for the summary. */
 function short(text: string | undefined) {
