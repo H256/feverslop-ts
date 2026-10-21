@@ -143,8 +143,41 @@ if (!hasSong) config.songDuration = Number(answer(await p.text({
     validate: value => !value || (Number.isFinite(Number(value)) && Number(value) > 0) ? undefined : 'a positive number, or empty',
 }))) || undefined
 
-const customize = answer(await p.confirm({message: 'Customize the project settings (workflows, resolution)?', initialValue: false}))
-if (customize) {
+// the clips' aspect ratio - characters stay portrait and places landscape, only the clips change
+const aspect = answer(await p.select({
+    message: 'Aspect ratio of the video',
+    options: [
+        {value: '16:9', label: '16:9 landscape', hint: 'default'},
+        {value: '9:16', label: '9:16 portrait', hint: 'social media'},
+        {value: '2:1', label: '2:1 wide'},
+        {value: '2:3', label: '2:3 portrait, less tall'},
+        {value: 'other', label: 'Another ratio'},
+    ],
+}))
+const videoAspect = aspect !== 'other' ? aspect : answer(await p.text({
+    message: 'Aspect ratio (WIDTH:HEIGHT)',
+    placeholder: '4:3',
+    validate: v => v && /^[1-9]\d*:[1-9]\d*$/.test(v) ? undefined : 'e.g. 4:3',
+}))
+if (videoAspect !== defaults.videoAspect) config.videoAspect = videoAspect as `${number}:${number}`
+
+// render settings: a preset, or every one of them asked
+const preset = answer(await p.select({
+    message: 'Render settings',
+    options: [
+        {value: 'defaults', label: 'Defaults', hint: `${defaults.imageWorkflow}, ${defaults.videoWorkflow}, the workflows' own resolution`},
+        {value: 'quick', label: 'Quick test', hint: `flat pictures instead of reference sheets, 0.5 MP clips${hasSong ? '' : ', a 60 s song unless a length was given'}`},
+        {value: 'quality', label: 'Quality', hint: 'two-pass clips at 2 MP - slower'},
+        {value: 'custom', label: 'Custom', hint: 'image/video workflow and resolution, one by one'},
+    ],
+}))
+if (preset === 'quick') {
+    config.sequenceSheets = false
+    config.videoResolution = 0.5
+    if (!hasSong && !config.songDuration) config.songDuration = 60
+}
+if (preset === 'quality') config.videoWorkflow = 'h3-ref2video-2pass'
+if (preset === 'custom') {
     const imageWorkflow = await askWorkflow('Image workflow', 'image')
     if (imageWorkflow !== defaults.imageWorkflow) config.imageWorkflow = imageWorkflow
     const videoWorkflow = await askWorkflow('Video workflow', 'video')

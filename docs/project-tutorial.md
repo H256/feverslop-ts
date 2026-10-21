@@ -48,8 +48,11 @@ The wizard asks, in order:
 7. **Visual style** (optional) - typed, from a file or picked from the [built-in list](style-examples.md); "← back" in
    the list returns to the level above; a picked style is shown in full and taken only on "Take it"
 8. **Target song length** - only when the song is generated; empty = the workflow's own default
-9. **Customize settings?** - No → defaults (the default workflows and their own resolution). Yes → image workflow (`kroma-image`, `krea2-image`), video
-   workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video resolution
+9. **Aspect ratio of the video** - 16:9 (default), 9:16, 2:1, 2:3 or another one (`videoAspect`)
+10. **Render settings** - *Defaults*; *Quick test* (`sequenceSheets: false`, `videoResolution: 0.5`, a 60 s song when
+    it is generated and no length was given); *Quality* (`h3-ref2video-2pass`, 2 MP); *Custom* → image workflow
+    (`kroma-image`, `krea2-image`), video workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video
+    resolution
 
 For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
 file*.
