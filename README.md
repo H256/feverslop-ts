@@ -131,7 +131,7 @@ An interactive wizard, in the same style as `bun run setup`: it asks for the son
 to generate from a song idea or from lyrics of your own), the language of the lyrics, who sings it (a woman, a man, a
 duet, or left open), lyrics and/or a story idea, who is seen singing, an optional visual style, the
 aspect ratio of the video, and render settings: the defaults, a quick-test or a quality preset, or image/video
-workflow and resolution one by one. It then
+workflow and resolution one by one. A summary at the end lets you change any answer before it
 writes `projects/<id>/` and prints the `bun index.ts` command to run.
 
 ```bash

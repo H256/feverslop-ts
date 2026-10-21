@@ -1,6 +1,6 @@
 // Creates a new project: asks for the song (an audio file, or one to generate from a song idea or from lyrics of your
-// own), who sings it, lyrics and/or a story idea, and whether to customize the project settings - then writes
-// projects/<id>/ and prints the command to run it.
+// own), who sings it, lyrics and/or a story idea, the look and the render settings - then shows a summary to change any
+// answer in, writes projects/<id>/ and prints the command to run it.
 // usage: bun run init
 import * as p from "@clack/prompts";
 import {existsSync, readdirSync} from "node:fs";
@@ -24,179 +24,316 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
 printBanner()
 p.intro('feverslop-ts · new project')
 
-const id = answer(await p.text({
-    message: 'Project id (used as the directory name)',
-    placeholder: 'well-of-youth-gothic-trio',
-    validate: value => {
-        if (!value) return 'required'
-        if (!validProjectId(value)) return 'lowercase letters, digits and "-" only'
-        if (projectExists(value)) return `projects/${value} already exists`
+// Every question is a step of its own that writes into the answers - so the summary at the end can ask any one of them
+// again (clack has no way back to an earlier prompt). The config is built from the answers only when it is written.
+type Answers = {
+    id: string
+    songSource: 'file' | 'idea' | 'lyrics'
+    songFile?: string
+    idea?: string
+    ownLyrics?: string      // lyrics of your own the song is generated from
+    musicStyle?: string
+    language: string
+    singerVoice: SingerVoice
+    lyrics?: string         // lyrics to a song you have
+    storyIdea?: string
+    singerMode: 'none' | 'auto' | 'named'
+    singerNames: string[]
+    style?: string
+    songDuration?: number
+    videoAspect: string
+    preset: 'defaults' | 'quick' | 'quality' | 'custom'
+    imageWorkflow: string
+    videoWorkflow: string
+    imageResolution: Resolution
+    videoResolution: Resolution
+}
+const a = {
+    singerMode: 'none', singerNames: [], language: defaults.lyricsLanguage, singerVoice: defaults.singerVoice, videoAspect: defaults.videoAspect,
+    preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
+} as unknown as Answers
+const hasSong = () => a.songSource === 'file'
+// singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
+const canSing = () => Boolean(a.ownLyrics || a.idea || a.lyrics)
+
+// then: the steps asked again after this one changed in the summary - their answers may no longer fit
+type Step = { label: () => string, ask: () => Promise<void>, summary: () => string, shown?: () => boolean, then?: string[] }
+const steps: Record<string, Step> = {
+    id: {
+        label: () => 'Project id',
+        summary: () => a.id,
+        ask: async () => {
+            a.id = answer(await p.text({
+                message: 'Project id (used as the directory name)',
+                placeholder: 'well-of-youth-gothic-trio',
+                initialValue: a.id,
+                validate: value => {
+                    if (!value) return 'required'
+                    if (!validProjectId(value)) return 'lowercase letters, digits and "-" only'
+                    if (projectExists(value)) return `projects/${value} already exists`
+                },
+            }))
+        },
     },
-}))
-
-const songSource = answer(await p.select({
-    message: 'The song',
-    options: [
-        {value: 'file', label: 'I have it as an audio file', hint: 'wav or mp3'},
-        {value: 'idea', label: 'Generate it from a song idea', hint: 'the LLM writes the lyrics'},
-        {value: 'lyrics', label: 'Generate it from my own lyrics', hint: 'set to music as they are'},
-    ],
-}))
-const hasSong = songSource === 'file'
-
-let songFile: string | undefined
-let idea: string | undefined
-let musicStyle: string | undefined
-let lyrics: string | undefined
-if (hasSong) {
-    songFile = answer(await p.text({
-        message: 'Path to the audio file (wav or mp3)',
-        validate: value => {
-            if (!value) return 'required'
-            if (!existsSync(value)) return 'file not found'
-            if (!/\.(wav|mp3)$/i.test(value)) return 'must be .wav or .mp3'
+    song: {
+        label: () => 'Song',
+        summary: () => a.songSource === 'file' ? a.songFile!
+            : `${a.songSource === 'idea' ? `from the idea "${short(a.idea)}"` : `from your lyrics "${short(a.ownLyrics)}"`}${a.musicStyle ? `, style hint "${short(a.musicStyle)}"` : ''}`,
+        then: ['texts', 'singers', 'length'],
+        ask: async () => {
+            a.songSource = answer(await p.select({
+                message: 'The song',
+                initialValue: a.songSource,
+                options: [
+                    {value: 'file' as const, label: 'I have it as an audio file', hint: 'wav or mp3'},
+                    {value: 'idea' as const, label: 'Generate it from a song idea', hint: 'the LLM writes the lyrics'},
+                    {value: 'lyrics' as const, label: 'Generate it from my own lyrics', hint: 'set to music as they are'},
+                ],
+            }))
+            a.songFile = a.idea = a.ownLyrics = a.musicStyle = undefined
+            if (hasSong()) {
+                a.songFile = answer(await p.text({
+                    message: 'Path to the audio file (wav or mp3)',
+                    validate: value => {
+                        if (!value) return 'required'
+                        if (!existsSync(value)) return 'file not found'
+                        if (!/\.(wav|mp3)$/i.test(value)) return 'must be .wav or .mp3'
+                    },
+                }))
+                return
+            }
+            p.log.step(`No song yet - it will be generated with the ${defaults.songWorkflow} workflow`)
+            if (a.songSource === 'idea') a.idea = await askText('Song idea', {required: true})
+            else {
+                p.log.info(styles.muted('Section tags on their own line - [Verse], [Chorus], [Bridge], ... - and a blank line between sections'))
+                a.ownLyrics = await askText('Lyrics', {required: true})
+            }
+            a.musicStyle = await askText('Musical style hint (genre, mood, instruments - optional, the LLM invents one otherwise)')
         },
+    },
+    // the language a generated song's lyrics are written and sung in - and for every song the one the lyrics are aligned in
+    language: {
+        label: () => 'Language',
+        summary: () => `${a.language} (${languageName(a.language)})`,
+        ask: async () => {
+            a.language = answer(await p.text({
+                message: a.songSource === 'idea' ? 'Language to write the lyrics in (ISO 639-1 code: en, de, ja, ...)' : 'Language of the lyrics (ISO 639-1 code: en, de, ja, ...)',
+                initialValue: a.language,
+                validate: value => languageName(value ?? '') ? undefined : `unknown language code "${value}"`,
+            }))
+            p.log.info(styles.muted(languageName(a.language)!))
+        },
+    },
+    // who sings: a generated song is sung in that voice (the YuE2 tags), and the story casts its singers to match it
+    voice: {
+        label: () => 'Voice',
+        summary: () => ({auto: 'left open', female: 'a woman', male: 'a man', mixed: 'a duet - a woman and a man'})[a.singerVoice],
+        then: ['singers'],
+        ask: async () => {
+            a.singerVoice = answer(await p.select<SingerVoice>({
+                message: hasSong() ? 'Who sings in the song?' : 'Who should sing the song?',
+                initialValue: a.singerVoice,
+                options: [
+                    {value: 'auto', label: hasSong() ? 'Leave it open' : 'Leave it to the LLM', hint: hasSong() ? 'the story decides - also for an instrumental' : 'the LLM picks the voice'},
+                    {value: 'female', label: 'A woman', hint: 'female vocals'},
+                    {value: 'male', label: 'A man', hint: 'male vocals'},
+                    {value: 'mixed', label: 'A duet - a woman and a man'},
+                ],
+            }))
+        },
+    },
+    // lyrics/story: required when there's already a song (index.ts throws otherwise) - when generating one, the lyrics
+    // are there (given, or written by index.ts from the idea), but a story idea on top still helps the story stay close
+    // to what you want
+    texts: {
+        label: () => hasSong() ? 'Lyrics / story' : 'Story idea',
+        summary: () => [a.lyrics && `lyrics "${short(a.lyrics)}"`, a.storyIdea && `story idea "${short(a.storyIdea)}"`].filter(Boolean).join(', ') || 'none',
+        then: ['singers'],
+        ask: async () => {
+            const choice = answer(await p.select({
+                message: hasSong() ? 'Lyrics and/or a story idea (at least one)' : `A story idea on top of the ${a.idea ? 'generated ' : ''}lyrics? (optional)`,
+                options: hasSong() ? [
+                    {value: 'lyrics', label: 'Lyrics'},
+                    {value: 'story', label: 'Story idea'},
+                    {value: 'both', label: 'Both'},
+                ] : [
+                    {value: 'story', label: 'Yes, add a story idea'},
+                    {value: 'none', label: 'No - let the lyrics carry the story'},
+                ],
+            }))
+            a.lyrics = choice === 'lyrics' || choice === 'both' ? await askText('Lyrics', {required: true}) : undefined
+            a.storyIdea = choice === 'story' || choice === 'both' ? await askText('Story idea', {required: true}) : undefined
+        },
+    },
+    // singers, right after the voice and the lyrics they follow. A voice given makes "the LLM picks" the default: in clip
+    // mode the voice only shapes the story, nobody is seen singing.
+    singers: {
+        label: () => 'Seen singing',
+        summary: () => !canSing() ? 'nobody - no lyrics (clip mode)' : a.singerMode === 'none' ? 'nobody (clip mode)' : a.singerMode === 'auto' ? 'the LLM picks' : a.singerNames.join(', '),
+        ask: async () => {
+            if (!canSing()) {
+                a.singerMode = 'none'
+                p.log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
+                return
+            }
+            const voice = a.singerVoice
+            a.singerMode = answer(await p.select({
+                message: 'Who is seen singing?',
+                initialValue: voice === 'auto' ? 'none' as const : 'auto' as const,
+                options: [
+                    {value: 'none' as const, label: 'Nobody - the song just plays (clip mode)', hint: voice === 'auto' ? 'default' : 'the voice only shapes the story'},
+                    {value: 'auto' as const, label: 'Let the LLM pick the singers', hint: voice === 'mixed' ? 'one woman and one man' : voice === 'auto' ? undefined : `${voice} characters`},
+                    {value: 'named' as const, label: 'Name the singer(s)'},
+                ],
+            }))
+            if (a.singerMode !== 'named') return
+            const names = answer(await p.text({
+                message: voice === 'mixed' ? 'The two singers, comma-separated - a woman and a man the story creates' : 'Singer name(s), comma-separated - must match characters the story creates',
+                initialValue: a.singerNames.join(', '),
+                validate: value => {
+                    const count = splitNames(value ?? '').length
+                    if (!count) return 'required'
+                    if (voice === 'mixed' && count !== 2) return 'a duet: exactly two names'
+                },
+            }))
+            a.singerNames = splitNames(names)
+        },
+    },
+    style: {
+        label: () => 'Visual style',
+        summary: () => a.style ? short(a.style) : 'picked by the first run',
+        ask: async () => { a.style = await askStyle() },
+    },
+    length: {
+        label: () => 'Song length',
+        shown: () => !hasSong(),
+        summary: () => a.songDuration ? `${a.songDuration} s` : a.preset === 'quick' ? '60 s (quick test)' : 'the workflow default',
+        ask: async () => {
+            a.songDuration = Number(answer(await p.text({
+                message: 'Target song length in seconds (the workflow\'s own default otherwise)',
+                placeholder: 'default',
+                initialValue: a.songDuration ? String(a.songDuration) : '',
+                validate: value => !value || (Number.isFinite(Number(value)) && Number(value) > 0) ? undefined : 'a positive number, or empty',
+            }))) || undefined
+        },
+    },
+    // the clips' aspect ratio - characters stay portrait and places landscape, only the clips change
+    aspect: {
+        label: () => 'Aspect ratio',
+        summary: () => a.videoAspect,
+        ask: async () => {
+            const known = ['16:9', '9:16', '2:1', '2:3']
+            const aspect = answer(await p.select({
+                message: 'Aspect ratio of the video',
+                initialValue: known.includes(a.videoAspect) ? a.videoAspect : 'other',
+                options: [
+                    {value: '16:9', label: '16:9 landscape', hint: 'default'},
+                    {value: '9:16', label: '9:16 portrait', hint: 'social media'},
+                    {value: '2:1', label: '2:1 wide'},
+                    {value: '2:3', label: '2:3 portrait, less tall'},
+                    {value: 'other', label: 'Another ratio'},
+                ],
+            }))
+            a.videoAspect = aspect !== 'other' ? aspect : answer(await p.text({
+                message: 'Aspect ratio (WIDTH:HEIGHT)',
+                placeholder: '4:3',
+                validate: v => v && /^[1-9]\d*:[1-9]\d*$/.test(v) ? undefined : 'e.g. 4:3',
+            }))
+        },
+    },
+    // render settings: a preset, or every one of them asked
+    render: {
+        label: () => 'Render settings',
+        summary: () => a.preset === 'custom'
+            ? `${a.imageWorkflow} (${resolutionText(a.imageResolution)}), ${a.videoWorkflow} (${resolutionText(a.videoResolution)})`
+            : ({defaults: 'defaults', quick: 'quick test', quality: 'quality - two-pass at 2 MP'})[a.preset],
+        ask: async () => {
+            a.preset = answer(await p.select({
+                message: 'Render settings',
+                initialValue: a.preset,
+                options: [
+                    {value: 'defaults' as const, label: 'Defaults', hint: `${defaults.imageWorkflow}, ${defaults.videoWorkflow}, the workflows' own resolution`},
+                    {value: 'quick' as const, label: 'Quick test', hint: `flat pictures instead of reference sheets, 0.5 MP clips${hasSong() ? '' : ', a 60 s song unless a length was given'}`},
+                    {value: 'quality' as const, label: 'Quality', hint: 'two-pass clips at 2 MP - slower'},
+                    {value: 'custom' as const, label: 'Custom', hint: 'image/video workflow and resolution, one by one'},
+                ],
+            }))
+            if (a.preset !== 'custom') return
+            a.imageWorkflow = await askWorkflow('Image workflow', 'image')
+            a.videoWorkflow = await askWorkflow('Video workflow', 'video')
+            a.imageResolution = await askResolution('Image resolution')
+            // the two-pass workflow takes videoResolution as its final size, pass 1 renders a quarter of it
+            a.videoResolution = await askResolution(a.videoWorkflow.endsWith('-2pass') ? 'Video resolution (the final size - pass 1 renders a quarter of it)' : 'Video resolution')
+        },
+    },
+}
+const shown = (key: string) => steps[key]!.shown?.() ?? true
+
+for (const key of Object.keys(steps)) if (shown(key)) await steps[key]!.ask()
+
+// the summary: write, change one answer (and what follows from it), or cancel
+while (true) {
+    const keys = Object.keys(steps).filter(shown)
+    p.note(keys.map(k => `${styles.muted(steps[k]!.label().padEnd(16))}${steps[k]!.summary()}`).join('\n'), 'The new project')
+    const next = answer(await p.select({
+        message: 'Write it?',
+        maxItems: 14,
+        options: [
+            {value: 'write', label: `Write projects/${a.id}/`},
+            ...keys.map(k => ({value: k, label: `Change: ${steps[k]!.label()}`})),
+            {value: 'cancel', label: 'Cancel - write nothing'},
+        ],
     }))
-} else {
-    p.log.step(`No song yet - it will be generated with the ${defaults.songWorkflow} workflow`)
-    if (songSource === 'idea') idea = await askText('Song idea', {required: true})
-    else {
-        p.log.info(styles.muted('Section tags on their own line - [Verse], [Chorus], [Bridge], ... - and a blank line between sections'))
-        lyrics = await askText('Lyrics', {required: true})
+    if (next === 'write') break
+    if (next === 'cancel') {
+        p.cancel('Cancelled - nothing written')
+        process.exit(1)
     }
-    musicStyle = await askText('Musical style hint (genre, mood, instruments - optional, the LLM invents one otherwise)')
+    await steps[next]!.ask()
+    for (const key of steps[next]!.then ?? []) if (shown(key)) await steps[key]!.ask()
 }
 
-// the language a generated song's lyrics are written and sung in - and for every song the one the lyrics are aligned in
 const config: Partial<ProjectConfig> = {}
-const language = answer(await p.text({
-    message: songSource === 'idea' ? 'Language to write the lyrics in (ISO 639-1 code: en, de, ja, ...)' : 'Language of the lyrics (ISO 639-1 code: en, de, ja, ...)',
-    initialValue: defaults.lyricsLanguage,
-    validate: value => languageName(value ?? '') ? undefined : `unknown language code "${value}"`,
-}))
-if (language !== defaults.lyricsLanguage) config.lyricsLanguage = language
-p.log.info(styles.muted(languageName(language)!))
-
-// who sings: a generated song is sung in that voice (the YuE2 tags), and the story casts its singers to match it
-const singerVoice = answer(await p.select<SingerVoice>({
-    message: hasSong ? 'Who sings in the song?' : 'Who should sing the song?',
-    options: [
-        {value: 'auto', label: hasSong ? 'Leave it open' : 'Leave it to the LLM', hint: hasSong ? 'the story decides - also for an instrumental' : 'the LLM picks the voice'},
-        {value: 'female', label: 'A woman', hint: 'female vocals'},
-        {value: 'male', label: 'A man', hint: 'male vocals'},
-        {value: 'mixed', label: 'A duet - a woman and a man'},
-    ],
-}))
-if (singerVoice !== defaults.singerVoice) config.singerVoice = singerVoice
-
-// lyrics/story: required when there's already a song (index.ts throws otherwise) - when generating one, the lyrics are
-// there (given, or written by index.ts from the idea), but a story idea on top still helps the story stay close to
-// what you want
-const lyricsChoice = answer(await p.select({
-    message: hasSong ? 'Lyrics and/or a story idea (at least one)' : `A story idea on top of the ${idea ? 'generated ' : ''}lyrics? (optional)`,
-    options: hasSong ? [
-        {value: 'lyrics', label: 'Lyrics'},
-        {value: 'story', label: 'Story idea'},
-        {value: 'both', label: 'Both'},
-    ] : [
-        {value: 'story', label: 'Yes, add a story idea'},
-        {value: 'none', label: 'No - let the lyrics carry the story'},
-    ],
-}))
-if (lyricsChoice === 'lyrics' || lyricsChoice === 'both') lyrics = await askText('Lyrics', {required: true})
-const storyIdea = lyricsChoice === 'story' || lyricsChoice === 'both' ? await askText('Story idea', {required: true}) : undefined
-
-// singers, right after the voice and the lyrics they follow: they lip-sync to the lyrics timing, which needs sung
-// lines - a story idea alone can't provide them. A voice given makes "the LLM picks" the default: in clip mode the voice
-// only shapes the story, nobody is seen singing.
-const canSing = Boolean(lyrics || idea)
-if (!canSing) p.log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
-const singerMode = !canSing ? 'none' : answer(await p.select({
-    message: 'Who is seen singing?',
-    initialValue: singerVoice === 'auto' ? 'none' : 'auto',
-    options: [
-        {value: 'none', label: 'Nobody - the song just plays (clip mode)', hint: singerVoice === 'auto' ? 'default' : 'the voice only shapes the story'},
-        {value: 'auto', label: 'Let the LLM pick the singers', hint: singerVoice === 'mixed' ? 'one woman and one man' : singerVoice === 'auto' ? undefined : `${singerVoice} characters`},
-        {value: 'named', label: 'Name the singer(s)'},
-    ],
-}))
-if (singerMode === 'auto') config.singers = ['auto']
-if (singerMode === 'named') {
-    const names = answer(await p.text({
-        message: singerVoice === 'mixed' ? 'The two singers, comma-separated - a woman and a man the story creates' : 'Singer name(s), comma-separated - must match characters the story creates',
-        validate: value => {
-            const count = (value ?? '').split(',').map(n => n.trim()).filter(Boolean).length
-            if (!count) return 'required'
-            if (singerVoice === 'mixed' && count !== 2) return 'a duet: exactly two names'
-        },
-    }))
-    config.singers = names.split(',').map(n => n.trim()).filter(Boolean)
-}
-
-const style = await askStyle()
-
-// project settings
-if (!hasSong) config.songDuration = Number(answer(await p.text({
-    message: 'Target song length in seconds (the workflow\'s own default otherwise)',
-    placeholder: 'default',
-    initialValue: '',
-    validate: value => !value || (Number.isFinite(Number(value)) && Number(value) > 0) ? undefined : 'a positive number, or empty',
-}))) || undefined
-
-// the clips' aspect ratio - characters stay portrait and places landscape, only the clips change
-const aspect = answer(await p.select({
-    message: 'Aspect ratio of the video',
-    options: [
-        {value: '16:9', label: '16:9 landscape', hint: 'default'},
-        {value: '9:16', label: '9:16 portrait', hint: 'social media'},
-        {value: '2:1', label: '2:1 wide'},
-        {value: '2:3', label: '2:3 portrait, less tall'},
-        {value: 'other', label: 'Another ratio'},
-    ],
-}))
-const videoAspect = aspect !== 'other' ? aspect : answer(await p.text({
-    message: 'Aspect ratio (WIDTH:HEIGHT)',
-    placeholder: '4:3',
-    validate: v => v && /^[1-9]\d*:[1-9]\d*$/.test(v) ? undefined : 'e.g. 4:3',
-}))
-if (videoAspect !== defaults.videoAspect) config.videoAspect = videoAspect as `${number}:${number}`
-
-// render settings: a preset, or every one of them asked
-const preset = answer(await p.select({
-    message: 'Render settings',
-    options: [
-        {value: 'defaults', label: 'Defaults', hint: `${defaults.imageWorkflow}, ${defaults.videoWorkflow}, the workflows' own resolution`},
-        {value: 'quick', label: 'Quick test', hint: `flat pictures instead of reference sheets, 0.5 MP clips${hasSong ? '' : ', a 60 s song unless a length was given'}`},
-        {value: 'quality', label: 'Quality', hint: 'two-pass clips at 2 MP - slower'},
-        {value: 'custom', label: 'Custom', hint: 'image/video workflow and resolution, one by one'},
-    ],
-}))
-if (preset === 'quick') {
+if (a.language !== defaults.lyricsLanguage) config.lyricsLanguage = a.language
+if (a.singerVoice !== defaults.singerVoice) config.singerVoice = a.singerVoice
+if (canSing() && a.singerMode === 'auto') config.singers = ['auto']
+if (canSing() && a.singerMode === 'named') config.singers = a.singerNames
+if (!hasSong() && a.songDuration) config.songDuration = a.songDuration
+if (a.videoAspect !== defaults.videoAspect) config.videoAspect = a.videoAspect as `${number}:${number}`
+if (a.preset === 'quick') {
     config.sequenceSheets = false
     config.videoResolution = 0.5
-    if (!hasSong && !config.songDuration) config.songDuration = 60
+    if (!hasSong() && !a.songDuration) config.songDuration = 60
 }
-if (preset === 'quality') config.videoWorkflow = 'h3-ref2video-2pass'
-if (preset === 'custom') {
-    const imageWorkflow = await askWorkflow('Image workflow', 'image')
-    if (imageWorkflow !== defaults.imageWorkflow) config.imageWorkflow = imageWorkflow
-    const videoWorkflow = await askWorkflow('Video workflow', 'video')
-    if (videoWorkflow !== defaults.videoWorkflow) config.videoWorkflow = videoWorkflow
-
-    config.imageResolution = await askResolution('Image resolution')
-    // the two-pass workflow takes videoResolution as its final size, pass 1 renders a quarter of it
-    config.videoResolution = await askResolution(videoWorkflow.endsWith('-2pass') ? 'Video resolution (the final size - pass 1 renders a quarter of it)' : 'Video resolution')
+if (a.preset === 'quality') config.videoWorkflow = 'h3-ref2video-2pass'
+if (a.preset === 'custom') {
+    if (a.imageWorkflow !== defaults.imageWorkflow) config.imageWorkflow = a.imageWorkflow
+    if (a.videoWorkflow !== defaults.videoWorkflow) config.videoWorkflow = a.videoWorkflow
+    // the default resolution of the workflow is not stored - a later change of workflow keeps its own default
+    if (a.imageResolution !== -1) config.imageResolution = a.imageResolution
+    if (a.videoResolution !== -1) config.videoResolution = a.videoResolution
 }
 
-// the default resolution of the workflow is not stored - a later change of workflow keeps its own default
-if (config.imageResolution === -1) delete config.imageResolution
-if (config.videoResolution === -1) delete config.videoResolution
-
+const id = a.id
 p.log.step(`Writing ${styles.muted(`projects/${id}/`)}`)
-await writeProject(id, {songFile, idea, lyrics, storyIdea, style, musicStyle, config})
+await writeProject(id, {songFile: a.songFile, idea: a.idea, lyrics: a.ownLyrics ?? a.lyrics, storyIdea: a.storyIdea, style: a.style, musicStyle: a.musicStyle, config})
 
-const render = hasSong ? 'images,videos,final' : 'song,images,videos,final'
+const render = hasSong() ? 'images,videos,final' : 'song,images,videos,final'
 p.outro(`Created - run it with:\n\n  bun index.ts ${id} --render=${render}\n`)
+
+/** The first line of a text, cut to a few words - for the summary. */
+function short(text: string | undefined) {
+    const first = (text ?? '').split('\n').find(l => l.trim())?.trim() ?? ''
+    return first.length > 40 ? `${first.slice(0, 40)}…` : first
+}
+
+function splitNames(value: string) {
+    return value.split(',').map(n => n.trim()).filter(Boolean)
+}
+
+function resolutionText(r: Resolution) {
+    return r === -1 ? 'workflow default' : typeof r === 'number' ? `${r} MP` : r
+}
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {
