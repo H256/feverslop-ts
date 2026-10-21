@@ -28,6 +28,7 @@ bun run setup
 
 All TypeScript tools support `--help`, `--verbose`, `--debug`, `--quiet` and `--banner`.
 See [CLI output and recovery](docs/cli.md) for logging, JSON output and terminal behavior.
+See [performance statistics](docs/stats.md) for the compact dashboard, filters, comparisons and metric definitions.
 
 | Script                  | What it does                                                                 |
 |-------------------------|------------------------------------------------------------------------------|
@@ -914,14 +915,18 @@ Every render and every LLM call is timed into one file for all projects, `timing
 `--dry-run` and `bun run status` take their time estimates from it.
 
 ```bash
-bun run stats                                   # medians, p90, cold starts and outliers per variant and GPU, token sums
-bun run stats --compare                         # every GPU against the first GPU of the same variant, in percent
+bun run stats                                   # compact overview, benchmark median and inclusive warm p90
+bun run stats --compare                         # comparable workloads against the first warm GPU group per variant
 bun run stats --by=resolution --kind=clip       # clips only, by resolution (also: workflow|variant|server|gpu, several
                                                 # joined with a comma, e.g. --by=workflow,gpu)
-bun run stats --project=<id> --compare --by=variant   # one project; the first row is the reference, the others in percent
+bun run stats --project=<id> --since=7d --sort=p90 --top=10
+bun run stats --details                         # cleaned p90, all groups and token breakdowns
+bun run stats --kind=clip --json                 # filtered machine-readable report
 ```
 
-Token sums become money with `prices` in the settings file, per model id (the currency is just a label):
+Costs are estimated for calls with complete reported usage and configured model prices; currencies are totaled separately.
+See [stats metric definitions and options](docs/stats.md), including `--baseline` and partial-data coverage.
+Configure `prices` in the settings file per model id:
 
 ```json
 {"prices": {"Muse-Glimmer-30B-GGUF": {"inputPerMillion": 0.2, "outputPerMillion": 0.6, "currency": "EUR"}}}

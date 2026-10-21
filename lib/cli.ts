@@ -19,7 +19,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     interpolate: {args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]', description: 'Interpolate the rendered clips of a project.'},
     status: {args: '<project-id> [--json]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json]', description: 'Inspect one clip, its references and prompt.', json: true},
-    stats: {args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--compare]', description: 'Compare measured render and LLM performance.'},
+    stats: {args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]', description: 'Compare measured render and LLM performance.', json: true},
     typecheck: {args: '', description: 'Check project TypeScript types.'},
     'styles:doc': {args: '', description: 'Regenerate the style reference document.'},
     'comfy:types': {args: '[--comfy=URL]', description: 'Regenerate typed ComfyUI nodes from the configured server.'},

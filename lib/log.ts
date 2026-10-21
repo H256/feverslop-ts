@@ -18,7 +18,7 @@ export const styles = {
 // a terminal that reports 0 columns (some ptys, CI) gets the width of one without a size
 const boxColumns = () => Math.max(1, Math.min(process.stdout.columns || 100, 120) - 4)
 
-function wrap(text: string, width: number) {
+export function wrap(text: string, width: number) {
     return text.split('\n').flatMap(paragraph => {
         const lines: string[] = []
         let line = ''
