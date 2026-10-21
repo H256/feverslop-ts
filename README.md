@@ -128,7 +128,7 @@ bun run init
 ```
 
 An interactive wizard, in the same style as `bun run setup`: it asks for the song (an audio file to copy in, or one
-to generate from a song idea or from lyrics of your own), who sings it (a woman, a man, a duet, or left open), lyrics
+to generate from a song idea or from lyrics of your own), the language of the lyrics, who sings it (a woman, a man, a duet, or left open), lyrics
 and/or a story idea, an optional visual style, and whether to use the project defaults or customize settings like
 singers, image/video workflow or resolution. It then
 writes `projects/<id>/` and prints the `bun index.ts` command to run.
