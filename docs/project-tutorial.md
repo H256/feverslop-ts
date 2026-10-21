@@ -53,6 +53,8 @@ The wizard asks, in order:
     it is generated and no length was given); *Quality* (`h3-ref2video-2pass`, 2 MP); *Custom* → image workflow
     (`kroma-image`, `krea2-image`), video workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video
     resolution
+11. **Summary** - all answers at a glance: *Write* it, *Change* one of them (the questions that depend on it are asked
+    again too - a new song source asks the lyrics/story and the singers again), or *Cancel*
 
 For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
 file*.
