@@ -215,12 +215,22 @@ async function askStyle(): Promise<string | undefined> {
                 options: [...groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`})), back],
             }))
             if (group === BACK) break
-            const picked = answer(await p.select({
-                message: group,
-                maxItems: 12,
-                options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
-            }))
-            if (picked !== BACK) return STYLES.find(s => s.id === picked)!.text
+            // a picked style is shown in full before it is taken - the hint in the list is only its first words
+            let last: string | undefined
+            while (true) {
+                const picked = answer(await p.select({
+                    message: group,
+                    maxItems: 12,
+                    initialValue: last,
+                    options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
+                }))
+                if (picked === BACK) break
+                const style = STYLES.find(s => s.id === picked)!
+                p.note(style.text, style.name)
+                const take = answer(await p.confirm({message: `Take ${style.name}?`, active: 'Take it', inactive: 'Another one', initialValue: true}))
+                if (take) return style.text
+                last = picked
+            }
         }
     }
 }
