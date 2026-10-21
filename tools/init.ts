@@ -105,6 +105,34 @@ const lyricsChoice = answer(await p.select({
 }))
 if (lyricsChoice === 'lyrics' || lyricsChoice === 'both') lyrics = await askText('Lyrics', {required: true})
 const storyIdea = lyricsChoice === 'story' || lyricsChoice === 'both' ? await askText('Story idea', {required: true}) : undefined
+
+// singers, right after the voice and the lyrics they follow: they lip-sync to the lyrics timing, which needs sung
+// lines - a story idea alone can't provide them. A voice given makes "the LLM picks" the default: in clip mode the voice
+// only shapes the story, nobody is seen singing.
+const canSing = Boolean(lyrics || idea)
+if (!canSing) p.log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
+const singerMode = !canSing ? 'none' : answer(await p.select({
+    message: 'Who is seen singing?',
+    initialValue: singerVoice === 'auto' ? 'none' : 'auto',
+    options: [
+        {value: 'none', label: 'Nobody - the song just plays (clip mode)', hint: singerVoice === 'auto' ? 'default' : 'the voice only shapes the story'},
+        {value: 'auto', label: 'Let the LLM pick the singers', hint: singerVoice === 'mixed' ? 'one woman and one man' : singerVoice === 'auto' ? undefined : `${singerVoice} characters`},
+        {value: 'named', label: 'Name the singer(s)'},
+    ],
+}))
+if (singerMode === 'auto') config.singers = ['auto']
+if (singerMode === 'named') {
+    const names = answer(await p.text({
+        message: singerVoice === 'mixed' ? 'The two singers, comma-separated - a woman and a man the story creates' : 'Singer name(s), comma-separated - must match characters the story creates',
+        validate: value => {
+            const count = (value ?? '').split(',').map(n => n.trim()).filter(Boolean).length
+            if (!count) return 'required'
+            if (singerVoice === 'mixed' && count !== 2) return 'a duet: exactly two names'
+        },
+    }))
+    config.singers = names.split(',').map(n => n.trim()).filter(Boolean)
+}
+
 const style = await askStyle()
 
 // project settings
@@ -115,28 +143,8 @@ if (!hasSong) config.songDuration = Number(answer(await p.text({
     validate: value => !value || (Number.isFinite(Number(value)) && Number(value) > 0) ? undefined : 'a positive number, or empty',
 }))) || undefined
 
-const customize = answer(await p.confirm({message: 'Customize the project settings (singers, workflows, resolution)?', initialValue: false}))
+const customize = answer(await p.confirm({message: 'Customize the project settings (workflows, resolution)?', initialValue: false}))
 if (customize) {
-    // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
-    const canSing = Boolean(lyrics || idea)
-    if (!canSing) p.log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
-    const singerMode = !canSing ? 'none' : answer(await p.select({
-        message: 'Singers',
-        options: [
-            {value: 'none', label: 'None - the song just plays (clip mode)', hint: 'default'},
-            {value: 'auto', label: 'Let the LLM pick who sings'},
-            {value: 'named', label: 'Name the singer(s)'},
-        ],
-    }))
-    if (singerMode === 'auto') config.singers = ['auto']
-    if (singerMode === 'named') {
-        const names = answer(await p.text({
-            message: 'Singer name(s), comma-separated - must match characters the story creates',
-            validate: value => value?.trim() ? undefined : 'required',
-        }))
-        config.singers = names.split(',').map(n => n.trim()).filter(Boolean)
-    }
-
     const imageWorkflow = await askWorkflow('Image workflow', 'image')
     if (imageWorkflow !== defaults.imageWorkflow) config.imageWorkflow = imageWorkflow
     const videoWorkflow = await askWorkflow('Video workflow', 'video')
