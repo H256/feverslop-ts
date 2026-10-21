@@ -14,7 +14,7 @@ The normal view starts with the command, positional context and selected mode. H
 
 Long-running concurrent jobs use a bounded multi-line board at the bottom of a terminal. Narrow windows clip individual statuses by display width, not by byte or JavaScript string length. Extra active jobs are counted when they do not fit. Their durations are elapsed job times, not a total-time percentage or an ETA. Persistent logs contain events and cached details, never animated board frames.
 
-`status <project> --json` and `inspect <project> <clip> --json` produce exactly one JSON value on stdout, even with `--quiet`. Errors in those modes are JSON on stderr with a nonzero exit code. Human headers and summaries are suppressed. Other tools do not claim JSON support unless their help lists it.
+`status <project> --json`, `inspect <project> <clip> --json` and `stats --json` produce exactly one JSON value on stdout, even with `--quiet`. Errors in those modes are JSON on stderr with a nonzero exit code. Human headers and summaries are suppressed. See [statistics](stats.md) for filtering and metric definitions. Other tools do not claim JSON support unless their help lists it.
 
 ```sh
 bun index.ts --help
