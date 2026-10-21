@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Carries rendered clips over to a changed plan: a clip whose prompt and length are the same as in the old plan keeps its video, under its new number
 // (a plan that got another shot or another split renumbers the clips). A clip that goes on from the last frame of the one before is only kept when that
 // one is carried over too - it starts from that frame.
@@ -9,17 +11,19 @@ import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, 
 import {join, resolve} from "node:path";
 import {promptHash} from "../lib/film/render.ts";
 import {filmDir} from "../lib/film/setup.ts";
+cli('film:migrate')
+
 
 type Request = { id: string, prompt: string, frames: number, frameStart: number, startsFrom?: string }
 const [id, oldArg, ...flags] = process.argv.slice(2)
 if (!id || !oldArg) {
-    console.error('usage: bun run film:migrate <film-id> <folder-with-the-old-state> [--apply]')
+    log.error('usage: bun run film:migrate <film-id> <folder-with-the-old-state> [--apply]')
     process.exit(1)
 }
 const film = filmDir(id)
 const old = resolve(oldArg)
 if (old === resolve(film)) {
-    console.error('the old state must be a copy of the film folder, not the folder itself')
+    log.error('the old state must be a copy of the film folder, not the folder itself')
     process.exit(1)
 }
 const apply = flags.includes('--apply')
@@ -29,7 +33,7 @@ const requests = (dir: string): Request[] => existsSync(dir) ? readdirSync(dir).
 const oldRequests = requests(join(old, 'output/clips'))
 const newRequests = requests(join(film, 'output/clips'))
 if (!oldRequests.length || !newRequests.length) {
-    console.error(`no clip requests in ${!oldRequests.length ? old : film} - plan the film first (output/clips/clip-001.json ...)`)
+    log.error(`no clip requests in ${!oldRequests.length ? old : film} - plan the film first (output/clips/clip-001.json ...)`)
     process.exit(1)
 }
 
@@ -56,11 +60,11 @@ for (const r of newRequests) {
     sameStart ? keep.set(r.id, was) : dropped.push(`${r.id} (was ${was.id}: another clip before it)`)
 }
 
-console.log(`${newRequests.length} clips in the plan, ${keep.size} can be carried over, ${newRequests.length - keep.size} to render`)
-if (dropped.length) console.log(`not carried over because the clip before it changed:\n${dropped.map(d => `  ${d}`).join('\n')}`)
-console.log('to render:', newRequests.filter(r => !keep.has(r.id)).map(r => r.id).join(' ') || 'nothing')
+log.info(`${newRequests.length} clips in the plan, ${keep.size} can be carried over, ${newRequests.length - keep.size} to render`)
+if (dropped.length) log.info(`not carried over because the clip before it changed:\n${dropped.map(d => `  ${d}`).join('\n')}`)
+log.info('to render:', newRequests.filter(r => !keep.has(r.id)).map(r => r.id).join(' ') || 'nothing')
 if (!apply) {
-    console.log('(nothing is changed - run again with --apply)')
+    log.info('(nothing is changed - run again with --apply)')
     process.exit(0)
 }
 
@@ -81,4 +85,4 @@ for (const [newId, was] of keep) {
 }
 // the assembled film is built from clips that are not all there any more
 rmSync(join(film, `${id}.mp4`), {force: true})
-console.log('done - the film is rendered with: bun film.ts', id, '--render=videos')
+log.next(`bun film.ts ${id} --render=videos`)

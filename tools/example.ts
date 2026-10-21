@@ -1,8 +1,12 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Creates a random example project - one of 10 built-in ideas - and generates a 1-minute song for it.
 // usage: bun run example [--no-render]
 import slugify from "slugify";
-import {printBanner, styles} from "../lib/log.ts";
+import {styles} from "../lib/log.ts";
 import {projectExists, writeProject} from "../lib/project-setup.ts";
+cli('example')
+
 
 const examples = [
     {name: 'gothic trio', idea: 'Three grave-robbers break into a sealed crypt for the legendary well of eternal youth, and find out too late what actually guards it.', style: 'gothic, candlelit stone, desaturated blues and gold', musicStyle: 'dark folk, cello and choir'},
@@ -17,7 +21,6 @@ const examples = [
     {name: 'last harvest', idea: 'A farming family holds a harvest festival for a scarecrow that has started walking the fields at night, and they\'re not sure if it still protects them.', style: 'rural folk horror, autumn gold and shadow', musicStyle: 'acoustic, unsettling minor key'},
 ] as const
 
-printBanner()
 const render = !Bun.argv.includes('--no-render')
 
 const example = examples[Math.floor(Math.random() * examples.length)]!
@@ -26,9 +29,9 @@ do {
     id = `${slugify(example.name, {lower: true, strict: true})}-${Math.random().toString(36).slice(2, 6)}`
 } while (projectExists(id))
 
-console.log(`${styles.label('▸ Example')} ${styles.name(id)}`)
-console.log(`${styles.label('▸ Idea')} ${example.idea}`)
-console.log(`${styles.label('▸ Style')} ${example.style}`)
+log.info(`${styles.label('▸ Example')} ${styles.name(id)}`)
+log.info(`${styles.label('▸ Idea')} ${example.idea}`)
+log.info(`${styles.label('▸ Style')} ${example.style}`)
 
 await writeProject(id, {
     idea: example.idea,
@@ -36,15 +39,16 @@ await writeProject(id, {
     musicStyle: example.musicStyle,
     config: {songDuration: 60},
 })
+log.output(`projects/${id}/`)
 
 if (!render) {
-    console.log(`\nCreated - run it with:\n\n  bun index.ts ${id} --render=song,images,videos,final\n`)
+    log.next(`bun index.ts ${id} --render=song,images,videos,final`)
     process.exit(0)
 }
 
-console.log(styles.muted(`\nGenerating the song - bun index.ts ${id} --render=song\n`))
+log.info(styles.muted(`\nGenerating the song - bun index.ts ${id} --render=song\n`))
 const result = Bun.spawnSync(['bun', 'index.ts', id, '--render=song'], {stdio: ['inherit', 'inherit', 'inherit']})
 if (result.exitCode === 0) {
-    console.log(`\nSong ready - continue with:\n\n  bun index.ts ${id} --render=images,videos,final\n`)
+    log.next(`bun index.ts ${id} --render=images,videos,final`)
 }
 process.exit(result.exitCode ?? 1)

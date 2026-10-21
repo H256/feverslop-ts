@@ -1,7 +1,8 @@
+import {cli} from './lib/cli.ts';
 import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
-import {failRun, formatDuration, hideDetails, keepLogIn, log, printBanner, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
+import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
 import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from "./lib/llm.ts";
@@ -48,13 +49,12 @@ import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, propInUsePrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
     locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
 } from "./lib/prompts.ts";
+cli('plan')
+
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-process.on('unhandledRejection', failRun)
-process.on('uncaughtException', failRun)
 
-printBanner()
 
 // hardware limit: the longest clip the video model can generate in one go. Set a little below the real
 // limit - the H3 node only renders 5 + 17·k frames, so every clip is rounded up to the next such length at
@@ -106,7 +106,7 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-setOutput({verbose: args.verbose, show: args.show.split(',').filter(Boolean)})
+setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
 // --render=all is images, videos and the final video, in that order - "song" is never part of "all", it has to be asked for
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
@@ -1448,7 +1448,10 @@ async function pickProject(): Promise<string> {
     if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
     if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
     const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
-    if (clack.isCancel(picked)) process.exit(0)
+    if (clack.isCancel(picked)) {
+        log.cancel('No project selected')
+        process.exit(0)
+    }
     return picked
 }
 

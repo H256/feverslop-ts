@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Replaces a character's reference picture and description in an existing film - for swapping in your own art, a picture
 // that came out wrong, or a character carried over from another project. The wizard asks for everything, clears whatever
 // the render would otherwise consider stale (a sequence sheet's video, frames and composite, all built from the old
@@ -16,20 +18,21 @@ import type {FilmProject} from "../lib/film/types.ts";
 import {genderNote} from "../lib/film/gender-check.ts";
 import {mentions} from "../lib/film/names.ts";
 import {ask, configureLlm} from "../lib/llm.ts";
-import {printBanner, styles} from "../lib/log.ts";
+import {styles} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
 import {pinnedSidecar} from "../lib/provenance.ts";
 import {characterImageDescriptionPrompt} from "../lib/prompts.ts";
 import type {PictureJob} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
+cli('film:replace-character')
+
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error('This needs a terminal to ask in - usage: bun run film:replace-character [film-id]')
+    log.error('This needs a terminal to ask in - usage: bun run film:replace-character [film-id]')
     process.exit(1)
 }
 
-printBanner()
-p.intro('feverslop-ts · replace a character of a film')
+log.section('feverslop-ts · replace a character of a film')
 
 // what is already changed on disk - a cancel has to say so (see answer())
 const changes: string[] = []
@@ -41,12 +44,12 @@ const films = existsSync(FILMS_DIR)
     : []
 let id = Bun.argv[2]
 if (id && !filmExists(id)) {
-    p.cancel(`No film "${id}" in ${FILMS_DIR}/`)
+    log.cancel(`No film "${id}" in ${FILMS_DIR}/`)
     process.exit(1)
 }
 if (!id) {
     if (!films.length) {
-        p.cancel(`No planned film in ${FILMS_DIR}/ yet - create one with: bun run film:init, then plan it: bun film.ts <film-id>`)
+        log.cancel(`No planned film in ${FILMS_DIR}/ yet - create one with: bun run film:init, then plan it: bun film.ts <film-id>`)
         process.exit(1)
     }
     id = films.length === 1 ? films[0]! : answer(await p.select({message: 'Film', options: films.map(f => ({value: f, label: f}))}))
@@ -54,17 +57,17 @@ if (!id) {
 const dir = filmDir(id)
 const file = join(dir, 'project.json')
 if (!existsSync(file)) {
-    p.cancel(`${file} not found - plan the film first: bun film.ts ${id}`)
+    log.cancel(`${file} not found - plan the film first: bun film.ts ${id}`)
     process.exit(1)
 }
 const data: FilmProject = await Bun.file(file).json()
 // a narrator who is never seen has no picture to replace
 const characters = (data.cast?.characters ?? []).filter(c => !c.voiceOnly)
 if (!characters.length) {
-    p.cancel(`No characters with a picture in ${file} yet - plan the film first: bun film.ts ${id}`)
+    log.cancel(`No characters with a picture in ${file} yet - plan the film first: bun film.ts ${id}`)
     process.exit(1)
 }
-p.log.step(`Film ${styles.name(id)}`)
+log.info(`Film ${styles.name(id)}`)
 
 const charId = answer(await p.select({
     message: 'Character to replace',
@@ -92,7 +95,7 @@ if (existsSync(targetFile)) {
     const keep = join(dir, 'old', `${char.id}-${Date.now()}.png`)
     mkdirSync(dirname(keep), {recursive: true})
     renameSync(targetFile, keep)
-    p.log.step(`The old picture is kept: ${keep}`)
+    log.info(`The old picture is kept: ${keep}`)
     changes.push(`the old picture is kept as ${keep}`)
 }
 mkdirSync(dirname(targetFile), {recursive: true})
@@ -105,7 +108,7 @@ renameSync(partial, targetFile)
 // the user's own picture: kept as it is whatever the look prompts say later, never reported as stale (lib/provenance.ts);
 // the clips made with the old one are, through the picture's content, and are listed when the video is assembled
 await Bun.write(`${targetFile}.json`, JSON.stringify(pinnedSidecar(`replaced with ${basename(imagePath)}`), null, 2))
-p.log.success(`Saved ${targetFile}`)
+log.success(`Saved ${targetFile}`)
 changes.push(`the new image is saved as ${targetFile}`)
 
 // everything downstream of the anchor was built from the OLD image and is now stale
@@ -119,7 +122,7 @@ if (config.sequenceSheets) {
     const removed = stale.filter(existsSync)
     for (const f of removed) rmSync(f, {recursive: true, force: true})
     if (removed.length) {
-        p.log.step(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
+        log.info(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
         changes.push('the old reference sheet and sequence video were deleted')
         sheetCleared = true
     }
@@ -147,15 +150,15 @@ if (descMode === 'vision') {
     })
     const base64 = Buffer.from(await Bun.file(downscaled).arrayBuffer()).toString('base64')
     rmSync(downscaled, {force: true})
-    p.log.step('Asking the vision model - can take a while')
+    log.info('Asking the vision model - can take a while')
     try {
         newDescription = (await ask(characterImageDescriptionPrompt(`data:image/png;base64,${base64}`, char))).trim() || undefined
         if (newDescription) {
-            p.log.success('Description generated from the image:')
-            p.log.message(newDescription)
+            log.success('Description generated from the image:')
+            log.info(newDescription)
         }
     } catch (e) {
-        p.log.warn(`Vision description failed - the connected model may not support images (${(e as Error).message})`)
+        log.warn(`Vision description failed - the connected model may not support images (${(e as Error).message})`)
     }
     if (!newDescription) {
         const typed = answer(await p.text({message: 'Type a description instead (leave empty to keep the current one)'}))
@@ -170,7 +173,7 @@ if (newDescription) {
     data.characterDescriptions ??= {}
     data.characterDescriptions[char.id] = newDescription
     await Bun.write(file, JSON.stringify(data, null, 2))
-    p.log.success('Saved the new description to project.json')
+    log.success('Saved the new description to project.json')
     changes.push('the new description is saved in project.json')
 
     // a picture of another gender than the script writes: the action lines say "she", the picture is a man (or the other way round)
@@ -180,8 +183,8 @@ if (newDescription) {
         const own = (data.screenplay?.scenes ?? []).flatMap(s => s.elements).filter(e => e.type === 'action' && mentions(e.text, char)).map(e => e.text).slice(0, 4).join(' ')
         const note = await genderNote(char.name, `${char.role} ${char.appearance} ${own}`.trim().slice(0, 2500), newDescription)
         if (note) {
-            p.log.warn(note)
-            p.log.message(styles.muted(`Edit the action lines of ${char.name} in films/${id}/project.json (screenplay) and plan the shots again (bun film.ts ${id} --redo=coverage); for a story written from an idea, put the gender into the idea.`))
+            log.warn(note)
+            log.info(styles.muted(`Edit the action lines of ${char.name} in films/${id}/project.json (screenplay) and plan the shots again (bun film.ts ${id} --redo=coverage); for a story written from an idea, put the gender into the idea.`))
         }
     } catch {
         // the check is a courtesy: no language model connected, nothing to say
@@ -200,8 +203,8 @@ if (existsSync(clipsDir)) {
         if (clip.assets?.pictures?.some((pic: { id: string }) => pic.id === char.id) && existsSync(join(dir, 'videos', `${clipId}.mp4`))) affected.push(clipId)
     }
     if (affected.length) {
-        p.log.warn(`${affected.length} already-rendered clip(s) show ${char.name} and were not touched: ${affected.join(', ')}`)
-        p.log.message('Delete the ones you want redone (videos/<clip-id>.mp4 and its .json) and render again: bun film.ts ' + id + ' --render=videos')
+        log.warn(`${affected.length} already-rendered clip(s) show ${char.name} and were not touched: ${affected.join(', ')}`)
+        log.info('Delete the ones you want redone (videos/<clip-id>.mp4 and its .json) and render again: bun film.ts ' + id + ' --render=videos')
     }
 }
 
@@ -217,18 +220,18 @@ if (config.sequenceSheets) {
             description,
         }
         await renderer.renderSequenceSheet(picture)
-        p.outro(`Done - ${picture.file} rendered.`)
+        log.success(`Done - ${picture.file} rendered.`)
     } else {
-        p.outro(`Done - run "bun film.ts ${id} --render=images" later to render the new sequence sheet.`)
+        log.success(`Done - run "bun film.ts ${id} --render=images" later to render the new sequence sheet.`)
     }
 } else {
-    p.outro('Done.')
+    log.success('Done.')
 }
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel(changes.length
+        log.cancel(changes.length
             ? `Cancelled - already changed: ${changes.join('; ')}.${sheetCleared ? ` Render the new reference sheet with: bun film.ts ${id} --render=images` : ''}`
             : 'Cancelled - nothing was changed')
         process.exit(1)

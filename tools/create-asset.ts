@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // A new library character or place from a picture - no project needed: the picture becomes the anchor, a vision-capable
 // model (or you) describes it, a place also gets its background features and floor plan, and ComfyUI renders the
 // reference sheet from it. The result goes into the asset library (lib/library.ts) - an existing asset is never
@@ -20,6 +22,8 @@ import {pinnedSidecar} from "../lib/provenance.ts";
 import {Renderer} from "../lib/render.ts";
 import {LOCATION_VIEWS} from "../lib/sequenceSheet.ts";
 import {loadSettings} from "../lib/settings.ts";
+cli('create-asset')
+
 
 const usage = 'usage: bun run create-asset <character|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]'
 const args = Bun.argv.slice(2)
@@ -27,8 +31,7 @@ const flag = (name: string) => args.find(a => a.startsWith(`--${name}=`))?.slice
 const [kindArg, id] = args.filter(a => !a.startsWith('--'))
 const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY
 const fail = (message: string): never => {
-    if (interactive) p.cancel(message)
-    else console.error(message)
+    log.error(message)
     process.exit(1)
 }
 const kind: AssetKind = kindArg === 'character' || kindArg === 'location' ? kindArg : fail(usage)
@@ -43,8 +46,8 @@ if (await readLibraryAsset(library, kind, id!)) fail(`The library already has a 
 const name = flag('name') ?? id!.split('-').map(w => w[0]!.toUpperCase() + w.slice(1)).join(' ')
 const role = flag('role') ?? (kind === 'character' ? 'a character' : '')
 
-if (interactive) p.intro(`feverslop-ts · create asset · ${kind} ${id}`)
-const say = (message: string) => interactive ? p.log.step(message) : console.log(message)
+if (interactive) log.section(`feverslop-ts · create asset · ${kind} ${id}`)
+const say = (message: string) => log.info(message)
 
 // the render settings: those of a project given with --like, else the defaults
 const config = await loadProjectConfig(like ? projectDir(like) : join(library, '.none'))
@@ -71,10 +74,10 @@ if (!description) {
         description = await describePicture(anchor, kind === 'character' ? {kind, name, role} : {kind, name})
     } catch (e) {
         if (!interactive) fail(`The vision description failed (${(e as Error).message}) - give one with --description=…`)
-        p.log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
+        log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
     }
     if (interactive) description = answer(await p.text({message: 'Description used in the clip prompts', initialValue: description ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
-    else if (description) console.log(description)
+    else if (description) log.info(description)
 }
 if (!description) fail('No description - give one with --description=…')
 
@@ -105,13 +108,14 @@ writeLibraryAsset(library, {
 })
 rmSync(work, {recursive: true, force: true})
 const done = `${name} is in the library as ${kind} "${id}" (${copied} files): ${join(library, libraryFolder(kind, id!))} - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`
-if (interactive) p.outro(done)
-else console.log(done)
+log.success(done)
+log.output(join(library, libraryFolder(kind, id!)))
+log.next(`bun run import-asset <project-id> <asset-id> --from=library:${id}`)
 
 // cancelled with Ctrl+C / Esc - the work folder stays, the next run starts it again
 function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel('Cancelled - nothing is in the library')
+        log.cancel('Cancelled - nothing is in the library')
         process.exit(1)
     }
     return value as Exclude<T, symbol>

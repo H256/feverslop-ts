@@ -1,3 +1,4 @@
+import {cli} from './lib/cli.ts';
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
 // usage: bun film.ts <film-id> [--redo=screenplay,cast]
@@ -30,17 +31,16 @@ import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
 import {ask, configureLlm} from "./lib/llm.ts";
-import {failRun, log, printBanner, styles} from "./lib/log.ts";
+import {log, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
 import {validProjectId} from "./lib/project-setup.ts";
 
 import {loadSettings} from "./lib/settings.ts";
 import {shuffledStyles, stylesById} from "./lib/styles.ts";
+cli('film')
 
-process.on('unhandledRejection', failRun)
-process.on('uncaughtException', failRun)
 
-printBanner()
+
 
 const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`

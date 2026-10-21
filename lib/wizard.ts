@@ -4,13 +4,13 @@ import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
-import {styles} from "./log.ts";
+import {log, styles} from "./log.ts";
 import {STYLES} from "./styles.ts";
 
 // cancelled with Ctrl+C / Esc
 export function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel('Cancelled - nothing written')
+        log.cancel('Cancelled - nothing written')
         process.exit(1)
     }
     return value as Exclude<T, symbol>
@@ -66,7 +66,7 @@ export async function askStyle(): Promise<string | undefined> {
  * closed. A single empty line doesn't end it: stories and screenplays routinely have blank lines in them.
  */
 export async function multiline(label: string): Promise<string> {
-    console.log(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))
+    log.prompt(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))
     const rl = createInterface({input: process.stdin})
     const lines: string[] = []
     let blankStreak = 0

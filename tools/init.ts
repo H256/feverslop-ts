@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Creates a new project: asks for the song (an audio file, or one to generate from a song idea or from lyrics of your
 // own), who sings it, lyrics and/or a story idea, the look and the render settings - then shows a summary to change any
 // answer in, writes projects/<id>/ and prints the command to run it.
@@ -7,12 +9,14 @@ import {existsSync, readdirSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
-import {printBanner, styles} from "../lib/log.ts";
+import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
 import {STYLES} from "../lib/styles.ts";
+cli('init')
+
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.log(`No terminal to ask in - create projects/<id>/input/ by hand instead:
+    log.error(`No terminal to ask in - create projects/<id>/input/ by hand instead:
   input/song.wav or song.mp3      a song you already have
   input/idea.txt                  or a song idea, for: bun index.ts <id> --render=song (lyrics.txt alone works too)
   input/lyrics.txt and/or input/story-idea.txt   at least one, unless idea.txt writes the lyrics for you
@@ -21,8 +25,7 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
     process.exit(1)
 }
 
-printBanner()
-p.intro('feverslop-ts · new project')
+log.section('feverslop-ts · new project')
 
 // Every question is a step of its own that writes into the answers - so the summary at the end can ask any one of them
 // again (clack has no way back to an earlier prompt). The config is built from the answers only when it is written.
@@ -102,10 +105,10 @@ const steps: Record<string, Step> = {
                 }))
                 return
             }
-            p.log.step(`No song yet - it will be generated with the ${defaults.songWorkflow} workflow`)
+            log.info(`No song yet - it will be generated with the ${defaults.songWorkflow} workflow`)
             if (a.songSource === 'idea') a.idea = await askText('Song idea', {required: true})
             else {
-                p.log.info(styles.muted('Section tags on their own line - [Verse], [Chorus], [Bridge], ... - and a blank line between sections'))
+                log.info(styles.muted('Section tags on their own line - [Verse], [Chorus], [Bridge], ... - and a blank line between sections'))
                 a.ownLyrics = await askText('Lyrics', {required: true})
             }
             a.musicStyle = await askText('Musical style hint (genre, mood, instruments - optional, the LLM invents one otherwise)')
@@ -121,7 +124,7 @@ const steps: Record<string, Step> = {
                 initialValue: a.language,
                 validate: value => languageName(value ?? '') ? undefined : `unknown language code "${value}"`,
             }))
-            p.log.info(styles.muted(languageName(a.language)!))
+            log.info(styles.muted(languageName(a.language)!))
         },
     },
     // who sings: a generated song is sung in that voice (the YuE2 tags), and the story casts its singers to match it
@@ -173,7 +176,7 @@ const steps: Record<string, Step> = {
         ask: async () => {
             if (!canSing()) {
                 a.singerMode = 'none'
-                p.log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
+                log.info('No lyrics, so nobody can sing - the song just plays (clip mode). Add input/lyrics.txt and "singers" in config.json later to change that.')
                 return
             }
             const voice = a.singerVoice
@@ -286,7 +289,7 @@ while (true) {
     }))
     if (next === 'write') break
     if (next === 'cancel') {
-        p.cancel('Cancelled - nothing written')
+        log.cancel('Cancelled - nothing written')
         process.exit(1)
     }
     await steps[next]!.ask()
@@ -315,8 +318,9 @@ if (a.preset === 'custom') {
 }
 
 const id = a.id
-p.log.step(`Writing ${styles.muted(`projects/${id}/`)}`)
+log.info(`Writing ${styles.muted(`projects/${id}/`)}`)
 await writeProject(id, {songFile: a.songFile, idea: a.idea, lyrics: a.ownLyrics ?? a.lyrics, storyIdea: a.storyIdea, style: a.style, musicStyle: a.musicStyle, config})
+log.output(`projects/${id}/`)
 
 // start it right away - the whole run, or only the song to listen to first (a generated song is the cheap step to judge
 // before hours of rendering); the command is printed either way, for later
@@ -331,14 +335,14 @@ const start = answer(await p.select({
     ],
 }))
 if (start === 'no') {
-    p.outro(`Created - run it with:\n\n  bun index.ts ${id} --render=${render}\n`)
+    log.next(`bun index.ts ${id} --render=${render}`)
     process.exit(0)
 }
 const run = start === 'song' ? 'song' : render
-p.outro(`Created - running bun index.ts ${id} --render=${run}`)
+log.success(`Created - running bun index.ts ${id} --render=${run}`)
 const result = Bun.spawnSync(['bun', 'index.ts', id, `--render=${run}`], {stdio: ['inherit', 'inherit', 'inherit']})
-if (result.exitCode === 0 && start === 'song') console.log(`\nSong ready - listen to projects/${id}/input/song.wav, then continue with:\n\n  bun index.ts ${id} --render=images,videos,final\n`)
-if (result.exitCode !== 0) console.log(`\nThe run stopped - start it again with:\n\n  bun index.ts ${id} --render=${run}\n`)
+if (result.exitCode === 0 && start === 'song') log.info(`\nSong ready - listen to projects/${id}/input/song.wav, then continue with:\n\n  bun index.ts ${id} --render=images,videos,final\n`)
+if (result.exitCode !== 0) log.info(`\nThe run stopped - start it again with:\n\n  bun index.ts ${id} --render=${run}\n`)
 process.exit(result.exitCode ?? 1)
 
 /** The first line of a text, cut to a few words - for the summary. */
@@ -358,7 +362,7 @@ function resolutionText(r: Resolution) {
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel('Cancelled - nothing written')
+        log.cancel('Cancelled - nothing written')
         process.exit(1)
     }
     return value as Exclude<T, symbol>
@@ -461,7 +465,7 @@ async function askWorkflow(label: string, kind: 'image' | 'video'): Promise<stri
  * closed. A single empty line doesn't end it: lyrics and stories routinely have blank lines between sections.
  */
 async function multiline(label: string): Promise<string> {
-    console.log(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))
+    log.prompt(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))
     const rl = createInterface({input: process.stdin})
     const lines: string[] = []
     let blankStreak = 0

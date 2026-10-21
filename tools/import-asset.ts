@@ -1,3 +1,5 @@
+import {cli} from '../lib/cli.ts';
+import {log} from '../lib/log.ts';
 // Carries a finished character or place over from another project - its picture and its whole reference sheet,
 // renamed to the id it has here - instead of rendering it again. Nothing is rendered: the copied files are pinned (never
 // reported stale), the old ones go to old/attempts/. The description that goes with the picture is chosen here; what
@@ -12,28 +14,30 @@ import {loadProjectConfig} from "../lib/config.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {configureLlm} from "../lib/llm.ts";
 import {describePicture} from "../lib/describe-picture.ts";
-import {printBanner, styles} from "../lib/log.ts";
+import {styles} from "../lib/log.ts";
 import {pictureProp, propMissing} from "../lib/prop-check.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
 import {type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
 import {loadSettings} from "../lib/settings.ts";
+cli('import-asset')
+
 
 const usage = 'usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]'
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error(`This needs a terminal to ask in - ${usage}`)
+    log.error(`This needs a terminal to ask in - ${usage}`)
     process.exit(1)
 }
 const args = Bun.argv.slice(2)
 const from = args.find(a => a.startsWith('--from='))?.slice('--from='.length)
 const [id, wantedId] = args.filter(a => !a.startsWith('--'))
 if (!id || !projectExists(id)) {
-    console.error(`${usage}${id ? `\nprojects/${id} does not exist` : ''}`)
+    log.error(`${usage}${id ? `\nprojects/${id} does not exist` : ''}`)
     process.exit(1)
 }
 const dir = projectDir(id)
 const file = join(dir, 'project.json')
 if (!existsSync(file)) {
-    console.error(`${file} not found - plan the project first: bun index.ts ${id}`)
+    log.error(`${file} not found - plan the project first: bun index.ts ${id}`)
     process.exit(1)
 }
 const data: Project = await Bun.file(file).json()
@@ -44,12 +48,11 @@ const entries = (project: Project): Entry[] => [
 ]
 const targets = entries(data)
 if (!targets.length) {
-    console.error(`No characters or locations in projects/${id}/project.json yet - plan the project first: bun index.ts ${id}`)
+    log.error(`No characters or locations in projects/${id}/project.json yet - plan the project first: bun index.ts ${id}`)
     process.exit(1)
 }
 
-printBanner()
-p.intro(`feverslop-ts · import asset · ${id}`)
+log.section(`feverslop-ts · import asset · ${id}`)
 
 // 1. what is replaced here
 const target = wantedId
@@ -117,12 +120,12 @@ if (!answer(await p.confirm({
     message: `Copy ${sourceLabel} to ${target.id}${replacing ? ` - the current pictures of ${target.name} are put away in old/attempts/` : ''}?`,
     initialValue: true,
 }))) {
-    p.cancel('Cancelled - nothing was changed')
+    log.cancel('Cancelled - nothing was changed')
     process.exit(0)
 }
 const done = copyAsset({dir: source.dir, layout: source.layout(sourceId), label: fromLibrary ? 'library' : source.label}, {dir, layout: assetPaths(target.kind, target.id), archiveName: target.id})
-p.log.success(`Copied ${done.copied} file(s) to ${sheet}${existsSync(join(dir, picture)) ? ` and ${picture}` : ''} - pinned, never rendered again`)
-if (done.putAway) p.log.step(`The old pictures are in ${done.putAway}`)
+log.success(`Copied ${done.copied} file(s) to ${sheet}${existsSync(join(dir, picture)) ? ` and ${picture}` : ''} - pinned, never rendered again`)
+if (done.putAway) log.info(`The old pictures are in ${done.putAway}`)
 
 // 3. the description that goes with the picture
 const config = await loadProjectConfig(dir)
@@ -157,32 +160,32 @@ if (target.kind === 'location') {
         (data.locationLayouts ??= {})[target.id] = layout
         changed.push('locationLayouts')
     }
-    if (anchor || layout) p.log.step(`Took ${[anchor && 'the background features', layout && 'the floor plan with its views'].filter(Boolean).join(' and ')} along from ${source.label}`)
+    if (anchor || layout) log.info(`Took ${[anchor && 'the background features', layout && 'the floor plan with its views'].filter(Boolean).join(' and ')} along from ${source.label}`)
 }
 if (changed.length) {
     await Bun.write(file, JSON.stringify(data, null, 2))
-    p.log.success('Saved project.json')
+    log.success('Saved project.json')
 }
 
 // 4. what to look at: the character's prop, the story's pronouns, the plan and the clips made with the old pictures
 if (target.kind === 'character' && description) {
     const character = data.cast!.characters.find(c => c.id === target.id)!
     const prop = pictureProp(character)
-    if (prop && propMissing(description, prop)) p.log.warn(`The description does not name ${target.name}'s "${prop}" - the clips may show the picture's prop, or none.`)
+    if (prop && propMissing(description, prop)) log.warn(`The description does not name ${target.name}'s "${prop}" - the clips may show the picture's prop, or none.`)
     try {
         const settings = await loadSettings({projectModel: config.llm.model})
         configureLlm(settings.llm)
         const own = (data.beats ?? []).map(b => b.summary).filter(s => typeof s === 'string' && s.includes(target.name)).slice(0, 4).join(' ')
         const note = await genderNote(target.name, `${character.role ?? ''} ${own}`.trim().slice(0, 2500), description)
-        if (note) p.log.warn(note)
+        if (note) log.warn(note)
     } catch {
         // the check is a courtesy: no language model connected, nothing to say
     }
 }
 const redo = redoAfter(changed, data)
 if (redo.length) {
-    p.log.warn(`The plan was made with the old description${changed.length > 1 ? 's' : ''} - to make it again with the new one:`)
-    p.log.message(`bun index.ts ${id} --redo=${redo.join(',')}`)
+    log.warn(`The plan was made with the old description${changed.length > 1 ? 's' : ''} - to make it again with the new one:`)
+    log.info(`bun index.ts ${id} --redo=${redo.join(',')}`)
 }
 const clipsDir = join(dir, 'output', 'clips')
 if (existsSync(clipsDir)) {
@@ -193,9 +196,9 @@ if (existsSync(clipsDir)) {
         const slotId = entry.replace(/\.json$/, '')
         if (clip.assets?.pictures?.some((pic: { id: string }) => pic.id === target.id) && existsSync(join(dir, 'videos', `${slotId}.mp4`))) rendered.push(slotId)
     }
-    if (rendered.length) p.log.warn(`${rendered.length} rendered clip(s) show the old ${target.name}: ${rendered.join(', ')} - they count as stale now; --render=videos --refresh=clips renders them again.`)
+    if (rendered.length) log.warn(`${rendered.length} rendered clip(s) show the old ${target.name}: ${rendered.join(', ')} - they count as stale now; --render=videos --refresh=clips renders them again.`)
 }
-p.outro('Done - nothing was rendered.')
+log.success('Done - nothing was rendered.')
 
 // the picture described by a vision-capable model - its anchor (one view), else the picture itself, at a small size
 async function fromPicture(): Promise<string | undefined> {
@@ -203,27 +206,27 @@ async function fromPicture(): Promise<string | undefined> {
     if (!image) return undefined
     const settings = await loadSettings({projectModel: config.llm.model})
     configureLlm(settings.llm)
-    p.log.step('Asking the vision model - can take a while')
+    log.info('Asking the vision model - can take a while')
     try {
         const character = data.cast?.characters.find(c => c.id === target.id)
         const text = await describePicture(image, character ? {kind: 'character', name: character.name, role: character.role} : {kind: 'location', name: target.name})
-        if (text) p.log.message(text)
+        if (text) log.info(text)
         return text
     } catch (e) {
-        p.log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
+        log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
         return undefined
     }
 }
 
 function fail(message: string): never {
-    p.cancel(message)
+    log.cancel(message)
     process.exit(1)
 }
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        p.cancel('Cancelled')
+        log.cancel('Cancelled')
         process.exit(1)
     }
     return value as Exclude<T, symbol>
