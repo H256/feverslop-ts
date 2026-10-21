@@ -67,8 +67,17 @@ if (hasSong) {
     musicStyle = await askText('Musical style hint (genre, mood, instruments - optional, the LLM invents one otherwise)')
 }
 
-// who sings: a generated song is sung in that voice (the YuE2 tags), and the story casts its singers to match it
+// the language a generated song's lyrics are written and sung in - and for every song the one the lyrics are aligned in
 const config: Partial<ProjectConfig> = {}
+const language = answer(await p.text({
+    message: songSource === 'idea' ? 'Language to write the lyrics in (ISO 639-1 code: en, de, ja, ...)' : 'Language of the lyrics (ISO 639-1 code: en, de, ja, ...)',
+    initialValue: defaults.lyricsLanguage,
+    validate: value => languageName(value ?? '') ? undefined : `unknown language code "${value}"`,
+}))
+if (language !== defaults.lyricsLanguage) config.lyricsLanguage = language
+p.log.info(styles.muted(languageName(language)!))
+
+// who sings: a generated song is sung in that voice (the YuE2 tags), and the story casts its singers to match it
 const singerVoice = answer(await p.select<SingerVoice>({
     message: hasSong ? 'Who sings in the song?' : 'Who should sing the song?',
     options: [
@@ -106,7 +115,7 @@ if (!hasSong) config.songDuration = Number(answer(await p.text({
     validate: value => !value || (Number.isFinite(Number(value)) && Number(value) > 0) ? undefined : 'a positive number, or empty',
 }))) || undefined
 
-const customize = answer(await p.confirm({message: 'Customize the project settings (singers, language, workflows, resolution)?', initialValue: false}))
+const customize = answer(await p.confirm({message: 'Customize the project settings (singers, workflows, resolution)?', initialValue: false}))
 if (customize) {
     // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
     const canSing = Boolean(lyrics || idea)
@@ -127,13 +136,6 @@ if (customize) {
         }))
         config.singers = names.split(',').map(n => n.trim()).filter(Boolean)
     }
-
-    const language = answer(await p.text({
-        message: 'Lyrics language (ISO 639-1 code)',
-        initialValue: defaults.lyricsLanguage,
-        validate: value => languageName(value ?? '') ? undefined : `unknown language code "${value}"`,
-    }))
-    if (language !== defaults.lyricsLanguage) config.lyricsLanguage = language
 
     const imageWorkflow = await askWorkflow('Image workflow', 'image')
     if (imageWorkflow !== defaults.imageWorkflow) config.imageWorkflow = imageWorkflow
