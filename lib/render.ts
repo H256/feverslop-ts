@@ -16,7 +16,7 @@ import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
-import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, locationSequencePrompt, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
+import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 
@@ -375,7 +375,8 @@ export class Renderer implements Disposable {
         const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
         const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
         const baseAnchorTarget = baseAnchorFile && join(this.projectDir, baseAnchorFile)
-        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(picture.description, look.change)
+        const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
+        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change)
             : picture.kind === 'character' ? characterSequencePrompt(picture.description)
             : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
         const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
@@ -413,7 +414,7 @@ export class Renderer implements Disposable {
                 const result = sequenceWorkflow({
                     prompt: sequencePrompt,
                     startFrame: `${this.remoteDir}/${baseAnchorFile ?? anchorFile}`,
-                    frames: SEQUENCE_FRAMES,
+                    frames: sequenceFrames,
                     orientation: picture.kind === 'character' ? 'portrait' : 'landscape',
                     resolution: -1,
                     seed,
@@ -421,7 +422,7 @@ export class Renderer implements Disposable {
                 })
                 return {result, uploads: [{from: baseAnchorTarget ?? anchorTarget, to: `${this.remoteDir}/${baseAnchorFile ?? anchorFile}`}], meta: {seed}}
             })
-            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt}, null, 2))
+            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: sequenceFrames, beatTimes, prompt: sequencePrompt}, null, 2))
         }
 
         const framesDir = join(this.projectDir, dir, 'frames')
@@ -429,7 +430,7 @@ export class Renderer implements Disposable {
         // the workflow may render another length than asked for (the video model only takes certain frame counts) -
         // the frames are picked from the video as it really is, not from the length that was requested
         const rendered = await probeVideo(videoTarget)
-        if (rendered.frames !== SEQUENCE_FRAMES) log.warn(`${videoFile} has ${rendered.frames} frames, ${SEQUENCE_FRAMES} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
+        if (rendered.frames !== sequenceFrames) log.warn(`${videoFile} has ${rendered.frames} frames, ${sequenceFrames} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
         const frameIndices = look ? lookSheetFrames(beatTimes, rendered.frames) : selectFrameIndices(beatTimes, rendered.frames)
         const framePaths = await Promise.all(frameIndices.map(async (frameIndex, i) => {
             const framePath = join(framesDir, `frame_${String(i).padStart(2, '0')}.png`)
@@ -445,7 +446,7 @@ export class Renderer implements Disposable {
         const {columns, panel} = sheetLayout(picture.kind)
         await composeSheet(framePaths, target, panel, columns)
         await Bun.write(`${target}.json`, JSON.stringify({
-            workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
+            workflow: this.config.sequenceWorkflow, frames: sequenceFrames, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
         }, null, 2))
         log.step('Saved', `${picture.file} ${styles.muted(this.took(videoTarget))}`)
     }

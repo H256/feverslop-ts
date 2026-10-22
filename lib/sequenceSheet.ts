@@ -54,14 +54,20 @@ export function characterSequencePrompt(description: string, frames = SEQUENCE_F
 /**
  * Another look of a character (wounded, soaked, disguised) from the anchor of its normal picture: the video starts on that
  * anchor, holds it for one shot, and from the hard cut after it shows the six views of the character sheet in the new look -
- * the face and build come from the anchor, the change from the prompt. The first beat is the lead-in: its frame is not
- * part of the sheet (lookSheetFrames).
+ * everything else, the clothing too, comes from the anchor and the change from the prompt: the views name the person of the
+ * first frame, not a description, whose words would redraw the clothes (a "bodice" lost the sleeves and the skirt of the
+ * picture). The first beat is the lead-in: its frame is not part of the sheet (lookSheetFrames).
  */
-export function characterLookSequencePrompt(description: string, change: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+export function characterLookSequencePrompt(change: string, frames = LOOK_SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(7, frames)
-    const prompt = `Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame, standing still, nothing about it changes in this shot. From the cut at ${formatTimestamp(beatTimes[1]!)} on, the same person with the same face, build and clothing is changed: ${change} ${characterViews(description, beatTimes.slice(1), 2)} ${SHEET_BACKDROP} The change stays in every shot after the first; clothing, hair, colours, proportions and every other visible detail remain identical across these shots.`
+    const person = 'the same person as in the first frame, in exactly the same clothing - every garment, sleeve, layer and length as there - with the change'
+    const prompt = `Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame, standing still, nothing about it changes in this shot. From the cut at ${formatTimestamp(beatTimes[1]!)} on, the same person with the same face, build, hair and clothing is changed, and only this is changed: ${change} ${characterViews(person, beatTimes.slice(1), 2)} ${SHEET_BACKDROP} The change stays in every shot after the first; the clothing is the clothing of the first frame, and hair, colours, proportions and every other visible detail remain identical across these shots.`
     return {prompt, beatTimes}
 }
+
+// a look's sheet has one shot more (the lead-in): 5 + 17·8 frames keep every shot at the 0.75 s of a normal sheet - with
+// SEQUENCE_FRAMES the seven shots were shorter and the model's cuts slipped (a second rear view instead of the right profile)
+export const LOOK_SEQUENCE_FRAMES = 141
 
 /** The frames of a look's sheet video that make its sheet: every beat but the lead-in. */
 export const lookSheetFrames = (beatTimes: number[], totalFrames: number) => selectFrameIndices(beatTimes, totalFrames).slice(1)

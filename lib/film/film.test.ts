@@ -269,13 +269,15 @@ describe('character states', () => {
     })
     test("a look's sheet: a lead-in on the anchor, then the six views in the new look - the lead-in is not in the sheet", async () => {
         const {characterLookSequencePrompt, characterSequencePrompt, lookSheetFrames, selectFrameIndices} = await import('../sequenceSheet.ts')
-        const {prompt, beatTimes} = characterLookSequencePrompt('Karl, a soldier', 'his left arm is bandaged and bloody.', 124)
-        expect(beatTimes).toHaveLength(7)
+        const {prompt, beatTimes} = characterLookSequencePrompt('his left arm is bandaged and bloody.')
+        // 141 frames: every shot 0.75 s, as in a normal sheet
+        expect(beatTimes).toEqual([0, 0.75, 1.5, 2.25, 3, 3.75, 4.5])
         expect(prompt).toStartWith('Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame')
-        expect(prompt).toContain('is changed: his left arm is bandaged and bloody. [Shot 2] At 00:00.738, the shot cuts to a full-body shot that frames Karl, a soldier')
-        expect(prompt).toContain('[Shot 7] At ')
-        expect(lookSheetFrames(beatTimes, 124)).toEqual(selectFrameIndices(beatTimes, 124).slice(1))
-        expect(lookSheetFrames(beatTimes, 124)).toHaveLength(6)
+        // the views name the person of the first frame and its clothing - no description that would redraw the clothes
+        expect(prompt).toContain('only this is changed: his left arm is bandaged and bloody. [Shot 2] At 00:00.750, the shot cuts to a full-body shot that frames the same person as in the first frame, in exactly the same clothing')
+        expect(prompt).toContain('[Shot 7] At 00:04.500')
+        expect(lookSheetFrames(beatTimes, 141)).toEqual(selectFrameIndices(beatTimes, 141).slice(1))
+        expect(lookSheetFrames(beatTimes, 141)).toHaveLength(6)
         // the sheet of a normal picture stays six shots
         expect(characterSequencePrompt('Karl', 124).beatTimes).toHaveLength(6)
     })
