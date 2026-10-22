@@ -110,6 +110,21 @@ export const contextFramesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 && (value === 0 || (value as number) % 17 === 5) ? undefined : `contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(value)}`
 export const leakRetriesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 ? undefined : `leakRetries must be a whole number, 0 or more, got ${JSON.stringify(value)}`
+export const finalFpsProblem = (value: unknown): string | undefined =>
+    Number.isInteger(value) && (value as number) >= FPS && (value === FPS || multiplierFor(value as number)) ? undefined
+        : `finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(value)}`
+export const interpolationModelProblem = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim() ? undefined : `interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(value)}`
+export function finishSettingProblem(value: unknown): string | undefined {
+    if (typeof value !== 'boolean') {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return `finish must be true, false or an object like {"sharpen": 0.3}, got ${JSON.stringify(value)}`
+        const unknown = Object.keys(value).filter(k => !(k in MILD_FINISH))
+        if (unknown.length) return `finish: unknown field(s) ${unknown.join(', ')} - known are ${Object.keys(MILD_FINISH).join(', ')}`
+    }
+    const finishing = finishOf(value as boolean | Partial<Finish>)
+    const wrong = finishing && finishProblem(finishing)
+    return wrong ? `finish: ${wrong}` : undefined
+}
 
 export async function loadProjectConfig(projectDir: string): Promise<ProjectConfig> {
     const file = join(projectDir, 'config.json')
@@ -146,18 +161,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
     if (typeof config.vocalGap !== 'number' || config.vocalGap < 0) fail(`vocalGap must be 0 (off) or a number of seconds like 1.5, got ${JSON.stringify(config.vocalGap)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
-    if (!Number.isInteger(config.finalFps) || config.finalFps < FPS || (config.finalFps !== FPS && !multiplierFor(config.finalFps))) {
-        fail(`finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(config.finalFps)}`)
-    }
-    if (typeof config.finish !== 'boolean') {
-        if (!config.finish || typeof config.finish !== 'object' || Array.isArray(config.finish)) fail(`finish must be true, false or an object like {"sharpen": 0.3}, got ${JSON.stringify(config.finish)}`)
-        const unknown = Object.keys(config.finish).filter(k => !(k in MILD_FINISH))
-        if (unknown.length) fail(`finish: unknown field(s) ${unknown.join(', ')} - known are ${Object.keys(MILD_FINISH).join(', ')}`)
-    }
-    const finishing = finishOf(config.finish)
-    const finishWrong = finishing && finishProblem(finishing)
-    if (finishWrong) fail(`finish: ${finishWrong}`)
-    if (typeof config.interpolationModel !== 'string' || !config.interpolationModel.trim()) fail(`interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(config.interpolationModel)}`)
+    for (const problem of [finalFpsProblem(config.finalFps), finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)]) if (problem) fail(problem)
     const leakWrong = leakRetriesProblem(config.leakRetries)
     if (leakWrong) fail(leakWrong)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)

@@ -1,7 +1,8 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Aspect, Resolution} from "../../comfy/helpers.ts";
-import {aspectProblem, contextFramesProblem, defaults, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
+import {aspectProblem, contextFramesProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
+import type {Finish} from "../finish.ts";
 import {log, warnUnknownKeys} from "../log.ts";
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
@@ -39,6 +40,14 @@ export type FilmConfig = {
     // a clip that came out as the reference pictures lined up on their grey backdrop (lib/leak.ts) is rendered again, with
     // another seed, up to this many times. 0 (default) = off
     leakRetries: number,
+    // the frame rate of a second film, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by frame interpolation
+    // (a ComfyUI job per clip, shot by shot), the sound is the one of the 24 fps film. 24 (default) = off - as in the music video
+    finalFps: number,
+    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    // a light grade and sharpen of the film(s), written as <id>-finished.mp4 next to them (lib/finish.ts), with the clips matched
+    // to one reference (colorMatch) and film grain when asked for: false (default) = off, true = the mild one, an object = the
+    // mild one with its fields replaced - as in the music video
+    finish: boolean | Partial<Finish>,
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
     subtitles: string,
@@ -66,6 +75,9 @@ export const filmDefaults: FilmConfig = {
     continuity: 'never',
     contextFrames: defaults.contextFrames,
     leakRetries: defaults.leakRetries,
+    finalFps: defaults.finalFps,
+    interpolationModel: defaults.interpolationModel,
+    finish: defaults.finish,
     subtitles: 'script',
     burnSubtitles: false,
     levelMatching: true,
@@ -115,7 +127,8 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
     if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
-    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries)]) if (problem) fail(problem)
+    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries), finalFpsProblem(config.finalFps),
+        finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)]) if (problem) fail(problem)
     if (config.contextFrames > 0 && config.continuity === 'never') log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)

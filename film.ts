@@ -6,7 +6,10 @@ import {copyFileSync, existsSync, mkdirSync, readdirSync, rmSync} from "node:fs"
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
-import {addScore, assembleFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
+import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
+import {finishOf} from "./lib/finish.ts";
+import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
+import {FPS, secondsAt} from "./lib/frames.ts";
 import {burnSubtitles, muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
@@ -529,6 +532,23 @@ if (render.has('final')) {
         log.step('Score', `${score} ${styles.muted(`under the film at ${config.scoreVolume} dB, ducking under the dialogue`)}`)
     }
 
+    // the finish and a film at another frame rate, as in the music video (lib/final-pass.ts) - before the subtitles, which every
+    // one of the films then gets: burned in after the grade and the grain, the text stays clean
+    const videos = [target]
+    const finishing = finishOf(config.finish)
+    // where each clip is in the film - the same seconds at every frame rate
+    const spans = selected.map((r, i) => ({id: r.id, start: result.starts[i]!, end: result.starts[i]! + secondsAt(result.used[i]! - result.skipped[i]!)}))
+    if (finishing) videos.push(await finishCopy(target, finishing, spans))
+    if (config.finalFps !== FPS) {
+        using smoother = new FilmRenderer(`film-${film.id}`, film.dir, filmRenderConfig(config), settings.comfy)
+        const {files, multiplier} = await interpolateClips(smoother, selected.map((r, i) => ({id: r.id, frames: result.used[i]!, shots: r.shots})), config.interpolationModel, config.finalFps)
+        const smooth = target.replace(/\.mp4$/, `-${config.finalFps}fps.mp4`)
+        const more = await assembleSmoothFilm({clips: selected.map((r, i) => ({id: r.id, used: result.used[i]!, skipped: result.skipped[i]!})), files, multiplier, fps: config.finalFps, sound: target, target: smooth})
+        log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
+        videos.push(smooth)
+        if (finishing) videos.push(await finishCopy(smooth, finishing, spans))
+    }
+
     // subtitles: the screenplay's own translations, or the film's lines translated into the language in config.json
     let translated = film.data.subtitles
     if (config.subtitles !== 'script' && config.subtitles !== 'off') {
@@ -544,9 +564,11 @@ if (render.has('final')) {
         const srt = target.replace(/\.mp4$/, '.srt')
         await Bun.write(srt, toSrt(cues))
         // burned in (always visible) or a track of the mp4 (the player switches it on) - not both, the text would be there twice
-        if (config.burnSubtitles) await burnSubtitles(target, srt)
-        else await muxSubtitles(target, srt, config.subtitles === 'script' ? undefined : config.subtitles)
-        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, ${config.burnSubtitles ? 'burned into the picture' : 'also a track in the mp4'} - timing is estimated`)}`)
+        for (const video of videos) {
+            if (config.burnSubtitles) await burnSubtitles(video, srt)
+            else await muxSubtitles(video, srt, config.subtitles === 'script' ? undefined : config.subtitles)
+        }
+        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, ${config.burnSubtitles ? 'burned into the picture' : 'also a track in the mp4'}${videos.length > 1 ? ` of all ${videos.length} films` : ''} - timing is estimated`)}`)
     } else if (config.subtitles !== 'off') {
         log.step('Subtitles', styles.muted(config.subtitles === 'script' ? 'none - the screenplay has no translations under its lines (config.json: "subtitles": "en" translates them)' : 'none - every line is in that language already'))
     }

@@ -174,7 +174,7 @@ render the new reference sheet. It is the film counterpart of `bun run replace-c
 All optional:
 
 ```json
-{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "videoAspect": "16:9", "imageWorkflow": "kroma-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "never", "contextFrames": 0, "leakRetries": 0, "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
+{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "videoAspect": "16:9", "imageWorkflow": "kroma-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "never", "contextFrames": 0, "leakRetries": 0, "finalFps": 24, "interpolationModel": "rife_v4.26_heavy.safetensors", "finish": false, "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
 ```
 
 | Field | Values |
@@ -187,6 +187,8 @@ All optional:
 | `continuity`       | `"never"` (default) = every clip is its own cut, `"auto"` = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other). Off by default: the picture drifts from clip to clip and the next one starts on the drift - see the paragraph above |
 | `contextFrames`    | `0` (default) = a continuing clip starts on the last frame of the clip before, `22` or `39` (5 + 17·k) = on that many of its last frames: the motion goes on, not only the pose. Rendered that much longer, the head cut off again and the colors matched to the clip before - as in the music video. Needs `continuity` `"auto"` or `"scene"` |
 | `leakRetries`      | `0` (default) = off; a clip that came out as the reference pictures lined up on their grey studio backdrop is put away in `old/leaks/` and rendered again with another seed, up to this many times (needs `"seed": -1`) - as in the music video |
+| `finish`           | `false` (default); `true` or an object like `{"colorMatch": 0.5, "grain": 3}` = a finished copy `<id>-finished.mp4` next to the film: the clips matched to one reference (`colorMatch`, `colorReference` a clip id like `"clip-004"`), a light grade, CAS sharpen and film grain - exactly as in the music video, see [Finishing](../README.md#finishing-finish) |
+| `finalFps`, `interpolationModel` | `24` (default) = off; `48` or `60` = a second film `<id>-<fps>fps.mp4`: every clip interpolated shot by shot on ComfyUI (as in the music video), the sound and the score taken over from the 24 fps film. With `finish` it gets its finished copy too |
 | `subtitles`        | `"script"` (default) = the translations the screenplay has under its lines (in brackets, they are kept as `translation`), `"off"`, or a language code like `"en"`: every line in another language is translated into it (a step, cached) |
 | `burnSubtitles`    | `false` (default) = the subtitles are a track of the mp4 that the player switches on, `true` = burned into the picture (always visible, for players that do not show a track - messengers, uploads; the video is encoded once more) |
 | `levelMatching`    | `true` (default) = every clip's sound is brought towards -20 LUFS, at most 9 dB either way - the model makes each clip's level on its own |
@@ -203,6 +205,9 @@ and speaks it at the planned speed - right to about a second; nothing listens to
 A score: put an audio file into `films/<id>/input/` as `score.mp3` (or .wav, .flac, .m4a, .ogg) before `--render=final`. It is looped or cut to
 the film, mixed in at `scoreVolume`, and ducks under the dialogue (sidechain compressor). The film is made once more with the score, so the
 file can be exchanged and `--render=final` run again; a score is not generated.
+
+The order of `--render=final`: the clips joined, the score, then the finished copy (`finish`) and the film at `finalFps` with its
+own finished copy - and the subtitles last, into every one of these films (burned in after the grade and the grain, the text stays clean).
 
 ## Location views
 

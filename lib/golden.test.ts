@@ -8,7 +8,8 @@ import {matchFilter} from "./colormatch.ts";
 import type {ClipRequest} from "./compose.ts";
 import {defaults, loadProjectConfig, type RenderConfig} from "./config.ts";
 import {finishFilter, finishOf, finishVideo, MILD_FINISH} from "./finish.ts";
-import {assembleFilm} from "./film/assemble.ts";
+import {assembleFilm, assembleSmoothFilm} from "./film/assemble.ts";
+import {finishCopy, interpolateClips} from "./final-pass.ts";
 import type {FilmClipRequest} from "./film/compose.ts";
 import {filmDefaults, loadFilmConfig} from "./film/config.ts";
 import {filmRenderConfig} from "./film/pictures.ts";
@@ -379,6 +380,27 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
             matched: await finishVideo(join(projectDir, 'golden-48fps.mp4'), finishOf({colorMatch: 0.5, grain: 4})!, spans),
         }))
         expect(portable({result, ffmpeg: calls})).toMatchSnapshot()
+    }, 60_000)
+
+    test('film: the finished copy with the clips matched, and the film at 48 fps with the sound of the one at 24', async () => {
+        const projectDir = folder('film-smooth')
+        for (const [id, frames] of [['clip-001', 36], ['clip-002', 44]] as const) await testClip(join(projectDir, 'videos', `${id}.mp4`), frames)
+        const clips = [{id: 'clip-001', frames: 30, useRendered: true}, {id: 'clip-002', frames: 40, continuesPrevious: true}]
+        const target = join(projectDir, 'film.mp4')
+        const Recording = recording(FilmRenderer)
+        using renderer = new Recording('film-golden', projectDir, filmRenderConfig(filmDefaults), servers)
+        const {result, calls} = await ffmpegCalls(async () => {
+            const joined = await assembleFilm({clips, projectDir, target})
+            const spans = clips.map((c, i) => ({id: c.id, start: joined.starts[i]!, end: joined.starts[i]! + (joined.used[i]! - joined.skipped[i]!) / 24}))
+            const finished = await finishCopy(target, finishOf({colorMatch: 0.5})!, spans)
+            const shots = [{at: 0}, {at: 0.75}]
+            const {files, multiplier} = await interpolateClips(renderer, clips.map((c, i) => ({id: c.id, frames: joined.used[i]!, shots})), 'rife_v4.26_heavy.safetensors', 48)
+            const smooth = await assembleSmoothFilm({clips: clips.map((c, i) => ({id: c.id, used: joined.used[i]!, skipped: joined.skipped[i]!})), files, multiplier, fps: 48, sound: target, target: join(projectDir, 'film-48fps.mp4')})
+            return {joined, finished, multiplier, smooth}
+        })
+        // the 48 fps film runs as long as the one at 24: 36 + 40 - 1 frames, twice
+        expect(result.smooth.frames).toBe(150)
+        expect(portable({result, jobs: renderer.jobs, ffmpeg: calls})).toMatchSnapshot()
     }, 60_000)
 
     test('film: the clips joined, with and without level matching', async () => {

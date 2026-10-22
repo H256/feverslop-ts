@@ -11897,8 +11897,11 @@ exports[`the config film: the defaults and what the renderer is given 1`] = `
   "contextFrames": 0,
   "continuity": "never",
   "dialogueLanguage": "auto",
+  "finalFps": 24,
+  "finish": false,
   "imageResolution": -1,
   "imageWorkflow": "kroma-image",
+  "interpolationModel": "rife_v4.26_heavy.safetensors",
   "leakRetries": 0,
   "levelMatching": true,
   "llm": {},
@@ -16338,9 +16341,17 @@ exports[`rendering and joining, with ffmpeg film: the clips joined, with and wit
       "frames": 75,
       "height": 192,
       "seconds": 3.125,
+      "skipped": [
+        0,
+        1,
+      ],
       "starts": [
         0,
         1.5,
+      ],
+      "used": [
+        36,
+        40,
       ],
       "width": 320,
     },
@@ -16349,9 +16360,17 @@ exports[`rendering and joining, with ffmpeg film: the clips joined, with and wit
       "frames": 75,
       "height": 192,
       "seconds": 3.125,
+      "skipped": [
+        0,
+        1,
+      ],
       "starts": [
         0,
         1.5,
+      ],
+      "used": [
+        36,
+        40,
       ],
       "width": 320,
     },
@@ -22577,5 +22596,618 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
       "workflow": "h3-ref2video-film",
     },
   ],
+}
+`;
+
+exports[`rendering and joining, with ffmpeg film: the finished copy with the clips matched, and the film at 48 fps with the sound of the one at 24 1`] = `
+{
+  "ffmpeg": [
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-progress",
+      "pipe:1",
+      "-nostats",
+      "-i",
+      "<tmp>/film-smooth/videos/clip-001.mp4",
+      "-i",
+      "<tmp>/film-smooth/videos/clip-002.mp4",
+      "-filter_complex",
+      "[0:v]trim=start_frame=0:end_frame=36,setpts=PTS-STARTPTS,scale=320:192,setsar=1,format=yuv420p[v0];[0:a]aresample=48000,aformat=channel_layouts=stereo,apad,atrim=start=0:end=1.5,asetpts=PTS-STARTPTS,afade=t=in:d=0.02,afade=t=out:st=1.48:d=0.02[a0];[1:v]trim=start_frame=1:end_frame=40,setpts=PTS-STARTPTS,scale=320:192,setsar=1,format=yuv420p[v1];[1:a]aresample=48000,aformat=channel_layouts=stereo,apad,atrim=start=0.041666666666666664:end=1.6666666666666667,asetpts=PTS-STARTPTS,afade=t=in:d=0.02,afade=t=out:st=1.605:d=0.02[a1];[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]",
+      "-map",
+      "[v]",
+      "-map",
+      "[a]",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      "24",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "256k",
+      "-movflags",
+      "+faststart",
+      "<tmp>/film-smooth/film.mp4.partial.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "info",
+      "-i",
+      "<tmp>/film-smooth/film.mp4",
+      "-vf",
+      "select='not(mod(n\\,6))',signalstats,metadata=print",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-smooth/film.mp4",
+      "-vf",
+      "lutyuv=y='clip((val-83)*0+93.25,16,235)':u='clip(val+6.5,16,240)':v='clip(val+21.75,16,240)':enable='between(t,0.000,1.500)',lutyuv=y='clip((val-124)*0+113.75,16,235)':u='clip(val+-6.5,16,240)':v='clip(val+-21.75,16,240)':enable='between(t,1.500,3.125)',colorlevels=rimin=0.025:gimin=0.025:bimin=0.025:rimax=0.98:gimax=0.98:bimax=0.98,eq=contrast=1.03:saturation=1.03,cas=strength=0.4",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "17",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      "<tmp>/film-smooth/film-finished.mp4.partial.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-smooth/videos/clip-001.mp4",
+      "-vf",
+      "select='gte(scene,0)',metadata=print:key=lavfi.scene_score:file=-",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-smooth/videos/clip-002.mp4",
+      "-vf",
+      "select='gte(scene,0)',metadata=print:key=lavfi.scene_score:file=-",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-smooth/videos/interpolated/clip-001.mp4",
+      "-i",
+      "<tmp>/film-smooth/videos/interpolated/clip-002.mp4",
+      "-i",
+      "<tmp>/film-smooth/film.mp4",
+      "-filter_complex",
+      "[0:v]trim=start_frame=0:end_frame=72,setpts=PTS-STARTPTS,scale=320:192,setsar=1,format=yuv420p[v0];[1:v]trim=start_frame=2:end_frame=80,setpts=PTS-STARTPTS,scale=320:192,setsar=1,format=yuv420p[v1];[v0][v1]concat=n=2:v=1:a=0[vc];[vc]fps=48[v]",
+      "-map",
+      "[v]",
+      "-map",
+      "2:a:0",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      "48",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      "<tmp>/film-smooth/film-48fps.mp4.partial.mp4",
+    ],
+  ],
+  "jobs": [
+    {
+      "meta": {},
+      "target": "<tmp>/film-smooth/videos/interpolated/clip-001.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/film-smooth/videos/clip-001.mp4",
+          "to": "feverslop-ts/film-golden/videos/clip-001.mp4",
+        },
+      ],
+      "what": {
+        "kind": "interpolation",
+        "label": "interpolation clip-001",
+        "spec": {
+          "id": "clip-001",
+          "kind": "interpolation",
+          "parts": [
+            "1e21ca5c0f8c96e4",
+            [
+              {
+                "frames": 18,
+                "start": 0,
+              },
+              {
+                "frames": 18,
+                "start": 18,
+              },
+            ],
+            "rife_v4.26_heavy.safetensors",
+            2,
+          ],
+        },
+        "workflow": "frame-interpolate",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VHS_LoadVideo",
+          },
+          "class_type": "VHS_LoadVideo",
+          "inputs": {
+            "custom_height": 0,
+            "custom_width": 0,
+            "force_rate": 0,
+            "frame_load_cap": 0,
+            "select_every_nth": 1,
+            "skip_first_frames": 0,
+            "video": "feverslop-ts/film-golden/videos/clip-001.mp4",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "RepeatImageBatch",
+          },
+          "class_type": "RepeatImageBatch",
+          "inputs": {
+            "amount": 1,
+            "image": [
+              "9",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BatchImagesNode",
+          },
+          "class_type": "BatchImagesNode",
+          "inputs": {
+            "images.image0": [
+              "4",
+              0,
+            ],
+            "images.image1": [
+              "6",
+              0,
+            ],
+            "images.image2": [
+              "8",
+              0,
+            ],
+            "images.image3": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 17,
+            "filename_prefix": "feverslop-ts/film-golden/interpolated/clip-001",
+            "format": "video/h264-mp4",
+            "frame_rate": 48,
+            "images": [
+              "11",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "FrameInterpolationModelLoader",
+          },
+          "class_type": "FrameInterpolationModelLoader",
+          "inputs": {
+            "model_name": "rife_v4.26_heavy.safetensors",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 0,
+            "image": [
+              "1",
+              0,
+            ],
+            "length": 18,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "FrameInterpolate",
+          },
+          "class_type": "FrameInterpolate",
+          "inputs": {
+            "images": [
+              "3",
+              0,
+            ],
+            "interp_model": [
+              "2",
+              0,
+            ],
+            "multiplier": 2,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 17,
+            "image": [
+              "3",
+              0,
+            ],
+            "length": 1,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "RepeatImageBatch",
+          },
+          "class_type": "RepeatImageBatch",
+          "inputs": {
+            "amount": 1,
+            "image": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 18,
+            "image": [
+              "1",
+              0,
+            ],
+            "length": 18,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "FrameInterpolate",
+          },
+          "class_type": "FrameInterpolate",
+          "inputs": {
+            "images": [
+              "7",
+              0,
+            ],
+            "interp_model": [
+              "2",
+              0,
+            ],
+            "multiplier": 2,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 17,
+            "image": [
+              "7",
+              0,
+            ],
+            "length": 1,
+          },
+        },
+      },
+    },
+    {
+      "meta": {},
+      "target": "<tmp>/film-smooth/videos/interpolated/clip-002.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/film-smooth/videos/clip-002.mp4",
+          "to": "feverslop-ts/film-golden/videos/clip-002.mp4",
+        },
+      ],
+      "what": {
+        "kind": "interpolation",
+        "label": "interpolation clip-002",
+        "spec": {
+          "id": "clip-002",
+          "kind": "interpolation",
+          "parts": [
+            "6878d1f71bf53031",
+            [
+              {
+                "frames": 18,
+                "start": 0,
+              },
+              {
+                "frames": 22,
+                "start": 18,
+              },
+            ],
+            "rife_v4.26_heavy.safetensors",
+            2,
+          ],
+        },
+        "workflow": "frame-interpolate",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VHS_LoadVideo",
+          },
+          "class_type": "VHS_LoadVideo",
+          "inputs": {
+            "custom_height": 0,
+            "custom_width": 0,
+            "force_rate": 0,
+            "frame_load_cap": 0,
+            "select_every_nth": 1,
+            "skip_first_frames": 0,
+            "video": "feverslop-ts/film-golden/videos/clip-002.mp4",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "RepeatImageBatch",
+          },
+          "class_type": "RepeatImageBatch",
+          "inputs": {
+            "amount": 1,
+            "image": [
+              "9",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BatchImagesNode",
+          },
+          "class_type": "BatchImagesNode",
+          "inputs": {
+            "images.image0": [
+              "4",
+              0,
+            ],
+            "images.image1": [
+              "6",
+              0,
+            ],
+            "images.image2": [
+              "8",
+              0,
+            ],
+            "images.image3": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 17,
+            "filename_prefix": "feverslop-ts/film-golden/interpolated/clip-002",
+            "format": "video/h264-mp4",
+            "frame_rate": 48,
+            "images": [
+              "11",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "FrameInterpolationModelLoader",
+          },
+          "class_type": "FrameInterpolationModelLoader",
+          "inputs": {
+            "model_name": "rife_v4.26_heavy.safetensors",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 0,
+            "image": [
+              "1",
+              0,
+            ],
+            "length": 18,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "FrameInterpolate",
+          },
+          "class_type": "FrameInterpolate",
+          "inputs": {
+            "images": [
+              "3",
+              0,
+            ],
+            "interp_model": [
+              "2",
+              0,
+            ],
+            "multiplier": 2,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 17,
+            "image": [
+              "3",
+              0,
+            ],
+            "length": 1,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "RepeatImageBatch",
+          },
+          "class_type": "RepeatImageBatch",
+          "inputs": {
+            "amount": 1,
+            "image": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 18,
+            "image": [
+              "1",
+              0,
+            ],
+            "length": 22,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "FrameInterpolate",
+          },
+          "class_type": "FrameInterpolate",
+          "inputs": {
+            "images": [
+              "7",
+              0,
+            ],
+            "interp_model": [
+              "2",
+              0,
+            ],
+            "multiplier": 2,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 21,
+            "image": [
+              "7",
+              0,
+            ],
+            "length": 1,
+          },
+        },
+      },
+    },
+  ],
+  "result": {
+    "finished": "<tmp>/film-smooth/film-finished.mp4",
+    "joined": {
+      "duration": "0:03.1",
+      "frames": 75,
+      "height": 192,
+      "seconds": 3.125,
+      "skipped": [
+        0,
+        1,
+      ],
+      "starts": [
+        0,
+        1.5,
+      ],
+      "used": [
+        36,
+        40,
+      ],
+      "width": 320,
+    },
+    "multiplier": 2,
+    "smooth": {
+      "frames": 150,
+      "height": 192,
+      "seconds": 3.125,
+      "width": 320,
+    },
+  },
 }
 `;
