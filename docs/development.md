@@ -61,6 +61,13 @@ bun run typecheck     # TypeScript, including the workflows against comfy/nodes.
 The tests cover the parts without servers - parsing, alignment, timeline, composition, fingerprints. Nothing calls an
 LLM or ComfyUI; those parts are tried on a real project.
 
+**Golden tests** (`lib/golden.test.ts`, snapshots in `lib/__snapshots__/`) record what the music video sends to ComfyUI
+(every clip workflow, node by node), what it runs ffmpeg with (rendering with a stand-in for ComfyUI, joining, finishing,
+48 fps), its config and the fingerprints of its clips - and the same for the film where it uses the shared code. The film
+pipeline shares the music video's render, workflow and finishing code: a changed snapshot is a changed music video, or
+rendered clips of existing projects that turn stale. Never update them (`bun test --update-snapshots`) to make a test
+pass - only for a change the PR means and names. The ffmpeg part needs ffmpeg on the PATH and is skipped without it.
+
 ## Docs
 
 - `docs/style-examples.md` is generated - edit `lib/styles.ts` and run `bun run styles:doc`.
