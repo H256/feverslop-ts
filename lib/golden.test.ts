@@ -1,5 +1,5 @@
 import {afterAll, beforeAll, describe, expect, spyOn, test} from "bun:test";
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 import type {WorkflowResult} from "../comfy/helpers.ts";
@@ -12,7 +12,7 @@ import {assembleFilm} from "./film/assemble.ts";
 import type {FilmClipRequest} from "./film/compose.ts";
 import {filmDefaults, loadFilmConfig} from "./film/config.ts";
 import {filmRenderConfig} from "./film/pictures.ts";
-import {FilmRenderer, filmClipFingerprint} from "./film/render.ts";
+import {FilmRenderer, filmClipFingerprint, startedOnContext} from "./film/render.ts";
 import {Renderer} from "./render.ts";
 import {clipSpec, filmClipSpec, specId} from "./render-spec.ts";
 
@@ -59,6 +59,7 @@ const filmVariants: Record<string, object> = {
     'pinned start frame': {...filmOptions, startFrame: 'fs/film-x/assets/clips/clip-002_lf.png'},
     'fixed size': {...filmOptions, resolution: '1280x720'},
     'portrait': {...filmOptions, aspect: '9:16'},
+    'context frames': {...filmOptions, startClip: 'fs/film-x/assets/clips/clip-002_tail22.mp4', frames: 141},
 }
 
 describe('the ComfyUI workflows, node by node', () => {
@@ -224,9 +225,10 @@ async function ffmpegCalls<T>(run: () => Promise<T>): Promise<{ result: T, calls
 }
 
 /** A clip of `frames` frames in one color (from the name, so clips differ), at `fps`, with a stereo sound. */
-async function testClip(file: string, frames: number, size: { width: number, height: number } = {width: 320, height: 192}, fps = 24, silent = false) {
+async function testClip(file: string, frames: number, size: { width: number, height: number } = {width: 320, height: 192}, fps = 24, silent = false, flatGrey = false) {
     mkdirSync(dirname(file), {recursive: true})
-    const color = `0x${Bun.hash(file.replace(/^.*[\\/]/, '')).toString(16).padStart(6, '0').slice(-6)}`
+    // flat grey: what lib/leak.ts takes for the studio backdrop of the reference pictures
+    const color = flatGrey ? '0x808080' : `0x${Bun.hash(file.replace(/^.*[\\/]/, '')).toString(16).padStart(6, '0').slice(-6)}`
     const audio = silent ? [] : ['-f', 'lavfi', '-i', 'sine=frequency=330:sample_rate=48000', '-ac', '2']
     const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=${size.width}x${size.height}:r=${fps}`, ...audio,
         '-frames:v', String(frames), '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', ...(silent ? [] : ['-c:a', 'aac']), file], {stdout: 'ignore', stderr: 'pipe'})
@@ -241,6 +243,8 @@ type Job = { what: unknown, target: string, uploads: unknown, workflow: Record<s
 function recording<T extends new (...args: any[]) => Renderer>(Base: T) {
     return class extends Base {
         jobs: Job[] = []
+        // clip ids whose next render comes out as the studio backdrop - once each
+        leaky = new Set<string>()
         protected override async render<M>(what: { kind: string }, target: string, _extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
             const {result, uploads, meta} = await prepare()
             const {workflow, size} = built(result)
@@ -251,7 +255,8 @@ function recording<T extends new (...args: any[]) => Renderer>(Base: T) {
                 const pieces = Object.values(workflow).filter(n => n.class_type === 'ImageFromBatch' && n.inputs.length !== 1).reduce((sum, n) => sum + Number(n.inputs.length), 0)
                 await testClip(target, pieces * multiplier, undefined, 24 * multiplier, true)
             } else {
-                await testClip(target, lengthOf(workflow), size ?? {width: 320, height: 192})
+                const id = target.replace(/^.*[\\/]/, '').replace(/\.mp4$/, '')
+                await testClip(target, lengthOf(workflow), size ?? {width: 320, height: 192}, 24, false, this.leaky.delete(id))
             }
             return {...meta, ...(size ? {size} : {})} as M
         }
@@ -291,6 +296,21 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
         expect(await musicRun('leak', {contextFrames: 22, leakRetries: 2})).toMatchSnapshot()
     }, 60_000)
 
+    test('music video: a clip with the studio backdrop is put away and rendered again with another seed', async () => {
+        const projectDir = folder('music-leaked', {
+            'assets/locations/hall.png': 'hall', 'assets/characters/ann.png': 'ann', 'assets/characters/bo.png': 'bo',
+            'stems/vocals.wav': 'vocals', 'stems/bass.wav': 'bass', 'stems/song.wav': 'song',
+        })
+        const Recording = recording(Renderer)
+        using renderer = new Recording('golden', projectDir, {...defaults, seed: -1, leakRetries: 2, videoResolution: '320x192'}, servers)
+        renderer.leaky.add('slot-007')
+        await renderer.renderClip(musicClip('slot-007'), {vocals: join(projectDir, 'stems/vocals.wav'), bass: join(projectDir, 'stems/bass.wav'), song: join(projectDir, 'stems/song.wav')})
+        const seeds = renderer.jobs.map(j => (j.meta as { seed: number }).seed)
+        expect(seeds).toHaveLength(2)
+        expect(JSON.parse(readFileSync(join(projectDir, 'videos/slot-007.mp4.json'), 'utf8')).seed).toBe(seeds[1]!)
+        expect(existsSync(join(projectDir, `old/leaks/slot-007-seed-${seeds[0]}.mp4`))).toBe(true)
+    }, 60_000)
+
     test('film: a clip and one that goes on from its last frame', async () => {
         const projectDir = folder('film', {'assets/locations/hall.png': 'hall', 'assets/characters/ann.png': 'ann'})
         const Recording = recording(FilmRenderer)
@@ -305,6 +325,41 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
         })
         const sidecar = (id: string) => JSON.parse(readFileSync(join(projectDir, `videos/${id}.mp4.json`), 'utf8'))
         expect(portable({jobs: renderer.jobs, sidecars: [sidecar('clip-003'), sidecar('clip-004')], ffmpeg: calls})).toMatchSnapshot()
+    }, 60_000)
+
+    test('film: context frames - the end of a clip with dialogue as the film shows it, its head cut off, its colors matched', async () => {
+        const projectDir = folder('film-context', {'assets/locations/hall.png': 'hall', 'assets/characters/ann.png': 'ann'})
+        const Recording = recording(FilmRenderer)
+        using renderer = new Recording('film-golden', projectDir, {...filmRenderConfig({...filmDefaults, contextFrames: 22}), seed: 42, videoResolution: '320x192'}, servers)
+        const first = filmClip('clip-003')
+        const second = filmClip('clip-004', {
+            startsFrom: 'clip-003', frameStart: 308, frames: 40, dialogue: [],
+            assets: {pictures: [...filmClip('clip-004').assets.pictures, {label: '<Picture 3>', file: 'assets/clips/clip-003_lf.png', subject: '', kind: 'frame', id: 'clip-003', name: 'clip-003', description: ''}]},
+        })
+        const {calls} = await ffmpegCalls(async () => {
+            await (renderer as unknown as FilmRenderer).renderFilmClip(first)
+            await (renderer as unknown as FilmRenderer).renderFilmClip(second, first)
+        })
+        const sidecar = (id: string) => JSON.parse(readFileSync(join(projectDir, `videos/${id}.mp4.json`), 'utf8'))
+        // clip-003 has dialogue: the film shows all its 124 frames, so the context ends CONTEXT_SETTLE (3) before its last one
+        expect(calls.some(c => c.includes('trim=start_frame=99:end_frame=121,setpts=PTS-STARTPTS'))).toBe(true)
+        // 40 frames + 25 of lead rendered as 73 (5 + 17·k), the 25 cut off again
+        expect(sidecar('clip-004')).toMatchObject({contextFrames: 22, renderedFrames: 48})
+        // its first frame is a new one: the film keeps it (a clip pinned to the last frame starts on that frame again, which is left out)
+        expect([startedOnContext(projectDir, 'clip-003'), startedOnContext(projectDir, 'clip-004')]).toEqual([false, true])
+        expect(portable({jobs: renderer.jobs, sidecars: [sidecar('clip-003'), sidecar('clip-004')], ffmpeg: calls})).toMatchSnapshot()
+    }, 60_000)
+
+    test('film: a clip with the studio backdrop is put away and rendered again with another seed', async () => {
+        const projectDir = folder('film-leaked', {'assets/locations/hall.png': 'hall', 'assets/characters/ann.png': 'ann'})
+        const Recording = recording(FilmRenderer)
+        using renderer = new Recording('film-golden', projectDir, {...filmRenderConfig({...filmDefaults, leakRetries: 1}), videoResolution: '320x192'}, servers)
+        renderer.leaky.add('clip-003')
+        await (renderer as unknown as FilmRenderer).renderFilmClip(filmClip('clip-003'))
+        const seeds = renderer.jobs.map(j => (j.meta as { seed: number }).seed)
+        expect(seeds).toHaveLength(2)
+        expect(JSON.parse(readFileSync(join(projectDir, 'videos/clip-003.mp4.json'), 'utf8')).seed).toBe(seeds[1]!)
+        expect(existsSync(join(projectDir, `old/leaks/clip-003-seed-${seeds[0]}.mp4`))).toBe(true)
     }, 60_000)
 
     test('music video: the final video, its finish and the one at 48 fps', async () => {

@@ -54,7 +54,11 @@ export type PictureJob = { kind: 'character' | 'location', id: string, name: str
 type Server = ComfyServer & { api: ComfyApi }
 
 /** What a render is, for the log and the statistics: the kind of result and the workflow (config name) that makes it. */
-type RenderWhat = { label: string, spec: RenderSpec, kind: Timing['kind'], workflow: string, resolution?: Timing['resolution'] }
+export type RenderWhat = { label: string, spec: RenderSpec, kind: Timing['kind'], workflow: string, resolution?: Timing['resolution'] }
+
+// the end of the clip before, cut out for a clip rendered with context frames (Renderer.contextOf): the short video, its
+// ComfyUI input name, its frames, and the clip it is from with the frames of that clip the final video shows
+export type ClipContext = { file: string, asset: string, frames: number, video: string, used: number }
 
 // the nodes ComfyUI reported while a job ran, in order - for the phase times
 type Trace = { classType: string, at: number }[]
@@ -542,39 +546,10 @@ export class Renderer implements Disposable {
         }
         // context frames (config.contextFrames): the tail of the clip before, cut out now so the job is made from it
         const context = clip.startsFrom && this.config.contextFrames > 0 ? await this.contextOf(clip.startsFrom, this.config.contextFrames) : undefined
-        let {seed, size: expected} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)
-
-        // a clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one
-        // that did is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times
-        for (let tries = 0; this.config.leakRetries > 0; tries++) {
-            const leaked = await backdropSeconds(target)
-            if (!hasBackdropRun(leaked)) break
-            const where = `${leaked.length} sample(s) between ${leaked[0]!.toFixed(1)} and ${leaked.at(-1)!.toFixed(1)} s`
-            if (this.config.seed !== -1) {
-                log.warn(`${file} has a grey studio backdrop (${where}) - the seed is fixed in config.json, so rendering it again gives the same clip. Use "seed": -1, or --again with another seed`)
-                break
-            }
-            const put = join(this.projectDir, 'old', 'leaks', `${clip.id}-seed-${seed}.mp4`)
-            if (tries >= this.config.leakRetries) {
-                log.warn(`${file} still has a grey studio backdrop (${where}) after ${tries} more render(s) - kept as it is, bun run leak-scan ${this.projectId} lists it again`)
-                break
-            }
-            mkdirSync(dirname(put), {recursive: true})
-            renameSync(target, put)
-            recordTiming({kind: 'clip', name: this.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'leak'})
-            log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
-            seed = (await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)).seed
-        }
-
-        // the head of a clip rendered with context frames is the clip before again: cut off, so the file starts on this
-        // clip's own first frame like every other one
-        if (context) {
-            await trimHead(target, context.frames + CONTEXT_SETTLE)
-            // drawn on its own, the clip has its own exposure: matched as a whole to the last frames of the clip before, so
-            // the cut that is no cut shows no step in brightness or color (lib/colormatch.ts)
-            const filter = await matchColors(target, context.video, context.used - 4, context.used - 1)
-            log.line(styles.muted(`        · ${clip.id}: colors matched to ${clip.startsFrom} - ${filter}`))
-        }
+        const what: RenderWhat = {label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}
+        let {seed, size: expected} = await this.render(what, target, '.mp4', prepare)
+        seed = await this.retryLeaks(what, clip.id, file, seed, prepare, `bun run leak-scan ${this.projectId} lists it again`)
+        if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
         const rendered = await probeVideo(target)
         // every server has to deliver the size asked for - a clip of another size is scaled in the final video. The sizes
         // are computed by the workflow file, not by the server (comfy/helpers.ts, pixelSize); what still comes out at
@@ -628,16 +603,58 @@ export class Renderer implements Disposable {
     }
 
     /**
+     * A clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one that did
+     * is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times. Returns the seed of the clip
+     * kept. `rescan`: what the warning says finds it again - the music video's and the film's clips.
+     */
+    protected async retryLeaks<M extends { seed: number }>(what: RenderWhat, id: string, file: string, seed: number, prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>, rescan: string): Promise<number> {
+        const target = join(this.projectDir, file)
+        for (let tries = 0; this.config.leakRetries > 0; tries++) {
+            const leaked = await backdropSeconds(target)
+            if (!hasBackdropRun(leaked)) break
+            const where = `${leaked.length} sample(s) between ${leaked[0]!.toFixed(1)} and ${leaked.at(-1)!.toFixed(1)} s`
+            if (this.config.seed !== -1) {
+                log.warn(`${file} has a grey studio backdrop (${where}) - the seed is fixed in config.json, so rendering it again gives the same clip. Use "seed": -1, or --again with another seed`)
+                break
+            }
+            const put = join(this.projectDir, 'old', 'leaks', `${id}-seed-${seed}.mp4`)
+            if (tries >= this.config.leakRetries) {
+                log.warn(`${file} still has a grey studio backdrop (${where}) after ${tries} more render(s) - kept as it is, ${rescan}`)
+                break
+            }
+            mkdirSync(dirname(put), {recursive: true})
+            renameSync(target, put)
+            recordTiming({kind: 'clip', name: this.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'leak'})
+            log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
+            seed = (await this.render(what, target, '.mp4', prepare)).seed
+        }
+        return seed
+    }
+
+    /**
+     * The head of a clip rendered with context frames is the clip before again: cut off, so the file starts on this clip's
+     * own first frame like every other one.
+     */
+    protected async joinContext(target: string, id: string, startsFrom: string, context: ClipContext) {
+        await trimHead(target, context.frames + CONTEXT_SETTLE)
+        // drawn on its own, the clip has its own exposure: matched as a whole to the last frames of the clip before, so
+        // the cut that is no cut shows no step in brightness or color (lib/colormatch.ts)
+        const filter = await matchColors(target, context.video, context.used - 4, context.used - 1)
+        log.line(styles.muted(`        · ${id}: colors matched to ${startsFrom} - ${filter}`))
+    }
+
+    /**
      * `wanted` frames of the end of the clip `id`, as a short video for the guide of the next clip: they end CONTEXT_SETTLE
      * frames before the last frame the clip gives the final video - those are drawn again after the batch and cut off with
      * the head, so the flash right after the batch is never seen. Fewer when the clip is shorter (5 + 17·k, at least 5).
-     * undefined when the clip is not rendered: the next clip is skipped.
+     * undefined when the clip is not rendered: the next clip is skipped. `shown`: the frames of it the final video shows,
+     * when that is not the `frames` of its sidecar (a film clip with dialogue shows all it has).
      */
-    private async contextOf(id: string, wanted: number): Promise<{ file: string, asset: string, frames: number, video: string, used: number } | undefined> {
+    protected async contextOf(id: string, wanted: number, shown?: number): Promise<ClipContext | undefined> {
         const video = join(this.projectDir, 'videos', `${id}.mp4`)
         const sidecar = `${video}.json`
         if (!existsSync(video) || !existsSync(sidecar)) return undefined
-        const used = (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
+        const used = shown ?? (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
         let frames = Math.min(wanted, used - CONTEXT_SETTLE)
         while (frames > 5 && frames % 17 !== 5) frames--
         if (frames < 5) return undefined
