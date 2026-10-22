@@ -8,13 +8,15 @@
 
 import {existsSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
+import {archiveFiles, versionStamp} from "./archive.ts";
 import {type AssetKind, assetPaths, copyAsset} from "./asset-import.ts";
-import {type LibraryAsset, libraryFolder, libraryLayout, libraryRef} from "./library.ts";
-import type {Character, Location} from "./project.ts";
+import {type LibraryAsset, libraryFolder, libraryIds, libraryLayout, libraryRef, readLibraryAsset} from "./library.ts";
+import {log, styles} from "./log.ts";
 
 export const CASTING_FILE = 'casting.json'
 export type CastingFile = { characters?: Record<string, string>, locations?: Record<string, string> }
-type Cast = { characters: Pick<Character, 'id' | 'name' | 'isGroup'>[], locations: Pick<Location, 'id' | 'name'>[] }
+// the roles and places of a music video's cast or a film's (its characters that are seen)
+type Cast = { characters: { id: string, name: string, isGroup?: boolean }[], locations: { id: string, name: string }[] }
 
 /** A role or place played by a library asset. */
 export type CastEntry = { kind: AssetKind, id: string, libraryId: string }
@@ -121,6 +123,36 @@ export function copyCasting(projectDir: string, library: string, entries: CastEn
 /** Copies the record has that casting.json no longer asks for - the role went back to "project:" (or left the cast). */
 export const droppedCopies = (copies: CastingCopies, entries: CastEntry[]) =>
     Object.keys(copies).filter(key => !entries.some(e => copyKey(e.kind, e.id) === key))
+
+/**
+ * The casting of a project - the music video's (index.ts) and a film's (film.ts): casting.json written once and read
+ * against the cast and the library, a role that went back to "project:" has its library pictures put away, the library
+ * assets are copied in. Throws before anything is made on an entry the library does not have. `copies`: the record of the
+ * copies so far; `again`: what the warning of a role that went back to "project:" says makes its texts anew. Returns the
+ * library asset of every entry by copyKey, the new record of the copies, and whether anything was copied or put away.
+ */
+export async function castFromLibrary({dir, cast, library, copies, again}: {
+    dir: string, cast: Cast, library: string, copies: CastingCopies | undefined, again: (kind: AssetKind) => string,
+}): Promise<{ entries: CastEntry[], assets: Map<string, LibraryAsset>, copies: CastingCopies, changed: boolean }> {
+    if (writeCastingOnce(dir, cast)) log.step('Casting', styles.muted(`${CASTING_FILE} written - every character and place "project:"; "library:<id>" in it takes a library asset instead`))
+    const casting = resolveCasting(readCastingFile(dir), cast, (kind, id) => libraryIds(library, kind).includes(id))
+    for (const warning of casting.warnings) log.warn(warning)
+    if (casting.errors.length) throw new Error(`${casting.errors.join('\n')}\nNothing was made - fix ${join(dir, CASTING_FILE)} (or put the asset into the library: bun run export-asset / create-asset)`)
+    // copyKey -> the library asset that plays it
+    const assets = new Map<string, LibraryAsset>()
+    for (const entry of casting.entries) assets.set(copyKey(entry.kind, entry.id), (await readLibraryAsset(library, entry.kind, entry.libraryId))!)
+    // a role that went back to "project:": the library pictures are put away, the project makes its own again
+    const dropped = droppedCopies(copies ?? {}, casting.entries)
+    for (const key of dropped) {
+        const [kind, id] = key.split(':') as [AssetKind, string]
+        const {picture, sheet} = assetPaths(kind, id)
+        archiveFiles(dir, `${id}-library-${versionStamp()}`, [picture, `${picture}.json`, sheet])
+        log.warn(`${id} is "project:" again - the library pictures are put away in old/attempts; ${again(kind)}`)
+    }
+    const {copied, copies: next} = copyCasting(dir, library, casting.entries, copies)
+    for (const entry of copied) log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
+    return {entries: casting.entries, assets, copies: next, changed: copied.length > 0 || dropped.length > 0}
+}
 
 /** A library asset's texts for the steps that would otherwise write them: look, description, background, floor plan. */
 export const libraryTexts = (asset: LibraryAsset) => ({

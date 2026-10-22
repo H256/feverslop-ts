@@ -2,7 +2,7 @@ import {afterEach, describe, expect, test} from "bun:test";
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
-import {CASTING_FILE, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
+import {CASTING_FILE, castFromLibrary, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
 
 const dirs: string[] = []
 const folder = (files: Record<string, string> = {}) => {
@@ -89,5 +89,44 @@ describe('copyCasting', () => {
     })
     test('droppedCopies: what the record has and casting.json no longer asks for', () => {
         expect(droppedCopies({'character:lyra': {library: 'kael-red', fingerprint: 'x'}, 'location:stage': {library: 'temple', fingerprint: 'y'}}, [{kind: 'location', id: 'stage', libraryId: 'temple'}])).toEqual(['character:lyra'])
+    })
+})
+
+describe('castFromLibrary - the casting step of the music video and of a film', () => {
+    const library = () => folder({
+        'characters/kael-red/asset.json': JSON.stringify({kind: 'character', id: 'kael-red', name: 'Kael', description: 'a man in red'}),
+        'characters/kael-red/picture.png': 'red',
+    })
+    // a film's cast: no groups, the characters that are seen
+    const filmCast = {characters: [{id: 'leo', name: 'Leo'}, {id: 'mira', name: 'Mira'}], locations: [{id: 'hut', name: 'Hut'}]}
+
+    test('writes casting.json on the first run, copies nothing', async () => {
+        const dir = folder()
+        const run = await castFromLibrary({dir, cast: filmCast, library: library(), copies: undefined, again: () => ''})
+        expect(readCastingFile(dir)).toEqual({characters: {leo: 'project:leo', mira: 'project:mira'}, locations: {hut: 'project:hut'}})
+        expect(run).toMatchObject({entries: [], copies: {}, changed: false})
+    })
+    test('a library entry is copied once, its asset returned; a role back to "project:" has the copy put away', async () => {
+        const lib = library()
+        const dir = folder({[CASTING_FILE]: JSON.stringify({characters: {leo: 'library:kael-red'}})})
+        const first = await castFromLibrary({dir, cast: filmCast, library: lib, copies: undefined, again: () => ''})
+        expect(first.changed).toBe(true)
+        expect(first.assets.get('character:leo')?.description).toBe('a man in red')
+        expect(readFileSync(join(dir, 'assets/characters/leo.png'), 'utf8')).toBe('red')
+        const second = await castFromLibrary({dir, cast: filmCast, library: lib, copies: first.copies, again: () => ''})
+        expect(second.changed).toBe(false)
+
+        writeFileSync(join(dir, CASTING_FILE), JSON.stringify({characters: {leo: 'project:leo'}}))
+        const said: string[] = []
+        const back = await castFromLibrary({dir, cast: filmCast, library: lib, copies: second.copies, again: kind => (said.push(kind), 'made anew')})
+        expect(back).toMatchObject({entries: [], copies: {}, changed: true})
+        expect(said).toEqual(['character'])
+        expect(existsSync(join(dir, 'assets/characters/leo.png'))).toBe(false)
+        expect(readdirSync(join(dir, 'old', 'attempts')).some(d => d.startsWith('leo-library-'))).toBe(true)
+    })
+    test('an entry the library does not have stops it before anything is copied', async () => {
+        const dir = folder({[CASTING_FILE]: JSON.stringify({characters: {leo: 'library:kael-red', mira: 'library:nobody'}})})
+        await expect(castFromLibrary({dir, cast: filmCast, library: library(), copies: undefined, again: () => ''})).rejects.toThrow('the library has no character "nobody"')
+        expect(existsSync(join(dir, 'assets'))).toBe(false)
     })
 })

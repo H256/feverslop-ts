@@ -21,6 +21,9 @@ import {FilmRenderer, filmClipFreshness, startedOnContext} from "./lib/film/rend
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
+import type {AssetKind} from "./lib/asset-import.ts";
+import {castFromLibrary, copyKey} from "./lib/casting.ts";
+import {libraryDir} from "./lib/library.ts";
 import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
@@ -269,6 +272,32 @@ const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', asyn
 for (const c of cast.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)
 for (const l of cast.locations) log.step('Location', styles.name(l.name))
 
+/////////// 4b · CASTING - who plays each role and which picture each place has: the film's own or a library asset (casting.json,
+// as in the music video - lib/casting.ts). A library asset is copied into the film and never rendered; its description
+// stands in for the look and the description of the steps below. A narrator's voice has no picture and no entry.
+const casting = await castFromLibrary({
+    dir: film.dir, cast: {characters: cast.characters.filter(c => !c.voiceOnly), locations: cast.locations}, library: await libraryDir(), copies: film.data.castingCopies,
+    again: kind => `its look and description were the library's: bun film.ts ${filmId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`,
+})
+if (Object.keys(casting.copies).length) film.data.castingCopies = casting.copies
+else delete film.data.castingCopies
+if (casting.changed) await film.save()
+const casted = (kind: AssetKind, id: string) => casting.assets.get(copyKey(kind, id))
+// the other looks of a library character are drawn from its description - the picture they are drawn after is not the library's
+for (const c of cast.characters) {
+    const asset = casted('character', c.id)
+    if (asset && c.states?.length) log.warn(`${c.id} is library:${asset.id} - its other looks (${c.states.map(s => s.name).join(', ')}) are drawn from the library's description, the face may differ from the library picture`)
+}
+// designed views (locationViews) describe the sheet the film renders for the place - a library place brings its own sheet
+if (config.sequenceSheets && config.locationViews) for (const l of cast.locations) {
+    const asset = casted('location', l.id)
+    if (asset) log.warn(`${l.id} is library:${asset.id} - its sheet is the library's, not one of the designed views (locationViews): a shot may name a view its picture does not show`)
+}
+// a library asset's description, also in a step kept from an earlier run (casting.json was changed since)
+const fromLibrary = (kind: AssetKind, values: Record<string, string>) => {
+    for (const [key, asset] of casting.assets) if (key.startsWith(`${kind}:`)) values[key.slice(kind.length + 1)] = asset.description
+}
+
 /////////// 5 · SUMMARY
 const summary = await film.step('summary', '5 · SUMMARIZING THE STORY', () => ask(summaryPrompt(screenplay, cast)))
 log.step('Summary', styles.muted(summary))
@@ -303,7 +332,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
         const lookOptions = characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks)
-        looks[char.id] = await film.each('characterLooks', char.id, lookOptions, () => ask(lookOptions))
+        looks[char.id] = casted('character', char.id)?.description ?? await film.each('characterLooks', char.id, lookOptions, () => ask(lookOptions))
         // other looks of the character (wounded, disguised): the same prompt with only the change applied
         for (const state of char.states ?? []) {
             const stateOptions = stateLookPrompt(looks[char.id]!, char.name, state)
@@ -312,6 +341,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
     }
     return looks
 })
+fromLibrary('character', characterLooks)
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 
 /////////// 7b · the character looks without the reference sheet (pose, grey background, studio light) - for the clip prompts
@@ -320,7 +350,7 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     for (const [i, char] of seen.entries()) {
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const descriptionOptions = characterDescriptionPrompt(characterLooks[char.id] ?? '')
-        descriptions[char.id] = await film.each('characterDescriptions', char.id, descriptionOptions, () => ask(descriptionOptions))
+        descriptions[char.id] = casted('character', char.id)?.description ?? await film.each('characterDescriptions', char.id, descriptionOptions, () => ask(descriptionOptions))
         for (const state of char.states ?? []) {
             const stateOptions = characterDescriptionPrompt(characterLooks[statePictureId(char.id, state.id)] ?? '')
             descriptions[statePictureId(char.id, state.id)] = await film.each('characterDescriptions', statePictureId(char.id, state.id), stateOptions, () => ask(stateOptions))
@@ -328,6 +358,7 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     }
     return descriptions
 })
+fromLibrary('character', characterDescriptions)
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 /////////// 8 · LOCATION LOOKS
@@ -336,10 +367,11 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const lookOptions = locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`)
-        looks[location.id] = await film.each('locationLooks', location.id, lookOptions, () => ask(lookOptions))
+        looks[location.id] = casted('location', location.id)?.description ?? await film.each('locationLooks', location.id, lookOptions, () => ask(lookOptions))
     }
     return looks
 })
+fromLibrary('location', locationLooks)
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 /////////// 8b · the location looks without the establishing shot (camera, "empty") - for the clip prompts
@@ -348,10 +380,11 @@ const locationDescriptions = await film.step('locationDescriptions', '8b · DESC
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const descriptionOptions = locationDescriptionPrompt(locationLooks[location.id] ?? '')
-        descriptions[location.id] = await film.each('locationDescriptions', location.id, descriptionOptions, () => ask(descriptionOptions))
+        descriptions[location.id] = casted('location', location.id)?.description ?? await film.each('locationDescriptions', location.id, descriptionOptions, () => ask(descriptionOptions))
     }
     return descriptions
 })
+fromLibrary('location', locationDescriptions)
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 /////////// 8c · LOCATION VIEWS - the five views of a location's reference sheet, designed for the place and its story (only with sequence sheets)

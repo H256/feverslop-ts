@@ -40,9 +40,9 @@ import {pictureProp, propMissing} from "./lib/prop-check.ts";
 import {projectInputs, stepUsed} from "./lib/inputs.ts";
 import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
-import {CASTING_FILE, copyCasting, copyKey, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./lib/casting.ts";
-import {type LibraryAsset, libraryDir, libraryIds, readLibraryAsset} from "./lib/library.ts";
-import {assetPaths, type AssetKind} from "./lib/asset-import.ts";
+import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
+import {type LibraryAsset, libraryDir} from "./lib/library.ts";
+import {type AssetKind} from "./lib/asset-import.ts";
 import {redoAfter} from "./lib/project.ts";
 import {handsOf} from "./lib/project.ts";
 import {
@@ -381,29 +381,16 @@ const cast = await reviewed(project, args.review, 'cast', () => project.step('ca
 ////////// CASTING - who plays each role and which picture each place has: the project's own or a library asset
 // (casting.json, written once here and then only read - lib/casting.ts). A library asset is copied into the project, so
 // the project stays complete without the library; its texts stand in for the look and description steps below.
-const library = await libraryDir()
-if (writeCastingOnce(project.dir, cast)) log.step('Casting', styles.muted(`${CASTING_FILE} written - every character and place "project:"; "library:<id>" in it takes a library asset instead`))
-const casting = resolveCasting(readCastingFile(project.dir), cast, (kind, id) => libraryIds(library, kind).includes(id))
-for (const warning of casting.warnings) log.warn(warning)
-if (casting.errors.length) throw new Error(`${casting.errors.join('\n')}\nNothing was made - fix ${join(project.dir, CASTING_FILE)} (or put the asset into the library: bun run export-asset / create-asset)`)
-// copyKey -> the library asset that plays it
-const castLibrary = new Map<string, LibraryAsset>()
-for (const entry of casting.entries) castLibrary.set(copyKey(entry.kind, entry.id), (await readLibraryAsset(library, entry.kind, entry.libraryId))!)
+const casting = await castFromLibrary({
+    dir: project.dir, cast, library: await libraryDir(), copies: project.data.castingCopies,
+    again: kind => `its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`,
+})
+const castLibrary = casting.assets
 const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id))
 {
-    // a role that went back to "project:": the library pictures are put away, the project makes its own again
-    const dropped = droppedCopies(project.data.castingCopies ?? {}, casting.entries)
-    for (const key of dropped) {
-        const [kind, id] = key.split(':') as [AssetKind, string]
-        const {picture, sheet} = assetPaths(kind, id)
-        archiveFiles(project.dir, `${id}-library-${versionStamp()}`, [picture, `${picture}.json`, sheet])
-        log.warn(`${id} is "project:" again - the library pictures are put away in old/attempts; its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`)
-    }
-    const {copied, copies} = copyCasting(project.dir, library, casting.entries, project.data.castingCopies)
-    for (const entry of copied) log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
-    if (Object.keys(copies).length) project.data.castingCopies = copies
+    if (Object.keys(casting.copies).length) project.data.castingCopies = casting.copies
     else delete project.data.castingCopies
-    if (copied.length || dropped.length) await project.save()
+    if (casting.changed) await project.save()
     // the picture fits the role? the prop the role has is named in the asset's description
     for (const entry of casting.entries.filter(e => e.kind === 'character')) {
         const role = cast.characters.find(c => c.id === entry.id)!

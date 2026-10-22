@@ -169,6 +169,28 @@ one (with `sequenceSheets`: the sheet's video and frames), lets a vision-capable
 it), names the clips that were already rendered with the old picture - they are not touched, delete the ones you want redone - and offers to
 render the new reference sheet. It is the film counterpart of `bun run replace-character`.
 
+## The asset library and casting.json
+
+A film takes characters and places from the [asset library](../README.md#the-asset-library) the way a music video does - the
+same code (`lib/casting.ts`). After the cast step the film writes `films/<id>/casting.json` once, every character that is seen
+and every place `"project:<id>"`; from then on it is yours:
+
+```json
+{"characters": {"morwenna": "library:vyvian-singer", "leo": "project:leo"}, "locations": {"hut": "library:stone-hut"}}
+```
+
+- A `"library:<id>"` role gets the library's picture and sheet copied in (never rendered, its old pictures go to `old/attempts`),
+  and the library's description stands in for its look and its description - the clip prompts describe it as the library does.
+- An entry the library does not have stops the run before anything is made. A narrator's voice has no picture and no entry.
+- Back to `"project:"`: the library pictures are put away, `bun film.ts <id> --redo=characterLooks` (or `locationLooks`)
+  writes its own look again, `--render=images` draws it.
+- The other looks of a library character (wounded, disguised) are drawn from the library's description - the face may differ
+  from the library picture (a warning says so). With `locationViews` a library place keeps the library's sheet, not views
+  designed for the film (a warning as well).
+
+Into the library from a film: `bun run export-asset <film-id> <id> --film [--as=<library id>]` - a character, a place, or a
+character in one of its other looks (`leo--wasted`), with its pictures and the description the clips use.
+
 ## config.json
 
 All optional:
