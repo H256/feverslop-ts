@@ -23211,3 +23211,2747 @@ exports[`rendering and joining, with ffmpeg film: the finished copy with the cli
   },
 }
 `;
+
+exports[`rendering and joining, with ffmpeg the reference sheets: a character and a place of the music video, a film character and its other look 1`] = `
+{
+  "ffmpeg": [
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,12)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_00.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,30)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_01.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,48)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_02.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,66)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_03.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,84)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_04.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,489)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_05.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_00.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_01.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_02.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_03.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_04.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/characters/ann/frames/frame_05.png",
+      "-filter_complex",
+      "[0:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p0];[1:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p1];[2:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p2];[3:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p3];[4:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p4];[5:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p5];[p0][p1][p2][p3][p4][p5]xstack=inputs=6:layout=0_0|288_0|0_512|288_512|0_1024|288_1024:fill=black[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/characters/ann.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,12)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_00.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,30)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_01.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,48)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_02.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,66)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_03.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,836)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_04.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_00.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_01.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_02.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_03.png",
+      "-i",
+      "<tmp>/sheets-music/assets/sequence/locations/hall/frames/frame_04.png",
+      "-filter_complex",
+      "[0:v]scale=512:288:force_original_aspect_ratio=decrease,pad=512:288:(ow-iw)/2:(oh-ih)/2:color=black[p0];[1:v]scale=512:288:force_original_aspect_ratio=decrease,pad=512:288:(ow-iw)/2:(oh-ih)/2:color=black[p1];[2:v]scale=512:288:force_original_aspect_ratio=decrease,pad=512:288:(ow-iw)/2:(oh-ih)/2:color=black[p2];[3:v]scale=512:288:force_original_aspect_ratio=decrease,pad=512:288:(ow-iw)/2:(oh-ih)/2:color=black[p3];[4:v]scale=512:288:force_original_aspect_ratio=decrease,pad=512:288:(ow-iw)/2:(oh-ih)/2:color=black[p4];[p0][p1][p2][p3][p4]xstack=inputs=5:layout=0_0|512_0|1024_0|0_288|512_288:fill=black[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-music/assets/locations/hall.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,12)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_00.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,30)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_01.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,48)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_02.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,66)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_03.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,84)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_04.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,489)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_05.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_00.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_01.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_02.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_03.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_04.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian/frames/frame_05.png",
+      "-filter_complex",
+      "[0:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p0];[1:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p1];[2:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p2];[3:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p3];[4:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p4];[5:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p5];[p0][p1][p2][p3][p4][p5]xstack=inputs=6:layout=0_0|288_0|0_512|288_512|0_1024|288_1024:fill=black[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/characters/vyvian.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,12)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_00.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,30)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_01.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,48)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_02.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,66)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_03.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,84)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_04.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "-vf",
+      "select=eq(n\\,489)",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_05.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_00.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_01.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_02.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_03.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_04.png",
+      "-i",
+      "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/frames/frame_05.png",
+      "-filter_complex",
+      "[0:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p0];[1:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p1];[2:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p2];[3:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p3];[4:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p4];[5:v]scale=288:512:force_original_aspect_ratio=decrease,pad=288:512:(ow-iw)/2:(oh-ih)/2:color=black[p5];[p0][p1][p2][p3][p4][p5]xstack=inputs=6:layout=0_0|288_0|0_512|288_512|0_1024|288_1024:fill=black[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "1",
+      "<tmp>/sheets-film/assets/characters/vyvian--soaked.partial.png",
+    ],
+  ],
+  "jobs": [
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-music/assets/sequence/characters/ann/anchor.png",
+      "uploads": [],
+      "what": {
+        "kind": "picture",
+        "label": "character ann anchor",
+        "resolution": -1,
+        "spec": {
+          "id": "ann",
+          "kind": "anchor",
+          "parts": [
+            "the picture of ann",
+            "kroma-image",
+            -1,
+          ],
+        },
+        "workflow": "kroma-image",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "kroma-v0.3.1-turbo-opd.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 1,
+            "latent_image": [
+              "8",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 8,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "10",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "ImageScaleBy",
+          },
+          "class_type": "ImageScaleBy",
+          "inputs": {
+            "image": [
+              "11",
+              0,
+            ],
+            "scale_by": 2,
+            "upscale_method": "lanczos",
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "VAEEncode",
+          },
+          "class_type": "VAEEncode",
+          "inputs": {
+            "pixels": [
+              "12",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 0.2,
+            "latent_image": [
+              "13",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 4,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "14",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": true,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "SaveImageAdvanced",
+          },
+          "class_type": "SaveImageAdvanced",
+          "inputs": {
+            "filename_prefix": "feverslop-ts/golden/assets/sequence/characters/ann/anchor",
+            "format": "png",
+            "format.bit_depth": "16-bit",
+            "format.input_color_space": "sRGB",
+            "images": [
+              "16",
+              0,
+            ],
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+            "device": "default",
+            "type": "krea2",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "qwen_image_vae.safetensors",
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPTextEncode",
+          },
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": [
+              "2",
+              0,
+            ],
+            "text": "the picture of ann",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ConditioningZeroOut",
+          },
+          "class_type": "ConditioningZeroOut",
+          "inputs": {
+            "conditioning": [
+              "4",
+              0,
+            ],
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 544,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 960,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "EmptyLatentImage",
+          },
+          "class_type": "EmptyLatentImage",
+          "inputs": {
+            "batch_size": 1,
+            "height": [
+              "7",
+              0,
+            ],
+            "width": [
+              "6",
+              0,
+            ],
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "SeedNode",
+          },
+          "class_type": "SeedNode",
+          "inputs": {
+            "seed": 42,
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-music/assets/sequence/characters/ann/sequence.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/sheets-music/assets/sequence/characters/ann/anchor.png",
+          "to": "feverslop-ts/golden/assets/sequence/characters/ann/anchor.png",
+        },
+      ],
+      "what": {
+        "kind": "picture",
+        "label": "character ann sequence",
+        "spec": {
+          "id": "ann",
+          "kind": "sequence",
+          "parts": [
+            "dbbf10233d905fe5",
+            "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ann, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+            "h3-sequence-to-sheet",
+          ],
+        },
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "9",
+              0,
+            ],
+            "model": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "res_multistep",
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "3",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "11",
+              0,
+            ],
+            "latent_image": [
+              "9",
+              1,
+            ],
+            "noise": [
+              "12",
+              0,
+            ],
+            "sampler": [
+              "13",
+              0,
+            ],
+            "sigmas": [
+              "14",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "16",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/golden/assets/sequence/characters/ann/sequence",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "17",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+            "model": [
+              "2",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 704,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 1248,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 124,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/sequence/characters/ann/anchor.png",
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "MiniMaxH3ImageToVideo",
+          },
+          "class_type": "MiniMaxH3ImageToVideo",
+          "inputs": {
+            "clip": [
+              "4",
+              0,
+            ],
+            "first_frame": [
+              "8",
+              0,
+            ],
+            "height": [
+              "6",
+              0,
+            ],
+            "length": [
+              "7",
+              0,
+            ],
+            "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ann, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "5",
+              0,
+            ],
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-music/assets/sequence/locations/hall/anchor.png",
+      "uploads": [],
+      "what": {
+        "kind": "picture",
+        "label": "location hall anchor",
+        "resolution": -1,
+        "spec": {
+          "id": "hall",
+          "kind": "anchor",
+          "parts": [
+            "the picture of hall",
+            "kroma-image",
+            -1,
+          ],
+        },
+        "workflow": "kroma-image",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "kroma-v0.3.1-turbo-opd.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 1,
+            "latent_image": [
+              "8",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 8,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "10",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "ImageScaleBy",
+          },
+          "class_type": "ImageScaleBy",
+          "inputs": {
+            "image": [
+              "11",
+              0,
+            ],
+            "scale_by": 2,
+            "upscale_method": "lanczos",
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "VAEEncode",
+          },
+          "class_type": "VAEEncode",
+          "inputs": {
+            "pixels": [
+              "12",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 0.2,
+            "latent_image": [
+              "13",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 4,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "14",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": true,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "SaveImageAdvanced",
+          },
+          "class_type": "SaveImageAdvanced",
+          "inputs": {
+            "filename_prefix": "feverslop-ts/golden/assets/sequence/locations/hall/anchor",
+            "format": "png",
+            "format.bit_depth": "16-bit",
+            "format.input_color_space": "sRGB",
+            "images": [
+              "16",
+              0,
+            ],
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+            "device": "default",
+            "type": "krea2",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "qwen_image_vae.safetensors",
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPTextEncode",
+          },
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": [
+              "2",
+              0,
+            ],
+            "text": "the picture of hall",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ConditioningZeroOut",
+          },
+          "class_type": "ConditioningZeroOut",
+          "inputs": {
+            "conditioning": [
+              "4",
+              0,
+            ],
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 960,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 544,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "EmptyLatentImage",
+          },
+          "class_type": "EmptyLatentImage",
+          "inputs": {
+            "batch_size": 1,
+            "height": [
+              "7",
+              0,
+            ],
+            "width": [
+              "6",
+              0,
+            ],
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "SeedNode",
+          },
+          "class_type": "SeedNode",
+          "inputs": {
+            "seed": 42,
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-music/assets/sequence/locations/hall/sequence.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/sheets-music/assets/sequence/locations/hall/anchor.png",
+          "to": "feverslop-ts/golden/assets/sequence/locations/hall/anchor.png",
+        },
+      ],
+      "what": {
+        "kind": "picture",
+        "label": "location hall sequence",
+        "spec": {
+          "id": "hall",
+          "kind": "sequence",
+          "parts": [
+            "3c9504366f49e041",
+            "Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: hall, as the clips describe it. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At 00:00.750, the shot cuts to a new locked-off camera position: the stage from the hall. [Shot 3] At 00:01.500, the shot cuts to a new locked-off camera position: the door. [Shot 4] At 00:02.250, the shot cuts to a new locked-off camera position: the bar. [Shot 5] At 00:03.000, the shot cuts to a new locked-off camera position: the hall from above. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. No people, text, watermark or unrelated structures.",
+            "h3-sequence-to-sheet",
+          ],
+        },
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "9",
+              0,
+            ],
+            "model": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "res_multistep",
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "3",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "11",
+              0,
+            ],
+            "latent_image": [
+              "9",
+              1,
+            ],
+            "noise": [
+              "12",
+              0,
+            ],
+            "sampler": [
+              "13",
+              0,
+            ],
+            "sigmas": [
+              "14",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "16",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/golden/assets/sequence/locations/hall/sequence",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "17",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+            "model": [
+              "2",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 1248,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 704,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 124,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/sequence/locations/hall/anchor.png",
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "MiniMaxH3ImageToVideo",
+          },
+          "class_type": "MiniMaxH3ImageToVideo",
+          "inputs": {
+            "clip": [
+              "4",
+              0,
+            ],
+            "first_frame": [
+              "8",
+              0,
+            ],
+            "height": [
+              "6",
+              0,
+            ],
+            "length": [
+              "7",
+              0,
+            ],
+            "prompt": "Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: hall, as the clips describe it. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At 00:00.750, the shot cuts to a new locked-off camera position: the stage from the hall. [Shot 3] At 00:01.500, the shot cuts to a new locked-off camera position: the door. [Shot 4] At 00:02.250, the shot cuts to a new locked-off camera position: the bar. [Shot 5] At 00:03.000, the shot cuts to a new locked-off camera position: the hall from above. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. No people, text, watermark or unrelated structures.",
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "5",
+              0,
+            ],
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-film/assets/sequence/characters/vyvian/anchor.png",
+      "uploads": [],
+      "what": {
+        "kind": "picture",
+        "label": "character vyvian anchor",
+        "resolution": -1,
+        "spec": {
+          "id": "vyvian",
+          "kind": "anchor",
+          "parts": [
+            "the picture of vyvian",
+            "kroma-image",
+            -1,
+          ],
+        },
+        "workflow": "kroma-image",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "kroma-v0.3.1-turbo-opd.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 1,
+            "latent_image": [
+              "8",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 8,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "10",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "ImageScaleBy",
+          },
+          "class_type": "ImageScaleBy",
+          "inputs": {
+            "image": [
+              "11",
+              0,
+            ],
+            "scale_by": 2,
+            "upscale_method": "lanczos",
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "VAEEncode",
+          },
+          "class_type": "VAEEncode",
+          "inputs": {
+            "pixels": [
+              "12",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 0.2,
+            "latent_image": [
+              "13",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 4,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "14",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": true,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "SaveImageAdvanced",
+          },
+          "class_type": "SaveImageAdvanced",
+          "inputs": {
+            "filename_prefix": "feverslop-ts/film-golden/assets/sequence/characters/vyvian/anchor",
+            "format": "png",
+            "format.bit_depth": "16-bit",
+            "format.input_color_space": "sRGB",
+            "images": [
+              "16",
+              0,
+            ],
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+            "device": "default",
+            "type": "krea2",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "qwen_image_vae.safetensors",
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPTextEncode",
+          },
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": [
+              "2",
+              0,
+            ],
+            "text": "the picture of vyvian",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ConditioningZeroOut",
+          },
+          "class_type": "ConditioningZeroOut",
+          "inputs": {
+            "conditioning": [
+              "4",
+              0,
+            ],
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 544,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 960,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "EmptyLatentImage",
+          },
+          "class_type": "EmptyLatentImage",
+          "inputs": {
+            "batch_size": 1,
+            "height": [
+              "7",
+              0,
+            ],
+            "width": [
+              "6",
+              0,
+            ],
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "SeedNode",
+          },
+          "class_type": "SeedNode",
+          "inputs": {
+            "seed": 42,
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-film/assets/sequence/characters/vyvian/sequence.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/sheets-film/assets/sequence/characters/vyvian/anchor.png",
+          "to": "feverslop-ts/film-golden/assets/sequence/characters/vyvian/anchor.png",
+        },
+      ],
+      "what": {
+        "kind": "picture",
+        "label": "character vyvian sequence",
+        "spec": {
+          "id": "vyvian",
+          "kind": "sequence",
+          "parts": [
+            "a59942b88cfd57ab",
+            "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+            "h3-sequence-to-sheet",
+          ],
+        },
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "9",
+              0,
+            ],
+            "model": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "res_multistep",
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "3",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "11",
+              0,
+            ],
+            "latent_image": [
+              "9",
+              1,
+            ],
+            "noise": [
+              "12",
+              0,
+            ],
+            "sampler": [
+              "13",
+              0,
+            ],
+            "sigmas": [
+              "14",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "16",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/film-golden/assets/sequence/characters/vyvian/sequence",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "17",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+            "model": [
+              "2",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 704,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 1248,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 124,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/film-golden/assets/sequence/characters/vyvian/anchor.png",
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "MiniMaxH3ImageToVideo",
+          },
+          "class_type": "MiniMaxH3ImageToVideo",
+          "inputs": {
+            "clip": [
+              "4",
+              0,
+            ],
+            "first_frame": [
+              "8",
+              0,
+            ],
+            "height": [
+              "6",
+              0,
+            ],
+            "length": [
+              "7",
+              0,
+            ],
+            "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "5",
+              0,
+            ],
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/anchor.png",
+      "uploads": [],
+      "what": {
+        "kind": "picture",
+        "label": "character vyvian--soaked anchor",
+        "resolution": -1,
+        "spec": {
+          "id": "vyvian--soaked",
+          "kind": "anchor",
+          "parts": [
+            "the picture of vyvian--soaked",
+            "kroma-image",
+            -1,
+          ],
+        },
+        "workflow": "kroma-image",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "kroma-v0.3.1-turbo-opd.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 1,
+            "latent_image": [
+              "8",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 8,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "10",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "ImageScaleBy",
+          },
+          "class_type": "ImageScaleBy",
+          "inputs": {
+            "image": [
+              "11",
+              0,
+            ],
+            "scale_by": 2,
+            "upscale_method": "lanczos",
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "VAEEncode",
+          },
+          "class_type": "VAEEncode",
+          "inputs": {
+            "pixels": [
+              "12",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "KSampler",
+          },
+          "class_type": "KSampler",
+          "inputs": {
+            "cfg": 1,
+            "denoise": 0.2,
+            "latent_image": [
+              "13",
+              0,
+            ],
+            "model": [
+              "1",
+              0,
+            ],
+            "negative": [
+              "5",
+              0,
+            ],
+            "positive": [
+              "4",
+              0,
+            ],
+            "sampler_name": "euler",
+            "scheduler": "simple",
+            "seed": [
+              "9",
+              0,
+            ],
+            "steps": 4,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "14",
+              0,
+            ],
+            "vae": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": true,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "SaveImageAdvanced",
+          },
+          "class_type": "SaveImageAdvanced",
+          "inputs": {
+            "filename_prefix": "feverslop-ts/film-golden/assets/sequence/characters/vyvian--soaked/anchor",
+            "format": "png",
+            "format.bit_depth": "16-bit",
+            "format.input_color_space": "sRGB",
+            "images": [
+              "16",
+              0,
+            ],
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+            "device": "default",
+            "type": "krea2",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "qwen_image_vae.safetensors",
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPTextEncode",
+          },
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": [
+              "2",
+              0,
+            ],
+            "text": "the picture of vyvian--soaked",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ConditioningZeroOut",
+          },
+          "class_type": "ConditioningZeroOut",
+          "inputs": {
+            "conditioning": [
+              "4",
+              0,
+            ],
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 544,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 960,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "EmptyLatentImage",
+          },
+          "class_type": "EmptyLatentImage",
+          "inputs": {
+            "batch_size": 1,
+            "height": [
+              "7",
+              0,
+            ],
+            "width": [
+              "6",
+              0,
+            ],
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "SeedNode",
+          },
+          "class_type": "SeedNode",
+          "inputs": {
+            "seed": 42,
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "target": "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/sequence.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/sheets-film/assets/sequence/characters/vyvian--soaked/anchor.png",
+          "to": "feverslop-ts/film-golden/assets/sequence/characters/vyvian--soaked/anchor.png",
+        },
+      ],
+      "what": {
+        "kind": "picture",
+        "label": "character vyvian--soaked sequence",
+        "spec": {
+          "id": "vyvian--soaked",
+          "kind": "sequence",
+          "parts": [
+            "c9b53eb528a5913d",
+            "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian--soaked, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+            "h3-sequence-to-sheet",
+          ],
+        },
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "3",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "9",
+              0,
+            ],
+            "model": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "res_multistep",
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "3",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "11",
+              0,
+            ],
+            "latent_image": [
+              "9",
+              1,
+            ],
+            "noise": [
+              "12",
+              0,
+            ],
+            "sampler": [
+              "13",
+              0,
+            ],
+            "sigmas": [
+              "14",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "15",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "16",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/film-golden/assets/sequence/characters/vyvian--soaked/sequence",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "17",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+            "model": [
+              "2",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 704,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 1248,
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 124,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/film-golden/assets/sequence/characters/vyvian--soaked/anchor.png",
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "MiniMaxH3ImageToVideo",
+          },
+          "class_type": "MiniMaxH3ImageToVideo",
+          "inputs": {
+            "clip": [
+              "4",
+              0,
+            ],
+            "first_frame": [
+              "8",
+              0,
+            ],
+            "height": [
+              "6",
+              0,
+            ],
+            "length": [
+              "7",
+              0,
+            ],
+            "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian--soaked, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "5",
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ],
+  "sidecars": {
+    "film": {
+      "assets/characters/vyvian--soaked.png": {
+        "beatTimes": [
+          0,
+          0.75,
+          1.5,
+          2.25,
+          3,
+          3.75,
+        ],
+        "fingerprint": "28596acf2333ecd9",
+        "frames": 124,
+        "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian--soaked, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "assets/characters/vyvian.png": {
+        "beatTimes": [
+          0,
+          0.75,
+          1.5,
+          2.25,
+          3,
+          3.75,
+        ],
+        "fingerprint": "a1265239d604ad",
+        "frames": 124,
+        "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "assets/sequence/characters/vyvian--soaked/anchor.png": {
+        "fingerprint": "c9b53eb528a5913d",
+        "prompt": "the picture of vyvian--soaked",
+        "resolution": -1,
+        "seed": 42,
+        "workflow": "kroma-image",
+      },
+      "assets/sequence/characters/vyvian--soaked/sequence.mp4": {
+        "beatTimes": [
+          0,
+          0.75,
+          1.5,
+          2.25,
+          3,
+          3.75,
+        ],
+        "frames": 124,
+        "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames vyvian--soaked, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+        "seed": 42,
+        "workflow": "h3-sequence-to-sheet",
+      },
+    },
+    "music": {
+      "assets/characters/ann.png": {
+        "beatTimes": [
+          0,
+          0.75,
+          1.5,
+          2.25,
+          3,
+          3.75,
+        ],
+        "fingerprint": "faebdfd5ba8f6b92",
+        "frames": 124,
+        "prompt": "Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ann, as the clips describe it, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At 00:00.750, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At 00:01.500, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At 00:02.250, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At 00:03.000, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At 00:03.750, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now angry: brows lowered and drawn together, eyes narrowed, jaw clenched, lips pressed tight. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.",
+        "workflow": "h3-sequence-to-sheet",
+      },
+      "assets/locations/hall.png": {
+        "beatTimes": [
+          0,
+          0.75,
+          1.5,
+          2.25,
+          3,
+        ],
+        "fingerprint": "bb5f8d7dd38c90ae",
+        "frames": 124,
+        "prompt": "Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: hall, as the clips describe it. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At 00:00.750, the shot cuts to a new locked-off camera position: the stage from the hall. [Shot 3] At 00:01.500, the shot cuts to a new locked-off camera position: the door. [Shot 4] At 00:02.250, the shot cuts to a new locked-off camera position: the bar. [Shot 5] At 00:03.000, the shot cuts to a new locked-off camera position: the hall from above. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. No people, text, watermark or unrelated structures.",
+        "workflow": "h3-sequence-to-sheet",
+      },
+    },
+  },
+}
+`;
