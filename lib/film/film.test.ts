@@ -276,6 +276,8 @@ describe('character states', () => {
         // the views name the person of the first frame and its clothing - no description that would redraw the clothes
         expect(prompt).toContain('only this is changed: his left arm is bandaged and bloody. [Shot 2] At 00:00.750, the shot cuts to a full-body shot that frames the same person as in the first frame, in exactly the same clothing')
         expect(prompt).toContain('[Shot 7] At 00:04.500')
+        // every view says the change again
+        expect(prompt.split('In this shot too, plainly visible: his left arm is bandaged and bloody.')).toHaveLength(7)
         expect(lookSheetFrames(beatTimes, 141)).toEqual(selectFrameIndices(beatTimes, 141).slice(1))
         expect(lookSheetFrames(beatTimes, 141)).toHaveLength(6)
         // the sheet of a normal picture stays six shots
