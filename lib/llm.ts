@@ -3,28 +3,46 @@ import type {ResponseCreateParamsStreaming} from "openai/resources/responses/res
 import {currentStep, readTimings, recordTiming} from "./timings.ts";
 import {predictLlmSeconds} from "./predict.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
+import type {VisionSettings} from "./settings.ts";
 
-export type LlmSettings = { url?: string, apiKey?: string, model?: string, parallel?: number }
+export type LlmSettings = { url?: string, apiKey?: string, model?: string, parallel?: number, vision?: VisionSettings }
+
+// One server and model the calls go to: the text one, and the one a call with pictures goes to - the same, unless
+// llm.vision names another server or model (a text server without a vision projector). Connected on first use.
+type Endpoint = {
+    url?: string, apiKey?: string, model?: string,
+    // "Model" or "Vision model" in the log
+    label: string,
+    client?: OpenAI,
+    modelId?: Promise<string>,
+    // whether the server takes a JSON schema on Chat Completions (see openChat)
+    chatSchema?: boolean,
+    // checked once, on the first call with a picture
+    vision?: Promise<void>,
+}
 
 let settings: LlmSettings = {}
-let llmClient: OpenAI | undefined
-let modelId: Promise<string> | undefined
+let text: Endpoint = {label: 'Model'}
+let vision: Endpoint = text
 
 /** Sets the server for the following calls - the connection itself is made on the first call. */
 export function configureLlm(llm: LlmSettings) {
     settings = llm
-    llmClient = undefined
-    modelId = undefined
-    chatSchema = undefined
+    text = {url: llm.url, apiKey: llm.apiKey, model: llm.model, label: 'Model'}
+    const v = llm.vision
+    // only a model: the text server (and its key) with another model
+    vision = v?.url || v?.model
+        ? {url: v.url ?? llm.url, apiKey: v.url ? v.apiKey : llm.apiKey, model: v.model, label: 'Vision model'}
+        : text
 }
 
 // local servers ignore the key, but the OpenAI client needs one
 const newClient = (url: string, apiKey?: string, timeout?: number) =>
     new OpenAI({baseURL: url, apiKey: apiKey || 'none', ...(timeout ? {timeout, maxRetries: 0} : {})})
 
-function getClient() {
-    if (!settings.url) throw new Error('No LLM server configured - run: bun run setup llm (or set FEVERSLOP_LLM_URL, or pass --llm-url)')
-    return llmClient ??= newClient(settings.url, settings.apiKey)
+function getClient(endpoint: Endpoint = text) {
+    if (!endpoint.url) throw new Error('No LLM server configured - run: bun run setup llm (or set FEVERSLOP_LLM_URL, or pass --llm-url)')
+    return endpoint.client ??= newClient(endpoint.url, endpoint.apiKey)
 }
 
 /** The model ids on a server - used by the setup and to check the configured model. */
@@ -35,32 +53,77 @@ export async function listModels(url: string, apiKey?: string, timeout?: number)
 }
 
 // resolved on first use, so a fully cached project runs without the server - once, also when the first calls run at once
-function getModelId() {
-    modelId ??= resolveModelId().catch(e => {
-        modelId = undefined
+function getModelId(endpoint: Endpoint = text) {
+    endpoint.modelId ??= resolveModelId(endpoint).catch(e => {
+        endpoint.modelId = undefined
         throw e
     })
-    return modelId
+    return endpoint.modelId
 }
 
-async function resolveModelId() {
-    const client = getClient()
+async function resolveModelId(endpoint: Endpoint) {
+    const client = getClient(endpoint)
     const ids: string[] = []
     for await (const model of client.models.list()) ids.push(model.id)
     const list = ids.join(', ') || 'none'
+    const setup = endpoint === text ? 'bun run setup llm-model' : 'bun run setup vision'
     let id: string
-    if (settings.model) {
-        if (!ids.includes(settings.model)) throw new Error(`The LLM server ${settings.url} has no model "${settings.model}" (it has: ${list}) - pick one with: bun run setup llm-model`)
-        id = settings.model
+    if (endpoint.model) {
+        if (!ids.includes(endpoint.model)) throw new Error(`The LLM server ${endpoint.url} has no model "${endpoint.model}" (it has: ${list}) - pick one with: ${setup}`)
+        id = endpoint.model
     } else if (ids.length === 1) {
         id = ids[0]!
     } else if (!ids.length) {
-        throw new Error(`The LLM server ${settings.url} lists no models - load one on the server`)
+        throw new Error(`The LLM server ${endpoint.url} lists no models - load one on the server`)
     } else {
-        throw new Error(`Several models on ${settings.url} (${list}) - pick one with: bun run setup llm-model`)
+        throw new Error(`Several models on ${endpoint.url} (${list}) - pick one with: ${setup}`)
     }
-    log.step('Model', `${styles.name(id)} ${styles.muted(`on ${settings.url}${(settings.parallel ?? 1) > 1 ? `, up to ${settings.parallel} calls at once` : ''}`)}`)
+    const parallel = endpoint === text && (settings.parallel ?? 1) > 1 ? `, up to ${settings.parallel} calls at once` : ''
+    log.step(endpoint.label, `${styles.name(id)} ${styles.muted(`on ${endpoint.url}${parallel}`)}`)
     return id
+}
+
+/**
+ * Whether a model takes pictures, as far as the server tells: llama.cpp (/props: the modalities of the loaded model, in
+ * router mode of the one asked for), Ollama (/api/show: its capabilities), LM Studio (/api/v0/models: vlm or llm).
+ * undefined when the server tells nothing (vLLM, a proxy) - the call then simply tries.
+ */
+export async function takesPictures(url: string, model: string, apiKey?: string, timeoutMs = 5000): Promise<boolean | undefined> {
+    const root = url.replace(/\/v1$/, '')
+    const auth: Record<string, string> = apiKey ? {Authorization: `Bearer ${apiKey}`} : {}
+    const get = async (path: string, init: RequestInit = {}) => {
+        try {
+            const response = await fetch(`${root}${path}`, {...init, headers: {...auth, ...init.headers as Record<string, string>}, signal: AbortSignal.timeout(timeoutMs)})
+            return response.ok ? await response.json() as Record<string, unknown> : undefined
+        } catch {
+            return undefined
+        }
+    }
+    const props = await get(`/props?model=${encodeURIComponent(model)}`) as { modalities?: { vision?: unknown } } | undefined
+    if (typeof props?.modalities?.vision === 'boolean') return props.modalities.vision
+    const show = await get('/api/show', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({model})}) as { capabilities?: unknown } | undefined
+    if (Array.isArray(show?.capabilities)) return show.capabilities.includes('vision')
+    const lmStudio = await get(`/api/v0/models/${encodeURIComponent(model)}`) as { type?: unknown } | undefined
+    if (lmStudio?.type === 'vlm') return true
+    if (lmStudio?.type === 'llm') return false
+    return undefined
+}
+
+// what to do about a model that takes no pictures - another one, or the text model's own vision projector
+const visionHint = (endpoint: Endpoint) => endpoint === text
+    ? 'name a vision model for pictures: bun run setup vision (or FEVERSLOP_VISION_URL / FEVERSLOP_VISION_MODEL), or load the model with its vision projector (llama-server --mmproj)'
+    : 'pick another: bun run setup vision'
+
+/** Before the first picture goes to the endpoint: a model the server says takes none stops here, with what to do. */
+function checkVision(endpoint: Endpoint) {
+    endpoint.vision ??= (async () => {
+        const id = await getModelId(endpoint)
+        if (await takesPictures(endpoint.url!, id, endpoint.apiKey) === false) throw new Error(`${id} on ${endpoint.url} takes no pictures - ${visionHint(endpoint)}`)
+    })().catch(e => {
+        endpoint.vision = undefined
+        throw e
+    })
+    return endpoint.vision
 }
 
 /**
@@ -122,16 +185,15 @@ export function applyReasoning(prompt: ResponseCreateParamsStreaming, level: Rea
 // with reasoning), so an answer with a schema is asked there. A server that refuses it is asked the plain way for the rest
 // of the run, and the answer is read and repaired as before.
 export type JsonSchema = Record<string, unknown>
-let chatSchema: boolean | undefined
 
-export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low', schema?: JsonSchema, label?: string) {
+export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStreaming, reasoning: ReasoningStrength = 'low', schema?: JsonSchema, label?: string, endpoint: Endpoint = text) {
     let thinking = ''
     let answer = ''
     let usage: ResponseUsage | undefined
     let incomplete: string | undefined
     // a stream that ends without a terminal event was cut off by the connection or the server - what came before is not an answer
     let finished = false
-    prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId()}, reasoning)
+    prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId(endpoint)}, reasoning)
     const started = Date.now()
     const expected = predictLlmSeconds(readTimings(), prompt.model ?? '', currentStep())
 
@@ -141,7 +203,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
         return styles.muted(`waiting for model${expected ? ` (usually ~${formatDuration(expected * 1000)})` : ''}`)
     })
     try {
-        const chat = schema && chatSchema !== false && typeof prompt.input === 'string' ? await openChat(prompt, schema) : undefined
+        const chat = schema && endpoint.chatSchema !== false && typeof prompt.input === 'string' ? await openChat(endpoint, prompt, schema) : undefined
         if (chat) for await (const chunk of chat) {
             const delta = chunk.choices[0]?.delta as { content?: string | null, reasoning_content?: string | null, reasoning?: string | null } | undefined
             thinking += delta?.reasoning_content ?? delta?.reasoning ?? ''
@@ -158,7 +220,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
                 output_tokens_details: {reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens},
             }
         }
-        else for await (const event of await getClient().responses.create(prompt)) {
+        else for await (const event of await getClient(endpoint).responses.create(prompt)) {
             switch (event.type) {
                 case 'response.reasoning_text.delta':
                 case 'response.reasoning_summary_text.delta':
@@ -183,7 +245,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
             }
         }
     } catch (e) {
-        keepCall(prompt, started, usage, thinking, 'failed', e instanceof Error ? e.name : 'error')
+        keepCall(endpoint, prompt, started, usage, thinking, 'failed', e instanceof Error ? e.name : 'error')
         throw e
     } finally {
         stopSpinner()
@@ -191,7 +253,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     const took = Date.now() - started
     const outputTokens = usage?.output_tokens
     if (!finished) {
-        keepCall(prompt, started, usage, thinking, 'failed', 'no-end')
+        keepCall(endpoint, prompt, started, usage, thinking, 'failed', 'no-end')
         throw new Error('the LLM stream ended without a completed or incomplete event - the answer is not complete')
     }
     log.step('Done', (label ? `${styles.name(label)} ` : '') + styles.muted(`${countWords(thinking)} words thinking (${reasoning}), ${countWords(answer)} words answer${outputTokens ? `, ${outputTokens} of ${prompt.max_output_tokens} tokens` : ''} · ${suffix(formatDuration(took), formatRate(outputTokens, took))}`))
@@ -199,7 +261,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     const limit = prompt.max_output_tokens
     const truncated = incomplete === 'max_output_tokens' || (!!limit && outputTokens !== undefined && outputTokens >= limit)
     // a cut-off or empty answer is asked for again (ask) - the call is kept as a retry, its tokens were spent all the same
-    keepCall(prompt, started, usage, thinking, truncated ? 'retry' : answer.trim() ? undefined : 'retry', truncated ? 'truncated' : answer.trim() ? undefined : 'empty')
+    keepCall(endpoint, prompt, started, usage, thinking, truncated ? 'retry' : answer.trim() ? undefined : 'retry', truncated ? 'truncated' : answer.trim() ? undefined : 'empty')
     if (truncated) throw new TruncatedError(limit ?? 0)
     if (incomplete) log.warn(`the answer is incomplete: ${incomplete}`)
     return {thinking, answer}
@@ -209,10 +271,10 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
  * The same request on the Chat Completions API, with the schema as response_format - undefined (and the plain way for the
  * rest of the run) when the server refuses it.
  */
-async function openChat(prompt: ResponseCreateParamsStreaming, schema: JsonSchema) {
+async function openChat(endpoint: Endpoint, prompt: ResponseCreateParamsStreaming, schema: JsonSchema) {
     const extra = prompt as ResponseCreateParamsStreaming & { chat_template_kwargs?: unknown }
     try {
-        const stream = await getClient().chat.completions.create({
+        const stream = await getClient(endpoint).chat.completions.create({
             model: prompt.model!,
             messages: [
                 ...(prompt.instructions ? [{role: 'system' as const, content: prompt.instructions}] : []),
@@ -225,12 +287,12 @@ async function openChat(prompt: ResponseCreateParamsStreaming, schema: JsonSchem
             stream: true,
             stream_options: {include_usage: true},
         } as Parameters<OpenAI['chat']['completions']['create']>[0] & { stream: true })
-        chatSchema = true
+        endpoint.chatSchema = true
         return stream
     } catch (e) {
         const status = (e as { status?: number }).status
-        if (chatSchema === true || !status || status >= 500) throw e
-        chatSchema = false
+        if (endpoint.chatSchema === true || !status || status >= 500) throw e
+        endpoint.chatSchema = false
         log.warn(`the LLM server does not take a JSON schema (${status}) - asking without one for the rest of the run`)
         return undefined
     }
@@ -239,13 +301,13 @@ async function openChat(prompt: ResponseCreateParamsStreaming, schema: JsonSchem
 type ResponseUsage = { input_tokens?: number, output_tokens?: number, input_tokens_details?: { cached_tokens?: number }, output_tokens_details?: { reasoning_tokens?: number } }
 
 /** Keeps one call in the central timings: durations and the token numbers the endpoint reported - nothing is estimated, and no text. */
-function keepCall(prompt: ResponseCreateParamsStreaming, started: number, usage: ResponseUsage | undefined, thinking: string, outcome?: 'retry' | 'failed', reason?: string) {
+function keepCall(endpoint: Endpoint, prompt: ResponseCreateParamsStreaming, started: number, usage: ResponseUsage | undefined, thinking: string, outcome?: 'retry' | 'failed', reason?: string) {
     const ms = Date.now() - started
     const tokensPerSecond = usage?.output_tokens && ms > 0 ? Math.round(usage.output_tokens / (ms / 1000) * 10) / 10 : undefined
-    const endpoint = settings.url ? new URL(settings.url).host : undefined
+    const host = endpoint.url ? new URL(endpoint.url).host : undefined
     recordTiming({
         kind: 'llm', name: prompt.model ?? '', seconds: Math.round(ms / 100) / 10, ...(currentStep() ? {step: currentStep()} : {}),
-        ...(outcome ? {outcome, reason} : {}), ...(endpoint ? {endpoint} : {}),
+        ...(outcome ? {outcome, reason} : {}), ...(host ? {endpoint: host} : {}),
         ...(usage?.input_tokens !== undefined ? {promptTokens: usage.input_tokens} : {}),
         ...(usage?.output_tokens !== undefined ? {completionTokens: usage.output_tokens} : {}),
         ...(usage?.output_tokens_details?.reasoning_tokens !== undefined ? {reasoningTokens: usage.output_tokens_details.reasoning_tokens} : {}),
@@ -289,6 +351,9 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     const requestInput = images?.length
         ? [{role: 'user' as const, content: [{type: 'input_text' as const, text: input}, ...images.map(image_url => ({type: 'input_image' as const, image_url, detail: 'auto' as const}))]}]
         : input
+    // pictures go to the vision model - checked first, so a text-only model says so instead of failing somewhere
+    const endpoint = images?.length ? vision : text
+    if (images?.length) await checkVision(endpoint)
     // A cut-off answer is useless (half a JSON), an empty one even more so - the model spent everything on thinking, which
     // varies a lot from run to run, and a small quant can loop in its thinking - more room at the same effort only
     // lets it loop longer. So the second try already has the prompt rewritten (think briefly, then answer) with a low
@@ -301,11 +366,15 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     ]
     for (const [i, {limit, level, note}] of attempts.entries()) {
         try {
-            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level, schema, label)
+            const {answer} = await fetchAndDisplayResponse({max_output_tokens: limit, input: requestInput, instructions: instructions + note, stream: true}, level, schema, label, endpoint)
             if (answer.trim()) return answer.trim()
             if (i === attempts.length - 1) throw new EmptyAnswerError(attempts.length)
             log.warn(`${of}empty answer - the model only thought - asking again with ${attempts[i + 1]!.limit}${attempts[i + 1]!.note ? ' and a shorter-thinking prompt' : ''}`)
         } catch (e) {
+            // a server that could not tell beforehand refuses the picture now (llama.cpp without --mmproj: "image input is not supported")
+            if (images?.length && /image|vision|mmproj|multimodal/i.test((e as Error).message)) {
+                throw new Error(`${await getModelId(endpoint)} on ${endpoint.url} took no picture (${(e as Error).message}) - ${visionHint(endpoint)}`)
+            }
             // only the first cut-off gets a second chance - after that the answer is too long for the model, not just unlucky
             if (!(e instanceof TruncatedError) || i !== 0) throw e
             log.warn(`${of}${e.message} - asking again with ${attempts[1]!.limit} and a shorter-thinking prompt`)
