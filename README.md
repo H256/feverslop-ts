@@ -35,8 +35,8 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
 | `bun run init`          | creates a new project - see [Creating a project](#creating-a-project)        |
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
-| `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command |
-| `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt |
+| `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command - `--film` for a film |
+| `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt - `--film` for a film |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |

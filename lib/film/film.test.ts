@@ -3,6 +3,9 @@ import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
 import {characterOf, locationOf, missingDialogue, omittedSourceLines, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
+import {FilmStore} from "./store.ts";
+import {filmStepUsed} from "./inputs.ts";
+import {filmDefaults} from "./config.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay} from "./types.ts";
 
 const raw = {
@@ -685,5 +688,36 @@ describe('source fidelity and ambiguous names', () => {
         const named = toCast(raw, toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'Anna', text: 'Hi.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'}))
         expect(characterOf(named, 'A')).toBeUndefined()
         expect(characterOf(named, 'Anna')?.name).toBe('Anna')
+    })
+})
+
+describe('the film store and its inputs - for --dry-run, --review and bun run status --film', () => {
+    const store = () => {
+        const film = new FilmStore('test-film')
+        film.data = {brief: {} as never, screenplay: {} as never, cast: {characters: [], locations: []}, summary: 's', lookBrief: 'l', characterLooks: {}, coverage: [], inputs: {'style.txt': Bun.hash('noir').toString(16)}}
+        return film
+    }
+    test('changedInputs: what changed since the last run, read only', () => {
+        const film = store()
+        expect(film.changedInputs({'style.txt': {value: 'noir', steps: ['lookBrief']}, 'idea.txt': {value: 'new', steps: ['brief']}})).toEqual([])
+        expect(film.changedInputs({'style.txt': {value: 'pastel', steps: ['lookBrief']}})).toEqual([{name: 'style.txt', steps: ['lookBrief']}])
+        expect(film.data.lookBrief).toBe('l')
+    })
+    test('redoneBy: the steps with a result that invalidating these would remove, in pipeline order, nothing removed', () => {
+        const film = store()
+        expect(film.redoneBy(['lookBrief'])).toEqual(['lookBrief', 'characterLooks', 'coverage'])
+        expect(film.redoneBy(['screenplay'])).toEqual(['screenplay', 'cast', 'summary', 'lookBrief', 'characterLooks', 'coverage'])
+        expect(film.data.lookBrief).toBe('l')
+    })
+    test('which steps a film uses', () => {
+        const config = {...filmDefaults, targetDurationSet: false}
+        expect(filmStepUsed('outline', 'screenplay', {}, config)).toBe(false)
+        expect(filmStepUsed('outline', 'idea', {}, config)).toBe(true)
+        expect(filmStepUsed('locationViews', 'idea', {}, config)).toBe(false)
+        expect(filmStepUsed('locationViews', 'idea', {}, {...config, locationViews: true})).toBe(true)
+        expect(filmStepUsed('scriptFixes', 'idea', {}, config)).toBe(false)
+        expect(filmStepUsed('scriptFixes', 'idea', {scriptFixes: []}, config)).toBe(true)
+        expect(filmStepUsed('subtitles', 'idea', {}, config)).toBe(false)
+        expect(filmStepUsed('subtitles', 'idea', {}, {...config, subtitles: 'en'})).toBe(true)
     })
 })
