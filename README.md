@@ -68,6 +68,7 @@ the arrow keys. Each part also works on its own:
 | `bun run setup`           | everything below, in order                                                                 |
 | `bun run setup llm`       | the LLM server: URL → API key (optional) → connects, lists the models → pick one            |
 | `bun run setup llm-model` | only the model: lists the models of the configured server → pick one                       |
+| `bun run setup vision`    | the model that describes pictures: the text model, another model on the text server, or one on another server - says whether it takes pictures |
 | `bun run setup comfy`     | the ComfyUI servers with their status (GPU, free VRAM) - add, remove, test again           |
 | `bun run setup show`      | the effective settings and where each value comes from, API keys masked                    |
 
@@ -85,6 +86,12 @@ The file, if you'd rather write it yourself:
   looks of the places, the views of the shots); everything else stays in order.
 - `llm.apiKey` is optional - local servers usually need none. Without `llm.model`, the server's only model is used;
   a server with several models needs one picked.
+- `llm.vision` (optional): the model that describes pictures (`replace-character`, `import-asset`, `create-asset`) -
+  for a text server that runs without a vision projector. `{"url": …, "apiKey": …, "model": …}`: without `url` it is
+  the text server (and its key) with another model, without `model` the server's only model. Without `llm.vision` the
+  text model describes the pictures. Before the first picture the server is asked whether the model takes pictures
+  (llama.cpp `/props`, Ollama, LM Studio) - one that does not stops right there and says what to set; a server that
+  cannot tell is simply tried.
 - `comfy` entries are a URL, or `{"url", "name", "token"}` / `{"url", "name", "username", "password"}` for a server
   behind a proxy with authentication. `name` (default: the host) shows up in the log. Without `comfy`,
   `http://localhost:8188` is used. With several servers, pictures and clips are rendered on all of them in parallel -
@@ -99,6 +106,9 @@ Everything can be overridden, lowest first: the settings file → the project's 
 | `FEVERSLOP_LLM_API_KEY`                | `--llm-key=`      | its API key                                       |
 | `FEVERSLOP_LLM_MODEL`                  | `--llm-model=`    | a model id of the server                          |
 | `FEVERSLOP_LLM_PARALLEL`               | `--llm-parallel=` | LLM calls at once, 1 or more                      |
+| `FEVERSLOP_VISION_URL`                 | -                 | the server that describes pictures, with `/v1`    |
+| `FEVERSLOP_VISION_API_KEY`             | -                 | its API key                                       |
+| `FEVERSLOP_VISION_MODEL`               | -                 | the model that describes pictures                 |
 | `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
@@ -899,9 +909,10 @@ the next run uses it:
 | `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
 | `casting.json` | - | which roles of a project are played by library assets, on every run |
 
-- **Describing a picture needs a vision-capable model** on the LLM server - `replace-character`, `import-asset` (when
-  asked to write the description from the picture) and `create-asset` send the picture to it. Without one, type the
-  description (`--description=…` for `create-asset`), or take the one that came with the asset.
+- **Describing a picture needs a vision-capable model** - `replace-character`, `import-asset` (when asked to write the
+  description from the picture) and `create-asset` send the picture to it: the text model, or the one in `llm.vision`
+  (`bun run setup vision`, see [Setup](#setup)) when the text server runs without a vision projector. Without one, type
+  the description (`--description=…` for `create-asset`), or take the one that came with the asset.
 - **A place from your own picture:** `replace-character` is for characters only. Make the place a library asset with
   `bun run create-asset location <id> --anchor=<picture>`, then cast it in `casting.json`
   (`"<place id>": "library:<id>"`) or take it in with `import-asset … --from=library:<id>`.
