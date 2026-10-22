@@ -11,7 +11,7 @@ import type {Resolution} from "../comfy/helpers.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
-import {STYLES} from "../lib/styles.ts";
+import {askStyle} from "../lib/wizard.ts";
 cli('init')
 
 
@@ -417,57 +417,6 @@ async function askText(label: string, options: { required?: boolean } = {}): Pro
         return (await Bun.file(path).text()).trim()
     }
     return multiline(label)
-}
-
-/**
- * The film style for input/style.txt: typed, read from a file, taken from the built-in list - or left to the first run.
- * The list goes kind of style -> style, and "← back" on each level returns to the one above.
- */
-async function askStyle(): Promise<string | undefined> {
-    const BACK = '\0back'
-    const back = {value: BACK, label: '← back'}
-    while (true) {
-        const mode = answer(await p.select({
-            message: 'Visual style',
-            options: [
-                {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
-                {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
-                {value: 'type', label: 'Type it now'},
-                {value: 'file', label: 'Read from a file'},
-            ],
-        }))
-        if (mode === 'skip') return undefined
-        if (mode === 'file') {
-            const path = answer(await p.text({message: 'File path', validate: v => v && existsSync(v) ? undefined : 'file not found'}))
-            return (await Bun.file(path).text()).trim()
-        }
-        if (mode === 'type') return multiline('Visual style')
-
-        const groups = [...new Set(STYLES.map(s => s.group))]
-        while (true) {
-            const group = answer(await p.select({
-                message: 'Kind of style',
-                options: [...groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`})), back],
-            }))
-            if (group === BACK) break
-            // a picked style is shown in full before it is taken - the hint in the list is only its first words
-            let last: string | undefined
-            while (true) {
-                const picked = answer(await p.select({
-                    message: group,
-                    maxItems: 12,
-                    initialValue: last,
-                    options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
-                }))
-                if (picked === BACK) break
-                const style = STYLES.find(s => s.id === picked)!
-                p.note(style.text, style.name)
-                const take = answer(await p.confirm({message: `Take ${style.name}?`, active: 'Take it', inactive: 'Another one', initialValue: true}))
-                if (take) return style.text
-                last = picked
-            }
-        }
-    }
 }
 
 // what the workflows in comfy/workflows/ are for - one that isn't listed here is still offered, without a hint
