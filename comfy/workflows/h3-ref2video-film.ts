@@ -3,7 +3,7 @@
 // makes its own ambience. As in ComfyUI's own template (video_minimax_h3_r2v) MiniMaxH3ReferenceToVideo already returns an
 // empty video+audio latent: it is sampled as it is, and the result is decoded twice - the picture with the video VAE, the
 // sound with the audio VAE.
-import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, type Aspect, dyn, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export type FilmVideoWorkflowOptions = {
     prompt: string,
@@ -13,7 +13,8 @@ export type FilmVideoWorkflowOptions = {
     startFrame?: string,
     frames: number,             // frames to render, already a length the model accepts (see renderFrames)
     seed: number,
-    resolution: Resolution,     // always rendered landscape
+    resolution: Resolution,
+    aspect?: Aspect,            // config videoAspect - "16:9" (landscape) when not given
     filenamePrefix: string,
 }
 
@@ -37,7 +38,7 @@ export default function h3Ref2VideoFilm(opts: FilmVideoWorkflowOptions): Workflo
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),

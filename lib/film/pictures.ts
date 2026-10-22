@@ -51,7 +51,7 @@ export function pictureSeed(projectDir: string, characterId: string): number | u
 
 // What lib/render.ts's Renderer reads - the film's own settings on top of the shared defaults (sequence sheets' workflow)
 export function filmRenderConfig(config: FilmConfig): RenderConfig {
-    return {...defaults, imageWorkflow: config.imageWorkflow, videoWorkflow: config.videoWorkflow, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, sequenceSheets: config.sequenceSheets}
+    return {...defaults, imageWorkflow: config.imageWorkflow, videoWorkflow: config.videoWorkflow, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, videoAspect: config.videoAspect, sequenceSheets: config.sequenceSheets}
 }
 
 export {renderAll} from "../batch.ts"

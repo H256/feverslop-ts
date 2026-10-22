@@ -132,6 +132,29 @@ describe('the two-pass workflow', () => {
     })
 })
 
+describe('the two-pass workflow of the film', () => {
+    test('the same two passes, no sound goes in, the sound is decoded from the latent after pass 2', async () => {
+        const module = await import('../comfy/workflows/h3-ref2video-film-2pass.ts')
+        const {workflow, output, size} = module.default({prompt: 'p', pictures: ['a.png'], startFrame: 'f.png', frames: 22, seed: 1, resolution: -1, aspect: '9:16', filenamePrefix: 'x'})
+        expect(size).toEqual({width: 1088, height: 1920})
+        const nodes = workflow.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>
+        const all = Object.values(nodes)
+        expect(all.filter(n => n.class_type === 'LoadAudio' || n.class_type === 'TrimAudioDuration')).toHaveLength(0)
+        expect(all.filter(n => n.class_type === 'BasicScheduler').map(n => n.inputs)).toMatchObject([{scheduler: 'simple', steps: 20, denoise: 1}, {scheduler: 'beta', steps: 4, denoise: 0.2}])
+        // the start frame on each pass's latent, nothing guided by sound
+        expect(all.filter(n => n.class_type === 'MiniMaxH3AddGuide').map(n => 'image' in n.inputs)).toEqual([true, true])
+        const decodeAudio = Object.entries(nodes).find(([, n]) => n.class_type === 'VAEDecodeAudio')!
+        const decodeVideo = all.find(n => n.class_type === 'VAEDecode')!
+        expect(decodeAudio[1].inputs.samples).toEqual(decodeVideo.inputs.samples)
+        expect((all.find(n => n.class_type === 'VHS_VideoCombine')!.inputs.audio as unknown[])[0]).toBe(decodeAudio[0])
+    })
+    test('audio tracks without the song are refused', async () => {
+        const {h3TwoPass} = await import('../comfy/h3-two-pass.ts')
+        const {WorkflowBuilder} = await import('../comfy/helpers.ts')
+        expect(() => h3TwoPass(new WorkflowBuilder(), {prompt: 'p', pictures: [], audios: ['d.wav'], frames: 22, seed: 1, resolution: -1, filenamePrefix: 'x'}, 'test')).toThrow('audio tracks without the song')
+    })
+})
+
 describe('context frames in the clip workflows', () => {
     test('a start clip is loaded as a frame batch and locked to frame 0, in both passes of the two-pass workflow', async () => {
         for (const [name, guides] of [['h3-ref2video', 1], ['h3-ref2video-2pass', 2]] as const) {
