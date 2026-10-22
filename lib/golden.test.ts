@@ -287,6 +287,9 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
     test('music video: context frames, two-pass, portrait', async () => {
         expect(await musicRun('context', {contextFrames: 22, videoWorkflow: 'h3-ref2video-2pass', videoAspect: '9:16', videoResolution: '192x320'})).toMatchSnapshot()
     }, 60_000)
+    test('music video: the backdrop check after every clip, with context frames', async () => {
+        expect(await musicRun('leak', {contextFrames: 22, leakRetries: 2})).toMatchSnapshot()
+    }, 60_000)
 
     test('film: a clip and one that goes on from its last frame', async () => {
         const projectDir = folder('film', {'assets/locations/hall.png': 'hall', 'assets/characters/ann.png': 'ann'})
