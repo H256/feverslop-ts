@@ -11,8 +11,8 @@ import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
-import {multiplierFor} from "./lib/interpolate.ts";
-import {finishFilter, finishOf, finishVideo} from "./lib/finish.ts";
+import {finishOf} from "./lib/finish.ts";
+import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
@@ -1219,25 +1219,16 @@ if (render.has('final')) {
     const finishing = finishOf(config.finish)
     // where each clip is in the final video - the same seconds at every frame rate
     const spans = clips.map(c => ({id: c.id, start: secondsAt(c.frameStart), end: secondsAt(c.frameStart + c.frames)}))
-    const finish = async (video: string) => {
-        if (!finishing) return
-        const done = await finishVideo(video, finishing, spans)
-        log.step('Finished', `${done.file} ${styles.muted(finishing.colorMatch > 0 ? `${finishFilter(finishing)}, ${spans.length} clips matched ${finishing.colorMatch} of the way to ${finishing.colorReference || 'their median'}` : done.filter)}`)
-    }
-    await finish(target)
+    if (finishing) await finishCopy(target, finishing, spans)
 
-    // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot - a job per
-    // clip, kept in videos/interpolated/ and made again only when the clip, its cuts or the model change
+    // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot (lib/final-pass.ts)
     if (config.finalFps !== FPS) {
-        const multiplier = multiplierFor(config.finalFps)!
-        log.step('Frame rate', `${config.finalFps} fps - ${config.interpolationModel}, x${multiplier} per shot`)
         using smoother = new Renderer(project.id, project.dir, config, settings.comfy)
-        const files = clips.map(c => join(project.dir, 'videos', 'interpolated', `${c.id}.mp4`))
-        await renderAll(clips.map((clip, i) => ({clip, file: files[i]!})), ({clip, file}) => smoother.renderInterpolation(clip, config.interpolationModel, multiplier, file))
+        const {files, multiplier} = await interpolateClips(smoother, clips, config.interpolationModel, config.finalFps)
         const smooth = join(project.dir, `${project.id}-${config.finalFps}fps.mp4`)
         const more = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target: smooth, interpolated: {files, multiplier, fps: config.finalFps}})
         log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
-        await finish(smooth)
+        if (finishing) await finishCopy(smooth, finishing, spans)
     }
 }
 
