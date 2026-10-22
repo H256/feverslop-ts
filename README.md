@@ -839,6 +839,7 @@ Finished characters and places that every project can take - the same band in ev
 bun run export-asset tides-of-eternal-flame-261017 kael                     # into the library as "kael"
 bun run export-asset tides-of-eternal-flame-261017 underwater-basilica-and-temple-stage --as=temple-stage
 bun run import-asset new-song guitarist --from=library:kael                # from the library into a project
+bun run export-asset witch-test leo --film                                  # a film's character (or its look "leo--wasted", or a place) into the library
 ```
 
 - `export-asset` copies the picture and the whole sheet with the texts that go with them: the description, for a place
@@ -905,9 +906,9 @@ the next run uses it:
 |---------|-------|------|
 | `bun run replace-character <project-id>` | a terminal, a planned project | your own picture (and description) for one character or group member of the project |
 | `bun run import-asset <project-id> [<id>] [--from=<project>[:<id>] \| --from=library:<id>]` | a terminal, a planned project | a finished character or place from another project or the library, copied and pinned |
-| `bun run export-asset <project-id> <id> [--as=<library id>]` | rendered pictures and a description | the character or place into the library |
+| `bun run export-asset <project-id> <id> [--as=<library id>] [--film]` | rendered pictures and a description | the character or place into the library - `--film`: of a film in `films/` |
 | `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
-| `casting.json` | - | which roles of a project are played by library assets, on every run |
+| `casting.json` | - | which roles of a project or a film are played by library assets, on every run |
 
 - **Describing a picture needs a vision-capable model** - `replace-character`, `import-asset` (when asked to write the
   description from the picture) and `create-asset` send the picture to it: the text model, or the one in `llm.vision`

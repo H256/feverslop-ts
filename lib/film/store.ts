@@ -4,7 +4,7 @@ import {log, styles} from "../log.ts";
 import {dropPartials, keepEach} from "../partials.ts";
 import type {FilmProject} from "./types.ts";
 
-export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials'>
+export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials' | 'castingCopies'>
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<FilmStepName, FilmStepName[]> = {
