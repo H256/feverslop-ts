@@ -3,19 +3,20 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import * as clack from "@clack/prompts";
 import {log, styles} from "./log.ts";
-import type {Project, ProjectStore, StepName} from "./project.ts";
 
-// --review: a step everything later is built on (the story, the cast, the look, the beats) is shown when it was just
-// generated, and the run waits - accept it, edit it in $EDITOR, generate it again, or stop. A weak story is cheaper to
-// catch here than after the looks and dozens of shot planner calls built on it. Cached steps are not asked about.
+// --review: a step everything later is built on (the story, the cast, the look, the beats - a film's screenplay, cast and
+// look) is shown when it was just generated, and the run waits - accept it, edit it in $EDITOR, generate it again, or stop.
+// A weak story is cheaper to catch here than after the looks and dozens of shot planner calls built on it. Cached steps
+// are not asked about.
 
-type Value<K extends StepName> = NonNullable<Project[K]>
+// what review needs of a project's store - the music video's ProjectStore and the film's FilmStore
+type Store<D, K extends keyof D> = { readonly file: string, data: D, readonly generated: ReadonlySet<K>, invalidate(name: K): void, save(): Promise<void> }
 
 /**
  * Runs the step (`run` is the project.step call) and prints it (`show`); with review on and a freshly generated result,
  * asks what to do with it and returns the result that was accepted.
  */
-export async function reviewed<K extends StepName>(project: ProjectStore, review: boolean, name: K, run: () => Promise<Value<K>>, show: (value: Value<K>) => void): Promise<Value<K>> {
+export async function reviewed<D, S extends keyof D & string, K extends S>(project: Store<D, S>, review: boolean, name: K, run: () => Promise<NonNullable<D[K]>>, show: (value: NonNullable<D[K]>) => void): Promise<NonNullable<D[K]>> {
     let value = await run()
     show(value)
     if (!review || !project.generated.has(name)) return value
@@ -51,7 +52,7 @@ export async function reviewed<K extends StepName>(project: ProjectStore, review
 const editorCommand = () => process.env.VISUAL || process.env.EDITOR || 'vi'
 
 /** Opens the value in the editor: text as text, everything else as JSON - read back and checked; undefined when unchanged or broken. */
-async function editValue<K extends StepName>(name: K, value: Value<K>): Promise<Value<K> | undefined> {
+async function editValue<V>(name: string, value: V): Promise<V | undefined> {
     const dir = mkdtempSync(join(tmpdir(), 'feverslop-review-'))
     const asText = typeof value === 'string'
     const file = join(dir, `${name}.${asText ? 'txt' : 'json'}`)
@@ -69,13 +70,13 @@ async function editValue<K extends StepName>(name: K, value: Value<K>): Promise<
             log.step('Unchanged', styles.muted(name))
             return undefined
         }
-        if (asText) return after as Value<K>
+        if (asText) return after as V
         const parsed = checkShape(value, after)
         if (typeof parsed === 'string') {
             log.warn(`${name}: ${parsed} - ${name} stays as it was`)
             return undefined
         }
-        return parsed as Value<K>
+        return parsed as V
     } finally {
         rmSync(dir, {recursive: true, force: true})
     }

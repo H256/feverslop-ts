@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {checkShape} from "./review.ts";
+import {checkShape, reviewed} from "./review.ts";
 
 describe('an edited step keeps its shape', () => {
     test('a list stays a list', () => {
@@ -13,5 +13,20 @@ describe('an edited step keeps its shape', () => {
     })
     test('broken JSON says why', () => {
         expect(String(checkShape({a: 1}, '{"a": '))).toStartWith('not valid JSON')
+    })
+})
+
+describe('reviewed with a film', () => {
+    test('a cached step and a run without --review are shown and taken as they are - nothing is asked', async () => {
+        const {FilmStore} = await import('./film/store.ts')
+        const film = new FilmStore('test-film')
+        film.data.lookBrief = 'cached look'
+        film.save = async () => {}
+        const shown: string[] = []
+        // generated just now, but no --review
+        expect(await reviewed(film, false, 'summary', async () => 'new summary', value => shown.push(value))).toBe('new summary')
+        // --review, but taken from project.json: not in film.generated
+        expect(await reviewed(film, true, 'lookBrief', async () => film.data.lookBrief!, value => shown.push(value))).toBe('cached look')
+        expect(shown).toEqual(['new summary', 'cached look'])
     })
 })

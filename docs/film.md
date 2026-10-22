@@ -98,7 +98,17 @@ Flags beyond the quick start: `--fix-script` (repair a handed-in screenplay, see
 (render the pictures and clips made from an older plan again - the old ones go to `old/attempts/`), `--strict` (the
 film refuses such stale clips instead of listing them), `--scenes=s6,s7` with `--redo=coverage` (only these scenes are planned
 again - the shots of the others and their rendered clips stay), `--allow-import-gaps` (see [Creating a film](#creating-a-film)),
+`--dry-run` (what the run would redo and render, with an estimate - nothing is done; with `--render=…` it counts the renders), `--review` (stop after
+the outline, the screenplay, the cast and the look when one was just generated: accept, edit in `$EDITOR`, generate again or stop),
 `--debug` (the stack trace of a failure) and the `--llm-*` / `--comfy=` overrides of the [README](../README.md#setup).
+
+Where a film stands - steps done or redone by the next run, pictures and clips missing or stale, the next command - and one clip on one screen
+(its scene, its shots as planned, its dialogue, pictures, render state and prompt):
+
+```bash
+bun run status <film-id> --film
+bun run inspect <film-id> clip-010 --film
+```
 
 ## Clips and prompts
 

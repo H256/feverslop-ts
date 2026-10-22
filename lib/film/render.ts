@@ -6,6 +6,7 @@ import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
 import {CONTEXT_SETTLE} from "../compose.ts";
 import {Renderer, type RenderWhat} from "../render.ts";
+import {renderStateOf} from "../render-state.ts";
 import {type Freshness, freshness} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
 import {workflowDir} from "../config.ts";
@@ -161,3 +162,7 @@ export class FilmRenderer extends Renderer {
         log.step('Saved', `${first}, ${last} ${styles.muted(`frames 0 and ${frames - 1}`)}`)
     }
 }
+
+/** What is rendered of a film, from the requests of its last plan run - for --dry-run and bun run status --film. */
+export const filmRenderState = (projectDir: string, filmId: string, config: FilmVideoConfig) =>
+    renderStateOf<FilmClipRequest>(projectDir, join(projectDir, 'assets.json'), join(projectDir, `${filmId}.mp4`), clip => filmClipFreshness(clip, projectDir, config) === 'stale')
