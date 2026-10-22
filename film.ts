@@ -293,10 +293,11 @@ if (Object.keys(casting.copies).length) film.data.castingCopies = casting.copies
 else delete film.data.castingCopies
 if (casting.changed) await film.save()
 const casted = (kind: AssetKind, id: string) => casting.assets.get(copyKey(kind, id))
-// the other looks of a library character are drawn from its description - the picture they are drawn after is not the library's
+// the other looks of a library character: with sequence sheets their sheets start on the library anchor (PictureJob.look);
+// without, they are drawn from its description - the picture they are drawn after is not the library's
 for (const c of cast.characters) {
     const asset = casted('character', c.id)
-    if (asset && c.states?.length) log.warn(`${c.id} is library:${asset.id} - its other looks (${c.states.map(s => s.name).join(', ')}) are drawn from the library's description, the face may differ from the library picture`)
+    if (asset && c.states?.length && !config.sequenceSheets) log.warn(`${c.id} is library:${asset.id} - its other looks (${c.states.map(s => s.name).join(', ')}) are drawn from the library's description, the face may differ from the library picture`)
 }
 // designed views (locationViews) describe the sheet the film renders for the place - a library place brings its own sheet
 if (config.sequenceSheets && config.locationViews) for (const l of cast.locations) {

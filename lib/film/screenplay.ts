@@ -145,14 +145,33 @@ type RawCast = { characters?: RawCharacter[], locations?: Partial<FilmLocation>[
 
 /**
  * An answer of the cast step that is asked again fixes what was left out - and sometimes leaves out what the first one had (a voice, a place). The
- * union of both, by name: what the new answer says wins, what only the earlier one has is kept.
+ * union of both, by the id a name gives ("AURORA THEATRE - STAGE" and "Aurora Theatre – Stage" are one place): what the new answer says
+ * wins, with the aliases of both - what only the earlier one has is kept.
  */
 export function mergeRawCasts(earlier: RawCast, later: RawCast): RawCast {
-    const merge = <T extends { name?: string }>(a: T[] | undefined, b: T[] | undefined) => {
-        const names = new Set((b ?? []).map(x => (x.name ?? '').trim().toLowerCase()))
-        return [...(b ?? []), ...(a ?? []).filter(x => !names.has((x.name ?? '').trim().toLowerCase()))]
+    const merge = <T extends { name?: string, aliases?: string[] }>(a: T[] | undefined, b: T[] | undefined) => {
+        const idOf = (x: T) => toId(text(x.name))
+        const before = new Map((a ?? []).map(x => [idOf(x), x]))
+        const merged = (b ?? []).map(x => {
+            const old = before.get(idOf(x))
+            return old ? {...x, aliases: [...new Set([...(Array.isArray(x.aliases) ? x.aliases : []), ...(Array.isArray(old.aliases) ? old.aliases : []), ...(old.name ? [old.name] : [])])]} : x
+        })
+        const ids = new Set((b ?? []).map(idOf))
+        return [...merged, ...(a ?? []).filter(x => !ids.has(idOf(x)))]
     }
     return {characters: merge(earlier.characters, later.characters), locations: merge(earlier.locations, later.locations)}
+}
+
+/** Places of one answer that are one place - the same id from their names - as one, with the aliases of all of them. */
+function samePlaces(locations: Partial<FilmLocation>[]): Partial<FilmLocation>[] {
+    const byId = new Map<string, Partial<FilmLocation>>()
+    for (const l of locations.filter(l => text(l.name))) {
+        const id = toId(text(l.name))
+        const first = byId.get(id)
+        if (!first) byId.set(id, {...l})
+        else first.aliases = [...(Array.isArray(first.aliases) ? first.aliases : []), text(l.name), ...(Array.isArray(l.aliases) ? l.aliases : [])]
+    }
+    return [...byId.values()]
 }
 
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
@@ -176,7 +195,7 @@ export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<F
         ...statesOf(c),
     }))
     const locationIds = new Set<string>()
-    const locations: FilmLocation[] = (raw.locations ?? []).filter(l => text(l.name)).map(l => ({
+    const locations: FilmLocation[] = samePlaces(raw.locations ?? []).map(l => ({
         id: unique(toId(text(l.name)), locationIds),
         name: text(l.name),
         aliases: [...new Set([text(l.name), ...(Array.isArray(l.aliases) ? l.aliases.map(text) : [])].filter(Boolean))],

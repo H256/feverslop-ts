@@ -28,6 +28,10 @@ export const pictureSpec = (picture: { id: string, prompt: string }, config: Ima
 export const anchorSpec = (picture: { id: string, prompt: string }, config: ImageConfig, userFile?: string): RenderSpec =>
     userFile ? {kind: 'anchor', id: picture.id, parts: [], fixed: fileFingerprint(userFile)} : {...pictureSpec(picture, config), kind: 'anchor'}
 
+/** The anchor of another look of a character (PictureJob.look): made from the anchor of its normal picture and the change - another one of either makes it stale. */
+export const lookAnchorSpec = (id: string, baseAnchor: string, change: string): RenderSpec =>
+    ({kind: 'anchor', id, parts: ['look', fileFingerprint(baseAnchor), change]})
+
 /** The turnaround video and the sheet made of it: the anchor, the prompt of the sequence and its workflow. */
 export const sequenceSpec = (kind: 'sequence' | 'sheet', id: string, anchor: RenderSpec, sequencePrompt: string, sequenceWorkflow: string): RenderSpec =>
     ({kind, id, parts: [specId(anchor), sequencePrompt, sequenceWorkflow]})

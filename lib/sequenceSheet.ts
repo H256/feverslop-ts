@@ -47,10 +47,37 @@ function beatTimestamps(totalShots: number, frames: number): number[] {
  */
 export function characterSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(6, frames)
+    const prompt = `Six distinct locked-off views joined by hard cuts. ${characterViews(description, beatTimes, 1)} ${SHEET_BACKDROP} Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
+    return {prompt, beatTimes}
+}
+
+/**
+ * Another look of a character (wounded, soaked, disguised) from the anchor of its normal picture: the video starts on that
+ * anchor, holds it for one shot, and from the hard cut after it shows the six views of the character sheet in the new look -
+ * the face and build come from the anchor, the change from the prompt. The first beat is the lead-in: its frame is not
+ * part of the sheet (lookSheetFrames).
+ */
+export function characterLookSequencePrompt(description: string, change: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+    const beatTimes = beatTimestamps(7, frames)
+    const prompt = `Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame, standing still, nothing about it changes in this shot. From the cut at ${formatTimestamp(beatTimes[1]!)} on, the same person with the same face, build and clothing is changed: ${change} ${characterViews(description, beatTimes.slice(1), 2)} ${SHEET_BACKDROP} The change stays in every shot after the first; clothing, hair, colours, proportions and every other visible detail remain identical across these shots.`
+    return {prompt, beatTimes}
+}
+
+/** The frames of a look's sheet video that make its sheet: every beat but the lead-in. */
+export const lookSheetFrames = (beatTimes: number[], totalFrames: number) => selectFrameIndices(beatTimes, totalFrames).slice(1)
+
+const SHEET_BACKDROP = 'Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows.'
+
+/**
+ * The six views of a character sheet as shots `first` to `first + 5`, at `times` - the first one opens the video (shot 1)
+ * or comes after a cut. The last view has one expression drawn at random.
+ */
+function characterViews(description: string, times: number[], first: number): string {
     const names = Object.keys(EXPRESSIONS)
     const expression = names[Math.floor(Math.random() * names.length)]!
-    const prompt = `Six distinct locked-off views joined by hard cuts. [Shot 1] a full-body shot frames ${description}, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. [Shot 6] At ${formatTimestamp(beatTimes[5]!)}, the shot cuts to a medium close-up of the face and shoulders, still facing the camera, the expression now ${expression}: ${EXPRESSIONS[expression]}. Only the expression changes; the figure does not flinch, recoil, turn away or move. Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows. Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
-    return {prompt, beatTimes}
+    const cut = (view: number) => `[Shot ${first + view}] At ${formatTimestamp(times[view]!)}, the shot cuts to`
+    const opening = first === 1 ? `[Shot 1] a full-body shot frames ${description}` : `${cut(0)} a full-body shot that frames ${description}`
+    return `${opening}, the entire figure visible from head to toe, facing the camera, generous empty margin on every side. The figure stands still in a neutral upright pose with arms relaxed at the sides and does not move, walk, gesture or turn at any point, and holds a neutral expression until the final shot. ${cut(1)} a tight close-up of the face, framed from the top of the hair to the chin, still facing the camera, the mouth closed and a still neutral expression. ${cut(2)} a left side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the left profile, the mouth closed and a still neutral expression. ${cut(3)} a right side profile of the full figure, the whole body visible from head to toe with the same framing margin, the head turned to show the right profile, the mouth closed and a still neutral expression. ${cut(4)} a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression. ${cut(5)} a medium close-up of the face and shoulders, still facing the camera, the expression now ${expression}: ${EXPRESSIONS[expression]}. Only the expression changes; the figure does not flinch, recoil, turn away or move.`
 }
 
 /**

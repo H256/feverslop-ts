@@ -32,7 +32,7 @@ export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterL
             prompt: data.characterLooks?.[c.id] ?? '', description: data.characterDescriptions?.[c.id] ?? '',
         })),
         ...cast.characters.filter(c => !c.voiceOnly).flatMap(c => (c.states ?? []).map(s => ({
-            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, file: filmPictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
+            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, look: {base: c.id, change: s.change}, file: filmPictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
             prompt: data.characterLooks?.[statePictureId(c.id, s.id)] ?? '', description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
         }))),
     ]

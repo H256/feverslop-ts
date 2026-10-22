@@ -263,6 +263,21 @@ describe('character states', () => {
         expect(jobs.filter(j => j.kind === 'character').map(j => j.id)).toEqual(['karl', 'karl--wounded', 'karl--wounded-2'])
         expect(jobs.find(j => j.id === 'karl--wounded')!.baseId).toBe('karl')
         expect(jobs.find(j => j.id === 'karl')!.baseId).toBeUndefined()
+        // with sequence sheets a look's sheet starts on the anchor of the normal picture and shows the change
+        expect(jobs.find(j => j.id === 'karl--wounded')!.look).toEqual({base: 'karl', change: stateCast.characters[0]!.states![0]!.change})
+        expect(jobs.find(j => j.id === 'karl')!.look).toBeUndefined()
+    })
+    test("a look's sheet: a lead-in on the anchor, then the six views in the new look - the lead-in is not in the sheet", async () => {
+        const {characterLookSequencePrompt, characterSequencePrompt, lookSheetFrames, selectFrameIndices} = await import('../sequenceSheet.ts')
+        const {prompt, beatTimes} = characterLookSequencePrompt('Karl, a soldier', 'his left arm is bandaged and bloody.', 124)
+        expect(beatTimes).toHaveLength(7)
+        expect(prompt).toStartWith('Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame')
+        expect(prompt).toContain('is changed: his left arm is bandaged and bloody. [Shot 2] At 00:00.738, the shot cuts to a full-body shot that frames Karl, a soldier')
+        expect(prompt).toContain('[Shot 7] At ')
+        expect(lookSheetFrames(beatTimes, 124)).toEqual(selectFrameIndices(beatTimes, 124).slice(1))
+        expect(lookSheetFrames(beatTimes, 124)).toHaveLength(6)
+        // the sheet of a normal picture stays six shots
+        expect(characterSequencePrompt('Karl', 124).beatTimes).toHaveLength(6)
     })
 })
 
@@ -640,6 +655,19 @@ describe('the cast step asked again', () => {
             {characters: [{name: 'anna', role: 'new'}, {name: 'Ben', role: 'b'}], locations: [{name: 'The Bridge'}]})
         expect(merged.characters!.map(c => `${c.name}:${c.role}`)).toEqual(['anna:new', 'Ben:b', 'Radio Voice:voice'])
         expect(merged.locations!.map(l => l.name)).toEqual(['The Bridge', 'The Hut'])
+    })
+    test('a place the second answer writes otherwise ("–" for "-", other case) is the same place, with the names of both', async () => {
+        const {mergeRawCasts} = await import("./screenplay.ts")
+        const merged = mergeRawCasts(
+            {characters: [{name: 'Vyvian'}], locations: [{name: 'AURORA THEATRE - STAGE', aliases: ['AURORA THEATRE - STAGE']}]},
+            {characters: [{name: 'Vyvian'}], locations: [{name: 'Aurora Theatre – Stage', aliases: ['INT. AURORA THEATRE - STAGE - NIGHT']}]})
+        expect(merged.locations).toHaveLength(1)
+        expect(merged.locations![0]!.aliases).toEqual(['INT. AURORA THEATRE - STAGE - NIGHT', 'AURORA THEATRE - STAGE'])
+        // and one answer that has it twice gives one place - every name of it finds it
+        const play = toScreenplay({scenes: [{setting: 'INT', location: 'AURORA THEATRE - STAGE', time: 'NIGHT', elements: [{type: 'action', text: 'Vyvian waits.'}]}]}, {title: 't', language: 'en'})
+        const cast = toCast({characters: [{name: 'Vyvian'}], locations: [{name: 'AURORA THEATRE - STAGE'}, {name: 'Aurora Theatre – Stage', aliases: ['the old stage']}]}, play)
+        expect(cast.locations.map(l => l.id)).toEqual(['aurora-theatre-stage'])
+        expect(locationOf(cast, 'the old stage')?.id).toBe('aurora-theatre-stage')
     })
 })
 
