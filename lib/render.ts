@@ -1,5 +1,5 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
-import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join, posix} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
@@ -11,12 +11,12 @@ import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo, trimHead} from "./assemble.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
-import {anchorSpec, clipSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
+import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
-import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
+import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 
@@ -49,7 +49,9 @@ export async function workflowHash(name: string) {
 export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect'>>) =>
     specId(clipSpec(clip, projectDir, config))
 
-export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[] }
+// look: another look of the character `base` (a film's states) - with sequence sheets its sheet starts on base's anchor and
+// shows the change, instead of an anchor drawn from the prompt (renderSequenceSheet)
+export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[], look?: { base: string, change: string } }
 
 type Server = ComfyServer & { api: ComfyApi }
 
@@ -367,12 +369,17 @@ export class Renderer implements Disposable {
         const anchorTarget = join(this.projectDir, anchorFile)
         const videoFile = `${dir}/sequence.mp4`
         const videoTarget = join(this.projectDir, videoFile)
-        const {prompt: sequencePrompt, beatTimes} = picture.kind === 'character'
-            ? characterSequencePrompt(picture.description)
-            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
         // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
         const anchorIsUsers = isUserFile(anchorTarget)
-        const anchor = anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
+        // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
+        const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
+        const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
+        const baseAnchorTarget = baseAnchorFile && join(this.projectDir, baseAnchorFile)
+        const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
+        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change)
+            : picture.kind === 'character' ? characterSequencePrompt(picture.description)
+            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
+        const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
         const anchorFingerprint = specId(anchor)
         const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow)
         const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow))
@@ -381,9 +388,10 @@ export class Renderer implements Disposable {
             const away = [picture.file, `${picture.file}.json`, videoFile, `${videoFile}.json`, ...frameFiles, ...(anchorIsUsers ? [] : [anchorFile, `${anchorFile}.json`])]
             if (!this.staleFile('pictures', picture.file, sheetFingerprint, away)) return log.step('Exists', styles.muted(picture.file))
         }
+        if (baseAnchorTarget && !existsSync(baseAnchorTarget)) return log.warn(`${picture.id} skipped - its sheet starts on the anchor of ${look!.base}, which is not rendered yet (${baseAnchorFile})`)
         mkdirSync(join(this.projectDir, dir), {recursive: true})
 
-        if (!existsSync(anchorTarget)) {
+        if (!look && !existsSync(anchorTarget)) {
             const {seed} = await this.render({label: `${picture.kind} ${picture.id} anchor`, spec: anchor, kind: 'picture', workflow: this.config.imageWorkflow, resolution: this.config.imageResolution}, anchorTarget, '.png', async () => {
                 const seed = picture.seed ?? resolveSeed(this.config.seed)
                 const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
@@ -405,16 +413,16 @@ export class Renderer implements Disposable {
                 const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
                 const result = sequenceWorkflow({
                     prompt: sequencePrompt,
-                    startFrame: `${this.remoteDir}/${anchorFile}`,
-                    frames: SEQUENCE_FRAMES,
+                    startFrame: `${this.remoteDir}/${baseAnchorFile ?? anchorFile}`,
+                    frames: sequenceFrames,
                     orientation: picture.kind === 'character' ? 'portrait' : 'landscape',
                     resolution: -1,
                     seed,
                     filenamePrefix: `${this.remoteDir}/${dir}/sequence`,
                 })
-                return {result, uploads: [{from: anchorTarget, to: `${this.remoteDir}/${anchorFile}`}], meta: {seed}}
+                return {result, uploads: [{from: baseAnchorTarget ?? anchorTarget, to: `${this.remoteDir}/${baseAnchorFile ?? anchorFile}`}], meta: {seed}}
             })
-            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt}, null, 2))
+            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: sequenceFrames, beatTimes, prompt: sequencePrompt}, null, 2))
         }
 
         const framesDir = join(this.projectDir, dir, 'frames')
@@ -422,18 +430,23 @@ export class Renderer implements Disposable {
         // the workflow may render another length than asked for (the video model only takes certain frame counts) -
         // the frames are picked from the video as it really is, not from the length that was requested
         const rendered = await probeVideo(videoTarget)
-        if (rendered.frames !== SEQUENCE_FRAMES) log.warn(`${videoFile} has ${rendered.frames} frames, ${SEQUENCE_FRAMES} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
-        const frameIndices = selectFrameIndices(beatTimes, rendered.frames)
+        if (rendered.frames !== sequenceFrames) log.warn(`${videoFile} has ${rendered.frames} frames, ${sequenceFrames} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
+        const frameIndices = look ? lookSheetFrames(beatTimes, rendered.frames) : selectFrameIndices(beatTimes, rendered.frames)
         const framePaths = await Promise.all(frameIndices.map(async (frameIndex, i) => {
             const framePath = join(framesDir, `frame_${String(i).padStart(2, '0')}.png`)
             if (!existsSync(framePath)) await extractFrame(videoTarget, frameIndex, framePath)
             return framePath
         }))
 
+        // a look's anchor is its first view in the new look - what a look built on this one would start on
+        if (look) {
+            copyFileSync(framePaths[0]!, anchorTarget)
+            await Bun.write(`${anchorTarget}.json`, JSON.stringify({from: baseAnchorFile, change: look.change, fingerprint: anchorFingerprint}, null, 2))
+        }
         const {columns, panel} = sheetLayout(picture.kind)
         await composeSheet(framePaths, target, panel, columns)
         await Bun.write(`${target}.json`, JSON.stringify({
-            workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
+            workflow: this.config.sequenceWorkflow, frames: sequenceFrames, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
         }, null, 2))
         log.step('Saved', `${picture.file} ${styles.muted(this.took(videoTarget))}`)
     }

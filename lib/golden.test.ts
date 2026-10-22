@@ -232,7 +232,7 @@ async function testClip(file: string, frames: number, size: { width: number, hei
     const color = flatGrey ? '0x808080' : `0x${Bun.hash(file.replace(/^.*[\\/]/, '')).toString(16).padStart(6, '0').slice(-6)}`
     const audio = silent ? [] : ['-f', 'lavfi', '-i', 'sine=frequency=330:sample_rate=48000', '-ac', '2']
     const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=${size.width}x${size.height}:r=${fps}`, ...audio,
-        '-frames:v', String(frames), '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', ...(silent ? [] : ['-c:a', 'aac']), file], {stdout: 'ignore', stderr: 'pipe'})
+        '-frames:v', String(frames), '-shortest', ...(file.endsWith('.png') ? [] : ['-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p']), ...(silent ? [] : ['-c:a', 'aac']), file], {stdout: 'ignore', stderr: 'pipe'})
     if (await proc.exited !== 0) throw new Error(`ffmpeg could not make ${file}: ${await new Response(proc.stderr).text()}`)
 }
 
@@ -255,6 +255,9 @@ function recording<T extends new (...args: any[]) => Renderer>(Base: T) {
                 const multiplier = Number(combine.inputs.frame_rate) / 24
                 const pieces = Object.values(workflow).filter(n => n.class_type === 'ImageFromBatch' && n.inputs.length !== 1).reduce((sum, n) => sum + Number(n.inputs.length), 0)
                 await testClip(target, pieces * multiplier, undefined, 24 * multiplier, true)
+            } else if (target.endsWith('.png')) {
+                // a picture: one frame in the colour of its name
+                await testClip(target, 1, size ?? {width: 288, height: 512}, 24, true)
             } else {
                 const id = target.replace(/^.*[\\/]/, '').replace(/\.mp4$/, '')
                 await testClip(target, lengthOf(workflow), size ?? {width: 320, height: 192}, 24, false, this.leaky.delete(id))
@@ -310,6 +313,32 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
         expect(seeds).toHaveLength(2)
         expect(JSON.parse(readFileSync(join(projectDir, 'videos/slot-007.mp4.json'), 'utf8')).seed).toBe(seeds[1]!)
         expect(existsSync(join(projectDir, `old/leaks/slot-007-seed-${seeds[0]}.mp4`))).toBe(true)
+    }, 60_000)
+
+    test('the reference sheets: a character and a place of the music video, a film character and its other look', async () => {
+        // the expression of the last view is drawn at random - fixed here
+        const random = spyOn(Math, 'random').mockReturnValue(0.3)
+        try {
+            const sheet = (id: string, kind: 'character' | 'location', extra: object = {}) => ({kind, id, name: id, file: `assets/${kind}s/${id}.png`, prompt: `the picture of ${id}`, description: `${id}, as the clips describe it`, ...extra})
+            const musicDir = folder('sheets-music')
+            const Music = recording(Renderer)
+            using music = new Music('golden', musicDir, {...defaults, seed: 42}, servers)
+            const filmDir = folder('sheets-film')
+            const Film = recording(FilmRenderer)
+            using film = new Film('film-golden', filmDir, {...filmRenderConfig(filmDefaults), seed: 42}, servers)
+            const {calls} = await ffmpegCalls(async () => {
+                await music.renderSequenceSheet(sheet('ann', 'character'))
+                await music.renderSequenceSheet(sheet('hall', 'location', {views: ['the stage from the hall', 'the door', 'the bar', 'the hall from above']}))
+                await film.renderSequenceSheet(sheet('vyvian', 'character'))
+                await film.renderSequenceSheet({...sheet('vyvian--soaked', 'character'), baseId: 'vyvian', seed: 42, look: {base: 'vyvian', change: 'her hair and costume are soaked and dripping'}} as Parameters<typeof film.renderSequenceSheet>[0])
+            })
+            const sidecars = (dir: string) => Object.fromEntries(['assets/characters/ann.png', 'assets/locations/hall.png', 'assets/characters/vyvian.png', 'assets/characters/vyvian--soaked.png',
+                'assets/sequence/characters/vyvian--soaked/anchor.png', 'assets/sequence/characters/vyvian--soaked/sequence.mp4']
+                .filter(f => existsSync(join(dir, `${f}.json`))).map(f => [f, JSON.parse(readFileSync(join(dir, `${f}.json`), 'utf8'))]))
+            expect(portable({jobs: [...music.jobs, ...film.jobs], sidecars: {music: sidecars(musicDir), film: sidecars(filmDir)}, ffmpeg: calls})).toMatchSnapshot()
+        } finally {
+            random.mockRestore()
+        }
     }, 60_000)
 
     test('film: a clip and one that goes on from its last frame', async () => {

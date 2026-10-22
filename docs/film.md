@@ -162,8 +162,11 @@ sentence stays one shot.
 
 **States of a character.** A character who looks different for a stretch of the film (wounded, disguised, covered in mud) has
 `states` in the cast: the cast step lists them only where the script changes the look (at most two). Every state gets a picture of its
-own, drawn from the normal picture's prompt with only the change applied and with the same seed (it keeps the face; the normal picture is
-rendered first). The shot planning says per shot which look a character is in; a clip uses the picture of the look its character is in
+own, made after the normal picture. With `sequenceSheets` (the default) its sheet is made from the normal picture's anchor: the video
+starts on it, holds it for one shot (the lead-in, not part of the sheet), and from the hard cut after it shows the six views of the sheet
+with the change (`change` of the state) - the face and build come from the anchor itself, also for a character from the library. A new
+anchor of the normal picture makes the look stale. Without sequence sheets a state is drawn from the normal picture's prompt with only the
+change applied and with the same seed. The shot planning says per shot which look a character is in; a clip uses the picture of the look its character is in
 when they first appear in it. Not set in a film planned before - `--redo=cast` makes them.
 
 ## Replacing a character
@@ -194,8 +197,9 @@ and every place `"project:<id>"`; from then on it is yours:
 - An entry the library does not have stops the run before anything is made. A narrator's voice has no picture and no entry.
 - Back to `"project:"`: the library pictures are put away, `bun film.ts <id> --redo=characterLooks` (or `locationLooks`)
   writes its own look again, `--render=images` draws it.
-- The other looks of a library character (wounded, disguised) are drawn from the library's description - the face may differ
-  from the library picture (a warning says so). With `locationViews` a library place keeps the library's sheet, not views
+- The other looks of a library character (wounded, disguised) start on the library's anchor (see the states of a character above).
+  Without `sequenceSheets` they are drawn from the library's description - the face may differ from the library picture (a warning
+  says so). With `locationViews` a library place keeps the library's sheet, not views
   designed for the film (a warning as well).
 
 Into the library from a film: `bun run export-asset <film-id> <id> --film [--as=<library id>]` - a character, a place, or a
