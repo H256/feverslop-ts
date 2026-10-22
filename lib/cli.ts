@@ -61,7 +61,7 @@ export function cli(command: string) {
         if (code !== 0 || runResult().cancelled) return
         log.success(`${command} · ${formatDuration(Date.now() - start)} · ${runWarnings().length} warning(s)`)
         if (runResult().output) log.info(`Output: ${runResult().output}`)
-        if (runResult().next) log.info(`Next: ${runResult().next}`)
+        if (runResult().next && !runResult().nextShown) log.info(`Next: ${runResult().next}`)
         if (runLogFile()) log.info(`Log: ${runLogFile()}`)
     })
 }

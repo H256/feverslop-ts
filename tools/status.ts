@@ -83,7 +83,6 @@ if (args.json) {
 }
 
 const mark: Record<StepState, string> = {done: styles.answer('✔'), redo: styles.warning('⟳'), missing: styles.warning('✗'), unused: styles.muted('–')}
-log.section(`STATUS · ${project.id}`)
 for (const c of changed) log.step('Changed', `${styles.name(c.name)} ${styles.muted(`- the next run redoes ${c.steps.join(', ')} and what is built on it`)}`)
 for (const step of lostStems) log.step('Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`)
 // in columns, in pipeline order
