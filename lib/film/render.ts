@@ -14,7 +14,7 @@ import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 export const promptHash = (clip: { prompt: string, frames: number }) => Bun.hash(`${clip.frames}
 ${clip.prompt}`).toString(16)
 
-type FilmVideoConfig = { videoWorkflow: string, videoResolution: string | number, pinStartFrame?: boolean }
+type FilmVideoConfig = { videoWorkflow: string, videoResolution: string | number, videoAspect?: string, pinStartFrame?: boolean }
 
 /** The id of the request a film clip is rendered from (lib/render-spec.ts) - what its sidecar records and the film compares. */
 export const filmClipFingerprint = (clip: FilmClipRequest, projectDir: string, config: FilmVideoConfig) =>
@@ -80,6 +80,7 @@ export class FilmRenderer extends Renderer {
                 frames,
                 seed,
                 resolution: this.config.videoResolution,
+                aspect: this.config.videoAspect,
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}
@@ -92,6 +93,7 @@ export class FilmRenderer extends Renderer {
             workflow: this.config.videoWorkflow,
             seed,
             resolution: this.config.videoResolution,
+            ...(this.config.videoAspect !== '16:9' ? {aspect: this.config.videoAspect} : {}),
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final film

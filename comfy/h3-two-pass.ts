@@ -19,21 +19,30 @@ export function twoPassSizes(setting: Resolution, aspect: Aspect = '16:9'): { fi
     return {final, first: {width: half(final.width), height: half(final.height)}}
 }
 
+// a music-video clip's inputs - or a film clip's, without any sound (no song, no audios): then nothing is guided by audio and
+// the sound of the clip is the model's own, decoded from the sampled latent as h3-ref2video-film does
+type SoundInputs = 'audios' | 'vocals' | 'song' | 'songStart' | 'duration'
+export type TwoPassOptions = Omit<VideoWorkflowOptions, SoundInputs> & Partial<Pick<VideoWorkflowOptions, SoundInputs>>
+
+// song: the sound of the video - the trimmed song, or the model's own sound when no song went in
 export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO">, size: PixelSize }
 
-export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name: string): TwoPassResult {
+export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: string): TwoPassResult {
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
     const unet = wf.UNETLoader({unet_name: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors', weight_dtype: 'default'})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     // the audio tracks, the song guide and the pinned first frame as in h3-ref2video - see the comments there
+    const silent = opts.song === undefined
+    if (silent && opts.audios?.length) throw new Error(`${name}: audio tracks without the song - a clip has both or no sound going in`)
+    if (!silent && (opts.songStart === undefined || opts.duration === undefined)) throw new Error(`${name}: the song without songStart and duration`)
     const tracks = (opts.audios ?? []).map(audio => wf.TrimAudioDuration({
         audio: wf.LoadAudio({audio: dyn(audio)}).AUDIO,
-        start_index: opts.songStart,
-        duration: opts.duration,
+        start_index: opts.songStart!,
+        duration: opts.duration!,
     }))
-    if (!tracks.length) throw new Error(`${name}: opts.audios is empty - lib/render.ts should always provide at least the drums track`)
+    if (!silent && !tracks.length) throw new Error(`${name}: opts.audios is empty - lib/render.ts should always provide at least the drums track`)
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
@@ -55,17 +64,19 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
             [`ref_images.ref_image_${i}`, wf.LoadImage({image: dyn(picture)}).IMAGE])),
         ...Object.fromEntries(tracks.map((track, i) => [`ref_audios.ref_audio_${i}`, track.AUDIO])),
     })
-    const song = wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song)}).AUDIO, start_index: opts.songStart, duration: opts.duration})
+    const song = silent ? undefined : wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song!)}).AUDIO, start_index: opts.songStart!, duration: opts.duration!})
     const startFrame = startImages(wf, opts)
 
     // The guides are keyframes on the latent's own grid (comfy/ldm/minimax/model.py): a pinned frame encoded for pass 1
     // does not fit the upscaled latent, so each pass anchors the song and the first frame on its own latent. The
     // text and the reference pictures stay those of pass 1 - pass 2 only refines what pass 1 laid out.
     const guide = (latent: NodeRef<"LATENT">) => {
-        const guided = wf.MiniMaxH3AddGuide({positive: references.positive, latent, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO})
+        const guided = song
+            ? wf.MiniMaxH3AddGuide({positive: references.positive, latent, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO}).positive
+            : references.positive
         return startFrame
-            ? wf.MiniMaxH3AddGuide({positive: guided.positive, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
-            : guided.positive
+            ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
+            : guided
     }
     const noise = wf.RandomNoise({noise_seed: opts.seed})
 
@@ -109,6 +120,8 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: VideoWorkflowOptions, name:
         latent_image: large,
     })
 
-    const images = wf.VAEDecode({samples: afterCleanup(wf, second.output, {offload_model: true, offload_cache: false}), vae: videoVae.VAE}).IMAGE
-    return {images, song: song.AUDIO, size: sizes.final}
+    const result = afterCleanup(wf, second.output, {offload_model: true, offload_cache: false})
+    const images = wf.VAEDecode({samples: result, vae: videoVae.VAE}).IMAGE
+    // no song went in: the sound is the model's own - the audio half of the latent went through the upscale as it was and was refined in pass 2
+    return {images, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: result, vae: audioVae.VAE}).AUDIO, size: sizes.final}
 }

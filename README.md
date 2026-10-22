@@ -603,7 +603,7 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `h3-sequence-to-sheet` | sequence | the turnaround video of a reference sheet (`sequenceWorkflow`, default) |
 | `frame-interpolate` | interpolation | RIFE/FILM frame interpolation per shot, for `finalFps` (not set in `config.json`, always this one) |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
-| `h3-ref2video-film`, `h3-ref2video-film-beta` | video | the short-film pipeline's clips, without audio input - see [docs/film.md](docs/film.md) |
+| `h3-ref2video-film`, `h3-ref2video-film-beta`, `h3-ref2video-film-2pass` | video | the short-film pipeline's clips, without audio input (`-2pass`: the two passes of `h3-ref2video-2pass`) - see [docs/film.md](docs/film.md) |
 
 ¹ The export JSON is only a one-time input to `bun run comfy:convert` (see below); it isn't kept in the repo, only
 the generated `.ts` file under `comfy/workflows/` is.

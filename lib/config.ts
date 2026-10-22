@@ -103,6 +103,10 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
 
+/** What is wrong with a videoAspect setting, or undefined - the film's config checks it the same way. */
+export const aspectProblem = (value: unknown): string | undefined =>
+    /^[1-9]\d*:[1-9]\d*$/.test(String(value)) ? undefined : `videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(value)}`
+
 export async function loadProjectConfig(projectDir: string): Promise<ProjectConfig> {
     const file = join(projectDir, 'config.json')
     const fail = (message: string): never => {
@@ -130,7 +134,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
             fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
         }
     }
-    if (!/^[1-9]\d*:[1-9]\d*$/.test(String(config.videoAspect))) fail(`videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(config.videoAspect)}`)
+    const aspectWrong = aspectProblem(config.videoAspect)
+    if (aspectWrong) fail(aspectWrong)
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     if (!Number.isInteger(config.contextFrames) || config.contextFrames < 0 || (config.contextFrames > 0 && config.contextFrames % 17 !== 5)) fail(`contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(config.contextFrames)}`)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)

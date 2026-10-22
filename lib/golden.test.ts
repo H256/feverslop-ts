@@ -58,6 +58,7 @@ const filmVariants: Record<string, object> = {
     'plain': filmOptions,
     'pinned start frame': {...filmOptions, startFrame: 'fs/film-x/assets/clips/clip-002_lf.png'},
     'fixed size': {...filmOptions, resolution: '1280x720'},
+    'portrait': {...filmOptions, aspect: '9:16'},
 }
 
 describe('the ComfyUI workflows, node by node', () => {
@@ -66,7 +67,7 @@ describe('the ComfyUI workflows, node by node', () => {
             test(`${name}: ${variant}`, async () => expect(await workflow(name, opts)).toMatchSnapshot())
         }
     }
-    for (const name of ['h3-ref2video-film', 'h3-ref2video-film-beta']) {
+    for (const name of ['h3-ref2video-film', 'h3-ref2video-film-beta', 'h3-ref2video-film-2pass']) {
         for (const [variant, opts] of Object.entries(filmVariants)) {
             test(`${name}: ${variant}`, async () => expect(await workflow(name, opts)).toMatchSnapshot())
         }

@@ -67,7 +67,7 @@ export function filmClipSpec(
     return {
         kind: 'clip', id: clip.id,
         parts: [
-            clip.promptHash, config.videoWorkflow, config.videoResolution, config.pinStartFrame === true,
+            clip.promptHash, config.videoWorkflow, config.videoResolution, ...aspectPart(config), config.pinStartFrame === true,
             clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
             predecessorId(projectDir, clip.startsFrom),
         ],
