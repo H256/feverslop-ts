@@ -1,8 +1,8 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Aspect, Resolution} from "../../comfy/helpers.ts";
-import {aspectProblem, defaults, languageName, workflowDir} from "../config.ts";
-import {warnUnknownKeys} from "../log.ts";
+import {aspectProblem, contextFramesProblem, defaults, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
+import {log, warnUnknownKeys} from "../log.ts";
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
 export type FilmConfig = {
@@ -33,6 +33,12 @@ export type FilmConfig = {
     // Off by default: a continuing clip starts on whatever the clip before it drifted to, and the drift (doubled people,
     // displaced patches of the set) is carried on and grows - see docs/film.md
     continuity: 'auto' | 'scene' | 'never',
+    // a continuing clip (continuity) starts on this many of the last frames of the clip before (0 = off, else 5 + 17·k: 22, 39)
+    // instead of its one last frame: the motion goes on, not only the pose - as in the music video (lib/render.ts)
+    contextFrames: number,
+    // a clip that came out as the reference pictures lined up on their grey backdrop (lib/leak.ts) is rendered again, with
+    // another seed, up to this many times. 0 (default) = off
+    leakRetries: number,
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
     subtitles: string,
@@ -58,6 +64,8 @@ export const filmDefaults: FilmConfig = {
     sequenceSheets: true,
     locationViews: false,
     continuity: 'never',
+    contextFrames: defaults.contextFrames,
+    leakRetries: defaults.leakRetries,
     subtitles: 'script',
     burnSubtitles: false,
     levelMatching: true,
@@ -107,6 +115,8 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
     if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
+    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries)]) if (problem) fail(problem)
+    if (config.contextFrames > 0 && config.continuity === 'never') log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
     if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)

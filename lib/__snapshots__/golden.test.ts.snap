@@ -11894,10 +11894,12 @@ exports[`the config music video: what a wrong value is told 1`] = `
 exports[`the config film: the defaults and what the renderer is given 1`] = `
 {
   "burnSubtitles": false,
+  "contextFrames": 0,
   "continuity": "never",
   "dialogueLanguage": "auto",
   "imageResolution": -1,
   "imageWorkflow": "kroma-image",
+  "leakRetries": 0,
   "levelMatching": true,
   "llm": {},
   "locationViews": false,
@@ -18867,5 +18869,3713 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-2pass: portrait 1
       },
     },
   },
+}
+`;
+
+exports[`rendering and joining, with ffmpeg music video: the backdrop check after every clip, with context frames 1`] = `
+{
+  "ffmpeg": [
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-007.mp4",
+      "-vf",
+      "fps=4,scale=96:54",
+      "-f",
+      "rawvideo",
+      "-pix_fmt",
+      "rgb24",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-007.mp4",
+      "-vf",
+      "select=eq(n\\,0)",
+      "-frames:v",
+      "1",
+      "<tmp>/music-leak/assets/clips/slot-007_ff.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-007.mp4",
+      "-vf",
+      "select=eq(n\\,71)",
+      "-frames:v",
+      "1",
+      "<tmp>/music-leak/assets/clips/slot-007_lf.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-007.mp4",
+      "-vf",
+      "trim=start_frame=47:end_frame=69,setpts=PTS-STARTPTS",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-crf",
+      "10",
+      "-pix_fmt",
+      "yuv420p",
+      "<tmp>/music-leak/assets/clips/slot-007_tail22.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-008.mp4",
+      "-vf",
+      "fps=4,scale=96:54",
+      "-f",
+      "rawvideo",
+      "-pix_fmt",
+      "rgb24",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-008.mp4",
+      "-vf",
+      "trim=start_frame=25,setpts=PTS-STARTPTS",
+      "-af",
+      "atrim=start=1.0416666666666667,asetpts=PTS-STARTPTS",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "14",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "256k",
+      "<tmp>/music-leak/videos/slot-008.trim.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "info",
+      "-i",
+      "<tmp>/music-leak/videos/slot-007.mp4",
+      "-vf",
+      "select='between(n\\,68\\,71)',signalstats,metadata=print",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "info",
+      "-i",
+      "<tmp>/music-leak/videos/slot-008.mp4",
+      "-vf",
+      "select='between(n\\,0\\,3)',signalstats,metadata=print",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-008.mp4",
+      "-vf",
+      "lutyuv=y='clip((val-128)*0+77,16,235)':u='clip(val+20,16,240)':v='clip(val+-29,16,240)'",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "14",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "copy",
+      "<tmp>/music-leak/videos/slot-008.match.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-008.mp4",
+      "-vf",
+      "select=eq(n\\,0)",
+      "-frames:v",
+      "1",
+      "<tmp>/music-leak/assets/clips/slot-008_ff.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-008.mp4",
+      "-vf",
+      "select=eq(n\\,47)",
+      "-frames:v",
+      "1",
+      "<tmp>/music-leak/assets/clips/slot-008_lf.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/music-leak/videos/slot-007.mp4",
+      "-vf",
+      "select='gte(scene,0)',metadata=print:key=lavfi.scene_score:file=-",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+  ],
+  "jobs": [
+    {
+      "meta": {
+        "seed": 42,
+        "size": {
+          "height": 192,
+          "width": 320,
+        },
+      },
+      "size": {
+        "height": 192,
+        "width": 320,
+      },
+      "target": "<tmp>/music-leak/videos/slot-007.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/music-leak/assets/locations/hall.png",
+          "to": "feverslop-ts/golden/assets/locations/hall.png",
+        },
+        {
+          "from": "<tmp>/music-leak/assets/characters/ann.png",
+          "to": "feverslop-ts/golden/assets/characters/ann.png",
+        },
+        {
+          "from": "<tmp>/music-leak/assets/characters/bo.png",
+          "to": "feverslop-ts/golden/assets/characters/bo.png",
+        },
+        {
+          "from": "<tmp>/music-leak/stems/vocals.wav",
+          "to": "feverslop-ts/golden/stems/vocals.wav",
+        },
+        {
+          "from": "<tmp>/music-leak/stems/bass.wav",
+          "to": "feverslop-ts/golden/stems/bass.wav",
+        },
+        {
+          "from": "<tmp>/music-leak/stems/song.wav",
+          "to": "feverslop-ts/golden/stems/song.wav",
+        },
+      ],
+      "what": {
+        "kind": "clip",
+        "label": "clip slot-007",
+        "resolution": "320x192",
+        "spec": {
+          "id": "slot-007",
+          "kind": "clip",
+          "parts": [
+            "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
+            72,
+            "h3-ref2video",
+            "320x192",
+            [
+              "7ec5e18699f7739b",
+              "6105e7c6249a6ed9",
+              "7535cc280f986d5f",
+            ],
+            [
+              [
+                "vocals",
+                12.5,
+                15.5,
+              ],
+              [
+                "bass",
+                12.5,
+                15.5,
+              ],
+            ],
+            "",
+          ],
+        },
+        "workflow": "h3-ref2video",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "TrimAudioDuration",
+          },
+          "class_type": "TrimAudioDuration",
+          "inputs": {
+            "audio": [
+              "9",
+              0,
+            ],
+            "duration": 3.0416666666666665,
+            "start_index": 12.5,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "PrimitiveStringMultiline",
+          },
+          "class_type": "PrimitiveStringMultiline",
+          "inputs": {
+            "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 73,
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 320,
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 192,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "MiniMaxH3ReferenceToVideo",
+          },
+          "class_type": "MiniMaxH3ReferenceToVideo",
+          "inputs": {
+            "audio_vae": [
+              "2",
+              0,
+            ],
+            "clip": [
+              "6",
+              0,
+            ],
+            "height": [
+              "14",
+              0,
+            ],
+            "length": [
+              "12",
+              0,
+            ],
+            "prompt": [
+              "11",
+              0,
+            ],
+            "ref_audios.ref_audio_0": [
+              "8",
+              0,
+            ],
+            "ref_audios.ref_audio_1": [
+              "10",
+              0,
+            ],
+            "ref_image_size": "match",
+            "ref_images.ref_image_0": [
+              "16",
+              0,
+            ],
+            "ref_images.ref_image_1": [
+              "17",
+              0,
+            ],
+            "ref_images.ref_image_2": [
+              "18",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "13",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/locations/hall.png",
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/characters/ann.png",
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/characters/bo.png",
+          },
+        },
+        "19": {
+          "_meta": {
+            "title": "LoadAudio",
+          },
+          "class_type": "LoadAudio",
+          "inputs": {
+            "audio": "feverslop-ts/golden/stems/song.wav",
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+          },
+        },
+        "20": {
+          "_meta": {
+            "title": "TrimAudioDuration",
+          },
+          "class_type": "TrimAudioDuration",
+          "inputs": {
+            "audio": [
+              "19",
+              0,
+            ],
+            "duration": 3.0416666666666665,
+            "start_index": 12.5,
+          },
+        },
+        "21": {
+          "_meta": {
+            "title": "MiniMaxH3AddGuide",
+          },
+          "class_type": "MiniMaxH3AddGuide",
+          "inputs": {
+            "audio": [
+              "20",
+              0,
+            ],
+            "audio_vae": [
+              "2",
+              0,
+            ],
+            "frame_idx": 0,
+            "latent": [
+              "15",
+              1,
+            ],
+            "positive": [
+              "15",
+              0,
+            ],
+          },
+        },
+        "22": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "23": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "21",
+              0,
+            ],
+            "model": [
+              "22",
+              0,
+            ],
+          },
+        },
+        "24": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "25": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "euler",
+          },
+        },
+        "26": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "5",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "27": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "23",
+              0,
+            ],
+            "latent_image": [
+              "15",
+              1,
+            ],
+            "noise": [
+              "24",
+              0,
+            ],
+            "sampler": [
+              "25",
+              0,
+            ],
+            "sigmas": [
+              "26",
+              0,
+            ],
+          },
+        },
+        "28": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "27",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "29": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "28",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "30": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "audio": [
+              "20",
+              0,
+            ],
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/golden/videos/slot-007",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "29",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+            "model": [
+              "3",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "MiniMaxH3SigmaShift",
+          },
+          "class_type": "MiniMaxH3SigmaShift",
+          "inputs": {
+            "model": [
+              "4",
+              0,
+            ],
+            "shift_audio": 3,
+            "shift_video": 12,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "LoadAudio",
+          },
+          "class_type": "LoadAudio",
+          "inputs": {
+            "audio": "feverslop-ts/golden/stems/vocals.wav",
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "TrimAudioDuration",
+          },
+          "class_type": "TrimAudioDuration",
+          "inputs": {
+            "audio": [
+              "7",
+              0,
+            ],
+            "duration": 3.0416666666666665,
+            "start_index": 12.5,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "LoadAudio",
+          },
+          "class_type": "LoadAudio",
+          "inputs": {
+            "audio": "feverslop-ts/golden/stems/bass.wav",
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+        "size": {
+          "height": 192,
+          "width": 320,
+        },
+      },
+      "size": {
+        "height": 192,
+        "width": 320,
+      },
+      "target": "<tmp>/music-leak/videos/slot-008.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/music-leak/assets/locations/hall.png",
+          "to": "feverslop-ts/golden/assets/locations/hall.png",
+        },
+        {
+          "from": "<tmp>/music-leak/assets/characters/ann.png",
+          "to": "feverslop-ts/golden/assets/characters/ann.png",
+        },
+        {
+          "from": "<tmp>/music-leak/assets/characters/bo.png",
+          "to": "feverslop-ts/golden/assets/characters/bo.png",
+        },
+        {
+          "from": "<tmp>/music-leak/assets/clips/slot-007_lf.png",
+          "to": "feverslop-ts/golden/assets/clips/slot-007_lf.png",
+        },
+        {
+          "from": "<tmp>/music-leak/stems/vocals.wav",
+          "to": "feverslop-ts/golden/stems/vocals.wav",
+        },
+        {
+          "from": "<tmp>/music-leak/stems/bass.wav",
+          "to": "feverslop-ts/golden/stems/bass.wav",
+        },
+        {
+          "from": "<tmp>/music-leak/stems/song.wav",
+          "to": "feverslop-ts/golden/stems/song.wav",
+        },
+        {
+          "from": "<tmp>/music-leak/assets/clips/slot-007_tail22.mp4",
+          "to": "feverslop-ts/golden/assets/clips/slot-007_tail22.mp4",
+        },
+      ],
+      "what": {
+        "kind": "clip",
+        "label": "clip slot-008",
+        "resolution": "320x192",
+        "spec": {
+          "id": "slot-008",
+          "kind": "clip",
+          "parts": [
+            "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
+            48,
+            "h3-ref2video",
+            "320x192",
+            [
+              "7ec5e18699f7739b",
+              "6105e7c6249a6ed9",
+              "7535cc280f986d5f",
+            ],
+            [
+              [
+                "vocals",
+                12.5,
+                15.5,
+              ],
+              [
+                "bass",
+                12.5,
+                15.5,
+              ],
+            ],
+            "4f5471ea886d1a4e",
+          ],
+        },
+        "workflow": "h3-ref2video",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "TrimAudioDuration",
+          },
+          "class_type": "TrimAudioDuration",
+          "inputs": {
+            "audio": [
+              "9",
+              0,
+            ],
+            "duration": 3.0416666666666665,
+            "start_index": 14.458333333333334,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "PrimitiveStringMultiline",
+          },
+          "class_type": "PrimitiveStringMultiline",
+          "inputs": {
+            "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 73,
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 320,
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 192,
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "MiniMaxH3ReferenceToVideo",
+          },
+          "class_type": "MiniMaxH3ReferenceToVideo",
+          "inputs": {
+            "audio_vae": [
+              "2",
+              0,
+            ],
+            "clip": [
+              "6",
+              0,
+            ],
+            "height": [
+              "14",
+              0,
+            ],
+            "length": [
+              "12",
+              0,
+            ],
+            "prompt": [
+              "11",
+              0,
+            ],
+            "ref_audios.ref_audio_0": [
+              "8",
+              0,
+            ],
+            "ref_audios.ref_audio_1": [
+              "10",
+              0,
+            ],
+            "ref_image_size": "match",
+            "ref_images.ref_image_0": [
+              "16",
+              0,
+            ],
+            "ref_images.ref_image_1": [
+              "17",
+              0,
+            ],
+            "ref_images.ref_image_2": [
+              "18",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "13",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/locations/hall.png",
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/characters/ann.png",
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/golden/assets/characters/bo.png",
+          },
+        },
+        "19": {
+          "_meta": {
+            "title": "LoadAudio",
+          },
+          "class_type": "LoadAudio",
+          "inputs": {
+            "audio": "feverslop-ts/golden/stems/song.wav",
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+          },
+        },
+        "20": {
+          "_meta": {
+            "title": "TrimAudioDuration",
+          },
+          "class_type": "TrimAudioDuration",
+          "inputs": {
+            "audio": [
+              "19",
+              0,
+            ],
+            "duration": 3.0416666666666665,
+            "start_index": 14.458333333333334,
+          },
+        },
+        "21": {
+          "_meta": {
+            "title": "MiniMaxH3AddGuide",
+          },
+          "class_type": "MiniMaxH3AddGuide",
+          "inputs": {
+            "audio": [
+              "20",
+              0,
+            ],
+            "audio_vae": [
+              "2",
+              0,
+            ],
+            "frame_idx": 0,
+            "latent": [
+              "15",
+              1,
+            ],
+            "positive": [
+              "15",
+              0,
+            ],
+          },
+        },
+        "22": {
+          "_meta": {
+            "title": "VHS_LoadVideo",
+          },
+          "class_type": "VHS_LoadVideo",
+          "inputs": {
+            "custom_height": 0,
+            "custom_width": 0,
+            "force_rate": 0,
+            "frame_load_cap": 0,
+            "select_every_nth": 1,
+            "skip_first_frames": 0,
+            "video": "feverslop-ts/golden/assets/clips/slot-007_tail22.mp4",
+          },
+        },
+        "23": {
+          "_meta": {
+            "title": "MiniMaxH3AddGuide",
+          },
+          "class_type": "MiniMaxH3AddGuide",
+          "inputs": {
+            "frame_idx": 0,
+            "image": [
+              "22",
+              0,
+            ],
+            "latent": [
+              "15",
+              1,
+            ],
+            "positive": [
+              "21",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "24": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "25": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "23",
+              0,
+            ],
+            "model": [
+              "24",
+              0,
+            ],
+          },
+        },
+        "26": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "27": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "euler",
+          },
+        },
+        "28": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "5",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "29": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "25",
+              0,
+            ],
+            "latent_image": [
+              "15",
+              1,
+            ],
+            "noise": [
+              "26",
+              0,
+            ],
+            "sampler": [
+              "27",
+              0,
+            ],
+            "sigmas": [
+              "28",
+              0,
+            ],
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "30": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "29",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "31": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "30",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "32": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "audio": [
+              "20",
+              0,
+            ],
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/golden/videos/slot-008",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "31",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+            "model": [
+              "3",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "MiniMaxH3SigmaShift",
+          },
+          "class_type": "MiniMaxH3SigmaShift",
+          "inputs": {
+            "model": [
+              "4",
+              0,
+            ],
+            "shift_audio": 3,
+            "shift_video": 12,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "LoadAudio",
+          },
+          "class_type": "LoadAudio",
+          "inputs": {
+            "audio": "feverslop-ts/golden/stems/vocals.wav",
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "TrimAudioDuration",
+          },
+          "class_type": "TrimAudioDuration",
+          "inputs": {
+            "audio": [
+              "7",
+              0,
+            ],
+            "duration": 3.0416666666666665,
+            "start_index": 14.458333333333334,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "LoadAudio",
+          },
+          "class_type": "LoadAudio",
+          "inputs": {
+            "audio": "feverslop-ts/golden/stems/bass.wav",
+          },
+        },
+      },
+    },
+    {
+      "meta": {},
+      "target": "<tmp>/music-leak/videos/interpolated/slot-007.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/music-leak/videos/slot-007.mp4",
+          "to": "feverslop-ts/golden/videos/slot-007.mp4",
+        },
+      ],
+      "what": {
+        "kind": "interpolation",
+        "label": "interpolation slot-007",
+        "spec": {
+          "id": "slot-007",
+          "kind": "interpolation",
+          "parts": [
+            "746a34670224de0e",
+            [
+              {
+                "frames": 30,
+                "start": 0,
+              },
+              {
+                "frames": 42,
+                "start": 30,
+              },
+            ],
+            "rife_v4.26_heavy.safetensors",
+            2,
+          ],
+        },
+        "workflow": "frame-interpolate",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VHS_LoadVideo",
+          },
+          "class_type": "VHS_LoadVideo",
+          "inputs": {
+            "custom_height": 0,
+            "custom_width": 0,
+            "force_rate": 0,
+            "frame_load_cap": 0,
+            "select_every_nth": 1,
+            "skip_first_frames": 0,
+            "video": "feverslop-ts/golden/videos/slot-007.mp4",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "RepeatImageBatch",
+          },
+          "class_type": "RepeatImageBatch",
+          "inputs": {
+            "amount": 1,
+            "image": [
+              "9",
+              0,
+            ],
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "BatchImagesNode",
+          },
+          "class_type": "BatchImagesNode",
+          "inputs": {
+            "images.image0": [
+              "4",
+              0,
+            ],
+            "images.image1": [
+              "6",
+              0,
+            ],
+            "images.image2": [
+              "8",
+              0,
+            ],
+            "images.image3": [
+              "10",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "crf": 17,
+            "filename_prefix": "feverslop-ts/golden/interpolated/slot-007",
+            "format": "video/h264-mp4",
+            "frame_rate": 48,
+            "images": [
+              "11",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "FrameInterpolationModelLoader",
+          },
+          "class_type": "FrameInterpolationModelLoader",
+          "inputs": {
+            "model_name": "rife_v4.26_heavy.safetensors",
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 0,
+            "image": [
+              "1",
+              0,
+            ],
+            "length": 30,
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "FrameInterpolate",
+          },
+          "class_type": "FrameInterpolate",
+          "inputs": {
+            "images": [
+              "3",
+              0,
+            ],
+            "interp_model": [
+              "2",
+              0,
+            ],
+            "multiplier": 2,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 29,
+            "image": [
+              "3",
+              0,
+            ],
+            "length": 1,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "RepeatImageBatch",
+          },
+          "class_type": "RepeatImageBatch",
+          "inputs": {
+            "amount": 1,
+            "image": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 30,
+            "image": [
+              "1",
+              0,
+            ],
+            "length": 42,
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "FrameInterpolate",
+          },
+          "class_type": "FrameInterpolate",
+          "inputs": {
+            "images": [
+              "7",
+              0,
+            ],
+            "interp_model": [
+              "2",
+              0,
+            ],
+            "multiplier": 2,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "ImageFromBatch",
+          },
+          "class_type": "ImageFromBatch",
+          "inputs": {
+            "batch_index": 41,
+            "image": [
+              "7",
+              0,
+            ],
+            "length": 1,
+          },
+        },
+      },
+    },
+  ],
+  "sidecars": [
+    {
+      "fingerprint": "4f5471ea886d1a4e",
+      "frameStart": 300,
+      "frames": 72,
+      "renderedFrames": 73,
+      "request": "output/clips/slot-007.json",
+      "resolution": "320x192",
+      "seed": 42,
+      "size": "320x192",
+      "workflow": "h3-ref2video",
+    },
+    {
+      "fingerprint": "d40bfb8487b97b02",
+      "frameStart": 372,
+      "frames": 48,
+      "renderedFrames": 48,
+      "request": "output/clips/slot-008.json",
+      "resolution": "320x192",
+      "seed": 42,
+      "size": "320x192",
+      "startsFrom": "slot-007",
+      "workflow": "h3-ref2video",
+    },
+  ],
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-film: context frames 1`] = `
+{
+  "size": {
+    "height": 480,
+    "width": 864,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 480,
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "6",
+          0,
+        ],
+        "height": [
+          "10",
+          0,
+        ],
+        "length": [
+          "8",
+          0,
+        ],
+        "prompt": [
+          "7",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "12",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "13",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "9",
+          0,
+        ],
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/locations/trench.png",
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "VHS_LoadVideo",
+      },
+      "class_type": "VHS_LoadVideo",
+      "inputs": {
+        "custom_height": 0,
+        "custom_width": 0,
+        "force_rate": 0,
+        "frame_load_cap": 0,
+        "select_every_nth": 1,
+        "skip_first_frames": 0,
+        "video": "fs/film-x/assets/clips/clip-002_tail22.mp4",
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "14",
+          0,
+        ],
+        "latent": [
+          "11",
+          1,
+        ],
+        "positive": [
+          "11",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "5",
+          0,
+        ],
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "15",
+          0,
+        ],
+        "model": [
+          "16",
+          0,
+        ],
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "5",
+          0,
+        ],
+        "scheduler": "simple",
+        "steps": 8,
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "17",
+          0,
+        ],
+        "latent_image": [
+          "11",
+          1,
+        ],
+        "noise": [
+          "18",
+          0,
+        ],
+        "sampler": [
+          "19",
+          0,
+        ],
+        "sigmas": [
+          "20",
+          0,
+        ],
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "21",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "22",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "22",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "25": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "24",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/film-x/videos/clip-003",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "23",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "LoraLoaderModelOnly",
+      },
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+        "model": [
+          "3",
+          0,
+        ],
+        "strength_model": 1,
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "4",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 141,
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 864,
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-film-beta: context frames 1`] = `
+{
+  "size": {
+    "height": 480,
+    "width": 864,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/locations/trench.png",
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "VHS_LoadVideo",
+      },
+      "class_type": "VHS_LoadVideo",
+      "inputs": {
+        "custom_height": 0,
+        "custom_width": 0,
+        "force_rate": 0,
+        "frame_load_cap": 0,
+        "select_every_nth": 1,
+        "skip_first_frames": 0,
+        "video": "fs/film-x/assets/clips/clip-002_tail22.mp4",
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "12",
+          0,
+        ],
+        "latent": [
+          "9",
+          1,
+        ],
+        "positive": [
+          "9",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "3",
+          0,
+        ],
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "13",
+          0,
+        ],
+        "model": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "res_multistep",
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "3",
+          0,
+        ],
+        "scheduler": "beta",
+        "steps": 20,
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "15",
+          0,
+        ],
+        "latent_image": [
+          "9",
+          1,
+        ],
+        "noise": [
+          "16",
+          0,
+        ],
+        "sampler": [
+          "17",
+          0,
+        ],
+        "sigmas": [
+          "18",
+          0,
+        ],
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "19",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "20",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "20",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "22",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/film-x/videos/clip-003",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "21",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 141,
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 864,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 480,
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "4",
+          0,
+        ],
+        "height": [
+          "8",
+          0,
+        ],
+        "length": [
+          "6",
+          0,
+        ],
+        "prompt": [
+          "5",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "10",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "11",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "7",
+          0,
+        ],
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-film-2pass: context frames 1`] = `
+{
+  "size": {
+    "height": 1088,
+    "width": 1920,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/locations/trench.png",
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "VHS_LoadVideo",
+      },
+      "class_type": "VHS_LoadVideo",
+      "inputs": {
+        "custom_height": 0,
+        "custom_width": 0,
+        "force_rate": 0,
+        "frame_load_cap": 0,
+        "select_every_nth": 1,
+        "skip_first_frames": 0,
+        "video": "fs/film-x/assets/clips/clip-002_tail22.mp4",
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "3",
+          0,
+        ],
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "12",
+          0,
+        ],
+        "latent": [
+          "9",
+          1,
+        ],
+        "positive": [
+          "9",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "15",
+          0,
+        ],
+        "model": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "res_multistep",
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "3",
+          0,
+        ],
+        "scheduler": "simple",
+        "steps": 20,
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "16",
+          0,
+        ],
+        "latent_image": [
+          "9",
+          1,
+        ],
+        "noise": [
+          "13",
+          0,
+        ],
+        "sampler": [
+          "17",
+          0,
+        ],
+        "sigmas": [
+          "18",
+          0,
+        ],
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "19",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "20",
+          0,
+        ],
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "MinimaxH3LatentUpscaler3D",
+      },
+      "class_type": "MinimaxH3LatentUpscaler3D",
+      "inputs": {
+        "align": 32,
+        "device": "cuda",
+        "enable_temporal_chunking": true,
+        "force_unload": true,
+        "latent": [
+          "21",
+          0,
+        ],
+        "mode": "target dimensions",
+        "mode.height": 1088,
+        "mode.width": 1920,
+        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
+        "precision": "bf16",
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "21",
+          1,
+        ],
+        "video_latent": [
+          "22",
+          0,
+        ],
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 43,
+      },
+    },
+    "25": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "12",
+          0,
+        ],
+        "latent": [
+          "23",
+          0,
+        ],
+        "positive": [
+          "9",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "26": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "25",
+          0,
+        ],
+        "model": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "27": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "28": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 0.2,
+        "model": [
+          "3",
+          0,
+        ],
+        "scheduler": "beta",
+        "steps": 4,
+      },
+    },
+    "29": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "26",
+          0,
+        ],
+        "latent_image": [
+          "23",
+          0,
+        ],
+        "noise": [
+          "24",
+          0,
+        ],
+        "sampler": [
+          "27",
+          0,
+        ],
+        "sigmas": [
+          "28",
+          0,
+        ],
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "30": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "29",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "31": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "30",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "32": {
+      "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "30",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "33": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "32",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/film-x/videos/clip-003",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "31",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 141,
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 960,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 544,
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "4",
+          0,
+        ],
+        "height": [
+          "8",
+          0,
+        ],
+        "length": [
+          "6",
+          0,
+        ],
+        "prompt": [
+          "5",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "10",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "11",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "7",
+          0,
+        ],
+      },
+    },
+  },
+}
+`;
+
+exports[`rendering and joining, with ffmpeg film: context frames - the end of a clip with dialogue as the film shows it, its head cut off, its colors matched 1`] = `
+{
+  "ffmpeg": [
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-003.mp4",
+      "-vf",
+      "select=eq(n\\,0)",
+      "-frames:v",
+      "1",
+      "<tmp>/film-context/assets/clips/clip-003_ff.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-003.mp4",
+      "-vf",
+      "select=eq(n\\,123)",
+      "-frames:v",
+      "1",
+      "<tmp>/film-context/assets/clips/clip-003_lf.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-003.mp4",
+      "-vf",
+      "trim=start_frame=99:end_frame=121,setpts=PTS-STARTPTS",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-crf",
+      "10",
+      "-pix_fmt",
+      "yuv420p",
+      "<tmp>/film-context/assets/clips/clip-003_tail22.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-004.mp4",
+      "-vf",
+      "trim=start_frame=25,setpts=PTS-STARTPTS",
+      "-af",
+      "atrim=start=1.0416666666666667,asetpts=PTS-STARTPTS",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "14",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "256k",
+      "<tmp>/film-context/videos/clip-004.trim.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "info",
+      "-i",
+      "<tmp>/film-context/videos/clip-003.mp4",
+      "-vf",
+      "select='between(n\\,120\\,123)',signalstats,metadata=print",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-v",
+      "info",
+      "-i",
+      "<tmp>/film-context/videos/clip-004.mp4",
+      "-vf",
+      "select='between(n\\,0\\,3)',signalstats,metadata=print",
+      "-an",
+      "-f",
+      "null",
+      "-",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-004.mp4",
+      "-vf",
+      "lutyuv=y='clip((val-123)*0+60,16,235)':u='clip(val+119,16,240)':v='clip(val+80,16,240)'",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "medium",
+      "-crf",
+      "14",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "copy",
+      "<tmp>/film-context/videos/clip-004.match.mp4",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-004.mp4",
+      "-vf",
+      "select=eq(n\\,0)",
+      "-frames:v",
+      "1",
+      "<tmp>/film-context/assets/clips/clip-004_ff.partial.png",
+    ],
+    [
+      "ffmpeg",
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      "<tmp>/film-context/videos/clip-004.mp4",
+      "-vf",
+      "select=eq(n\\,39)",
+      "-frames:v",
+      "1",
+      "<tmp>/film-context/assets/clips/clip-004_lf.partial.png",
+    ],
+  ],
+  "jobs": [
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "size": {
+        "height": 192,
+        "width": 320,
+      },
+      "target": "<tmp>/film-context/videos/clip-003.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/film-context/assets/locations/hall.png",
+          "to": "feverslop-ts/film-golden/assets/locations/hall.png",
+        },
+        {
+          "from": "<tmp>/film-context/assets/characters/ann.png",
+          "to": "feverslop-ts/film-golden/assets/characters/ann.png",
+        },
+      ],
+      "what": {
+        "kind": "clip",
+        "label": "clip clip-003",
+        "resolution": "320x192",
+        "spec": {
+          "id": "clip-003",
+          "kind": "clip",
+          "parts": [
+            "a9b027fa6b152475",
+            "h3-ref2video-film",
+            "320x192",
+            true,
+            [
+              "7ec5e18699f7739b",
+              "6105e7c6249a6ed9",
+            ],
+            "",
+          ],
+        },
+        "workflow": "h3-ref2video-film",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 192,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "MiniMaxH3ReferenceToVideo",
+          },
+          "class_type": "MiniMaxH3ReferenceToVideo",
+          "inputs": {
+            "audio_vae": [
+              "2",
+              0,
+            ],
+            "clip": [
+              "6",
+              0,
+            ],
+            "height": [
+              "10",
+              0,
+            ],
+            "length": [
+              "8",
+              0,
+            ],
+            "prompt": [
+              "7",
+              0,
+            ],
+            "ref_image_size": "match",
+            "ref_images.ref_image_0": [
+              "12",
+              0,
+            ],
+            "ref_images.ref_image_1": [
+              "13",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "9",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/film-golden/assets/locations/hall.png",
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/film-golden/assets/characters/ann.png",
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "11",
+              0,
+            ],
+            "model": [
+              "14",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "euler",
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "5",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "19": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "15",
+              0,
+            ],
+            "latent_image": [
+              "11",
+              1,
+            ],
+            "noise": [
+              "16",
+              0,
+            ],
+            "sampler": [
+              "17",
+              0,
+            ],
+            "sigmas": [
+              "18",
+              0,
+            ],
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+          },
+        },
+        "20": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "19",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "21": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "20",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "22": {
+          "_meta": {
+            "title": "VAEDecodeAudio",
+          },
+          "class_type": "VAEDecodeAudio",
+          "inputs": {
+            "samples": [
+              "20",
+              0,
+            ],
+            "vae": [
+              "2",
+              0,
+            ],
+          },
+        },
+        "23": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "audio": [
+              "22",
+              0,
+            ],
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/film-golden/videos/clip-003",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "21",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+            "model": [
+              "3",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "MiniMaxH3SigmaShift",
+          },
+          "class_type": "MiniMaxH3SigmaShift",
+          "inputs": {
+            "model": [
+              "4",
+              0,
+            ],
+            "shift_audio": 3,
+            "shift_video": 12,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveStringMultiline",
+          },
+          "class_type": "PrimitiveStringMultiline",
+          "inputs": {
+            "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 124,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 320,
+          },
+        },
+      },
+    },
+    {
+      "meta": {
+        "seed": 42,
+      },
+      "size": {
+        "height": 192,
+        "width": 320,
+      },
+      "target": "<tmp>/film-context/videos/clip-004.mp4",
+      "uploads": [
+        {
+          "from": "<tmp>/film-context/assets/locations/hall.png",
+          "to": "feverslop-ts/film-golden/assets/locations/hall.png",
+        },
+        {
+          "from": "<tmp>/film-context/assets/characters/ann.png",
+          "to": "feverslop-ts/film-golden/assets/characters/ann.png",
+        },
+        {
+          "from": "<tmp>/film-context/assets/clips/clip-003_lf.png",
+          "to": "feverslop-ts/film-golden/assets/clips/clip-003_lf.png",
+        },
+        {
+          "from": "<tmp>/film-context/assets/clips/clip-003_tail22.mp4",
+          "to": "feverslop-ts/film-golden/assets/clips/clip-003_tail22.mp4",
+        },
+      ],
+      "what": {
+        "kind": "clip",
+        "label": "clip clip-004",
+        "resolution": "320x192",
+        "spec": {
+          "id": "clip-004",
+          "kind": "clip",
+          "parts": [
+            "7e139c62bfe3dc2e",
+            "h3-ref2video-film",
+            "320x192",
+            true,
+            [
+              "7ec5e18699f7739b",
+              "6105e7c6249a6ed9",
+            ],
+            "9644cc2f533683bf",
+          ],
+        },
+        "workflow": "h3-ref2video-film",
+      },
+      "workflow": {
+        "1": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+          },
+        },
+        "10": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 192,
+          },
+        },
+        "11": {
+          "_meta": {
+            "title": "MiniMaxH3ReferenceToVideo",
+          },
+          "class_type": "MiniMaxH3ReferenceToVideo",
+          "inputs": {
+            "audio_vae": [
+              "2",
+              0,
+            ],
+            "clip": [
+              "6",
+              0,
+            ],
+            "height": [
+              "10",
+              0,
+            ],
+            "length": [
+              "8",
+              0,
+            ],
+            "prompt": [
+              "7",
+              0,
+            ],
+            "ref_image_size": "match",
+            "ref_images.ref_image_0": [
+              "12",
+              0,
+            ],
+            "ref_images.ref_image_1": [
+              "13",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+            "width": [
+              "9",
+              0,
+            ],
+          },
+        },
+        "12": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/film-golden/assets/locations/hall.png",
+          },
+        },
+        "13": {
+          "_meta": {
+            "title": "LoadImage",
+          },
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "feverslop-ts/film-golden/assets/characters/ann.png",
+          },
+        },
+        "14": {
+          "_meta": {
+            "title": "VHS_LoadVideo",
+          },
+          "class_type": "VHS_LoadVideo",
+          "inputs": {
+            "custom_height": 0,
+            "custom_width": 0,
+            "force_rate": 0,
+            "frame_load_cap": 0,
+            "select_every_nth": 1,
+            "skip_first_frames": 0,
+            "video": "feverslop-ts/film-golden/assets/clips/clip-003_tail22.mp4",
+          },
+        },
+        "15": {
+          "_meta": {
+            "title": "MiniMaxH3AddGuide",
+          },
+          "class_type": "MiniMaxH3AddGuide",
+          "inputs": {
+            "frame_idx": 0,
+            "image": [
+              "14",
+              0,
+            ],
+            "latent": [
+              "11",
+              1,
+            ],
+            "positive": [
+              "11",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "16": {
+          "_meta": {
+            "title": "ModelAttentionBackend",
+          },
+          "class_type": "ModelAttentionBackend",
+          "inputs": {
+            "attention": "comfy kitchen attention",
+            "model": [
+              "5",
+              0,
+            ],
+          },
+        },
+        "17": {
+          "_meta": {
+            "title": "BasicGuider",
+          },
+          "class_type": "BasicGuider",
+          "inputs": {
+            "conditioning": [
+              "15",
+              0,
+            ],
+            "model": [
+              "16",
+              0,
+            ],
+          },
+        },
+        "18": {
+          "_meta": {
+            "title": "RandomNoise",
+          },
+          "class_type": "RandomNoise",
+          "inputs": {
+            "noise_seed": 42,
+          },
+        },
+        "19": {
+          "_meta": {
+            "title": "KSamplerSelect",
+          },
+          "class_type": "KSamplerSelect",
+          "inputs": {
+            "sampler_name": "euler",
+          },
+        },
+        "2": {
+          "_meta": {
+            "title": "VAELoader",
+          },
+          "class_type": "VAELoader",
+          "inputs": {
+            "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+          },
+        },
+        "20": {
+          "_meta": {
+            "title": "BasicScheduler",
+          },
+          "class_type": "BasicScheduler",
+          "inputs": {
+            "denoise": 1,
+            "model": [
+              "5",
+              0,
+            ],
+            "scheduler": "simple",
+            "steps": 8,
+          },
+        },
+        "21": {
+          "_meta": {
+            "title": "SamplerCustomAdvanced",
+          },
+          "class_type": "SamplerCustomAdvanced",
+          "inputs": {
+            "guider": [
+              "17",
+              0,
+            ],
+            "latent_image": [
+              "11",
+              1,
+            ],
+            "noise": [
+              "18",
+              0,
+            ],
+            "sampler": [
+              "19",
+              0,
+            ],
+            "sigmas": [
+              "20",
+              0,
+            ],
+          },
+        },
+        "22": {
+          "_meta": {
+            "title": "VRAMCleanup",
+          },
+          "class_type": "VRAMCleanup",
+          "inputs": {
+            "anything": [
+              "21",
+              0,
+            ],
+            "offload_cache": false,
+            "offload_model": true,
+          },
+        },
+        "23": {
+          "_meta": {
+            "title": "VAEDecode",
+          },
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "22",
+              0,
+            ],
+            "vae": [
+              "1",
+              0,
+            ],
+          },
+        },
+        "24": {
+          "_meta": {
+            "title": "VAEDecodeAudio",
+          },
+          "class_type": "VAEDecodeAudio",
+          "inputs": {
+            "samples": [
+              "22",
+              0,
+            ],
+            "vae": [
+              "2",
+              0,
+            ],
+          },
+        },
+        "25": {
+          "_meta": {
+            "title": "VHS_VideoCombine",
+          },
+          "class_type": "VHS_VideoCombine",
+          "inputs": {
+            "audio": [
+              "24",
+              0,
+            ],
+            "crf": 19,
+            "filename_prefix": "feverslop-ts/film-golden/videos/clip-004",
+            "format": "video/h264-mp4",
+            "frame_rate": 24,
+            "images": [
+              "23",
+              0,
+            ],
+            "loop_count": 0,
+            "pingpong": false,
+            "pix_fmt": "yuv420p",
+            "save_metadata": true,
+            "save_output": true,
+            "trim_to_audio": false,
+          },
+        },
+        "3": {
+          "_meta": {
+            "title": "UNETLoader",
+          },
+          "class_type": "UNETLoader",
+          "inputs": {
+            "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+            "weight_dtype": "default",
+          },
+        },
+        "4": {
+          "_meta": {
+            "title": "LoraLoaderModelOnly",
+          },
+          "class_type": "LoraLoaderModelOnly",
+          "inputs": {
+            "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+            "model": [
+              "3",
+              0,
+            ],
+            "strength_model": 1,
+          },
+        },
+        "5": {
+          "_meta": {
+            "title": "MiniMaxH3SigmaShift",
+          },
+          "class_type": "MiniMaxH3SigmaShift",
+          "inputs": {
+            "model": [
+              "4",
+              0,
+            ],
+            "shift_audio": 3,
+            "shift_video": 12,
+          },
+        },
+        "6": {
+          "_meta": {
+            "title": "CLIPLoader",
+          },
+          "class_type": "CLIPLoader",
+          "inputs": {
+            "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "device": "default",
+            "type": "minimax",
+          },
+        },
+        "7": {
+          "_meta": {
+            "title": "PrimitiveStringMultiline",
+          },
+          "class_type": "PrimitiveStringMultiline",
+          "inputs": {
+            "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+          },
+        },
+        "8": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 73,
+          },
+        },
+        "9": {
+          "_meta": {
+            "title": "PrimitiveInt",
+          },
+          "class_type": "PrimitiveInt",
+          "inputs": {
+            "value": 320,
+          },
+        },
+      },
+    },
+  ],
+  "sidecars": [
+    {
+      "fingerprint": "9644cc2f533683bf",
+      "frameStart": 200,
+      "frames": 108,
+      "promptHash": "a9b027fa6b152475",
+      "renderedFrames": 124,
+      "request": "output/clips/clip-003.json",
+      "resolution": "320x192",
+      "seed": 42,
+      "size": "320x192",
+      "workflow": "h3-ref2video-film",
+    },
+    {
+      "contextFrames": 22,
+      "fingerprint": "461121f11ff3c28d",
+      "frameStart": 308,
+      "frames": 40,
+      "promptHash": "7e139c62bfe3dc2e",
+      "renderedFrames": 48,
+      "request": "output/clips/clip-004.json",
+      "resolution": "320x192",
+      "seed": 42,
+      "size": "320x192",
+      "startsFrom": "clip-003",
+      "workflow": "h3-ref2video-film",
+    },
+  ],
 }
 `;
