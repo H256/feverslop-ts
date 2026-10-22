@@ -1,5 +1,5 @@
 // Prompt helpers for the interactive CLIs (@clack/prompts) - the same questions tools/init.ts asks for the music-video
-// wizard, here as a module so tools/film-init.ts can use them. tools/init.ts keeps its own copies untouched.
+// wizard, here as a module so tools/film-init.ts can use them. tools/init.ts takes askStyle from here and keeps its own copies of the rest.
 import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
@@ -36,29 +36,53 @@ async function readFromFile() {
     return (await Bun.file(path).text()).trim()
 }
 
-/** The film style for input/style.txt: typed, read from a file, taken from the built-in list - or left to the first run. */
+/**
+ * The film style for input/style.txt: typed, read from a file, taken from the built-in list - or left to the first run.
+ * The list goes kind of style -> style, and "← back" on each level returns to the one above. The music video's wizard
+ * (tools/init.ts) and the film's (tools/film-init.ts) ask it.
+ */
 export async function askStyle(): Promise<string | undefined> {
-    const mode = answer(await p.select({
-        message: 'Visual style',
-        options: [
-            {value: 'skip', label: 'Skip', hint: 'a style from the built-in list that fits the story is picked later'},
-            {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
-            {value: 'type', label: 'Type it now'},
-            {value: 'file', label: 'Read from a file'},
-        ],
-    }))
-    if (mode === 'skip') return undefined
-    if (mode === 'file') return readFromFile()
-    if (mode === 'type') return multiline('Visual style')
+    const BACK = '\0back'
+    const back = {value: BACK, label: '← back'}
+    while (true) {
+        const mode = answer(await p.select({
+            message: 'Visual style',
+            options: [
+                {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
+                {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
+                {value: 'type', label: 'Type it now'},
+                {value: 'file', label: 'Read from a file'},
+            ],
+        }))
+        if (mode === 'skip') return undefined
+        if (mode === 'file') return readFromFile()
+        if (mode === 'type') return multiline('Visual style')
 
-    const groups = [...new Set(STYLES.map(s => s.group))]
-    const group = answer(await p.select({message: 'Kind of style', options: groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`}))}))
-    const picked = answer(await p.select({
-        message: group,
-        maxItems: 12,
-        options: STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})),
-    }))
-    return STYLES.find(s => s.id === picked)!.text
+        const groups = [...new Set(STYLES.map(s => s.group))]
+        while (true) {
+            const group = answer(await p.select({
+                message: 'Kind of style',
+                options: [...groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`})), back],
+            }))
+            if (group === BACK) break
+            // a picked style is shown in full before it is taken - the hint in the list is only its first words
+            let last: string | undefined
+            while (true) {
+                const picked = answer(await p.select({
+                    message: group,
+                    maxItems: 12,
+                    initialValue: last,
+                    options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
+                }))
+                if (picked === BACK) break
+                const style = STYLES.find(s => s.id === picked)!
+                p.note(style.text, style.name)
+                const take = answer(await p.confirm({message: `Take ${style.name}?`, active: 'Take it', inactive: 'Another one', initialValue: true}))
+                if (take) return style.text
+                last = picked
+            }
+        }
+    }
 }
 
 /**
