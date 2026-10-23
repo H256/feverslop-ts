@@ -25875,28 +25875,26 @@ N/A"
     "pictures": [
       "assets/locations/the-corridor.png",
       "assets/characters/bo.png",
-      "assets/characters/ann.png",
       "assets/clips/clip-001_lf.png",
     ],
     "prompt": 
 "subject_definitions:
 <Subject 1> is the THE CORRIDOR environment in <Picture 1>: a narrow corridor
 <Subject 2> is Bo, the character in <Picture 2>; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: Bo, an old man in a cardigan
-<Subject 3> is Ann, the character in <Picture 3>; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: Ann, a singer in a dark coat
 
 summary:
-[reference generation] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2> and <Subject 3>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over. The characters speak the dialogue themselves, in the shots below. It is cut in 1 shot.
+[reference generation] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on, holds it for a moment and then cuts hard to a new camera position in the same place: across the cut everyone keeps their place, their clothes and the light. The characters speak the dialogue themselves, in the shots below. It is cut in 2 shots.
 
 retention_analysis:
-<Subject 1> (appears in [Shot 1]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
-<Subject 2> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
-<Subject 3> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Ann are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
+<Subject 1> (appears in [Shot 2]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
+<Subject 2> (appears in [Shot 2]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
 
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
 No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside <Subject 1>, at the positions described below.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 3>, Ann, left of centre, looking toward the right of the frame; <Subject 2>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to <Subject 3>. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d> <Subject 3>, Ann, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+[Shot 1] The video begins on the frame the previous clip ended on and holds that picture for a moment: the same camera and framing, everyone where they are, nobody speaks.
+[Shot 2] At 00:00.500, the shot cuts to a close-up of <Subject 2>, still in <Subject 1>, the THE CORRIDOR; locked off. The camera is from beside <Subject 2>. In frame: <Subject 2>, Bo, centre, three-quarter view, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to Ann. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d>
 
 overall_soundscape:
 footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
@@ -25907,12 +25905,11 @@ N/A"
     "shots": [
       {
         "at": 0,
-        "camera": "the camera tracks backward ahead of them",
-        "framing": "medium shot",
+        "camera": "locked off",
+        "framing": "close-up",
         "label": "[Shot 1]",
         "subjects": [
           "<Subject 1>",
-          "<Subject 3>",
           "<Subject 2>",
         ],
       },
@@ -25934,18 +25931,19 @@ N/A"
 <Subject 3> is Bo, the character in <Picture 3>; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: Bo, an old man in a cardigan
 
 summary:
-[reference generation] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2> and <Subject 3>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over. The characters speak the dialogue themselves, in the shots below. It is cut in 1 shot.
+[reference generation] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2> and <Subject 3>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on, holds it for a moment and then cuts hard to a new camera position in the same place: across the cut everyone keeps their place, their clothes and the light. The characters speak the dialogue themselves, in the shots below. It is cut in 2 shots.
 
 retention_analysis:
-<Subject 1> (appears in [Shot 1]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
-<Subject 2> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Ann are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
-<Subject 3> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
+<Subject 1> (appears in [Shot 2]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
+<Subject 2> (appears in [Shot 2]): fully_preserved - the facial identity, build, hair and costume of Ann are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
+<Subject 3> (appears in [Shot 2]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
 
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
 No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside <Subject 1>, at the positions described below.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+[Shot 1] The video begins on the frame the previous clip ended on and holds that picture for a moment: the same camera and framing, everyone where they are, nobody speaks.
+[Shot 2] At 00:00.500, the shot cuts to a close-up, still in <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
 
 overall_soundscape:
 footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
@@ -25956,8 +25954,8 @@ N/A"
     "shots": [
       {
         "at": 0,
-        "camera": "the camera tracks backward ahead of them",
-        "framing": "medium shot",
+        "camera": "a slow push in",
+        "framing": "close-up",
         "label": "[Shot 1]",
         "subjects": [
           "<Subject 1>",
@@ -26026,30 +26024,28 @@ N/A"
     "pictures": [
       "assets/locations/the-corridor.png",
       "assets/characters/bo.png",
-      "assets/characters/ann.png",
       "assets/clips/clip-001_lf.png",
     ],
     "prompt": 
 "subject_definitions:
 <Subject 1> is the THE CORRIDOR environment in <Picture 1>: a narrow corridor
 <Subject 2> is Bo, the character in <Picture 2>; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: Bo, an old man in a cardigan
-<Subject 3> is Ann, the character in <Picture 3>; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: Ann, a singer in a dark coat
-<Picture 4> is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: <Subject 1>, <Subject 2> and <Subject 3>.
+<Picture 3> is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: <Subject 1> and <Subject 2>.
 
 summary:
-[reference generation + keyframe completion] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2> and <Subject 3>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on <Picture 4> and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over. The characters speak the dialogue themselves, in the shots below. It is cut in 1 shot.
+[reference generation + keyframe completion] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on, holds it for a moment and then cuts hard to a new camera position in the same place: across the cut everyone keeps their place, their clothes and the light. The characters speak the dialogue themselves, in the shots below. It is cut in 2 shots.
 
 retention_analysis:
-<Subject 1> (appears in [Shot 1]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
-<Subject 2> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
-<Subject 3> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Ann are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
-<Picture 4> ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.
+<Subject 1> (appears in [Shot 2]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
+<Subject 2> (appears in [Shot 2]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
+<Picture 3> ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.
 
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
 No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside <Subject 1>, at the positions described below.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The shot begins from <Picture 4> and goes on from there. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 3>, Ann, left of centre, looking toward the right of the frame; <Subject 2>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to <Subject 3>. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d> <Subject 3>, Ann, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+[Shot 1] The video begins on <Picture 3> and holds that picture for a moment: the same camera and framing, everyone where they are, nobody speaks.
+[Shot 2] At 00:00.500, the shot cuts to a close-up of <Subject 2>, still in <Subject 1>, the THE CORRIDOR; locked off. The camera is from beside <Subject 2>. In frame: <Subject 2>, Bo, centre, three-quarter view, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to Ann. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d>
 
 overall_soundscape:
 footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
@@ -26060,12 +26056,11 @@ N/A"
     "shots": [
       {
         "at": 0,
-        "camera": "the camera tracks backward ahead of them",
-        "framing": "medium shot",
+        "camera": "locked off",
+        "framing": "close-up",
         "label": "[Shot 1]",
         "subjects": [
           "<Subject 1>",
-          "<Subject 3>",
           "<Subject 2>",
         ],
       },
@@ -26088,19 +26083,20 @@ N/A"
 <Picture 4> is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: <Subject 1>, <Subject 2> and <Subject 3>.
 
 summary:
-[reference generation + keyframe completion] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2> and <Subject 3>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on <Picture 4> and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over. The characters speak the dialogue themselves, in the shots below. It is cut in 1 shot.
+[reference generation + keyframe completion] The target video is a 5-second clip of a short film set in <Subject 1> with <Subject 2> and <Subject 3>: The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on, holds it for a moment and then cuts hard to a new camera position in the same place: across the cut everyone keeps their place, their clothes and the light. The characters speak the dialogue themselves, in the shots below. It is cut in 2 shots.
 
 retention_analysis:
-<Subject 1> (appears in [Shot 1]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
-<Subject 2> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Ann are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
-<Subject 3> (appears in [Shot 1]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
+<Subject 1> (appears in [Shot 2]): fully_preserved - the layout, materials, colors and lighting of the THE CORRIDOR are retained.
+<Subject 2> (appears in [Shot 2]): fully_preserved - the facial identity, build, hair and costume of Ann are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
+<Subject 3> (appears in [Shot 2]): fully_preserved - the facial identity, build, hair and costume of Bo are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.
 <Picture 4> ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.
 
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
 No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside <Subject 1>, at the positions described below.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The shot begins from <Picture 4> and goes on from there. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+[Shot 1] The video begins on <Picture 4> and holds that picture for a moment: the same camera and framing, everyone where they are, nobody speaks.
+[Shot 2] At 00:00.500, the shot cuts to a close-up, still in <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
 
 overall_soundscape:
 footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
@@ -26111,8 +26107,8 @@ N/A"
     "shots": [
       {
         "at": 0,
-        "camera": "the camera tracks backward ahead of them",
-        "framing": "medium shot",
+        "camera": "a slow push in",
+        "framing": "close-up",
         "label": "[Shot 1]",
         "subjects": [
           "<Subject 1>",

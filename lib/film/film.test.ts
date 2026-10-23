@@ -753,3 +753,38 @@ describe('the film store and its inputs - for --dry-run, --review and bun run st
         expect(filmStepUsed('subtitles', 'idea', {}, {...config, subtitles: 'en'})).toBe(true)
     })
 })
+
+describe('a clip that goes on from the one before', () => {
+    test('cuts in when its first shot is another setup - goes on without a cut in the same take or the same picture', async () => {
+        const {cutsIn} = await import('./compose.ts')
+        const shot = (over: object) => ({framing: 'medium shot', camera: 'locked off', characters: [], action: '', lines: [], seconds: 4, view: 'from the stage door', ...over})
+        const before = {id: 'clip-001', shots: [shot({})]} as never
+        const clip = (first: object) => ({id: 'clip-002', startsFrom: 'clip-001', shots: [shot(first)]}) as never
+        expect(cutsIn(clip({framing: 'close-up'}), before)).toBe(true)
+        expect(cutsIn(clip({view: 'from the side door'}), before)).toBe(true)
+        // the same framing from the same place: a cut there would be a jump cut
+        expect(cutsIn(clip({}), before)).toBe(false)
+        expect(cutsIn(clip({framing: 'close-up', continues: true}), before)).toBe(false)
+        expect(cutsIn({id: 'clip-002', shots: [shot({framing: 'close-up'})]} as never, before)).toBe(false)
+    })
+    test('the cut is found where the scene score says it is, near the planned frame - else the planned frame', async () => {
+        const {cutInFrame} = await import('./render.ts')
+        const scores = Array.from({length: 60}, () => 0.01)
+        expect(cutInFrame(scores, 12)).toBe(12)
+        scores[15] = 0.6
+        expect(cutInFrame(scores, 12)).toBe(15)
+        // a cut far from the plan is not this one
+        const far = Array.from({length: 60}, () => 0.01)
+        far[40] = 0.9
+        expect(cutInFrame(far, 12)).toBe(12)
+    })
+    test('a look is offered to the shot planning only from its scene on', async () => {
+        const {coveragePrompt} = await import('./prompts.ts')
+        const play = toScreenplay({scenes: [{setting: 'EXT', location: 'THE DOCK', time: 'NIGHT', elements: [{type: 'action', text: 'Vyvian waits.'}]}]}, {title: 't', language: 'en'})
+        const cast = toCast({characters: [{name: 'Vyvian', states: [{name: 'soaked', change: 'Her hair is dripping wet.', from: 3}]}], locations: [{name: 'THE DOCK'}]}, play)
+        const scene1 = coveragePrompt(play.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 1)
+        const scene3 = coveragePrompt(play.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 3)
+        expect(JSON.stringify(scene1)).not.toContain('dripping wet')
+        expect(JSON.stringify(scene3)).toContain('"soaked\\" = Her hair is dripping wet.')
+    })
+})

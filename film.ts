@@ -453,7 +453,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const planScene = async () => {
             let problems: string[] = []
             for (let attempt = 0; ; attempt++) {
-                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
+                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id], i + 1))
                 try {
                     // the first time what the script checks find is a reason to ask again, the second time it is only noted
                     const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
@@ -469,7 +469,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         }
         // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
         // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
-        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id])
+        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id], i + 1)
         result.push(await film.each('coverage', scene.id, firstAsk, planScene))
     }
     return result
@@ -484,6 +484,7 @@ const requests = buildFilmClipRequests({
     voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
     characterDescriptions, locationDescriptions, locationViews, lookBrief,
     pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
+    contextFrames: config.contextFrames,
 })
 const outputDir = join(film.dir, 'output')
 // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
