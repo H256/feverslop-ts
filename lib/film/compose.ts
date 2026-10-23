@@ -7,7 +7,7 @@ import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
 import {filmPictureAsset, locationViewAsset, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
-import type {DialogueKind, Facing, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
+import type {DialogueKind, Facing, FilmCast, FilmCharacter, Screenplay, Shot} from "./types.ts";
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
@@ -65,7 +65,35 @@ const positions = [
 ]
 
 export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
-    return input.clips.map(clip => buildClip(clip, input))
+    // the last shot of every clip as it is rendered - a clip that goes on from one that itself went on keeps what that one kept
+    const lastShots = new Map<string, Shot | undefined>()
+    return input.clips.map(planned => {
+        const clip = planned.startsFrom ? goingOn(planned, lastShots.get(planned.startsFrom)) : planned
+        lastShots.set(clip.id, clip.shots.at(-1))
+        return buildClip(clip, input)
+    })
+}
+
+/**
+ * A clip that goes on from the one before has no cut at its start: its first shot keeps the framing, the camera and the view of
+ * the last shot of that clip, and everyone in it keeps their place in the picture - who was in it stays in it. Only what happens
+ * (the action, the lines, where people go) is the plan's. The later shots of the clip cut as planned. As in the music video
+ * (lib/compose.ts): a first shot planned as a new camera setup while the video goes on from the clip before without a cut
+ * drifted - a hard cut in the middle of the clip, people swapping sides, a lineup facing the camera.
+ */
+export function goingOn(clip: FilmClip, before: Shot | undefined): FilmClip {
+    const [first, ...rest] = clip.shots
+    if (!before || !first) return clip
+    const characters = [...new Set([...before.characters, ...first.characters])]
+    const people = Object.fromEntries(characters.flatMap(id => {
+        const planned = first.people?.[id]
+        const was = before.people?.[id]
+        if (!planned && !was) return []
+        // where they are in the picture from the clip before; what they do from the plan
+        return [[id, {...planned, ...(was ? {frame: was.frame, facing: was.facing, foreground: was.foreground} : {})}]]
+    }))
+    const kept: Shot = {...first, characters, framing: before.framing, camera: before.camera, view: before.view, placeView: before.placeView, hold: before.hold, ...(Object.keys(people).length ? {people} : {})}
+    return {...clip, shots: [kept, ...rest]}
 }
 
 // does the plan of every shot say where its people are?

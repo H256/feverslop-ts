@@ -13,7 +13,9 @@ const filmableRules = `The film is generated clip by clip with an AI video model
 - No text that must be readable on screen (letters, signs, screens, phone messages) - tell it in dialogue or action instead.
 - A fight, duel, chase or battle is written as an exchange of 3-6 concrete beats, each on its own action line: who moves first and how, where it lands, how the other answers (blocks, dodges, falls back, strikes back) - the people act on each other, never one clash at the end and never two people standing still while their powers meet.
 - Keep track of the state of the story as it is written: where everybody is, whether they are bound, hurt, hold or wear something, what time of day it is. A scene goes on from the state the scene before left. A change - someone freed, something picked up or put down, a wound - happens on screen, in an action line, never as a state that appears between two scenes; and times of day run forward unless a line says that time jumped.
-- Mirrors, photographs and screens showing a face are avoided - the video model copies the face into them.`
+- Mirrors, photographs and screens showing a face are avoided - the video model copies the face into them.
+- A hand does one simple thing in a shot: hold something out, take it, put it down, push a door. Several fiddly steps on a mechanism (opening an umbrella, unlocking a door, tying a knot, loading a gun) are not shown being done - the shot starts with it done (the umbrella is already open in his hand) or shows only the last, simple step; the video model fumbles them.
+- Weather that falls or blows (rain, snow, wind, smoke) is in the picture of every outdoor shot of a scene that has it - falling streaks of rain, drifting snow in the air - and on the people and things in it (wet hair and clothes, dripping), not only in the sound or on the ground.`
 
 export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
     return {

@@ -857,7 +857,9 @@ bun run create-asset location temple-stage --anchor=pictures/stage.png --like=ti
 ```
 
 - The picture becomes the anchor as it is. A vision-capable model describes it - shown and editable before it is kept;
-  `--description=…` gives your own instead (and runs without a terminal).
+  `--description=…` gives your own instead (and runs without a terminal). A character is described once more after its sheet
+  is made, from the anchor and the full-body views of the sheet - the clips are given the sheet, and an anchor cut at the waist
+  says nothing of the legs and shoes. The description names every garment from top to bottom (sleeves, the length of a skirt).
 - A place also gets its background features and its floor plan, with the same prompts a project uses.
 - ComfyUI renders the reference sheet (sequence video, frames, picture) from the anchor - with the render settings of
   the project given with `--like`, else the defaults. It is made in `library/.work/` and moved into the library when it
