@@ -10,7 +10,10 @@ import {defaults, loadProjectConfig, type RenderConfig} from "./config.ts";
 import {finishFilter, finishOf, finishVideo, MILD_FINISH} from "./finish.ts";
 import {assembleFilm, assembleSmoothFilm} from "./film/assemble.ts";
 import {finishCopy, interpolateClips} from "./final-pass.ts";
-import type {FilmClipRequest} from "./film/compose.ts";
+import {buildFilmClipRequests, type FilmClipRequest} from "./film/compose.ts";
+import {packClips} from "./film/coverage.ts";
+import {toCast, toScreenplay} from "./film/screenplay.ts";
+import type {SceneCoverage} from "./film/types.ts";
 import {filmDefaults, loadFilmConfig} from "./film/config.ts";
 import {filmRenderConfig} from "./film/pictures.ts";
 import {FilmRenderer, filmClipFingerprint, startedOnContext} from "./film/render.ts";
@@ -135,6 +138,29 @@ describe('the config', () => {
             finishFilter(MILD_FINISH, matchFilter({ylow: 20, yhigh: 230, uavg: 126, vavg: 130}, {ylow: 30, yhigh: 220, uavg: 120, vavg: 134}, 0.5, 'between(t,0,3)')),
         ]).toMatchSnapshot()
     })
+})
+
+describe("a film's clip prompts", () => {
+    // one scene of a walk and a talk, three clips of one shot each - the second and the third go on from the one before with continuity "scene"
+    const play = toScreenplay({scenes: [{setting: 'INT', location: 'THE CORRIDOR', time: 'NIGHT', elements: [
+        {type: 'action', text: 'Ann and Bo walk down the corridor.'},
+        {type: 'dialogue', speaker: 'BO', text: 'You were so nervous that night.', kind: 'spoken'},
+        {type: 'dialogue', speaker: 'ANN', text: 'I still am.', kind: 'spoken'},
+    ]}]}, {title: 'The Walk', language: 'en'})
+    const cast = toCast({characters: [{name: 'Ann', appearance: 'a singer', voice: 'a woman, low'}, {name: 'Bo', appearance: 'an old man', voice: 'a man, raspy'}], locations: [{name: 'THE CORRIDOR', description: 'a narrow corridor'}]}, play)
+    const shot = (over: object) => ({framing: 'medium shot', camera: 'locked off', characters: ['ann', 'bo'], action: 'Ann and Bo walk side by side.', lines: [], seconds: 5, ...over})
+    const coverage = [{sceneId: play.scenes[0]!.id, soundscape: 'footsteps', staging: 'Ann walks left of Bo.', shots: [
+        shot({view: 'from ahead of them, looking back down the corridor', camera: 'the camera tracks backward ahead of them', people: {ann: {state: 'walks', frame: 'left of centre', facing: 'right'}, bo: {state: 'walks', frame: 'right of centre', facing: 'left'}}}),
+        shot({framing: 'close-up', view: 'from beside Bo', camera: 'locked off', characters: ['bo'], action: 'Bo speaks to Ann.', lines: [0], people: {bo: {state: 'walks', frame: 'centre, three-quarter view', facing: 'left'}}}),
+        shot({framing: 'close-up', view: 'from beside Ann', camera: 'a slow push in', characters: ['ann', 'bo'], action: 'Ann answers.', lines: [1], people: {ann: {state: 'walks', frame: 'centre', facing: 'right'}, bo: {state: 'walks', frame: 'left edge, a soft shoulder', facing: 'right', foreground: true}}}),
+    ]}] as unknown as SceneCoverage[]
+    const requests = (continuity: 'never' | 'scene', pinStartFrame: boolean) => buildFilmClipRequests({
+        screenplay: play, cast, clips: packClips(play, coverage, continuity), soundscapes: {s1: 'footsteps'}, stagings: {s1: 'Ann walks left of Bo.'}, voices: {},
+        characterDescriptions: {ann: 'Ann, a singer in a dark coat', bo: 'Bo, an old man in a cardigan'}, locationDescriptions: {}, locationViews: {}, lookBrief: 'a realistic film look', pinStartFrame,
+    }).map(r => ({id: r.id, startsFrom: r.startsFrom ?? null, shots: r.shots, pictures: r.assets.pictures.map(p => p.file), prompt: r.prompt}))
+    for (const [continuity, pin] of [['never', true], ['scene', true], ['scene', false]] as const) {
+        test(`continuity ${continuity}, ${pin ? 'the start frame pinned' : 'the start frame as a picture'}`, () => expect(requests(continuity, pin)).toMatchSnapshot())
+    }
 })
 
 // pictures, stems and earlier clips with fixed content: their fingerprints are part of a clip's
