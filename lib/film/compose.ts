@@ -2,8 +2,7 @@ import {escapeRegExp} from "../shot-plan.ts";
 import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
 import {log} from "../log.ts";
-import {CONTEXT_SETTLE} from "../compose.ts";
-import {formatTimestamp, FPS, round} from "../frames.ts";
+import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
 import {filmPictureAsset, locationViewAsset, statePictureId} from "./pictures.ts";
@@ -32,9 +31,6 @@ export type FilmClipRequest = {
     frameStart: number,         // on the film's frame grid (lib/frames.ts)
     frames: number,             // frames this clip contributes to the final film
     startsFrom?: string,        // goes on from the last frame of this clip (`<Picture N>` below, kind 'frame')
-    // goes on from it into another camera setup (cutsIn): this many frames of a lead-in on its picture come before the hard cut
-    // into the first shot - rendered, and cut off again with the context frames (FilmRenderer)
-    cutIn?: number,
     shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
     // every spoken line of the clip, in order: `at` is the start of its shot, speaker ids are numbered per clip
     dialogue: { at: number, line: number, speaker: string, speakerId: string, subject?: string, kind: DialogueKind, text: string }[],
@@ -58,8 +54,6 @@ export type FilmInput = {
     // config.pinStartFrame: a continuing clip's first frame is pinned by the render itself - then it is not a reference
     // picture as well, and the prompt has no `<Picture N>` for it (the same image twice was blended in a second time, shifted)
     pinStartFrame?: boolean,
-    // config.contextFrames: a continuing clip begins on that many frames of the clip before - the lead-in of a cut comes after them
-    contextFrames?: number,
 }
 
 // one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
@@ -71,32 +65,13 @@ const positions = [
 ]
 
 export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
-    const byId = new Map(input.clips.map(c => [c.id, c]))
-    return input.clips.map(clip => buildClip(clip, input, cutsIn(clip, clip.startsFrom ? byId.get(clip.startsFrom) : undefined)))
+    return input.clips.map(clip => buildClip(clip, input))
 }
-
-/**
- * Does a clip that goes on from the one before cut into another camera setup? Its first shot is planned as a new setup: not
- * the same take (`continues`), and not the same framing from the same place as the last shot of the clip before - those go on
- * without a cut (a cut into the same picture is a jump cut). A clip that cuts in renders a lead-in on the picture of the clip
- * before and a hard cut into its first shot, and the lead-in is cut off again (FilmRenderer): the cut falls on the clip's
- * border, while the clip has seen how the scene looked - faces, clothes, light, who stands where. Told to go on without a cut
- * into another setup, the video model drifted there: a hard cut in the middle of the clip, people swapping sides.
- */
-export function cutsIn(clip: FilmClip, before: FilmClip | undefined): boolean {
-    const first = clip.shots[0]
-    const last = before?.shots.at(-1)
-    if (!clip.startsFrom || !first || !last || first.continues) return false
-    return !(first.framing === last.framing && (first.view ?? '') === (last.view ?? ''))
-}
-
-// the lead-in of a clip that cuts in, after the context frames: long enough to be a picture, cut off with them
-export const LEAD_IN_FRAMES = 12
 
 // does the plan of every shot say where its people are?
 const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame, contextFrames = 0}: FilmInput, cutIn: boolean): FilmClipRequest {
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -140,9 +115,6 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         : withoutSentencesNaming(stagingFull, unpictured)
     const framePicture = clip.startsFrom && !pinStartFrame ? `<Picture ${subjects.length + 1}>` : undefined
     const pinnedFrame = clip.startsFrom !== undefined && pinStartFrame === true
-    // a clip that cuts in: the lead-in is [Shot 1], the planned shots come after it - their numbers and times in the prompt move on
-    const leadSeconds = cutIn ? round((contextFrames > 0 ? contextFrames + CONTEXT_SETTLE : 0) / FPS + LEAD_IN_FRAMES / FPS) : 0
-    const leadInText = `[Shot 1] ${framePicture ? `The video begins on ${framePicture}` : 'The video begins on the frame the previous clip ended on'} and holds that picture for a moment: the same camera and framing, everyone where they are, nobody speaks.`
 
     // speaker ids (S1), (S2), ... in the order of the spoken lines of this clip - numbered per clip, not per character
     type Spoken = { at: number, line: number, key: string, character?: FilmCharacter, kind: DialogueKind, text: string, delivery?: string, language: string }
@@ -156,7 +128,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             const character = characterOf(cast, line.speaker)
             return {at, line: n, key: character?.id ?? line.speaker, character, kind: line.kind, text: shot.texts?.[k] ?? line.text, delivery: line.delivery || shot.deliveries?.[k] || undefined, language: line.language ?? screenplay.language}
         })
-        return {...shot, label: `[Shot ${j + 1}]`, promptLabel: `[Shot ${j + 1 + Number(cutIn)}]`, at, promptAt: round(at + leadSeconds), spoken, focus: shot.characters.map(subjectOf).filter(s => s !== undefined)}
+        return {...shot, label: `[Shot ${j + 1}]`, at, spoken, focus: shot.characters.map(subjectOf).filter(s => s !== undefined)}
     })
     const speakers = [...new Set(shots.flatMap(s => s.spoken.map(l => l.key)))]
     const speakerId = (key: string) => `(S${speakers.indexOf(key) + 1})`
@@ -183,11 +155,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
 
     const shotTexts = shots.map((shot, j) => {
         const focusLabels = joinAnd(shot.focus.map(s => s.label))
-        const opening = j === 0 && !cutIn
-            ? `${shot.promptLabel} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+        const opening = j === 0
+            ? `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
             // the place is repeated on every cut - a shot without it tends to fall back to the plain grey background of the character pictures
-            : `${shot.promptLabel} At ${formatTimestamp(shot.promptAt)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-        const fromFrame = j === 0 && framePicture && !cutIn ? ` The shot begins from ${framePicture} and goes on from there.` : ''
+            : `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+        const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
         const inFrame = shot.focus.length
             ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}${facingPhrase(shot.people?.[s.id]?.facing)}`).join('; ')}.`
             : ''
@@ -220,10 +192,9 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)
-    const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.promptLabel).join(', ')
+    const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
-        : cutIn ? `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame. The video begins on the frame the previous clip ended on, holds it for a moment and then cuts hard to a new camera position in the same place: across the cut everyone keeps their place, their clothes and the light.`
         : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.' : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
@@ -235,10 +206,10 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd(subjects.map(s => s.label))}.`] : []),
         '',
         'summary:',
-        `[reference generation${framePicture ? ' + keyframe completion' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second clip of a short film${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${talking} It is cut in ${shots.length + Number(cutIn)} shot${shots.length + Number(cutIn) > 1 ? 's' : ''}.`,
+        `[reference generation${framePicture ? ' + keyframe completion' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second clip of a short film${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${talking} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''}.`,
         '',
         'retention_analysis:',
-        ...subjects.map(s => `${s.label} (appears in ${s.kind === 'location' ? shots.map(x => x.promptLabel).join(', ') : appearsIn(s.label) || shots[0]!.promptLabel}): fully_preserved - ${s.kind === 'location'
+        ...subjects.map(s => `${s.label} (appears in ${s.kind === 'location' ? shots.map(x => x.label).join(', ') : appearsIn(s.label) || shots[0]!.label}): fully_preserved - ${s.kind === 'location'
             ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
             : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`}`),
         ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
@@ -249,7 +220,6 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
         ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
         ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
-        ...(cutIn ? [leadInText] : []),
         ...shotTexts,
         '',
         'overall_soundscape:',
@@ -267,7 +237,6 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         frameStart: clip.frameStart,
         frames: clip.frames,
         ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
-        ...(cutIn ? {cutIn: LEAD_IN_FRAMES} : {}),
         shots: shots.map(s => ({label: s.label, at: s.at, framing: s.framing, camera: s.camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...s.focus.map(f => f.label)]})),
         dialogue: shots.flatMap(s => s.spoken.map(l => ({
             at: l.at, line: l.line, speaker: l.character?.name ?? l.key, speakerId: speakerId(l.key),
