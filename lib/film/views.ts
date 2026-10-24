@@ -65,7 +65,6 @@ export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptio
 /** The view of every shot of the scenes whose place has read views (1-based), chosen again only when the shots or the views changed. */
 export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[], locationOfScene: (sceneId: string) => string | undefined, sheetViews: Record<string, LocationView[]>): Promise<Record<string, number[]>> {
     const result: Record<string, number[]> = {}
-    let changed = false
     for (const scene of coverage) {
         const views = sheetViews[locationOfScene(scene.sceneId) ?? '']
         if (!views) continue
@@ -85,13 +84,13 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
                 return Number.isInteger(v) && v >= 1 && v <= views.length ? v : 1
             })
             film.data.shotViews = {...film.data.shotViews, [scene.sceneId]: {fingerprint, views: result[scene.sceneId]!}}
-            changed = true
+            // saved scene by scene: with a thinking model a scene takes up to a minute, a stopped run keeps what it chose
+            await film.save()
             log.step('Views', `${styles.name(scene.sceneId)} ${styles.muted(`shots in views ${result[scene.sceneId]!.join(', ')}`)}`)
         } catch (e) {
             log.warn(`${scene.sceneId}: the views of its shots could not be chosen (${e instanceof Error ? e.message : e}) - its clips get the whole sheet, the next run asks again`)
         }
     }
-    if (changed) await film.save()
     return result
 }
 
