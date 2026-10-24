@@ -94,6 +94,11 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
     return result
 }
 
-/** The coverage with the chosen view of every shot that has none of its own (a designed view the planning gave stays). */
+/**
+ * The coverage with the chosen view of every shot of the scenes that have them. They win over a "placeView" the planning wrote:
+ * without designed views it was never shown any views, and its JSON example has the field anyway - last-rehearsal planned 1, 2, 1, 3, …
+ * for shots chosen as 5, 3, 3, 2, … and the clips got the planning's guess. With designed views no views are chosen (readSheetViews
+ * reads only without them), so the planning's numbers stay.
+ */
 export const withShotViews = (coverage: SceneCoverage[], shotViews: Record<string, number[]>): SceneCoverage[] =>
-    coverage.map(scene => shotViews[scene.sceneId] ? {...scene, shots: scene.shots.map((s, n) => s.placeView ? s : {...s, placeView: shotViews[scene.sceneId]![n]})} : scene)
+    coverage.map(scene => shotViews[scene.sceneId] ? {...scene, shots: scene.shots.map((s, n) => ({...s, placeView: shotViews[scene.sceneId]![n]}))} : scene)
