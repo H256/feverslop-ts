@@ -247,6 +247,12 @@ own finished copy - and the subtitles last, into every one of these films (burne
 
 ## Location views
 
+Without designed views (the default) a clip is still given the one view of its place that its shots are in, not the whole sheet:
+once a location's sheet is rendered, a vision-capable model reads what each of its five views shows - where the camera stands and
+what it looks toward (`sheetViews` in `project.json`, read again when the sheet changes) - and the LLM chooses the view of every
+shot from them (`shotViews`, chosen again when the shots change). Given the whole sheet, the video model took its first view as
+the background whatever the shot's camera said. A sheet rendered in the same run gets its views before the clips are rendered.
+
 With `"locationViews": true` the five views of a location's reference sheet are designed for the place (a floor plan, then: the picture itself, the reverse, the two sides, a wide view) and every shot names the view that is its background. The clip gets that **one view** as the picture of the place (frame 0-4 of the sheet video, `assets/sequence/locations/<id>/frames/`), never the sheet itself - the video model shows a grid of views back. A shot that looks from another view says so in words ("that side is not in the picture"). The sheet's video model cuts to the views it is told about - but it cannot know what the other side of a place holds, so the reverse is only roughly right.
 
 ## Design decisions

@@ -17,19 +17,23 @@ const VISION_MAX_WIDTH = 512
  */
 export const characterViews = (sheetDir: string) => [join(sheetDir, 'anchor.png'), join(sheetDir, 'frames', 'frame_00.png'), join(sheetDir, 'frames', 'frame_04.png')].filter(existsSync)
 
-/**
- * The description from the picture(s) - the LLM must be configured. A character can be given several pictures of it (its anchor
- * and full-body views), a place one. Throws when the model fails (e.g. takes no images).
- */
-export async function describePicture(images: string | string[], subject: { kind: 'character', name: string, role: string } | { kind: 'location', name: string }): Promise<string | undefined> {
-    const files = [images].flat()
-    const urls = await Promise.all(files.map(async (image, i) => {
+/** Pictures as data URLs for a vision-capable model, at a small size. */
+export function visionUrls(files: string[]): Promise<string[]> {
+    return Promise.all(files.map(async (image, i) => {
         const small = `${image}.vision-${i}.png`
         await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', image, '-vf', `scale=${VISION_MAX_WIDTH}:-1`, small], {errorMessage: err => `ffmpeg could not downscale ${image}:\n${err}`})
         const url = `data:image/png;base64,${Buffer.from(await Bun.file(small).arrayBuffer()).toString('base64')}`
         rmSync(small, {force: true})
         return url
     }))
+}
+
+/**
+ * The description from the picture(s) - the LLM must be configured. A character can be given several pictures of it (its anchor
+ * and full-body views), a place one. Throws when the model fails (e.g. takes no images).
+ */
+export async function describePicture(images: string | string[], subject: { kind: 'character', name: string, role: string } | { kind: 'location', name: string }): Promise<string | undefined> {
+    const urls = await visionUrls([images].flat())
     const prompt = subject.kind === 'character' ? characterImageDescriptionPrompt(urls, subject) : locationImageDescriptionPrompt(urls[0]!, subject.name)
     return (await ask(prompt)).trim() || undefined
 }
