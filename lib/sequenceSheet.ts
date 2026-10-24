@@ -12,7 +12,7 @@ import {captureProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 export const SEQUENCE_FRAMES = 124   // ~5.17s @ 24fps - matches the predecessor project's default
 const SHOT_SECONDS = 0.75            // spacing between beats, clamped to fit the render's duration
 
-// the expression of the last beat is picked at random from these - each with its own facial description, so the
+// the expression of the last beat is picked from these - each with its own facial description, so the
 // prompt never says one expression while describing another
 export const EXPRESSIONS: Record<string, string> = {
     frightened: 'eyes wide, brows raised and drawn together, mouth slightly open',
@@ -41,13 +41,13 @@ function beatTimestamps(totalShots: number, frames: number): number[] {
 
 /**
  * Six locked-off hard-cut views of one character from its hero image: full-body front, face close-up, left
- * profile, right profile, rear, and a medium close-up with one random expression change on the last beat (every
+ * profile, right profile, rear, and a medium close-up with one expression change on the last beat (expressionFor) (every
  * other beat holds a neutral expression, so the character's identity/build/wardrobe stay the read - only the
  * final beat exists to give the reference sheet one non-neutral expression to draw on).
  */
-export function characterSequencePrompt(description: string, frames = SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+export function characterSequencePrompt(description: string, frames = SEQUENCE_FRAMES, expression = expressionFor(description)): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(6, frames)
-    const prompt = `Six distinct locked-off views joined by hard cuts. ${characterViews(description, beatTimes, 1)} ${SHEET_BACKDROP} Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
+    const prompt = `Six distinct locked-off views joined by hard cuts. ${characterViews(description, beatTimes, 1, expression)} ${SHEET_BACKDROP} Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
     return {prompt, beatTimes}
 }
 
@@ -60,10 +60,10 @@ export function characterSequencePrompt(description: string, frames = SEQUENCE_F
  * clothing of the first frame held everything else. The first beat is the lead-in: its frame is not part of the sheet
  * (lookSheetFrames).
  */
-export function characterLookSequencePrompt(change: string, frames = LOOK_SEQUENCE_FRAMES): { prompt: string, beatTimes: number[] } {
+export function characterLookSequencePrompt(change: string, frames = LOOK_SEQUENCE_FRAMES, expression = expressionFor(change)): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(7, frames)
     const person = 'the same person as in the first frame, in exactly the same clothing - every garment, sleeve, layer and length as there - with the change'
-    const prompt = `Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame, standing still, nothing about it changes in this shot. From the cut at ${formatTimestamp(beatTimes[1]!)} on, the same person with the same face, build, hair and clothing is changed, and only this is changed: ${change} ${characterViews(person, beatTimes.slice(1), 2, `In this shot too, plainly visible: ${change}`)} ${SHEET_BACKDROP} The change stays in every shot after the first; the clothing is the clothing of the first frame, and hair, colours, proportions and every other visible detail remain identical across these shots.`
+    const prompt = `Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame, standing still, nothing about it changes in this shot. From the cut at ${formatTimestamp(beatTimes[1]!)} on, the same person with the same face, build, hair and clothing is changed, and only this is changed: ${change} ${characterViews(person, beatTimes.slice(1), 2, expression, `In this shot too, plainly visible: ${change}`)} ${SHEET_BACKDROP} The change stays in every shot after the first; the clothing is the clothing of the first frame, and hair, colours, proportions and every other visible detail remain identical across these shots.`
     return {prompt, beatTimes}
 }
 
@@ -77,13 +77,28 @@ export const lookSheetFrames = (beatTimes: number[], totalFrames: number) => sel
 const SHEET_BACKDROP = 'Plain seamless neutral grey studio backdrop, even neutral lighting from every side, no props and no cast shadows.'
 
 /**
+ * The expression of a sheet's last view, from the words it is drawn from: the same character gets the same one in every run,
+ * different characters still get different ones. It was drawn at random, and the prompt - part of the sheet's fingerprint -
+ * changed in 9 of 10 runs, so nearly every character sheet counted as stale (#378).
+ */
+export function expressionFor(text: string): string {
+    // the last view is there to give the sheet one face that is not neutral
+    const names = Object.keys(EXPRESSIONS).filter(name => name !== 'neutral')
+    return names[Number(BigInt(Bun.hash(text)) % BigInt(names.length))]!
+}
+
+/** The expression a sheet prompt was made with - a sheet made before expressionFor keeps the one it was drawn with. */
+export function expressionOf(prompt: string | undefined): string | undefined {
+    const name = prompt?.match(/the expression now ([a-z]+): /)?.[1]
+    return name && name in EXPRESSIONS ? name : undefined
+}
+
+/**
  * The six views of a character sheet as shots `first` to `first + 5`, at `times` - the first one opens the video (shot 1)
- * or comes after a cut. The last view has one expression drawn at random. `still`: a sentence after every view (a look
+ * or comes after a cut. The last view has `expression`. `still`: a sentence after every view (a look
  * names its change in each shot - said once, before the views, it showed only in the close-up).
  */
-function characterViews(description: string, times: number[], first: number, still?: string): string {
-    const names = Object.keys(EXPRESSIONS)
-    const expression = names[Math.floor(Math.random() * names.length)]!
+function characterViews(description: string, times: number[], first: number, expression: string, still?: string): string {
     const cut = (view: number) => `[Shot ${first + view}] At ${formatTimestamp(times[view]!)}, the shot cuts to`
     const opening = first === 1 ? `[Shot 1] a full-body shot frames ${description}` : `${cut(0)} a full-body shot that frames ${description}`
     const views = [
@@ -113,18 +128,20 @@ export const LOCATION_VIEWS = [
  * Five locked-off tripod views of one location from its hero image: front, right side, rear, left side, wide establishing.
  * With `views` (the four views after the first, each a camera position and what is seen from it - designed for the place and its
  * story, see lib/film/prompts.ts locationViewsPrompt) the cuts go to those instead: the generic "behind the location" is a turn
- * around the same spot, and the video model has no idea what the other side of a place holds.
+ * around the same spot, and the video model has no idea what the other side of a place holds. Every view keeps the fixtures
+ * of the first frame: each cut drew them anew (one work light, then two lamps, then a row of spots), and the clips copied
+ * whichever view they got.
  */
 export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES, views?: string[]): { prompt: string, beatTimes: number[] } {
     const beatTimes = beatTimestamps(5, frames)
     if (views && views.length >= 4) {
         const cut = (i: number) => `At ${formatTimestamp(beatTimes[i]!)}, the shot cuts to a new locked-off camera position: ${views[i - 1]!.replace(/[.\s]+$/, '')}.`
-        const designed = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] ${cut(1)} [Shot 3] ${cut(2)} [Shot 4] ${cut(3)} [Shot 5] ${cut(4)} The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. No people, text, watermark or unrelated structures.`
+        const designed = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] ${cut(1)} [Shot 3] ${cut(2)} [Shot 4] ${cut(3)} [Shot 5] ${cut(4)} The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. Every fixture of the first frame - each light source, door, window, piece of furniture and prop - keeps its number, its place and its look in every view that shows it: no lamp, light or object is added, doubled or dropped from one view to the next. No people, text, watermark or unrelated structures.`
         return {prompt: designed, beatTimes}
     }
     // every beat is its own locked-off setup at an explicit cut time - a bare list of views reads as one continuous
     // camera move around the place instead of separate shots
-    const prompt = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a new locked-off camera position at the right side of the location, looking at it from the right, a completely different viewpoint. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a new locked-off camera position behind the location, looking back across it from the rear. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a new locked-off camera position at the left side of the location, looking at it from the left. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a wide establishing view showing the whole location from a distance. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot. No people, text, watermark or unrelated structures.`
+    const prompt = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] At ${formatTimestamp(beatTimes[1]!)}, the shot cuts to a new locked-off camera position at the right side of the location, looking at it from the right, a completely different viewpoint. [Shot 3] At ${formatTimestamp(beatTimes[2]!)}, the shot cuts to a new locked-off camera position behind the location, looking back across it from the rear. [Shot 4] At ${formatTimestamp(beatTimes[3]!)}, the shot cuts to a new locked-off camera position at the left side of the location, looking at it from the left. [Shot 5] At ${formatTimestamp(beatTimes[4]!)}, the shot cuts to a wide establishing view showing the whole location from a distance. The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot. Every fixture of the first frame - each light source, door, window, piece of furniture and prop - keeps its number, its place and its look in every view that shows it: no lamp, light or object is added, doubled or dropped from one view to the next. No people, text, watermark or unrelated structures.`
     return {prompt, beatTimes}
 }
 
