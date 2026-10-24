@@ -140,7 +140,7 @@ export function fitLine(text: string, width: number) {
 // the warnings of this run, for its summary at the end
 const warnings: string[] = []
 export const runWarnings = () => [...warnings]
-const result: {output?: string, next?: string, cancelled?: boolean} = {}
+const result: {output?: string, next?: string, nextShown?: boolean, cancelled?: boolean} = {}
 export const runResult = () => ({...result})
 
 export const log = {
@@ -154,7 +154,7 @@ export const log = {
     },
     json: (value: unknown) => console.log(JSON.stringify(value, null, 2)),
     success: (message: string) => print(`${styles.answer('✔ Done')} ${message}`, true),
-    next: (command: string) => { result.next = command; print(`${styles.label('→ Next')} ${command}`, true) },
+    next: (command: string) => { result.next = command; result.nextShown = true; print(`${styles.label('→ Next')} ${command}`, true) },
     output: (path: string) => { result.output = path; print(`${styles.label('▸ Output')} ${path}`, true) },
     cancel: (message: string) => { result.cancelled = true; print(`${styles.warning('⊘ Cancelled')} ${message}`, true, true) },
     section: (title: string) => {

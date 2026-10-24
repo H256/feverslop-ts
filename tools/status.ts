@@ -149,7 +149,6 @@ if (args.json) {
 }
 
 const mark: Record<StepState, string> = {done: styles.answer('✔'), redo: styles.warning('⟳'), missing: styles.warning('✗'), unused: styles.muted('–')}
-log.section(`STATUS · ${id}`)
 for (const c of changed) log.step('Changed', `${styles.name(c.name)} ${styles.muted(`- the next run redoes ${c.steps.join(', ')} and what is built on it`)}`)
 for (const [label, text] of notes) log.step(label, text)
 // in columns, in pipeline order
