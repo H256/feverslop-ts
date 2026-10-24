@@ -332,3 +332,41 @@ ${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.l
 Answer only with JSON: {"edits": [{"scene": "s6", "element": 0, "text": "<the whole new action line>"}, {"scene": "s17", "time": "NIGHT"}]} - a "text" replaces the action line [element] of the scene; a "time" replaces the time of day of the scene; both in one edit if both change.`,
     }
 }
+
+/**
+ * The five views of a place's reference sheet, read by a vision-capable model from its frames: where the camera of each stands and
+ * what it looks toward, in the terms of the place - so a clip can be given the one view its shot is in (lib/film/views.ts). The sheet
+ * video turns around the place on its own, and the generic names of its cuts ("a front view") do not say which side of a stage or of
+ * a corridor a view shows.
+ */
+export function sheetViewsPrompt(images: string[], location: FilmLocation, description: string): AskOptions {
+    return {
+        input: `The attached images are the ${images.length} views of one place, from its reference sheet, in this order. The place: ${location.name} - ${description}
+
+For each view say where the camera stands and what it looks toward, in terms of the fixed features of the place (its doors, its walls, a stage edge and the seats, a window, a counter) - never only "the left" or "the right" of the picture.
+Answer only with JSON: {"views": [{"name": "", "shows": ""}]} - exactly ${images.length}, in the order of the images. "name": where the camera stands and what it looks toward, a few words ("from the stage, looking out over the empty seats"). "shows": what is in the picture, one sentence.`,
+        images,
+        instructions: 'You are a film location scout who describes the views of a place from its pictures. Answer only with JSON.',
+        schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: images.length, maxItems: images.length, items: {type: 'object', additionalProperties: false, required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}}}}},
+    }
+}
+
+/** The view of the place's sheet each shot of a scene is in - as the music video chooses it (index.ts, shotViews). 1-based. */
+export function shotViewsPrompt(views: { name: string, shows: string }[], staging: string, shots: { framing: string, camera: string, view?: string, action: string }[]): AskOptions {
+    return {
+        input: `A place is shown to the video model as one of the views of its reference sheet. For every shot below choose the view the shot is in. First find where the shot's camera stands (its "view": on the stage or in the seats, at which door, at which wall), then the way it looks - and choose the view whose camera stands on that same side and looks the same way. A view that looks the opposite way is wrong even when it names the same things: a shot from the seats looking at the stage is a view from the seats, never one from the stage looking out.
+views (number: where the camera stands and what it shows):
+${views.map((v, n) => `${n + 1}: ${v.name} - ${v.shows}`).join('\n')}
+
+The place: ${staging}
+shots:
+${JSON.stringify(shots.map((s, n) => ({shot: n + 1, framing: s.framing, camera: s.camera, view: s.view ?? '', action: s.action})))}
+
+Answer only with JSON: {"views": [one number from 1 to ${views.length} per shot, in order]} - exactly ${shots.length} numbers.`,
+        instructions: 'You are a film director who chooses the view of a place for each shot. Answer only with JSON.',
+        // a short thought: without it the choice went by the words a view shares with the shot ("stage edge") - the shots "from the
+        // audience side, looking back at her" got the view from the stage looking out (last-rehearsal). A film has few shots per scene
+        reasoning: 'low',
+        schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: shots.length, maxItems: shots.length, items: {type: 'integer', minimum: 1, maximum: views.length}}}},
+    }
+}

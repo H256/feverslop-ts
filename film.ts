@@ -15,6 +15,7 @@ import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
+import {chooseShotViews, readSheetViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import type {PictureJob} from "./lib/render.ts";
 import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
@@ -476,31 +477,40 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
 })
 
 /////////// 10 · CLIPS - shots packed into clips of up to ~9 s, then the H3 requests, built deterministically and never cached
-const clips = packClips(screenplay, coverage, config.continuity)
-const requests = buildFilmClipRequests({
-    screenplay, cast, clips,
-    soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
-    stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
-    voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
-    characterDescriptions, locationDescriptions, locationViews, lookBrief,
-    pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
-})
-const outputDir = join(film.dir, 'output')
-// a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
-const planned = new Set(requests.map(r => `${r.id}.json`))
-const clipsDir = join(outputDir, 'clips')
-if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
-for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
-await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
-    title: screenplay.title,
-    language: screenplay.language,
-    totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
-    clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
-}, null, 2))
-await Bun.write(join(outputDir, 'timeline.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
-await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
-for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
-log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
+// Without designed views every clip is given the one view of its place its shots are in, read from the rendered sheet
+// (lib/film/views.ts) - made again after the pictures of this run, so a sheet rendered now gets its views at once.
+let clips: ReturnType<typeof packClips> = []
+let requests: ReturnType<typeof buildFilmClipRequests> = []
+async function planClips() {
+    const sheetViews = config.sequenceSheets && !config.locationViews ? await readSheetViews(film, cast, locationDescriptions) : {}
+    const shotViews = await chooseShotViews(film, coverage, sceneId => locationOf(cast, screenplay.scenes.find(s => s.id === sceneId)!.location)?.id, sheetViews)
+    clips = packClips(screenplay, withShotViews(coverage, shotViews), config.continuity)
+    requests = buildFilmClipRequests({
+        screenplay, cast, clips,
+        soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
+        stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
+        voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
+        characterDescriptions, locationDescriptions, locationViews: {...sheetViews, ...locationViews}, lookBrief,
+        pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
+    })
+    const outputDir = join(film.dir, 'output')
+    // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
+    const planned = new Set(requests.map(r => `${r.id}.json`))
+    const clipsDir = join(outputDir, 'clips')
+    if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
+    for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
+    await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
+        title: screenplay.title,
+        language: screenplay.language,
+        totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
+        clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
+    }, null, 2))
+    await Bun.write(join(outputDir, 'timeline.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
+    await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
+    for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
+    log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
+}
+await planClips()
 
 /////////// 11 · RENDERING WITH COMFYUI
 if (render.has('images') || render.has('videos')) {
@@ -519,6 +529,8 @@ if (render.has('images') || render.has('videos')) {
         // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
         await renderAll(pictures.filter(p => p.baseId), p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}))
     }
+    // a sheet rendered just now gets its views read, and the clips their view, before they are rendered
+    if (render.has('images') && render.has('videos') && config.sequenceSheets && !config.locationViews) await planClips()
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()

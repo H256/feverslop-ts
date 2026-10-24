@@ -1,5 +1,5 @@
 import {afterAll, afterEach, beforeAll, describe, expect, test} from "bun:test";
-import {ask, configureLlm, takesPictures} from "./llm.ts";
+import {ask, configureLlm, picturesReadable, takesPictures} from "./llm.ts";
 import {loadSettings} from "./settings.ts";
 
 // Two fake servers: a text server and a vision server, each with its models, /props as llama.cpp has it (vision on or
@@ -100,6 +100,23 @@ describe('takesPictures', () => {
         expect(await takesPictures(textUrl(), 'qwen-27b')).toBe(false)
         textFake.vision = undefined
         expect(await takesPictures(textUrl(), 'qwen-27b')).toBeUndefined()
+    })
+})
+
+describe('picturesReadable', () => {
+    test('a vision model of its own, or a text model the server says takes pictures - unknown is no', async () => {
+        configureLlm({url: textUrl(), model: 'qwen-27b', vision: {url: visionUrl(), model: 'gemma-vl'}})
+        expect(await picturesReadable()).toBe(true)
+        configureLlm({url: textUrl(), model: 'qwen-vl'})
+        textFake.vision = true
+        expect(await picturesReadable()).toBe(true)
+        textFake.vision = false
+        expect(await picturesReadable()).toBe(false)
+        // a server that tells nothing: a text model there may drop the picture and make up what it would have seen
+        textFake.vision = undefined
+        expect(await picturesReadable()).toBe(false)
+        configureLlm({})
+        expect(await picturesReadable()).toBe(false)
     })
 })
 

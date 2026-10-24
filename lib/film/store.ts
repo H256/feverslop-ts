@@ -4,7 +4,7 @@ import {log, styles} from "../log.ts";
 import {dropPartials, keepEach} from "../partials.ts";
 import type {FilmProject} from "./types.ts";
 
-export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials' | 'castingCopies'>
+export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials' | 'castingCopies' | 'sheetViews' | 'shotViews'>
 // an input file or setting a film's steps are made from (lib/film/inputs.ts): its value now, and the steps it redoes when it changes
 export type FilmInput = { value: string | Uint8Array, steps: FilmStepName[] }
 
