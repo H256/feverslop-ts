@@ -3,6 +3,9 @@ import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
 import {characterOf, locationOf, missingDialogue, omittedSourceLines, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";
+import {FilmStore} from "./store.ts";
+import {filmStepUsed} from "./inputs.ts";
+import {filmDefaults} from "./config.ts";
 import type {FilmCast, Scene, SceneCoverage, Screenplay} from "./types.ts";
 
 const raw = {
@@ -260,6 +263,25 @@ describe('character states', () => {
         expect(jobs.filter(j => j.kind === 'character').map(j => j.id)).toEqual(['karl', 'karl--wounded', 'karl--wounded-2'])
         expect(jobs.find(j => j.id === 'karl--wounded')!.baseId).toBe('karl')
         expect(jobs.find(j => j.id === 'karl')!.baseId).toBeUndefined()
+        // with sequence sheets a look's sheet starts on the anchor of the normal picture and shows the change
+        expect(jobs.find(j => j.id === 'karl--wounded')!.look).toEqual({base: 'karl', change: stateCast.characters[0]!.states![0]!.change})
+        expect(jobs.find(j => j.id === 'karl')!.look).toBeUndefined()
+    })
+    test("a look's sheet: a lead-in on the anchor, then the six views in the new look - the lead-in is not in the sheet", async () => {
+        const {characterLookSequencePrompt, characterSequencePrompt, lookSheetFrames, selectFrameIndices} = await import('../sequenceSheet.ts')
+        const {prompt, beatTimes} = characterLookSequencePrompt('his left arm is bandaged and bloody.')
+        // 141 frames: every shot 0.75 s, as in a normal sheet
+        expect(beatTimes).toEqual([0, 0.75, 1.5, 2.25, 3, 3.75, 4.5])
+        expect(prompt).toStartWith('Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame')
+        // the views name the person of the first frame and its clothing - no description that would redraw the clothes
+        expect(prompt).toContain('only this is changed: his left arm is bandaged and bloody. [Shot 2] At 00:00.750, the shot cuts to a full-body shot that frames the same person as in the first frame, in exactly the same clothing')
+        expect(prompt).toContain('[Shot 7] At 00:04.500')
+        // every view says the change again
+        expect(prompt.split('In this shot too, plainly visible: his left arm is bandaged and bloody.')).toHaveLength(7)
+        expect(lookSheetFrames(beatTimes, 141)).toEqual(selectFrameIndices(beatTimes, 141).slice(1))
+        expect(lookSheetFrames(beatTimes, 141)).toHaveLength(6)
+        // the sheet of a normal picture stays six shots
+        expect(characterSequencePrompt('Karl', 124).beatTimes).toHaveLength(6)
     })
 })
 
@@ -638,6 +660,19 @@ describe('the cast step asked again', () => {
         expect(merged.characters!.map(c => `${c.name}:${c.role}`)).toEqual(['anna:new', 'Ben:b', 'Radio Voice:voice'])
         expect(merged.locations!.map(l => l.name)).toEqual(['The Bridge', 'The Hut'])
     })
+    test('a place the second answer writes otherwise ("–" for "-", other case) is the same place, with the names of both', async () => {
+        const {mergeRawCasts} = await import("./screenplay.ts")
+        const merged = mergeRawCasts(
+            {characters: [{name: 'Vyvian'}], locations: [{name: 'AURORA THEATRE - STAGE', aliases: ['AURORA THEATRE - STAGE']}]},
+            {characters: [{name: 'Vyvian'}], locations: [{name: 'Aurora Theatre – Stage', aliases: ['INT. AURORA THEATRE - STAGE - NIGHT']}]})
+        expect(merged.locations).toHaveLength(1)
+        expect(merged.locations![0]!.aliases).toEqual(['INT. AURORA THEATRE - STAGE - NIGHT', 'AURORA THEATRE - STAGE'])
+        // and one answer that has it twice gives one place - every name of it finds it
+        const play = toScreenplay({scenes: [{setting: 'INT', location: 'AURORA THEATRE - STAGE', time: 'NIGHT', elements: [{type: 'action', text: 'Vyvian waits.'}]}]}, {title: 't', language: 'en'})
+        const cast = toCast({characters: [{name: 'Vyvian'}], locations: [{name: 'AURORA THEATRE - STAGE'}, {name: 'Aurora Theatre – Stage', aliases: ['the old stage']}]}, play)
+        expect(cast.locations.map(l => l.id)).toEqual(['aurora-theatre-stage'])
+        expect(locationOf(cast, 'the old stage')?.id).toBe('aurora-theatre-stage')
+    })
 })
 
 describe('a closer too many in an answer of the language model', () => {
@@ -685,5 +720,82 @@ describe('source fidelity and ambiguous names', () => {
         const named = toCast(raw, toScreenplay({scenes: [{setting: 'INT', location: 'The Hut', time: 'DAY', elements: [{type: 'dialogue', speaker: 'Anna', text: 'Hi.', kind: 'spoken'}]}]}, {title: 'T', language: 'en'}))
         expect(characterOf(named, 'A')).toBeUndefined()
         expect(characterOf(named, 'Anna')?.name).toBe('Anna')
+    })
+})
+
+describe('the film store and its inputs - for --dry-run, --review and bun run status --film', () => {
+    const store = () => {
+        const film = new FilmStore('test-film')
+        film.data = {brief: {} as never, screenplay: {} as never, cast: {characters: [], locations: []}, summary: 's', lookBrief: 'l', characterLooks: {}, coverage: [], inputs: {'style.txt': Bun.hash('noir').toString(16)}}
+        return film
+    }
+    test('changedInputs: what changed since the last run, read only', () => {
+        const film = store()
+        expect(film.changedInputs({'style.txt': {value: 'noir', steps: ['lookBrief']}, 'idea.txt': {value: 'new', steps: ['brief']}})).toEqual([])
+        expect(film.changedInputs({'style.txt': {value: 'pastel', steps: ['lookBrief']}})).toEqual([{name: 'style.txt', steps: ['lookBrief']}])
+        expect(film.data.lookBrief).toBe('l')
+    })
+    test('redoneBy: the steps with a result that invalidating these would remove, in pipeline order, nothing removed', () => {
+        const film = store()
+        expect(film.redoneBy(['lookBrief'])).toEqual(['lookBrief', 'characterLooks', 'coverage'])
+        expect(film.redoneBy(['screenplay'])).toEqual(['screenplay', 'cast', 'summary', 'lookBrief', 'characterLooks', 'coverage'])
+        expect(film.data.lookBrief).toBe('l')
+    })
+    test('which steps a film uses', () => {
+        const config = {...filmDefaults, targetDurationSet: false}
+        expect(filmStepUsed('outline', 'screenplay', {}, config)).toBe(false)
+        expect(filmStepUsed('outline', 'idea', {}, config)).toBe(true)
+        expect(filmStepUsed('locationViews', 'idea', {}, config)).toBe(false)
+        expect(filmStepUsed('locationViews', 'idea', {}, {...config, locationViews: true})).toBe(true)
+        expect(filmStepUsed('scriptFixes', 'idea', {}, config)).toBe(false)
+        expect(filmStepUsed('scriptFixes', 'idea', {scriptFixes: []}, config)).toBe(true)
+        expect(filmStepUsed('subtitles', 'idea', {}, config)).toBe(false)
+        expect(filmStepUsed('subtitles', 'idea', {}, {...config, subtitles: 'en'})).toBe(true)
+    })
+})
+
+describe('a clip that goes on from the one before', () => {
+    test('goes on without a cut only in the same take or the same picture - another setup is a plain cut', async () => {
+        const {goesOnWithoutCut} = await import('./coverage.ts')
+        const shot = (over: object) => ({framing: 'medium shot', camera: 'locked off', characters: [], action: '', lines: [], seconds: 4, view: 'from the stage door', ...over}) as never
+        const last = shot({})
+        expect(goesOnWithoutCut(shot({}), last, 'scene')).toBe(true)
+        expect(goesOnWithoutCut(shot({framing: 'close-up'}), last, 'scene')).toBe(false)
+        expect(goesOnWithoutCut(shot({view: 'from the side door'}), last, 'scene')).toBe(false)
+        expect(goesOnWithoutCut(shot({framing: 'close-up', continues: true}), last, 'scene')).toBe(true)
+        // auto: only the take the plan says goes on
+        expect(goesOnWithoutCut(shot({}), last, 'auto')).toBe(false)
+        expect(goesOnWithoutCut(shot({continues: true}), last, 'auto')).toBe(true)
+        expect(goesOnWithoutCut(shot({continues: true}), last, 'never')).toBe(false)
+    })
+    test('a look is offered to the shot planning only from its scene on', async () => {
+        const {coveragePrompt} = await import('./prompts.ts')
+        const play = toScreenplay({scenes: [{setting: 'EXT', location: 'THE DOCK', time: 'NIGHT', elements: [{type: 'action', text: 'Vyvian waits.'}]}]}, {title: 't', language: 'en'})
+        const cast = toCast({characters: [{name: 'Vyvian', states: [{name: 'soaked', change: 'Her hair is dripping wet.', from: 3}]}], locations: [{name: 'THE DOCK'}]}, play)
+        const scene1 = coveragePrompt(play.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 1)
+        const scene3 = coveragePrompt(play.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 3)
+        expect(JSON.stringify(scene1)).not.toContain('dripping wet')
+        expect(JSON.stringify(scene3)).toContain('"soaked\\" = Her hair is dripping wet.')
+    })
+})
+
+describe('the view of a place each clip is given, without designed views', () => {
+    test('the chosen view goes to every shot that has none of its own', async () => {
+        const {withShotViews} = await import('./views.ts')
+        const coverage = [{sceneId: 's1', soundscape: '', shots: [{placeView: 2}, {}, {}]}, {sceneId: 's2', soundscape: '', shots: [{}]}] as never
+        const out = withShotViews(coverage, {s1: [1, 3, 4]})
+        expect(out[0]!.shots.map(s => s.placeView)).toEqual([2, 3, 4])
+        expect(out[1]!.shots[0]!.placeView).toBeUndefined()
+    })
+    test('the views are chosen with a short thought, one number per shot from 1 to the number of views', async () => {
+        const {shotViewsPrompt} = await import('./prompts.ts')
+        const prompt = shotViewsPrompt([{name: 'from the stage, looking out over the seats', shows: 'the seats'}, {name: 'from the seats, looking at the stage', shows: 'the stage'}], 'A stage.', [{framing: 'close-up', camera: 'still', view: 'from the seats', action: 'She sings.'}])
+        expect(prompt.reasoning).toBe('low')
+        expect(prompt.input).toContain('2: from the seats, looking at the stage - the stage')
+        expect(prompt.schema).toMatchObject({properties: {views: {minItems: 1, maxItems: 1, items: {minimum: 1, maximum: 2}}}})
+    })
+    test('a sheet counts only with all five frames', async () => {
+        const {sheetFrames} = await import('./views.ts')
+        expect(sheetFrames('/nowhere', 'stage')).toEqual([])
     })
 })

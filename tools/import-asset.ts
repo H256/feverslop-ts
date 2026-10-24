@@ -13,7 +13,7 @@ import {libraryDir, libraryIds, libraryLayout, readLibraryAsset} from "../lib/li
 import {loadProjectConfig} from "../lib/config.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {configureLlm} from "../lib/llm.ts";
-import {describePicture} from "../lib/describe-picture.ts";
+import {characterViews, describePicture} from "../lib/describe-picture.ts";
 import {styles} from "../lib/log.ts";
 import {pictureProp, propMissing} from "../lib/prop-check.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
@@ -200,9 +200,12 @@ if (existsSync(clipsDir)) {
 }
 log.success('Done - nothing was rendered.')
 
-// the picture described by a vision-capable model - its anchor (one view), else the picture itself, at a small size
+// the picture described by a vision-capable model - a character from its anchor and the full-body views of its sheet, else the
+// picture itself, at a small size
 async function fromPicture(): Promise<string | undefined> {
-    const image = [join(dir, sheet, 'anchor.png'), join(dir, picture)].find(existsSync)
+    const isCharacter = data.cast?.characters.some(c => c.id === target.id)
+    const views = isCharacter ? characterViews(join(dir, sheet)) : []
+    const image = views.length ? views : [join(dir, sheet, 'anchor.png'), join(dir, picture)].find(existsSync)
     if (!image) return undefined
     const settings = await loadSettings({projectModel: config.llm.model})
     configureLlm(settings.llm)

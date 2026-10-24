@@ -98,7 +98,17 @@ Flags beyond the quick start: `--fix-script` (repair a handed-in screenplay, see
 (render the pictures and clips made from an older plan again - the old ones go to `old/attempts/`), `--strict` (the
 film refuses such stale clips instead of listing them), `--scenes=s6,s7` with `--redo=coverage` (only these scenes are planned
 again - the shots of the others and their rendered clips stay), `--allow-import-gaps` (see [Creating a film](#creating-a-film)),
+`--dry-run` (what the run would redo and render, with an estimate - nothing is done; with `--render=…` it counts the renders), `--review` (stop after
+the outline, the screenplay, the cast and the look when one was just generated: accept, edit in `$EDITOR`, generate again or stop),
 `--debug` (the stack trace of a failure) and the `--llm-*` / `--comfy=` overrides of the [README](../README.md#setup).
+
+Where a film stands - steps done or redone by the next run, pictures and clips missing or stale, the next command - and one clip on one screen
+(its scene, its shots as planned, its dialogue, pictures, render state and prompt):
+
+```bash
+bun run status <film-id> --film
+bun run inspect <film-id> clip-010 --film
+```
 
 ## Clips and prompts
 
@@ -152,8 +162,11 @@ sentence stays one shot.
 
 **States of a character.** A character who looks different for a stretch of the film (wounded, disguised, covered in mud) has
 `states` in the cast: the cast step lists them only where the script changes the look (at most two). Every state gets a picture of its
-own, drawn from the normal picture's prompt with only the change applied and with the same seed (it keeps the face; the normal picture is
-rendered first). The shot planning says per shot which look a character is in; a clip uses the picture of the look its character is in
+own, made after the normal picture. With `sequenceSheets` (the default) its sheet is made from the normal picture's anchor: the video
+starts on it, holds it for one shot (the lead-in, not part of the sheet), and from the hard cut after it shows the six views of the sheet
+with the change (`change` of the state) - the face and build come from the anchor itself, also for a character from the library. A new
+anchor of the normal picture makes the look stale. Without sequence sheets a state is drawn from the normal picture's prompt with only the
+change applied and with the same seed. The shot planning says per shot which look a character is in; a clip uses the picture of the look its character is in
 when they first appear in it. Not set in a film planned before - `--redo=cast` makes them.
 
 ## Replacing a character
@@ -169,27 +182,54 @@ one (with `sequenceSheets`: the sheet's video and frames), lets a vision-capable
 it), names the clips that were already rendered with the old picture - they are not touched, delete the ones you want redone - and offers to
 render the new reference sheet. It is the film counterpart of `bun run replace-character`.
 
+## The asset library and casting.json
+
+A film takes characters and places from the [asset library](../README.md#the-asset-library) the way a music video does - the
+same code (`lib/casting.ts`). After the cast step the film writes `films/<id>/casting.json` once, every character that is seen
+and every place `"project:<id>"`; from then on it is yours:
+
+```json
+{"characters": {"morwenna": "library:vyvian-singer", "leo": "project:leo"}, "locations": {"hut": "library:stone-hut"}}
+```
+
+- A `"library:<id>"` role gets the library's picture and sheet copied in (never rendered, its old pictures go to `old/attempts`),
+  and the library's description stands in for its look and its description - the clip prompts describe it as the library does.
+- An entry the library does not have stops the run before anything is made. A narrator's voice has no picture and no entry.
+- Back to `"project:"`: the library pictures are put away, `bun film.ts <id> --redo=characterLooks` (or `locationLooks`)
+  writes its own look again, `--render=images` draws it.
+- The other looks of a library character (wounded, disguised) start on the library's anchor (see the states of a character above).
+  Without `sequenceSheets` they are drawn from the library's description - the face may differ from the library picture (a warning
+  says so). With `locationViews` a library place keeps the library's sheet, not views
+  designed for the film (a warning as well).
+
+Into the library from a film: `bun run export-asset <film-id> <id> --film [--as=<library id>]` - a character, a place, or a
+character in one of its other looks (`leo--wasted`), with its pictures and the description the clips use.
+
 ## config.json
 
 All optional:
 
 ```json
-{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "imageWorkflow": "kroma-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "never", "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
+{"dialogueLanguage": "auto", "targetDuration": 90, "seed": -1, "imageResolution": -1, "videoResolution": -1, "videoAspect": "16:9", "imageWorkflow": "kroma-image", "videoWorkflow": "h3-ref2video-film", "sequenceSheets": true, "locationViews": false, "continuity": "never", "contextFrames": 0, "leakRetries": 0, "finalFps": 24, "interpolationModel": "rife_v4.26_heavy.safetensors", "finish": false, "subtitles": "script", "burnSubtitles": false, "levelMatching": true, "scoreVolume": -14, "llm": {}}
 ```
 
 | Field | Values |
 |-------|--------|
 | `dialogueLanguage` | `"auto"` = the language of the idea, or a code like `"de"`. Ignored for a screenplay |
 | `targetDuration`   | seconds of film, at least 10; `-1` = as long as the story needs. An idea is developed for it, and the shots of every scene are planned to it (each scene gets its share, by the length of its script). A **screenplay** is only planned to a length when this is written in `config.json` - without it the shot planning decides freely, and a script of ~140 s easily becomes 240 s |
-| `imageWorkflow`, `videoWorkflow` | the workflow file in `comfy/workflows/` (without `.ts`) that renders the pictures and the clips - exactly one each, as in the music-video projects (see [custom workflows](custom-workflows.md)). The film's clips use `h3-ref2video-film` by default: pictures only, no audio goes in. A video workflow for the film takes that file's options (`FilmVideoWorkflowOptions`); the name of the workflow that made a clip is in its `.json`. `h3-ref2video-film-beta` is the same graph without the turbo LoRA (res_multistep, beta, 20 steps - about 2.5 times slower, follows the prompt more closely, e.g. for held shots): `"videoWorkflow": "h3-ref2video-film-beta"`; copy it to experiment |
+| `imageWorkflow`, `videoWorkflow` | the workflow file in `comfy/workflows/` (without `.ts`) that renders the pictures and the clips - exactly one each, as in the music-video projects (see [custom workflows](custom-workflows.md)). The film's clips use `h3-ref2video-film` by default: pictures only, no audio goes in. A video workflow for the film takes that file's options (`FilmVideoWorkflowOptions`); the name of the workflow that made a clip is in its `.json`. `h3-ref2video-film-beta` is the same graph without the turbo LoRA (res_multistep, beta, 20 steps - about 2.5 times slower, follows the prompt more closely, e.g. for held shots): `"videoWorkflow": "h3-ref2video-film-beta"`; copy it to experiment. `h3-ref2video-film-2pass` renders the clips in the two passes of the music video's `h3-ref2video-2pass` (the same code, `comfy/h3-two-pass.ts`): the base model at a quarter of the pixels, the latent x2, a short refine - sharp clips at 2 MP (`videoResolution` -1) without the ghosting of one pass at that size; the sound is the model's own, as in the other film workflows: `"videoWorkflow": "h3-ref2video-film-2pass"` |
 | `sequenceSheets`   | `true` (default) = every picture is a multi-angle reference sheet (a short turnaround video, sampled and composited), `false` = one plain picture each - much cheaper |
 | `locationViews`    | `false` (default). `true` = the five views of every location sheet are **designed** for the place and its story: a step (`locationViews`) writes the floor plan and the views (the reverse - what lies behind the camera of the first view -, the two sides, a wide view), the sheet's video cuts to them, and every shot says which view is its background (`placeView`). For conversations where a reverse shot has to show the other side of the place. Needs `sequenceSheets`; adds to the clip prompts, so only for a film planned with it - switch it on, delete the location pictures (`assets/locations/*`, `assets/sequence/locations/*`) and `--redo=locationViews,coverage` |
-| `continuity`       | `"never"` (default) = every clip is its own cut, `"auto"` = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other). Off by default: the picture drifts from clip to clip and the next one starts on the drift - see the paragraph above |
+| `continuity`       | `"never"` (default) = every clip is its own cut, `"auto"` = clips go on from the last frame of the one before where the shot planning marked a take that goes on, `"scene"` = every clip of a scene but its first does (people keep their posture and clothes from clip to clip, but the clips of a scene render one after the other). A clip goes on from the one before only where the picture goes on: its first shot is the same take (`continues`) or - with `"scene"` - the same framing from the same place. Where the plan cuts to another setup it is a plain cut with no context frames: a clip that starts on the frames of the one before cannot make that cut, the video model rebuilt the place in the middle of the clip (people swapping sides, a person twice). Off by default: the picture drifts from clip to clip and the next one starts on the drift - see the paragraph above |
+| `contextFrames`    | `0` (default) = a continuing clip starts on the last frame of the clip before, `22` or `39` (5 + 17·k) = on that many of its last frames: the motion goes on, not only the pose. Rendered that much longer, the head cut off again and the colors matched to the clip before - as in the music video. Needs `continuity` `"auto"` or `"scene"` |
+| `leakRetries`      | `0` (default) = off; a clip that came out as the reference pictures lined up on their grey studio backdrop is put away in `old/leaks/` and rendered again with another seed, up to this many times (needs `"seed": -1`) - as in the music video |
+| `finish`           | `false` (default); `true` or an object like `{"colorMatch": 0.5, "grain": 3}` = a finished copy `<id>-finished.mp4` next to the film: the clips matched to one reference (`colorMatch`, `colorReference` a clip id like `"clip-004"`), a light grade, CAS sharpen and film grain - exactly as in the music video, see [Finishing](../README.md#finishing-finish) |
+| `finalFps`, `interpolationModel` | `24` (default) = off; `48` or `60` = a second film `<id>-<fps>fps.mp4`: every clip interpolated shot by shot on ComfyUI (as in the music video), the sound and the score taken over from the 24 fps film. With `finish` it gets its finished copy too |
 | `subtitles`        | `"script"` (default) = the translations the screenplay has under its lines (in brackets, they are kept as `translation`), `"off"`, or a language code like `"en"`: every line in another language is translated into it (a step, cached) |
 | `burnSubtitles`    | `false` (default) = the subtitles are a track of the mp4 that the player switches on, `true` = burned into the picture (always visible, for players that do not show a track - messengers, uploads; the video is encoded once more) |
 | `levelMatching`    | `true` (default) = every clip's sound is brought towards -20 LUFS, at most 9 dB either way - the model makes each clip's level on its own |
 | `scoreVolume`      | dB under the film's own sound for a score (-40 to 0, default -14) |
-| `seed`, `imageResolution`, `videoResolution`, `llm` | as in the music-video [config.json](../README.md#configjson) |
+| `seed`, `imageResolution`, `videoResolution`, `videoAspect`, `llm` | as in the music-video [config.json](../README.md#configjson) - `videoAspect` (`"16:9"` default, `"9:16"`, `"12:5"`, ...) is the shape of the clips |
 
 ## Subtitles and score
 
@@ -202,7 +242,19 @@ A score: put an audio file into `films/<id>/input/` as `score.mp3` (or .wav, .fl
 the film, mixed in at `scoreVolume`, and ducks under the dialogue (sidechain compressor). The film is made once more with the score, so the
 file can be exchanged and `--render=final` run again; a score is not generated.
 
+The order of `--render=final`: the clips joined, the score, then the finished copy (`finish`) and the film at `finalFps` with its
+own finished copy - and the subtitles last, into every one of these films (burned in after the grade and the grain, the text stays clean).
+
 ## Location views
+
+Without designed views (the default) a clip is still given the one view of its place that its shots are in, not the whole sheet:
+once a location's sheet is rendered, a vision-capable model reads what each of its five views shows - where the camera stands and
+what it looks toward (`sheetViews` in `project.json`, read again when the sheet changes) - and the LLM chooses the view of every
+shot from them (`shotViews`, chosen again when the shots change). Given the whole sheet, the video model took its first view as
+the background whatever the shot's camera said. A sheet rendered in the same run gets its views before the clips are rendered.
+It needs a model that surely reads pictures: a vision model of its own (`bun run setup vision`), or a text model the server says
+takes pictures. Without one - or with a server that does not say - nothing is asked (a text model handed a picture it cannot see
+makes up the views), one note says so, and the clips are given the whole sheet as before.
 
 With `"locationViews": true` the five views of a location's reference sheet are designed for the place (a floor plan, then: the picture itself, the reverse, the two sides, a wide view) and every shot names the view that is its background. The clip gets that **one view** as the picture of the place (frame 0-4 of the sheet video, `assets/sequence/locations/<id>/frames/`), never the sheet itself - the video model shows a grid of views back. A shot that looks from another view says so in words ("that side is not in the picture"). The sheet's video model cuts to the views it is told about - but it cannot know what the other side of a place holds, so the reverse is only roughly right.
 

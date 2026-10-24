@@ -1,3 +1,4 @@
+import type {CastingCopies} from "../casting.ts";
 import type {Partials} from "../partials.ts";
 
 // Data of the short-film pipeline (film.ts) - lives in films/<id>/project.json, separate from the music-video projects.
@@ -133,4 +134,10 @@ export type FilmProject = {
     scriptNotes?: string[],             // contradictions the script has in itself (a person bound, then free, then bound again) - read by the language model, only reported
     subtitles?: Record<string, string>, // config subtitles = a language code: the translation of every line spoken in another language, by "sceneId:line" (line = index among the dialogue lines of the scene)
     coverage?: SceneCoverage[],         // the shots of every scene, in scene order
+    castingCopies?: CastingCopies,      // the library assets copied for casting.json, and which version - not a step (lib/casting.ts)
+    // without designed views (locationViews): what each view of a place's rendered sheet shows, read from its frames by a vision
+    // model, by location id, with the fingerprint of the frames it was read from - and the view each shot of a scene is in (1-based),
+    // with the fingerprint of what it was chosen from. Not steps: made again when their sheet or their shots change (lib/film/views.ts)
+    sheetViews?: Record<string, { fingerprint: string, views: LocationView[] }>,
+    shotViews?: Record<string, { fingerprint: string, views: number[] }>,
 }

@@ -3,7 +3,7 @@
 // makes its own ambience. As in ComfyUI's own template (video_minimax_h3_r2v) MiniMaxH3ReferenceToVideo already returns an
 // empty video+audio latent: it is sampled as it is, and the result is decoded twice - the picture with the video VAE, the
 // sound with the audio VAE.
-import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, type Aspect, dyn, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export type FilmVideoWorkflowOptions = {
     prompt: string,
@@ -11,9 +11,13 @@ export type FilmVideoWorkflowOptions = {
     // ComfyUI input name of the picture the video has to start on (a continuing clip's first frame, config.pinStartFrame):
     // locked to frame 0 with MiniMaxH3AddGuide instead of only being one of the loose reference pictures
     startFrame?: string,
-    frames: number,             // frames to render, already a length the model accepts (see renderFrames)
+    // ComfyUI input name of a short video: the last frames of the clip before (config.contextFrames), all of them locked to
+    // the start of this clip - the motion goes on, not only the pose. Instead of startFrame
+    startClip?: string,
+    frames: number,            // frames to render, already a length the model accepts (see renderFrames)
     seed: number,
-    resolution: Resolution,     // always rendered landscape
+    resolution: Resolution,
+    aspect?: Aspect,            // config videoAspect - "16:9" (landscape) when not given
     filenamePrefix: string,
 }
 
@@ -37,7 +41,7 @@ export default function h3Ref2VideoFilm(opts: FilmVideoWorkflowOptions): Workflo
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -54,9 +58,11 @@ export default function h3Ref2VideoFilm(opts: FilmVideoWorkflowOptions): Workflo
         [`ref_images.ref_image_${i}`, wf.LoadImage({image: dyn(picture)}).IMAGE])))
 
     // A continuing clip's first frame is a ref image like any other above - references only carry identity and place, the
-    // pose and framing of the last frame of the clip before get lost. This node takes the image as the clip's actual first frame.
-    const positive = opts.startFrame
-        ? wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE}).positive
+    // pose and framing of the last frame of the clip before get lost. This node takes the image as the clip's actual first frame -
+    // or the last frames of the clip before (startClip, config.contextFrames) as its first frames.
+    const start = startImages(wf, opts)
+    const positive = start
+        ? wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: start}).positive
         : references.positive
 
     const attention = wf.ModelAttentionBackend({model: shifted.MODEL, attention: 'comfy kitchen attention'})

@@ -35,8 +35,8 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
 | `bun run init`          | creates a new project - see [Creating a project](#creating-a-project)        |
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
-| `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command |
-| `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt |
+| `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command - `--film` for a film |
+| `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt - `--film` for a film |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
@@ -68,6 +68,7 @@ the arrow keys. Each part also works on its own:
 | `bun run setup`           | everything below, in order                                                                 |
 | `bun run setup llm`       | the LLM server: URL → API key (optional) → connects, lists the models → pick one            |
 | `bun run setup llm-model` | only the model: lists the models of the configured server → pick one                       |
+| `bun run setup vision`    | the model that describes pictures: the text model, another model on the text server, or one on another server - says whether it takes pictures |
 | `bun run setup comfy`     | the ComfyUI servers with their status (GPU, free VRAM) - add, remove, test again           |
 | `bun run setup show`      | the effective settings and where each value comes from, API keys masked                    |
 
@@ -85,6 +86,12 @@ The file, if you'd rather write it yourself:
   looks of the places, the views of the shots); everything else stays in order.
 - `llm.apiKey` is optional - local servers usually need none. Without `llm.model`, the server's only model is used;
   a server with several models needs one picked.
+- `llm.vision` (optional): the model that describes pictures (`replace-character`, `import-asset`, `create-asset`) -
+  for a text server that runs without a vision projector. `{"url": …, "apiKey": …, "model": …}`: without `url` it is
+  the text server (and its key) with another model, without `model` the server's only model. Without `llm.vision` the
+  text model describes the pictures. Before the first picture the server is asked whether the model takes pictures
+  (llama.cpp `/props`, Ollama, LM Studio) - one that does not stops right there and says what to set; a server that
+  cannot tell is simply tried.
 - `comfy` entries are a URL, or `{"url", "name", "token"}` / `{"url", "name", "username", "password"}` for a server
   behind a proxy with authentication. `name` (default: the host) shows up in the log. Without `comfy`,
   `http://localhost:8188` is used. With several servers, pictures and clips are rendered on all of them in parallel -
@@ -99,6 +106,9 @@ Everything can be overridden, lowest first: the settings file → the project's 
 | `FEVERSLOP_LLM_API_KEY`                | `--llm-key=`      | its API key                                       |
 | `FEVERSLOP_LLM_MODEL`                  | `--llm-model=`    | a model id of the server                          |
 | `FEVERSLOP_LLM_PARALLEL`               | `--llm-parallel=` | LLM calls at once, 1 or more                      |
+| `FEVERSLOP_VISION_URL`                 | -                 | the server that describes pictures, with `/v1`    |
+| `FEVERSLOP_VISION_API_KEY`             | -                 | its API key                                       |
+| `FEVERSLOP_VISION_MODEL`               | -                 | the model that describes pictures                 |
 | `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
@@ -593,7 +603,7 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `h3-sequence-to-sheet` | sequence | the turnaround video of a reference sheet (`sequenceWorkflow`, default) |
 | `frame-interpolate` | interpolation | RIFE/FILM frame interpolation per shot, for `finalFps` (not set in `config.json`, always this one) |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
-| `h3-ref2video-film`, `h3-ref2video-film-beta` | video | the short-film pipeline's clips, without audio input - see [docs/film.md](docs/film.md) |
+| `h3-ref2video-film`, `h3-ref2video-film-beta`, `h3-ref2video-film-2pass` | video | the short-film pipeline's clips, without audio input (`-2pass`: the two passes of `h3-ref2video-2pass`) - see [docs/film.md](docs/film.md) |
 
 ¹ The export JSON is only a one-time input to `bun run comfy:convert` (see below); it isn't kept in the repo, only
 the generated `.ts` file under `comfy/workflows/` is.
@@ -829,6 +839,7 @@ Finished characters and places that every project can take - the same band in ev
 bun run export-asset tides-of-eternal-flame-261017 kael                     # into the library as "kael"
 bun run export-asset tides-of-eternal-flame-261017 underwater-basilica-and-temple-stage --as=temple-stage
 bun run import-asset new-song guitarist --from=library:kael                # from the library into a project
+bun run export-asset witch-test leo --film                                  # a film's character (or its look "leo--wasted", or a place) into the library
 ```
 
 - `export-asset` copies the picture and the whole sheet with the texts that go with them: the description, for a place
@@ -846,7 +857,9 @@ bun run create-asset location temple-stage --anchor=pictures/stage.png --like=ti
 ```
 
 - The picture becomes the anchor as it is. A vision-capable model describes it - shown and editable before it is kept;
-  `--description=…` gives your own instead (and runs without a terminal).
+  `--description=…` gives your own instead (and runs without a terminal). A character is described once more after its sheet
+  is made, from the anchor and the full-body views of the sheet - the clips are given the sheet, and an anchor cut at the waist
+  says nothing of the legs and shoes. The description names every garment from top to bottom (sleeves, the length of a skirt).
 - A place also gets its background features and its floor plan, with the same prompts a project uses.
 - ComfyUI renders the reference sheet (sequence video, frames, picture) from the anchor - with the render settings of
   the project given with `--like`, else the defaults. It is made in `library/.work/` and moved into the library when it
@@ -895,13 +908,14 @@ the next run uses it:
 |---------|-------|------|
 | `bun run replace-character <project-id>` | a terminal, a planned project | your own picture (and description) for one character or group member of the project |
 | `bun run import-asset <project-id> [<id>] [--from=<project>[:<id>] \| --from=library:<id>]` | a terminal, a planned project | a finished character or place from another project or the library, copied and pinned |
-| `bun run export-asset <project-id> <id> [--as=<library id>]` | rendered pictures and a description | the character or place into the library |
+| `bun run export-asset <project-id> <id> [--as=<library id>] [--film]` | rendered pictures and a description | the character or place into the library - `--film`: of a film in `films/` |
 | `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
-| `casting.json` | - | which roles of a project are played by library assets, on every run |
+| `casting.json` | - | which roles of a project or a film are played by library assets, on every run |
 
-- **Describing a picture needs a vision-capable model** on the LLM server - `replace-character`, `import-asset` (when
-  asked to write the description from the picture) and `create-asset` send the picture to it. Without one, type the
-  description (`--description=…` for `create-asset`), or take the one that came with the asset.
+- **Describing a picture needs a vision-capable model** - `replace-character`, `import-asset` (when asked to write the
+  description from the picture) and `create-asset` send the picture to it: the text model, or the one in `llm.vision`
+  (`bun run setup vision`, see [Setup](#setup)) when the text server runs without a vision projector. Without one, type
+  the description (`--description=…` for `create-asset`), or take the one that came with the asset.
 - **A place from your own picture:** `replace-character` is for characters only. Make the place a library asset with
   `bun run create-asset location <id> --anchor=<picture>`, then cast it in `casting.json`
   (`"<place id>": "library:<id>"`) or take it in with `import-asset … --from=library:<id>`.

@@ -218,7 +218,9 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         styleOpening(lookBrief),
         ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
         // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
-        ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
+        // where the shots put them - not "inside" the place for everyone: someone a shot has beyond an open door or outside a
+        // window was pulled into the room by it (last-rehearsal clip-001)
+        ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in ${locationSubject.label} at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.`] : []),
         ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
         ...shotTexts,
         '',

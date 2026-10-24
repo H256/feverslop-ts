@@ -238,6 +238,19 @@ export type FilmClip = {
 }
 
 /**
+ * Does a clip whose first shot is `first` go on from the clip before (whose last shot is `last`) without a cut? With
+ * continuity "auto" only where the plan says the take goes on; with "scene" also where the first shot is the same picture -
+ * the same framing from the same place. A shot planned as another setup is a cut, and a clip that starts on the frames of the
+ * one before cannot make it: told to go on into another setup the video model rebuilt the place in the middle of the clip
+ * (people swapping sides, a person twice), and a hard cut asked for right after the context frames did not come.
+ */
+export function goesOnWithoutCut(first: Shot, last: Shot | undefined, continuity: 'auto' | 'scene' | 'never'): boolean {
+    if (continuity === 'never' || !last) return false
+    if (first.continues) return true
+    return continuity === 'scene' && first.framing === last.framing && (first.view ?? '') === (last.view ?? '')
+}
+
+/**
  * Packs the shots of every scene into clips, in order: a clip never spans two scenes (the place changes), a shot is never
  * split (so no line of dialogue is cut in two), and a clip holds as many shots as fit into MAX_CLIP_SEC. A shot that
  * goes on in the same take as the one before it starts a continuing clip when it opens one (config.continuity).
@@ -267,7 +280,7 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
             clips.push({
                 id: `clip-${String(index).padStart(3, '0')}`, index, sceneId: scene.id, opensScene: !clips.some(c => c.sceneId === scene.id),
                 shots: current, seconds, frameStart, frames,
-                ...((continuity === 'scene' || (continuity === 'auto' && current[0]!.continues)) && previous?.sceneId === scene.id ? {startsFrom: previous.id} : {}),
+                ...(previous?.sceneId === scene.id && goesOnWithoutCut(current[0]!, previous.shots.at(-1), continuity) ? {startsFrom: previous.id} : {}),
             })
             frameStart += frames
             current = []

@@ -32,7 +32,7 @@ export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterL
             prompt: data.characterLooks?.[c.id] ?? '', description: data.characterDescriptions?.[c.id] ?? '',
         })),
         ...cast.characters.filter(c => !c.voiceOnly).flatMap(c => (c.states ?? []).map(s => ({
-            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, file: filmPictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
+            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, look: {base: c.id, change: s.change}, file: filmPictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
             prompt: data.characterLooks?.[statePictureId(c.id, s.id)] ?? '', description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
         }))),
     ]
@@ -51,7 +51,7 @@ export function pictureSeed(projectDir: string, characterId: string): number | u
 
 // What lib/render.ts's Renderer reads - the film's own settings on top of the shared defaults (sequence sheets' workflow)
 export function filmRenderConfig(config: FilmConfig): RenderConfig {
-    return {...defaults, imageWorkflow: config.imageWorkflow, videoWorkflow: config.videoWorkflow, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, sequenceSheets: config.sequenceSheets}
+    return {...defaults, imageWorkflow: config.imageWorkflow, videoWorkflow: config.videoWorkflow, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, videoAspect: config.videoAspect, sequenceSheets: config.sequenceSheets, contextFrames: config.contextFrames, leakRetries: config.leakRetries, finalFps: config.finalFps, interpolationModel: config.interpolationModel, finish: config.finish}
 }
 
 export {renderAll} from "../batch.ts"

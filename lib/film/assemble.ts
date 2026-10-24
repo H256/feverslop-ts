@@ -3,6 +3,7 @@ import {join} from "node:path";
 import {formatSlotRanges, framesOnGrid, probeVideo} from "../assemble.ts";
 import {FPS, formatTime, secondsAt} from "../frames.ts";
 import {log, startSpinner, styles} from "../log.ts";
+import {runProcess} from "../process.ts";
 
 // a clip's sound starts and ends with a very short fade, so that no click is heard where two clips meet
 const FADE_SEC = 0.02
@@ -110,7 +111,44 @@ export async function assembleFilm({clips, projectDir, target, levelMatching = f
     // the second of the film every clip starts at
     let at = 0
     const starts = used.map((n, i) => { const start = at; at += secondsAt(n - skipped[i]!); return start })
-    return {starts, frames: result.frames, width, height, seconds: secondsAt(result.frames), duration: formatTime(secondsAt(result.frames), true)}
+    // used, skipped: the frames of each clip the film shows, from frame 0 - and of those the ones left out at its start
+    return {starts, used, skipped, frames: result.frames, width, height, seconds: secondsAt(result.frames), duration: formatTime(secondsAt(result.frames), true)}
+}
+
+/**
+ * The film at another frame rate (finalFps): the interpolated clips (lib/final-pass.ts, `multiplier` times the frames each
+ * clip has in the film) joined as assembleFilm joined them, down to `fps`, and the sound of the film at 24 fps taken over as it is -
+ * levelled, faded and with its score. The picture of the two runs exactly as long.
+ */
+export async function assembleSmoothFilm({clips, files, multiplier, fps, sound, target}: {
+    clips: { id: string, used: number, skipped: number }[],   // as assembleFilm returned them
+    files: string[],                                           // the interpolated clips, in order
+    multiplier: number,
+    fps: number,
+    sound: string,                                             // the film at 24 fps
+    target: string,
+}) {
+    const infos = await Promise.all(files.map(probeVideo))
+    clips.forEach((clip, i) => {
+        if (infos[i]!.frames < clip.used * multiplier) throw new Error(`${files[i]} has ${infos[i]!.frames} frames, ${clip.used * multiplier} expected - delete it and run again`)
+    })
+    const {width, height} = infos[0]!
+    const filters = clips.map((clip, i) => `[${i}:v]trim=start_frame=${clip.skipped * multiplier}:end_frame=${clip.used * multiplier},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`)
+    filters.push(`${clips.map((_, i) => `[v${i}]`).join('')}concat=n=${clips.length}:v=1:a=0[vc];[vc]fps=${fps}[v]`)
+    const partial = `${target}.partial.mp4`
+    await runProcess([
+        'ffmpeg', '-y', '-v', 'error',
+        ...files.flatMap(f => ['-i', f]), '-i', sound,
+        '-filter_complex', filters.join(';'),
+        '-map', '[v]', '-map', `${clips.length}:a:0`,
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(fps),
+        '-c:a', 'copy', '-movflags', '+faststart', partial,
+    ], {errorMessage: err => `ffmpeg could not join the interpolated clips:\n${err}`})
+    renameSync(partial, target)
+    const result = await probeVideo(target)
+    const expected = Math.round(clips.reduce((sum, c) => sum + c.used - c.skipped, 0) * fps / FPS)
+    if (Math.abs(result.frames - expected) > 1) log.warn(`${target} has ${result.frames} frames, ${expected} expected`)
+    return {frames: result.frames, width, height, seconds: result.frames / fps}
 }
 
 export const SCORE_EXTENSIONS = ['mp3', 'wav', 'flac', 'm4a', 'ogg']

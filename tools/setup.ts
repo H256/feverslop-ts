@@ -1,10 +1,10 @@
 import {cli} from '../lib/cli.ts';
 import {log} from '../lib/log.ts';
 // Sets up the LLM server and the ComfyUI servers - writes the global settings file (see the README, section "Setup").
-// usage: bun run setup [llm | llm-model | comfy | show]
+// usage: bun run setup [llm | llm-model | vision | comfy | show]
 import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
-import {listModels} from "../lib/llm.ts";
+import {listModels, takesPictures} from "../lib/llm.ts";
 import {styles} from "../lib/log.ts";
 import {
     type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, maskSecret, normalizeUrl,
@@ -17,6 +17,7 @@ const commands = {
     all: 'everything below, in order',
     llm: 'the LLM server: URL, API key and model',
     'llm-model': 'only the model of the configured LLM server',
+    vision: 'the model that describes pictures: another model or server, or the text model',
     comfy: 'the ComfyUI servers: add, remove, test',
     show: 'the effective settings and where each comes from',
 }
@@ -40,6 +41,7 @@ const file = await readSettingsFile()
 log.section(`feverslop-ts setup ${styles.muted(settingsPath())}`)
 if (command === 'all' || command === 'llm') await setupLlm()
 if (command === 'llm-model') await setupModel()
+if (command === 'all' || command === 'vision') await setupVision()
 if (command === 'all' || command === 'comfy') await setupComfy()
 log.success('Done - see the result with: bun run setup show')
 
@@ -113,7 +115,7 @@ async function setupLlm() {
     } else if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) {
         return log.info('LLM settings unchanged')
     }
-    file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {}), ...(file.llm?.parallel ? {parallel: file.llm.parallel} : {})}
+    file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {}), ...(file.llm?.parallel ? {parallel: file.llm.parallel} : {}), ...(file.llm?.vision ? {vision: file.llm.vision} : {})}
     await save('the LLM server')
 }
 
@@ -131,6 +133,65 @@ async function setupModel() {
     if (!model) return
     file.llm = {...file.llm, model}
     await save(`the model ${model}`)
+}
+
+async function setupVision() {
+    log.info('Vision model - describes pictures (replace-character, import-asset, create-asset); for a text server without a vision projector')
+    if (process.env.FEVERSLOP_VISION_URL || process.env.FEVERSLOP_VISION_MODEL) log.warn('FEVERSLOP_VISION_URL / FEVERSLOP_VISION_MODEL is set - it overrides what is saved here')
+    // the effective text server - it may come from an env var
+    const {llm} = await loadSettings()
+    const current = file.llm?.vision
+    const where = answer(await p.select({
+        message: 'Pictures are described by',
+        options: [
+            {value: 'text', label: 'The text model', hint: llm.model ?? 'the server\'s only model'},
+            ...(llm.url ? [{value: 'same', label: 'Another model on the text server', hint: llm.url}] : []),
+            {value: 'other', label: 'A model on another server'},
+        ],
+        initialValue: current?.url ? 'other' : current?.model && llm.url ? 'same' : 'text',
+    }))
+    if (where === 'text') {
+        if (file.llm?.vision) {
+            delete file.llm.vision
+            await save('no vision model - the text model describes pictures')
+        }
+        const ids = llm.model ? [llm.model] : llm.url ? await fetchModels(llm.url, llm.apiKey) : null
+        if (llm.url && ids?.length === 1) await reportVision(llm.url, ids[0]!, llm.apiKey)
+        return
+    }
+    let url = llm.url!
+    let apiKey = llm.apiKey
+    if (where === 'other') {
+        url = normalizeUrl(answer(await p.text({
+            message: 'URL (with /v1)',
+            placeholder: 'http://localhost:8081/v1',
+            initialValue: current?.url ?? '',
+            validate: validateUrl,
+        })), 'URL')
+        const typed = answer(await p.password({
+            message: current?.apiKey ? `API key - empty keeps ${maskSecret(current.apiKey)}, "-" removes it` : 'API key - empty if the server needs none',
+        })) ?? ''
+        apiKey = typed === '-' ? undefined : typed || current?.apiKey
+    }
+    const ids = await fetchModels(url, apiKey)
+    let model = current?.model
+    if (ids) {
+        model = await selectModel(ids, model)
+        if (model) await reportVision(url, model, apiKey)
+    } else if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) {
+        return log.info('Vision settings unchanged')
+    }
+    if (where === 'same' && !model) return log.info('Vision settings unchanged')
+    file.llm = {...file.llm, vision: where === 'other' ? {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {})} : {model}}
+    await save(`the vision model${model ? ` ${model}` : ''}`)
+}
+
+/** Says whether the model takes pictures, as far as the server tells (lib/llm.ts takesPictures). */
+async function reportVision(url: string, model: string, apiKey?: string) {
+    const takes = await takesPictures(url, model, apiKey)
+    if (takes === true) log.success(`${model} takes pictures`)
+    else if (takes === false) log.warn(`${model} takes no pictures, the server says - describing a picture will fail (llama-server: load it with --mmproj)`)
+    else log.info(styles.muted(`${url} does not tell whether ${model} takes pictures - the first picture will show`))
 }
 
 async function setupComfy() {
@@ -233,6 +294,13 @@ async function show() {
     log.info(`  api key  ${llm.apiKey ? maskSecret(llm.apiKey) : styles.muted('none')} ${source(sources.llmApiKey)}`)
     log.info(`  model    ${llm.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.llmModel)}`)
     log.info(`  parallel ${llm.parallel} ${styles.muted(llm.parallel > 1 ? 'calls at once' : 'call at a time')} ${source(sources.llmParallel)}`)
+    log.info('\nVision (describing pictures)')
+    if (!llm.vision) log.info(`  ${styles.muted('the text model')}`)
+    else {
+        log.info(`  url      ${llm.vision.url ?? styles.muted('the text server')} ${source(sources.visionUrl)}`)
+        if (llm.vision.url) log.info(`  api key  ${llm.vision.apiKey ? maskSecret(llm.vision.apiKey) : styles.muted('none')} ${source(sources.visionApiKey)}`)
+        log.info(`  model    ${llm.vision.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.visionModel)}`)
+    }
     log.info(`\nComfyUI ${source(sources.comfy)}`)
     for (const server of comfy) {
         const auth = server.credentials?.type === 'bearer_token' ? ` token ${maskSecret(server.credentials.token)}`
@@ -244,7 +312,7 @@ async function show() {
 
 function printWithoutTerminal() {
     const example: SettingsFile = {
-        llm: {url: 'http://localhost:8080/v1', apiKey: '…', model: '<model id>'},
+        llm: {url: 'http://localhost:8080/v1', apiKey: '…', model: '<model id>', vision: {url: 'http://localhost:8081/v1', model: '<vision model id>'}},
         comfy: [defaultComfy, {url: 'https://gpu2.lan:8188', name: 'gpu2', token: '…'}],
     }
     log.info(`No terminal to ask in - set the values instead:
@@ -253,6 +321,9 @@ function printWithoutTerminal() {
               FEVERSLOP_LLM_API_KEY=…
               FEVERSLOP_LLM_MODEL=<model id>
               FEVERSLOP_LLM_PARALLEL=2     (as many calls at once as the server has slots, default 1)
+              FEVERSLOP_VISION_URL=http://localhost:8081/v1   (describing pictures - default: the text server)
+              FEVERSLOP_VISION_API_KEY=…
+              FEVERSLOP_VISION_MODEL=<vision model id>       (default: the text model)
               FEVERSLOP_COMFY=http://localhost:8188,http://gpu2.lan:8188
 
   per run:    bun index.ts --llm-url=… --llm-model=… --llm-parallel=2 --comfy=http://a:8188,http://b:8188

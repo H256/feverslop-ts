@@ -1,8 +1,9 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
-import type {Resolution} from "../../comfy/helpers.ts";
-import {defaults, languageName, workflowDir} from "../config.ts";
-import {warnUnknownKeys} from "../log.ts";
+import type {Aspect, Resolution} from "../../comfy/helpers.ts";
+import {aspectProblem, contextFramesProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
+import type {Finish} from "../finish.ts";
+import {log, warnUnknownKeys} from "../log.ts";
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
 export type FilmConfig = {
@@ -15,6 +16,7 @@ export type FilmConfig = {
     seed: number,                   // -1 = random per render
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
+    videoAspect: Aspect,            // the clips' aspect ratio, "16:9" (default), "9:16", "12:5" (scope), ... - as in the music video
     // file names in comfy/workflows/, without .ts - exactly one workflow for the pictures and one for the clips (see docs/custom-workflows.md; a video
     // workflow of the film takes comfy/workflows/h3-ref2video-film.ts's options: pictures only, no audio)
     imageWorkflow: string,
@@ -32,6 +34,20 @@ export type FilmConfig = {
     // Off by default: a continuing clip starts on whatever the clip before it drifted to, and the drift (doubled people,
     // displaced patches of the set) is carried on and grows - see docs/film.md
     continuity: 'auto' | 'scene' | 'never',
+    // a continuing clip (continuity) starts on this many of the last frames of the clip before (0 = off, else 5 + 17·k: 22, 39)
+    // instead of its one last frame: the motion goes on, not only the pose - as in the music video (lib/render.ts)
+    contextFrames: number,
+    // a clip that came out as the reference pictures lined up on their grey backdrop (lib/leak.ts) is rendered again, with
+    // another seed, up to this many times. 0 (default) = off
+    leakRetries: number,
+    // the frame rate of a second film, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by frame interpolation
+    // (a ComfyUI job per clip, shot by shot), the sound is the one of the 24 fps film. 24 (default) = off - as in the music video
+    finalFps: number,
+    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    // a light grade and sharpen of the film(s), written as <id>-finished.mp4 next to them (lib/finish.ts), with the clips matched
+    // to one reference (colorMatch) and film grain when asked for: false (default) = off, true = the mild one, an object = the
+    // mild one with its fields replaced - as in the music video
+    finish: boolean | Partial<Finish>,
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
     subtitles: string,
@@ -51,11 +67,17 @@ export const filmDefaults: FilmConfig = {
     seed: -1,
     imageResolution: -1,
     videoResolution: -1,
+    videoAspect: defaults.videoAspect,
     imageWorkflow: defaults.imageWorkflow,
     videoWorkflow: 'h3-ref2video-film',
     sequenceSheets: true,
     locationViews: false,
     continuity: 'never',
+    contextFrames: defaults.contextFrames,
+    leakRetries: defaults.leakRetries,
+    finalFps: defaults.finalFps,
+    interpolationModel: defaults.interpolationModel,
+    finish: defaults.finish,
     subtitles: 'script',
     burnSubtitles: false,
     levelMatching: true,
@@ -97,12 +119,17 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
             fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
         }
     }
+    const aspectWrong = aspectProblem(config.videoAspect)
+    if (aspectWrong) fail(aspectWrong)
     for (const key of ['imageWorkflow', 'videoWorkflow'] as const) {
         if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
     }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
     if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
+    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries), finalFpsProblem(config.finalFps),
+        finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)]) if (problem) fail(problem)
+    if (config.contextFrames > 0 && config.continuity === 'never') log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
     if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)

@@ -13,7 +13,9 @@ export type ComfyEntry = string | { url: string, name?: string, token?: string, 
 // the settings file as written by `bun run setup`
 export type SettingsFile = {
     // parallel: how many LLM calls may run at once - as many as the server has slots (llama-server --parallel N, vLLM); default 1
-    llm?: { url?: string, apiKey?: string, model?: string, parallel?: number },
+    // vision: the model that describes pictures (replace-character, import-asset, create-asset) - its own server and/or
+    // model, for a text server without a vision projector; without it the text model is asked
+    llm?: { url?: string, apiKey?: string, model?: string, parallel?: number, vision?: VisionSettings },
     comfy?: ComfyEntry[],
     /** Turns the tokens of `bun run stats` into money: per model id, price per million tokens (the currency is only a label). */
     prices?: Record<string, { inputPerMillion: number, outputPerMillion: number, currency?: string }>,
@@ -21,14 +23,17 @@ export type SettingsFile = {
     library?: string,
 }
 
+// a missing url is the text server (with its key), a missing model the server's only model
+export type VisionSettings = { url?: string, apiKey?: string, model?: string }
+
 export type ComfyServer = { url: string, name: string, credentials?: BasicCredentials | BearerTokenCredentials }
 
 export type Source = 'default' | 'file' | 'project' | 'env' | 'flag'
 
 export type Settings = {
-    llm: { url?: string, apiKey?: string, model?: string, parallel: number },
+    llm: { url?: string, apiKey?: string, model?: string, parallel: number, vision?: VisionSettings },
     comfy: ComfyServer[],
-    sources: { llmUrl: Source, llmApiKey: Source, llmModel: Source, llmParallel: Source, comfy: Source },
+    sources: { llmUrl: Source, llmApiKey: Source, llmModel: Source, llmParallel: Source, visionUrl: Source, visionApiKey: Source, visionModel: Source, comfy: Source },
 }
 
 // everything that beats the settings file - all optional, strings as typed on the command line
@@ -71,12 +76,21 @@ export async function readSettingsFile(): Promise<SettingsFile> {
 
     if (raw.llm !== undefined) {
         if (!raw.llm || typeof raw.llm !== 'object' || Array.isArray(raw.llm)) fail('llm must be an object like {"url": …, "apiKey": …, "model": …}')
-        warnUnknownKeys(raw.llm, ['url', 'apiKey', 'model', 'parallel'], file, 'llm.')
+        warnUnknownKeys(raw.llm, ['url', 'apiKey', 'model', 'parallel', 'vision'], file, 'llm.')
         for (const key of ['url', 'apiKey', 'model'] as const) {
             if (raw.llm[key] !== undefined && typeof raw.llm[key] !== 'string') fail(`llm.${key} must be a string, got ${JSON.stringify(raw.llm[key])}`)
         }
         if (raw.llm.parallel !== undefined && !(Number.isInteger(raw.llm.parallel) && raw.llm.parallel >= 1)) fail(`llm.parallel must be a whole number of 1 or more, got ${JSON.stringify(raw.llm.parallel)}`)
         if (raw.llm.url) checkUrl(raw.llm.url, `${file}: llm.url`)
+        const vision = raw.llm.vision
+        if (vision !== undefined) {
+            if (!vision || typeof vision !== 'object' || Array.isArray(vision)) fail('llm.vision must be an object like {"url": …, "model": …}')
+            warnUnknownKeys(vision, ['url', 'apiKey', 'model'], file, 'llm.vision.')
+            for (const key of ['url', 'apiKey', 'model'] as const) {
+                if (vision[key] !== undefined && typeof vision[key] !== 'string') fail(`llm.vision.${key} must be a string, got ${JSON.stringify(vision[key])}`)
+            }
+            if (vision.url) checkUrl(vision.url, `${file}: llm.vision.url`)
+        }
     }
     if (raw.comfy !== undefined) {
         if (!Array.isArray(raw.comfy)) fail(`comfy must be a list of URLs or {"url": …} objects, got ${JSON.stringify(raw.comfy)}`)
@@ -100,7 +114,7 @@ export async function saveSettings(settings: SettingsFile) {
 export async function loadSettings(overrides: SettingsOverrides = {}): Promise<Settings> {
     const file = await readSettingsFile()
     const env = process.env
-    const sources: Settings['sources'] = {llmUrl: 'default', llmApiKey: 'default', llmModel: 'default', llmParallel: 'default', comfy: 'default'}
+    const sources: Settings['sources'] = {llmUrl: 'default', llmApiKey: 'default', llmModel: 'default', llmParallel: 'default', visionUrl: 'default', visionApiKey: 'default', visionModel: 'default', comfy: 'default'}
 
     // the value of the highest layer that sets it
     const pick = (key: keyof Settings['sources'], layers: [Source, string | undefined][]) => {
@@ -119,6 +133,14 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
     const parallelText = pick('llmParallel', [['file', file.llm?.parallel === undefined ? undefined : String(file.llm.parallel)], ['env', env.FEVERSLOP_LLM_PARALLEL], ['flag', overrides.llmParallel]])
     const parallel = parallelText === undefined ? 1 : Number(parallelText)
     if (!Number.isInteger(parallel) || parallel < 1) throw new Error(`${sources.llmParallel === 'env' ? 'FEVERSLOP_LLM_PARALLEL' : '--llm-parallel'}: "${parallelText}" must be a whole number of 1 or more`)
+    // the project's llm.model is the text model only - the vision model stays the machine's
+    const visionUrl = pick('visionUrl', [['file', file.llm?.vision?.url], ['env', env.FEVERSLOP_VISION_URL]])
+    const visionApiKey = pick('visionApiKey', [['file', file.llm?.vision?.apiKey], ['env', env.FEVERSLOP_VISION_API_KEY]])
+    const visionModel = pick('visionModel', [['file', file.llm?.vision?.model], ['env', env.FEVERSLOP_VISION_MODEL]])
+    if (visionUrl && sources.visionUrl === 'env') checkUrl(visionUrl, 'FEVERSLOP_VISION_URL')
+    const vision = visionUrl || visionModel
+        ? {...(visionUrl ? {url: trimSlash(visionUrl)} : {}), ...(visionApiKey ? {apiKey: visionApiKey} : {}), ...(visionModel ? {model: visionModel} : {})}
+        : undefined
 
     let comfy = parseComfyEntries([defaultComfy], 'default')
     if (file.comfy?.length) {
@@ -134,7 +156,7 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
         comfy = parseComfyEntries(splitList(overrides.comfy), '--comfy')
         sources.comfy = 'flag'
     }
-    return {llm: {url: url && trimSlash(url), apiKey, model, parallel}, comfy, sources}
+    return {llm: {url: url && trimSlash(url), apiKey, model, parallel, ...(vision ? {vision} : {})}, comfy, sources}
 }
 
 /** Settings file entries → servers with a unique name each and SDK credentials. */

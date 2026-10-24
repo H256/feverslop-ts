@@ -3,7 +3,7 @@
 // follows the prompt more closely (a held shot stays held). Select it with "videoWorkflow": "h3-ref2video-film-beta" in the film's config.json.
 // The model is CFG-distilled: no negative prompt, BasicGuider as in the template. Change the sampler, the scheduler or the steps below.
 import type {FilmVideoWorkflowOptions} from "./h3-ref2video-film.ts";
-import {afterCleanup, dyn, FPS, MAX_REFERENCE_IMAGES, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, startImages, FPS, MAX_REFERENCE_IMAGES, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export {renderFrames} from "./h3-ref2video-film.ts"
 
@@ -18,7 +18,7 @@ export default function h3Ref2VideoFilmBeta(opts: FilmVideoWorkflowOptions): Wor
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -35,9 +35,11 @@ export default function h3Ref2VideoFilmBeta(opts: FilmVideoWorkflowOptions): Wor
         [`ref_images.ref_image_${i}`, wf.LoadImage({image: dyn(picture)}).IMAGE])))
 
     // A continuing clip's first frame is a ref image like any other above - references only carry identity and place, the
-    // pose and framing of the last frame of the clip before get lost. This node takes the image as the clip's actual first frame.
-    const positive = opts.startFrame
-        ? wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE}).positive
+    // pose and framing of the last frame of the clip before get lost. This node takes the image as the clip's actual first frame -
+    // or the last frames of the clip before (startClip, config.contextFrames) as its first frames.
+    const start = startImages(wf, opts)
+    const positive = start
+        ? wf.MiniMaxH3AddGuide({positive: references.positive, latent: references.LATENT, frame_idx: 0, vae: videoVae.VAE, image: start}).positive
         : references.positive
 
     const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})

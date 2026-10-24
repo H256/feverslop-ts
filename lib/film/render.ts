@@ -4,7 +4,9 @@ import {type RecommendedResolution, type RenderFrames, resolveSeed} from "../../
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
-import {Renderer} from "../render.ts";
+import {CONTEXT_SETTLE} from "../compose.ts";
+import {Renderer, type RenderWhat} from "../render.ts";
+import {renderStateOf} from "../render-state.ts";
 import {type Freshness, freshness} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
 import {workflowDir} from "../config.ts";
@@ -14,7 +16,7 @@ import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
 export const promptHash = (clip: { prompt: string, frames: number }) => Bun.hash(`${clip.frames}
 ${clip.prompt}`).toString(16)
 
-type FilmVideoConfig = { videoWorkflow: string, videoResolution: string | number, pinStartFrame?: boolean }
+type FilmVideoConfig = { videoWorkflow: string, videoResolution: string | number, videoAspect?: string, pinStartFrame?: boolean }
 
 /** The id of the request a film clip is rendered from (lib/render-spec.ts) - what its sidecar records and the film compares. */
 export const filmClipFingerprint = (clip: FilmClipRequest, projectDir: string, config: FilmVideoConfig) =>
@@ -33,6 +35,29 @@ export function filmClipFreshness(clip: FilmClipRequest, projectDir: string, con
     return freshness(file, filmClipFingerprint(clip, projectDir, config))
 }
 
+/** The frames a rendered clip's file has, as its sidecar records them - undefined when it has none. */
+function renderedFramesOf(projectDir: string, id: string): number | undefined {
+    const sidecar = join(projectDir, `videos/${id}.mp4.json`)
+    if (!existsSync(sidecar)) return undefined
+    try {
+        const frames = JSON.parse(readFileSync(sidecar, 'utf8')).renderedFrames
+        return Number.isInteger(frames) ? frames : undefined
+    } catch {
+        return undefined
+    }
+}
+
+/** Was the clip rendered with context frames (its first frame is a new one, not the last frame of the clip before)? */
+export function startedOnContext(projectDir: string, id: string): boolean {
+    const sidecar = join(projectDir, `videos/${id}.mp4.json`)
+    if (!existsSync(sidecar)) return false
+    try {
+        return Number.isInteger(JSON.parse(readFileSync(sidecar, 'utf8')).contextFrames)
+    } catch {
+        return false
+    }
+}
+
 const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
 
 /**
@@ -40,7 +65,8 @@ const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.p
  * with the film workflow - pictures only, no audio goes in, the model speaks the dialogue itself.
  */
 export class FilmRenderer extends Renderer {
-    async renderFilmClip(clip: FilmClipRequest) {
+    // previous: the clip this one goes on from (clip.startsFrom) - for context frames
+    async renderFilmClip(clip: FilmClipRequest, previous?: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
         const spec = filmClipSpec({...clip, promptHash: promptHash(clip)}, this.projectDir, this.config)
@@ -63,27 +89,39 @@ export class FilmRenderer extends Renderer {
         if (missing.some(p => p.kind === 'frame')) return log.warn(`${clip.id} skipped - it starts on the last frame of ${clip.startsFrom}, which is not rendered yet (${missing.find(p => p.kind === 'frame')!.file})`)
         if (missing.length) return log.warn(`${clip.id} skipped - missing pictures: ${missing.map(p => p.file).join(', ')} - run --render=images`)
 
-        const {seed} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', async () => {
+        // context frames (config.contextFrames): the end of the clip before as the film shows it - a clip with dialogue with
+        // every frame it has (assembleFilm useRendered)
+        const shown = previous?.dialogue.length ? renderedFramesOf(this.projectDir, previous.id) : undefined
+        const context = clip.startsFrom && this.config.contextFrames > 0 ? await this.contextOf(clip.startsFrom, this.config.contextFrames, shown) : undefined
+        const prepare = async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             const seed = resolveSeed(this.config.seed)
             const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames, recommendedResolution?: RecommendedResolution }
             this.noteResolution(module.recommendedResolution)
 
             // Rendered at least as long as the clip needs, in a length the model accepts - the frames after the clip's own
-            // are cut off again when the film is assembled
-            const frames = module.renderFrames?.(clip.frames) ?? clip.frames
-            if (frames < clip.frames) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames}) returned only ${frames} frames`)
+            // are cut off again when the film is assembled. With context frames the render begins that much earlier
+            const lead = context ? context.frames + CONTEXT_SETTLE : 0
+            const frames = module.renderFrames?.(clip.frames + lead) ?? clip.frames + lead
+            if (frames < clip.frames + lead) throw new Error(`${this.config.videoWorkflow}: renderFrames(${clip.frames + lead}) returned only ${frames} frames`)
+            if (context) uploads.push({from: context.file, to: `${this.remoteDir}/${context.asset}`})
             const result = module.default({
                 prompt: clip.prompt,
                 pictures: clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => `${this.remoteDir}/${p.file}`),
-                ...(this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${filmBoundaryFrame(clip.startsFrom)}`} : {}),
+                ...(context ? {startClip: `${this.remoteDir}/${context.asset}`} : this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${filmBoundaryFrame(clip.startsFrom)}`} : {}),
                 frames,
                 seed,
                 resolution: this.config.videoResolution,
+                aspect: this.config.videoAspect,
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed}}
-        })
+        }
+        const what: RenderWhat = {label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}
+        let {seed} = await this.render(what, target, '.mp4', prepare)
+        seed = await this.retryLeaks(what, clip.id, file, seed, prepare, `render it again with --render=videos --again --only=${clip.id}`)
+        // the head - the clip before again - cut off, the colors matched to it: as in the music video
+        if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
 
         const rendered = await probeVideo(target)
         if (rendered.frames < clip.frames) log.warn(`${file} has ${rendered.frames} frames, the clip needs ${clip.frames} - delete it and render again`)
@@ -92,7 +130,10 @@ export class FilmRenderer extends Renderer {
             workflow: this.config.videoWorkflow,
             seed,
             resolution: this.config.videoResolution,
+            ...(this.config.videoAspect !== '16:9' ? {aspect: this.config.videoAspect} : {}),
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
+            // started on the last frames of the clip before, its head cut off: its first frame is a new one (assembleFilm)
+            ...(context ? {contextFrames: context.frames} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final film
             promptHash: promptHash(clip),   // a clip rendered from another prompt than the plan has now is stale
@@ -121,3 +162,7 @@ export class FilmRenderer extends Renderer {
         log.step('Saved', `${first}, ${last} ${styles.muted(`frames 0 and ${frames - 1}`)}`)
     }
 }
+
+/** What is rendered of a film, from the requests of its last plan run - for --dry-run and bun run status --film. */
+export const filmRenderState = (projectDir: string, filmId: string, config: FilmVideoConfig) =>
+    renderStateOf<FilmClipRequest>(projectDir, join(projectDir, 'assets.json'), join(projectDir, `${filmId}.mp4`), clip => filmClipFreshness(clip, projectDir, config) === 'stale')

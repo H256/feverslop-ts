@@ -1,5 +1,5 @@
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
-import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join, posix} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
@@ -11,12 +11,12 @@ import {secondsAt} from "./frames.ts";
 import {extractFrame, probeVideo, trimHead} from "./assemble.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
-import {anchorSpec, clipSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
+import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
-import {characterSequencePrompt, composeSheet, locationSequencePrompt, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
+import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 
@@ -49,12 +49,18 @@ export async function workflowHash(name: string) {
 export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect'>>) =>
     specId(clipSpec(clip, projectDir, config))
 
-export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[] }
+// look: another look of the character `base` (a film's states) - with sequence sheets its sheet starts on base's anchor and
+// shows the change, instead of an anchor drawn from the prompt (renderSequenceSheet)
+export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[], look?: { base: string, change: string } }
 
 type Server = ComfyServer & { api: ComfyApi }
 
 /** What a render is, for the log and the statistics: the kind of result and the workflow (config name) that makes it. */
-type RenderWhat = { label: string, spec: RenderSpec, kind: Timing['kind'], workflow: string, resolution?: Timing['resolution'] }
+export type RenderWhat = { label: string, spec: RenderSpec, kind: Timing['kind'], workflow: string, resolution?: Timing['resolution'] }
+
+// the end of the clip before, cut out for a clip rendered with context frames (Renderer.contextOf): the short video, its
+// ComfyUI input name, its frames, and the clip it is from with the frames of that clip the final video shows
+export type ClipContext = { file: string, asset: string, frames: number, video: string, used: number }
 
 // the nodes ComfyUI reported while a job ran, in order - for the phase times
 type Trace = { classType: string, at: number }[]
@@ -363,12 +369,17 @@ export class Renderer implements Disposable {
         const anchorTarget = join(this.projectDir, anchorFile)
         const videoFile = `${dir}/sequence.mp4`
         const videoTarget = join(this.projectDir, videoFile)
-        const {prompt: sequencePrompt, beatTimes} = picture.kind === 'character'
-            ? characterSequencePrompt(picture.description)
-            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
         // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
         const anchorIsUsers = isUserFile(anchorTarget)
-        const anchor = anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
+        // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
+        const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
+        const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
+        const baseAnchorTarget = baseAnchorFile && join(this.projectDir, baseAnchorFile)
+        const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
+        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change)
+            : picture.kind === 'character' ? characterSequencePrompt(picture.description)
+            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
+        const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
         const anchorFingerprint = specId(anchor)
         const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow)
         const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow))
@@ -377,9 +388,10 @@ export class Renderer implements Disposable {
             const away = [picture.file, `${picture.file}.json`, videoFile, `${videoFile}.json`, ...frameFiles, ...(anchorIsUsers ? [] : [anchorFile, `${anchorFile}.json`])]
             if (!this.staleFile('pictures', picture.file, sheetFingerprint, away)) return log.step('Exists', styles.muted(picture.file))
         }
+        if (baseAnchorTarget && !existsSync(baseAnchorTarget)) return log.warn(`${picture.id} skipped - its sheet starts on the anchor of ${look!.base}, which is not rendered yet (${baseAnchorFile})`)
         mkdirSync(join(this.projectDir, dir), {recursive: true})
 
-        if (!existsSync(anchorTarget)) {
+        if (!look && !existsSync(anchorTarget)) {
             const {seed} = await this.render({label: `${picture.kind} ${picture.id} anchor`, spec: anchor, kind: 'picture', workflow: this.config.imageWorkflow, resolution: this.config.imageResolution}, anchorTarget, '.png', async () => {
                 const seed = picture.seed ?? resolveSeed(this.config.seed)
                 const {default: imageWorkflow} = await loadWorkflow<{ default: ImageWorkflow }>(this.config.imageWorkflow)
@@ -401,16 +413,16 @@ export class Renderer implements Disposable {
                 const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
                 const result = sequenceWorkflow({
                     prompt: sequencePrompt,
-                    startFrame: `${this.remoteDir}/${anchorFile}`,
-                    frames: SEQUENCE_FRAMES,
+                    startFrame: `${this.remoteDir}/${baseAnchorFile ?? anchorFile}`,
+                    frames: sequenceFrames,
                     orientation: picture.kind === 'character' ? 'portrait' : 'landscape',
                     resolution: -1,
                     seed,
                     filenamePrefix: `${this.remoteDir}/${dir}/sequence`,
                 })
-                return {result, uploads: [{from: anchorTarget, to: `${this.remoteDir}/${anchorFile}`}], meta: {seed}}
+                return {result, uploads: [{from: baseAnchorTarget ?? anchorTarget, to: `${this.remoteDir}/${baseAnchorFile ?? anchorFile}`}], meta: {seed}}
             })
-            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt}, null, 2))
+            await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: sequenceFrames, beatTimes, prompt: sequencePrompt}, null, 2))
         }
 
         const framesDir = join(this.projectDir, dir, 'frames')
@@ -418,18 +430,23 @@ export class Renderer implements Disposable {
         // the workflow may render another length than asked for (the video model only takes certain frame counts) -
         // the frames are picked from the video as it really is, not from the length that was requested
         const rendered = await probeVideo(videoTarget)
-        if (rendered.frames !== SEQUENCE_FRAMES) log.warn(`${videoFile} has ${rendered.frames} frames, ${SEQUENCE_FRAMES} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
-        const frameIndices = selectFrameIndices(beatTimes, rendered.frames)
+        if (rendered.frames !== sequenceFrames) log.warn(`${videoFile} has ${rendered.frames} frames, ${sequenceFrames} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
+        const frameIndices = look ? lookSheetFrames(beatTimes, rendered.frames) : selectFrameIndices(beatTimes, rendered.frames)
         const framePaths = await Promise.all(frameIndices.map(async (frameIndex, i) => {
             const framePath = join(framesDir, `frame_${String(i).padStart(2, '0')}.png`)
             if (!existsSync(framePath)) await extractFrame(videoTarget, frameIndex, framePath)
             return framePath
         }))
 
+        // a look's anchor is its first view in the new look - what a look built on this one would start on
+        if (look) {
+            copyFileSync(framePaths[0]!, anchorTarget)
+            await Bun.write(`${anchorTarget}.json`, JSON.stringify({from: baseAnchorFile, change: look.change, fingerprint: anchorFingerprint}, null, 2))
+        }
         const {columns, panel} = sheetLayout(picture.kind)
         await composeSheet(framePaths, target, panel, columns)
         await Bun.write(`${target}.json`, JSON.stringify({
-            workflow: this.config.sequenceWorkflow, frames: SEQUENCE_FRAMES, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
+            workflow: this.config.sequenceWorkflow, frames: sequenceFrames, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,
         }, null, 2))
         log.step('Saved', `${picture.file} ${styles.muted(this.took(videoTarget))}`)
     }
@@ -542,39 +559,10 @@ export class Renderer implements Disposable {
         }
         // context frames (config.contextFrames): the tail of the clip before, cut out now so the job is made from it
         const context = clip.startsFrom && this.config.contextFrames > 0 ? await this.contextOf(clip.startsFrom, this.config.contextFrames) : undefined
-        let {seed, size: expected} = await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)
-
-        // a clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one
-        // that did is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times
-        for (let tries = 0; this.config.leakRetries > 0; tries++) {
-            const leaked = await backdropSeconds(target)
-            if (!hasBackdropRun(leaked)) break
-            const where = `${leaked.length} sample(s) between ${leaked[0]!.toFixed(1)} and ${leaked.at(-1)!.toFixed(1)} s`
-            if (this.config.seed !== -1) {
-                log.warn(`${file} has a grey studio backdrop (${where}) - the seed is fixed in config.json, so rendering it again gives the same clip. Use "seed": -1, or --again with another seed`)
-                break
-            }
-            const put = join(this.projectDir, 'old', 'leaks', `${clip.id}-seed-${seed}.mp4`)
-            if (tries >= this.config.leakRetries) {
-                log.warn(`${file} still has a grey studio backdrop (${where}) after ${tries} more render(s) - kept as it is, bun run leak-scan ${this.projectId} lists it again`)
-                break
-            }
-            mkdirSync(dirname(put), {recursive: true})
-            renameSync(target, put)
-            recordTiming({kind: 'clip', name: this.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'leak'})
-            log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
-            seed = (await this.render({label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, target, '.mp4', prepare)).seed
-        }
-
-        // the head of a clip rendered with context frames is the clip before again: cut off, so the file starts on this
-        // clip's own first frame like every other one
-        if (context) {
-            await trimHead(target, context.frames + CONTEXT_SETTLE)
-            // drawn on its own, the clip has its own exposure: matched as a whole to the last frames of the clip before, so
-            // the cut that is no cut shows no step in brightness or color (lib/colormatch.ts)
-            const filter = await matchColors(target, context.video, context.used - 4, context.used - 1)
-            log.line(styles.muted(`        · ${clip.id}: colors matched to ${clip.startsFrom} - ${filter}`))
-        }
+        const what: RenderWhat = {label: `clip ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}
+        let {seed, size: expected} = await this.render(what, target, '.mp4', prepare)
+        seed = await this.retryLeaks(what, clip.id, file, seed, prepare, `bun run leak-scan ${this.projectId} lists it again`)
+        if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
         const rendered = await probeVideo(target)
         // every server has to deliver the size asked for - a clip of another size is scaled in the final video. The sizes
         // are computed by the workflow file, not by the server (comfy/helpers.ts, pixelSize); what still comes out at
@@ -628,16 +616,58 @@ export class Renderer implements Disposable {
     }
 
     /**
+     * A clip that came out as the reference pictures lined up on their grey backdrop depends on the seed: the one that did
+     * is put away (old/leaks/) and the clip rendered again, up to config.leakRetries times. Returns the seed of the clip
+     * kept. `rescan`: what the warning says finds it again - the music video's and the film's clips.
+     */
+    protected async retryLeaks<M extends { seed: number }>(what: RenderWhat, id: string, file: string, seed: number, prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>, rescan: string): Promise<number> {
+        const target = join(this.projectDir, file)
+        for (let tries = 0; this.config.leakRetries > 0; tries++) {
+            const leaked = await backdropSeconds(target)
+            if (!hasBackdropRun(leaked)) break
+            const where = `${leaked.length} sample(s) between ${leaked[0]!.toFixed(1)} and ${leaked.at(-1)!.toFixed(1)} s`
+            if (this.config.seed !== -1) {
+                log.warn(`${file} has a grey studio backdrop (${where}) - the seed is fixed in config.json, so rendering it again gives the same clip. Use "seed": -1, or --again with another seed`)
+                break
+            }
+            const put = join(this.projectDir, 'old', 'leaks', `${id}-seed-${seed}.mp4`)
+            if (tries >= this.config.leakRetries) {
+                log.warn(`${file} still has a grey studio backdrop (${where}) after ${tries} more render(s) - kept as it is, ${rescan}`)
+                break
+            }
+            mkdirSync(dirname(put), {recursive: true})
+            renameSync(target, put)
+            recordTiming({kind: 'clip', name: this.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'leak'})
+            log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
+            seed = (await this.render(what, target, '.mp4', prepare)).seed
+        }
+        return seed
+    }
+
+    /**
+     * The head of a clip rendered with context frames is the clip before again: cut off, so the file starts on this clip's
+     * own first frame like every other one.
+     */
+    protected async joinContext(target: string, id: string, startsFrom: string, context: ClipContext) {
+        await trimHead(target, context.frames + CONTEXT_SETTLE)
+        // drawn on its own, the clip has its own exposure: matched as a whole to the last frames of the clip before, so
+        // the cut that is no cut shows no step in brightness or color (lib/colormatch.ts)
+        const filter = await matchColors(target, context.video, context.used - 4, context.used - 1)
+        log.line(styles.muted(`        · ${id}: colors matched to ${startsFrom} - ${filter}`))
+    }
+
+    /**
      * `wanted` frames of the end of the clip `id`, as a short video for the guide of the next clip: they end CONTEXT_SETTLE
      * frames before the last frame the clip gives the final video - those are drawn again after the batch and cut off with
      * the head, so the flash right after the batch is never seen. Fewer when the clip is shorter (5 + 17·k, at least 5).
-     * undefined when the clip is not rendered: the next clip is skipped.
+     * undefined when the clip is not rendered: the next clip is skipped. `shown`: the frames of it the final video shows,
+     * when that is not the `frames` of its sidecar (a film clip with dialogue shows all it has).
      */
-    private async contextOf(id: string, wanted: number): Promise<{ file: string, asset: string, frames: number, video: string, used: number } | undefined> {
+    protected async contextOf(id: string, wanted: number, shown?: number): Promise<ClipContext | undefined> {
         const video = join(this.projectDir, 'videos', `${id}.mp4`)
         const sidecar = `${video}.json`
         if (!existsSync(video) || !existsSync(sidecar)) return undefined
-        const used = (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
+        const used = shown ?? (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
         let frames = Math.min(wanted, used - CONTEXT_SETTLE)
         while (frames > 5 && frames % 17 !== 5) frames--
         if (frames < 5) return undefined

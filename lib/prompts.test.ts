@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {characterLookPrompt, locationLookPrompt, propInUsePrompt, songLyricsPrompt, songStylePrompt} from "./prompts.ts";
+import {characterImageDescriptionPrompt, characterLookPrompt, locationLookPrompt, propInUsePrompt, songLyricsPrompt, songStylePrompt} from "./prompts.ts";
 import {pictureProp} from "./prop-check.ts";
 import {castProp} from "./shot-planner.ts";
 
@@ -59,5 +59,20 @@ describe('the singer voice in a generated song', () => {
     test('"auto" leaves the voice to the LLM', () => {
         expect(songStylePrompt('[Verse]\nla', '', 'English').input).not.toContain('vocal gender tag is exactly')
         expect(songLyricsPrompt('a lighthouse', 'English').input).not.toContain('Sung by')
+    })
+})
+
+describe('a character described from its pictures (create-asset, import-asset)', () => {
+    test('the anchor and the full-body views of the sheet go in together, the clothing is asked for garment by garment', () => {
+        const prompt = characterImageDescriptionPrompt(['data:a', 'data:front', 'data:back'], {name: 'Vyvian', role: 'singer'})
+        expect(prompt.images).toEqual(['data:a', 'data:front', 'data:back'])
+        expect(prompt.input).toContain('the others are full-body views of the same character from its reference sheet')
+        expect(prompt.input).toContain('its sleeves (long, short, none)')
+        expect(prompt.input).toContain('40-90 words')
+    })
+    test('one picture alone, as before', () => {
+        const prompt = characterImageDescriptionPrompt('data:a', {name: 'Vyvian', role: 'singer'})
+        expect(prompt.images).toEqual(['data:a'])
+        expect(prompt.input).toContain('The attached image is the reference picture of the character below.')
     })
 })

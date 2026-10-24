@@ -4,7 +4,9 @@ import {log, styles} from "../log.ts";
 import {dropPartials, keepEach} from "../partials.ts";
 import type {FilmProject} from "./types.ts";
 
-export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials'>
+export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials' | 'castingCopies' | 'sheetViews' | 'shotViews'>
+// an input file or setting a film's steps are made from (lib/film/inputs.ts): its value now, and the steps it redoes when it changes
+export type FilmInput = { value: string | Uint8Array, steps: FilmStepName[] }
 
 // Which steps a step reads from - redoing a step also redoes everything built on it
 const dependsOn: Record<FilmStepName, FilmStepName[]> = {
@@ -35,6 +37,8 @@ export class FilmStore {
     readonly dir: string
     readonly file: string
     data: FilmProject = {}
+    // the steps generated in this run (not taken from project.json) - what --review asks about
+    readonly generated = new Set<FilmStepName>()
 
     constructor(readonly id: string) {
         this.dir = join(FILMS_DIR, id)
@@ -72,18 +76,36 @@ export class FilmStore {
         }
     }
 
-    /** Redoes the steps built on an input that changed since the last run - every input is fingerprinted in project.json. */
-    async syncInputs(inputs: Record<string, { value: string | Uint8Array, steps: FilmStepName[] }>) {
+    /** The inputs that changed since the last run, with the steps each redoes - read only (--dry-run, bun run status --film). */
+    changedInputs(inputs: Record<string, FilmInput>): { name: string, steps: FilmStepName[] }[] {
         const previous = this.data.inputs ?? {}
-        const current: Record<string, string> = {}
-        for (const [name, {value, steps}] of Object.entries(inputs)) {
-            current[name] = Bun.hash(value).toString(16)
-            const before = previous[name] ?? current[name]
-            if (before !== current[name]) {
-                log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
-                for (const step of steps) this.invalidate(step)
+        return Object.entries(inputs).flatMap(([name, {value, steps}]) => {
+            const current = Bun.hash(value).toString(16)
+            return (previous[name] ?? current) !== current ? [{name, steps}] : []
+        })
+    }
+
+    /** The steps with a result that invalidating these would remove - what invalidate() does, without doing it. */
+    redoneBy(names: FilmStepName[]): FilmStepName[] {
+        const redone = new Set<FilmStepName>()
+        const visit = (name: FilmStepName) => {
+            if (this.data[name] !== undefined) redone.add(name)
+            for (const [step, deps] of Object.entries(dependsOn) as [FilmStepName, FilmStepName[]][]) {
+                if (deps.includes(name) && this.data[step] !== undefined && !redone.has(step)) visit(step)
             }
         }
+        for (const name of names) visit(name)
+        return FILM_STEP_NAMES.filter(step => redone.has(step))
+    }
+
+    /** Redoes the steps built on an input that changed since the last run - every input is fingerprinted in project.json. */
+    async syncInputs(inputs: Record<string, FilmInput>) {
+        const previous = this.data.inputs ?? {}
+        for (const {name, steps} of this.changedInputs(inputs)) {
+            log.step('Changed', `${styles.name(name)} ${styles.muted(`- redoing ${steps.join(', ')}`)}`)
+            for (const step of steps) this.invalidate(step)
+        }
+        const current = Object.fromEntries(Object.entries(inputs).map(([name, {value}]) => [name, Bun.hash(value).toString(16)]))
         if (JSON.stringify(current) !== JSON.stringify(previous)) {
             this.data.inputs = current
             await this.save()
@@ -106,6 +128,7 @@ export class FilmStore {
         }
         const result = await run()
         this.data[name] = result
+        this.generated.add(name)
         dropPartials(this.data, name)
         await this.save()
         return result

@@ -6,18 +6,29 @@ import {copyFileSync, existsSync, mkdirSync, readdirSync, rmSync} from "node:fs"
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {languageName} from "./lib/config.ts";
-import {addScore, assembleFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
+import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
+import {finishOf} from "./lib/finish.ts";
+import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
+import {FPS, secondsAt} from "./lib/frames.ts";
 import {burnSubtitles, muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
+import {chooseShotViews, readSheetViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import type {PictureJob} from "./lib/render.ts";
-import {FilmRenderer, filmClipFreshness} from "./lib/film/render.ts";
+import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
+import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
+import {clipEstimate, pictureEstimate} from "./lib/render-state.ts";
+import {formatSlotRanges} from "./lib/assemble.ts";
+import {reviewed} from "./lib/review.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
 import {clipChains} from "./lib/batch.ts";
+import type {AssetKind} from "./lib/asset-import.ts";
+import {castFromLibrary, copyKey} from "./lib/casting.ts";
+import {libraryDir} from "./lib/library.ts";
 import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
@@ -42,7 +53,7 @@ cli('film')
 
 
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--dry-run] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -61,6 +72,8 @@ const {values: args, positionals} = (() => {
                 // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
                 debug: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
+                review: {type: 'boolean', default: false},
+                'dry-run': {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -77,6 +90,8 @@ const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].inc
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
 if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
+if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
+if (args.review && args['dry-run']) log.usageError('--review and --dry-run do not go together: a dry run generates nothing to look at', usage)
 const redoSteps = args.redo.split(',').filter(Boolean) as FilmStepName[]
 const unknownRedo = redoSteps.filter(s => !(FILM_STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${FILM_STEP_NAMES.join(', ')}`, usage)
@@ -89,7 +104,8 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
 
 const film = new FilmStore(filmId!)
 // before the load: a run that writes works from the state it read, so no other run may save in between
-lockProject(film.dir, `film ${film.id}`)
+// --dry-run only reads: no lock, nothing saved
+if (!args['dry-run']) lockProject(film.dir, `film ${film.id}`)
 await film.load()
 // --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
 const sceneIds = new Set(args.scenes.split(',').filter(Boolean))
@@ -99,7 +115,8 @@ const keptCoverage = sceneIds.size ? film.data.coverage : undefined
 // planned again (or edited) gives other scenes and dialogue indices, and old shots would be read against them
 const coverageBasis = () => Bun.hash(JSON.stringify([film.data.screenplay, film.data.cast, film.data.lookBrief, film.data.locationViews])).toString(16)
 const keptBasis = keptCoverage ? coverageBasis() : undefined
-for (const step of redoSteps) film.invalidate(step)
+// a dry run only says what would be redone (see dryRun below)
+if (!args['dry-run']) for (const step of redoSteps) film.invalidate(step)
 
 const readInput = async (name: string) => existsSync(film.input(name)) ? (await Bun.file(film.input(name)).text()).trim() : ''
 
@@ -111,6 +128,10 @@ configureLlm(settings.llm)
 log.step('LLM', settings.llm.url
     ? `${settings.llm.url} · ${settings.llm.model ? styles.name(settings.llm.model) : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
+if (args['dry-run']) {
+    await dryRun()
+    process.exit(0)
+}
 
 let style = await readInput('style.txt')
 const idea = await readInput('idea.txt')
@@ -122,16 +143,7 @@ const source = screenplaySource || idea
 log.step('Mode', mode === 'screenplay' ? 'adopting the screenplay' : `developing the idea ${styles.muted(config.targetDuration > 0 ? `for ~${config.targetDuration}s` : '(as long as the story needs)')}`)
 
 // an edited input redoes the steps built on it
-await film.syncInputs({
-    'idea.txt': {value: idea, steps: ['brief']},
-    'screenplay.txt': {value: screenplaySource, steps: ['brief']},
-    dialogueLanguage: {value: config.dialogueLanguage, steps: ['brief']},
-    targetDuration: {value: String(config.targetDuration), steps: ['outline', 'coverage']},
-    'style.txt': {value: style, steps: ['lookBrief']},
-    subtitles: {value: config.subtitles, steps: ['subtitles']},
-    // designed views of the places change what the coverage is planned against
-    sequenceViews: {value: `${config.sequenceSheets}:${config.locationViews}`, steps: ['locationViews', 'coverage']},
-})
+await film.syncInputs(await filmInputs(film.dir, config))
 
 /////////// 1 · BRIEF
 const brief = await film.step('brief', '1 · READING THE SOURCE', async () => {
@@ -149,13 +161,14 @@ log.step('Genre · tone · setting', styles.muted(`${brief.genre} · ${brief.ton
 /////////// 2 · OUTLINE - an idea only; a screenplay already is the plan
 let outline: Outline | undefined
 if (mode === 'idea') {
-    outline = await film.step('outline', '2 · PLANNING THE FILM', () => askJson<Outline>(outlinePrompt(idea, brief, config.targetDuration)))
-    log.step('Scenes', styles.muted(`(${outline.scenes.length}) ${outline.scenes.map(s => s.heading).join(' · ')}`))
-    log.step('Planned', styles.muted(`${outline.scenes.reduce((sum, s) => sum + (Number(s.seconds) || 0), 0)}s`))
+    outline = await reviewed(film, args.review, 'outline', () => film.step('outline', '2 · PLANNING THE FILM', () => askJson<Outline>(outlinePrompt(idea, brief, config.targetDuration))), value => {
+        log.step('Scenes', styles.muted(`(${value.scenes.length}) ${value.scenes.map(s => s.heading).join(' · ')}`))
+        log.step('Planned', styles.muted(`${value.scenes.reduce((sum, s) => sum + (Number(s.seconds) || 0), 0)}s`))
+    })
 }
 
 /////////// 3 · SCREENPLAY
-let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING THE SCREENPLAY' : '3 · STRUCTURING THE SCREENPLAY', async () => {
+let screenplay = await reviewed(film, args.review, 'screenplay', () => film.step('screenplay', mode === 'idea' ? '3 · WRITING THE SCREENPLAY' : '3 · STRUCTURING THE SCREENPLAY', async () => {
     const meta = {title: brief.title, language: brief.language}
     if (mode === 'idea') return toScreenplay(await askJson(screenplayWritePrompt(brief, outline!)), meta)
 
@@ -189,6 +202,9 @@ let screenplay = await film.step('screenplay', mode === 'idea' ? '3 · WRITING T
         log.warn(`${missing.length} line(s) still differ from or are missing in the screenplay - fix them in ${film.file}, or run --redo=screenplay:\n${missing.map(m => `  "${m}"`).join('\n')}`)
     }
     return result
+}), value => {
+    // with --review the whole script, as screenplay.fountain has it - else it is read in that file
+    if (args.review) log.box('Screenplay', screenplayToFountain(value))
 })
 // the screenplay is the base of every expensive step after it: one that does not hold the whole source stops the run here
 // (the source is checked again on every run, so a fix in project.json lets it through)
@@ -249,7 +265,7 @@ for (const note of scriptNotes) log.warn(`script: ${note}`)
 if (scriptNotes.length) log.step('Script', styles.muted(mode === 'screenplay' ? 'the film follows the script as it is - --fix-script repairs it (old version kept), or edit project.json (screenplay)' : 'the film follows the script as it is - edit project.json (screenplay) to resolve these before rendering'))
 
 /////////// 4 · CAST
-const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
+const cast = await reviewed(film, args.review, 'cast', () => film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
     const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined, brief.setting))
     let raw = await attempt()
     // what is left out is asked for - up to twice; an answer that fixes it can leave out something the one before had, so the answers are merged
@@ -262,9 +278,37 @@ const cast = await film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', asyn
             raw = mergeRawCasts(raw, await attempt(e.message.replace('not in the cast: ', '').split('; ')))
         }
     }
+}), value => {
+    for (const c of value.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)
+    for (const l of value.locations) log.step('Location', styles.name(l.name))
 })
-for (const c of cast.characters) log.step(c.voiceOnly ? 'Voice' : 'Character', `${styles.name(c.name)} ${styles.muted(`- ${c.role} · ${c.voice}`)}`)
-for (const l of cast.locations) log.step('Location', styles.name(l.name))
+
+/////////// 4b · CASTING - who plays each role and which picture each place has: the film's own or a library asset (casting.json,
+// as in the music video - lib/casting.ts). A library asset is copied into the film and never rendered; its description
+// stands in for the look and the description of the steps below. A narrator's voice has no picture and no entry.
+const casting = await castFromLibrary({
+    dir: film.dir, cast: {characters: cast.characters.filter(c => !c.voiceOnly), locations: cast.locations}, library: await libraryDir(), copies: film.data.castingCopies,
+    again: kind => `its look and description were the library's: bun film.ts ${filmId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`,
+})
+if (Object.keys(casting.copies).length) film.data.castingCopies = casting.copies
+else delete film.data.castingCopies
+if (casting.changed) await film.save()
+const casted = (kind: AssetKind, id: string) => casting.assets.get(copyKey(kind, id))
+// the other looks of a library character: with sequence sheets their sheets start on the library anchor (PictureJob.look);
+// without, they are drawn from its description - the picture they are drawn after is not the library's
+for (const c of cast.characters) {
+    const asset = casted('character', c.id)
+    if (asset && c.states?.length && !config.sequenceSheets) log.warn(`${c.id} is library:${asset.id} - its other looks (${c.states.map(s => s.name).join(', ')}) are drawn from the library's description, the face may differ from the library picture`)
+}
+// designed views (locationViews) describe the sheet the film renders for the place - a library place brings its own sheet
+if (config.sequenceSheets && config.locationViews) for (const l of cast.locations) {
+    const asset = casted('location', l.id)
+    if (asset) log.warn(`${l.id} is library:${asset.id} - its sheet is the library's, not one of the designed views (locationViews): a shot may name a view its picture does not show`)
+}
+// a library asset's description, also in a step kept from an earlier run (casting.json was changed since)
+const fromLibrary = (kind: AssetKind, values: Record<string, string>) => {
+    for (const [key, asset] of casting.assets) if (key.startsWith(`${kind}:`)) values[key.slice(kind.length + 1)] = asset.description
+}
 
 /////////// 5 · SUMMARY
 const summary = await film.step('summary', '5 · SUMMARIZING THE STORY', () => ask(summaryPrompt(screenplay, cast)))
@@ -288,8 +332,8 @@ if (!style && film.data.lookBrief === undefined) {
     await film.recordInput('style.txt', style)
     log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`- ${choice.reason ?? 'the best fit'} - written to input/style.txt, edit or replace it to change the look`)}`)
 }
-const lookBrief = await film.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, `${brief.genre}, ${brief.tone}, ${brief.setting}. ${summary}`)))
-log.box('Look brief', lookBrief)
+const lookBrief = await reviewed(film, args.review, 'lookBrief', () => film.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, `${brief.genre}, ${brief.tone}, ${brief.setting}. ${summary}`))),
+    value => log.box('Look brief', value))
 
 /////////// 7 · CHARACTER LOOKS - a reference picture for everyone who is seen (a narrator's voice has none)
 const seen = cast.characters.filter(c => !c.voiceOnly)
@@ -300,7 +344,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
         const otherLooks = seen.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
         // the script's own description of the character is a fact the picture has to show
         const lookOptions = characterLookPrompt(lookBrief, {name: char.name, role: `${char.role} Appearance: ${char.appearance} Keep the age, build and proportions this appearance gives, whatever they are - tell the characters apart by hair, face, clothing and gear, never by changing the height or build. The picture shows the whole body: name the whole outfit from head to feet - every garment, trousers or a skirt and the shoes included.`}, otherLooks)
-        looks[char.id] = await film.each('characterLooks', char.id, lookOptions, () => ask(lookOptions))
+        looks[char.id] = casted('character', char.id)?.description ?? await film.each('characterLooks', char.id, lookOptions, () => ask(lookOptions))
         // other looks of the character (wounded, disguised): the same prompt with only the change applied
         for (const state of char.states ?? []) {
             const stateOptions = stateLookPrompt(looks[char.id]!, char.name, state)
@@ -309,6 +353,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
     }
     return looks
 })
+fromLibrary('character', characterLooks)
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 
 /////////// 7b · the character looks without the reference sheet (pose, grey background, studio light) - for the clip prompts
@@ -317,7 +362,7 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     for (const [i, char] of seen.entries()) {
         log.step(`Character ${i + 1}/${seen.length}`, styles.name(char.id))
         const descriptionOptions = characterDescriptionPrompt(characterLooks[char.id] ?? '')
-        descriptions[char.id] = await film.each('characterDescriptions', char.id, descriptionOptions, () => ask(descriptionOptions))
+        descriptions[char.id] = casted('character', char.id)?.description ?? await film.each('characterDescriptions', char.id, descriptionOptions, () => ask(descriptionOptions))
         for (const state of char.states ?? []) {
             const stateOptions = characterDescriptionPrompt(characterLooks[statePictureId(char.id, state.id)] ?? '')
             descriptions[statePictureId(char.id, state.id)] = await film.each('characterDescriptions', statePictureId(char.id, state.id), stateOptions, () => ask(stateOptions))
@@ -325,6 +370,7 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     }
     return descriptions
 })
+fromLibrary('character', characterDescriptions)
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 /////////// 8 · LOCATION LOOKS
@@ -333,10 +379,11 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const lookOptions = locationLookPrompt(lookBrief, summary, `${location.name} - ${location.description} Show the place only as the film first sees it: leave out what the story reveals, builds or changes later, and every object that anyone picks up, carries, uses or moves.`)
-        looks[location.id] = await film.each('locationLooks', location.id, lookOptions, () => ask(lookOptions))
+        looks[location.id] = casted('location', location.id)?.description ?? await film.each('locationLooks', location.id, lookOptions, () => ask(lookOptions))
     }
     return looks
 })
+fromLibrary('location', locationLooks)
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 /////////// 8b · the location looks without the establishing shot (camera, "empty") - for the clip prompts
@@ -345,10 +392,11 @@ const locationDescriptions = await film.step('locationDescriptions', '8b · DESC
     for (const [i, location] of cast.locations.entries()) {
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const descriptionOptions = locationDescriptionPrompt(locationLooks[location.id] ?? '')
-        descriptions[location.id] = await film.each('locationDescriptions', location.id, descriptionOptions, () => ask(descriptionOptions))
+        descriptions[location.id] = casted('location', location.id)?.description ?? await film.each('locationDescriptions', location.id, descriptionOptions, () => ask(descriptionOptions))
     }
     return descriptions
 })
+fromLibrary('location', locationDescriptions)
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 /////////// 8c · LOCATION VIEWS - the five views of a location's reference sheet, designed for the place and its story (only with sequence sheets)
@@ -406,7 +454,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const planScene = async () => {
             let problems: string[] = []
             for (let attempt = 0; ; attempt++) {
-                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id]))
+                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id], i + 1))
                 try {
                     // the first time what the script checks find is a reason to ask again, the second time it is only noted
                     const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
@@ -422,38 +470,47 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         }
         // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
         // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
-        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id])
+        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id], i + 1)
         result.push(await film.each('coverage', scene.id, firstAsk, planScene))
     }
     return result
 })
 
 /////////// 10 · CLIPS - shots packed into clips of up to ~9 s, then the H3 requests, built deterministically and never cached
-const clips = packClips(screenplay, coverage, config.continuity)
-const requests = buildFilmClipRequests({
-    screenplay, cast, clips,
-    soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
-    stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
-    voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
-    characterDescriptions, locationDescriptions, locationViews, lookBrief,
-    pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
-})
-const outputDir = join(film.dir, 'output')
-// a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
-const planned = new Set(requests.map(r => `${r.id}.json`))
-const clipsDir = join(outputDir, 'clips')
-if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
-for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
-await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
-    title: screenplay.title,
-    language: screenplay.language,
-    totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
-    clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
-}, null, 2))
-await Bun.write(join(outputDir, 'timeline.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
-await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
-for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
-log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
+// Without designed views every clip is given the one view of its place its shots are in, read from the rendered sheet
+// (lib/film/views.ts) - made again after the pictures of this run, so a sheet rendered now gets its views at once.
+let clips: ReturnType<typeof packClips> = []
+let requests: ReturnType<typeof buildFilmClipRequests> = []
+async function planClips() {
+    const sheetViews = config.sequenceSheets && !config.locationViews ? await readSheetViews(film, cast, locationDescriptions) : {}
+    const shotViews = await chooseShotViews(film, coverage, sceneId => locationOf(cast, screenplay.scenes.find(s => s.id === sceneId)!.location)?.id, sheetViews)
+    clips = packClips(screenplay, withShotViews(coverage, shotViews), config.continuity)
+    requests = buildFilmClipRequests({
+        screenplay, cast, clips,
+        soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
+        stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
+        voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
+        characterDescriptions, locationDescriptions, locationViews: {...sheetViews, ...locationViews}, lookBrief,
+        pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
+    })
+    const outputDir = join(film.dir, 'output')
+    // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
+    const planned = new Set(requests.map(r => `${r.id}.json`))
+    const clipsDir = join(outputDir, 'clips')
+    if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
+    for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
+    await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
+        title: screenplay.title,
+        language: screenplay.language,
+        totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
+        clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
+    }, null, 2))
+    await Bun.write(join(outputDir, 'timeline.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
+    await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
+    for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
+    log.step('Clips', `${clips.length} ${styles.muted(`· ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
+}
+await planClips()
 
 /////////// 11 · RENDERING WITH COMFYUI
 if (render.has('images') || render.has('videos')) {
@@ -472,6 +529,8 @@ if (render.has('images') || render.has('videos')) {
         // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
         await renderAll(pictures.filter(p => p.baseId), p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}))
     }
+    // a sheet rendered just now gets its views read, and the clips their view, before they are rendered
+    if (render.has('images') && render.has('videos') && config.sequenceSheets && !config.locationViews) await planClips()
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
@@ -482,7 +541,7 @@ if (render.has('images') || render.has('videos')) {
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
         // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
         const renderClips = (clips: typeof requests) => renderAll(clipChains(clips), async chain => {
-            for (const clip of chain) await renderer.renderFilmClip(clip)
+            for (const clip of chain) await renderer.renderFilmClip(clip, requests.find(r => r.id === clip.startsFrom))
         })
         // on request, and only for the clips named: they are put away in old/attempts/ and rendered again, with a new seed
         if (args.again) {
@@ -520,13 +579,30 @@ if (render.has('final')) {
         log.warn(message)
     }
     // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
-    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id})), projectDir: film.dir, target, levelMatching: config.levelMatching})
+    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id && !startedOnContext(film.dir, r.id)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
 
     // a score in input/ is mixed under the film
     const score = SCORE_EXTENSIONS.map(ext => film.input(`score.${ext}`)).find(file => existsSync(file))
     if (score) {
         await addScore(target, score, config.scoreVolume)
         log.step('Score', `${score} ${styles.muted(`under the film at ${config.scoreVolume} dB, ducking under the dialogue`)}`)
+    }
+
+    // the finish and a film at another frame rate, as in the music video (lib/final-pass.ts) - before the subtitles, which every
+    // one of the films then gets: burned in after the grade and the grain, the text stays clean
+    const videos = [target]
+    const finishing = finishOf(config.finish)
+    // where each clip is in the film - the same seconds at every frame rate
+    const spans = selected.map((r, i) => ({id: r.id, start: result.starts[i]!, end: result.starts[i]! + secondsAt(result.used[i]! - result.skipped[i]!)}))
+    if (finishing) videos.push(await finishCopy(target, finishing, spans))
+    if (config.finalFps !== FPS) {
+        using smoother = new FilmRenderer(`film-${film.id}`, film.dir, filmRenderConfig(config), settings.comfy)
+        const {files, multiplier} = await interpolateClips(smoother, selected.map((r, i) => ({id: r.id, frames: result.used[i]!, shots: r.shots})), config.interpolationModel, config.finalFps)
+        const smooth = target.replace(/\.mp4$/, `-${config.finalFps}fps.mp4`)
+        const more = await assembleSmoothFilm({clips: selected.map((r, i) => ({id: r.id, used: result.used[i]!, skipped: result.skipped[i]!})), files, multiplier, fps: config.finalFps, sound: target, target: smooth})
+        log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
+        videos.push(smooth)
+        if (finishing) videos.push(await finishCopy(smooth, finishing, spans))
     }
 
     // subtitles: the screenplay's own translations, or the film's lines translated into the language in config.json
@@ -544,12 +620,50 @@ if (render.has('final')) {
         const srt = target.replace(/\.mp4$/, '.srt')
         await Bun.write(srt, toSrt(cues))
         // burned in (always visible) or a track of the mp4 (the player switches it on) - not both, the text would be there twice
-        if (config.burnSubtitles) await burnSubtitles(target, srt)
-        else await muxSubtitles(target, srt, config.subtitles === 'script' ? undefined : config.subtitles)
-        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, ${config.burnSubtitles ? 'burned into the picture' : 'also a track in the mp4'} - timing is estimated`)}`)
+        for (const video of videos) {
+            if (config.burnSubtitles) await burnSubtitles(video, srt)
+            else await muxSubtitles(video, srt, config.subtitles === 'script' ? undefined : config.subtitles)
+        }
+        log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, ${config.burnSubtitles ? 'burned into the picture' : 'also a track in the mp4'}${videos.length > 1 ? ` of all ${videos.length} films` : ''} - timing is estimated`)}`)
     } else if (config.subtitles !== 'off') {
         log.step('Subtitles', styles.muted(config.subtitles === 'script' ? 'none - the screenplay has no translations under its lines (config.json: "subtitles": "en" translates them)' : 'none - every line is in that language already'))
     }
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}${only.size ? ` - ${selected.length} of ${requests.length} clips (--only)` : ''}`)}`)
 }
 
+
+/** --dry-run: what the run would redo and render, with an estimate - nothing is done (as in the music video). */
+async function dryRun() {
+    const mode = await filmMode(film.dir)
+    const changed = film.changedInputs(await filmInputs(film.dir, config))
+    const reasons: [string, FilmStepName[]][] = [
+        ...(redoSteps.length ? [['--redo', redoSteps] as [string, FilmStepName[]]] : []),
+        ...changed.map(c => [`${c.name} changed`, c.steps] as [string, FilmStepName[]]),
+    ]
+    const redone = film.redoneBy(reasons.flatMap(([, steps]) => steps))
+    // the subtitles are translated when the film is assembled - only --render=final makes them
+    const missing = FILM_STEP_NAMES.filter(step => film.data[step] === undefined && !redone.includes(step) && filmStepUsed(step, mode, film.data, config) && (step !== 'subtitles' || render.has('final')))
+
+    log.section('DRY RUN - nothing is done')
+    for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
+    log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
+    if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
+
+    if (!render.has('images') && !render.has('videos') && !render.has('final')) return
+    const renderConfig = filmRenderConfig(config)
+    const state = await filmRenderState(film.dir, film.id, renderConfig)
+    const servers = settings.comfy.map(s => s.name)
+    const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
+    if (redone.length || missing.length) log.warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
+    if (render.has('images')) {
+        const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+        log.step('Pictures', state.missingPictures.length ? `${await pictureEstimate(state.missingPictures.length, renderConfig, servers)}${stale}` : styles.muted('all rendered'))
+    }
+    if (render.has('videos')) {
+        const only = new Set(args.only.split(',').filter(Boolean))
+        const selected = state.clips.filter(c => !only.size || only.has(c.id))
+        const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+        log.step('Clips', todo.length ? `${await clipEstimate(todo, renderConfig, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+    }
+    if (render.has('final')) log.step('Film', state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'))
+}

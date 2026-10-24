@@ -11,8 +11,8 @@ import {join} from "node:path";
 import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
-import {multiplierFor} from "./lib/interpolate.ts";
-import {finishFilter, finishOf, finishVideo} from "./lib/finish.ts";
+import {finishOf} from "./lib/finish.ts";
+import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
@@ -40,9 +40,9 @@ import {pictureProp, propMissing} from "./lib/prop-check.ts";
 import {projectInputs, stepUsed} from "./lib/inputs.ts";
 import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
-import {CASTING_FILE, copyCasting, copyKey, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./lib/casting.ts";
-import {type LibraryAsset, libraryDir, libraryIds, readLibraryAsset} from "./lib/library.ts";
-import {assetPaths, type AssetKind} from "./lib/asset-import.ts";
+import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
+import {type LibraryAsset, libraryDir} from "./lib/library.ts";
+import {type AssetKind} from "./lib/asset-import.ts";
 import {redoAfter} from "./lib/project.ts";
 import {handsOf} from "./lib/project.ts";
 import {
@@ -381,29 +381,16 @@ const cast = await reviewed(project, args.review, 'cast', () => project.step('ca
 ////////// CASTING - who plays each role and which picture each place has: the project's own or a library asset
 // (casting.json, written once here and then only read - lib/casting.ts). A library asset is copied into the project, so
 // the project stays complete without the library; its texts stand in for the look and description steps below.
-const library = await libraryDir()
-if (writeCastingOnce(project.dir, cast)) log.step('Casting', styles.muted(`${CASTING_FILE} written - every character and place "project:"; "library:<id>" in it takes a library asset instead`))
-const casting = resolveCasting(readCastingFile(project.dir), cast, (kind, id) => libraryIds(library, kind).includes(id))
-for (const warning of casting.warnings) log.warn(warning)
-if (casting.errors.length) throw new Error(`${casting.errors.join('\n')}\nNothing was made - fix ${join(project.dir, CASTING_FILE)} (or put the asset into the library: bun run export-asset / create-asset)`)
-// copyKey -> the library asset that plays it
-const castLibrary = new Map<string, LibraryAsset>()
-for (const entry of casting.entries) castLibrary.set(copyKey(entry.kind, entry.id), (await readLibraryAsset(library, entry.kind, entry.libraryId))!)
+const casting = await castFromLibrary({
+    dir: project.dir, cast, library: await libraryDir(), copies: project.data.castingCopies,
+    again: kind => `its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`,
+})
+const castLibrary = casting.assets
 const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id))
 {
-    // a role that went back to "project:": the library pictures are put away, the project makes its own again
-    const dropped = droppedCopies(project.data.castingCopies ?? {}, casting.entries)
-    for (const key of dropped) {
-        const [kind, id] = key.split(':') as [AssetKind, string]
-        const {picture, sheet} = assetPaths(kind, id)
-        archiveFiles(project.dir, `${id}-library-${versionStamp()}`, [picture, `${picture}.json`, sheet])
-        log.warn(`${id} is "project:" again - the library pictures are put away in old/attempts; its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`)
-    }
-    const {copied, copies} = copyCasting(project.dir, library, casting.entries, project.data.castingCopies)
-    for (const entry of copied) log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
-    if (Object.keys(copies).length) project.data.castingCopies = copies
+    if (Object.keys(casting.copies).length) project.data.castingCopies = casting.copies
     else delete project.data.castingCopies
-    if (copied.length || dropped.length) await project.save()
+    if (casting.changed) await project.save()
     // the picture fits the role? the prop the role has is named in the asset's description
     for (const entry of casting.entries.filter(e => e.kind === 'character')) {
         const role = cast.characters.find(c => c.id === entry.id)!
@@ -1219,25 +1206,16 @@ if (render.has('final')) {
     const finishing = finishOf(config.finish)
     // where each clip is in the final video - the same seconds at every frame rate
     const spans = clips.map(c => ({id: c.id, start: secondsAt(c.frameStart), end: secondsAt(c.frameStart + c.frames)}))
-    const finish = async (video: string) => {
-        if (!finishing) return
-        const done = await finishVideo(video, finishing, spans)
-        log.step('Finished', `${done.file} ${styles.muted(finishing.colorMatch > 0 ? `${finishFilter(finishing)}, ${spans.length} clips matched ${finishing.colorMatch} of the way to ${finishing.colorReference || 'their median'}` : done.filter)}`)
-    }
-    await finish(target)
+    if (finishing) await finishCopy(target, finishing, spans)
 
-    // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot - a job per
-    // clip, kept in videos/interpolated/ and made again only when the clip, its cuts or the model change
+    // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot (lib/final-pass.ts)
     if (config.finalFps !== FPS) {
-        const multiplier = multiplierFor(config.finalFps)!
-        log.step('Frame rate', `${config.finalFps} fps - ${config.interpolationModel}, x${multiplier} per shot`)
         using smoother = new Renderer(project.id, project.dir, config, settings.comfy)
-        const files = clips.map(c => join(project.dir, 'videos', 'interpolated', `${c.id}.mp4`))
-        await renderAll(clips.map((clip, i) => ({clip, file: files[i]!})), ({clip, file}) => smoother.renderInterpolation(clip, config.interpolationModel, multiplier, file))
+        const {files, multiplier} = await interpolateClips(smoother, clips, config.interpolationModel, config.finalFps)
         const smooth = join(project.dir, `${project.id}-${config.finalFps}fps.mp4`)
         const more = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target: smooth, interpolated: {files, multiplier, fps: config.finalFps}})
         log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
-        await finish(smooth)
+        if (finishing) await finishCopy(smooth, finishing, spans)
     }
 }
 

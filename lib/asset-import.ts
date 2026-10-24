@@ -30,7 +30,7 @@ export function assetIds(projectDir: string, kind: AssetKind): string[] {
 }
 
 // left behind by a render that did not finish, or the record of one - not part of a finished asset
-const unfinished = (file: string) => /\.(partial|pending)\b|\.vision\.png$/.test(file)
+const unfinished = (file: string) => /\.(partial|pending)\b|\.vision(-\d+)?\.png$/.test(file)
 
 /**
  * What one copy does: every file of the asset (relative to `sourceDir`) to where it goes (relative to the target folder).
