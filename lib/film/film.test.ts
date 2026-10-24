@@ -780,12 +780,13 @@ describe('a clip that goes on from the one before', () => {
 })
 
 describe('the view of a place each clip is given, without designed views', () => {
-    test('the chosen view goes to every shot that has none of its own', async () => {
+    test('the chosen view goes to every shot - over the number the planning guessed without views', async () => {
         const {withShotViews} = await import('./views.ts')
-        const coverage = [{sceneId: 's1', soundscape: '', shots: [{placeView: 2}, {}, {}]}, {sceneId: 's2', soundscape: '', shots: [{}]}] as never
+        const coverage = [{sceneId: 's1', soundscape: '', shots: [{placeView: 2}, {}, {}]}, {sceneId: 's2', soundscape: '', shots: [{placeView: 3}]}] as never
         const out = withShotViews(coverage, {s1: [1, 3, 4]})
-        expect(out[0]!.shots.map(s => s.placeView)).toEqual([2, 3, 4])
-        expect(out[1]!.shots[0]!.placeView).toBeUndefined()
+        expect(out[0]!.shots.map(s => s.placeView)).toEqual([1, 3, 4])
+        // a scene without chosen views keeps what the planning gave (designed views)
+        expect(out[1]!.shots[0]!.placeView).toBe(3)
     })
     test('the views are chosen with a short thought, one number per shot from 1 to the number of views', async () => {
         const {shotViewsPrompt} = await import('./prompts.ts')
