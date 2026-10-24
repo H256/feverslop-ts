@@ -1,6 +1,7 @@
 import {renameSync} from "node:fs";
 import {colorMatchFilter, type Span} from "./colormatch.ts";
-import {runProcess} from "./process.ts";
+import {probeVideo} from "./assemble.ts";
+import {startSpinner, styles} from "./log.ts";
 
 // The finishing pass of the final video (issue #291): the clips come out a little milky - the darkest tenth of a frame sits at
 // level ~29 instead of 16 (measured on tides-261017, turbo and two-pass alike, with and without "haze" in the prompt) - and
@@ -65,11 +66,27 @@ export const finishedName = (video: string) => video.replace(/\.mp4$/, '-finishe
 export async function finishVideo(video: string, f: Finish, spans: Span[] = []): Promise<{ file: string, filter: string }> {
     const target = finishedName(video)
     const partial = `${target}.partial.mp4`
-    const match = f.colorMatch > 0 && spans.length ? await colorMatchFilter(video, spans, f.colorMatch, f.colorReference || undefined) : undefined
-    const filter = finishFilter(f, match)
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', filter,
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', partial],
-        {errorMessage: err => `ffmpeg could not finish ${video}:\n${err}`})
+    const total = (await probeVideo(video)).frames
+    // the match, the grade and the sharpen run on the CPU - minutes for a whole song, so they show what they are at
+    let frame = 0
+    let stage = f.colorMatch > 0 && spans.length ? 'matching the clips' : 'grading'
+    const stopSpinner = startSpinner(() => `${styles.name('ffmpeg')} ${styles.muted(`finishing: ${stage}${frame ? ` - frame ${frame} / ${total}` : ''}`)}`)
+    let filter: string
+    try {
+        const match = f.colorMatch > 0 && spans.length ? await colorMatchFilter(video, spans, f.colorMatch, f.colorReference || undefined) : undefined
+        filter = finishFilter(f, match)
+        stage = 'grading and sharpening'
+        const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-progress', 'pipe:1', '-nostats', '-i', video, '-vf', filter,
+            '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', partial], {stdout: 'pipe', stderr: 'pipe'})
+        const stderr = new Response(proc.stderr).text()
+        for await (const chunk of proc.stdout) {
+            const found = new TextDecoder().decode(chunk).match(/frame=(\d+)/g)
+            if (found) frame = Number(found.at(-1)!.slice(6))
+        }
+        if (await proc.exited !== 0) throw new Error(`ffmpeg could not finish ${video}:\n${await stderr}`)
+    } finally {
+        stopSpinner()
+    }
     renameSync(partial, target)
     return {file: target, filter}
 }
