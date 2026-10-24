@@ -342,9 +342,7 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
     }, 60_000)
 
     test('the reference sheets: a character and a place of the music video, a film character and its other look', async () => {
-        // the expression of the last view is drawn at random - fixed here
-        const random = spyOn(Math, 'random').mockReturnValue(0.3)
-        try {
+        {
             const sheet = (id: string, kind: 'character' | 'location', extra: object = {}) => ({kind, id, name: id, file: `assets/${kind}s/${id}.png`, prompt: `the picture of ${id}`, description: `${id}, as the clips describe it`, ...extra})
             const musicDir = folder('sheets-music')
             const Music = recording(Renderer)
@@ -362,9 +360,26 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
                 'assets/sequence/characters/vyvian--soaked/anchor.png', 'assets/sequence/characters/vyvian--soaked/sequence.mp4']
                 .filter(f => existsSync(join(dir, `${f}.json`))).map(f => [f, JSON.parse(readFileSync(join(dir, `${f}.json`), 'utf8'))]))
             expect(portable({jobs: [...music.jobs, ...film.jobs], sidecars: {music: sidecars(musicDir), film: sidecars(filmDir)}, ffmpeg: calls})).toMatchSnapshot()
-        } finally {
-            random.mockRestore()
         }
+    }, 60_000)
+
+    test('a sheet made again for its own prompt keeps its anchor - a changed anchor is drawn again', async () => {
+        const hall = (extra: object = {}) => ({kind: 'location' as const, id: 'hall', name: 'hall', file: 'assets/locations/hall.png', prompt: 'the picture of hall', description: 'hall', ...extra})
+        const dir = folder('sheets-refresh')
+        const Music = recording(Renderer)
+        using music = new Music('golden', dir, {...defaults, seed: -1}, servers)
+        music.refresh.add('pictures')
+        const anchor = join(dir, 'assets/sequence/locations/hall/anchor.png.json')
+        const labels = () => music.jobs.map(j => (j.what as { label: string }).label)
+        await music.renderSequenceSheet(hall())
+        const first = readFileSync(anchor, 'utf8')
+        // other views: the sheet's prompt changed, its anchor did not
+        await music.renderSequenceSheet(hall({views: ['the stage', 'the door', 'the bar', 'the hall from above']}))
+        expect(labels()).toEqual(['location hall anchor', 'location hall sequence', 'location hall sequence'])
+        expect(readFileSync(anchor, 'utf8')).toBe(first)
+        // another picture prompt: the anchor goes with the sheet
+        await music.renderSequenceSheet(hall({prompt: 'the picture of another hall'}))
+        expect(labels().slice(3)).toEqual(['location hall anchor', 'location hall sequence'])
     }, 60_000)
 
     test('film: a clip and one that goes on from its last frame', async () => {
