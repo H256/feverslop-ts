@@ -11,7 +11,7 @@ import {basename, dirname, join} from "node:path";
 import {type AssetKind, assetPaths, copyAsset} from "../lib/asset-import.ts";
 import {pictureAsset} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
-import {describePicture} from "../lib/describe-picture.ts";
+import {characterViews, describePicture} from "../lib/describe-picture.ts";
 import {libraryDir, libraryFolder, libraryIdPattern, libraryLayout, readLibraryAsset, writeLibraryAsset} from "../lib/library.ts";
 import {ask, askJson, configureLlm} from "../lib/llm.ts";
 import {runProcess} from "../lib/process.ts";
@@ -97,6 +97,21 @@ say('Rendering the reference sheet')
 {
     using renderer = new Renderer(`library-${id}`, work, config, settings.comfy)
     await renderer.renderSequenceSheet({kind, id: id!, name, file: pictureAsset(kind, id!), prompt: '', description: description!, ...(layout ? {views: layout.views} : {})})
+}
+
+// A character is described once more, now from its sheet: the clips are given the sheet, and its full-body views show what an
+// anchor cut at the waist does not (the legs, a skirt, the shoes) - the first description was all there was to make the sheet from.
+// One given with --description stays as it is.
+if (kind === 'character' && !flag('description')) {
+    say('Describing the character once more, from its sheet')
+    try {
+        const fromSheet = await describePicture(characterViews(join(work, sheet)), {kind, name, role})
+        if (fromSheet) description = fromSheet
+    } catch (e) {
+        log.warn(`The description from the sheet failed - the one from the picture is kept (${(e as Error).message})`)
+    }
+    if (interactive) description = answer(await p.text({message: 'Description used in the clip prompts (from the sheet)', initialValue: description ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
+    else log.info(description!)
 }
 
 const {copied} = copyAsset({dir: work, layout: assetPaths(kind, id!), label: `create-asset ${basename(anchorPicture)}`}, {dir: library, layout: libraryLayout(kind, id!), archiveName: id!})

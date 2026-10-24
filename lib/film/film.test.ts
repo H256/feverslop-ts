@@ -753,3 +753,28 @@ describe('the film store and its inputs - for --dry-run, --review and bun run st
         expect(filmStepUsed('subtitles', 'idea', {}, {...config, subtitles: 'en'})).toBe(true)
     })
 })
+
+describe('a clip that goes on from the one before', () => {
+    test('goes on without a cut only in the same take or the same picture - another setup is a plain cut', async () => {
+        const {goesOnWithoutCut} = await import('./coverage.ts')
+        const shot = (over: object) => ({framing: 'medium shot', camera: 'locked off', characters: [], action: '', lines: [], seconds: 4, view: 'from the stage door', ...over}) as never
+        const last = shot({})
+        expect(goesOnWithoutCut(shot({}), last, 'scene')).toBe(true)
+        expect(goesOnWithoutCut(shot({framing: 'close-up'}), last, 'scene')).toBe(false)
+        expect(goesOnWithoutCut(shot({view: 'from the side door'}), last, 'scene')).toBe(false)
+        expect(goesOnWithoutCut(shot({framing: 'close-up', continues: true}), last, 'scene')).toBe(true)
+        // auto: only the take the plan says goes on
+        expect(goesOnWithoutCut(shot({}), last, 'auto')).toBe(false)
+        expect(goesOnWithoutCut(shot({continues: true}), last, 'auto')).toBe(true)
+        expect(goesOnWithoutCut(shot({continues: true}), last, 'never')).toBe(false)
+    })
+    test('a look is offered to the shot planning only from its scene on', async () => {
+        const {coveragePrompt} = await import('./prompts.ts')
+        const play = toScreenplay({scenes: [{setting: 'EXT', location: 'THE DOCK', time: 'NIGHT', elements: [{type: 'action', text: 'Vyvian waits.'}]}]}, {title: 't', language: 'en'})
+        const cast = toCast({characters: [{name: 'Vyvian', states: [{name: 'soaked', change: 'Her hair is dripping wet.', from: 3}]}], locations: [{name: 'THE DOCK'}]}, play)
+        const scene1 = coveragePrompt(play.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 1)
+        const scene3 = coveragePrompt(play.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 3)
+        expect(JSON.stringify(scene1)).not.toContain('dripping wet')
+        expect(JSON.stringify(scene3)).toContain('"soaked\\" = Her hair is dripping wet.')
+    })
+})

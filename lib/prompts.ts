@@ -305,21 +305,26 @@ ${existingMembers.map((look, i) => `- Member ${i + 1}: ${look}`).join('\n')}`,
 // For tools/replace-character.ts: describes a character straight from a user-supplied reference image, instead of
 // deriving it from this project's own generated look prompt (characterDescriptionPrompt) - same output shape/rules,
 // so the result drops straight into characterDescriptions/characterDescriptionVariants.
-export function characterImageDescriptionPrompt(imageDataUrl: string, char: { name: string, role: string }): AskOptions {
+export function characterImageDescriptionPrompt(imageDataUrls: string | string[], char: { name: string, role: string }): AskOptions {
+    const images = [imageDataUrls].flat()
     return {
         input: `
-The attached image is the reference picture of the character below. Describe what they look like, for a video prompt where they act in many different scenes - so only say what they look like, nothing about the picture itself.
+${images.length > 1
+            ? `The attached images show the character below: the first is the reference picture, the others are full-body views of the same character from its reference sheet (front, side, back). Describe what they look like`
+            : 'The attached image is the reference picture of the character below. Describe what they look like'}, for a video prompt where they act in many different scenes - so only say what they look like, nothing about the picture itself.
 
 Keep: age, gender, build, skin, face and distinctive marks, hair, every piece of clothing with its materials and colors, accessories and any props they carry.
 Leave out: the medium and style (e.g. "35mm film photograph of"), the pose and framing, the background, the lighting, film grain and anything else about the picture rather than the character.
 
+The clothing is said garment by garment, from top to bottom: what they wear on the upper body and its sleeves (long, short, none), what they wear on the legs and how long it is (trousers, a skirt to the knee, a dress to the floor, a train), and the shoes. Never shorten it to a word that leaves a part out ("a bodice" for an armoured top with long sleeves) - a video prompt draws what the word says.
+
 Rules:
-- One or two sentences, 30-60 words, starting with the character (e.g. "a woman in her late 30s with ...").
-- Only details actually visible in the image - do not invent anything not shown.
+- One to three sentences, 40-90 words, starting with the character (e.g. "a woman in her late 30s with ...").
+- Only details actually visible in the images - do not invent anything not shown; what none of them shows (the legs of a picture cut at the waist) is left out.
 - Answer only with the description.
 
 Character: ${JSON.stringify({name: char.name, role: char.role})}`,
-        images: [imageDataUrl],
+        images,
         instructions: 'You are an expert editor who writes character descriptions from a reference image. You answer only with the description.',
     }
 }
