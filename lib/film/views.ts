@@ -1,6 +1,7 @@
 import {existsSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {visionUrls} from "../describe-picture.ts";
+import {picturesReadable} from "../llm.ts";
 import {log, styles} from "../log.ts";
 import {askFilmJson as askJson} from "./json.ts";
 import {locationViewAsset} from "./pictures.ts";
@@ -27,6 +28,8 @@ const fingerprintOf = (files: string[]) => Bun.hash(files.map(f => Bun.hash(read
 export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptions: Record<string, string>): Promise<Record<string, LocationView[]>> {
     const result: Record<string, LocationView[]> = {}
     let changed = false
+    // asked once, at the first sheet that has to be read: without pictures that are surely read, nothing is asked
+    let readable: Promise<boolean> | undefined
     for (const location of cast.locations) {
         const frames = sheetFrames(film.dir, location.id)
         if (!frames.length) continue
@@ -36,6 +39,11 @@ export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptio
             result[location.id] = kept.views
             continue
         }
+        readable ??= picturesReadable().then(yes => {
+            if (!yes) log.step('Views', styles.muted('the view of the place per clip needs a model that reads pictures - bun run setup vision; until then the clips are given the whole sheet'))
+            return yes
+        })
+        if (!await readable) continue
         log.step('Views', `${styles.name(location.id)} ${styles.muted('- reading its sheet with the vision model')}`)
         try {
             const answer = await askJson<{ views: LocationView[] }>(sheetViewsPrompt(await visionUrls(frames), location, descriptions[location.id] ?? location.description))
@@ -45,7 +53,9 @@ export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptio
             changed = true
             log.line(styles.muted(`        ${result[location.id]!.map((v, n) => `${n + 1}. ${v.name}`).join(' · ')}`))
         } catch (e) {
-            log.warn(`${location.id}: its sheet could not be read (${e instanceof Error ? e.message : e}) - its clips get the whole sheet, the next run asks again`)
+            log.warn(`the sheets of the places could not be read (${location.id}: ${e instanceof Error ? e.message : e}) - their clips get the whole sheet, the next run asks again`)
+            // one warning, not one per place: the next ones would fail the same way
+            readable = Promise.resolve(false)
         }
     }
     if (changed) await film.save()

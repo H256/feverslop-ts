@@ -114,6 +114,21 @@ const visionHint = (endpoint: Endpoint) => endpoint === text
     ? 'name a vision model for pictures: bun run setup vision (or FEVERSLOP_VISION_URL / FEVERSLOP_VISION_MODEL), or load the model with its vision projector (llama-server --mmproj)'
     : 'pick another: bun run setup vision'
 
+/**
+ * Can pictures be read - known for sure? A vision model of its own is set (bun run setup vision), or the server says the text
+ * model takes pictures. Unknown counts as no: a server that drops the picture lets a text model answer from the words alone,
+ * and it makes up what it would have seen.
+ */
+export async function picturesReadable(): Promise<boolean> {
+    if (vision !== text) return true
+    if (!text.url) return false
+    try {
+        return await takesPictures(text.url, await getModelId(text), text.apiKey) === true
+    } catch {
+        return false
+    }
+}
+
 /** Before the first picture goes to the endpoint: a model the server says takes none stops here, with what to do. */
 function checkVision(endpoint: Endpoint) {
     endpoint.vision ??= (async () => {
