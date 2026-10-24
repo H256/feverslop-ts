@@ -16,7 +16,7 @@ import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, versionStamp} from "./archive.ts";
-import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
+import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 
@@ -46,6 +46,15 @@ export async function workflowHash(name: string) {
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
 /** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
+/** The expression of the sheet at `sidecar`, as its recorded prompt has it - none when there is no sheet yet. */
+function recordedExpression(sidecar: string): string | undefined {
+    try {
+        return expressionOf((JSON.parse(readFileSync(sidecar, 'utf8')) as { prompt?: string }).prompt)
+    } catch {
+        return undefined
+    }
+}
+
 export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect'>>) =>
     specId(clipSpec(clip, projectDir, config))
 
@@ -376,8 +385,10 @@ export class Renderer implements Disposable {
         const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
         const baseAnchorTarget = baseAnchorFile && join(this.projectDir, baseAnchorFile)
         const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
-        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change)
-            : picture.kind === 'character' ? characterSequencePrompt(picture.description)
+        // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
+        const expression = recordedExpression(`${target}.json`)
+        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change, LOOK_SEQUENCE_FRAMES, expression)
+            : picture.kind === 'character' ? characterSequencePrompt(picture.description, SEQUENCE_FRAMES, expression)
             : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
         const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
         const anchorFingerprint = specId(anchor)
