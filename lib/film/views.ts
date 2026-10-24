@@ -60,14 +60,16 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
         const views = sheetViews[locationOfScene(scene.sceneId) ?? '']
         if (!views) continue
         const shots = scene.shots.map(s => ({framing: s.framing, camera: s.camera, view: s.view, action: s.action}))
-        const fingerprint = Bun.hash(JSON.stringify([views, scene.staging, shots])).toString(16)
+        // the question itself: another wording of it asks again
+        const question = shotViewsPrompt(views, scene.staging ?? '', shots)
+        const fingerprint = Bun.hash(JSON.stringify([question.input, question.reasoning])).toString(16)
         const kept = film.data.shotViews?.[scene.sceneId]
         if (kept?.fingerprint === fingerprint) {
             result[scene.sceneId] = kept.views
             continue
         }
         try {
-            const answer = await askJson<{ views: unknown[] }>(shotViewsPrompt(views, scene.staging ?? '', shots))
+            const answer = await askJson<{ views: unknown[] }>(question)
             result[scene.sceneId] = shots.map((_, n) => {
                 const v = Number(answer.views?.[n])
                 return Number.isInteger(v) && v >= 1 && v <= views.length ? v : 1

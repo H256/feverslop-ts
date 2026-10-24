@@ -354,7 +354,7 @@ Answer only with JSON: {"views": [{"name": "", "shows": ""}]} - exactly ${images
 /** The view of the place's sheet each shot of a scene is in - as the music video chooses it (index.ts, shotViews). 1-based. */
 export function shotViewsPrompt(views: { name: string, shows: string }[], staging: string, shots: { framing: string, camera: string, view?: string, action: string }[]): AskOptions {
     return {
-        input: `A place is shown to the video model as one of the views of its reference sheet. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on.
+        input: `A place is shown to the video model as one of the views of its reference sheet. For every shot below choose the view the shot is in. First find where the shot's camera stands (its "view": on the stage or in the seats, at which door, at which wall), then the way it looks - and choose the view whose camera stands on that same side and looks the same way. A view that looks the opposite way is wrong even when it names the same things: a shot from the seats looking at the stage is a view from the seats, never one from the stage looking out.
 views (number: where the camera stands and what it shows):
 ${views.map((v, n) => `${n + 1}: ${v.name} - ${v.shows}`).join('\n')}
 
@@ -364,8 +364,9 @@ ${JSON.stringify(shots.map((s, n) => ({shot: n + 1, framing: s.framing, camera: 
 
 Answer only with JSON: {"views": [one number from 1 to ${views.length} per shot, in order]} - exactly ${shots.length} numbers.`,
         instructions: 'You are a film director who chooses the view of a place for each shot. Answer only with JSON.',
-        // a few numbers - no thinking needed (index.ts measured 18.6 min with thinking against 27 s without, for the same picks)
-        reasoning: 'none',
+        // a short thought: without it the choice went by the words a view shares with the shot ("stage edge") - the shots "from the
+        // audience side, looking back at her" got the view from the stage looking out (last-rehearsal). A film has few shots per scene
+        reasoning: 'low',
         schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: shots.length, maxItems: shots.length, items: {type: 'integer', minimum: 1, maximum: views.length}}}},
     }
 }

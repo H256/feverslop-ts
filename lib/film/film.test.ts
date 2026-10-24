@@ -787,10 +787,10 @@ describe('the view of a place each clip is given, without designed views', () =>
         expect(out[0]!.shots.map(s => s.placeView)).toEqual([2, 3, 4])
         expect(out[1]!.shots[0]!.placeView).toBeUndefined()
     })
-    test('the views are chosen without thinking, one number per shot from 1 to the number of views', async () => {
+    test('the views are chosen with a short thought, one number per shot from 1 to the number of views', async () => {
         const {shotViewsPrompt} = await import('./prompts.ts')
         const prompt = shotViewsPrompt([{name: 'from the stage, looking out over the seats', shows: 'the seats'}, {name: 'from the seats, looking at the stage', shows: 'the stage'}], 'A stage.', [{framing: 'close-up', camera: 'still', view: 'from the seats', action: 'She sings.'}])
-        expect(prompt.reasoning).toBe('none')
+        expect(prompt.reasoning).toBe('low')
         expect(prompt.input).toContain('2: from the seats, looking at the stage - the stage')
         expect(prompt.schema).toMatchObject({properties: {views: {minItems: 1, maxItems: 1, items: {minimum: 1, maximum: 2}}}})
     })
