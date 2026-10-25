@@ -252,6 +252,8 @@ once a location's sheet is rendered, a vision-capable model reads what each of i
 what it looks toward (`sheetViews` in `project.json`, read again when the sheet changes) - and the LLM chooses the view of every
 shot from them (`shotViews`, chosen again when the shots change). Given the whole sheet, the video model took its first view as
 the background whatever the shot's camera said. A sheet rendered in the same run gets its views before the clips are rendered.
+A clip with a view describes its place by what that view shows, not by the description of the hero picture: written from where
+the hero picture looks ("the seats beyond the stage edge"), it won over a view from the seats, and the video model turned round.
 It needs a model that surely reads pictures: a vision model of its own (`bun run setup vision`), or a text model the server says
 takes pictures. Without one - or with a server that does not say - nothing is asked (a text model handed a picture it cannot see
 makes up the views), one note says so, and the clips are given the whole sheet as before.

@@ -451,6 +451,33 @@ describe('location views', () => {
         expect(request!.prompt).not.toContain('sheet of views')
         expect(request!.assets.pictures[0]!.file).toBe('assets/sequence/locations/the-bridge/frames/frame_01.png')
     })
+    test('the place is described by what its view shows - the description of the hero picture looks the other way', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [
+            {framing: 'wide', view: 'from the water side', placeView: 2, camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1]},
+            {framing: 'close-up', view: 'from the left', placeView: 3, camera: 'c', characters: ['Anna'], action: 'Anna looks up.', seconds: 4, lines: [2]},
+        ]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
+            soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {'the-bridge': 'A bridge seen from the dunes, the water beyond it.'}, locationViews: {'the-bridge': views}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('the camera stands at the water and looks at the dunes. The picture shows the place from the water side, looking back toward the dunes.')
+        expect(request!.prompt).not.toContain('the water beyond it')
+        // a shot in another view says what that side shows
+        expect(request!.prompt).toContain('The background is the place seen from the left: seen along the place from the left - that side is not in the picture.')
+    })
+    test('without a view the description of the place stays', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna waits.', seconds: 4, lines: [1, 2]}]}, scene, cast)
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
+            soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {'the-bridge': 'A bridge seen from the dunes, the water beyond it.'}, lookBrief: 'Look. More.'})
+        expect(request!.prompt).toContain('A bridge seen from the dunes, the water beyond it.')
+    })
+    test('the planning keeps the camera on one side, lets people enter where they came from, and brings nobody in twice', async () => {
+        const {coveragePrompt} = await import("./prompts.ts")
+        const {instructions} = coveragePrompt(screenplay.scenes[0]!, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6)
+        expect(instructions).toContain('The camera of a scene stays on one side of the action')
+        expect(instructions).toContain('enter through the feature of this place that leads there')
+        expect(instructions).toContain('never someone who is already in the picture and also comes in, steps in or arrives in the same shot')
+    })
 })
 
 describe('held shots', () => {
