@@ -46,7 +46,6 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run film:init`, `bun film.ts <id>` | the short-film pipeline - see [docs/film.md](docs/film.md) |
 | `bun run styles:doc`    | regenerates [docs/style-examples.md](docs/style-examples.md) from `lib/styles.ts` |
-| `bun run site:build`    | builds the documentation site in `site/dist/` from the README and `docs/` |
 | `bun test`              | the unit tests |
 | `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
 | `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |
@@ -92,6 +91,18 @@ The file, if you'd rather write it yourself:
   text model describes the pictures. Before the first picture the server is asked whether the model takes pictures
   (llama.cpp `/props`, Ollama, LM Studio) - one that does not stops right there and says what to set; a server that
   cannot tell is simply tried.
+- A complete example with every optional block - the vision model of its own, a second ComfyUI server behind a proxy:
+
+  ```json
+  {
+    "llm": {
+      "url": "http://localhost:8080/v1", "model": "Muse-Glimmer-30B-GGUF", "parallel": 1,
+      "vision": {"url": "http://localhost:8081/v1", "model": "Qwen3-VL-8B"}
+    },
+    "comfy": ["http://localhost:8188", {"url": "https://gpu2.lan:8188", "name": "gpu2", "token": "…"}]
+  }
+  ```
+
 - `comfy` entries are a URL, or `{"url", "name", "token"}` / `{"url", "name", "username", "password"}` for a server
   behind a proxy with authentication. `name` (default: the host) shows up in the log. Without `comfy`,
   `http://localhost:8188` is used. With several servers, pictures and clips are rendered on all of them in parallel -
@@ -171,7 +182,7 @@ projects/<project-id>/
                       (see lyrics.txt below) - required, unless generated
     idea.txt          the song idea for --render=song - required for it unless lyrics.txt is given, otherwise unused
     music-style.txt   optional - musical direction for --render=song, e.g. genre/instruments/mood
-    story-idea.txt    optional
+    story-idea.txt    optional - the story to tell, see Story idea and music style below
     style.txt         optional - the film's style, e.g. "dark gothic oil painting, heavy chiaroscuro"
   config.json         settings: singers, lyrics language, rendering (see config.json)
   stems/              the song's stems (vocals, drums, bass, other) - only when lyrics are aligned
@@ -263,6 +274,21 @@ Cold as ice and deep as time
 - `(notes)` in round brackets are not sung.
 - A project whose song was analyzed with one section per tag (before this rule) keeps that reading until
   `--redo=music`.
+
+### Story idea and music style
+
+Both files are free text, one or a few paragraphs, in any language. `story-idea.txt` says what happens and who is in the
+video; the story step turns it (with the lyrics) into the story. `music-style.txt` is only for `--render=song`: genre,
+instruments, mood, voice - the song-style step turns it into the YuE2 prompt.
+
+```
+# input/story-idea.txt
+A lighthouse keeper's daughter rows out through the fog every night to a ship nobody else can see. The band plays on the
+rocks below the lamp - four people, the singer in a tattered oilskin coat. At the end the ship is the lighthouse's reflection.
+
+# input/music-style.txt
+slow sea shanty turned doom folk: low male lead vocal, accordion, bowed double bass, one heavy floor drum, gang vocals in the chorus
+```
 
 ### Generating the song
 

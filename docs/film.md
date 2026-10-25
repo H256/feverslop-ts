@@ -46,6 +46,43 @@ The wizard asks for the film id, whether you start from an idea or a screenplay 
 style (typed, from a file, or from the built-in list), the target length of an idea, and optionally the dialogue
 language and the image and video resolution. It writes `films/<id>/` and prints the command to run it.
 
+An idea is free text: title and tone, who is in it, what happens. The outline step plans the scenes from it:
+
+```
+# input/idea.txt
+The Last Rehearsal - a quiet two-minute short film, realistic, night.
+
+Vyvian, a rock singer in her late thirties with long silver-white hair, still in her stage costume, comes back at night
+to the old Aurora Theatre, where she played her first show twenty years ago. Tomorrow it will be torn down.
+Emil, the old stage manager (seventies, grey cardigan, a ring of keys), lets her in through the side door. They walk the
+backstage corridor and talk: she was so nervous that night she threw up behind the curtain.
+```
+
+A screenplay in Fountain (title page, sluglines, cues in capitals, parentheticals - the second one after a line is the script's own translation):
+
+```
+# input/screenplay.txt
+Title: Blackwood
+Language: en
+
+EXT. BLACKWOOD FOREST - DAY
+
+LEO (32), in pristine outdoor gear, holds a phone up to the sky. No signal.
+
+LEO
+(muttering)
+Great.
+
+EXT. STONE CLEARING - DUSK
+
+A woman sorts blackened roots on a flat stone. She does not turn.
+
+@MORWENNA
+(in archaic French)
+Tu tardes.
+(You're late.)
+```
+
 By hand: `films/<id>/input/idea.txt` **or** `input/screenplay.txt` (the screenplay wins if both exist), optionally
 `input/style.txt` and `config.json`. Without `style.txt` the first run has the LLM choose the one style from
 [docs/style-examples.md](style-examples.md) that suits the film - genre, tone, setting and audience decide, there is no
@@ -74,8 +111,10 @@ directions (a lost line stops the run, `--allow-import-gaps` goes on anyway).
 | 7 | `characterLooks`, `characterDescriptions` | Krea 2 prompt per character who is seen, and the description without the picture's pose and background for the clip prompts | cast, lookBrief |
 | 8 | `locationLooks`, `locationDescriptions` | the same for the locations | cast, lookBrief, summary |
 | 8c | `locationViews` | Only with `"locationViews": true`: the floor plan and the five views of every location sheet, designed for the place - see [Location views](#location-views) | cast, locationDescriptions |
+| 8d | `props` | The things the story names that people handle and that come back (at most six), each with a look put together from the thing alone - see [Props](#props) | screenplay, cast |
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json`, `output/timeline.edl` (the film as an edit decision list for an editor: DaVinci Resolve, Premiere, … - the clips cut as the assembled film cuts them) | coverage |
+| 10a | –          | Only with `--render=…` and `sequenceSheets`: once a location's sheet is rendered, a vision model reads what each of its five views shows (`sheetViews`), and the LLM chooses the view of every shot (`shotViews`) - cached in `project.json`, see [Location views](#location-views) | coverage, rendered sheets |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
 | 12a | `subtitles` | Only with `--render=final` and `"subtitles": "en"` (a language code) in config.json: every line that is not in that language, translated | screenplay |
 | 12 | –           | The film: every clip cut to exactly its frames and joined, with the sound the model made for it and a 20 ms fade at each cut (only with `--render=final`) | |
@@ -192,6 +231,13 @@ and every place `"project:<id>"`; from then on it is yours:
 {"characters": {"morwenna": "library:vyvian-singer", "leo": "project:leo"}, "locations": {"hut": "library:stone-hut"}}
 ```
 
+- The cast in `project.json` can hold other looks of a character (`states`, see above). The cast step writes them; its format, as in `project.json`:
+
+  ```json
+  {"id": "vyvian", "states": [{"id": "soaked", "name": "soaked", "change": "Her hair hangs flat, dark and dripping; her costume is soaked and glistening.", "from": 3}]}
+  ```
+
+  `from` is the number of the scene (1 = the first) in which the look first shows.
 - A `"library:<id>"` role gets the library's picture and sheet copied in (never rendered, its old pictures go to `old/attempts`),
   and the library's description stands in for its look and its description - the clip prompts describe it as the library does.
 - An entry the library does not have stops the run before anything is made. A narrator's voice has no picture and no entry.

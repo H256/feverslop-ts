@@ -23,7 +23,6 @@ For changing FeverSlop TS itself. Using it: the [README](../README.md).
 | `lib/log.ts` | terminal output, the run log in `logs/`, errors |
 | `comfy/` | workflows (`comfy/workflows/`), helpers and the generated node types - [custom-workflows.md](custom-workflows.md) |
 | `tools/` | the `bun run …` scripts; `tools/*.py` the audio analysis, run with `uv` |
-| `site/` | the documentation site, built from the README and `docs/` by `bun run site:build` |
 
 ## Principles
 
