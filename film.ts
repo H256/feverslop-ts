@@ -31,11 +31,11 @@ import {castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
 import {lockProject} from "./lib/lock.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
-import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
+import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, propsPrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {timelineEdl} from "./lib/film/timeline.ts";
-import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toScreenplay} from "./lib/film/screenplay.ts";
+import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toProps, toScreenplay} from "./lib/film/screenplay.ts";
 import {filmExists} from "./lib/film/setup.ts";
 import {applyAnnotations, parseFountain} from "./lib/film/fountain-import.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
@@ -421,7 +421,12 @@ const locationViews = config.sequenceSheets && config.locationViews
     : {} as Record<string, LocationView[]>
 for (const [id, views] of Object.entries(locationViews)) log.step(id, styles.muted(views.map((v, i) => `${i + 1}. ${v.name}`).join(' · ')))
 
-const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationViews})
+/////////// 8d · PROPS - the things people handle that come back (an umbrella, a key), each with a picture of its own: without it the video
+// model drew the thing anew in every clip, with another canopy and handle
+const props = await film.step('props', '8d · FINDING THE PROPS', async () => toProps((await askJson<{ props?: unknown }>(propsPrompt(screenplay, cast))).props))
+for (const prop of props) log.step(prop.id, styles.muted(prop.description))
+
+const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationViews, props})
 await Bun.write(join(film.dir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
 /////////// 9 · SHOTS - every scene broken into shots, one LLM call per scene
@@ -454,10 +459,10 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const planScene = async () => {
             let problems: string[] = []
             for (let attempt = 0; ; attempt++) {
-                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id], i + 1))
+                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id], i + 1, props))
                 try {
                     // the first time what the script checks find is a reason to ask again, the second time it is only noted
-                    const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1)
+                    const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1, props)
                     for (const note of notes) log.warn(note)
                     return planned
                 } catch (e) {
@@ -470,7 +475,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         }
         // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
         // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
-        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id], i + 1)
+        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id], i + 1, props)
         result.push(await film.each('coverage', scene.id, firstAsk, planScene))
     }
     return result
@@ -490,7 +495,7 @@ async function planClips() {
         soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
         stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
         voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
-        characterDescriptions, locationDescriptions, locationViews: {...sheetViews, ...locationViews}, lookBrief,
+        characterDescriptions, locationDescriptions, locationViews: {...sheetViews, ...locationViews}, lookBrief, props,
         pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
     })
     const outputDir = join(film.dir, 'output')
@@ -524,7 +529,7 @@ if (render.has('images') || render.has('videos')) {
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-        const renderPicture = (picture: PictureJob) => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
+        const renderPicture = (picture: PictureJob) => config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
         await renderAll(pictures.filter(p => !p.baseId), renderPicture)
         // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
         await renderAll(pictures.filter(p => p.baseId), p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}))

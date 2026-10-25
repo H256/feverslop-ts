@@ -3,7 +3,7 @@ import {FPS, frameAt, round} from "../frames.ts";
 import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
 import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
-import type {Facing, FilmCast, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
+import type {Facing, FilmCast, FilmProp, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
 
 const FACINGS: readonly string[] = ['left', 'right', 'camera', 'away']
 
@@ -18,7 +18,7 @@ const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, hold?: unknown, cutaway?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
+type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, props?: unknown, hold?: unknown, cutaway?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
 export type RawCoverage = { soundscape?: unknown, staging?: unknown, ends?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
@@ -98,7 +98,14 @@ export class CoverageProblem extends Error {
  * strict: what lib/film/shot-checks.ts finds (people in a scene that names none, speech without a line, too many shots) is a problem the planner is asked
  * to fix; not strict, it is only noted - a rule of thumb must never stop a film.
  */
-export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true, introduced?: ReadonlySet<string>, sceneNumber?: number): { coverage: SceneCoverage, notes: string[] } {
+/** The ids of the props a shot names, as the planning spelled them (case and spaces do not matter). */
+export function propIds(named: unknown, props: FilmProp[]): string[] {
+    if (!Array.isArray(named)) return []
+    const key = (name: string) => name.toLowerCase().replace(/\s+/g, ' ').trim()
+    return [...new Set(named.flatMap(n => typeof n === 'string' ? props.filter(p => key(p.name) === key(n)).map(p => p.id) : []))]
+}
+
+export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true, introduced?: ReadonlySet<string>, sceneNumber?: number, props: FilmProp[] = []): { coverage: SceneCoverage, notes: string[] } {
     if (!Array.isArray(raw?.shots) || !raw.shots.length) throw new CoverageProblem(['there are no shots'])
     const dialogue = dialogueOf(scene)
     const problems: string[] = []
@@ -157,6 +164,8 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             ...(shot.hold === true ? {hold: true} : {}),
             ...(shot.cutaway === true ? {cutaway: true} : {}),
             ...(Number.isInteger(Number(shot.placeView)) && Number(shot.placeView) >= 1 && Number(shot.placeView) <= 5 ? {placeView: Number(shot.placeView)} : {}),
+            // the props the shot names, by id - a name that is no prop of the film is left out
+            ...(propIds(shot.props, props).length ? {props: propIds(shot.props, props)} : {}),
             ...(Object.keys(people).length ? {people} : {}),
             seconds: round(Math.max(planned, speakingSeconds(scene, lines))),
             ...(shot.continues === true && i > 0 ? {continues: true} : {}),

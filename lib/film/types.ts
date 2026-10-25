@@ -90,6 +90,10 @@ export type FilmLocation = {
     description: string,
 }
 export type FilmCast = { characters: FilmCharacter[], locations: FilmLocation[] }
+// A thing the story names that people handle and that comes back (an umbrella, a key, a letter) - it gets a picture of its own, so the
+// video model draws the same one in every clip instead of a new one each time. Not what someone wears all film long (that is in their
+// picture), not a fixed feature of a place (that is in the place's picture).
+export type FilmProp = { id: string, name: string, description: string }
 
 // One shot of a scene: what the camera sees and which dialogue lines are spoken in it. A shot is the unit that is
 // never split - it lives in one clip, with its lines.
@@ -109,6 +113,7 @@ export type Shot = {
     texts?: string[],               // only when a line is too long for one clip: the part of it (same order as lines) spoken in this shot - the parts of a line, joined, are the line
     deliveries?: string[],          // how each of its lines is spoken (same order as lines): feeling, intensity, pace - where the script has no parenthetical
     continues?: boolean,            // the shot goes on in the same take as the one before, no cut
+    props?: string[],               // ids of the props (FilmProject.props) that are in the picture
 }
 // staging: the fixed physical arrangement of the scene - where everyone is, in what posture, what they wear and hold - which every shot keeps to
 // people / voices: what the shot planning read in the script of the scene - is anyone in it (a character, a creature, people said in general
@@ -133,6 +138,7 @@ export type FilmProject = {
     locationViews?: Record<string, LocationView[]>,  // per location id: the five views of its reference sheet, the first is the picture itself - only with sequence sheets
     scriptNotes?: string[],             // contradictions the script has in itself (a person bound, then free, then bound again) - read by the language model, only reported
     subtitles?: Record<string, string>, // config subtitles = a language code: the translation of every line spoken in another language, by "sceneId:line" (line = index among the dialogue lines of the scene)
+    props?: FilmProp[],                 // the props of the film, each with a picture of its own
     coverage?: SceneCoverage[],         // the shots of every scene, in scene order
     castingCopies?: CastingCopies,      // the library assets copied for casting.json, and which version - not a step (lib/casting.ts)
     // without designed views (locationViews): what each view of a place's rendered sheet shows, read from its frames by a vision

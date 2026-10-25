@@ -1,6 +1,6 @@
 import slugify from "slugify";
 import {languageName} from "../config.ts";
-import type {DialogueKind, FilmCast, FilmCharacter, FilmCharacterState, FilmLocation, Scene, Screenplay, ScreenplayElement} from "./types.ts";
+import type {DialogueKind, FilmCast, FilmCharacter, FilmCharacterState, FilmLocation, FilmProp, Scene, Screenplay, ScreenplayElement} from "./types.ts";
 
 // What the LLM answers for a screenplay - checked and turned into a Screenplay. Models are loose with enums and
 // empty fields, so everything is normalized here and a script that can't be used is rejected with the reason.
@@ -176,6 +176,25 @@ function samePlaces(locations: Partial<FilmLocation>[]): Partial<FilmLocation>[]
 
 /** Gives characters and locations unique ids and checks every speaker and place of the screenplay against them. */
 export type RawCharacter = Omit<Partial<FilmCharacter>, 'states'> & { states?: { name?: string, change?: string, from?: unknown }[] }
+/**
+ * The props the model listed (propsPrompt): named and described, one per name, ids unique - at most 6. The description is put
+ * together from the fields of the thing alone: a free description took in where it stood and who held it ("leaning against the
+ * wall"), which the picture of the thing would have drawn.
+ */
+export function toProps(raw: unknown): FilmProp[] {
+    const props: FilmProp[] = []
+    const field = (value: unknown) => typeof value === 'string' ? value.trim().replace(/[.\s]+$/, '') : ''
+    for (const p of Array.isArray(raw) ? raw : []) {
+        const name = field(p?.name)
+        const description = [field(p?.shape), field(p?.colour), field(p?.material)].filter(Boolean).join('; ')
+        if (!name || !description || props.some(q => q.name.toLowerCase() === name.toLowerCase())) continue
+        let id = toId(name)
+        while (props.some(q => q.id === id)) id = `${id}-2`
+        props.push({id, name, description})
+    }
+    return props.slice(0, 6)
+}
+
 export function toCast(raw: { characters?: RawCharacter[], locations?: Partial<FilmLocation>[] }, screenplay: Screenplay): FilmCast {
     const unique = (base: string, taken: Set<string>) => {
         let id = base

@@ -7,7 +7,7 @@ import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
 import {filmPictureAsset, locationViewAsset, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
-import type {DialogueKind, Facing, FilmCast, FilmCharacter, Screenplay} from "./types.ts";
+import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from "./types.ts";
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
@@ -35,7 +35,7 @@ export type FilmClipRequest = {
     // every spoken line of the clip, in order: `at` is the start of its shot, speaker ids are numbered per clip
     dialogue: { at: number, line: number, speaker: string, speakerId: string, subject?: string, kind: DialogueKind, text: string }[],
     assets: {
-        pictures: { label: string, file: string, subject: string, kind: 'character' | 'location' | 'frame', id: string, name: string, description: string }[],
+        pictures: { label: string, file: string, subject: string, kind: 'character' | 'location' | 'prop' | 'frame', id: string, name: string, description: string }[],
     },
     prompt: string,
 }
@@ -54,6 +54,7 @@ export type FilmInput = {
     // config.pinStartFrame: a continuing clip's first frame is pinned by the render itself - then it is not a reference
     // picture as well, and the prompt has no `<Picture N>` for it (the same image twice was blended in a second time, shifted)
     pinStartFrame?: boolean,
+    props?: FilmProp[],                              // the props of the film - a shot names the ones in its picture (Shot.props)
 }
 
 // one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
@@ -71,7 +72,7 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
 // does the plan of every shot say where its people are?
 const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame}: FilmInput): FilmClipRequest {
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame, props = []}: FilmInput): FilmClipRequest {
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -87,6 +88,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const room = MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (clip.startsFrom && !pinStartFrame ? 1 : 0)
     const visible = visibleIds.map(id => cast.characters.find(c => c.id === id)).filter(c => c !== undefined)
     const characters = visible.slice(0, room)
+    // the props in the shots of the clip get the pictures that are left - the people come first: a prop without a picture is still
+    // the word in the action, a person without one is drawn as a stranger
+    const shownProps = [...new Set(clip.shots.flatMap(s => s.props ?? []))].map(id => props.find(p => p.id === id)).filter(p => p !== undefined)
+    const propsPictured = shownProps.slice(0, Math.max(0, room - characters.length))
+    if (shownProps.length > propsPictured.length) log.warn(`${clip.id}: no room for the picture of ${shownProps.slice(propsPictured.length).map(p => p.name).join(', ')} - drawn from the words alone`)
     if (visible.length > room) log.warn(`${clip.id}: ${visible.length} people in its shots but room for ${room} pictures - ${visible.slice(room).map(c => c.name).join(', ')} get none (shots need to be divided, --redo=coverage --scenes=${clip.sceneId})`)
 
     // With designed views the place's picture is the one view the clip starts in - not the sheet of all of them, which the video model shows back as a grid of four
@@ -102,9 +108,11 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             const pictureId = stateId && c.states?.some(s => s.id === stateId) ? statePictureId(c.id, stateId) : c.id
             return {kind: 'character' as const, id: c.id, pictureId, name: c.name, description: characterDescriptions[pictureId] ?? characterDescriptions[c.id] ?? c.appearance}
         }),
+        ...propsPictured.map(p => ({kind: 'prop' as const, id: p.id, pictureId: p.id, name: p.name, description: p.description})),
     ].map((s, n) => ({...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`}))
     const locationSubject = subjects.find(s => s.kind === 'location')
     const castSubjects = subjects.filter(s => s.kind === 'character')
+    const propSubjects = subjects.filter(s => s.kind === 'prop')
     const subjectOf = (characterId: string) => castSubjects.find(s => s.id === characterId)
     // characters of the film who have no picture in this clip: the text of the clip does not name them (the model would draw a stranger)
     const unpictured = cast.characters.filter(c => !c.voiceOnly && !subjectOf(c.id))
@@ -136,7 +144,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const speakerId = (key: string) => `(S${speakers.indexOf(key) + 1})`
 
     const names = (s: { name: string }) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(s.name)}(?![\\p{L}\\p{N}])`, 'gu')
-    const withLabels = (text: string) => castSubjects.reduce((t, s) => t.replace(names(s), s.label), text)
+    const withLabels = (text: string) => [...castSubjects, ...propSubjects].reduce((t, s) => t.replace(names(s), s.label), text)
 
     // "<Subject 2> (S1) says in ..." for someone with a picture in this clip, else the speaker is only a voice
     const who = (line: Spoken) => {
@@ -177,6 +185,9 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const start = starts.length ? ` At the start of the shot: ${starts.map(s => `${s.label} ${withLabels(shot.people![s.id]!.state!)}`).join('; ')}.` : ''
         const moving = shot.focus.filter(s => shot.people?.[s.id]?.motion && !shot.people[s.id]!.foreground)
         const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
+        // a prop in the picture is the one of its picture - drawn from the word alone, it came out new in every clip
+        const propsIn = propSubjects.filter(p => shot.props?.includes(p.id))
+        const propClause = propsIn.length ? ` In the shot: ${propsIn.map(p => `${p.label}, the ${p.name}, exactly as in ${p.picture}`).join('; ')}.` : ''
         const lines = shot.spoken.map(l => lineText(l, !l.character || shot.focus.some(f => f.id === l.character!.id))).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
@@ -190,7 +201,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const noSpeech = !shot.spoken.length && shot.focus.length
             ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
             : ''
-        return `${opening}${fromFrame}${view}${inFrame}${start}${motion}${holdClause} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
+        return `${opening}${fromFrame}${view}${inFrame}${start}${motion}${propClause}${holdClause} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
 
     const seconds = String(Math.round(clip.seconds * 10) / 10)
@@ -204,6 +215,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         'subject_definitions:',
         ...subjects.map(s => s.kind === 'location'
             ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+            : s.kind === 'prop' ? `${s.label} is the ${s.name}, the object in ${s.picture}: ${s.description}`.trim()
             : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()),
         ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd(subjects.map(s => s.label))}.`] : []),
         '',
@@ -211,8 +223,9 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         `[reference generation${framePicture ? ' + keyframe completion' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second clip of a short film${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClause}${talking} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''}.`,
         '',
         'retention_analysis:',
-        ...subjects.map(s => `${s.label} (appears in ${s.kind === 'location' ? shots.map(x => x.label).join(', ') : appearsIn(s.label) || shots[0]!.label}): fully_preserved - ${s.kind === 'location'
+        ...subjects.map(s => `${s.label} (appears in ${s.kind === 'location' ? shots.map(x => x.label).join(', ') : s.kind === 'prop' ? shots.filter(x => x.props?.includes(s.id)).map(x => x.label).join(', ') : appearsIn(s.label) || shots[0]!.label}): fully_preserved - ${s.kind === 'location'
             ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
+            : s.kind === 'prop' ? `the shape, size, colors and material of the ${s.name} are retained; the plain grey backdrop of its picture is discarded - it is only where the shots put it, held or in the place.`
             : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`}`),
         ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
         '',
@@ -241,7 +254,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         frameStart: clip.frameStart,
         frames: clip.frames,
         ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
-        shots: shots.map(s => ({label: s.label, at: s.at, framing: s.framing, camera: s.camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...s.focus.map(f => f.label)]})),
+        shots: shots.map(s => ({label: s.label, at: s.at, framing: s.framing, camera: s.camera, subjects: [...(locationSubject ? [locationSubject.label] : []), ...s.focus.map(f => f.label), ...propSubjects.filter(p => s.props?.includes(p.id)).map(p => p.label)]})),
         dialogue: shots.flatMap(s => s.spoken.map(l => ({
             at: l.at, line: l.line, speaker: l.character?.name ?? l.key, speakerId: speakerId(l.key),
             ...(l.character && subjectOf(l.character.id) ? {subject: subjectOf(l.character.id)!.label} : {}),
