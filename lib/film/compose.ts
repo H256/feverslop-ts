@@ -90,10 +90,12 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     if (visible.length > room) log.warn(`${clip.id}: ${visible.length} people in its shots but room for ${room} pictures - ${visible.slice(room).map(c => c.name).join(', ')} get none (shots need to be divided, --redo=coverage --scenes=${clip.sceneId})`)
 
     // With designed views the place's picture is the one view the clip starts in - not the sheet of all of them, which the video model shows back as a grid of four
+    // and the place is described by what that view shows, not by the description of the hero picture: written from where the hero picture looks
+    // ("the seats beyond the stage edge"), it won over a view from the seats - the video model turned round to the view the words had
     const views = location ? locationViews?.[location.id] : undefined
     const pictured = views?.length ? Math.min(views.length, Math.max(1, clip.shots.find(s => s.placeView)?.placeView ?? 1)) : undefined
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: locationViewAsset(location.id, pictured)} : {}), name: location.name, description: `${locationDescriptions[location.id] ?? location.description}${pictured ? ` The picture shows the place ${views![pictured - 1]!.name}.` : ''}`.trim()}] : []),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: locationViewAsset(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
         ...characters.map(c => {
             // the look the character is in when they first appear in this clip - the clip has one picture of them
             const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]
@@ -165,7 +167,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             : ''
         // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
         const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined
-        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? (shot.placeView === pictured ? ` The background is ${locationSubject.picture}.` : ` The background is the place seen ${placeView.name} - that side is not in the picture, it follows from the place's description.`) : ''}` : ''
+        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? (shot.placeView === pictured ? ` The background is ${locationSubject.picture}.` : ` The background is the place seen ${placeView.name}: ${placeView.shows.replace(/[.\s]+$/, '')} - that side is not in the picture.`) : ''}` : ''
         // a person who is only a shoulder at the near edge of the picture (an over-the-shoulder listener) is drawn from "In frame" alone: said where they really stand, the video model draws a second, whole person there
         const starts = shot.focus.filter(s => shot.people?.[s.id]?.state && !shot.people[s.id]!.foreground)
         // a held shot: what the picture IS from the first frame to the last, said positively - "no push-in" does not hold the video model back, a picture that stays does
@@ -195,7 +197,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
-        : `The scene continues directly from the previous clip, at the same time and place: everyone is already present and mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.' : ''}`
+        : `The scene continues directly from the previous clip, at the same time and place: everyone is already where the first shot below has them, mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.' : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
     const prompt = [
