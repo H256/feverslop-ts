@@ -260,6 +260,19 @@ makes up the views), one note says so, and the clips are given the whole sheet a
 
 With `"locationViews": true` the five views of a location's reference sheet are designed for the place (a floor plan, then: the picture itself, the reverse, the two sides, a wide view) and every shot names the view that is its background. The clip gets that **one view** as the picture of the place (frame 0-4 of the sheet video, `assets/sequence/locations/<id>/frames/`), never the sheet itself - the video model shows a grid of views back. A shot that looks from another view says so in words ("that side is not in the picture"). The sheet's video model cuts to the views it is told about - but it cannot know what the other side of a place holds, so the reverse is only roughly right.
 
+## Props
+
+A thing the story names that people handle and that comes back - an umbrella, a key, a letter - gets a picture of its own
+(`props` in `project.json`, step 8d, `assets/props/<id>.png`). Without it the video model drew the thing anew in every clip:
+another canopy, another handle. The LLM reads the script and lists at most six props; their look is put together from fields of
+the thing alone (shape, colour, material), so where it stands or who holds it never ends up in its picture. What someone wears
+all film long stays in their picture, a fixed feature of a place in the place's.
+
+The shot planning is told the props and names the ones in the picture of every shot; a clip that shows a prop gets its picture as a
+reference, after the place and the people - when there is no room left, the prop is drawn from the words alone, with a warning.
+A film planned before has props after its next run, but its shots name them only once they are planned again
+(`--redo=coverage --scenes=…`).
+
 ## Design decisions
 
 - **No TTS and no audio references.** The video model speaks the dialogue itself: it is written into the clip prompt as

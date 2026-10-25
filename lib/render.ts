@@ -69,7 +69,7 @@ export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: P
 
 // look: another look of the character `base` (a film's states) - with sequence sheets its sheet starts on base's anchor and
 // shows the change, instead of an anchor drawn from the prompt (renderSequenceSheet)
-export type PictureJob = { kind: 'character' | 'location', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[], look?: { base: string, change: string } }
+export type PictureJob = { kind: 'character' | 'location' | 'prop', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[], look?: { base: string, change: string } }
 
 type Server = ComfyServer & { api: ComfyApi }
 
@@ -466,7 +466,7 @@ export class Renderer implements Disposable {
             copyFileSync(framePaths[0]!, anchorTarget)
             await Bun.write(`${anchorTarget}.json`, JSON.stringify({from: baseAnchorFile, change: look.change, fingerprint: anchorFingerprint}, null, 2))
         }
-        const {columns, panel} = sheetLayout(picture.kind)
+        const {columns, panel} = sheetLayout(picture.kind === 'character' ? 'character' : 'location')
         await composeSheet(framePaths, target, panel, columns)
         await Bun.write(`${target}.json`, JSON.stringify({
             workflow: this.config.sequenceWorkflow, frames: sequenceFrames, beatTimes, prompt: sequencePrompt, fingerprint: sheetFingerprint,

@@ -4,10 +4,10 @@ import type {FilmConfig} from "./config.ts";
 import {defaults, type RenderConfig} from "../config.ts";
 import {log} from "../log.ts";
 import type {PictureJob} from "../render.ts";
-import type {FilmCast, FilmProject} from "./types.ts";
+import type {FilmCast, FilmProject, FilmProp} from "./types.ts";
 
 // the same place the music-video pipeline keeps its reference pictures, inside films/<id>/
-export const filmPictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+export const filmPictureAsset = (kind: 'character' | 'location' | 'prop', id: string) => `assets/${kind}s/${id}.png`
 
 /** One view of a location's reference sheet as a picture of its own (view 1..5 = frame 0..4 of the sheet video) - the video model gets the one view, not the grid. */
 export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view - 1).padStart(2, '0')}.png`
@@ -18,8 +18,15 @@ export const statePictureId = (characterId: string, stateId: string) => `${chara
 // baseId: the character this picture is another look of - drawn with the seed of the normal picture, which keeps the face
 export type FilmPictureJob = PictureJob & { baseId?: string }
 
-/** The reference pictures of a film: every location, and every character who is ever seen (not a narrator's voice). */
-export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'> & Pick<Partial<FilmProject>, 'locationViews'>): FilmPictureJob[] {
+/**
+ * The picture of a prop: the thing alone on the grey backdrop of the character pictures - a plain picture, no sheet. Nobody holds it
+ * and nothing else is in it: a hand or a place in it would be drawn into every clip that has the prop.
+ */
+export const propPicturePrompt = (prop: FilmProp) =>
+    `A studio product photograph of ${prop.description.replace(/[.]+$/, '')}. The ${prop.name} alone, whole and centred, on a plain seamless neutral grey backdrop, even soft light from every side, sharp focus. Nothing else in the picture: no hands, no people, no other objects, no text.`
+
+/** The reference pictures of a film: every location, every character who is ever seen (not a narrator's voice), and every prop. */
+export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'> & Pick<Partial<FilmProject>, 'locationViews' | 'props'>): FilmPictureJob[] {
     return [
         ...cast.locations.map(l => ({
             kind: 'location' as const, id: l.id, file: filmPictureAsset('location', l.id), name: l.name,
@@ -35,6 +42,9 @@ export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterL
             kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, look: {base: c.id, change: s.change}, file: filmPictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
             prompt: data.characterLooks?.[statePictureId(c.id, s.id)] ?? '', description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
         }))),
+        ...(data.props ?? []).map(p => ({
+            kind: 'prop' as const, id: p.id, file: filmPictureAsset('prop', p.id), name: p.name, prompt: propPicturePrompt(p), description: p.description,
+        })),
     ]
 }
 

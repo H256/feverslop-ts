@@ -827,3 +827,52 @@ describe('the view of a place each clip is given, without designed views', () =>
         expect(sheetFrames('/nowhere', 'stage')).toEqual([])
     })
 })
+
+describe('props (#380)', () => {
+    const scene = screenplay.scenes[0]!
+    const umbrella = {id: 'umbrella', name: 'umbrella', description: 'A large black umbrella with a curved wooden handle.'}
+    const letter = {id: 'letter', name: 'letter', description: 'A folded yellowed letter.'}
+    const later = toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage
+
+    test('the props the model lists: described by the fields of the thing alone - where it is and who holds it stay out - one per name, at most six', async () => {
+        const {toProps} = await import('./screenplay.ts')
+        expect(toProps([{name: ' Umbrella ', used: 'leans against the wall', shape: 'a long umbrella.', colour: 'black', material: 'nylon'}, {name: 'umbrella', shape: 'again'}, {name: '', shape: 'x'}, {name: 'key'}, 'nonsense'])).toEqual([{id: 'umbrella', name: 'Umbrella', description: 'a long umbrella; black; nylon'}])
+        expect(toProps(Array.from({length: 9}, (_, n) => ({name: `thing ${n}`, shape: 'd'})))).toHaveLength(6)
+        expect(toProps(undefined)).toEqual([])
+    })
+    test('a shot names its props as the planning spelled them; a name that is no prop is left out', () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna holds the umbrella.', lines: [1, 2], props: ['Umbrella', 'sword']}]}, scene, cast, true, undefined, undefined, [umbrella])
+        expect(coverage.shots[0]!.props).toEqual(['umbrella'])
+        const none = toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna waits.', lines: [1, 2], props: []}]}, scene, cast, true, undefined, undefined, [umbrella])
+        expect(none.coverage.shots[0]!.props).toBeUndefined()
+    })
+    test('a prop is a plain picture of the thing alone', async () => {
+        const {filmPictures} = await import('./pictures.ts')
+        const job = filmPictures(cast, {props: [umbrella]}).find(j => j.kind === 'prop')!
+        expect(job.file).toBe('assets/props/umbrella.png')
+        expect(job.prompt).toContain('A large black umbrella with a curved wooden handle. The umbrella alone')
+        expect(job.prompt).toContain('no hands, no people')
+    })
+    test('a clip that shows a prop gets its picture, after the people, and the shot says it is that one', async () => {
+        const {buildFilmClipRequests} = await import('./compose.ts')
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{framing: 'wide', camera: 'c', characters: ['Anna'], action: 'Anna opens the umbrella.', lines: [1, 2], props: ['umbrella']}]}, scene, cast, true, undefined, undefined, [umbrella, letter])
+        const [request] = buildFilmClipRequests({screenplay, cast, clips: packClips(screenplay, [coverage, later], 'auto').filter(c => c.sceneId === 's1'),
+            soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, lookBrief: 'Look. More.', props: [umbrella, letter]})
+        const prop = request!.assets.pictures.find(p => p.kind === 'prop')!
+        expect(prop.file).toBe('assets/props/umbrella.png')
+        expect(request!.assets.pictures.findIndex(p => p.kind === 'prop')).toBeGreaterThan(request!.assets.pictures.findIndex(p => p.kind === 'character'))
+        expect(request!.prompt).toContain(`${prop.subject} is the umbrella, the object in ${prop.label}: A large black umbrella with a curved wooden handle.`)
+        expect(request!.prompt).toContain(`In the shot: ${prop.subject}, the umbrella, exactly as in ${prop.label}.`)
+        expect(request!.prompt).toContain(`Anna opens the ${prop.subject}.`.replace('Anna', request!.assets.pictures.find(p => p.kind === 'character')!.subject))
+        // a prop no shot of the clip has is not in it
+        expect(request!.assets.pictures.some(p => p.id === 'letter')).toBe(false)
+    })
+    test('the planning is told the props and names them per shot', async () => {
+        const {coveragePrompt, propsPrompt} = await import('./prompts.ts')
+        const ask = coveragePrompt(scene, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6, [], undefined, undefined, 1, [umbrella])
+        expect(ask.input).toContain('Props you may use, exactly as spelled - each has a picture of its own: umbrella (A large black umbrella with a curved wooden handle).')
+        expect(ask.instructions).toContain('- "props": the props listed above that are in the picture of this shot')
+        expect(coveragePrompt(scene, cast.locations[0]!, cast.characters, 'en', 'Look.', undefined, 6).input).not.toContain('Props you may use')
+        expect(propsPrompt(screenplay, cast).instructions).toContain('Not what someone wears all film long')
+    })
+})
