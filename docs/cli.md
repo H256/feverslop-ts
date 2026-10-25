@@ -16,6 +16,12 @@ Long-running concurrent jobs use a bounded multi-line board at the bottom of a t
 
 `status <project> --json`, `inspect <project> <clip> --json` and `stats --json` produce exactly one JSON value on stdout, even with `--quiet`. Errors in those modes are JSON on stderr with a nonzero exit code. Human headers and summaries are suppressed. See [statistics](stats.md) for filtering and metric definitions. Other tools do not claim JSON support unless their help lists it.
 
+The options set environment variables that child processes inherit: `--quiet` sets `FEVERSLOP_QUIET=1`, `--verbose` sets `FEVERSLOP_VERBOSE=1`, `--debug` `FEVERSLOP_DEBUG=1`. They can be set in the shell instead of repeating the flag, e.g. for a script that runs several tools:
+
+```sh
+FEVERSLOP_QUIET=1 bun index.ts my-project --render=videos
+```
+
 ```sh
 bun index.ts --help
 bun run status my-project
