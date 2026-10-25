@@ -2,6 +2,82 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.4.0 – the film pipeline catches up, init for your own songs, a vision model of its own
+
+_2026-10-25_
+
+The film pipeline reaches the music video's quality features through the code both share: two-pass clips, context frames, the backdrop check, finishing, 48/60 fps, casting and the asset library, and the same tools. On top of that, films get the views of their places right: a clip is given the one view of the place its shots are in, described by what that view shows. Init now starts a song from your own lyrics and asks for the render settings, and pictures can be read by a vision model of their own. 31 pull requests since v0.3.0 (#346–#388).
+
+### Highlights
+
+- **Films at music-video level**: two-pass clips and `videoAspect` (#371), `contextFrames` and the backdrop check (#372), finishing, color match and `finalFps` (#373), `casting.json` and the asset library (#374), `--dry-run`, `--review`, `status` and `inspect` (#375) - all through the renderer and final pass the music video uses, proven unchanged by golden snapshots (#370).
+- **The right view of the place per clip**: without designed views a vision model reads what each view of a location sheet shows, the LLM chooses the view of every shot, and the clip gets that one view instead of the whole sheet (#382, #386). The place is described by what that view shows, not by the description of the hero picture (#387).
+- **Props with a picture of their own**: the things people handle and that come back (an umbrella, a key) are read from the script, get a plain picture each, and every clip that shows one gets it as a reference - the same thing in every clip instead of a new one each time (#388, fixes #380).
+- **Space that holds together in a film**: the camera keeps one side of the action per scene, people enter where they came from, nobody is brought into a shot twice (#387); a clip goes on from the one before only in the same picture, else a plain cut (#379).
+- **Other looks of a character** (wounded, soaked) are drawn from the anchor of the normal picture, with the change named in every view (#377).
+- **Init for your own songs**: lyrics of your own, who sings them, the aspect ratio, presets for the render settings, a summary before writing, and the run started at the end (#350–#362, #367).
+- **A vision model of its own** for describing and reading pictures (`bun run setup vision`) (#368).
+
+### Film
+
+#### Rendering and finishing
+- Two-pass clips (`h3-ref2video-film-2pass`) and `videoAspect` (#371).
+- `contextFrames` and the backdrop check (`leakRetries`) through the shared renderer (#372).
+- `finish`, color match and `finalFps` through the shared final pass (#373).
+- A clip goes on from the one before only where the picture goes on (the same take); otherwise a plain cut without context frames (#379).
+
+#### Places and views
+- The view of every shot is chosen from the views read from the location sheet, and the clip gets that one view (#382). The views are read only with a model that surely reads pictures; otherwise the clip gets the whole sheet as before, with one note (#382).
+- The chosen view wins over the number the planning wrote without being shown any views (#386).
+- The place is described by what the clip's view shows; a shot in another view says what that side shows (#387).
+- Figures stay where the shots put them - also beyond a door or a window (#382).
+
+#### Shot planning
+- One camera side per scene; people who come from the scene before enter through the feature that leads there (#387).
+- Nobody is already in the picture and also comes in during the same shot (#387).
+- A hand does one simple thing per shot; weather that falls is in the picture, not only in the sound (#379).
+- A look is offered only from its scene on; places are named by fixed landmarks, not by where the camera is (#379).
+
+#### Props
+- Step 8d `props`: at most six props read from the script, their look put together from fields of the thing alone - where it stands or who holds it never ends up in its picture (#388).
+- A plain picture per prop (`assets/props/<id>.png`), the shot planning names the props of every shot, and a clip gets their pictures after the place and the people (#388).
+
+#### Characters and looks
+- Another look's sheet starts on the anchor of the normal picture and shows the change in every view (#377).
+- Character descriptions list the clothing garment by garment, from the sheet (#379).
+
+#### Casting and tools
+- `casting.json` and the asset library for films (#374).
+- `--dry-run`, `--review`, `bun run status` and `bun run inspect` for films (#375).
+- Film init: the style list has "← back" and shows a style before it is taken (#376).
+
+### Reference sheets (music video and film)
+- The expression of a character sheet's last view comes from its description, not from chance - a sheet no longer counts as stale on almost every run; sheets made before keep their expression (#385, fixes #378).
+- A location sheet keeps its fixtures in every view: the same lights, doors and furniture, none added or doubled (#385).
+- `--refresh=pictures` keeps the anchor of a sheet whose anchor did not change (#385).
+
+### Init
+- A song from your own lyrics, who sings it, the image and video workflow (#350).
+- The lyrics language is asked early, for every project (#357).
+- A picked style is shown in full before it is taken (#358).
+- The singers are asked next to the voice and follow it (#359).
+- The aspect ratio, and presets for the render settings (#360); continuity and `contextFrames` under the custom render settings (#367).
+- A summary before writing: write, change one answer, or cancel (#361).
+- The run can be started at the end (#362).
+
+### LLM
+- A vision model of its own for describing pictures, on its own server or as another model on the text server (`bun run setup vision`) (#368).
+
+### CLI, tools and logs
+- Unified logging, common options (`--verbose`, `--debug`, `--quiet`, `--banner`) and an adaptive ASCII banner (#365); no duplicated header or Next line in `status` (#384).
+- Progress of the finish step is shown (#383, #384).
+- `bun run stats`: a compact dashboard, filters and honest tail latency (#366); the same variant compared across GPUs (#348); a frame interpolation is one variant per model and multiplier (#346).
+- Output: wait for a folder another program holds open (#369).
+
+### Tests and releases
+- Golden snapshots of what the music video and the film send to ComfyUI and ffmpeg (#370).
+- `CHANGELOG.md`, and GitHub releases built from it (#349).
+
 ## v0.3.0 – two-pass clips, film-look shot planning, a band that plays what is heard
 
 _2026-10-20_
