@@ -8,6 +8,8 @@ import * as p from "@clack/prompts";
 import {existsSync, readdirSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
+import {type Finish, MILD_FINISH} from "../lib/finish.ts";
+import {FPS} from "../lib/frames.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
@@ -52,11 +54,13 @@ type Answers = {
     videoResolution: Resolution
     continuity: ProjectConfig['continuity']
     contextFrames: number
+    finalFps: number
+    finish: boolean | Partial<Finish>
 }
 const a = {
     singerMode: 'none', singerNames: [], language: defaults.lyricsLanguage, singerVoice: defaults.singerVoice, videoAspect: defaults.videoAspect,
     preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
-    continuity: defaults.continuity, contextFrames: defaults.contextFrames,
+    continuity: defaults.continuity, contextFrames: defaults.contextFrames, finalFps: defaults.finalFps, finish: defaults.finish,
 } as unknown as Answers
 const hasSong = () => a.songSource === 'file'
 // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
@@ -311,8 +315,60 @@ const steps: Record<string, Step> = {
             }))
         },
     },
+    // a second final video with more frames per second, the clips interpolated shot by shot (README "finalFps")
+    fps: {
+        label: () => 'Frame rate',
+        summary: () => a.finalFps === FPS ? `${FPS} fps` : `${FPS} fps + a second video at ${a.finalFps} fps`,
+        ask: async () => {
+            a.finalFps = answer(await p.select({
+                message: 'Frame rate of the final video',
+                initialValue: a.finalFps,
+                options: [
+                    {value: FPS, label: `${FPS} fps`, hint: 'default - the clips as rendered'},
+                    {value: 48, label: '48 fps too', hint: 'a second video, the clips interpolated - one ComfyUI job per clip'},
+                    {value: 60, label: '60 fps too', hint: 'a second video, the clips interpolated - one ComfyUI job per clip'},
+                ],
+            }))
+        },
+    },
+    // a finished copy next to every final video: color match, grade, sharpen, grain - ffmpeg only, quick (README "Finishing")
+    finish: {
+        label: () => 'Finishing',
+        summary: () => {
+            if (!a.finish) return 'none'
+            const f = {...MILD_FINISH, ...(a.finish === true ? {} : a.finish)}
+            return `finished copy - sharpen ${f.sharpen}, ${f.colorMatch ? `color match ${f.colorMatch}` : 'no color match'}${f.grain ? `, grain ${f.grain}` : ''}`
+        },
+        ask: async () => {
+            const mode = answer(await p.select({
+                message: 'Finishing - a polished copy (<id>-finished.mp4) next to the final video; the original stays untouched',
+                initialValue: !a.finish ? 'off' : a.finish === true ? 'mild' : 'custom',
+                options: [
+                    {value: 'off', label: 'No finishing', hint: 'default - the video as rendered'},
+                    {value: 'mild', label: 'Mild', hint: 'deeper blacks, a touch more contrast and colour, light sharpening'},
+                    {value: 'match', label: 'Mild + colour match', hint: 'also evens out the brightness and tint jumps between clips - recommended'},
+                    {value: 'custom', label: 'Custom', hint: 'colour match, sharpening and film grain, one by one'},
+                ],
+            }))
+            if (mode === 'off') a.finish = false
+            else if (mode === 'mild') a.finish = true
+            else if (mode === 'match') a.finish = {colorMatch: 0.5}
+            else {
+                const was = {...MILD_FINISH, ...(typeof a.finish === 'object' ? a.finish : {})}
+                const number = async (message: string, initialValue: number, max: number) => Number(answer(await p.text({
+                    message, initialValue: String(initialValue), placeholder: String(initialValue),
+                    validate: v => v !== undefined && v !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? undefined : `a number from 0 to ${max}`,
+                })))
+                a.finish = {
+                    colorMatch: await number('Colour match, 0-1 (0 = off, 0.5 halves the jumps between clips, 1 removes them - and some of the mood)', was.colorMatch || 0.5, 1),
+                    sharpen: await number('Sharpening (CAS), 0-1 (0 = off, 0.4 = mild)', was.sharpen, 1),
+                    grain: await number('Film grain, 0-100 (0 = off, 3 = light)', was.grain, 100),
+                }
+            }
+        },
+    },
 }
-const shown = (key: string) => steps[key]!.shown?.() ?? true
+const shown =(key: string) => steps[key]!.shown?.() ?? true
 
 for (const key of Object.keys(steps)) if (shown(key)) await steps[key]!.ask()
 
@@ -345,6 +401,8 @@ if (canSing() && a.singerMode === 'auto') config.singers = ['auto']
 if (canSing() && a.singerMode === 'named') config.singers = a.singerNames
 if (!hasSong() && a.songDuration) config.songDuration = a.songDuration
 if (a.videoAspect !== defaults.videoAspect) config.videoAspect = a.videoAspect as `${number}:${number}`
+if (a.finalFps !== defaults.finalFps) config.finalFps = a.finalFps
+if (a.finish) config.finish = a.finish
 if (a.preset === 'quick') {
     config.sequenceSheets = false
     config.videoResolution = 0.5
