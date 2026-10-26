@@ -30,7 +30,7 @@ import {freshness} from "./lib/provenance.ts";
 import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
-import {FPS, formatTime, frameAt, secondsAt} from "./lib/frames.ts";
+import {FPS, formatTime, frameAt, maxClipFor, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
@@ -133,7 +133,6 @@ if (!projectExists(projectId)) {
     log.usageError(`No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
 }
 const project = new ProjectStore(projectId)
-const maxClipSec = MAX_CLIP_SEC
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
 if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
@@ -148,11 +147,7 @@ if (args.gallery) {
     process.exit(0)
 }
 // a dry run only says what would be redone (see dryRun below)
-const timelineOutdated = project.data.timeline !== undefined && project.data.timeline.maxClipSec !== maxClipSec
-if (!args['dry-run']) {
-    for (const step of redoSteps) project.invalidate(step)
-    if (timelineOutdated) project.invalidate('timeline')
-}
+if (!args['dry-run']) for (const step of redoSteps) project.invalidate(step)
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
 const readInput = async (name: string) => existsSync(project.input(name)) ? (await Bun.file(project.input(name)).text()).trim() : ''
@@ -167,6 +162,10 @@ const inputChangedSinceLastRun = (name: string, value: string) => {
 /////////// GET LYRICS, STORY IDEA, STYLE AND CONFIG
 log.section(`FEVERSLOP TS · ${project.id}`)
 const config = await loadProjectConfig(project.dir)
+// a continuing clip with context frames is rendered longer at its head - the clips are planned that much shorter (maxClipFor)
+const maxClipSec = maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity)
+const timelineOutdated = project.data.timeline !== undefined && project.data.timeline.maxClipSec !== maxClipSec
+if (!args['dry-run'] && timelineOutdated) project.invalidate('timeline')
 const settings = await loadSettings({
     projectModel: config.llm.model,
     llmUrl: args['llm-url'],

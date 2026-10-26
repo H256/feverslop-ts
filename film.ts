@@ -9,11 +9,11 @@ import {languageName} from "./lib/config.ts";
 import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from "./lib/film/assemble.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
-import {FPS, secondsAt} from "./lib/frames.ts";
+import {FPS, maxClipFor, secondsAt} from "./lib/frames.ts";
 import {burnSubtitles, muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
-import {CoverageProblem, packClips, type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
+import {CoverageProblem, MAX_CLIP_SEC, packClips,type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {chooseShotViews, readSheetViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
@@ -489,7 +489,7 @@ let requests: ReturnType<typeof buildFilmClipRequests> = []
 async function planClips() {
     const sheetViews = config.sequenceSheets && !config.locationViews ? await readSheetViews(film, cast, locationDescriptions) : {}
     const shotViews = await chooseShotViews(film, coverage, sceneId => locationOf(cast, screenplay.scenes.find(s => s.id === sceneId)!.location)?.id, sheetViews)
-    clips = packClips(screenplay, withShotViews(coverage, shotViews), config.continuity)
+    clips = packClips(screenplay, withShotViews(coverage, shotViews), config.continuity, maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity))
     requests = buildFilmClipRequests({
         screenplay, cast, clips,
         soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),

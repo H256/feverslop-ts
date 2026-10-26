@@ -267,7 +267,7 @@ export function goesOnWithoutCut(first: Shot, last: Shot | undefined, continuity
 /** The people a clip can show: the video model takes MAX_REFERENCE_IMAGES pictures, one of them the place. */
 export const MAX_PEOPLE_PER_CLIP = MAX_REFERENCE_IMAGES - 1
 
-export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], continuity: 'auto' | 'scene' | 'never'): FilmClip[] {
+export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], continuity: 'auto' | 'scene' | 'never', maxClipSec = MAX_CLIP_SEC): FilmClip[] {
     const clips: FilmClip[] = []
     let frameStart = 0
     for (const scene of screenplay.scenes) {
@@ -277,7 +277,7 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
         // a single shot that still does not fit a clip (no line to split it at, or one unit longer than a clip) is a plan
         // that cannot be rendered as it is - said here, not found as a failed or cut-off render
         for (const [k, shot] of shots.entries()) {
-            if (shot.seconds > MAX_CLIP_SEC) throw new Error(`scene ${scene.id}, shot ${k + 1}: ${shot.seconds}s is longer than a clip can be (${round(MAX_CLIP_SEC)}s) and cannot be split - shorten it or divide it into shots (--redo=coverage --scenes=${scene.id})`)
+            if (shot.seconds > maxClipSec) throw new Error(`scene ${scene.id}, shot ${k + 1}: ${shot.seconds}s is longer than a clip can be (${round(maxClipSec)}s) and cannot be split - shorten it or divide it into shots (--redo=coverage --scenes=${scene.id})`)
         }
         let current: Shot[] = []
         const flush = () => {
@@ -297,7 +297,7 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
         for (const shot of shots) {
             // a clip also ends where the people of its shots would no longer all get a picture of their own
             const people = new Set([...current, shot].flatMap(s => s.characters))
-            if (current.length && (current.reduce((sum, s) => sum + s.seconds, 0) + shot.seconds > MAX_CLIP_SEC || people.size > MAX_PEOPLE_PER_CLIP)) flush()
+            if (current.length && (current.reduce((sum, s) => sum + s.seconds, 0) + shot.seconds > maxClipSec || people.size > MAX_PEOPLE_PER_CLIP)) flush()
             current.push(shot)
         }
         flush()

@@ -3,7 +3,7 @@ import {asBeatShots} from "./shot-plan.ts";
 import {readTokens, replaceTokens} from "./refs.ts";
 import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {handsOf} from "./project.ts";
-import {formatTimestamp, FPS, frameAt, round} from "./frames.ts";
+import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
 
@@ -49,12 +49,7 @@ const trackAsset = (clipId: string, stem: string) => `output/audio/${clipId}.${s
 
 // a track mixed of several instrument stems (more players heard in a clip than ref_audio slots): its name, the same for the
 // same stems in any order - also the file it is mixed into (stems/<name>.wav, lib/music.ts mixStems)
-/**
- * Context frames (config.contextFrames): the frame batch of the clip before ends this many frames before that clip's end,
- * and these frames are rendered again and cut off with the head. The first frames the model draws after the batch flash
- * brighter (tides slot-014: two frames at 86 against 81 before and 77 after) - they fall into the part that is cut off.
- */
-export const CONTEXT_SETTLE = 3
+export {CONTEXT_SETTLE}
 export type MixStem = `mix-${string}`
 export const mixStem = (stems: PropStem[]): MixStem => `mix-${[...stems].sort().join('-')}`
 
