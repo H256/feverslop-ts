@@ -62,6 +62,17 @@ const hasSong = () => a.songSource === 'file'
 // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
 const canSing = () => Boolean(a.ownLyrics || a.idea || a.lyrics)
 
+// what the workflows in comfy/workflows/ are for - one that isn't listed here is still offered, without a hint
+// (declared before the steps: they are asked by a top-level await further down)
+const WORKFLOW_HINTS: Record<string, string> = {
+    'kroma-image': 'Kroma turbo, half size + 2x refine',
+    'krea2-image': 'Krea 2, one pass',
+    'h3-ref2video': 'MiniMax H3, one pass with the turbo LoRA - fastest',
+    'h3-ref2video-full': 'MiniMax H3 base model, 20 steps - ~2.5x slower, more detail and motion',
+    'h3-ref2video-2pass': 'MiniMax H3 in two passes - quarter size, latent x2, short refine',
+    'h3-ref2video-cpu-clip': 'one pass, text encoder on the CPU - for less VRAM',
+}
+
 // then: the steps asked again after this one changed in the summary - their answers may no longer fit
 type Step = { label: () => string, ask: () => Promise<void>, summary: () => string, shown?: () => boolean, then?: string[] }
 const steps: Record<string, Step> = {
@@ -417,16 +428,6 @@ async function askText(label: string, options: { required?: boolean } = {}): Pro
         return (await Bun.file(path).text()).trim()
     }
     return multiline(label)
-}
-
-// what the workflows in comfy/workflows/ are for - one that isn't listed here is still offered, without a hint
-const WORKFLOW_HINTS: Record<string, string> = {
-    'kroma-image': 'Kroma turbo, half size + 2x refine',
-    'krea2-image': 'Krea 2, one pass',
-    'h3-ref2video': 'MiniMax H3, one pass with the turbo LoRA - fastest',
-    'h3-ref2video-full': 'MiniMax H3 base model, 20 steps - ~2.5x slower, more detail and motion',
-    'h3-ref2video-2pass': 'MiniMax H3 in two passes - quarter size, latent x2, short refine',
-    'h3-ref2video-cpu-clip': 'one pass, text encoder on the CPU - for less VRAM',
 }
 
 /** An image or video workflow from comfy/workflows/ - the film pipeline's own and the helper ones are not offered. */
