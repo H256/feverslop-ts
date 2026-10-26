@@ -8,6 +8,7 @@ import * as p from "@clack/prompts";
 import {existsSync, readdirSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
+import {FPS} from "../lib/frames.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
@@ -52,11 +53,12 @@ type Answers = {
     videoResolution: Resolution
     continuity: ProjectConfig['continuity']
     contextFrames: number
+    finalFps: number
 }
 const a = {
     singerMode: 'none', singerNames: [], language: defaults.lyricsLanguage, singerVoice: defaults.singerVoice, videoAspect: defaults.videoAspect,
     preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
-    continuity: defaults.continuity, contextFrames: defaults.contextFrames,
+    continuity: defaults.continuity, contextFrames: defaults.contextFrames, finalFps: defaults.finalFps,
 } as unknown as Answers
 const hasSong = () => a.songSource === 'file'
 // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
@@ -311,8 +313,24 @@ const steps: Record<string, Step> = {
             }))
         },
     },
+    // a second final video with more frames per second, the clips interpolated shot by shot (README "finalFps")
+    fps: {
+        label: () => 'Frame rate',
+        summary: () => a.finalFps === FPS ? `${FPS} fps` : `${FPS} fps + a second video at ${a.finalFps} fps`,
+        ask: async () => {
+            a.finalFps = answer(await p.select({
+                message: 'Frame rate of the final video',
+                initialValue: a.finalFps,
+                options: [
+                    {value: FPS, label: `${FPS} fps`, hint: 'default - the clips as rendered'},
+                    {value: 48, label: '48 fps too', hint: 'a second video, the clips interpolated - one ComfyUI job per clip'},
+                    {value: 60, label: '60 fps too', hint: 'a second video, the clips interpolated - one ComfyUI job per clip'},
+                ],
+            }))
+        },
+    },
 }
-const shown = (key: string) => steps[key]!.shown?.() ?? true
+const shown =(key: string) => steps[key]!.shown?.() ?? true
 
 for (const key of Object.keys(steps)) if (shown(key)) await steps[key]!.ask()
 
@@ -345,6 +363,7 @@ if (canSing() && a.singerMode === 'auto') config.singers = ['auto']
 if (canSing() && a.singerMode === 'named') config.singers = a.singerNames
 if (!hasSong() && a.songDuration) config.songDuration = a.songDuration
 if (a.videoAspect !== defaults.videoAspect) config.videoAspect = a.videoAspect as `${number}:${number}`
+if (a.finalFps !== defaults.finalFps) config.finalFps = a.finalFps
 if (a.preset === 'quick') {
     config.sequenceSheets = false
     config.videoResolution = 0.5
