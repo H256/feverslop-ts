@@ -563,7 +563,9 @@ The H3 node only renders 5 + 17·k frames, so the frame count is rounded up: an 
 (8.71 s), a full 10 s slot 243 frames (10.13 s). The extra frames are cut off again in the final video - see
 [frame-exact timing](#the-final-video-and-frame-exact-timing). The files in `videos/` keep the full render length. If
 your hardware can't render more than 10 s, set `MAX_CLIP_SEC` in `index.ts` a little lower - the rounding needs up to
-16 extra frames (0.67 s).
+16 extra frames (0.67 s). With `contextFrames` and `continuity` on, a continuing clip is rendered that much longer at
+its head too (+ 3 settle frames, ~1 s for 22, ~1.75 s for 39), so the clips are planned shorter by exactly that: the
+limit becomes 8.25 s for 22 and 7.54 s for 39 context frames. Changing either setting cuts the song into clips again.
 
 **The second audio input is the vocals stem, only for clips with a singer.**
 `comfy/r2v_audio_fullmix_guide_1-pass_turbo.json` feeds a second reference audio in (`ref_audios.ref_audio_1`). The
