@@ -1381,10 +1381,11 @@ ${storySummary}`,
         instructions: 'You are a music video director who splits a song between its singers. Answer only with JSON.',
         schema: {type: 'object', additionalProperties: false, required: ['lines'], properties: {lines: {type: 'array', items: {
             type: 'object', additionalProperties: false, required: ['line', 'singers'],
-            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, uniqueItems: true, items: {enum: singers}}},
+            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
         }}}},
     })
-    // a model that loops repeats a singer in a line ("lyra, kaelen, lyra, ...") - each sings it once
+    // a model that loops repeats a singer in a line ("lyra, kaelen, lyra, ...") - each sings it once; uniqueItems is not
+    // in the schema, the server's grammar compiler refuses it (llama.cpp/vLLM: "Unimplemented keys")
     const byLine = new Map((assigned.lines ?? []).map(l => [l.line, [...new Set(known(l.singers).filter(id => singers.includes(id)))]]))
     const missing = lines.filter(l => !byLine.get(l.line)?.length)
     if (missing.length) log.warn(`${missing.length} line(s) got no singer - sung by ${singers[0]}`)
