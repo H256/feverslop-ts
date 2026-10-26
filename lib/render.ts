@@ -760,6 +760,7 @@ export class Renderer implements Disposable {
             }
         }
 
+        let timeouts = 0
         for (;;) {
             const server = await this.acquire(home?.name)
             this.settle(target)
@@ -768,6 +769,7 @@ export class Renderer implements Disposable {
             let pending: PendingJob<M> | undefined
             let failure: Error | undefined
             let again = false
+            let resume = false
             try {
                 pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
                 await this.downloadResult(label, target, extension, server, pending, trace)
@@ -781,13 +783,22 @@ export class Renderer implements Disposable {
                     again = this.connected.some(s => !this.down.has(s.name))
                     if (again) log.warn(`${label}: rendered again on another server (${failure.message.slice(0, 160)})`)
                 }
+                // A request that hung and timed out on a server that answers again (a network blip, a job that finished
+                // meanwhile): the job is on the server - ask for it again instead of ending the whole run
+                if (!again && timeouts < 2 && /timed out|timeout/i.test(`${failure.name} ${failure.message}`)) {
+                    timeouts++
+                    again = resume = true
+                    log.warn(`${label}: ${failure.message.slice(0, 160)} - asking ${server.name} again (${timeouts}/2)`)
+                }
                 if (!again) throw e
             } finally {
                 this.release(server)
                 this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
                 await this.keepRender(what, server, pending, trace, started, failure)
             }
-            home = undefined
+            // the job queued just now is in the pending file - taken up again (on its server) or, if gone, rendered anew
+            initial = resume ? await readPending<M>(pendingFile) : initial
+            home = resume && initial ? this.homeOf(label, initial, this.connected.filter(s => !this.down.has(s.name))) : undefined
         }
     }
 
