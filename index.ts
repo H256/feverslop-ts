@@ -3,12 +3,11 @@ import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
-import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
-import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./lib/predict.ts";
+import {keepTimingsIn, recordTiming, runTimings} from "./lib/timings.ts";
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
-import {LOCATION_VIEWS, SEQUENCE_FRAMES} from "./lib/sequenceSheet.ts";
+import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
 import {clipChains, renderAll} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
@@ -20,7 +19,7 @@ import {playingCases, playingIssues} from "./lib/playing-check.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
-import {clipFingerprint, type PictureJob, Renderer, workflowHash} from "./lib/render.ts";
+import {clipFingerprint, type PictureJob, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {projectLyricSections} from "./lib/music.ts";
@@ -1131,13 +1130,7 @@ if (render.has('images') || render.has('videos')) {
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
         const todoPictures = pictures.filter(p => !existsSync(join(project.dir, p.file)))
-        const pictureWorkflow = config.sequenceSheets ? config.sequenceWorkflow : config.imageWorkflow
-        const pictureHash = await workflowHash(pictureWorkflow)
-        const pictureJobs: RenderJob[] = todoPictures.map(() => ({
-            kind: 'picture', name: pictureWorkflow, workflowHash: pictureHash,
-            ...(config.sequenceSheets ? {frames: SEQUENCE_FRAMES} : {pixels: resolutionPixels(config.imageResolution)}),
-        }))
-        log.step('Estimate', styles.muted(describePrediction(config.sequenceSheets ? 'sheet video' : 'picture', predictJobs(readTimings(), pictureJobs, settings.comfy.map(server => server.name)))))
+        log.step('Estimate', styles.muted(await pictureEstimate(todoPictures.length, config, settings.comfy.map(server => server.name))))
         await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
     }
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
@@ -1164,11 +1157,7 @@ if (render.has('images') || render.has('videos')) {
             if (later.size) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
         }
         const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, 'videos', `${c.id}.mp4`)))
-        const clipHash = await workflowHash(config.videoWorkflow)
-        const clipJobs: RenderJob[] = await Promise.all(todoClips.map(async c => ({
-            kind: 'clip' as const, name: config.videoWorkflow, workflowHash: clipHash, frames: await renderer.plannedFrames(c.frames), pixels: resolutionPixels(config.videoResolution),
-        })))
-        log.step('Estimate', styles.muted(describePrediction('clip', predictJobs(readTimings(), clipJobs, settings.comfy.map(server => server.name)))))
+        log.step('Estimate', styles.muted(await clipEstimate(todoClips, config, settings.comfy.map(server => server.name))))
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
         // the jobs an earlier run left queued on a server get it before any new clip does (#335) - the head of each chain

@@ -1,7 +1,7 @@
 import {describe, expect, test} from "bun:test";
 import {aboveRecommended, pixelSize} from "../comfy/helpers.ts";
 import {twoPassSizes} from "../comfy/h3-two-pass.ts";
-import {boardStatus, dispatchOrder, pickServer, resumesJob} from "./render.ts";
+import {boardStatus, contextLength, dispatchOrder, pickServer, renderedFrames, resumesJob} from "./render.ts";
 
 test('a job that is queued, running or finished is resumed', () => {
     expect(resumesJob('queued')).toBe(true)
@@ -167,5 +167,20 @@ describe('context frames in the clip workflows', () => {
             expect(imageGuides).toHaveLength(guides)
             expect(Object.values(nodes).some(n => n.class_type === 'LoadImage' && n.inputs.image === 'tail.mp4')).toBe(false)
         }
+    })
+})
+
+describe('the frames a clip renders - what the estimate counts', () => {
+    test('context frames: wanted at most, 5 + 17·k, CONTEXT_SETTLE short of the end of the clip before', () => {
+        expect(contextLength(22, 172)).toBe(22)
+        expect(contextLength(30, 172)).toBe(22)
+        expect(contextLength(22, 20)).toBe(5)
+        expect(contextLength(22, 3)).toBe(0)
+    })
+    test('a clip going on from another renders its context frames too, in a length the workflow takes (schwarzer-flur-261026-sing slot-033: 172 used, 209 rendered)', async () => {
+        const config = {videoWorkflow: 'h3-ref2video-2pass', contextFrames: 22}
+        expect(await renderedFrames({frames: 172, startsFrom: 'slot-032'}, config)).toBe(209)
+        expect(await renderedFrames({frames: 172}, config)).toBe(175)
+        expect(await renderedFrames({frames: 172, startsFrom: 'slot-032'}, {...config, contextFrames: 0})).toBe(175)
     })
 })

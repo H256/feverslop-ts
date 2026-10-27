@@ -2,9 +2,9 @@ import {existsSync, readdirSync, statSync} from "node:fs";
 import {join} from "node:path";
 import type {ClipRequest} from "./compose.ts";
 import type {ProjectConfig, RenderConfig} from "./config.ts";
-import {describePrediction, predictJobs, type RenderJob, resolutionPixels} from "./predict.ts";
+import {describePrediction, predictJobs, type RenderJob} from "./predict.ts";
 import {freshness} from "./provenance.ts";
-import {clipFingerprint, type PictureJob, workflowHash} from "./render.ts";
+import {clipFingerprint, type PictureJob, renderedFrames, workflowHash} from "./render.ts";
 import {SEQUENCE_FRAMES} from "./sequenceSheet.ts";
 import {readTimings} from "./timings.ts";
 
@@ -50,13 +50,13 @@ export async function renderStateOf<C extends { id: string }>(projectDir: string
 export async function pictureEstimate(count: number, config: Pick<RenderConfig, 'sequenceSheets' | 'sequenceWorkflow' | 'imageWorkflow' | 'imageResolution'>, servers: string[]) {
     const workflow = config.sequenceSheets ? config.sequenceWorkflow : config.imageWorkflow
     const hash = await workflowHash(workflow).catch(() => undefined)
-    const jobs: RenderJob[] = Array.from({length: count}, () => ({kind: 'picture', name: workflow, workflowHash: hash, ...(config.sequenceSheets ? {frames: SEQUENCE_FRAMES} : {pixels: resolutionPixels(config.imageResolution)})}))
+    const jobs: RenderJob[] = Array.from({length: count}, () => ({kind: 'picture', name: workflow, workflowHash: hash, ...(config.sequenceSheets ? {frames: SEQUENCE_FRAMES} : {resolution: config.imageResolution})}))
     return describePrediction(config.sequenceSheets ? 'sheet video' : 'picture', predictJobs(readTimings(), jobs, servers))
 }
 
-/** The time estimate of rendering these clips - from their own frames (the workflow rounds them up a little). */
-export async function clipEstimate(clips: { frames: number }[], config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'>, servers: string[]) {
+/** The time estimate of rendering these clips - from the frames their jobs render, context frames included, as their timings count them. */
+export async function clipEstimate(clips: { frames: number, startsFrom?: string }[], config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution' | 'contextFrames'>, servers: string[]) {
     const hash = await workflowHash(config.videoWorkflow).catch(() => undefined)
-    const jobs: RenderJob[] = clips.map(c => ({kind: 'clip', name: config.videoWorkflow, workflowHash: hash, frames: c.frames, pixels: resolutionPixels(config.videoResolution)}))
+    const jobs: RenderJob[] = await Promise.all(clips.map(async c => ({kind: 'clip' as const, name: config.videoWorkflow, workflowHash: hash, frames: await renderedFrames(c, config).catch(() => c.frames), resolution: config.videoResolution})))
     return describePrediction('clip', predictJobs(readTimings(), jobs, servers))
 }

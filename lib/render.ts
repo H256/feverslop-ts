@@ -42,6 +42,24 @@ export async function workflowHash(name: string) {
     return workflowHashes.get(name)!
 }
 
+/** The context frames of the end of a clip of `used` frames: `wanted` at most, 5 + 17·k, CONTEXT_SETTLE short of its end - 0 when it is too short. */
+export function contextLength(wanted: number, used: number) {
+    let frames = Math.min(wanted, used - CONTEXT_SETTLE)
+    while (frames > 5 && frames % 17 !== 5) frames--
+    return frames < 5 ? 0 : frames
+}
+
+/**
+ * The frames the job of a clip renders - what its timing records: the clip's own, the context frames before them when it
+ * goes on from a clip (config.contextFrames; the clip before taken as long enough), in a length the workflow takes.
+ */
+export async function renderedFrames(clip: { frames: number, startsFrom?: string }, config: Pick<RenderConfig, 'videoWorkflow' | 'contextFrames'>) {
+    const context = clip.startsFrom && config.contextFrames > 0 ? contextLength(config.contextFrames, Infinity) : 0
+    const lead = context ? context + CONTEXT_SETTLE : 0
+    const {renderFrames} = await loadWorkflow<VideoWorkflowModule>(config.videoWorkflow)
+    return renderFrames?.(clip.frames + lead) ?? clip.frames + lead
+}
+
 // description: the plain visual description (characterDescriptions/locationDescriptions), not the image prompt -
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
@@ -142,12 +160,6 @@ export function backslashedRemotePath(uploads: { to: string }[], prompt: unknown
 }
 
 export class Renderer implements Disposable {
-    /** The frames the video workflow really renders for a clip of `frames` (some models only take certain counts). */
-    async plannedFrames(frames: number) {
-        const {renderFrames} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
-        return renderFrames?.(frames) ?? frames
-    }
-
     private resolutionNoted = false
     /** Says once per run that videoResolution is above the size the workflow's model is made for - it is rendered as set all the same. */
     protected noteResolution(recommended: RecommendedResolution | undefined) {
@@ -691,9 +703,8 @@ export class Renderer implements Disposable {
         const sidecar = `${video}.json`
         if (!existsSync(video) || !existsSync(sidecar)) return undefined
         const used = shown ?? (JSON.parse(readFileSync(sidecar, 'utf8')) as { frames: number }).frames
-        let frames = Math.min(wanted, used - CONTEXT_SETTLE)
-        while (frames > 5 && frames % 17 !== 5) frames--
-        if (frames < 5) return undefined
+        const frames = contextLength(wanted, used)
+        if (!frames) return undefined
         const asset = `assets/clips/${id}_tail${frames}.mp4`
         const file = join(this.projectDir, asset)
         mkdirSync(dirname(file), {recursive: true})
