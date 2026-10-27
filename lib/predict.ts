@@ -15,7 +15,7 @@ export function percentile(values: number[], p: number) {
     return sorted[lower]! + (sorted[Math.ceil(at)]! - sorted[lower]!) * (at - lower)
 }
 
-export type RenderJob = { kind: 'picture' | 'clip', name: string, workflowHash?: string, frames?: number, pixels?: number }
+export type RenderJob = { kind: 'picture' | 'clip', name: string, workflowHash?: string, frames?: number, resolution?: number | string }
 export type Basis = 'measured' | 'extrapolated' | 'none'
 export type Prediction = {
     seconds?: number          // time of one job on all servers together (1 / summed throughput)
@@ -25,6 +25,12 @@ export type Prediction = {
 }
 
 const size = (frames: number | undefined, pixels: number | undefined) => (frames ?? 1) * (pixels ?? 1)
+
+/**
+ * The pixels of a measured job in the unit of its resolution setting, the graph's own size only when the setting names
+ * none (-1, a sheet video): a two-pass workflow's graph says its first pass (960x544) while "videoResolution": 2 is 2 MP.
+ */
+const pixelsOf = (t: Timing) => (t.resolution !== undefined ? resolutionPixels(t.resolution) : undefined) ?? t.pixels
 
 /** Pixels of a resolution setting: a number is megapixels, "1280x720" a size, -1 the workflow's own default (unknown here). */
 export function resolutionPixels(resolution: number | string): number | undefined {
@@ -41,11 +47,12 @@ export function resolutionPixels(resolution: number | string): number | undefine
  */
 export function predictJob(timings: Timing[], job: RenderJob, servers: string[]): Prediction {
     const same = timings.filter(t => t.kind === job.kind && t.name === job.name && !t.outcome && !t.cold && !!t.variant
-        && !!job.workflowHash && t.workflowHash === job.workflowHash && t.pixels && t.seconds > 0)
+        && !!job.workflowHash && t.workflowHash === job.workflowHash && pixelsOf(t) && t.seconds > 0)
     const variant = same.at(-1)?.variant
     const ofVariant = same.filter(t => t.variant === variant)
     // the workflow's own default size (resolution -1) is the size of its earlier jobs
-    const pixels = job.pixels ?? ofVariant.at(-1)?.pixels
+    const last = ofVariant.at(-1)
+    const pixels = (job.resolution !== undefined ? resolutionPixels(job.resolution) : undefined) ?? (last && pixelsOf(last))
     let throughput = 0
     let basis: Basis = 'measured'
     let samples = 0
@@ -53,13 +60,13 @@ export function predictJob(timings: Timing[], job: RenderJob, servers: string[])
     for (const server of servers) {
         const mine = ofVariant.filter(t => t.server === server)
         if (!mine.length) continue
-        const exact = mine.filter(t => (t.frames ?? 1) === (job.frames ?? 1) && t.pixels === pixels)
+        const exact = mine.filter(t => (t.frames ?? 1) === (job.frames ?? 1) && pixelsOf(t) === pixels)
         let seconds: number
         if (exact.length) {
             seconds = median(exact.map(t => t.seconds))
             samples += exact.length
         } else {
-            seconds = median(mine.map(t => t.seconds / size(t.frames, t.pixels))) * size(job.frames, pixels)
+            seconds = median(mine.map(t => t.seconds / size(t.frames, pixelsOf(t)))) * size(job.frames, pixels)
             basis = 'extrapolated'
             samples += mine.length
         }

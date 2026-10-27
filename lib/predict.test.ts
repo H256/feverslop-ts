@@ -5,7 +5,7 @@ import type {Timing} from "./timings.ts";
 const clip = (seconds: number, extra: Partial<Timing> = {}): Timing => ({
     at: '', kind: 'clip', name: 'wan', seconds, variant: 'v1', workflowHash: 'h1', server: 'gpu1', frames: 22, pixels: 400_000, ...extra,
 })
-const job = {kind: 'clip' as const, name: 'wan', workflowHash: 'h1', frames: 22, pixels: 400_000}
+const job = {kind: 'clip' as const, name: 'wan', workflowHash: 'h1', frames: 22, resolution: 0.4}
 
 test('median and p90', () => {
     expect(median([1, 2, 3, 4])).toBe(2.5)
@@ -31,7 +31,7 @@ describe('predictJob', () => {
     test('another size is scaled by frames x pixels and marked as extrapolated', () => {
         const p = predictJob([clip(100)], {...job, frames: 44}, ['gpu1'])
         expect(p).toMatchObject({seconds: 200, basis: 'extrapolated'})
-        const q = predictJob([clip(100)], {...job, pixels: 800_000}, ['gpu1'])
+        const q = predictJob([clip(100)], {...job, resolution: 0.8}, ['gpu1'])
         expect(q).toMatchObject({seconds: 200, basis: 'extrapolated'})
     })
     test('an unknown variant (an edited workflow) gives no number', () => {
@@ -42,8 +42,14 @@ describe('predictJob', () => {
         const timings = [clip(100), clip(100, {server: 'gpu2'})]
         expect(predictJob(timings, job, ['gpu1', 'gpu2', 'gpu3'])).toMatchObject({seconds: 50, servers: ['gpu1', 'gpu2']})
     })
+    test('the size of the resolution setting, not of the graph: a two-pass workflow records its first pass (schwarzer-flur-261026-sing)', () => {
+        const twoPass = clip(530, {frames: 209, pixels: 522_240, resolution: 2})
+        expect(predictJob([twoPass], {...job, frames: 209, resolution: 2}, ['gpu1'])).toEqual({seconds: 530, basis: 'measured', samples: 1, servers: ['gpu1']})
+        // was 3.8x too long when 2 MP were compared with the 960x544 of the graph
+        expect(predictJob([twoPass], {...job, frames: 209, resolution: 1}, ['gpu1']).seconds).toBe(265)
+    })
     test('a workflow default size (unknown pixels) is the size it had before', () => {
-        expect(predictJob([clip(100)], {...job, pixels: undefined}, ['gpu1'])).toMatchObject({seconds: 100, basis: 'measured'})
+        expect(predictJob([clip(100)], {...job, resolution: -1}, ['gpu1'])).toMatchObject({seconds: 100, basis: 'measured'})
     })
 })
 
