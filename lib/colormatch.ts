@@ -4,6 +4,14 @@ import {runProcess} from "./process.ts";
 // A continuing clip is drawn on its own and comes out with its own exposure: on tides slot-013 -> 014 the new clip started
 // darker and flatter (black 33 -> 29, white 157 -> 151, mean 81 -> 77) - a visible step at a cut that is no cut. The clip is
 // matched as a whole to the last frames of the one before: black and white of the luma, the mean of the two chroma channels.
+// On schwarzer-flur-261026-sing slot-031 -> 033 it was measured on a scripted blackout (luma 16 to 25): the ratio of two spans
+// of a few levels gave gains of 0.3, 2 and 2 for the whole clip - its bright shots clipped, then lifted again by the finish
+// (x3.3). So the gain stays near 1, and frames that are nearly black leave the luma alone.
+
+/** Black to white of the luma below this: too few levels to measure a gain on - the luma is left as it is. */
+export const DARK_RANGE = 30
+/** How far a match stretches or squeezes the luma, at most. */
+export const GAIN_LIMIT = {min: 0.85, max: 1.18}
 
 export type FrameStats = { ylow: number, yhigh: number, uavg: number, vavg: number }
 
@@ -22,14 +30,17 @@ export async function frameStats(video: string, from: number, to: number): Promi
 }
 
 /**
- * The lutyuv filter that maps `cur` onto `ref`: the luma stretched from cur's black/white to ref's, the chroma shifted.
- * strength < 1 goes only that part of the way; `enable` limits it to a time span of the video (ffmpeg timeline).
+ * The lutyuv filter that maps `cur` onto `ref`: the luma stretched from cur's black/white to ref's (within GAIN_LIMIT; left as
+ * it is when either is nearly black, DARK_RANGE), the chroma shifted. strength < 1 goes only that part of the way; `enable`
+ * limits it to a time span of the video (ffmpeg timeline).
  */
 export function matchFilter(ref: FrameStats, cur: FrameStats, strength = 1, enable?: string): string {
     const to = (key: keyof FrameStats) => cur[key] + strength * (ref[key] - cur[key])
-    const gain = (to('yhigh') - to('ylow')) / Math.max(1, cur.yhigh - cur.ylow)
+    const dark = Math.min(ref.yhigh - ref.ylow, cur.yhigh - cur.ylow) < DARK_RANGE
+    const gain = dark ? 1 : Math.min(GAIN_LIMIT.max, Math.max(GAIN_LIMIT.min, (to('yhigh') - to('ylow')) / (cur.yhigh - cur.ylow)))
+    const black = dark ? cur.ylow : to('ylow')
     const r = (n: number) => Math.round(n * 1000) / 1000
-    return `lutyuv=y='clip((val-${r(cur.ylow)})*${r(gain)}+${r(to('ylow'))},16,235)':u='clip(val+${r(to('uavg') - cur.uavg)},16,240)':v='clip(val+${r(to('vavg') - cur.vavg)},16,240)'${enable ? `:enable='${enable}'` : ''}`
+    return `lutyuv=y='clip((val-${r(cur.ylow)})*${r(gain)}+${r(black)},16,235)':u='clip(val+${r(to('uavg') - cur.uavg)},16,240)':v='clip(val+${r(to('vavg') - cur.vavg)},16,240)'${enable ? `:enable='${enable}'` : ''}`
 }
 
 export type Span = { id: string, start: number, end: number }
