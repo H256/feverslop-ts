@@ -220,15 +220,14 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
         return styles.muted(`waiting for model${expected ? ` (usually ~${formatDuration(expected * 1000)})` : ''}`)
     })
     try {
-        const plain = typeof prompt.input === 'string'
-        let chat = schema && endpoint.chatSchema !== false && plain ? await openChat(endpoint, prompt, schema) : undefined
+        let chat = schema && endpoint.chatSchema !== false ? await openChat(endpoint, prompt, schema) : undefined
         let events: AsyncIterable<ResponseStreamEvent> | undefined
-        if (!chat && endpoint.responses === false && plain) chat = await openChat(endpoint, prompt)
+        if (!chat && endpoint.responses === false) chat = await openChat(endpoint, prompt)
         else if (!chat) try {
             events = await getClient(endpoint).responses.create(prompt)
         } catch (e) {
             // a server with Chat Completions only (a proxy in front of the model) does not know /responses
-            if ((e as { status?: number }).status !== 404 || !plain) throw e
+            if ((e as { status?: number }).status !== 404) throw e
             endpoint.responses = false
             log.warn('the LLM server has no Responses API (404) - using Chat Completions for the rest of the run')
             chat = await openChat(endpoint, prompt)
@@ -307,7 +306,7 @@ async function openChat(endpoint: Endpoint, prompt: ResponseCreateParamsStreamin
             model: prompt.model!,
             messages: [
                 ...(prompt.instructions ? [{role: 'system' as const, content: prompt.instructions}] : []),
-                {role: 'user' as const, content: prompt.input as string},
+                {role: 'user' as const, content: chatContent(prompt.input)},
             ],
             ...(prompt.max_output_tokens ? {max_tokens: prompt.max_output_tokens} : {}),
             ...(prompt.reasoning?.effort ? {reasoning_effort: prompt.reasoning.effort as 'low'} : {}),
@@ -537,4 +536,13 @@ export async function askJson<T>(options: AskOptions): Promise<T> {
     }
     log.box('Unparsable answer', answer)
     throw new Error(`LLM did not answer with valid JSON: ${(error as Error).message}`)
+}
+
+// the one user message of ask() - text, or text and pictures - as Chat Completions content
+function chatContent(input: ResponseCreateParamsStreaming['input']) {
+    if (typeof input === 'string' || !input) return input as string
+    const parts = (input[0] as { content: { type: string, text?: string, image_url?: string }[] }).content
+    return parts.map(part => part.type === 'input_text'
+        ? {type: 'text' as const, text: part.text!}
+        : {type: 'image_url' as const, image_url: {url: part.image_url!}})
 }
