@@ -1,5 +1,5 @@
 import {OpenAI} from "openai/client";
-import type {ResponseCreateParamsStreaming} from "openai/resources/responses/responses";
+import type {ResponseCreateParamsStreaming, ResponseStreamEvent} from "openai/resources/responses/responses";
 import {currentStep, readTimings, recordTiming} from "./timings.ts";
 import {predictLlmSeconds} from "./predict.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
@@ -17,6 +17,8 @@ type Endpoint = {
     modelId?: Promise<string>,
     // whether the server takes a JSON schema on Chat Completions (see openChat)
     chatSchema?: boolean,
+    // false once the server answered the Responses API with 404 - it only has Chat Completions (see fetchAndDisplayResponse)
+    responses?: boolean,
     // checked once, on the first call with a picture
     vision?: Promise<void>,
 }
@@ -218,7 +220,19 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
         return styles.muted(`waiting for model${expected ? ` (usually ~${formatDuration(expected * 1000)})` : ''}`)
     })
     try {
-        const chat = schema && endpoint.chatSchema !== false && typeof prompt.input === 'string' ? await openChat(endpoint, prompt, schema) : undefined
+        const plain = typeof prompt.input === 'string'
+        let chat = schema && endpoint.chatSchema !== false && plain ? await openChat(endpoint, prompt, schema) : undefined
+        let events: AsyncIterable<ResponseStreamEvent> | undefined
+        if (!chat && endpoint.responses === false && plain) chat = await openChat(endpoint, prompt)
+        else if (!chat) try {
+            events = await getClient(endpoint).responses.create(prompt)
+        } catch (e) {
+            // a server with Chat Completions only (a proxy in front of the model) does not know /responses
+            if ((e as { status?: number }).status !== 404 || !plain) throw e
+            endpoint.responses = false
+            log.warn('the LLM server has no Responses API (404) - using Chat Completions for the rest of the run')
+            chat = await openChat(endpoint, prompt)
+        }
         if (chat) for await (const chunk of chat) {
             const delta = chunk.choices[0]?.delta as { content?: string | null, reasoning_content?: string | null, reasoning?: string | null } | undefined
             thinking += delta?.reasoning_content ?? delta?.reasoning ?? ''
@@ -235,7 +249,7 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
                 output_tokens_details: {reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens},
             }
         }
-        else for await (const event of await getClient(endpoint).responses.create(prompt)) {
+        else if (events) for await (const event of events) {
             switch (event.type) {
                 case 'response.reasoning_text.delta':
                 case 'response.reasoning_summary_text.delta':
@@ -284,9 +298,9 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
 
 /**
  * The same request on the Chat Completions API, with the schema as response_format - undefined (and the plain way for the
- * rest of the run) when the server refuses it.
+ * rest of the run) when the server refuses it. Without a schema, errors are thrown.
  */
-async function openChat(endpoint: Endpoint, prompt: ResponseCreateParamsStreaming, schema: JsonSchema) {
+async function openChat(endpoint: Endpoint, prompt: ResponseCreateParamsStreaming, schema?: JsonSchema) {
     const extra = prompt as ResponseCreateParamsStreaming & { chat_template_kwargs?: unknown }
     try {
         const stream = await getClient(endpoint).chat.completions.create({
@@ -298,13 +312,14 @@ async function openChat(endpoint: Endpoint, prompt: ResponseCreateParamsStreamin
             ...(prompt.max_output_tokens ? {max_tokens: prompt.max_output_tokens} : {}),
             ...(prompt.reasoning?.effort ? {reasoning_effort: prompt.reasoning.effort as 'low'} : {}),
             ...(extra.chat_template_kwargs ? {chat_template_kwargs: extra.chat_template_kwargs} : {}),
-            response_format: {type: 'json_schema', json_schema: {name: 'answer', strict: true, schema}},
+            ...(schema ? {response_format: {type: 'json_schema', json_schema: {name: 'answer', strict: true, schema}}} : {}),
             stream: true,
             stream_options: {include_usage: true},
         } as Parameters<OpenAI['chat']['completions']['create']>[0] & { stream: true })
-        endpoint.chatSchema = true
+        if (schema) endpoint.chatSchema = true
         return stream
     } catch (e) {
+        if (!schema) throw e
         const status = (e as { status?: number }).status
         if (endpoint.chatSchema === true || !status || status >= 500) throw e
         endpoint.chatSchema = false
