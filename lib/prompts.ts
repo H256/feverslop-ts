@@ -450,7 +450,7 @@ ${LOCATION_VIEWS.map((v, n) => `${n}: ${v}`).join('\n')}
 Write the fixed layout of the place, so that every scene there is staged in the same room and every view shows the same place.
 
 Answer only with JSON: {"layout": "...", "views": ["...", "...", "...", "...", "..."]}
-- "layout": 3-5 sentences, the floor plan as seen from the camera of view 0: what is at the back, on the left, on the right and behind the camera, where the entrances are, where the light comes from, and how big the place is. Only what the picture shows, and where it does not show a side, what fits it plainly - nothing that moves, no people.
+- "layout": 3-5 sentences, the floor plan as seen from the camera of view 0: what is at the back, on the left, on the right and behind the camera, where the entrances are, where the light comes from, and how big the place is. Name each wall or side also by what is on it (the window wall, the door wall), so that a shot from another side can still point to it. Only what the picture shows, and where it does not show a side, what fits it plainly - nothing that moves, no people.
 - "views": five entries, one per view above, in order: one sentence each with what that view shows of the layout - which features are in it, on which side of its frame.
 
 Place: ${name}
