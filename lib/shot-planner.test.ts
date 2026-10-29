@@ -43,6 +43,22 @@ describe('asked again: only the calls whose shots have a problem', () => {
     })
 })
 
+describe('people walk forward, not backwards (#412)', () => {
+    const {instructions} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+    test('a walk names its direction to the camera, and only a short one leads away from it with the face visible', () => {
+        expect(instructions).toContain('gets the direction of the walk relative to THIS shot')
+        expect(instructions).toContain('Nobody walks backwards unless the beat itself says so')
+    })
+    test('no example or rule tells people to step back', () => {
+        expect(instructions).not.toMatch(/steps? back|gives a step back/)
+        expect(blockingPrompt(context, beat, undefined, undefined).instructions).not.toMatch(/steps? back/)
+    })
+    test('layout directions are tied to the first view in the staging and the blocking rules', () => {
+        expect(instructions).toContain('is fixed to the camera of its first view')
+        expect(blockingPrompt(context, beat, undefined, undefined).instructions).toContain('is fixed to the camera of its first view')
+    })
+})
+
 describe('the planner sees what the pictures show', () => {
     test('the descriptions of the place and of the people of the beat are in the input', () => {
         const {input} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
