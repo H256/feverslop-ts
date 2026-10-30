@@ -12,11 +12,12 @@ export async function readInput(dir: string, name: string) {
     return existsSync(file) ? (await Bun.file(file).text()).trim() : ''
 }
 
-/** The song a project uses: input/song.wav, else a hand-supplied input/song.mp3 - song.wav when there is neither (yet). */
+/** The song a project uses: input/song.wav, else a hand-supplied input/song.mp3 or song.flac - song.wav when there is none (yet). */
 export function songFileOf(dir: string) {
     const wav = join(dir, 'input', 'song.wav')
     const mp3 = join(dir, 'input', 'song.mp3')
-    return existsSync(wav) ? wav : existsSync(mp3) ? mp3 : wav
+    const flac = join(dir, 'input', 'song.flac')
+    return existsSync(wav) ? wav : existsSync(mp3) ? mp3 : existsSync(flac) ? flac : wav
 }
 
 export async function projectInputs(dir: string, config: ProjectConfig): Promise<Record<string, TrackedInput>> {

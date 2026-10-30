@@ -177,7 +177,7 @@ Every song is a project folder:
 ```
 projects/<project-id>/
   input/
-    song.wav          required (or song.mp3), unless generated with --render=song (see Generating the song)
+    song.wav          required (or song.mp3, song.flac), unless generated with --render=song (see Generating the song)
     lyrics.txt        lyrics with section tags: [Intro], [Verse 1], [Chorus], ... and a blank line between sections
                       (see lyrics.txt below) - required, unless generated
     idea.txt          the song idea for --render=song - required for it unless lyrics.txt is given, otherwise unused
@@ -237,7 +237,7 @@ built on it (and everything built on those):
 |-------------------------------|-------------------------------------|
 | `idea.txt`                    | `songStyle`                         |
 | `music-style.txt`             | `songStyle`                         |
-| `song.wav`/`song.mp3`         | `music`, `stems`                    |
+| `song.wav`/`.mp3`/`.flac`     | `music`, `stems`                    |
 | `lyrics.txt`                  | `story`, `transcript`, `singing`, `songStyle` |
 | `story-idea.txt`              | `story`                             |
 | `style.txt`                   | `lookBrief`                         |

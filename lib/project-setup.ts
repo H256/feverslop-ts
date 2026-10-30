@@ -5,7 +5,7 @@ import {join} from "node:path";
 import type {ProjectConfig} from "./config.ts";
 
 export type ProjectSeed = {
-    songFile?: string // path to an existing audio file, copied in as input/song.wav or input/song.mp3
+    songFile?: string // path to an existing audio file, copied in as input/song.wav, input/song.mp3 or input/song.flac
     idea?: string      // input/idea.txt - a song idea for --render=song to write lyrics + generate audio from
     lyrics?: string    // input/lyrics.txt
     storyIdea?: string // input/story-idea.txt
@@ -47,7 +47,7 @@ export async function writeProject(id: string, seed: ProjectSeed) {
     const dir = projectDir(id)
     const input = (name: string) => join(dir, 'input', name)
     if (seed.songFile) {
-        const ext = seed.songFile.toLowerCase().endsWith('.mp3') ? 'mp3' : 'wav'
+        const ext = seed.songFile.toLowerCase().match(/\.(mp3|flac)$/)?.[1] ?? 'wav'
         await Bun.write(input(`song.${ext}`), Bun.file(seed.songFile))
     }
     if (seed.idea) await Bun.write(input('idea.txt'), seed.idea)

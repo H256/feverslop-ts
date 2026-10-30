@@ -36,7 +36,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/style
 import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
 import * as clack from "@clack/prompts";
 import {pictureProp, propMissing} from "./lib/prop-check.ts";
-import {projectInputs, stepUsed} from "./lib/inputs.ts";
+import {projectInputs, songFileOf, stepUsed} from "./lib/inputs.ts";
 import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
 import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
@@ -185,7 +185,7 @@ if (args['dry-run']) {
     process.exit(0)
 }
 const language = languageName(config.lyricsLanguage)!
-// --render=song always writes wav (see Renderer.renderSong); a hand-supplied song can be wav or mp3
+// --render=song always writes wav (see Renderer.renderSong); a hand-supplied song can be wav, mp3 or flac
 const generatedSongFile = project.input('song.wav')
 
 ////////// WRITING & GENERATING THE SONG - only with --render=song
@@ -236,10 +236,8 @@ if (render.has('song')) {
     }
 }
 
-// the song a user supplies by hand can be song.wav or song.mp3 in input/ - a generated one (above) is always wav
-const songFile = existsSync(generatedSongFile) ? generatedSongFile
-    : existsSync(project.input('song.mp3')) ? project.input('song.mp3')
-    : generatedSongFile
+// the song a user supplies by hand can be song.wav, song.mp3 or song.flac in input/ - a generated one (above) is always wav
+const songFile = songFileOf(project.dir)
 
 // re-read: the song block above may have just written lyrics.txt/music-style.txt for the first time
 const lyrics = await readInput('lyrics.txt')
@@ -287,7 +285,7 @@ if (project.data.stems && Object.values(project.data.stems).some(file => !exists
 if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('instrumentStems')
 
 ////////// ANALYZE THE SONG
-if (!existsSync(songFile)) throw new Error(`No song found at ${project.input('song.wav')} or ${project.input('song.mp3')}${idea || lyrics ? ` - run with --render=song to generate one from input/${idea ? 'idea.txt' : 'lyrics.txt'}` : ''}`)
+if (!existsSync(songFile)) throw new Error(`No song found at ${project.input('song.wav')}, ${project.input('song.mp3')} or ${project.input('song.flac')}${idea || lyrics ? ` - run with --render=song to generate one from input/${idea ? 'idea.txt' : 'lyrics.txt'}` : ''}`)
 const music = await project.step('music', '2 · ANALYZING THE SONG', async () => {
     log.step('Analyzing', styles.muted(`${songFile} - beats, bars and ${lyricSections.length} sections`))
     return analyzeSong(songFile, lyricSections.map(s => s.label))

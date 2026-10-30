@@ -9,6 +9,7 @@ import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {loadProjectConfig} from "../lib/config.ts";
 import {FPS, secondsAt} from "../lib/frames.ts";
+import {songFileOf} from "../lib/inputs.ts";
 import {log} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
@@ -32,8 +33,9 @@ if (!id || !projectExists(id) || !only.length || !models.length || !Number.isInt
 const dir = projectDir(id)
 const config = await loadProjectConfig(dir)
 const settings = await loadSettings({projectModel: config.llm.model, ...(args.comfy ? {comfy: args.comfy} : {})})
-// the song as index.ts finds it: generated or supplied as input/song.wav, or supplied as input/song.mp3
-const song = ['song.wav', 'song.mp3'].map(f => join(dir, 'input', f)).find(existsSync)
+// the song as index.ts finds it - undefined when there is none
+const songFile = songFileOf(dir)
+const song = existsSync(songFile) ? songFile : undefined
 
 using renderer = new Renderer(id, dir, config, settings.comfy)
 for (const clipId of only) {

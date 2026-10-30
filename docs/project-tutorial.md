@@ -31,7 +31,7 @@ The wizard asks, in order:
 
 1. **Project id** - the directory name, e.g. `rusty-crown-legend`
 2. **The song**
-   - an audio file → give the path to a `.wav`/`.mp3` file, it's copied to `input/song.wav`
+   - an audio file → give the path to a `.wav`/`.mp3`/`.flac` file, it's copied to `input/` as `song.wav`/`song.mp3`/`song.flac`
    - generate it from a song idea → type the idea (or read it from a file); the LLM writes the lyrics
    - generate it from your own lyrics → type them (or read them from a file); they are set to music as they are
 

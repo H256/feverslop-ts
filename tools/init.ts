@@ -19,7 +19,7 @@ cli('init')
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
     log.error(`No terminal to ask in - create projects/<id>/input/ by hand instead:
-  input/song.wav or song.mp3      a song you already have
+  input/song.wav, .mp3 or .flac   a song you already have
   input/idea.txt                  or a song idea, for: bun index.ts <id> --render=song (lyrics.txt alone works too)
   input/lyrics.txt and/or input/story-idea.txt   at least one, unless idea.txt writes the lyrics for you
   input/style.txt                 optional visual style - see docs/style-examples.md (picked from the list if missing)
@@ -106,7 +106,7 @@ const steps: Record<string, Step> = {
                 message: 'The song',
                 initialValue: a.songSource,
                 options: [
-                    {value: 'file' as const, label: 'I have it as an audio file', hint: 'wav or mp3'},
+                    {value: 'file' as const, label: 'I have it as an audio file', hint: 'wav, mp3 or flac'},
                     {value: 'idea' as const, label: 'Generate it from a song idea', hint: 'the LLM writes the lyrics'},
                     {value: 'lyrics' as const, label: 'Generate it from my own lyrics', hint: 'set to music as they are'},
                 ],
@@ -114,11 +114,11 @@ const steps: Record<string, Step> = {
             a.songFile = a.idea = a.ownLyrics = a.musicStyle = undefined
             if (hasSong()) {
                 a.songFile = answer(await p.text({
-                    message: 'Path to the audio file (wav or mp3)',
+                    message: 'Path to the audio file (wav, mp3 or flac)',
                     validate: value => {
                         if (!value) return 'required'
                         if (!existsSync(value)) return 'file not found'
-                        if (!/\.(wav|mp3)$/i.test(value)) return 'must be .wav or .mp3'
+                        if (!/\.(wav|mp3|flac)$/i.test(value)) return 'must be .wav, .mp3 or .flac'
                     },
                 }))
                 return
