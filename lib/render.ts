@@ -553,7 +553,7 @@ export class Renderer implements Disposable {
             // unseparated song goes up too, always - MiniMaxH3AddGuide locks it into the AV latent so every
             // instrument gets some real audio grounding, not just the isolated tracks a character's own prop
             // happens to need (an idle instrument otherwise has no audio backing its idle prompt text at all).
-            // song can be a hand-supplied song.mp3 as well as the usual wav - keep its real extension on upload,
+            // song can be a hand-supplied song.mp3 or song.flac as well as the usual wav - keep its real extension on upload,
             // LoadAudio needs it to demux correctly
             const songRemote = `${this.remoteDir}/stems/song${extname(stemFiles.song!)}`
             const uploads = [
