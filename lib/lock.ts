@@ -4,7 +4,7 @@ import {join} from "node:path";
 // Every save writes the whole project.json from the state the run loaded: two runs on one project would silently drop
 // each other's steps. So a run that writes holds a lock file with its process id for as long as it lives.
 
-const alive = (pid: number) => {
+export const processAlive = (pid: number) => {
     try {
         process.kill(pid, 0)
         return true
@@ -28,7 +28,7 @@ export function lockProject(dir: string, what: string): () => void {
         } catch (e) {
             if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
             const holder = Number(readFileSync(file, 'utf8').trim())
-            if (Number.isInteger(holder) && holder !== process.pid && alive(holder)) {
+            if (Number.isInteger(holder) && holder !== process.pid && processAlive(holder)) {
                 throw new Error(`${what} is being worked on by another run (process ${holder}) - wait for it to finish; if it is not running any more, delete ${file}`)
             }
             rmSync(file, {force: true})

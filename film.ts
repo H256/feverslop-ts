@@ -30,6 +30,7 @@ import type {AssetKind} from "./lib/asset-import.ts";
 import {castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
 import {lockProject} from "./lib/lock.ts";
+import {beginRun} from "./lib/run-record-view.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
 import {briefPrompt, castPrompt, coveragePrompt, fountainAnnotatePrompt, propsPrompt, outlinePrompt, screenplayParsePrompt, screenplayWritePrompt, locationViewsPrompt, scriptFixPrompt, scriptNotesPrompt, stateLookPrompt, styleChoicePrompt, summaryPrompt} from "./lib/film/prompts.ts";
 import {namedByScene} from "./lib/film/names.ts";
@@ -105,7 +106,10 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
 const film = new FilmStore(filmId!)
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
-if (!args['dry-run']) lockProject(film.dir, `film ${film.id}`)
+if (!args['dry-run']) {
+    lockProject(film.dir, `film ${film.id}`)
+    beginRun(film.dir, 'film.ts')
+}
 await film.load()
 // --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
 const sceneIds = new Set(args.scenes.split(',').filter(Boolean))

@@ -13,6 +13,7 @@ import {clipChains, renderAll} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
+import {beginRun} from "./lib/run-record-view.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {playingCases, playingIssues} from "./lib/playing-check.ts";
@@ -138,7 +139,10 @@ if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${proje
 await project.load()
 if (!args['dry-run']) keepTimingsIn(project.dir)
 // everything this run prints, also into the project (the terminal may show less of it) - not for a run that only reads
-if (!args.gallery && !args['dry-run']) keepLogIn(join(project.dir, 'logs', `${versionStamp()}.log`))
+if (!args.gallery && !args['dry-run']) {
+    keepLogIn(join(project.dir, 'logs', `${versionStamp()}.log`))
+    beginRun(project.dir, 'index.ts')
+}
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
