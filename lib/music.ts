@@ -5,7 +5,7 @@ import type {Assignment, Character, InstrumentStems, LyricSection, LyricsTiming,
 import {refineSections, slotVocals} from "./lyrics.ts";
 import {formatTime, round} from "./frames.ts";
 import {log} from "./log.ts";
-import {runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
+import {lastLines, runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 
 /**
  * "[Verse 1]\n[Low, gravelly vocals]\nline\nline" -> [{label: 'Verse 1', notes: ['Low, gravelly vocals'], lines: [...]}]
@@ -134,8 +134,8 @@ export function activityRanges(power: number[], hopSec: number, barSec: number):
 // progress (and the model downloads on first use) are shown as they happen, stdout is the result
 async function runVocalsTool(args: string[], what: string) {
     return runProcess(['uv', 'run', 'tools/vocals.py', ...args], {
-        stderr: 'inherit',
-        errorMessage: () => `${what} failed (tools/vocals.py ${args[0]}) - see the output above`,
+        stderr: 'tee',
+        errorMessage: stderr => [`${what} failed (tools/vocals.py ${args[0]}):`, ...lastLines(stderr)].join('\n'),
     })
 }
 
