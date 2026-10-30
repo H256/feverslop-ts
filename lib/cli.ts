@@ -1,3 +1,4 @@
+import {helpDetails} from "./cli-help.ts";
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts';
 
 // Shared options are consumed before each tool's own parser. Never inspect values after `--`.
@@ -34,7 +35,7 @@ export function cli(command: string) {
     const end = original.indexOf('--')
     const options = end < 0 ? original : original.slice(0, end)
     if (options.includes('--help') || options.includes('-h')) {
-        log.info(`${styles.name(command)} — ${spec.description}\n\nUsage: ${usage}\n\nCommon options:\n  -h, --help     Show help without starting work\n  -v, --verbose  Show cached and detailed output\n      --debug    Show stack traces for failures\n      --quiet    Hide human output; keep warnings, errors and prompts\n      --banner   Show the large terminal banner\n\nSee docs/cli.md for output modes and recovery.`)
+        log.info(`${styles.name(command)} — ${spec.description}\n\nUsage: ${usage}${helpDetails(command)}\n\nCommon options:\n  -h, --help     Show help without starting work\n  -v, --verbose  Show cached and detailed output\n      --debug    Show stack traces for failures\n      --quiet    Hide human output; keep warnings, errors and prompts\n      --banner   Show the large terminal banner\n\nSee docs/cli.md for output modes and recovery.`)
         process.exit(0)
     }
     const common = new Set(['--verbose', '-v', '--debug', '--quiet', '--banner'])
