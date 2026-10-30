@@ -32,4 +32,6 @@ bun run init --banner
 
 On a pipeline failure, completed outputs remain available. Correct the reported cause and repeat the command to reuse completed steps. Use `bun run status <project>` to inspect missing/stale outputs before changing redo or refresh flags. `--debug` adds a stack trace; the error also links the full run log when one is open.
 
+A run that writes keeps its command and how it ended in `<project>/logs/last-run.json`, with `--llm-key` left out. When renders fail, the error names each one and the command to repeat. `status` (and `lastRun` in `status --json`) and the next run say when the last run failed or ended without a result - it was stopped or crashed.
+
 Contributor convention: use `log.step`/`log.line` for step details, `log.info` for unconditional human content, `log.warn`/`log.error` for diagnostics, `log.output`/`log.next` for artifacts and actionable commands, and `log.json` exclusively for machine output. Keep Clack for interactive input rather than parallel logging APIs. Common options are consumed before tool-specific parsing; `--` ends common-option handling.

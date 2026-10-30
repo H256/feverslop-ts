@@ -1,6 +1,7 @@
 import {closeSync, mkdirSync, openSync, writeSync} from "node:fs";
 import {dirname} from "node:path";
 import {format, stripVTControlCharacters, styleText} from "node:util";
+import {noteRunError} from "./run-record.ts";
 
 type Format = Parameters<typeof styleText>[0]
 export const style = (format: Format) => (text: string) => process.env.NO_COLOR !== undefined || !process.stdout.isTTY ? text : styleText(format, text)
@@ -195,7 +196,10 @@ export const log = {
     ]),
     /** Any other uncaught runtime failure (a rejected step, a missing file, ...) - the same loud red box, just
      * without a usage line, instead of Bun's raw stack-trace dump. */
-    fatal: (message: string): never => errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}]),
+    fatal: (message: string): never => {
+        noteRunError(message)
+        return errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}])
+    },
 }
 
 /**

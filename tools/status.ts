@@ -19,6 +19,8 @@ import {filmRenderConfig} from "../lib/film/pictures.ts";
 import {filmRenderState} from "../lib/film/render.ts";
 import {filmExists} from "../lib/film/setup.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore} from "../lib/film/store.ts";
+import {lastRun, runState} from "../lib/run-record.ts";
+import {lastRunLines} from "../lib/run-record-view.ts";
 cli('status')
 
 
@@ -37,6 +39,7 @@ type Next = { command: string, why: string, estimate?: string }
 // what is printed, of a music video's project or of a film
 type Status = {
     id: string,
+    dir: string,
     changed: { name: string, steps: string[] }[],
     notes: [string, string][],      // more lines under the changed inputs: label, text
     steps: { step: string, state: StepState }[],
@@ -89,7 +92,7 @@ async function projectStatus(id: string): Promise<Status> {
         clips: clips => clipEstimate(clips, config, servers),
     }, 'final video')
     return {
-        id: project.id, changed, steps, render, next,
+        id: project.id, dir: project.dir, changed, steps, render, next,
         notes: lostStems.map(step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`]),
         json: {project: project.id},
     }
@@ -118,7 +121,7 @@ async function filmStatus(id: string): Promise<Status> {
         pictures: count => pictureEstimate(count, renderConfig, servers),
         clips: clips => clipEstimate(clips, renderConfig, servers),
     }, 'film')
-    return {id: film.id, changed, steps, render, next, notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')]], json: {film: film.id}}
+    return {id: film.id, dir: film.dir, changed, steps, render, next, notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')]], json: {film: film.id}}
 }
 
 if (args.film) {
@@ -131,13 +134,15 @@ if (args.film) {
     log.usageError(`${id ? `No project "${id}" in projects/` : 'Which project?'} - the projects here are: ${projects.join(', ')}`, usage)
 }
 
-const {changed, notes, steps, render, next, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)
+const {dir, changed, notes, steps, render, next, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)
 const {pictures, missingPictures, clips, missingClips, staleClips, finalVideo, finalState} = render
 const finalLabel = args.film ? 'Film' : 'Final video'
+const run = lastRun(dir)
 
 if (args.json) {
     log.json({
         ...json,
+        lastRun: run ? {...run, state: runState(run)} : null,
         changedInputs: changed,
         steps,
         pictures: {total: pictures.length, missing: missingPictures.map(p => p.id)},
@@ -163,6 +168,11 @@ log.section('RENDERS')
 log.step('Pictures', pictures.length ? `${pictures.length - missingPictures.length} of ${pictures.length} rendered${missingPictures.length ? styles.muted(` - missing: ${missingPictures.map(p => p.id).join(', ')}`) : ''}` : styles.muted('no plan yet'))
 log.step('Clips', clips.length ? `${clips.length - missingClips.length} of ${clips.length} rendered${staleClips.length ? styles.warning(` · ${staleClips.length} stale: ${staleClips.map(c => c.id).join(', ')}`) : ''}` : styles.muted('no plan yet'))
 log.step(finalLabel, finalState === 'missing' ? styles.muted('not assembled yet') : finalState === 'current' ? finalVideo : styles.warning(`${finalVideo} - older than its clips`))
+
+if (run && runState(run) !== 'finished') {
+    log.section('LAST RUN')
+    for (const line of lastRunLines(run)) log.line(line)
+}
 
 log.section('NEXT')
 if (next.command) {
