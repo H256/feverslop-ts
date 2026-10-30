@@ -1,3 +1,4 @@
+import {nameService} from "./service-error.ts";
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
 import {basename, dirname, extname, join, posix} from "node:path";
@@ -801,7 +802,7 @@ export class Renderer implements Disposable {
                     again = resume = true
                     log.warn(`${label}: ${failure.message.slice(0, 160)} - asking ${server.name} again (${timeouts}/2)`)
                 }
-                if (!again) throw e
+                if (!again) throw nameService(failure, `${label} on ${server.name} (${server.url})`, label)
             } finally {
                 this.release(server)
                 this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)

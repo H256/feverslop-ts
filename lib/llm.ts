@@ -1,6 +1,7 @@
 import {OpenAI} from "openai/client";
 import type {ResponseCreateParamsStreaming, ResponseStreamEvent} from "openai/resources/responses/responses";
 import {currentStep, readTimings, recordTiming} from "./timings.ts";
+import {nameService} from "./service-error.ts";
 import {predictLlmSeconds} from "./predict.ts";
 import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from "./log.ts";
 import type {VisionSettings} from "./settings.ts";
@@ -405,7 +406,7 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
                 throw new Error(`${await getModelId(endpoint)} on ${endpoint.url} took no picture (${(e as Error).message}) - ${visionHint(endpoint)}`)
             }
             // only the first cut-off gets a second chance - after that the answer is too long for the model, not just unlucky
-            if (!(e instanceof TruncatedError) || i !== 0) throw e
+            if (!(e instanceof TruncatedError) || i !== 0) throw nameService(e, `LLM ${endpoint.url}, ${[currentStep(), label].filter(Boolean).join(' ') || 'a call'}`, endpoint.url)
             log.warn(`${of}${e.message} - asking again with ${attempts[1]!.limit} and a shorter-thinking prompt`)
         }
     }
