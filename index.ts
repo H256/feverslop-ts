@@ -3,7 +3,7 @@ import slugify from "slugify";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
-import {keepTimingsIn, recordTiming, runTimings} from "./lib/timings.ts";
+import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from "./lib/llm.ts";
 import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
@@ -38,7 +38,7 @@ import {listProjects, projectExists, validProjectId} from "./lib/project-setup.t
 import * as clack from "@clack/prompts";
 import {pictureProp, propMissing} from "./lib/prop-check.ts";
 import {projectInputs, songFileOf, stepUsed} from "./lib/inputs.ts";
-import {clipEstimate, pictureEstimate, renderState} from "./lib/render-state.ts";
+import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
 import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
 import {type LibraryAsset, libraryDir} from "./lib/library.ts";
@@ -1160,6 +1160,7 @@ if (render.has('images') || render.has('videos')) {
         }
         const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, 'videos', `${c.id}.mp4`)))
         log.step('Estimate', styles.muted(await clipEstimate(todoClips, config, settings.comfy.map(server => server.name))))
+        for (const risk of clipFailureRisks(readTimings(), todoClips, config.videoWorkflow, settings.comfy.map(server => server.name))) log.warn(risk)
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
         // the jobs an earlier run left queued on a server get it before any new clip does (#335) - the head of each chain
@@ -1283,6 +1284,7 @@ async function dryRun() {
         const only = new Set(args.only.split(',').filter(Boolean))
         const selected = state.clips.filter(c => !only.size || only.has(c.id))
         const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+        for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) log.warn(risk)
         log.step('Clips', todo.length ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
     }
     if (render.has('final')) log.step('Final video', state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'))

@@ -20,7 +20,8 @@ import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} 
 import type {PictureJob} from "./lib/render.ts";
 import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
-import {clipEstimate, pictureEstimate} from "./lib/render-state.ts";
+import {clipEstimate, clipFailureRisks, pictureEstimate} from "./lib/render-state.ts";
+import {readTimings} from "./lib/timings.ts";
 import {formatSlotRanges} from "./lib/assemble.ts";
 import {reviewed} from "./lib/review.ts";
 import {archiveClip} from "./lib/film/archive.ts";
@@ -548,6 +549,7 @@ if (render.has('images') || render.has('videos')) {
         const unknown = [...only].filter(id => !requests.some(r => r.id === id))
         if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
+        for (const risk of clipFailureRisks(readTimings(), selected.filter(c => args.again || !existsSync(join(film.dir, 'videos', `${c.id}.mp4`))), renderConfig.videoWorkflow, settings.comfy.map(server => server.name))) log.warn(risk)
         // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
         const renderClips = (clips: typeof requests) => renderAll(clipChains(clips), async chain => {
             for (const clip of chain) await renderer.renderFilmClip(clip, requests.find(r => r.id === clip.startsFrom))
@@ -672,6 +674,7 @@ async function dryRun() {
         const only = new Set(args.only.split(',').filter(Boolean))
         const selected = state.clips.filter(c => !only.size || only.has(c.id))
         const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+        for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) log.warn(risk)
         log.step('Clips', todo.length ? `${await clipEstimate(todo, renderConfig, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
     }
     if (render.has('final')) log.step('Film', state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'))
