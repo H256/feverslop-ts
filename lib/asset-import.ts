@@ -41,7 +41,8 @@ export function copyPlan(sourceDir: string, source: AssetLayout, target: AssetLa
     const files: string[] = []
     if (existsSync(join(sourceDir, source.picture))) files.push(source.picture)
     const walk = (rel: string) => {
-        for (const entry of readdirSync(join(sourceDir, rel))) {
+        // sorted: readdir gives the order of the file system, another one on every machine
+        for (const entry of readdirSync(join(sourceDir, rel)).sort()) {
             const path = `${rel}/${entry}`
             if (statSync(join(sourceDir, path)).isDirectory()) walk(path)
             else files.push(path)

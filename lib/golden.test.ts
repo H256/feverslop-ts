@@ -18,6 +18,7 @@ import {filmDefaults, loadFilmConfig} from "./film/config.ts";
 import {filmRenderConfig} from "./film/pictures.ts";
 import {FilmRenderer, filmClipFingerprint, startedOnContext} from "./film/render.ts";
 import {Renderer} from "./render.ts";
+import * as provenance from "./provenance.ts";
 import {clipSpec, filmClipSpec, specId} from "./render-spec.ts";
 
 // Golden tests: what the music video sends to ComfyUI and to ffmpeg, its config, and the fingerprints of its files, recorded
@@ -295,6 +296,16 @@ function recording<T extends new (...args: any[]) => Renderer>(Base: T) {
 const servers = [{name: 'stand-in', url: 'http://127.0.0.1:9'}]
 
 describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
+    // What ffmpeg writes differs by bit from one build to the next, and every fingerprint built on it with it. Its files
+    // count by their path in the project here - that still shows which file a fingerprint is built on. The fixtures (text) by their content.
+    const {fileFingerprint} = provenance
+    let fingerprints: ReturnType<typeof spyOn>
+    beforeAll(() => {
+        fingerprints = spyOn(provenance, 'fileFingerprint').mockImplementation((path: string) =>
+            existsSync(path) && readFileSync(path).includes(0) ? Bun.hash(path.slice(dir.length).replaceAll('\\', '/').replace(/^\/[^/]+\//, '')).toString(16) : fileFingerprint(path))
+    })
+    afterAll(() => fingerprints.mockRestore())
+
     async function musicRun(name: string, config: Partial<RenderConfig>) {
         const projectDir = folder(`music-${name}`, {
             'assets/locations/hall.png': 'hall', 'assets/characters/ann.png': 'ann', 'assets/characters/bo.png': 'bo',
@@ -470,7 +481,9 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
         })
         // the 48 fps film runs as long as the one at 24: 36 + 40 - 1 frames, twice
         expect(result.smooth.frames).toBe(150)
-        expect(portable({result, jobs: renderer.jobs, ffmpeg: calls})).toMatchSnapshot()
+        // the clips are interpolated side by side, their jobs come in the order they happen to start
+        const jobs = renderer.jobs.toSorted((a, b) => a.target.localeCompare(b.target))
+        expect(portable({result, jobs, ffmpeg: calls})).toMatchSnapshot()
     }, 60_000)
 
     test('film: the clips joined, with and without level matching', async () => {
@@ -481,6 +494,8 @@ describe.skipIf(!ffmpegAvailable)('rendering and joining, with ffmpeg', () => {
             plain: await assembleFilm({clips, projectDir, target: join(projectDir, 'film.mp4')}),
             levelled: await assembleFilm({clips, projectDir, target: join(projectDir, 'film-levelled.mp4'), levelMatching: true}),
         }))
-        expect(portable({result, ffmpeg: calls})).toMatchSnapshot()
+        // the gain is measured on the sound ffmpeg encoded, so its last digits differ by build - whole dB here
+        const wholeDb = calls.map(cmd => cmd.map(arg => arg.replace(/volume=(-?[\d.]+)dB/g, (_, db: string) => `volume=${Math.round(Number(db))}dB`)))
+        expect(portable({result, ffmpeg: wholeDb})).toMatchSnapshot()
     }, 60_000)
 })
