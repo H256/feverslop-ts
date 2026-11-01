@@ -26,7 +26,7 @@ import {formatSlotRanges} from "./lib/assemble.ts";
 import {reviewed} from "./lib/review.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {versionStamp} from "./lib/archive.ts";
-import {clipChains} from "./lib/batch.ts";
+import {clipChains, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import type {AssetKind} from "./lib/asset-import.ts";
 import {castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
@@ -556,15 +556,10 @@ if (render.has('images') || render.has('videos')) {
         })
         // on request, and only for the clips named: they are put away in old/attempts/ and rendered again, with a new seed
         if (args.again) {
-            if (config.seed !== -1) log.warn(`"seed" is ${config.seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)
+            warnFixedSeed(config.seed)
             const stamp = versionStamp()
             for (const clip of selected) log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${archiveClip(film.dir, clip.id, stamp)}`)}`)
-            // a clip that goes on from the last frame of one of these starts on a picture that no longer exists
-            const later = new Set<string>()
-            for (const clip of selected) {
-                for (let next = requests.find(c => c.startsFrom === clip.id); next; next = requests.find(c => c.startsFrom === next!.id)) if (!selected.includes(next)) later.add(next.id)
-            }
-            if (later.size) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
+            warnClipsGoingOn(selected, requests)
         }
         await renderClips(selected)
 
