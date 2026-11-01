@@ -867,7 +867,8 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
 - **Projects**: how far each one is, what its last run did, and what comes next. Pages, a search over all of them and filters by kind and state; the takes of one thing fold into one card. All of it is in the address, so *Back* from a project lands in the same place.
 - **Render servers**: on every page, how busy each one is. Before a render you choose which ones it may use; it is the same as `--comfy=`.
 - **Timeline**: the whole video on one timeline with sections or scenes, sound, clips with their shots, and sung or spoken lines; every clip playable in place with its prompt, shots and references next to it. A final video newer than its clips is played as it is, otherwise the clips one by one. Clips with something against them are flagged: missing, stale, failed in the last run, a grey backdrop (`Scan for backdrops`).
-- **A clip**: render it again with the estimate before the click, render one shot or part of it, compare and pick versions, make a preview.
+- **A clip**: render it again with the estimate before the click, render one shot or part of it, compare and pick versions, make a preview. After a render the old and the new one open side by side.
+- **Several clips**: Ctrl or Shift click marks clips on the timeline, to render them together. During a run every block says waiting, rendering or done. *Review* goes through the marked clips, else the flagged ones, one by one with keys. `?` shows all keys and what the words mean.
 - **References**: every picture with its prompt, sheet, older versions and the clips that use it: a new sheet from the same anchor, a new anchor, an edited prompt (the picture then stays pinned), or into the library.
 - **Casting**: `casting.json` as a page. A choice changes that one entry; the next plan run takes the asset.
 - **Library**: the asset library, who uses what, a new asset from a picture.

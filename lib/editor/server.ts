@@ -17,6 +17,7 @@ import {filmDir, filmExists} from "../film/setup.ts";
 import {filmIds, readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
+import {runProgress} from "./progress.ts";
 import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
@@ -259,6 +260,12 @@ export function editorHandler(runs = new RunControl()) {
                     return json({peaks: await waveforms.get(key) ?? null})
                 }
                 if (what === 'run') return json({run: runs.current(target) ?? null})
+                if (what === 'progress') {
+                    const current = runs.current(target)
+                    if (!current?.running) return json({progress: null})
+                    const requests = await readClipRequests<{ id: string }>(target.dir)
+                    return json({progress: runProgress(target.dir, current.command, current.startedAt ? Date.parse(current.startedAt) : 0, requests.map(clip => clip.id)) ?? null})
+                }
                 if (what === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
                 if (what === 'versions' && id) {
                     const current = await clipRequestId(target, id)

@@ -10,6 +10,7 @@ import {plainText} from "../refs.ts";
 import {clipFingerprint, pictureFingerprint, type PictureJob} from "../render.ts";
 import {type FinalState, finalStateOf, readClipRequests, readPictureJobs} from "../render-state.ts";
 import {lastRun, type RunState, runState} from "../run-record.ts";
+import {explainFailure, type Explained} from "./progress.ts";
 import {asBeatShots} from "../shot-plan.ts";
 import type {FilmClipRequest} from "../film/compose.ts";
 import {loadFilmConfig} from "../film/config.ts";
@@ -71,7 +72,7 @@ export type EditorProject = {
     final: { state: FinalState, file?: string, v?: number },
     previewVideo?: { file: string, v: number },
     finals: EditorFinal[],      // every finished video there is of it: the final one, finished, at another frame rate
-    lastRun?: { state: RunState, command: string, startedAt: string, failures: string[] },
+    lastRun?: { state: RunState, command: string, startedAt: string, failures: string[], explained: Explained[] },
     command: string,            // how this project is run, for the commands the page shows
 }
 
@@ -162,7 +163,11 @@ const finalOf = (dir: string, id: string, clips: { id: string }[]): EditorProjec
 
 const lastRunOf = (dir: string): EditorProject['lastRun'] => {
     const run = lastRun(dir)
-    return run ? {state: runState(run), command: run.command, startedAt: run.startedAt, failures: run.failures ?? (run.error ? [run.error] : [])} : undefined
+    if (!run) return undefined
+    const failures = run.failures ?? (run.error ? [run.error] : [])
+    // one explanation of each kind: forty clips out of memory are one thing to do
+    const explained = [...new Map(failures.flatMap(failure => explainFailure(failure) ?? []).map(found => [found.text, found])).values()]
+    return {state: runState(run), command: run.command, startedAt: run.startedAt, failures, explained}
 }
 
 type Scan = { clips?: Record<string, { video: number, from: number, to: number, samples: number }> }
