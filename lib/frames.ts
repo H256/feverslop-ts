@@ -9,6 +9,14 @@ export const secondsAt = (frame: number) => frame / FPS
 export const round = (n: number) => Math.round(n * 1000) / 1000
 
 /**
+ * Hardware limit: the longest clip the video model can generate in one go, for the music video and the film alike. Set a
+ * little below the real limit - the H3 node only renders 5 + 17·k frames, so every clip is rounded up to the next such
+ * length at render time (up to 16 extra frames / 0.67s, see docs/comfyui.md) - a clip targeted at exactly the real limit
+ * can still render over it.
+ */
+export const MAX_CLIP_SEC = 10 - 17 / FPS
+
+/**
  * Context frames (config.contextFrames): the frame batch of the clip before ends this many frames before that clip's end,
  * and these frames are rendered again and cut off with the head. The first frames the model draws after the batch flash
  * brighter (tides slot-014: two frames at 86 against 81 before and 77 after) - they fall into the part that is cut off.

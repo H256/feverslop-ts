@@ -30,7 +30,7 @@ import {freshness} from "./lib/provenance.ts";
 import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
-import {FPS, formatTime, frameAt, maxClipFor, secondsAt} from "./lib/frames.ts";
+import {FPS, formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
@@ -55,12 +55,6 @@ cli('plan')
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
 
-
-// hardware limit: the longest clip the video model can generate in one go. Set a little below the real
-// limit - the H3 node only renders 5 + 17·k frames, so every clip is rounded up to the next such length at
-// render time (up to 16 extra frames / 0.67s, see docs/comfyui.md) - a clip targeted at exactly the real
-// limit can still render over it.
-const MAX_CLIP_SEC = 10 - 17 / FPS
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)

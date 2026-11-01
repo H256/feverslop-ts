@@ -1,5 +1,6 @@
 import {describe, expect, test} from "bun:test";
-import {CoverageProblem, MAX_CLIP_SEC, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
+import {MAX_CLIP_SEC} from "../frames.ts";
+import {CoverageProblem, packClips, splitLongShot, speakingSeconds, toCoverage} from "./coverage.ts";
 import {collapseEmptyScene, maxShotsFor, softProblems} from "./shot-checks.ts";
 import {characterOf, locationOf, missingDialogue, omittedSourceLines, speechSeconds, toCast, toScreenplay} from "./screenplay.ts";
 import {screenplayToFountain} from "./fountain.ts";

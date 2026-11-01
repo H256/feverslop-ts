@@ -1,5 +1,5 @@
 import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
-import {FPS, frameAt, round} from "../frames.ts";
+import {FPS, frameAt, MAX_CLIP_SEC, round} from "../frames.ts";
 import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
 import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
@@ -7,9 +7,6 @@ import type {Facing, FilmCast, FilmProp, Scene, SceneCoverage, Screenplay, Shot}
 
 const FACINGS: readonly string[] = ['left', 'right', 'camera', 'away']
 
-// The longest a clip can be: the video model renders 5 + 17·k frames and every clip is rounded up to such a length, so
-// it is set a little under 10 s - the same limit as the music-video pipeline's MAX_CLIP_SEC
-export const MAX_CLIP_SEC = 10 - 17 / FPS
 const MAX_SHOT_SEC = 8
 const MIN_SHOT_SEC = 2
 // a shot with more speech than this is cut into shots with a part of the line each - the video model is limited to ~10 s a clip
