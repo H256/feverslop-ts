@@ -25,7 +25,7 @@ const save = (file: string, record: RunRecord) => {
 
 /** The command as it can be typed again - with the key left out, this file and the log stay on disk. */
 export function commandLine(argv: string[]) {
-    return argv.map(arg => arg.startsWith('--llm-key=') ? '--llm-key=…' : /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg).join(' ')
+    return argv.map((arg, n) => arg.startsWith('--llm-key=') ? '--llm-key=…' : argv[n - 1] === '--llm-key' ? '…' : /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg).join(' ')
 }
 
 export function lastRun(dir: string): RunRecord | undefined {

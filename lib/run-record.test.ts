@@ -26,6 +26,9 @@ describe('commandLine', () => {
     test('leaves out the key and quotes what has spaces', () => {
         expect(commandLine(['bun', 'index.ts', 'x', '--llm-key=secret', '--comfy=a b'])).toBe('bun index.ts x --llm-key=… "--comfy=a b"')
     })
+    test('leaves out a key given as its own argument', () => {
+        expect(commandLine(['bun', 'index.ts', 'x', '--llm-key', 'secret', '--again'])).toBe('bun index.ts x --llm-key … --again')
+    })
 })
 
 test('a project without a record has no last run', () => {
