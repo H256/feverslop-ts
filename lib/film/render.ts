@@ -3,9 +3,12 @@ import {dirname, join} from "node:path";
 import {type RecommendedResolution, type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {extractFrame, probeVideo} from "../assemble.ts";
+import {secondsAt} from "../frames.ts";
 import {log, styles} from "../log.ts";
 import {CONTEXT_SETTLE} from "../compose.ts";
-import {Renderer, type RenderWhat} from "../render.ts";
+import {pictureFingerprint, Renderer, RETAKE_LEAD, type RenderWhat} from "../render.ts";
+import type {RetakeAsk} from "../retake.ts";
+import type {RenderSpec} from "../render-spec.ts";
 import {renderStateOf} from "../render-state.ts";
 import {type Freshness, freshness} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
@@ -58,6 +61,21 @@ export function startedOnContext(projectDir: string, id: string): boolean {
     }
 }
 
+/**
+ * Where each clip is in the film as it is assembled, in frames - not always where the plan has it: a clip with dialogue is used with
+ * every frame the model rendered, a clip that goes on from the one before leaves out the first frame, which is that one's last.
+ */
+export function filmClipSpans(projectDir: string, requests: { id: string, frames: number, dialogue: unknown[], startsFrom?: string }[]): { start: number, frames: number }[] {
+    let cursor = 0
+    return requests.map((clip, n) => {
+        const used = clip.dialogue.length ? renderedFramesOf(projectDir, clip.id) ?? clip.frames : clip.frames
+        const skipped = clip.startsFrom !== undefined && clip.startsFrom === requests[n - 1]?.id && !startedOnContext(projectDir, clip.id) ? 1 : 0
+        const span = {start: cursor, frames: used - skipped}
+        cursor += span.frames
+        return span
+    })
+}
+
 const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
 
 /**
@@ -65,6 +83,73 @@ const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.p
  * with the film workflow - pictures only, no audio goes in, the model speaks the dialogue itself.
  */
 export class FilmRenderer extends Renderer {
+    private filmJob(clip: FilmClipRequest, job: { prompt: string, frames: number, seed: number, startClip?: string, startFrame?: string, endFrame?: { image: string, at: number }, preview?: { scale: number, steps: number }, filenamePrefix: string, extraUploads?: { from: string, to: string }[] }, module: { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default> }) {
+        const uploads = [...clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`})), ...(job.extraUploads ?? [])]
+        const result = module.default({
+            prompt: job.prompt,
+            pictures: clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => `${this.remoteDir}/${p.file}`),
+            ...(job.startClip ? {startClip: job.startClip} : job.startFrame ? {startFrame: job.startFrame} : {}),
+            ...(job.endFrame ? {endFrame: job.endFrame} : {}),
+            ...(job.preview ? {preview: job.preview} : {}),
+            frames: job.frames,
+            seed: job.seed,
+            resolution: this.config.videoResolution,
+            aspect: this.config.videoAspect,
+            filenamePrefix: job.filenamePrefix,
+        })
+        return {result, uploads, meta: {seed: job.seed}}
+    }
+
+    private filmWorkflow() {
+        return import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as Promise<{ default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames, recommendedResolution?: RecommendedResolution }>
+    }
+
+    /** A clip as a cheap render into previews/ (--preview), with the model's own sound: see Renderer.renderClipPreview. */
+    async renderFilmPreview(clip: FilmClipRequest) {
+        const file = `previews/${clip.id}.mp4`
+        const target = join(this.projectDir, file)
+        if (existsSync(target)) return log.step('Exists', styles.muted(file))
+        const missing = clip.assets.pictures.filter(p => p.kind !== 'frame' && !existsSync(join(this.projectDir, p.file)))
+        if (missing.length) return log.warn(`${clip.id}: no preview - missing pictures: ${missing.map(p => p.file).join(', ')} - run --render=images`)
+        const start = clip.startsFrom ? await this.previewStart(clip.startsFrom) : undefined
+        if (clip.startsFrom && !start) return log.warn(`${clip.id}: no preview - it goes on from ${clip.startsFrom}, which has neither a preview nor a render yet`)
+        const preview = this.config.preview
+        const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['preview', preview, clip.prompt, clip.frames, this.config.videoWorkflow, start ?? '']}
+        const what: RenderWhat = {label: `preview ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: `preview ${preview.scale}`}
+        mkdirSync(dirname(target), {recursive: true})
+        const {seed} = await this.render(what, target, '.mp4', async () => {
+            const module = await this.filmWorkflow()
+            this.noteResolution(module.recommendedResolution)
+            const remote = start && `${this.remoteDir}/${start}`
+            return this.filmJob(clip, {
+                prompt: clip.prompt, frames: module.renderFrames?.(clip.frames) ?? clip.frames, seed: resolveSeed(this.config.seed), preview, filenamePrefix: `${this.remoteDir}/previews/${clip.id}`,
+                ...(start ? {startFrame: remote, extraUploads: [{from: join(this.projectDir, start), to: remote!}]} : {}),
+            }, module)
+        })
+        await this.savePreviewRecord(clip, target, seed)
+    }
+
+    /** A part of a film clip rendered again. The sound stays the clip's: a part with dialogue is refused, its words would no longer fit the mouth. */
+    async renderFilmRetake(clip: FilmClipRequest, ask: RetakeAsk) {
+        const seconds = secondsAt(clip.frames)
+        const range = ask.seconds ?? (() => {
+            const shot = clip.shots[(ask.shot ?? 1) - 1]
+            return shot ? [shot.at, clip.shots[ask.shot ?? 1]?.at ?? seconds] as [number, number] : undefined
+        })()
+        const spoken = range && clip.dialogue.some((line, n) => line.at < range[1] && (clip.dialogue[n + 1]?.at ?? seconds) > range[0])
+        if (spoken) throw new Error(`${clip.id}: that part has dialogue in it. The sound of a film comes with the picture: the old words would stay under new lips, so such a part is not rendered on its own yet - render the whole clip again`)
+        const module = await this.filmWorkflow()
+        this.noteResolution(module.recommendedResolution)
+        await this.retake(clip, ask, RETAKE_LEAD, async (plan, guides) => this.filmJob(clip, {
+            prompt: guides.prompt, frames: plan.render, seed: guides.seed, filenamePrefix: guides.filenamePrefix,
+            startClip: guides.startClip, startFrame: guides.startFrame, endFrame: guides.endFrame, extraUploads: guides.uploads,
+        }, module), frames => module.renderFrames?.(frames) ?? frames)
+    }
+
+    protected override async saveFramesAfterRetake(clip: { id: string, frames: number }, video: string, fileFrames: number) {
+        await this.saveFrames(clip as FilmClipRequest, video, fileFrames)
+    }
+
     // previous: the clip this one goes on from (clip.startsFrom) - for context frames
     async renderFilmClip(clip: FilmClipRequest, previous?: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
@@ -164,5 +249,5 @@ export class FilmRenderer extends Renderer {
 }
 
 /** What is rendered of a film, from the requests of its last plan run - for --dry-run and bun run status --film. */
-export const filmRenderState = (projectDir: string, filmId: string, config: FilmVideoConfig) =>
-    renderStateOf<FilmClipRequest>(projectDir, join(projectDir, 'assets.json'), join(projectDir, `${filmId}.mp4`), clip => filmClipFreshness(clip, projectDir, config) === 'stale')
+export const filmRenderState = (projectDir: string, filmId: string, config: FilmVideoConfig & Parameters<typeof pictureFingerprint>[2]) =>
+    renderStateOf<FilmClipRequest>(projectDir, join(projectDir, 'assets.json'), join(projectDir, `${filmId}.mp4`), config, clip => filmClipFreshness(clip, projectDir, config) === 'stale')

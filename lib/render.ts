@@ -1,6 +1,6 @@
 import {nameService} from "./service-error.ts";
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
 import {basename, dirname, extname, join, posix} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
@@ -9,14 +9,15 @@ import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type Interpola
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
-import {extractFrame, probeVideo, trimHead} from "./assemble.ts";
+import {extractFrame, framesOnGrid, probeVideo, trimHead} from "./assemble.ts";
+import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
 import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
-import {archiveFiles, versionStamp} from "./archive.ts";
+import {archiveFiles, pictureFiles, versionStamp} from "./archive.ts";
 import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
@@ -26,6 +27,17 @@ const DEFAULT_SONG_DURATION = 360
 
 // how long connecting to a server may take, and how long a server that was reachable may stay silent while a job is
 // waited for (a restart takes a while) before the run stops - the queued job is recorded and picked up by the next run
+// the frames before a part of a clip rendered again that its render starts on (--retake), 5 + 17·k: 22 of them ran out of memory
+// in MiniMaxH3AddGuide on a 32 GB card in a two-pass job, also with its memory freed before
+export const RETAKE_LEAD = 5
+// the guides of a part of a clip are encoded on the card next to everything else: at 2 MP that ran out of memory on 32 GB (--retake). The node brings them to the size of its latent anyway
+const GUIDE_SCALE = "scale='min(iw,960)':-2"
+const smallerPicture = (file: string) => {
+    const partial = file.replace(/\.png$/, '.small.png')
+    return runProcess(['ffmpeg', '-y', '-v', 'error', '-i', file, '-vf', GUIDE_SCALE, partial], {errorMessage: err => `ffmpeg could not make ${file} smaller:\n${err}`}).then(() => renameSync(partial, file))
+}
+// the shot a further view of a place comes from (renderExtraView): long enough for one slow move, in a length the model takes
+const EXTRA_VIEW_FRAMES = 73
 const CONNECT_TIMEOUT_MS = 60 * 1000
 const SERVER_SILENT_MS = 5 * 60 * 1000
 
@@ -89,6 +101,73 @@ export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: P
 // look: another look of the character `base` (a film's states) - with sequence sheets its sheet starts on base's anchor and
 // shows the change, instead of an anchor drawn from the prompt (renderSequenceSheet)
 export type PictureJob = { kind: 'character' | 'location' | 'prop', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[], look?: { base: string, change: string } }
+
+type SheetConfig = Pick<RenderConfig, 'imageWorkflow' | 'imageResolution' | 'sequenceWorkflow'>
+
+/** What a picture's reference sheet is made from and where its files go - what it is rendered from, and what says whether the sheet there is stale. */
+function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig) {
+    const dir = `assets/sequence/${picture.kind}s/${picture.id}`
+    // with / also on Windows: anchorFile goes to the server as part of a path (a Linux ComfyUI refused "assets\sequence\…")
+    const anchorFile = `${dir}/anchor.png`
+    const anchorTarget = join(projectDir, anchorFile)
+    const videoFile = `${dir}/sequence.mp4`
+    const videoTarget = join(projectDir, videoFile)
+    // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
+    const anchorIsUsers = isUserFile(anchorTarget)
+    // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
+    const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
+    const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
+    const baseAnchorTarget = baseAnchorFile && join(projectDir, baseAnchorFile)
+    const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
+    // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
+    const expression = recordedExpression(`${join(projectDir, picture.file)}.json`)
+    const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change, LOOK_SEQUENCE_FRAMES, expression)
+        : picture.kind === 'character' ? characterSequencePrompt(picture.description, SEQUENCE_FRAMES, expression)
+        : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
+    const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, config, anchorIsUsers ? anchorTarget : undefined)
+    const anchorFingerprint = specId(anchor)
+    const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, config.sequenceWorkflow)
+    const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, config.sequenceWorkflow))
+    return {dir, anchorFile, anchorTarget, videoFile, videoTarget, anchorIsUsers, look, baseAnchorFile, baseAnchorTarget, sequenceFrames, sequencePrompt, beatTimes, anchor, anchorFingerprint, sequence, sheetFingerprint}
+}
+
+/**
+ * Puts a picture away so that it is rendered again (--again): the picture, and of a reference sheet its video and frames. The anchor
+ * stays - the same person or place from other views - unless `newAnchor` asks for another one. A look's anchor is a frame of its sheet.
+ */
+export function putAwayPicture(picture: PictureJob, projectDir: string, config: Pick<RenderConfig, 'sequenceSheets'>, newAnchor: boolean) {
+    const sheet = config.sequenceSheets && picture.kind !== 'prop' ? `assets/sequence/${picture.kind}s/${picture.id}` : undefined
+    const keepAnchor = !newAnchor && !picture.look
+    const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && sheet && (file === `${sheet}/anchor.png` || file === `${sheet}/anchor.png.json`)))
+    return archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, files)
+}
+
+/** A picture rendered from a prompt the user edited: kept as it is (lib/provenance.ts), whatever the plan's own prompt says - the edited prompt is in its sidecar. */
+export function pinEditedPicture(picture: PictureJob, projectDir: string, editedPrompt: string) {
+    const sheet = `assets/sequence/${picture.kind}s/${picture.id}`
+    for (const file of [`${picture.file}.json`, `${sheet}/anchor.png.json`]) {
+        const path = join(projectDir, file)
+        if (!existsSync(path)) continue
+        writeFileSync(path, JSON.stringify({...JSON.parse(readFileSync(path, 'utf8')), pinned: true, editedPrompt}, null, 2))
+    }
+}
+
+/**
+ * Which pictures a run with --only renders: the ones it names, or all when it names none of them (--only then is about clips). With
+ * --again every name has to be a picture when no clips are rendered - every one is GPU time, a typo must not pass.
+ */
+export function namedPictures<P extends { id: string }>(pictures: P[], only: Set<string>, mustBePictures: boolean): P[] {
+    const named = pictures.filter(p => only.has(p.id))
+    if (mustBePictures) {
+        const unknown = [...only].filter(id => !pictures.some(p => p.id === id))
+        if (unknown.length) throw new Error(`--only: no picture ${unknown.join(', ')} - the pictures are ${pictures.map(p => p.id).join(', ')}`)
+    }
+    return named.length ? named : pictures
+}
+
+/** The id of the request a picture is rendered from, as its sidecar records it: its reference sheet with sequence sheets - a prop stays one plain picture - else the picture. */
+export const pictureFingerprint = (picture: PictureJob, projectDir: string, config: SheetConfig & Pick<RenderConfig, 'sequenceSheets'>) =>
+    config.sequenceSheets && picture.kind !== 'prop' ? sheetPlan(picture, projectDir, config).sheetFingerprint : specId(pictureSpec(picture, config))
 
 type Server = ComfyServer & { api: ComfyApi }
 
@@ -394,28 +473,7 @@ export class Renderer implements Disposable {
     async renderSequenceSheet(picture: PictureJob) {
         const target = join(this.projectDir, picture.file)
 
-        const dir = `assets/sequence/${picture.kind}s/${picture.id}`
-        // with / also on Windows: anchorFile goes to the server as part of a path (a Linux ComfyUI refused "assets\sequence\…")
-        const anchorFile = `${dir}/anchor.png`
-        const anchorTarget = join(this.projectDir, anchorFile)
-        const videoFile = `${dir}/sequence.mp4`
-        const videoTarget = join(this.projectDir, videoFile)
-        // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
-        const anchorIsUsers = isUserFile(anchorTarget)
-        // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
-        const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
-        const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
-        const baseAnchorTarget = baseAnchorFile && join(this.projectDir, baseAnchorFile)
-        const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
-        // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
-        const expression = recordedExpression(`${target}.json`)
-        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change, LOOK_SEQUENCE_FRAMES, expression)
-            : picture.kind === 'character' ? characterSequencePrompt(picture.description, SEQUENCE_FRAMES, expression)
-            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
-        const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
-        const anchorFingerprint = specId(anchor)
-        const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow)
-        const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow))
+        const {dir, anchorFile, anchorTarget, videoFile, videoTarget, anchorIsUsers, look, baseAnchorFile, baseAnchorTarget, sequenceFrames, sequencePrompt, beatTimes, anchor, anchorFingerprint, sequence, sheetFingerprint} = sheetPlan(picture, this.projectDir, this.config)
         if (existsSync(target)) {
             const frameFiles = existsSync(join(this.projectDir, dir, 'frames')) ? readdirSync(join(this.projectDir, dir, 'frames')).map(f => join(dir, 'frames', f)) : []
             // the anchor goes too only when it changed: a sheet made again for its own prompt keeps its place or person - drawn
@@ -521,7 +579,8 @@ export class Renderer implements Disposable {
     // stemFiles: the isolated stems of the whole song (stems/vocals.wav, stems/drums.wav, ...) plus a "song"
     // entry for the whole, unseparated song - vocals is needed by clips with a singer, others by whichever
     // tracks this clip's prompt references ("song" when stems weren't separated at all, see lib/compose.ts).
-    async renderClip(clip: ClipRequest, stemFiles: Record<string, string>) {
+    async renderClip(clip: ClipRequest, stemFiles: Record<string, string>, preview = false) {
+        if (preview) return this.renderClipPreview(clip, stemFiles)
         const file = `videos/${clip.id}.mp4`
         const target = join(this.projectDir, file)
         const spec = clipSpec(clip, this.projectDir, this.config)
@@ -625,6 +684,190 @@ export class Renderer implements Disposable {
         await this.saveBoundaryFrames(clip, target, rendered.frames)
     }
 
+    /** The job of a music-video clip, or of a part of it: the same pictures, stems and song, from `songStart` on. */
+    private async clipJob(clip: ClipRequest, stemFiles: Record<string, string>, job: { prompt: string, songStart: number, frames: number, seed: number, startFrame?: string, startClip?: string, endFrame?: { image: string, at: number }, preview?: { scale: number, steps: number }, filenamePrefix: string, extraUploads?: { from: string, to: string }[], workflow: VideoWorkflowModule }) {
+        const songRemote = `${this.remoteDir}/stems/song${extname(stemFiles.song!)}`
+        const uploads = [
+            ...clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`})),
+            ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${this.remoteDir}/stems/${a.stem}.wav`})),
+            {from: stemFiles.song!, to: songRemote},
+            ...(job.extraUploads ?? []),
+        ]
+        const result = job.workflow.default({
+            prompt: job.prompt,
+            pictures: clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => `${this.remoteDir}/${p.file}`),
+            audios: clip.assets.audio.map(a => `${this.remoteDir}/stems/${a.stem}.wav`),
+            ...(clip.assets.audio.some(a => a.stem === 'vocals') ? {vocals: `${this.remoteDir}/stems/vocals.wav`} : {}),
+            song: songRemote,
+            ...(job.startClip ? {startClip: job.startClip} : job.startFrame ? {startFrame: job.startFrame} : {}),
+            ...(job.endFrame ? {endFrame: job.endFrame} : {}),
+            ...(job.preview ? {preview: job.preview} : {}),
+            songStart: job.songStart,
+            frames: job.frames,
+            duration: secondsAt(job.frames),
+            seed: job.seed,
+            resolution: this.config.videoResolution,
+            aspect: this.config.videoAspect,
+            filenamePrefix: job.filenamePrefix,
+        })
+        return {result, uploads, meta: {seed: job.seed}}
+    }
+
+    /**
+     * A clip as a cheap render into previews/ (--preview): never a file of videos/, it leaves no first or last frame behind and stays out of
+     * what is current or stale. A clip that goes on from another starts on the last frame of that one's preview or render, and says it is approximate.
+     */
+    private async renderClipPreview(clip: ClipRequest, stemFiles: Record<string, string>) {
+        const file = `previews/${clip.id}.mp4`
+        const target = join(this.projectDir, file)
+        if (existsSync(target)) return log.step('Exists', styles.muted(file))
+        const missing = clip.assets.pictures.filter(p => p.kind !== 'frame' && !existsSync(join(this.projectDir, p.file)))
+        if (missing.length) return log.warn(`${clip.id}: no preview - missing pictures: ${missing.map(p => p.file).join(', ')}`)
+        if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id}: no preview - missing the full song`)
+        const start = clip.startsFrom ? await this.previewStart(clip.startsFrom) : undefined
+        if (clip.startsFrom && !start) return log.warn(`${clip.id}: no preview - it goes on from ${clip.startsFrom}, which has neither a preview nor a render yet`)
+        const preview = this.config.preview
+        const spec: RenderSpec = {...clipSpec(clip, this.projectDir, this.config), parts: ['preview', preview, clip.prompt, clip.frames, this.config.videoWorkflow, start ?? '']}
+        const what: RenderWhat = {label: `preview ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: `preview ${preview.scale}`}
+        mkdirSync(dirname(target), {recursive: true})
+        const {seed} = await this.render(what, target, '.mp4', async () => {
+            const workflow = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
+            this.noteResolution(workflow.recommendedResolution)
+            const frames = workflow.renderFrames?.(clip.frames) ?? clip.frames
+            const remote = start && `${this.remoteDir}/${start}`
+            return this.clipJob(clip, stemFiles, {
+                prompt: clip.prompt, songStart: secondsAt(clip.frameStart), frames, seed: resolveSeed(this.config.seed), preview, workflow,
+                filenamePrefix: `${this.remoteDir}/previews/${clip.id}`,
+                ...(start ? {startFrame: remote, extraUploads: [{from: join(this.projectDir, start), to: remote!}]} : {}),
+            })
+        })
+        await this.savePreviewRecord(clip, target, seed)
+    }
+
+    /** The picture a preview starts on: the last frame of the clip before as the preview shows it - its preview, else its render. */
+    protected async previewStart(id: string): Promise<string | undefined> {
+        const source = [`previews/${id}.mp4`, `videos/${id}.mp4`].find(file => existsSync(join(this.projectDir, file)))
+        if (!source) return undefined
+        const video = join(this.projectDir, source)
+        const record = existsSync(`${video}.json`) ? JSON.parse(readFileSync(`${video}.json`, 'utf8')) as { frames?: number } : {}
+        const frames = Math.min(record.frames ?? Infinity, framesOnGrid(await probeVideo(video)))
+        const frame = `previews/${id}_lf.png`
+        mkdirSync(join(this.projectDir, 'previews'), {recursive: true})
+        await extractFrame(video, frames - 1, join(this.projectDir, frame))
+        return frame
+    }
+
+    protected async savePreviewRecord(clip: { id: string, frames: number, startsFrom?: string }, target: string, seed: number) {
+        const rendered = await probeVideo(target)
+        await Bun.write(`${target}.json`, JSON.stringify({
+            preview: true, workflow: this.config.videoWorkflow, seed, ...this.config.preview,
+            ...(clip.startsFrom ? {approximate: true, startsFrom: clip.startsFrom} : {}),
+            frames: clip.frames, renderedFrames: rendered.frames, size: `${rendered.width}x${rendered.height}`,
+        }, null, 2))
+        log.step('Saved', `previews/${clip.id}.mp4 ${styles.muted(`${rendered.width}x${rendered.height}, ${clip.frames} frames${clip.startsFrom ? ' - approximate' : ''} · ${this.took(target)}`)}`)
+    }
+
+    /**
+     * Renders part of a clip again and puts it into the clip (--retake). The whole old clip goes to old/attempts first, so it stays a version
+     * to go back to. The request it was made from does not change: the clip stays current. The frames around the part guide the render.
+     */
+    protected async retake(clip: { id: string, frames: number, shots?: { at: number }[], prompt: string }, ask: RetakeAsk, wantedLead: number, job: (plan: RetakePlan, guides: { prompt: string, startClip?: string, startFrame?: string, endFrame?: { image: string, at: number }, uploads: { from: string, to: string }[], seed: number, filenamePrefix: string }) => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: { seed: number } }>, renderFrames: (frames: number) => number) {
+        const file = `videos/${clip.id}.mp4`
+        const video = join(this.projectDir, file)
+        if (!existsSync(video)) throw new Error(`${clip.id} is not rendered yet - there is nothing to render part of`)
+        const info = await probeVideo(video)
+        const fileFrames = framesOnGrid(info)
+        const cuts = shotCuts(clip.frames, (clip.shots ?? []).map(s => s.at), await sceneScores(video))
+        const plan = planRetake(retakeFrames(ask, fileFrames, cuts), fileFrames, wantedLead, renderFrames)
+        const work = `assets/clips/${clip.id}_retake`
+        mkdirSync(join(this.projectDir, 'assets', 'clips'), {recursive: true})
+        const uploads: { from: string, to: string }[] = []
+        const remote = (name: string) => {
+            uploads.push({from: join(this.projectDir, name), to: `${this.remoteDir}/${name}`})
+            return `${this.remoteDir}/${name}`
+        }
+        const guides: { startClip?: string, startFrame?: string, endFrame?: { image: string, at: number } } = {}
+        if (plan.lead) {
+            const head = `${work}_head.mp4`
+            await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `trim=start_frame=${plan.first - plan.lead}:end_frame=${plan.first},setpts=PTS-STARTPTS,${GUIDE_SCALE}`, '-an', '-c:v', 'libx264', '-crf', '10', '-pix_fmt', 'yuv420p', join(this.projectDir, head)],
+                {errorMessage: err => `ffmpeg could not cut the frames before the part of ${clip.id}:\n${err}`})
+            guides.startClip = remote(head)
+        } else if (plan.singleStart) {
+            const before = `${work}_before.png`
+            await extractFrame(video, plan.first - 1, join(this.projectDir, before))
+            await smallerPicture(join(this.projectDir, before))
+            guides.startFrame = remote(before)
+        }
+        if (plan.endAt !== undefined) {
+            const after = `${work}_after.png`
+            await extractFrame(video, plan.end, join(this.projectDir, after))
+            await smallerPicture(join(this.projectDir, after))
+            guides.endFrame = {image: remote(after), at: plan.endAt}
+        }
+        log.warn('--retake is not proven yet: on a 32 GB Radeon its two-pass job ran out of memory while encoding the guides, and one try took the server down (#157) - try it on one short part first')
+        log.step('Part', `${clip.id} ${styles.muted(`frames ${plan.first}-${plan.end} of ${fileFrames}, ${plan.lead ? `${plan.lead} frames before it` : plan.singleStart ? 'the frame before it' : 'from its start'}${plan.endAt !== undefined ? ', the frame after it' : ''} as guides - ${plan.render} frames rendered`)}`)
+        const prompt = retakePrompt(clip.prompt, shotsIn(plan, cuts))
+        const rendered = join(this.projectDir, `${work}.mp4`)
+        const seed = resolveSeed(this.config.seed)
+        const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['retake', plan.first, plan.end, prompt, this.config.videoWorkflow, fileFingerprint(video)]}
+        await this.render<{ seed: number }>({label: `part of ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, rendered, '.mp4',
+            () => job(plan, {...guides, prompt, uploads, seed, filenamePrefix: `${this.remoteDir}/videos/${clip.id}-retake`}))
+
+        const spliced = join(this.projectDir, `${work}_spliced.mp4`)
+        await spliceVideo({original: video, rendered, plan, width: info.width, height: info.height, target: spliced})
+        const record = existsSync(`${video}.json`) ? JSON.parse(readFileSync(`${video}.json`, 'utf8')) as Record<string, unknown> & { retakes?: unknown[] } : {}
+        const keep = archiveFiles(this.projectDir, `${clip.id}-${versionStamp()}`, [file, `${file}.json`, boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
+        renameSync(spliced, video)
+        await Bun.write(`${video}.json`, JSON.stringify({...record, retakes: [...(record.retakes ?? []), {first: plan.first, end: plan.end, seed, at: new Date().toISOString()}]}, null, 2))
+        rmSync(rendered, {force: true})
+        const frames = await probeVideo(video)
+        log.step('Saved', `${file} ${styles.muted(`frames ${plan.first}-${plan.end} are new, the old clip is in ${keep}`)}`)
+        await this.saveFramesAfterRetake(clip, video, frames.frames)
+    }
+
+    /** The first and last frame of a clip after a part of it changed: made again from the file. */
+    protected async saveFramesAfterRetake(clip: { id: string, frames: number }, video: string, fileFrames: number) {
+        await this.saveBoundaryFrames(clip as ClipRequest, video, fileFrames)
+    }
+
+    /**
+     * One more view of a place: a short shot that starts on the place's anchor and moves to what is asked for, and the last frame of it. From
+     * the anchor, so the look stays the same. Kept next to the sheet (views/view-<n>.png), with its name and what it shows beside it.
+     */
+    async renderExtraView(locationId: string, n: number, name: string, shows: string): Promise<string> {
+        const anchor = `assets/sequence/locations/${locationId}/anchor.png`
+        const video = `assets/sequence/locations/${locationId}/views/view-${n}.mp4`
+        const picture = `assets/sequence/locations/${locationId}/views/view-${n}.png`
+        const prompt = `The camera moves through this same place in one slow, unbroken move and comes to rest ${name}, where it shows ${shows}. The same place, the same light, the same fixtures throughout: nothing is added or doubled. Nobody is in the picture.`
+        mkdirSync(join(this.projectDir, dirname(video)), {recursive: true})
+        const spec: RenderSpec = {kind: 'sequence', id: `${locationId}-view-${n}`, parts: [prompt, this.config.sequenceWorkflow, fileFingerprint(join(this.projectDir, anchor))]}
+        const {seed} = await this.render({label: `view ${n} of ${locationId}`, spec, kind: 'picture', workflow: this.config.sequenceWorkflow}, join(this.projectDir, video), '.mp4', async () => {
+            const seed = resolveSeed(this.config.seed)
+            const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
+            const result = sequenceWorkflow({prompt, startFrame: `${this.remoteDir}/${anchor}`, frames: EXTRA_VIEW_FRAMES, orientation: 'landscape', resolution: -1, seed, filenamePrefix: `${this.remoteDir}/${video.replace(/\.mp4$/, '')}`})
+            return {result, uploads: [{from: join(this.projectDir, anchor), to: `${this.remoteDir}/${anchor}`}], meta: {seed}}
+        })
+        const rendered = await probeVideo(join(this.projectDir, video))
+        await extractFrame(join(this.projectDir, video), rendered.frames - 1, join(this.projectDir, picture))
+        await Bun.write(join(this.projectDir, `${picture}.json`), JSON.stringify({name, shows, seed, prompt, workflow: this.config.sequenceWorkflow}, null, 2))
+        log.step('Saved', `${picture} ${styles.muted(this.took(join(this.projectDir, video)))}`)
+        return picture
+    }
+
+    /** A part of a music-video clip rendered again, with the song at its place. */
+    async renderClipRetake(clip: ClipRequest, stemFiles: Record<string, string>, ask: RetakeAsk) {
+        const workflow = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
+        this.noteResolution(workflow.recommendedResolution)
+        if (!(stemFiles.song && existsSync(stemFiles.song))) throw new Error(`${clip.id}: the full song is missing`)
+        await this.retake({...clip, shots: clip.shots}, ask, RETAKE_LEAD, async (plan, guides) => {
+            const job = await this.clipJob(clip, stemFiles, {
+                prompt: guides.prompt, songStart: secondsAt(clip.frameStart + plan.first - plan.lead), frames: plan.render, seed: guides.seed, workflow, filenamePrefix: guides.filenamePrefix,
+                startClip: guides.startClip, startFrame: guides.startFrame, endFrame: guides.endFrame, extraUploads: guides.uploads,
+            })
+            return job
+        }, frames => workflow.renderFrames?.(frames) ?? frames)
+    }
+
     /**
      * A rendered clip with `multiplier` times its frames (frame interpolation, comfy/workflows/frame-interpolate.ts), written
      * to `target` at FPS * multiplier. Only the frames the final video uses, cut into the clip's shots where the picture cuts. Rendered again when
@@ -719,7 +962,7 @@ export class Renderer implements Disposable {
      * not the file's last frame, the frames after it are only padding for the model's lengths (see assembleFinal).
      */
     // renderedFrames: set for a clip just rendered - its frames are always rewritten; without, only missing ones are made
-    private async saveBoundaryFrames(clip: ClipRequest, video: string, renderedFrames?: number) {
+    protected async saveBoundaryFrames(clip: ClipRequest, video: string, renderedFrames?: number) {
         const first = boundaryFrameAsset(clip.id, 'ff')
         const last = boundaryFrameAsset(clip.id, 'lf')
         if (renderedFrames === undefined && existsSync(join(this.projectDir, first)) && existsSync(join(this.projectDir, last))) return

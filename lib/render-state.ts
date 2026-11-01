@@ -4,45 +4,63 @@ import type {ClipRequest} from "./compose.ts";
 import type {ProjectConfig, RenderConfig} from "./config.ts";
 import {describePrediction, predictJobs, type RenderJob} from "./predict.ts";
 import {freshness} from "./provenance.ts";
-import {clipFingerprint, type PictureJob, renderedFrames, workflowHash} from "./render.ts";
+import {clipFingerprint, type PictureJob, pictureFingerprint, renderedFrames, workflowHash} from "./render.ts";
 import {SEQUENCE_FRAMES} from "./sequenceSheet.ts";
 import {readTimings, type Timing} from "./timings.ts";
 
 // What is rendered of a project, read from the requests of its last plan run (output/) - for bun run status and --dry-run.
 
 export type RenderState<C = ClipRequest> = {
-    pictures: PictureJob[], missingPictures: PictureJob[],
+    pictures: PictureJob[], missingPictures: PictureJob[], stalePictures: PictureJob[],
     clips: C[], missingClips: C[], staleClips: C[],
-    finalVideo: string, finalState: 'missing' | 'current' | 'older',
+    finalVideo: string, finalState: FinalState,
 }
+export type FinalState = 'missing' | 'current' | 'older'
 
 export async function renderState(projectDir: string, projectId: string, config: ProjectConfig): Promise<RenderState> {
-    return renderStateOf<ClipRequest>(projectDir, join(projectDir, 'output', 'assets.json'), join(projectDir, `${projectId}.mp4`),
+    return renderStateOf<ClipRequest>(projectDir, join(projectDir, 'output', 'assets.json'), join(projectDir, `${projectId}.mp4`), config,
         (clip, video) => freshness(video, clipFingerprint(clip, projectDir, config)) === 'stale')
+}
+
+/** The jobs of the last plan run - music video: output/assets.json, film: assets.json in its folder. */
+export const readPictureJobs = async (picturesFile: string): Promise<PictureJob[]> => existsSync(picturesFile) ? await Bun.file(picturesFile).json() : []
+
+/** The clip requests of the last plan run, in order. */
+export async function readClipRequests<C>(projectDir: string): Promise<C[]> {
+    const clipsDir = join(projectDir, 'output', 'clips')
+    return existsSync(clipsDir) ? await Promise.all(readdirSync(clipsDir).filter(f => f.endsWith('.json')).sort().map(f => Bun.file(join(clipsDir, f)).json())) : []
+}
+
+/** Is the final video there, and is it newer than every clip it is made of? */
+export function finalStateOf(projectDir: string, finalVideo: string, clips: { id: string }[]): FinalState {
+    if (!existsSync(finalVideo)) return 'missing'
+    const finalAge = statSync(finalVideo).mtimeMs
+    const inIt = (clip: { id: string }) => {
+        const video = join(projectDir, 'videos', `${clip.id}.mp4`)
+        return existsSync(video) && statSync(video).mtimeMs <= finalAge
+    }
+    return clips.length && clips.every(inIt) ? 'current' : 'older'
 }
 
 /**
  * The render state of a music video's or a film's project: the pictures in `picturesFile` (the jobs of the last plan
- * run), the clip requests in output/clips/, their videos in videos/ - `stale` says whether a rendered clip was made from
- * another request - and the final video.
+ * run) with `config` saying what they are rendered from, the clip requests in output/clips/, their videos in videos/ -
+ * `stale` says whether a rendered clip was made from another request - and the final video.
  */
-export async function renderStateOf<C extends { id: string }>(projectDir: string, picturesFile: string, finalVideo: string, stale: (clip: C, video: string) => boolean): Promise<RenderState<C>> {
-    const pictures: PictureJob[] = existsSync(picturesFile) ? await Bun.file(picturesFile).json() : []
-    const clipsDir = join(projectDir, 'output', 'clips')
-    const clips: C[] = existsSync(clipsDir)
-        ? await Promise.all(readdirSync(clipsDir).filter(f => f.endsWith('.json')).sort().map(f => Bun.file(join(clipsDir, f)).json()))
-        : []
+export async function renderStateOf<C extends { id: string }>(projectDir: string, picturesFile: string, finalVideo: string, config: Parameters<typeof pictureFingerprint>[2], stale: (clip: C, video: string) => boolean): Promise<RenderState<C>> {
+    const pictures = await readPictureJobs(picturesFile)
+    const clips = await readClipRequests<C>(projectDir)
     const videoOf = (clip: C) => join(projectDir, 'videos', `${clip.id}.mp4`)
-    const finalAge = existsSync(finalVideo) ? statSync(finalVideo).mtimeMs : undefined
+    const there = (p: PictureJob) => existsSync(join(projectDir, p.file))
     return {
         pictures,
-        missingPictures: pictures.filter(p => !existsSync(join(projectDir, p.file))),
+        missingPictures: pictures.filter(p => !there(p)),
+        stalePictures: pictures.filter(p => there(p) && freshness(join(projectDir, p.file), pictureFingerprint(p, projectDir, config)) === 'stale'),
         clips,
         missingClips: clips.filter(c => !existsSync(videoOf(c))),
         staleClips: clips.filter(c => existsSync(videoOf(c)) && stale(c, videoOf(c))),
         finalVideo,
-        finalState: finalAge === undefined ? 'missing'
-            : clips.length && clips.every(c => existsSync(videoOf(c)) && statSync(videoOf(c)).mtimeMs <= finalAge) ? 'current' : 'older',
+        finalState: finalStateOf(projectDir, finalVideo, clips),
     }
 }
 

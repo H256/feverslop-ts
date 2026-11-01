@@ -263,6 +263,13 @@ If the model only accepts certain frame counts, export a `renderFrames` function
 (see [the contract](#the-workflow-contract)). `h3-ref2video.ts` has it for H3's 5 + 17·k frames. Without it, a model
 that rounds the length itself would silently return a different frame count than planned.
 
+### Previews and parts of a clip (video)
+
+Two more options a video workflow can honour; without them it renders as it always did, and a workflow that ignores them still runs:
+
+- `preview` (`--preview`): `{scale, steps}`. Pass `opts.preview?.scale` as the last argument of `resolution()`; a workflow with the turbo LoRA takes `opts.preview?.steps ?? 8` as its steps. A two-pass workflow stops after its first pass (`comfy/h3-two-pass.ts`).
+- `endFrame` (`--retake`): `{image, at}`, the frame right after the part. Pass the conditioning through `endGuide(wf, positive, latent, videoVae, opts.endFrame)` before the guider.
+
 ## Helpers
 
 All in `comfy/helpers.ts`. `WorkflowBuilder` is exported from there too, so a workflow file only imports from

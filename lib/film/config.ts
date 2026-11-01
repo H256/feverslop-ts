@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Aspect, Resolution} from "../../comfy/helpers.ts";
-import {aspectProblem, contextFramesProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
+import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
 import type {Finish} from "../finish.ts";
 import {log, warnUnknownKeys} from "../log.ts";
 
@@ -48,6 +48,7 @@ export type FilmConfig = {
     // to one reference (colorMatch) and film grain when asked for: false (default) = off, true = the mild one, an object = the
     // mild one with its fields replaced - as in the music video
     finish: boolean | Partial<Finish>,
+    preview: { scale: number, steps: number },  // --preview: as in the music video (lib/config.ts)
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
     subtitles: string,
@@ -78,6 +79,7 @@ export const filmDefaults: FilmConfig = {
     finalFps: defaults.finalFps,
     interpolationModel: defaults.interpolationModel,
     finish: defaults.finish,
+    preview: defaults.preview,
     subtitles: 'script',
     burnSubtitles: false,
     levelMatching: true,
@@ -128,7 +130,7 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
     if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
     for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries), finalFpsProblem(config.finalFps),
-        finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)]) if (problem) fail(problem)
+        finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel), previewProblem(config.preview)]) if (problem) fail(problem)
     if (config.contextFrames > 0 && config.continuity === 'never') log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)

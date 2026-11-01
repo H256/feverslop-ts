@@ -4,7 +4,7 @@
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the base model again, euler/beta, 4 steps, denoise 0.2, with a
 // noise of its own, at the final size (#343).
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
+import {afterCleanup, endGuide, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
@@ -70,13 +70,16 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // The guides are keyframes on the latent's own grid (comfy/ldm/minimax/model.py): a pinned frame encoded for pass 1
     // does not fit the upscaled latent, so each pass anchors the song and the first frame on its own latent. The
     // text and the reference pictures stay those of pass 1 - pass 2 only refines what pass 1 laid out.
-    const guide = (latent: NodeRef<"LATENT">) => {
+    // A part of a clip (opts.endFrame): the pictures around it guide pass 1 only. Pass 2 changes little, and encoding them at the full size ran out of memory on 32 GB.
+    const guide = (latent: NodeRef<"LATENT">, refine = false) => {
         const guided = song
             ? wf.MiniMaxH3AddGuide({positive: references.positive, latent, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO}).positive
             : references.positive
-        return startFrame
+        if (refine && opts.endFrame) return guided
+        const started = startFrame
             ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
             : guided
+        return endGuide(wf, started, latent, videoVae.VAE, opts.endFrame)
     }
     const noise = wf.RandomNoise({noise_seed: opts.seed})
 
@@ -89,6 +92,18 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         sigmas: wf.BasicScheduler({scheduler: 'simple', steps: 20, denoise: 1, model: unet.MODEL}).SIGMAS,
         latent_image: references.LATENT,
     })
+
+    // a preview: what the first pass laid out, at its quarter of the pixels - the same picture a full render would go on from
+    if (opts.preview) {
+        const laidOut = afterCleanup(wf, first.output, {offload_model: true, offload_cache: false})
+        return {images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO, size: sizes.first}
+    }
+
+    // a preview: what the first pass laid out, at its quarter of the pixels - the same picture a full render would go on from
+    if (opts.preview) {
+        const laidOut = afterCleanup(wf, first.output, {offload_model: true, offload_cache: false})
+        return {images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO, size: sizes.first}
+    }
 
     // x2, to exactly the final size: the upscaler takes the video half of the AV latent only; the audio half goes on as it is.
     // device 'cuda' on both machines: a ROCm build of PyTorch serves the AMD card as "cuda" too, while 'rocm' is refused by a CUDA build
@@ -114,7 +129,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // noise, seed + 1: the noise of pass 1 again on the large latent repeats its pattern.
     const second = wf.SamplerCustomAdvanced({
         noise: wf.RandomNoise({noise_seed: opts.seed + 1}).NOISE,
-        guider: wf.BasicGuider({model: base.model, conditioning: guide(large)}).GUIDER,
+        guider: wf.BasicGuider({model: base.model, conditioning: guide(large, true)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: 'euler'}).SAMPLER,
         sigmas: wf.BasicScheduler({scheduler: 'beta', steps: 4, denoise: 0.2, model: unet.MODEL}).SIGMAS,
         latent_image: large,

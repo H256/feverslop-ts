@@ -3,7 +3,7 @@
 // follows the prompt more closely (a held shot stays held). Select it with "videoWorkflow": "h3-ref2video-film-beta" in the film's config.json.
 // The model is CFG-distilled: no negative prompt, BasicGuider as in the template. Change the sampler, the scheduler or the steps below.
 import type {FilmVideoWorkflowOptions} from "./h3-ref2video-film.ts";
-import {afterCleanup, dyn, startImages, FPS, MAX_REFERENCE_IMAGES, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export {renderFrames} from "./h3-ref2video-film.ts"
 
@@ -18,7 +18,7 @@ export default function h3Ref2VideoFilmBeta(opts: FilmVideoWorkflowOptions): Wor
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4, opts.preview?.scale)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -43,7 +43,7 @@ export default function h3Ref2VideoFilmBeta(opts: FilmVideoWorkflowOptions): Wor
         : references.positive
 
     const attention = wf.ModelAttentionBackend({model: model.MODEL, attention: 'comfy kitchen attention'})
-    const guider = wf.BasicGuider({model: attention.model, conditioning: positive})
+    const guider = wf.BasicGuider({model: attention.model, conditioning: endGuide(wf, positive, references.LATENT, videoVae.VAE, opts.endFrame)})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'res_multistep'})
     const sigmas = wf.BasicScheduler({scheduler: 'beta', steps: 20, denoise: 1, model: model.MODEL})

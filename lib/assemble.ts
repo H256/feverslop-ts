@@ -1,4 +1,4 @@
-import {existsSync, renameSync} from "node:fs";
+import {existsSync, mkdirSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, startSpinner, styles} from "./log.ts";
 import {FPS, formatTime, frameAt, secondsAt} from "./frames.ts";
@@ -75,12 +75,30 @@ export async function extractFrame(video: string, index: number, target: string)
 }
 
 /**
+ * The files of a preview video of the whole thing, a clip each: its preview, else its render, else black with silence for as long as it
+ * lasts - so that the cuts and the sound stay where they are, and a clip that is missing is seen as a gap. The first file with a picture sets the size.
+ */
+export async function previewSources(projectDir: string, clips: { id: string, frames: number }[]): Promise<string[]> {
+    const found = clips.map(c => [join(projectDir, 'previews', `${c.id}.mp4`), join(projectDir, 'videos', `${c.id}.mp4`)].find(file => existsSync(file)))
+    const first = found.find(Boolean)
+    const {width, height} = first ? await probeVideo(first) : {width: 640, height: 360}
+    mkdirSync(join(projectDir, 'previews'), {recursive: true})
+    return Promise.all(clips.map(async (clip, i) => {
+        if (found[i]) return found[i]!
+        const filler = join(projectDir, 'previews', `${clip.id}.gap.mp4`)
+        await runProcess(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=black:s=${width}x${height}:r=${FPS}`, '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-frames:v', String(clip.frames), '-t', String(secondsAt(clip.frames)), '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', filler],
+            {errorMessage: err => `ffmpeg could not make the gap for ${clip.id}:\n${err}`})
+        return filler
+    }))
+}
+
+/**
  * Builds the final video: every clip cut to exactly its own frames from frame 0 on - the frames past
  * that were only rendered because the model needs certain lengths - then all clips concatenated.
  * The clips own consecutive ranges of the song's frame grid, so every clip starts on exactly the frame
  * its audio started on during generation, and the song can be laid under the whole video unchanged.
  */
-export async function assembleFinal({clips, projectDir, songFile, songAudio, target, interpolated}: {
+export async function assembleFinal({clips, projectDir, songFile, songAudio, target, interpolated, sources}: {
     clips: ClipRequest[],
     projectDir: string,
     songFile: string,
@@ -88,11 +106,13 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     target: string,
     // the clips with more frames (lib/interpolate.ts): `multiplier` times their frames at FPS * multiplier, the video saved at `fps`
     interpolated?: { files: string[], multiplier: number, fps: number },
+    // other files for the clips than the ones in videos/ - the preview video
+    sources?: string[],
 }) {
     const m = interpolated?.multiplier ?? 1
     const outFps = interpolated?.fps ?? FPS
     if (interpolated && !songAudio) throw new Error('the interpolated clips are silent - a final video at another frame rate needs "songAudio": true')
-    const files = interpolated?.files ?? clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
+    const files = interpolated?.files ?? sources ?? clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
     if (missing.length) throw new Error(`Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`)
 

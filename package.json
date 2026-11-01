@@ -26,7 +26,9 @@
     "interpolate": "bun tools/interpolate.ts",
     "stats": "bun tools/stats.ts",
     "status": "bun tools/status.ts",
-    "inspect": "bun tools/inspect.ts"
+    "inspect": "bun tools/inspect.ts",
+    "editor": "bun editor.ts",
+    "add-view": "bun tools/add-view.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

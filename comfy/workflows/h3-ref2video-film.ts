@@ -3,7 +3,7 @@
 // makes its own ambience. As in ComfyUI's own template (video_minimax_h3_r2v) MiniMaxH3ReferenceToVideo already returns an
 // empty video+audio latent: it is sampled as it is, and the result is decoded twice - the picture with the video VAE, the
 // sound with the audio VAE.
-import {afterCleanup, type Aspect, dyn, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, type Aspect, dyn, endGuide, type EndFrame, type PreviewOptions, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export type FilmVideoWorkflowOptions = {
     prompt: string,
@@ -18,6 +18,8 @@ export type FilmVideoWorkflowOptions = {
     seed: number,
     resolution: Resolution,
     aspect?: Aspect,            // config videoAspect - "16:9" (landscape) when not given
+    preview?: PreviewOptions,   // a cheap render (--preview), as in the music video's workflows
+    endFrame?: EndFrame,        // part of a clip rendered again (--retake), as in the music video's workflows
     filenamePrefix: string,
 }
 
@@ -41,7 +43,7 @@ export default function h3Ref2VideoFilm(opts: FilmVideoWorkflowOptions): Workflo
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4, opts.preview?.scale)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -66,10 +68,10 @@ export default function h3Ref2VideoFilm(opts: FilmVideoWorkflowOptions): Workflo
         : references.positive
 
     const attention = wf.ModelAttentionBackend({model: shifted.MODEL, attention: 'comfy kitchen attention'})
-    const guider = wf.BasicGuider({model: attention.model, conditioning: positive})
+    const guider = wf.BasicGuider({model: attention.model, conditioning: endGuide(wf, positive, references.LATENT, videoVae.VAE, opts.endFrame)})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'euler'})
-    const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: 8, denoise: 1, model: shifted.MODEL})
+    const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: opts.preview?.steps ?? 8, denoise: 1, model: shifted.MODEL})
     // No audio goes in - not as a reference, not as a guide: the latent of the reference node is the (empty) one that is sampled
     const sampled = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,

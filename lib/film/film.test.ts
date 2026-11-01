@@ -32,6 +32,53 @@ const cast: FilmCast = toCast({
     locations: [{name: 'The Bridge', aliases: ['The Bridge']}, {name: 'The Hut', aliases: ['The Hut']}],
 }, screenplay)
 
+describe('a choice per clip', () => {
+    const base = {framing: 'two-shot', camera: 'c', seconds: 4}
+    const views = {'the-bridge': [{name: 'from the east', shows: 'the eastern arch'}, {name: 'from the west', shows: 'the western arch'}]}
+    const input = () => {
+        const {coverage} = toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna', 'Ben'], action: 'Anna and Ben talk.', lines: [1, 2], placeView: 1}]}, screenplay.scenes[0]!, cast, false)
+        return {screenplay, cast, clips: packClips(screenplay, [coverage, toCoverage({soundscape: 's', people: true, shots: [{...base, characters: ['Anna'], action: 'Anna lights a candle.', lines: [1]}]}, screenplay.scenes[1]!, cast).coverage], 'auto').filter(c => c.sceneId === 's1'),
+            soundscapes: {}, stagings: {}, voices: {}, characterDescriptions: {}, locationDescriptions: {}, locationViews: views, lookBrief: 'Look. More.'}
+    }
+    const pictures = (request: { assets: { pictures: { id: string, label: string }[] } }) => request.assets.pictures.map(p => [p.label, p.id])
+    test('without one the clip is what the plan says', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const [request] = buildFilmClipRequests(input())
+        expect(pictures(request!)).toEqual([['<Picture 1>', 'the-bridge'], ['<Picture 2>', 'anna'], ['<Picture 3>', 'ben']])
+        expect(request!.prompt).toContain('the eastern arch')
+    })
+    test('another view of the place: the picture and the words that describe it', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const data = input()
+        const [request] = buildFilmClipRequests({...data, overrides: {[data.clips[0]!.id]: {placeView: 2}}})
+        expect(request!.assets.pictures[0]!.file).toContain('frame_01')
+        expect(request!.prompt).toContain('the western arch')
+        expect(request!.prompt).not.toContain('the eastern arch')
+    })
+    test('a further view: its own file, when a choice takes it', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const data = input()
+        const more = {...data, locationViews: {'the-bridge': [...views['the-bridge'], {name: 'under the arch', shows: 'the water', file: 'assets/sequence/locations/the-bridge/views/view-6.png'}]}}
+        const [chosen] = buildFilmClipRequests({...more, overrides: {[data.clips[0]!.id]: {placeView: 3}}})
+        expect(chosen!.assets.pictures[0]!.file).toBe('assets/sequence/locations/the-bridge/views/view-6.png')
+        expect(chosen!.prompt).toContain('the water')
+        // without a choice the plan's view: a further one changes no other clip
+        expect(buildFilmClipRequests(more)[0]!.prompt).toEqual(buildFilmClipRequests(data)[0]!.prompt)
+    })
+    test('another order: the numbers in the prompt follow', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const data = input()
+        const [request] = buildFilmClipRequests({...data, overrides: {[data.clips[0]!.id]: {order: ['ben', 'anna']}}})
+        expect(pictures(request!)).toEqual([['<Picture 1>', 'ben'], ['<Picture 2>', 'anna'], ['<Picture 3>', 'the-bridge']])
+    })
+    test('left out: no picture, and the prompt does not name a person without one', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const data = input()
+        const [request] = buildFilmClipRequests({...data, overrides: {[data.clips[0]!.id]: {without: ['ben']}}})
+        expect(pictures(request!).map(p => p[1])).toEqual(['the-bridge', 'anna'])
+    })
+})
+
 describe('screenplay', () => {
     test('normalizes headings, settings, kinds and shot headings', () => {
         const [bridge, hut] = screenplay.scenes as [Scene, Scene]

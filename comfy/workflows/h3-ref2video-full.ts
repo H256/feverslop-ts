@@ -2,7 +2,7 @@
 // branch) - res_multistep, simple, 20 steps, no CFG (BasicGuider) and no sigma shift. About 2.5x the sampling time of the
 // 8-step turbo, for more detail, prompt adherence and motion - a person far from the camera has a face here.
 // Everything else (references, audio tracks, the song guide, the pinned first frame) is the same as h3-ref2video.
-import {afterCleanup, dyn, startImages, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
 export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
@@ -31,7 +31,7 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
     const length = wf.PrimitiveInt({value: opts.frames})
-    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4)
+    const size = resolution(wf, opts.resolution, opts.aspect ?? 'landscape', 0.4, opts.preview?.scale)
 
     const references = wf.MiniMaxH3ReferenceToVideo({
         prompt: widget(prompt.STRING),
@@ -72,7 +72,7 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
 
     // int8 attention through comfy-kitchen: ~25% faster sampling on the Radeon. Only the guider gets it - the scheduler just needs the sigma schedule
     const attention = wf.ModelAttentionBackend({model: unet.MODEL, attention: 'comfy kitchen attention'})
-    const guider = wf.BasicGuider({model: attention.model, conditioning: pinned.positive})
+    const guider = wf.BasicGuider({model: attention.model, conditioning: endGuide(wf, pinned.positive, references.LATENT, videoVae.VAE, opts.endFrame)})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'res_multistep'})
     const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: 20, denoise: 1, model: unet.MODEL})
