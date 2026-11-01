@@ -18,6 +18,7 @@ import {filmIds, readCasting, readLibrary, writeCastingEntry} from "./library.ts
 import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
 import {type RunAction, RunControl} from "./runs.ts";
+import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
@@ -277,11 +278,11 @@ export function editorHandler(runs = new RunControl()) {
         try {
             const started = (run: unknown) => json({run})
             if (what === 'run') {
-                const {action: wanted} = await body<{ action: RunAction }>()
+                const {action: wanted, servers} = await body<{ action: RunAction, servers?: string[] }>()
                 if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures') return refused(new Error('no such action'))
                 // a prompt comes in through its own route below, never as a path from the page
                 if (wanted.type === 'pictures') delete wanted.promptFile
-                return started(runs.start(target, wanted))
+                return started(runs.start(target, wanted, await urlsOfChoice(servers)))
             }
             if (what === 'stop') return json({stopped: runs.stop(target)})
             if (what === 'estimate') {
@@ -294,7 +295,7 @@ export function editorHandler(runs = new RunControl()) {
                 return json({picked: version, putAway: relative(target.dir, result.putAway).replace(/\\/g, '/')})
             }
             if (what === 'references' && id && action === 'rerender') {
-                const {newAnchor, prompt} = await body<{ newAnchor?: boolean, prompt?: string }>()
+                const {newAnchor, prompt, servers} = await body<{ newAnchor?: boolean, prompt?: string, servers?: string[] }>()
                 const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
                 if (!job) return refused(new Error(`no picture ${id}`))
                 let promptFile: string | undefined
@@ -302,7 +303,7 @@ export function editorHandler(runs = new RunControl()) {
                     promptFile = join(mkdtempSync(join(tmpdir(), 'workspace-prompt-')), `${id}.txt`)
                     writeFileSync(promptFile, prompt)
                 }
-                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile}))
+                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile}, await urlsOfChoice(servers)))
             }
             if (what === 'references' && id && action === 'pick') {
                 const {version} = await body<{ version: string }>()
@@ -358,7 +359,8 @@ export function editorHandler(runs = new RunControl()) {
                 return value ? [`--${name}=${value}`] : []
             }
             try {
-                return json({run: runs.startTool(target, 'tools/create-asset.ts', [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')])})
+                const servers = form.get('servers')
+                return json({run: runs.startTool(target, 'tools/create-asset.ts', [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')], await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined))})
             } catch (e) {
                 return refused(e)
             }
@@ -384,6 +386,7 @@ export function editorHandler(runs = new RunControl()) {
                         return []
                     }
                 }).sort((a, b) => b.changed - a.changed)})
+                if (parts[1] === 'servers' && !post) return json({servers: await readServers()})
                 if (parts[1] === 'library') return libraryApi(parts.slice(2), request, url)
                 return notFound()
             }

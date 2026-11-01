@@ -27,14 +27,17 @@ export type RunAction =
 
 const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
 
-// what a command of the last run or of `status` may hold to be started from the page: rendering, nothing that asks in the terminal, no servers or keys
+// what a command of the last run or of `status` may hold to be started from the page: rendering, nothing that asks in the terminal, no keys.
+// Which servers a run goes to is chosen again on the page, so what the command said about them is left out
+const SERVERS_FLAG = /^--comfy=/
 const ALLOWED_FLAGS = /^--(render=[a-z,]+|only=[a-z0-9,-]+|again|new-anchor|refresh=[a-z,]+|strict|preview|retake=[a-z0-9:.,-]+)$/
 
 /** A command line as `status` or the last run give it, when it is one the page may start: its options. */
 export function allowedOptions(kind: EditorKind, id: string, command: string): string[] | undefined {
     const [bun, script, project, ...options] = command.trim().split(/\s+/)
     if (bun !== 'bun' || script !== pipeline(kind) || project !== id) return undefined
-    return options.every(option => ALLOWED_FLAGS.test(option)) ? options : undefined
+    const rendering = options.filter(option => !SERVERS_FLAG.test(option))
+    return rendering.every(option => ALLOWED_FLAGS.test(option)) ? rendering : undefined
 }
 
 /** The command an action comes to: script and arguments. Throws on what cannot be asked for. */
@@ -116,25 +119,25 @@ export class RunControl {
         this.root = root
     }
 
-    /** Starts what is asked for, or throws when the project is being worked on. */
-    start(target: EditorTarget, action: RunAction): RunInfo {
+    /** Starts what is asked for, or throws when the project is being worked on. `servers`: the URLs it may render on - none said: those of the settings. */
+    start(target: EditorTarget, action: RunAction, servers?: string[]): RunInfo {
         const {script, args} = runCommand(target, action)
-        return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'leak-scan')
+        return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'leak-scan', servers)
     }
 
     /** A tool that is not about one project's files, under a name of its own - the library's create-asset. */
-    startTool(target: EditorTarget, script: string, args: string[]): RunInfo {
-        return this.spawn(target, script, args, false)
+    startTool(target: EditorTarget, script: string, args: string[], servers?: string[]): RunInfo {
+        return this.spawn(target, script, args, false, servers)
     }
 
-    private spawn(target: EditorTarget, script: string, args: string[], locks: boolean): RunInfo {
+    private spawn(target: EditorTarget, script: string, args: string[], locks: boolean, servers?: string[]): RunInfo {
         const running = this.own.get(this.key(target))
         if (running?.info.running) throw new Error(`a run is going on here: ${running.info.command}`)
         const holder = locks ? lockHolder(target.dir) : undefined
         if (holder) throw new Error(`${target.id} is being worked on by another run (process ${holder}) - it can be followed and stopped here, a second one is not started`)
         // no terminal: nothing can be asked (stdin closed), no colours and no animation in the log
-        const proc = Bun.spawn(['bun', join(this.root, script), ...args], {stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1', FEVERSLOP_QUIET: '', FORCE_COLOR: '0'}})
-        const own: Own = {info: {source: 'here', command: ['bun', script, ...args].join(' '), pid: proc.pid, startedAt: new Date().toISOString(), running: true}, proc, lines: [], dropped: 0}
+        const proc = Bun.spawn(['bun', join(this.root, script), ...args], {stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1', FEVERSLOP_QUIET: '', FORCE_COLOR: '0', ...(servers ? {FEVERSLOP_COMFY: servers.join(',')} : {})}})
+        const own: Own = {info: {source: 'here', command: ['bun', script, ...args, ...(servers ? [`--comfy=${servers.join(',')}`] : [])].join(' '), pid: proc.pid, startedAt: new Date().toISOString(), running: true}, proc, lines: [], dropped: 0}
         const add = (text: string) => {
             own.lines.push(text)
             if (own.lines.length > LINES_KEPT) {
