@@ -58,7 +58,9 @@ bun run typecheck     # TypeScript, including the workflows against comfy/nodes.
 ```
 
 The tests cover the parts without servers - parsing, alignment, timeline, composition, fingerprints. Nothing calls an
-LLM or ComfyUI; those parts are tried on a real project.
+LLM or ComfyUI; those parts are tried on a real project. They run on a fresh clone too: without the generated
+`comfy/nodes.ts` the workflows are built with `comfy/nodes-fallback.ts`, and `bun run typecheck` doesn't check them
+against a server. A new node in a workflow goes into that list as well - `comfy/nodes-fallback.test.ts` says so.
 
 **Golden tests** (`lib/golden.test.ts`, snapshots in `lib/__snapshots__/`) record what the music video sends to ComfyUI
 (every clip workflow, node by node), what it runs ffmpeg with (rendering with a stand-in for ComfyUI, joining, finishing,

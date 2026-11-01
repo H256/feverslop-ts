@@ -1,7 +1,13 @@
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {WorkflowBuilder} from "./nodes.ts";
+import {existsSync} from "node:fs";
+import {join} from "node:path";
+import {FallbackWorkflowBuilder} from "./nodes-fallback.ts";
+// @ts-ignore generated, gitignored and made from a server: without it the workflows are simply not type-checked
+import type {WorkflowBuilder as GeneratedWorkflowBuilder} from "./nodes.ts";
 
-export {WorkflowBuilder}
+const generated = join(import.meta.dir, 'nodes.ts')
+export const WorkflowBuilder: typeof GeneratedWorkflowBuilder = existsSync(generated) ? (await import(generated)).WorkflowBuilder : FallbackWorkflowBuilder
+export type WorkflowBuilder = GeneratedWorkflowBuilder
 export {FPS} from "../lib/frames.ts";
 
 /**

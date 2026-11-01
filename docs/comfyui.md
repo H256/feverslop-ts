@@ -56,7 +56,8 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
 
 3. **Node types for your server.** `comfy/nodes.ts` describes every node and model installed on the server, so
    the workflows are checked against what is really there. It is generated from the first server of the settings (or
-   `--comfy=<url>`); after installing nodes or models, regenerate it and check the workflows:
+   `--comfy=<url>`); after installing nodes or models, regenerate it and check the workflows. Without the file our own
+   workflows still run, unchecked - only a workflow with other nodes needs it:
 
    ```bash
    bun run comfy:types
@@ -554,7 +555,7 @@ queue and history) is it rendered again. Downloads go to a temporary `.download`
 download never looks like a finished clip.
 
 **`comfy/nodes.ts` is large.**
-It has a method and a few types for every installed node (about 4.3 MB for ~2,500 nodes). It's generated - never edit
+It has a method and a few types for every installed node (several MB, depending on the server's nodes). It's generated - never edit
 it by hand, and leave it out of version control (add it to `.gitignore`); everyone regenerates it against their own
 server.
 
