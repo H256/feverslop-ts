@@ -41,7 +41,7 @@ projects
 library
 .claude
 
-# generated, ~4.3 MB (bun run comfy:types)
+# generated, several MB (bun run comfy:types)
 comfy/nodes.ts
 
 films

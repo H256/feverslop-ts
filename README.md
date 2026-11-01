@@ -651,7 +651,10 @@ The full guide, with the options every workflow gets, the helpers and a checklis
 
 - **Run `bun run comfy:types` after installing nodes or models.** It regenerates `comfy/nodes.ts` with the SDK's
   `cfli codegen` and fixes custom nodes with duplicate output names on the way.
-- **`comfy/nodes.ts` is generated and large** (about 4.3 MB). Don't edit it, and keep it out of version control.
+- **`comfy/nodes.ts` is generated and large** (several MB, depending on the server's nodes). Don't edit it, and keep it
+  out of version control. Without it everything still runs, on a small list of the nodes of our workflows
+  (`comfy/nodes-fallback.ts`) - but `bun run typecheck` can't check the workflows against your server, and a workflow
+  with any other node stops and asks you to generate it.
 - **Some connections aren't in the types:** node outputs into widgets, autogrow inputs like `ref_images.ref_image_0`,
   and widgets that depend on another widget. The helpers `widget()` and `withInputs()` cover them.
 - **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped

@@ -884,8 +884,9 @@ export class Renderer implements Disposable {
             const details = error instanceof Response ? await error.text() : String(error)
             throw new Error(`${label}: ComfyUI ${server.name} rejected the workflow - ${details}`)
         })
-        const nodes = Object.fromEntries(Object.entries(prompt).map(([id, node]) => [id, node.class_type]))
-        const {variant, setup} = describeGraph(prompt as unknown as Graph)
+        const graph = prompt as unknown as Graph
+        const nodes = Object.fromEntries(Object.entries(graph).map(([id, node]) => [id, node.class_type]))
+        const {variant, setup} = describeGraph(graph)
         // the first job on a server after another set of models has to load them: it is kept apart in the statistics
         const models = JSON.stringify([setup.models, setup.loras])
         const cold = this.lastModels.get(server.name) !== models
