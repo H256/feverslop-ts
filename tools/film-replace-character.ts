@@ -15,7 +15,7 @@ import {FilmRenderer} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import type {FilmProject} from "../lib/film/types.ts";
-import {genderNote} from "../lib/film/gender-check.ts";
+import {genderNote} from "../lib/gender-check.ts";
 import {mentions} from "../lib/film/names.ts";
 import {ask, configureLlm} from "../lib/llm.ts";
 import {styles} from "../lib/log.ts";
@@ -181,7 +181,7 @@ if (newDescription) {
         const settings = await loadSettings({projectModel: config.llm.model})
         configureLlm(settings.llm)
         const own = (data.screenplay?.scenes ?? []).flatMap(s => s.elements).filter(e => e.type === 'action' && mentions(e.text, char)).map(e => e.text).slice(0, 4).join(' ')
-        const note = await genderNote(char.name, `${char.role} ${char.appearance} ${own}`.trim().slice(0, 2500), newDescription)
+        const note = await genderNote(char.name, `${char.role} ${char.appearance} ${own}`.trim().slice(0, 2500), newDescription, 'script')
         if (note) {
             log.warn(note)
             log.info(styles.muted(`Edit the action lines of ${char.name} in films/${id}/project.json (screenplay) and plan the shots again (bun film.ts ${id} --redo=coverage); for a story written from an idea, put the gender into the idea.`))
