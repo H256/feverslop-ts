@@ -23,6 +23,7 @@ export type RunAction =
     | { type: 'next', command: string }
     | { type: 'leak-scan' }
     | { type: 'export-asset', asset: string, as?: string }
+    | { type: 'add-view', location: string, name: string, shows: string }
 
 const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
 
@@ -68,6 +69,9 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         }
         case 'leak-scan':
             return {script: 'tools/leak-scan.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}
+        case 'add-view':
+            if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim()) throw new Error('a further view is for a place of a film, with a name and what it shows')
+            return {script: 'tools/add-view.ts', args: [id, action.location, `--name=${action.name.trim()}`, `--shows=${action.shows.trim()}`]}
         case 'export-asset':
             if (!PICTURE_ID.test(action.asset.replace('--', '-')) || (action.as && !PICTURE_ID.test(action.as))) throw new Error('no such asset')
             return {script: 'tools/export-asset.ts', args: [id, action.asset, ...(action.as ? [`--as=${action.as}`] : []), ...(kind === 'film' ? ['--film'] : [])]}

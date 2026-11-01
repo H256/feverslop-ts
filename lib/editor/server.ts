@@ -151,7 +151,7 @@ const allTargets = (): EditorTarget[] => [
     ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
 ]
 
-const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset'])
+const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'add-view'])
 
 /** What rendering these clips is expected to cost: the time, what can go wrong, and that a fixed seed gives the same clip. */
 async function estimateClips(target: EditorTarget, ids: string[]) {

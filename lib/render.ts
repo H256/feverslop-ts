@@ -29,6 +29,8 @@ const DEFAULT_SONG_DURATION = 360
 // waited for (a restart takes a while) before the run stops - the queued job is recorded and picked up by the next run
 // the frames before a part of a clip rendered again that its render starts on (--retake): as context frames (5 + 17·k)
 export const RETAKE_LEAD = 22
+// the shot a further view of a place comes from (renderExtraView): long enough for one slow move, in a length the model takes
+const EXTRA_VIEW_FRAMES = 73
 const CONNECT_TIMEOUT_MS = 60 * 1000
 const SERVER_SILENT_MS = 5 * 60 * 1000
 
@@ -795,6 +797,8 @@ export class Renderer implements Disposable {
         }
         log.step('Part', `${clip.id} ${styles.muted(`frames ${plan.first}-${plan.end} of ${fileFrames}, ${plan.lead ? `${plan.lead} frames before it` : plan.singleStart ? 'the frame before it' : 'from its start'}${plan.endAt !== undefined ? ', the frame after it' : ''} as guides - ${plan.render} frames rendered`)}`)
         const prompt = retakePrompt(clip.prompt, shotsIn(plan, cuts))
+        // the guides are encoded at the start of the job, next to what the last job left loaded: a batch of frames ran out of memory on 32 GB
+        await this.freeMemory()
         const rendered = join(this.projectDir, `${work}.mp4`)
         const seed = resolveSeed(this.config.seed)
         const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['retake', plan.first, plan.end, prompt, this.config.videoWorkflow, fileFingerprint(video)]}
@@ -816,6 +820,30 @@ export class Renderer implements Disposable {
     /** The first and last frame of a clip after a part of it changed: made again from the file. */
     protected async saveFramesAfterRetake(clip: { id: string, frames: number }, video: string, fileFrames: number) {
         await this.saveBoundaryFrames(clip as ClipRequest, video, fileFrames)
+    }
+
+    /**
+     * One more view of a place: a short shot that starts on the place's anchor and moves to what is asked for, and the last frame of it. From
+     * the anchor, so the look stays the same. Kept next to the sheet (views/view-<n>.png), with its name and what it shows beside it.
+     */
+    async renderExtraView(locationId: string, n: number, name: string, shows: string): Promise<string> {
+        const anchor = `assets/sequence/locations/${locationId}/anchor.png`
+        const video = `assets/sequence/locations/${locationId}/views/view-${n}.mp4`
+        const picture = `assets/sequence/locations/${locationId}/views/view-${n}.png`
+        const prompt = `The camera moves through this same place in one slow, unbroken move and comes to rest ${name}, where it shows ${shows}. The same place, the same light, the same fixtures throughout: nothing is added or doubled. Nobody is in the picture.`
+        mkdirSync(join(this.projectDir, dirname(video)), {recursive: true})
+        const spec: RenderSpec = {kind: 'sequence', id: `${locationId}-view-${n}`, parts: [prompt, this.config.sequenceWorkflow, fileFingerprint(join(this.projectDir, anchor))]}
+        const {seed} = await this.render({label: `view ${n} of ${locationId}`, spec, kind: 'picture', workflow: this.config.sequenceWorkflow}, join(this.projectDir, video), '.mp4', async () => {
+            const seed = resolveSeed(this.config.seed)
+            const {default: sequenceWorkflow} = await loadWorkflow<{ default: SequenceWorkflow }>(this.config.sequenceWorkflow)
+            const result = sequenceWorkflow({prompt, startFrame: `${this.remoteDir}/${anchor}`, frames: EXTRA_VIEW_FRAMES, orientation: 'landscape', resolution: -1, seed, filenamePrefix: `${this.remoteDir}/${video.replace(/\.mp4$/, '')}`})
+            return {result, uploads: [{from: join(this.projectDir, anchor), to: `${this.remoteDir}/${anchor}`}], meta: {seed}}
+        })
+        const rendered = await probeVideo(join(this.projectDir, video))
+        await extractFrame(join(this.projectDir, video), rendered.frames - 1, join(this.projectDir, picture))
+        await Bun.write(join(this.projectDir, `${picture}.json`), JSON.stringify({name, shows, seed, prompt, workflow: this.config.sequenceWorkflow}, null, 2))
+        log.step('Saved', `${picture} ${styles.muted(this.took(join(this.projectDir, video)))}`)
+        return picture
     }
 
     /** A part of a music-video clip rendered again, with the song at its place. */

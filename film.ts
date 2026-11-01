@@ -15,7 +15,7 @@ import {buildFilmClipRequests, clipOverrides} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips,type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
-import {chooseShotViews, readSheetViews, withShotViews} from "./lib/film/views.ts";
+import {chooseShotViews, readSheetViews, withExtraViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from "./lib/render.ts";
 import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
@@ -520,7 +520,7 @@ async function planClips() {
         soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
         stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
         voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
-        characterDescriptions, locationDescriptions, locationViews: {...sheetViews, ...locationViews}, lookBrief, props,
+        characterDescriptions, locationDescriptions, locationViews: withExtraViews(film.dir, {...sheetViews, ...locationViews}), lookBrief, props,
         pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
     })
     const outputDir = join(film.dir, 'output')

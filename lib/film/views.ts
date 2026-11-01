@@ -1,4 +1,4 @@
-import {existsSync, readFileSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {visionUrls} from "../describe-picture.ts";
 import {picturesReadable} from "../llm.ts";
@@ -15,6 +15,21 @@ import type {FilmCast, LocationView, SceneCoverage} from "./types.ts";
 // of every shot is chosen from them, and the clip gets that one view - the way designed views work (lib/film/compose.ts).
 
 const VIEWS = 5
+
+/** The further views of a place, rendered one by one (bun run add-view): after the five of its sheet, with the file each one is in. */
+export function extraViews(projectDir: string, locationId: string): { name: string, shows: string, file: string }[] {
+    const folder = `assets/sequence/locations/${locationId}/views`
+    if (!existsSync(join(projectDir, folder))) return []
+    return readdirSync(join(projectDir, folder)).filter(f => /^view-\d+\.png$/.test(f)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5))).map(f => {
+        const {name, shows} = JSON.parse(readFileSync(join(projectDir, folder, `${f}.json`), 'utf8')) as { name: string, shows: string }
+        return {name, shows, file: `${folder}/${f}`}
+    })
+}
+
+/** The views of the places with their further ones behind them: only a clip's own choice ever takes one of those, so the plan stays as it is. */
+export function withExtraViews<V extends { name: string, shows: string }>(projectDir: string, views: Record<string, V[]>): Record<string, (V | { name: string, shows: string, file: string })[]> {
+    return Object.fromEntries(Object.entries(views).map(([id, known]) => [id, [...known, ...extraViews(projectDir, id)]]))
+}
 
 /** The frames of a place's sheet, one per view - all of them, or none while the sheet is not rendered. */
 export function sheetFrames(projectDir: string, locationId: string): string[] {

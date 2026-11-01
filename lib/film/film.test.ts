@@ -55,6 +55,16 @@ describe('a choice per clip', () => {
         expect(request!.prompt).toContain('the western arch')
         expect(request!.prompt).not.toContain('the eastern arch')
     })
+    test('a further view: its own file, when a choice takes it', async () => {
+        const {buildFilmClipRequests} = await import("./compose.ts")
+        const data = input()
+        const more = {...data, locationViews: {'the-bridge': [...views['the-bridge'], {name: 'under the arch', shows: 'the water', file: 'assets/sequence/locations/the-bridge/views/view-6.png'}]}}
+        const [chosen] = buildFilmClipRequests({...more, overrides: {[data.clips[0]!.id]: {placeView: 3}}})
+        expect(chosen!.assets.pictures[0]!.file).toBe('assets/sequence/locations/the-bridge/views/view-6.png')
+        expect(chosen!.prompt).toContain('the water')
+        // without a choice the plan's view: a further one changes no other clip
+        expect(buildFilmClipRequests(more)[0]!.prompt).toEqual(buildFilmClipRequests(data)[0]!.prompt)
+    })
     test('another order: the numbers in the prompt follow', async () => {
         const {buildFilmClipRequests} = await import("./compose.ts")
         const data = input()

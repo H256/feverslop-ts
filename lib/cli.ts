@@ -21,6 +21,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},
     stats: {args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]', description: 'Compare measured render and LLM performance.', json: true},
+    'add-view': {args: '<film-id> <location-id> --name=<where the camera is> --shows=<what is seen>', description: 'Render one more view of a place of a film, from its anchor.'},
     editor: {args: '[project-id] [--film] [--port=4173]', description: 'Open the workspace in the browser: all projects, the whole video on one timeline, renders, library and casting.'},
     typecheck: {args: '', description: 'Check project TypeScript types.'},
     'styles:doc': {args: '', description: 'Regenerate the style reference document.'},

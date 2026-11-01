@@ -186,6 +186,11 @@ describe('what can be started', () => {
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: '3.2-5'})).toEqual({script: 'index.ts', args: ['demo', '--retake=slot-007:3.2-5']})
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: 'shot2'}).args[1]).toBe('--retake=slot-007:shot2')
     })
+    test('a further view of a place: only for a film, with what it shows as one argument each', () => {
+        expect(runCommand(film, {type: 'add-view', location: 'hall', name: 'from the bar', shows: 'the door --film'})).toEqual({script: 'tools/add-view.ts', args: ['demo', 'hall', '--name=from the bar', '--shows=the door --film']})
+        expect(() => runCommand(music, {type: 'add-view', location: 'hall', name: 'a', shows: 'b'})).toThrow('a place of a film')
+        expect(() => runCommand(film, {type: 'add-view', location: 'hall', name: ' ', shows: 'b'})).toThrow('a place of a film')
+    })
     test('nothing but ids gets into a command', () => {
         expect(() => runCommand(music, {type: 'clips', ids: ['--comfy=http://evil']})).toThrow('no such clips')
         expect(() => runCommand(music, {type: 'clips', ids: []})).toThrow('no such clips')

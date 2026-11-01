@@ -15,6 +15,7 @@ import {loadFilmConfig} from "../film/config.ts";
 import {filmRenderConfig, locationViewAsset} from "../film/pictures.ts";
 import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
+import {withExtraViews} from "../film/views.ts";
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
 // nothing kept. The fast part (/api/project) only looks at which files are there; whether they are stale means hashing every
@@ -272,7 +273,10 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         if (!location) return undefined
         const known = data.locationViews?.[location.id] ?? data.sheetViews?.[location.id]?.views
         if (!known?.length) return undefined
-        const options = known.map((view, n) => ({n: n + 1, name: view.name, shows: view.shows, file: locationViewAsset(location.id, n + 1), v: media(dir, locationViewAsset(location.id, n + 1))?.v}))
+        const options = withExtraViews(dir, {[location.id]: known})[location.id]!.map((view, n) => {
+            const file = 'file' in view ? view.file : locationViewAsset(location.id, n + 1)
+            return {n: n + 1, name: view.name, shows: view.shows, file, v: media(dir, file)?.v}
+        })
         return {locationId: location.id, chosen: options.find(o => o.file === location.file)?.n, options}
     }
     // on the timeline a clip is where the film has it: the final video and the clips have to agree

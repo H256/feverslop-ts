@@ -875,7 +875,7 @@ Everything that renders is the CLI, started from the page and through the same l
 
 The same in the terminal: `--render=images --only=<picture> --again [--new-anchor] [--picture-prompt=<file>]`, `--render=videos --only=<clip> --preview`, `--render=final --preview` (`<id>-preview.mp4`), `--retake=slot-007:3.2-5.0` or `--retake=slot-007:shot2`.
 
-A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json`. It applies from the next plan run on, and the clip then counts as stale.
+A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json`. It applies from the next plan run on, and the clip then counts as stale. Where the sheet has no view that fits, `bun run add-view <film-id> <location-id> --name=… --shows=…` renders one more from the place's anchor.
 
 ### The asset library
 

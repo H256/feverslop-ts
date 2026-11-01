@@ -51,7 +51,7 @@ export type FilmInput = {
     voices: Record<string, boolean>,                 // scene id -> the script itself has voices in it (whispers, a chant): wordless sounds are allowed there
     characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
     locationDescriptions: Record<string, string>,
-    locationViews?: Record<string, { name: string, shows: string }[]>,   // the views of the location sheet, when it has them
+    locationViews?: Record<string, { name: string, shows: string, file?: string }[]>,   // the views of the location sheet, when it has them
     lookBrief: string,
     // config.pinStartFrame: a continuing clip's first frame is pinned by the render itself - then it is not a reference
     // picture as well, and the prompt has no `<Picture N>` for it (the same image twice was blended in a second time, shifted)
@@ -120,7 +120,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const views = location ? locationViews?.[location.id] : undefined
     const pictured = views?.length ? Math.min(views.length, Math.max(1, override?.placeView ?? clip.shots.find(s => s.placeView)?.placeView ?? 1)) : undefined
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: locationViewAsset(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: views![pictured - 1]!.file ?? locationViewAsset(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
         ...characters.map(c => {
             // the look the character is in when they first appear in this clip - the clip has one picture of them
             const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]

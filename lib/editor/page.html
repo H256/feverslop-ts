@@ -495,7 +495,7 @@ function renderRun(current) {
 
 function followRun(root) {
     run.source?.close()
-    const source = new EventSource(`${root}/api/${root.endsWith('library') ? '' : ''}run-events?after=${run.after}`)
+    const source = new EventSource(`${root}/api/run-events?after=${run.after}`)
     run.source = source
     source.addEventListener('lines', event => {
         const {lines, next} = JSON.parse(event.data)
@@ -1238,6 +1238,16 @@ function overridePanel(clip) {
         out.push(el('div', {class: 'section'}, el('h3', {}, 'View of the place'), el('div', {class: 'refs'}, clip.views.options.map(option => el('button', {class: `ref${option.n === chosen ? ' chosen' : ''}`, title: option.shows, onclick: () => save({...override, placeView: option.n}).catch(showError)},
             option.v ? el('img', {src: thumbUrl(option), alt: '', loading: 'lazy'}) : el('span', {class: 'noimg'}, 'Not rendered'),
             el('div', {}, el('b', {}, option.name), el('small', {}, `View ${option.n}${option.n === clip.views.chosen ? ' · in the plan' : ''}`)))))))
+    }
+    if (clip.views) {
+        const addView = async () => {
+            const name = el('input', {type: 'text', placeholder: 'behind the bar, looking at the door'})
+            const shows = el('textarea', {rows: 3, placeholder: 'What is seen from there'})
+            const field = (label, input) => el('label', {class: 'field'}, el('span', {}, label), input)
+            const yes = await ask({title: 'One more view of this place', lines: ['For where the sheet has no view that fits. Rendered from the anchor of the place, so the look stays the same. It appears here to choose from.'], extra: el('div', {}, field('Where the camera is', name), field('What it shows', shows)), confirm: 'Render it'})
+            if (yes) await startRun({type: 'add-view', location: clip.views.locationId, name: name.value, shows: shows.value})
+        }
+        out.push(el('div', {class: 'section'}, el('button', {class: 'btn', onclick: () => addView().catch(showError)}, 'Add a view of this place')))
     }
     const people = clip.pictures.filter(p => p.kind !== 'frame')
     if (people.length > 1) {
