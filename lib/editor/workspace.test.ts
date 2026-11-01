@@ -291,6 +291,40 @@ describe('the start page', () => {
     })
 })
 
+describe('the finished videos of a project', () => {
+    test('what the name says it is, in a useful order; try-outs and other files are none', async () => {
+        const {finalLabel} = await import('./project.ts')
+        expect(finalLabel('demo', 'demo.mp4')).toMatchObject({label: 'Final', preview: false})
+        expect(finalLabel('demo', 'demo-finished.mp4')).toMatchObject({label: 'Final finished'})
+        expect(finalLabel('demo', 'demo-48fps.mp4')).toMatchObject({label: 'Final 48 fps'})
+        expect(finalLabel('demo', 'demo-48fps-finished.mp4')).toMatchObject({label: 'Final 48 fps finished'})
+        expect(finalLabel('demo', 'demo-preview.mp4')).toMatchObject({label: 'Preview video', preview: true})
+        for (const other of ['demo-partial.mp4', 'demo-partial-48fps.mp4', 'demo-2.mp4', 'other.mp4', 'demo.srt', 'demo-b.mp4']) expect(finalLabel('demo', other)).toBeUndefined()
+        const order = ['demo-preview.mp4', 'demo-48fps-finished.mp4', 'demo.mp4', 'demo-48fps.mp4', 'demo-finished.mp4'].sort((a, b) => finalLabel('demo', a)!.order - finalLabel('demo', b)!.order)
+        expect(order).toEqual(['demo.mp4', 'demo-finished.mp4', 'demo-48fps.mp4', 'demo-48fps-finished.mp4', 'demo-preview.mp4'])
+    })
+    test('each with its size and frame rate, and whether it is older than the clips', async () => {
+        const project = target('finals')
+        const video = async (name: string, size: string, rate: number) => {
+            mkdirSync(project.dir, {recursive: true})
+            const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=black:s=${size}:r=${rate}`, '-frames:v', '4', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(project.dir, name)], {stdout: 'ignore', stderr: 'ignore'})
+            expect(await proc.exited).toBe(0)
+        }
+        await video('finals.mp4', '64x36', 24)
+        await video('finals-48fps.mp4', '128x72', 48)
+        await video('finals-partial.mp4', '64x36', 24)
+        write(join(project.dir, 'output/clips/slot-001.json'), {id: 'slot-001', frameStart: 0, frames: 24, section: 'A', beatId: 'b', shots: [], assets: {pictures: [], audio: []}, prompt: ''})
+        write(join(project.dir, 'videos/slot-001.mp4'))
+        utimesSync(join(project.dir, 'videos/slot-001.mp4'), old, old)
+        utimesSync(join(project.dir, 'finals-48fps.mp4'), new Date(500_000), new Date(500_000))
+        const {finals} = await readEditorProject(project)
+        expect(finals.map(f => [f.file, f.label, f.width, f.height, f.fps, f.state])).toEqual([
+            ['finals.mp4', 'Final', 64, 36, 24, 'current'],
+            ['finals-48fps.mp4', 'Final 48 fps', 128, 72, 48, 'older'],
+        ])
+    })
+})
+
 describe('marks', () => {
     const clip = (id: string, more = {}) => ({id, frameStart: 0, frames: 24, section: 'A', beatId: 'b', shots: [], assets: {pictures: [], audio: []}, prompt: '', ...more})
     test('what is known against a clip, from what is on disk', async () => {

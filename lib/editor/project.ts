@@ -1,5 +1,6 @@
 import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {isAbsolute, join, relative} from "node:path";
+import {probeVideo} from "../assemble.ts";
 import {boundaryFrameAsset, type ClipRequest} from "../compose.ts";
 import {loadProjectConfig} from "../config.ts";
 import {FPS, secondsAt} from "../frames.ts";
@@ -69,9 +70,12 @@ export type EditorProject = {
     pictures: { id: string, kind: string, name: string, file: string, exists: boolean, v?: number }[],
     final: { state: FinalState, file?: string, v?: number },
     previewVideo?: { file: string, v: number },
+    finals: EditorFinal[],      // every finished video there is of it: the final one, finished, at another frame rate
     lastRun?: { state: RunState, command: string, startedAt: string, failures: string[] },
     command: string,            // how this project is run, for the commands the page shows
 }
+
+export type EditorFinal = { file: string, v: number, label: string, state: FinalState, preview: boolean, width?: number, height?: number, fps?: number }
 
 export type EditorTarget = { id: string, dir: string, kind: EditorKind }
 
@@ -81,6 +85,7 @@ const media = (dir: string, file: string) => existsSync(join(dir, file)) ? {file
 
 const readJson = <T>(file: string): T | undefined => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as T : undefined
 
+type VideoInfo = Awaited<ReturnType<typeof probeVideo>>
 type Sidecar = { workflow?: string, size?: string, seed?: number, renderedFrames?: number }
 const videoOf = (dir: string, id: string): EditorClip['video'] => {
     const file = `videos/${id}.mp4`
@@ -115,6 +120,37 @@ export function groupsOf(clips: EditorClip[], label: (id: string) => string): Ed
         else groups.push({id: clip.group, label: label(clip.group), start: clip.start, end: clip.end})
     }
     return groups
+}
+
+const probed = new Map<string, Promise<VideoInfo | undefined>>()
+/** What a video is, asked of ffprobe once per version of the file. */
+const probedVideo = (file: string, v: number) => {
+    const key = `${file}:${v}`
+    if (!probed.has(key)) probed.set(key, probeVideo(file).catch(() => undefined))
+    return probed.get(key)!
+}
+
+/** <id>.mp4, <id>-48fps.mp4, <id>-finished.mp4, <id>-48fps-finished.mp4, <id>-preview.mp4: what name a video has says what it is. Partial try-outs do not lie on the timeline. */
+export function finalLabel(id: string, name: string): { label: string, preview: boolean, order: number } | undefined {
+    if (!name.startsWith(id) || !name.endsWith('.mp4')) return undefined
+    const match = /^(-preview)?(?:-(\d+)fps)?(-finished)?$/.exec(name.slice(id.length, -'.mp4'.length))
+    if (!match) return undefined
+    const preview = !!match[1]
+    const fps = match[2] ? Number(match[2]) : 0
+    const label = preview ? 'Preview video' : ['Final', fps ? `${fps} fps` : '', match[3] ? 'finished' : ''].filter(Boolean).join(' ')
+    return {label, preview, order: (preview ? 10000 : 0) + fps * 2 + (match[3] ? 1 : 0)}
+}
+
+async function finalsOf(dir: string, id: string, clips: { id: string }[]): Promise<EditorFinal[]> {
+    const found = readdirSync(dir).flatMap(name => {
+        const about = finalLabel(id, name)
+        return about && statSync(join(dir, name)).isFile() ? [{name, ...about}] : []
+    }).sort((a, b) => a.order - b.order)
+    return Promise.all(found.map(async ({name, label, preview}) => {
+        const {file, v} = media(dir, name)!
+        const info = await probedVideo(join(dir, name), v)
+        return {file, v, label, preview, state: finalStateOf(dir, join(dir, name), clips), ...(info ? {width: info.width, height: info.height, fps: info.fps} : {})}
+    }))
 }
 
 const previewVideoOf = (dir: string, id: string) => media(dir, `${id}-preview.mp4`)
@@ -250,6 +286,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'output', 'assets.json'))),
         final: finalOf(dir, id, requests),
         previewVideo: previewVideoOf(dir, id),
+        finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun index.ts ${id}`,
     }
@@ -328,6 +365,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'assets.json'))),
         final: finalOf(dir, id, requests),
         previewVideo: previewVideoOf(dir, id),
+        finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun film.ts ${id}`,
     }

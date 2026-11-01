@@ -27,8 +27,9 @@ const DEFAULT_SONG_DURATION = 360
 
 // how long connecting to a server may take, and how long a server that was reachable may stay silent while a job is
 // waited for (a restart takes a while) before the run stops - the queued job is recorded and picked up by the next run
-// the frames before a part of a clip rendered again that its render starts on (--retake): as context frames (5 + 17·k)
-export const RETAKE_LEAD = 22
+// the frames before a part of a clip rendered again that its render starts on (--retake), 5 + 17·k: 22 of them ran out of memory
+// in MiniMaxH3AddGuide on a 32 GB card in a two-pass job, also with its memory freed before
+export const RETAKE_LEAD = 5
 // the shot a further view of a place comes from (renderExtraView): long enough for one slow move, in a length the model takes
 const EXTRA_VIEW_FRAMES = 73
 const CONNECT_TIMEOUT_MS = 60 * 1000
@@ -797,8 +798,6 @@ export class Renderer implements Disposable {
         }
         log.step('Part', `${clip.id} ${styles.muted(`frames ${plan.first}-${plan.end} of ${fileFrames}, ${plan.lead ? `${plan.lead} frames before it` : plan.singleStart ? 'the frame before it' : 'from its start'}${plan.endAt !== undefined ? ', the frame after it' : ''} as guides - ${plan.render} frames rendered`)}`)
         const prompt = retakePrompt(clip.prompt, shotsIn(plan, cuts))
-        // the guides are encoded at the start of the job, next to what the last job left loaded: a batch of frames ran out of memory on 32 GB
-        await this.freeMemory()
         const rendered = join(this.projectDir, `${work}.mp4`)
         const seed = resolveSeed(this.config.seed)
         const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['retake', plan.first, plan.end, prompt, this.config.videoWorkflow, fileFingerprint(video)]}

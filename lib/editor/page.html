@@ -320,7 +320,8 @@ dialog::backdrop { background: #000a; }
                         <span class="time"><span id="time-now">0:00.0</span> <span class="muted">/ <span id="time-all">0:00</span></span></span>
                         <span class="now muted" id="now"></span>
                         <div class="spacer"></div>
-                        <select class="source" id="source" title="What the monitor plays"></select>
+                        <span class="chip num" id="playing" hidden></span>
+                        <select class="source" id="source" title="What the monitor plays" aria-label="What the monitor plays"></select>
                         <button class="tbtn" id="mute" title="Sound on or off (M)" aria-label="Sound on or off"><svg class="icon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="sound-waves" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg></button>
                     </div>
                 </section>
@@ -924,7 +925,8 @@ const state = {
     pps: 1,                 // pixels per second of the timeline
     fitted: true,
     muted: false,
-    source: 'auto',         // what the monitor plays: auto, clips, previews
+    source: 'clips',        // what the monitor plays: final:<file>, clips, previews
+    sourceChosen: false,    // said by hand: it stays. Otherwise the best there is
     onlyFlagged: false,
     status: undefined,
 }
@@ -939,29 +941,63 @@ const flagged = clip => !clip.video || stateOf(clip) === 'stale' || clip.marks.l
 const clipAt = t => state.project.clips.find(c => t >= c.start && t < c.end)
 // A final video newer than all its clips is those clips, cut and with their sound in one file: nothing can run apart in it. Only without
 // one do the clips play one by one, and a song in an element of its own under them stays some hundredths of a second off.
-const finalPlayable = () => state.project?.final.state === 'current' && !!state.project.final.file
-const playsFinal = () => state.source === 'auto' && finalPlayable()
+const chosenFinal = () => state.source.startsWith('final:') ? state.project?.finals.find(f => f.file === state.source.slice('final:'.length)) : undefined
+const playsFinal = () => !!chosenFinal()
 const usesSong = () => !!state.project?.song && !playsFinal()
+const sizeOf = item => item.width ? `${item.width}×${item.height}` : ''
+const fpsOf = item => item.fps ? `${Math.round(item.fps * 100) / 100} fps` : ''
 // what a clip plays from: previews asked for, or nothing else there - marked on the monitor
 const fileOf = clip => state.source === 'previews' ? clip.preview ?? clip.video : clip.video ?? clip.preview
 
 ////////// MONITOR
 const setSrc = (node, url) => { if (node.dataset.url !== url) { node.dataset.url = url; node.src = url } }
 
+const sourceKey = () => `source:${route.kind}/${route.id}`
 function renderSourceChoice() {
     const select = $('source')
-    const hasPreviews = state.project.clips.some(c => c.preview)
+    const {finals, clips, song} = state.project
+    const clipsLabel = song ? 'Clips over the song' : 'Clips'
     const options = [
-        finalPlayable() ? ['auto', 'Final video'] : ['auto', usesSong() ? 'Clips over the song' : 'Clips'],
-        ...(finalPlayable() ? [['clips', usesSong() ? 'Clips over the song' : 'Clips']] : []),
-        ...(hasPreviews ? [['previews', 'Previews']] : []),
+        ...finals.map(final => [`final:${final.file}`, [final.label, sizeOf(final), final.state === 'older' ? 'older than its clips' : ''].filter(Boolean).join(' · ')]),
+        ['clips', clipsLabel],
+        ...(clips.some(c => c.preview) ? [['previews', 'Previews of the clips']] : []),
     ]
     select.replaceChildren(...options.map(([value, label]) => el('option', {value}, label)))
-    if (!options.some(([value]) => value === state.source)) state.source = 'auto'
+    const known = value => options.some(([option]) => option === value)
+    // a choice by hand stays, here and at the next visit, as long as it is there
+    const kept = localStorage.getItem(sourceKey())
+    if (!state.sourceChosen && kept && known(kept)) {
+        state.source = kept
+        state.sourceChosen = true
+    }
+    if (!state.sourceChosen || !known(state.source)) {
+        // otherwise the plain final video when it is newer than its clips: all else plays what is there now, clip by clip
+        const best = finals.find(f => !f.preview && f.state === 'current')
+        state.source = best ? `final:${best.file}` : 'clips'
+    }
     select.value = state.source
+    renderPlayingInfo()
 }
+// what the monitor shows right now: read from the video itself, not from a plan
+function renderPlayingInfo() {
+    const info = $('playing')
+    const node = video()
+    const final = chosenFinal()
+    const clip = state.clip
+    const file = !final && clip ? fileOf(clip) : undefined
+    const preview = !!file && file === clip?.preview
+    if (node.hidden || (!final && !file)) { info.hidden = true; return }
+    const size = node.videoWidth ? `${node.videoWidth}×${node.videoHeight}` : final ? sizeOf(final) : clip?.video?.size?.replace('x', '×') ?? ''
+    const fps = final ? fpsOf(final) : `${state.project.fps} fps`
+    info.hidden = !size
+    info.textContent = [size, fps].filter(Boolean).join(' · ')
+    info.title = final ? final.file : [file?.file, preview ? 'a preview' : clip?.video?.workflow, clip?.video?.seed !== undefined && !preview ? `seed ${clip.video.seed}` : ''].filter(Boolean).join(' · ')
+}
+for (const node of [$('video-a'), $('video-b')]) node.addEventListener('loadedmetadata', () => renderPlayingInfo())
 $('source').addEventListener('change', () => {
     state.source = $('source').value
+    state.sourceChosen = true
+    localStorage.setItem(sourceKey(), state.source)
     if (usesSong()) song.currentTime = state.t
     else song.pause()
     showClip(state.clip, state.clip ? state.t - state.clip.start : 0)
@@ -977,7 +1013,7 @@ function showClip(clip, offset) {
     poster.hidden = true
     flag.hidden = true
     if (playsFinal()) {
-        setSrc(video(), mediaUrl(state.project.final))
+        setSrc(video(), mediaUrl(chosenFinal()))
         video().hidden = false
         standby().hidden = true
         standby().pause()
@@ -985,11 +1021,13 @@ function showClip(clip, offset) {
         applySound()
         if (Math.abs(video().currentTime - state.t) > 0.05) video().currentTime = state.t
         if (state.playing) video().play().catch(() => {})
+        renderPlayingInfo()
         return
     }
     const file = clip && fileOf(clip)
     if (!file) {
         for (const node of videos) { node.hidden = true; node.pause() }
+        renderPlayingInfo()
         notice.hidden = false
         notice.textContent = clip ? 'Not rendered' : state.project.clips.length ? 'No clip here' : 'No clips planned yet'
         const stand = clip?.pictures.find(p => p.kind === 'location' && p.exists) ?? clip?.pictures.find(p => p.exists)
@@ -1019,6 +1057,7 @@ function showClip(clip, offset) {
     const following = state.project.clips[state.project.clips.indexOf(clip) + 1]
     const nextFile = following && fileOf(following)
     if (nextFile) setSrc(standby(), mediaUrl(nextFile))
+    renderPlayingInfo()
 }
 
 function applySound() {
@@ -1398,7 +1437,9 @@ async function pickVersion(clip, version) {
     await api(`versions/${clip.id}/pick`, {version: version.id})
     state.versions = undefined
     await loadProject()
-    state.source = 'auto'
+    // what was just made current is to be seen: not a final video without it
+    state.sourceChosen = false
+    localStorage.removeItem(sourceKey())
     renderSourceChoice()
     seek(state.t)
     toast(`${clip.id} is now that version`)
