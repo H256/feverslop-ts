@@ -21,6 +21,7 @@ import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {Character, Project} from "../lib/project.ts";
 import {type PictureJob, Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
+import {answer as wizardAnswer} from "../lib/wizard.ts";
 cli('replace-character')
 
 
@@ -227,12 +228,8 @@ if (config.sequenceSheets) {
 }
 
 // cancelled with Ctrl+C / Esc
-function answer<T>(value: T): Exclude<T, symbol> {
-    if (p.isCancel(value)) {
-        log.cancel(changes.length
+function answer<T>(value: T) {
+    return wizardAnswer(value, changes.length
             ? `Cancelled - already changed: ${changes.join('; ')}.${sheetCleared ? ` Render the new reference sheet with: bun index.ts ${id} --render=images` : ''}`
             : 'Cancelled - nothing was changed')
-        process.exit(1)
-    }
-    return value as Exclude<T, symbol>
 }

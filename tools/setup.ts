@@ -6,6 +6,7 @@ import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {listModels, takesPictures} from "../lib/llm.ts";
 import {styles} from "../lib/log.ts";
+import {answer as wizardAnswer} from "../lib/wizard.ts";
 import {
     type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, maskSecret, normalizeUrl,
     parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source,
@@ -46,12 +47,8 @@ if (command === 'all' || command === 'comfy') await setupComfy()
 log.success('Done - see the result with: bun run setup show')
 
 // cancelled with Ctrl+C / Esc: stop without saving the current part
-function answer<T>(value: T): Exclude<T, symbol> {
-    if (p.isCancel(value)) {
-        log.cancel('Cancelled - nothing more saved')
-        process.exit(1)
-    }
-    return value as Exclude<T, symbol>
+function answer<T>(value: T) {
+    return wizardAnswer(value, 'Cancelled - nothing more saved')
 }
 
 async function save(what: string) {

@@ -1,5 +1,5 @@
-// Prompt helpers for the interactive CLIs (@clack/prompts) - the same questions tools/init.ts asks for the music-video
-// wizard, here as a module so tools/film-init.ts can use them. tools/init.ts takes askStyle from here and keeps its own copies of the rest.
+// Prompt helpers for the interactive CLIs (@clack/prompts), shared by the wizards of the music video (tools/init.ts) and
+// the film (tools/film-init.ts). The other tools take answer() and pass what a cancel means for them.
 import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {createInterface} from "node:readline/promises";
@@ -8,15 +8,15 @@ import {log, styles} from "./log.ts";
 import {STYLES} from "./styles.ts";
 
 // cancelled with Ctrl+C / Esc
-export function answer<T>(value: T): Exclude<T, symbol> {
+export function answer<T>(value: T, cancelMessage = 'Cancelled - nothing written'): Exclude<T, symbol> {
     if (p.isCancel(value)) {
-        log.cancel('Cancelled - nothing written')
+        log.cancel(cancelMessage)
         process.exit(1)
     }
     return value as Exclude<T, symbol>
 }
 
-/** Text from a file path or typed on the spot (clack's text prompt is single-line, unsuited to a story or a screenplay). */
+/** Text from a file path or typed on the spot (clack's text prompt is single-line, unsuited to lyrics, a story or a screenplay). */
 export async function askText(label: string, options: { required?: boolean } = {}): Promise<string | undefined> {
     const mode = answer(await p.select({
         message: label,
@@ -87,7 +87,7 @@ export async function askStyle(): Promise<string | undefined> {
 
 /**
  * Clack has no multiline prompt - reads plain lines until two in a row are empty, after the current clack prompt
- * closed. A single empty line doesn't end it: stories and screenplays routinely have blank lines in them.
+ * closed. A single empty line doesn't end it: lyrics, stories and screenplays routinely have blank lines in them.
  */
 export async function multiline(label: string): Promise<string> {
     log.prompt(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))

@@ -6,14 +6,13 @@ import {log} from '../lib/log.ts';
 // usage: bun run init
 import * as p from "@clack/prompts";
 import {existsSync, readdirSync} from "node:fs";
-import {createInterface} from "node:readline/promises";
 import type {Resolution} from "../comfy/helpers.ts";
 import {type Finish, MILD_FINISH} from "../lib/finish.ts";
 import {FPS} from "../lib/frames.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
-import {askStyle} from "../lib/wizard.ts";
+import {answer, askResolution, askStyle, askText, multiline} from "../lib/wizard.ts";
 cli('init')
 
 
@@ -461,33 +460,6 @@ function resolutionText(r: Resolution) {
     return r === -1 ? 'workflow default' : typeof r === 'number' ? `${r} MP` : r
 }
 
-// cancelled with Ctrl+C / Esc
-function answer<T>(value: T): Exclude<T, symbol> {
-    if (p.isCancel(value)) {
-        log.cancel('Cancelled - nothing written')
-        process.exit(1)
-    }
-    return value as Exclude<T, symbol>
-}
-
-/** Text from a file path or typed on the spot (clack's text prompt is single-line, unsuited to lyrics/a story). */
-async function askText(label: string, options: { required?: boolean } = {}): Promise<string | undefined> {
-    const mode = answer(await p.select({
-        message: label,
-        options: [
-            {value: 'type', label: 'Type it now'},
-            {value: 'file', label: 'Read from a file'},
-            ...(options.required ? [] : [{value: 'skip', label: 'Skip'}]),
-        ],
-    }))
-    if (mode === 'skip') return undefined
-    if (mode === 'file') {
-        const path = answer(await p.text({message: 'File path', validate: v => v && existsSync(v) ? undefined : 'file not found'}))
-        return (await Bun.file(path).text()).trim()
-    }
-    return multiline(label)
-}
-
 /** An image or video workflow from comfy/workflows/ - the film pipeline's own and the helper ones are not offered. */
 async function askWorkflow(label: string, kind: 'image' | 'video'): Promise<string> {
     const fallback = kind === 'image' ? defaults.imageWorkflow : defaults.videoWorkflow
@@ -499,41 +471,4 @@ async function askWorkflow(label: string, kind: 'image' | 'video'): Promise<stri
         initialValue: fallback,
         options: names.map(n => ({value: n, label: n, hint: [WORKFLOW_HINTS[n], n === fallback ? 'default' : ''].filter(Boolean).join(' · ') || undefined})),
     }))
-}
-
-/**
- * Clack has no multiline prompt - reads plain lines until two in a row are empty, after the current clack prompt
- * closed. A single empty line doesn't end it: lyrics and stories routinely have blank lines between sections.
- */
-async function multiline(label: string): Promise<string> {
-    log.prompt(styles.muted(`  ${label} - end with two empty lines (press Enter twice when done):`))
-    const rl = createInterface({input: process.stdin})
-    const lines: string[] = []
-    let blankStreak = 0
-    for await (const line of rl) {
-        if (line === '') {
-            blankStreak++
-            if (blankStreak >= 2 && lines.length) break
-        } else {
-            blankStreak = 0
-        }
-        lines.push(line)
-    }
-    rl.close()
-    while (lines.length && lines.at(-1) === '') lines.pop()
-    return lines.join('\n').trim()
-}
-
-async function askResolution(label: string): Promise<Resolution> {
-    const mode = answer(await p.select({
-        message: label,
-        options: [
-            {value: 'default', label: 'Workflow default', hint: 'default'},
-            {value: 'megapixels', label: 'Megapixels (e.g. 1.1)'},
-            {value: 'fixed', label: 'Fixed size (WIDTHxHEIGHT)'},
-        ],
-    }))
-    if (mode === 'default') return -1
-    if (mode === 'megapixels') return Number(answer(await p.text({message: 'Megapixels', placeholder: '1.1', validate: v => Number(v) > 0 ? undefined : 'a positive number'})))
-    return answer(await p.text({message: 'Size', placeholder: '1920x1088', validate: v => v && /^\d+x\d+$/.test(v) ? undefined : 'e.g. 1920x1088'})) as `${number}x${number}`
 }

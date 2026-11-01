@@ -19,6 +19,7 @@ import {pictureProp, propMissing} from "../lib/prop-check.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
 import {type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
 import {loadSettings} from "../lib/settings.ts";
+import {answer as wizardAnswer} from "../lib/wizard.ts";
 cli('import-asset')
 
 
@@ -227,10 +228,6 @@ function fail(message: string): never {
 }
 
 // cancelled with Ctrl+C / Esc
-function answer<T>(value: T): Exclude<T, symbol> {
-    if (p.isCancel(value)) {
-        log.cancel('Cancelled')
-        process.exit(1)
-    }
-    return value as Exclude<T, symbol>
+function answer<T>(value: T) {
+    return wizardAnswer(value, 'Cancelled')
 }
