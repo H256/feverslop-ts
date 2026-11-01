@@ -22,6 +22,7 @@ import {pinnedSidecar} from "../lib/provenance.ts";
 import {Renderer} from "../lib/render.ts";
 import {LOCATION_VIEWS} from "../lib/sequenceSheet.ts";
 import {loadSettings} from "../lib/settings.ts";
+import {answer as wizardAnswer} from "../lib/wizard.ts";
 cli('create-asset')
 
 
@@ -128,10 +129,6 @@ log.output(join(library, libraryFolder(kind, id!)))
 log.next(`bun run import-asset <project-id> <asset-id> --from=library:${id}`)
 
 // cancelled with Ctrl+C / Esc - the work folder stays, the next run starts it again
-function answer<T>(value: T): Exclude<T, symbol> {
-    if (p.isCancel(value)) {
-        log.cancel('Cancelled - nothing is in the library')
-        process.exit(1)
-    }
-    return value as Exclude<T, symbol>
+function answer<T>(value: T) {
+    return wizardAnswer(value, 'Cancelled - nothing is in the library')
 }

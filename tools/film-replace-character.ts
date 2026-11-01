@@ -24,6 +24,7 @@ import {pinnedSidecar} from "../lib/provenance.ts";
 import {characterImageDescriptionPrompt} from "../lib/prompts.ts";
 import type {PictureJob} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
+import {answer as wizardAnswer} from "../lib/wizard.ts";
 cli('film:replace-character')
 
 
@@ -229,12 +230,8 @@ if (config.sequenceSheets) {
 }
 
 // cancelled with Ctrl+C / Esc
-function answer<T>(value: T): Exclude<T, symbol> {
-    if (p.isCancel(value)) {
-        log.cancel(changes.length
+function answer<T>(value: T) {
+    return wizardAnswer(value, changes.length
             ? `Cancelled - already changed: ${changes.join('; ')}.${sheetCleared ? ` Render the new reference sheet with: bun film.ts ${id} --render=images` : ''}`
             : 'Cancelled - nothing was changed')
-        process.exit(1)
-    }
-    return value as Exclude<T, symbol>
 }
