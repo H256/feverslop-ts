@@ -9,7 +9,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
-import {clipChains, renderAll} from "./lib/batch.ts";
+import {clipChains, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
@@ -1144,19 +1144,14 @@ if (render.has('images') || render.has('videos')) {
         if (args.again) {
             const unknown = [...only].filter(id => !clips.some(c => c.id === id))
             if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${clips.map(c => c.id).join(', ')}`)
-            if (config.seed !== -1) log.warn(`"seed" is ${config.seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)
+            warnFixedSeed(config.seed)
             const stamp = versionStamp()
             for (const clip of selected) {
                 const keep = archiveFiles(project.dir, `${clip.id}-${stamp}`, [join('videos', `${clip.id}.mp4`), join('videos', `${clip.id}.mp4.json`), boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
                 log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
                 recordTiming({kind: 'clip', name: config.videoWorkflow, seconds: 0, outcome: 'again', reason: 'again'})
             }
-            // a clip that goes on from the last frame of one of these starts on a picture that is gone
-            const later = new Set<string>()
-            for (const clip of selected) {
-                for (let next = clips.find(c => c.startsFrom === clip.id); next; next = clips.find(c => c.startsFrom === next!.id)) if (!selected.includes(next)) later.add(next.id)
-            }
-            if (later.size) log.warn(`${[...later].join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
+            warnClipsGoingOn(selected, clips)
         }
         const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, 'videos', `${c.id}.mp4`)))
         log.step('Estimate', styles.muted(await clipEstimate(todoClips, config, settings.comfy.map(server => server.name))))

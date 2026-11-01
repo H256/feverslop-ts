@@ -28,3 +28,23 @@ export function clipChains<T extends { id: string, startsFrom?: string }>(clips:
     }
     return chains
 }
+
+/** A clip that is rendered again with a fixed seed comes out the same (--again). */
+export function warnFixedSeed(seed: number) {
+    if (seed !== -1) log.warn(`"seed" is ${seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)
+}
+
+/** The clips not among the selected ones that go on, directly or through others, from the last frame of a selected one. */
+export function clipsGoingOn<T extends { id: string, startsFrom?: string }>(selected: T[], all: T[]): string[] {
+    const later = new Set<string>()
+    for (const clip of selected) {
+        for (let next = all.find(c => c.startsFrom === clip.id); next; next = all.find(c => c.startsFrom === next!.id)) if (!selected.includes(next)) later.add(next.id)
+    }
+    return [...later]
+}
+
+/** A clip that goes on from the last frame of a clip rendered again starts on a picture that is gone (--again). */
+export function warnClipsGoingOn<T extends { id: string, startsFrom?: string }>(selected: T[], all: T[]) {
+    const later = clipsGoingOn(selected, all)
+    if (later.length) log.warn(`${later.join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`)
+}
