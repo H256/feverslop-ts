@@ -1,8 +1,8 @@
 import {describe, expect, test} from "bun:test";
-import {CONTEXT_SETTLE, FPS, maxClipFor} from "./frames.ts";
+import {CONTEXT_SETTLE, FPS, MAX_CLIP_SEC, maxClipFor} from "./frames.ts";
 
 describe('maxClipFor', () => {
-    const max = 10 - 17 / FPS
+    const max = MAX_CLIP_SEC
 
     test('stays as it is without context frames or without continuing clips', () => {
         expect(maxClipFor(max, 0, 'always')).toBe(max)

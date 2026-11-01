@@ -328,7 +328,7 @@ Dark gothic oil painting in the manner of Caravaggio, heavy chiaroscuro, candlel
 [docs/style-examples.md](docs/style-examples.md) lists all the built-in styles (classic to modern live action, anime,
 2D/3D animation, stop-motion, painted and found-media looks) to copy into `style.txt`.
 
-The longest clip the video model can generate is set in `index.ts` as `MAX_CLIP_SEC` (10 seconds - the H3 node
+The longest clip the video model can generate is set in `lib/frames.ts` as `MAX_CLIP_SEC` (10 seconds - the H3 node
 actually renders such a slot as 10.13 s, see [The final video](#the-final-video)).
 
 ## Steps
