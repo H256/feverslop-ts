@@ -37,6 +37,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
 | `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command - `--film` for a film |
 | `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt - `--film` for a film |
+| `bun run editor <id>`   | the workspace in the browser: the whole video on one timeline, every clip playable with its prompt, shots and references next to it; dark, light or the system's theme. Reads only - `--film` for a film, `--port=4173` for another port |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |

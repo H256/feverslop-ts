@@ -135,7 +135,7 @@ if (args.film) {
 }
 
 const {dir, changed, notes, steps, render, next, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)
-const {pictures, missingPictures, clips, missingClips, staleClips, finalVideo, finalState} = render
+const {pictures, missingPictures, stalePictures, clips, missingClips, staleClips, finalVideo, finalState} = render
 const finalLabel = args.film ? 'Film' : 'Final video'
 const run = lastRun(dir)
 
@@ -145,7 +145,7 @@ if (args.json) {
         lastRun: run ? {...run, state: runState(run)} : null,
         changedInputs: changed,
         steps,
-        pictures: {total: pictures.length, missing: missingPictures.map(p => p.id)},
+        pictures: {total: pictures.length, missing: missingPictures.map(p => p.id), stale: stalePictures.map(p => p.id)},
         clips: {total: clips.length, missing: missingClips.map(c => c.id), stale: staleClips.map(c => c.id)},
         finalVideo: finalState === 'missing' ? 'missing' : finalState === 'current' ? 'current' : 'older than the clips',
         next,
@@ -165,7 +165,7 @@ for (let i = 0; i < steps.length; i += perLine) {
 log.info(styles.muted(`✔ done · ⟳ redone by the next run · ✗ not generated yet · – not used by this ${args.film ? 'film' : 'project'}`))
 
 log.section('RENDERS')
-log.step('Pictures', pictures.length ? `${pictures.length - missingPictures.length} of ${pictures.length} rendered${missingPictures.length ? styles.muted(` - missing: ${missingPictures.map(p => p.id).join(', ')}`) : ''}` : styles.muted('no plan yet'))
+log.step('Pictures', pictures.length ? `${pictures.length - missingPictures.length} of ${pictures.length} rendered${missingPictures.length ? styles.muted(` - missing: ${missingPictures.map(p => p.id).join(', ')}`) : ''}${stalePictures.length ? styles.warning(` · ${stalePictures.length} stale: ${stalePictures.map(p => p.id).join(', ')}`) : ''}` : styles.muted('no plan yet'))
 log.step('Clips', clips.length ? `${clips.length - missingClips.length} of ${clips.length} rendered${staleClips.length ? styles.warning(` · ${staleClips.length} stale: ${staleClips.map(c => c.id).join(', ')}`) : ''}` : styles.muted('no plan yet'))
 log.step(finalLabel, finalState === 'missing' ? styles.muted('not assembled yet') : finalState === 'current' ? finalVideo : styles.warning(`${finalVideo} - older than its clips`))
 

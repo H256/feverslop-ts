@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace</title>
+<script>
+// before the first paint, so that a chosen theme does not flash the other one
+document.documentElement.dataset.theme = localStorage.getItem('theme') ?? 'system'
+</script>
+<style>
+:root {
+    color-scheme: light dark;
+    --bg: light-dark(#f3f3f1, #0d0e10);
+    --surface: light-dark(#ffffff, #15171a);
+    --raised: light-dark(#ecebe8, #1e2125);
+    --hover: light-dark(#e3e2de, #272b30);
+    --line: light-dark(#dddcd7, #292d32);
+    --text: light-dark(#191a1c, #eceef1);
+    --muted: light-dark(#5f6269, #9a9fa8);
+    --accent: light-dark(#cf3d1b, #ff6f4d);
+    --accent-text: light-dark(#ffffff, #1a0d09);
+    --accent-soft: light-dark(#fbe6e0, #3a1d15);
+    --stale: light-dark(#8f6200, #f2bd3a);
+    --stale-soft: light-dark(#f8ecc9, #3a2d0c);
+    --danger: light-dark(#b42318, #ff7a70);
+    --ok: light-dark(#17693f, #5ed29a);
+    --hatch: light-dark(#d6d5d0, #24272b);
+    --sans: "Inter", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+    --radius: 8px;
+}
+:root[data-theme=light] { color-scheme: light; }
+:root[data-theme=dark] { color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 var(--sans); overflow: hidden; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+h1, h2, h3, p { margin: 0; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+
+.app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+
+/* top bar */
+.top { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--line); min-width: 0; }
+.mark { width: 18px; height: 18px; flex: none; border-radius: 5px; background: var(--accent); display: grid; place-items: center; color: var(--accent-text); }
+.top h1 { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; background: var(--raised); color: var(--muted); font-size: 12px; white-space: nowrap; }
+.chip.stale { background: var(--stale-soft); color: var(--stale); }
+.chip.bad { color: var(--danger); }
+.chip.good { color: var(--ok); }
+.chip a { color: inherit; }
+.chips { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+.spacer { flex: 1; }
+.theme { display: flex; flex: none; padding: 2px; gap: 2px; border-radius: 8px; background: var(--raised); border: 0; margin: 0; }
+.theme legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.theme label { display: grid; place-items: center; width: 28px; height: 24px; border-radius: 6px; color: var(--muted); cursor: pointer; }
+.theme label:hover { color: var(--text); }
+.theme input { position: absolute; opacity: 0; pointer-events: none; }
+.theme input:checked + label { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px #0003; }
+.theme input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 1px; }
+svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+/* monitor and inspector */
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 400px; min-height: 0; }
+.monitor { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+/* a monitor stays dark in both themes: a picture is judged against black */
+.stage { position: relative; background: #000; min-height: 0; overflow: hidden; }
+.stage video, .stage .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.stage video[hidden], .stage .poster[hidden] { display: none; }
+.stage .poster { opacity: .35; }
+.notice { position: absolute; left: 50%; top: 50%; translate: -50% -50%; color: #fff; background: #000a; padding: 6px 14px; border-radius: 99px; font-size: 13px; white-space: nowrap; }
+.notice[hidden] { display: none; }
+.transport { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
+.tbtn { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent; color: var(--text); flex: none; }
+.tbtn:hover { background: var(--raised); }
+.tbtn.play { background: var(--accent); color: var(--accent-text); }
+.tbtn.play:hover { background: var(--accent); filter: brightness(1.1); }
+.tbtn.play svg { fill: currentColor; stroke: none; }
+.time { font: 13px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+.inspector { display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--surface); border-left: 1px solid var(--line); min-height: 0; min-width: 0; }
+.ihead { padding: 12px 14px 8px; }
+.ihead h2 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; font-family: var(--mono); }
+.ihead p { color: var(--muted); }
+.tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.tabs button { padding: 7px 8px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); margin-bottom: -1px; }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected=true] { color: var(--text); border-color: var(--accent); font-weight: 500; }
+.tabs small { color: var(--muted); font-size: 11px; margin-left: 2px; }
+.panel { overflow-y: auto; padding: 12px 14px 20px; min-height: 0; }
+.empty { color: var(--muted); padding: 32px 16px; text-align: center; }
+.prompt { font: 12px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.token { color: var(--accent); background: var(--accent-soft); border-radius: 3px; padding: 0 2px; }
+.section { margin-bottom: 16px; }
+.section > h3 { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.shot { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; }
+.shot header { display: flex; justify-content: space-between; gap: 8px; font-weight: 500; }
+.shot header span:last-child { color: var(--muted); font-weight: 400; white-space: nowrap; }
+.shot .how { color: var(--muted); font-size: 12px; }
+.shot p + p, .shot .how + p { margin-top: 4px; }
+.person { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.person b { color: var(--text); font-weight: 500; }
+.line { display: grid; grid-template-columns: 44px 1fr; gap: 6px; margin-bottom: 5px; }
+.line time { color: var(--muted); font: 12px var(--mono); }
+.line small { display: block; color: var(--muted); }
+.refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ref { display: block; width: 100%; padding: 0; background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; text-align: left; }
+.ref:hover { border-color: var(--muted); }
+.ref img, .ref .noimg { display: block; width: 100%; aspect-ratio: 16/10; object-fit: cover; background: var(--hatch); }
+.ref .noimg { display: grid; place-items: center; color: var(--danger); font-size: 12px; }
+.ref div { padding: 5px 8px 6px; }
+.ref b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ref small { color: var(--muted); display: flex; gap: 6px; }
+.ref small .stale { color: var(--stale); }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; font-family: var(--mono); }
+.frames { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.frames figure { margin: 0; }
+.frames img { width: 100%; display: block; border-radius: 6px; background: #000; cursor: zoom-in; }
+.frames figcaption { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.cmd { display: flex; align-items: flex-start; gap: 6px; background: var(--raised); border-radius: 6px; padding: 6px 6px 6px 10px; margin-bottom: 6px; }
+.cmd code { flex: 1; font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+.cmd button { flex: none; border: 0; background: transparent; border-radius: 5px; color: var(--muted); padding: 3px; }
+.cmd button:hover { background: var(--hover); color: var(--text); }
+.warn { background: var(--stale-soft); color: var(--stale); padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; }
+
+/* timeline */
+.timeline { background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
+.tbar { display: flex; align-items: center; gap: 12px; padding: 5px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.legend { display: flex; gap: 12px; color: var(--muted); font-size: 12px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.zoom { display: flex; align-items: center; gap: 6px; color: var(--muted); flex: none; }
+.zoom input { width: 120px; accent-color: var(--accent); }
+.zoom button { border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: 0 8px; color: var(--muted); }
+.zoom button:hover { color: var(--text); background: var(--raised); }
+.tbody { display: grid; grid-template-columns: 62px minmax(0, 1fr); }
+.labels { border-right: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+.labels div { display: flex; align-items: center; padding-left: 12px; }
+.lane-ruler { height: 22px; }
+.lane-groups { height: 22px; }
+.lane-wave { height: 40px; }
+.lane-clips { height: 72px; }
+.lane-lines { height: 20px; }
+.scroll { overflow-x: auto; overflow-y: hidden; position: relative; scrollbar-width: thin; }
+.track { position: relative; width: calc(var(--seconds) * var(--pps) * 1px); min-width: 100%; }
+.lane { position: relative; overflow: hidden; }
+.lane canvas { position: sticky; left: 0; display: block; }
+.lane-ruler, .lane-wave, .lane-groups, .lane-lines { cursor: text; }
+.group, .spoken, .clip { position: absolute; left: calc(var(--s) * var(--pps) * 1px); width: calc(var(--d) * var(--pps) * 1px); }
+.group { top: 2px; bottom: 2px; border-radius: 4px; padding: 0 6px; font-size: 11px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: light-dark(oklch(.92 .05 var(--h)), oklch(.31 .06 var(--h))); color: light-dark(oklch(.32 .09 var(--h)), oklch(.89 .07 var(--h))); border-right: 1px solid var(--surface); }
+.spoken { top: 2px; bottom: 2px; border-radius: 3px; padding: 0 4px; font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: clip; background: var(--raised); color: var(--muted); border-right: 1px solid var(--surface); container-type: inline-size; }
+@container (width < 44px) { .spoken span { display: none; } }
+.clip { top: 3px; bottom: 3px; padding: 0; border: 0; border-radius: 5px; overflow: hidden; background: var(--raised); container-type: inline-size; outline-offset: -2px; }
+.clip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.clip::after { content: ""; position: absolute; inset: 0; border-radius: 5px; box-shadow: inset 0 0 0 1px #ffffff1f; pointer-events: none; }
+.clip:hover::after { box-shadow: inset 0 0 0 1.5px #fff9; }
+.clip.selected::after { box-shadow: inset 0 0 0 2px var(--accent); }
+.clip .tag { position: absolute; left: 4px; top: 3px; color: #fff; font: 11px var(--mono); padding: 0 4px; border-radius: 3px; background: #000a; }
+.clip .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff8; }
+.clip.missing { background: repeating-linear-gradient(135deg, var(--hatch) 0 5px, transparent 5px 10px); box-shadow: inset 0 0 0 1px var(--line); }
+.clip.missing img { opacity: .25; }
+.clip.missing .tag { background: transparent; color: var(--muted); }
+.clip.stale::before { content: ""; position: absolute; z-index: 1; left: 0; right: 0; top: 0; height: 4px; background: var(--stale); }
+.clip.stale .tag { top: 6px; }
+.clip .goes { position: absolute; z-index: 1; left: 3px; bottom: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1.5px #000a; }
+@container (width < 48px) { .clip .tag { display: none; } }
+@container (width < 14px) { .clip .goes { display: none; } }
+.playhead { position: absolute; top: 0; bottom: 0; left: calc(var(--t, 0) * var(--pps) * 1px); width: 1.5px; background: var(--accent); pointer-events: none; z-index: 3; }
+.playhead::before { content: ""; position: absolute; left: -4.25px; top: 0; width: 10px; height: 10px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 45%, 50% 100%, 0 45%); }
+
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); padding: 0; max-width: min(92vw, 1200px); max-height: 90vh; }
+dialog::backdrop { background: #000a; }
+dialog img { display: block; max-width: 100%; max-height: 68vh; margin: 0 auto; background: #000; }
+dialog .caption { padding: 12px 16px; max-height: 20vh; overflow: auto; }
+dialog .caption p { color: var(--muted); font-size: 12px; margin-top: 2px; }
+dialog form { position: absolute; right: 8px; top: 8px; margin: 0; }
+dialog form button { border: 0; border-radius: 6px; background: #000a; color: #fff; padding: 3px 9px; }
+
+.boot { display: grid; place-items: center; height: 100%; color: var(--muted); text-align: center; padding: 24px; }
+.boot code { font-family: var(--mono); color: var(--text); }
+
+@media (max-width: 960px) {
+    body { overflow: auto; }
+    .app { height: auto; }
+    .work { grid-template-columns: minmax(0, 1fr); }
+    .stage { aspect-ratio: 16/9; }
+    .inspector { border-left: 0; border-top: 1px solid var(--line); max-height: 60vh; }
+    .chips { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { .tbtn, .clip::after, .theme label { transition: background-color .12s, box-shadow .12s, color .12s; } }
+</style>
+</head>
+<body>
+<div class="app" id="app" hidden>
+    <header class="top">
+        <span class="mark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="M6 4v16l14-8z" fill="currentColor" stroke="none"/></svg></span>
+        <h1 id="title"></h1>
+        <div class="chips" id="chips"></div>
+        <div class="spacer"></div>
+        <fieldset class="theme" id="theme">
+            <legend>Theme</legend>
+            <input type="radio" name="theme" id="theme-system" value="system"><label for="theme-system" title="Follow the system setting"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span hidden>System</span></label>
+            <input type="radio" name="theme" id="theme-light" value="light"><label for="theme-light" title="Light"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span hidden>Light</span></label>
+            <input type="radio" name="theme" id="theme-dark" value="dark"><label for="theme-dark" title="Dark"><svg class="icon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg><span hidden>Dark</span></label>
+        </fieldset>
+    </header>
+
+    <main class="work">
+        <section class="monitor" aria-label="Monitor">
+            <div class="stage" id="stage">
+                <video id="video-a" playsinline preload="auto"></video>
+                <video id="video-b" playsinline preload="auto" hidden></video>
+                <img class="poster" id="poster" alt="" hidden>
+                <div class="notice" id="notice" hidden></div>
+            </div>
+            <div class="transport">
+                <button class="tbtn" id="prev" title="Previous clip (←)" aria-label="Previous clip"><svg class="icon" viewBox="0 0 24 24"><path d="M6 5v14M19 5l-10 7 10 7z"/></svg></button>
+                <button class="tbtn play" id="play" title="Play or pause (Space)" aria-label="Play"><svg class="icon" viewBox="0 0 24 24"><path id="play-icon" d="M7 4v16l13-8z"/></svg></button>
+                <button class="tbtn" id="next" title="Next clip (→)" aria-label="Next clip"><svg class="icon" viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z"/></svg></button>
+                <span class="time"><span id="time-now">0:00.0</span> <span class="muted">/ <span id="time-all">0:00</span></span></span>
+                <span class="now muted" id="now"></span>
+                <div class="spacer"></div>
+                <span class="chip" id="source" title="What the monitor plays: the final video when it is newer than all its clips, else the clips one by one"></span>
+                <button class="tbtn" id="mute" title="Sound on or off (M)" aria-label="Sound on or off"><svg class="icon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="sound-waves" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg></button>
+            </div>
+        </section>
+
+        <aside class="inspector" aria-label="Clip">
+            <div class="ihead" id="ihead"></div>
+            <div class="tabs" role="tablist" id="tabs"></div>
+            <div class="panel" role="tabpanel" id="panel"></div>
+        </aside>
+    </main>
+
+    <section class="timeline" aria-label="Timeline">
+        <div class="tbar">
+            <div class="legend" id="legend"></div>
+            <div class="spacer"></div>
+            <div class="zoom">
+                <button id="fit" title="Show the whole video">Fit</button>
+                <label for="zoom" class="muted">Zoom</label>
+                <input type="range" id="zoom" min="0" max="100" value="0" title="Ctrl + wheel over the timeline">
+            </div>
+        </div>
+        <div class="tbody">
+            <div class="labels" aria-hidden="true">
+                <div class="lane-ruler"></div>
+                <div class="lane-groups" id="groups-label"></div>
+                <div class="lane-wave" id="wave-label">Sound</div>
+                <div class="lane-clips">Clips</div>
+                <div class="lane-lines" id="lines-label"></div>
+            </div>
+            <div class="scroll" id="scroll">
+                <div class="track" id="track">
+                    <div class="lane lane-ruler" id="seek-ruler"><canvas id="ruler"></canvas></div>
+                    <div class="lane lane-groups" id="groups"></div>
+                    <div class="lane lane-wave" id="seek-wave"><canvas id="wave"></canvas></div>
+                    <div class="lane lane-clips" id="clips"></div>
+                    <div class="lane lane-lines" id="lines"></div>
+                    <div class="playhead" id="playhead"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+<audio id="song" preload="auto" hidden></audio>
+<div class="boot" id="boot">Loading…</div>
+<dialog id="viewer"><form method="dialog"><button aria-label="Close">✕</button></form><img id="viewer-img" alt=""><div class="caption" id="viewer-caption"></div></dialog>
+
+<script type="module">
+const $ = id => document.getElementById(id)
+
+/** A DOM element: text always goes in as text, never as markup - prompts and names come from a language model. */
+function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag)
+    for (const [key, value] of Object.entries(props)) {
+        if (value === undefined || value === null || value === false) continue
+        if (key === 'class') node.className = value
+        else if (key === 'style') for (const [name, v] of Object.entries(value)) node.style.setProperty(name, v)
+        else if (key.startsWith('on')) node.addEventListener(key.slice(2), value)
+        else if (key in node && key !== 'list') node[key] = value
+        else node.setAttribute(key, value)
+    }
+    node.append(...children.flat().filter(child => child !== undefined && child !== null && child !== false))
+    return node
+}
+
+const encoded = file => file.split('/').map(encodeURIComponent).join('/')
+const mediaUrl = ({file, v}) => `/media/${encoded(file)}${v ? `?v=${v}` : ''}`
+const thumbUrl = ({file, v}, width = 320) => `/thumb/${encoded(file)}?w=${width}${v ? `&v=${v}` : ''}`
+const clock = (seconds, precise = true) => {
+    const whole = Math.max(0, seconds)
+    const minutes = Math.floor(whole / 60)
+    const rest = whole - minutes * 60
+    return precise ? `${minutes}:${rest.toFixed(1).padStart(4, '0')}` : `${minutes}:${String(Math.floor(rest)).padStart(2, '0')}`
+}
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value))
+
+////////// THEME - the system's, or a choice kept in this browser
+const themeInputs = [...document.querySelectorAll('#theme input')]
+const themeOf = () => document.documentElement.dataset.theme
+for (const input of themeInputs) {
+    input.checked = input.value === themeOf()
+    input.addEventListener('change', () => {
+        document.documentElement.dataset.theme = input.value
+        if (input.value === 'system') localStorage.removeItem('theme')
+        else localStorage.setItem('theme', input.value)
+        drawCanvases()
+    })
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => drawCanvases())
+
+////////// STATE
+const state = {
+    project: undefined,
+    projectText: '',
+    fresh: {clips: {}, pictures: {}},
+    peaks: undefined,
+    t: 0,
+    playing: false,
+    clip: undefined,        // the clip at the playhead - what the monitor and the inspector show
+    tab: 'prompt',
+    pps: 1,                 // pixels per second of the timeline
+    fitted: true,
+    muted: false,
+}
+const song = $('song')
+const videos = [$('video-a'), $('video-b')]
+let active = 0
+const video = () => videos[active]
+const standby = () => videos[1 - active]
+
+const stateOf = clip => !clip.video ? 'missing' : state.fresh.clips[clip.id] ?? 'unknown'
+const clipAt = t => state.project.clips.find(c => t >= c.start && t < c.end)
+// A final video newer than all its clips is those clips, cut and with their sound in one file: nothing can run apart in it. Only without
+// one do the clips play one by one, and a song in an element of its own under them stays some hundredths of a second off.
+const playsFinal = () => state.project?.final.state === 'current' && !!state.project.final.file
+const usesSong = () => !!state.project?.song && !playsFinal()
+
+////////// MONITOR
+const setSrc = (node, url) => { if (node.dataset.url !== url) { node.dataset.url = url; node.src = url } }
+
+function showClip(clip, offset) {
+    const notice = $('notice')
+    const poster = $('poster')
+    notice.hidden = true
+    poster.hidden = true
+    $('source').textContent = playsFinal() ? 'Final video' : usesSong() ? 'Clips over the song' : 'Clips'
+    if (playsFinal()) {
+        setSrc(video(), mediaUrl(state.project.final))
+        video().hidden = false
+        standby().hidden = true
+        standby().pause()
+        song.pause()
+        applySound()
+        if (Math.abs(video().currentTime - state.t) > 0.05) video().currentTime = state.t
+        if (state.playing) video().play().catch(() => {})
+        return
+    }
+    if (!clip?.video) {
+        for (const node of videos) { node.hidden = true; node.pause() }
+        notice.hidden = false
+        notice.textContent = clip ? 'Not rendered' : state.project.clips.length ? 'No clip here' : 'No clips planned yet'
+        const stand = clip?.pictures.find(p => p.kind === 'location' && p.exists) ?? clip?.pictures.find(p => p.exists)
+        if (stand) {
+            poster.src = mediaUrl(stand)
+            poster.hidden = false
+        }
+        return
+    }
+    const url = mediaUrl(clip.video)
+    if (video().dataset.url !== url && standby().dataset.url === url) {
+        video().pause()
+        active = 1 - active
+    } else setSrc(video(), url)
+    video().hidden = false
+    video().playbackRate = 1
+    standby().hidden = true
+    standby().pause()
+    applySound()
+    if (Math.abs(video().currentTime - offset) > 0.05) video().currentTime = offset
+    if (state.playing) video().play().catch(() => {})
+    // the clip after this one is loaded in advance, so that the cut is a cut and not a wait
+    const following = state.project.clips[state.project.clips.indexOf(clip) + 1]
+    if (following?.video) setSrc(standby(), mediaUrl(following.video))
+}
+
+function applySound() {
+    song.muted = state.muted
+    for (const node of videos) node.muted = state.muted || usesSong()
+    $('sound-waves').style.display = state.muted ? 'none' : ''
+}
+
+function setClip(clip) {
+    if (clip === state.clip) return
+    state.clip = clip
+    for (const node of $('clips').children) node.classList.toggle('selected', node.dataset.id === clip?.id)
+    if (clip) history.replaceState(null, '', `#${clip.id}`)
+    renderInspector()
+    renderNow()
+}
+
+function renderNow() {
+    const clip = state.clip
+    $('now').textContent = clip ? `${clip.id} · ${state.project.groups.find(g => g.id === clip.group)?.label ?? clip.group}` : ''
+}
+
+function moveTo(t, {scroll = true} = {}) {
+    state.t = t
+    $('track').style.setProperty('--t', t)
+    $('time-now').textContent = clock(t)
+    if (scroll) keepInView(t)
+}
+
+function seek(t) {
+    const target = clamp(t, 0, state.project.seconds)
+    const clip = clipAt(target)
+    if (usesSong()) song.currentTime = target
+    moveTo(target)
+    if (clip) setClip(clip)
+    else if (state.clip) { state.clip = undefined; for (const node of $('clips').children) node.classList.remove('selected'); renderNow() }
+    showClip(clip, clip ? target - clip.start : 0)
+}
+
+function setPlaying(playing) {
+    state.playing = playing
+    $('play-icon').setAttribute('d', playing ? 'M7 4h3.5v16H7zM13.5 4H17v16h-3.5z' : 'M7 4v16l13-8z')
+    $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play')
+    if (playing) {
+        if (state.t >= state.project.seconds - 0.05) seek(0)
+        lastTick = performance.now()
+        if (usesSong()) song.play().catch(() => setPlaying(false))
+        if (playsFinal() || clipAt(state.t)?.video) video().play().catch(() => {})
+        requestAnimationFrame(tick)
+    } else {
+        song.pause()
+        for (const node of videos) { node.pause(); node.playbackRate = 1 }
+    }
+}
+
+let lastTick = 0
+function tick(now) {
+    if (!state.playing) return
+    const elapsed = (now - lastTick) / 1000
+    lastTick = now
+    const clip = state.clip && state.t >= state.clip.start && state.t < state.clip.end ? state.clip : clipAt(state.t)
+    let t
+    if (playsFinal()) t = video().ended ? state.project.seconds : video().currentTime
+    else if (usesSong()) t = song.ended ? state.project.seconds : song.currentTime
+    else if (clip?.video && !video().hidden) t = video().ended ? clip.end : clip.start + video().currentTime
+    else t = state.t + elapsed      // nothing plays here: the time goes on by the clock, as it does in the final video
+
+    if (t >= state.project.seconds) {
+        moveTo(state.project.seconds)
+        setPlaying(false)
+        return
+    }
+    const here = clipAt(t)
+    if (here !== state.clip) {
+        moveTo(t)
+        setClip(here)
+        showClip(here, here ? t - here.start : 0)
+    } else {
+        moveTo(t)
+        if (usesSong() && here?.video) followSong(t - here.start)
+    }
+    requestAnimationFrame(tick)
+}
+
+// Under the song a clip follows it. A jump would show, so more than a frame off is played away a little faster or slower; only what has
+// grown large (a clip still loading) is a jump. Less than a frame is left alone: every change of the rate disturbs the video's clock.
+const JUMP_AT = 0.2
+const A_FRAME = 1 / 24
+const MOST_RATE_CHANGE = 0.1
+function followSong(wanted) {
+    const late = wanted - video().currentTime
+    if (Math.abs(late) > JUMP_AT) {
+        video().currentTime = wanted
+        return setRate(1)
+    }
+    setRate(Math.abs(late) < A_FRAME ? 1 : 1 + clamp(late, -MOST_RATE_CHANGE, MOST_RATE_CHANGE))
+}
+const setRate = rate => { if (Math.abs(video().playbackRate - rate) > 0.004) video().playbackRate = rate }
+
+function step(direction) {
+    const clips = state.project.clips
+    if (!clips.length) return
+    const index = state.clip ? clips.indexOf(state.clip) : clips.findIndex(c => c.start > state.t) - (direction > 0 ? 1 : 0)
+    // back: first to the start of this clip, from there to the one before
+    const target = direction < 0 && state.clip && state.t - state.clip.start > 0.5 ? index : clamp(index + direction, 0, clips.length - 1)
+    seek(clips[target].start)
+}
+
+////////// INSPECTOR
+const TABS = [
+    ['prompt', 'Prompt', () => undefined],
+    ['shots', 'Shots', clip => clip.shots.length],
+    ['refs', 'References', clip => clip.pictures.length + clip.audio.length],
+    ['render', 'Render', () => undefined],
+]
+const STATE_CHIPS = {
+    missing: ['Not rendered', 'chip'],
+    stale: ['Stale', 'chip stale'],
+    current: ['Current', 'chip good'],
+    pinned: ['Pinned', 'chip'],
+    unknown: ['Checking…', 'chip'],
+}
+
+function renderInspector() {
+    const clip = state.clip
+    $('ihead').replaceChildren(...(clip ? [
+        el('h2', {}, clip.id, el('span', {class: STATE_CHIPS[stateOf(clip)][1], style: {'font-family': 'var(--sans)', 'font-weight': '400'}}, STATE_CHIPS[stateOf(clip)][0])),
+        el('p', {class: 'num'}, `${clock(clip.start)} – ${clock(clip.end)} · ${(clip.end - clip.start).toFixed(1)}s · ${state.project.groups.find(g => g.id === clip.group)?.label ?? clip.group}`),
+    ] : [el('h2', {}, 'No clip'), el('p', {}, 'Nothing at the playhead')]))
+    $('tabs').replaceChildren(...(clip ? TABS : []).map(([id, name, count]) => {
+        const n = count(clip)
+        return el('button', {role: 'tab', 'aria-selected': String(state.tab === id), onclick: () => { state.tab = id; renderInspector(); $('panel').scrollTop = 0 }}, name, n ? el('small', {}, String(n)) : undefined)
+    }))
+    if (!clip) return $('panel').replaceChildren(el('div', {class: 'empty'}, state.project.clips.length ? 'Pick a clip on the timeline.' : `No plan yet - run ${state.project.command}`))
+    const panels = {prompt: promptPanel, shots: shotsPanel, refs: refsPanel, render: renderPanel}
+    $('panel').replaceChildren(...panels[state.tab](clip))
+}
+
+function promptPanel(clip) {
+    // <Picture N> and <Audio N> are the prompt's own markup: they point at the references of the clip
+    const parts = clip.prompt.split(/(<(?:Picture|Audio) \d+>)/g).map(part => {
+        if (!/^<(Picture|Audio) \d+>$/.test(part)) return part
+        const label = part.slice(1, -1)
+        const ref = clip.pictures.find(p => p.label === part || p.label === label) ?? clip.audio.find(a => a.label === part || a.label === label)
+        return el('span', {class: 'token', title: ref ? (ref.name ?? ref.stem ?? '') : ''}, part)
+    })
+    return [el('div', {class: 'prompt'}, parts)]
+}
+
+function shotsPanel(clip) {
+    const out = []
+    if (clip.context.text || clip.context.staging) {
+        out.push(el('div', {class: 'section'},
+            el('h3', {}, clip.context.label),
+            clip.context.text && el('p', {}, clip.context.text),
+            clip.context.staging && el('p', {class: 'muted', style: {'margin-top': '4px'}}, clip.context.staging)))
+    }
+    out.push(el('div', {class: 'section'}, el('h3', {}, 'Shots'), clip.shots.map(shot => el('article', {class: 'shot'},
+        el('header', {}, el('span', {}, shot.label.replace(/^\[|\]$/g, '')), el('span', {class: 'num'}, `${shot.at}s`)),
+        el('p', {class: 'how'}, [shot.framing, shot.camera].filter(Boolean).join(' · ')),
+        shot.action && el('p', {}, shot.action),
+        shot.people.map(person => el('div', {class: 'person'}, el('b', {}, person.name), ` ${person.text}`)),
+    ))))
+    if (clip.lines.length) {
+        out.push(el('div', {class: 'section'}, el('h3', {}, state.project.kind === 'film' ? 'Dialogue' : 'Sung'), clip.lines.map(line => el('div', {class: 'line'},
+            el('time', {}, `${line.at.toFixed(1)}s`),
+            el('div', {}, line.text, line.who && el('small', {}, line.who))))))
+    }
+    return out
+}
+
+const pictureState = file => {
+    const job = state.project.pictures.find(p => p.file === file)
+    return job ? state.fresh.pictures[job.id] : undefined
+}
+
+function refsPanel(clip) {
+    const out = []
+    if (clip.dropped.length) out.push(el('div', {class: 'warn'}, `No picture for lack of room: ${clip.dropped.join(', ')}`))
+    out.push(el('div', {class: 'section'}, el('h3', {}, 'Pictures'), el('div', {class: 'refs'}, clip.pictures.map(picture => {
+        const fresh = pictureState(picture.file)
+        return el('button', {class: 'ref', title: picture.description, onclick: () => picture.exists && openViewer(picture, picture.label, picture.name, picture.description)},
+            picture.exists ? el('img', {src: thumbUrl(picture, 640), alt: picture.name, loading: 'lazy', decoding: 'async'}) : el('span', {class: 'noimg'}, 'Missing'),
+            el('div', {}, el('b', {}, picture.name || picture.label), el('small', {}, picture.label.replace(/[<>]/g, ''), ` · ${picture.kind}`, fresh === 'stale' && el('span', {class: 'stale'}, 'stale'), fresh === 'pinned' && el('span', {}, 'pinned'))))
+    }))))
+    if (clip.audio.length) {
+        out.push(el('div', {class: 'section'}, el('h3', {}, 'Sound'), el('dl', {class: 'facts'}, clip.audio.flatMap(audio => [
+            el('dt', {}, audio.label.replace(/[<>]/g, '')),
+            el('dd', {class: 'num'}, `${audio.stem ?? ''} · ${audio.songStart.toFixed(1)}s – ${audio.songEnd.toFixed(1)}s of the song`),
+        ]))))
+    }
+    return out
+}
+
+function renderPanel(clip) {
+    const fresh = stateOf(clip)
+    const facts = (...rows) => el('dl', {class: 'facts'}, rows.filter(([, value]) => value !== undefined && value !== '').flatMap(([name, value]) => [el('dt', {}, name), el('dd', {}, value)]))
+    const jump = id => el('button', {class: 'link', onclick: () => seek(state.project.clips.find(c => c.id === id).start)}, id)
+    const out = []
+    if (fresh === 'stale') out.push(el('div', {class: 'warn'}, 'Made from another prompt, picture or start frame than the plan has now.'))
+    out.push(el('div', {class: 'section'}, el('h3', {}, 'File'), facts(
+        ['Video', clip.video ? el('a', {href: mediaUrl(clip.video), target: '_blank', rel: 'noopener', style: {color: 'inherit'}}, clip.video.file) : 'not rendered'],
+        ['Workflow', clip.video?.workflow],
+        ['Size', clip.video?.size],
+        ['Seed', clip.video?.seed === undefined ? undefined : String(clip.video.seed)],
+        ['Frames', clip.video?.renderedFrames ? `${clip.frames} of ${clip.video.renderedFrames} used` : `${clip.frames}`],
+        ['From frame', String(clip.frameStart)],
+    )))
+    if (clip.startsFrom || clip.next) {
+        out.push(el('div', {class: 'section'}, el('h3', {}, 'Goes on'), facts(
+            ['From', clip.startsFrom ? jump(clip.startsFrom) : undefined],
+            ['Into', clip.next ? jump(clip.next) : undefined],
+        )))
+    }
+    const frames = [['First frame', clip.firstFrame], ['Last frame', clip.lastFrame]].filter(([, frame]) => frame)
+    if (frames.length) {
+        out.push(el('div', {class: 'section'}, el('h3', {}, 'Frames'), el('div', {class: 'frames'}, frames.map(([name, frame]) => el('figure', {},
+            el('img', {src: thumbUrl(frame, 640), alt: name, loading: 'lazy', decoding: 'async', onclick: () => openViewer(frame, name, clip.id)}),
+            el('figcaption', {}, name))))))
+    }
+    const command = `${state.project.command} --render=videos --only=${clip.id}${clip.video ? ' --again' : ''}`
+    out.push(el('div', {class: 'section'}, el('h3', {}, clip.video ? 'Render again in the terminal' : 'Render in the terminal'), copyable(command)))
+    return out
+}
+
+function copyable(text) {
+    const button = el('button', {title: 'Copy', 'aria-label': 'Copy', onclick: async () => {
+        await navigator.clipboard.writeText(text)
+        button.textContent = '✓'
+        setTimeout(() => button.replaceChildren(copyIcon()), 1200)
+    }}, copyIcon())
+    // a command breaks between its words, not at the dashes of an option
+    const words = text.split(' ').flatMap((word, n) => [n ? ' ' : '', el('span', {style: {display: 'inline-block'}}, word)])
+    return el('div', {class: 'cmd'}, el('code', {}, words), button)
+}
+function copyIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    svg.setAttribute('class', 'icon')
+    svg.setAttribute('viewBox', '0 0 24 24')
+    svg.innerHTML = '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'
+    return svg
+}
+
+function openViewer(picture, title, name, text) {
+    $('viewer-img').src = mediaUrl(picture)
+    $('viewer-img').alt = name ?? title
+    $('viewer-caption').replaceChildren(el('b', {}, [title.replace(/[<>]/g, ''), name].filter(Boolean).join(' · ')), text ? el('p', {}, text) : '')
+    $('viewer').showModal()
+}
+$('viewer').addEventListener('click', event => { if (event.target === $('viewer')) $('viewer').close() })
+
+////////// TIMELINE
+// a colour per section or scene name, the same one wherever it comes back
+const HUES = [25, 255, 145, 320, 80, 200, 0, 290]
+
+function renderTimeline() {
+    const {project} = state
+    const hues = new Map()
+    for (const group of project.groups) if (!hues.has(group.label)) hues.set(group.label, HUES[hues.size % HUES.length])
+    const span = (s, d) => ({'--s': s, '--d': d})
+    $('groups-label').textContent = project.kind === 'film' ? 'Scenes' : 'Sections'
+    $('lines-label').textContent = project.kind === 'film' ? 'Lines' : 'Sung'
+    $('groups').replaceChildren(...project.groups.map(group => el('div', {class: 'group', title: group.label, style: {...span(group.start, group.end - group.start), '--h': hues.get(group.label)}}, group.label)))
+    $('clips').replaceChildren(...project.clips.map(clip => {
+        const seconds = clip.end - clip.start
+        const stand = clip.firstFrame ?? clip.pictures.find(p => p.kind === 'location' && p.exists) ?? clip.pictures.find(p => p.exists)
+        return el('button', {class: `clip ${stateOf(clip)}${clip === state.clip ? ' selected' : ''}`, 'data-id': clip.id, title: `${clip.id} · ${clock(clip.start)} – ${clock(clip.end)}`, style: span(clip.start, seconds), 'aria-label': `${clip.id}, ${STATE_CHIPS[stateOf(clip)][0]}`, onclick: () => seek(clip.start)},
+            stand && el('img', {src: thumbUrl(stand), alt: '', decoding: 'async', draggable: false}),
+            clip.shots.slice(1).map(shot => el('span', {class: 'tick', style: {left: `${shot.at / seconds * 100}%`}})),
+            el('span', {class: 'tag'}, clip.id.replace(/^\D+/, '')),
+            clip.startsFrom && el('span', {class: 'goes', title: `Goes on from ${clip.startsFrom}`}))
+    }))
+    $('lines').replaceChildren(...project.clips.flatMap(clip => clip.lines.map(line => {
+        const end = line.end ?? clip.end - clip.start
+        return el('div', {class: 'spoken', title: line.who ? `${line.who}: ${line.text}` : line.text, style: span(clip.start + line.at, Math.max(0.1, end - line.at))}, el('span', {}, line.text))
+    })))
+    renderSummary()
+}
+
+function renderSummary() {
+    const {project} = state
+    const clips = project.clips
+    const missing = clips.filter(c => !c.video).length
+    const stale = clips.filter(c => stateOf(c) === 'stale').length
+    const pinned = clips.filter(c => stateOf(c) === 'pinned').length
+    const stalePictures = project.pictures.filter(p => state.fresh.pictures[p.id] === 'stale').length
+    const missingPictures = project.pictures.filter(p => !p.exists).length
+    const final = {missing: ['No final video', 'chip'], current: ['Final video current', 'chip good'], older: ['Final video older than its clips', 'chip stale']}[project.final.state]
+    const run = project.lastRun
+    const runChip = run && {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']}[run.state]
+    $('chips').replaceChildren(
+        el('span', {class: 'chip'}, project.kind === 'film' ? 'Film' : 'Music video'),
+        el('span', {class: `chip ${final[1].replace('chip', '')}`}, project.final.file ? el('a', {href: mediaUrl(project.final), target: '_blank', rel: 'noopener'}, final[0]) : final[0]),
+        runChip ? el('span', {class: runChip[1], title: [run.command, ...run.failures].join('\n')}, runChip[0]) : '',
+        missingPictures ? el('span', {class: 'chip bad'}, `${missingPictures} pictures missing`) : '',
+        stalePictures ? el('span', {class: 'chip stale'}, `${stalePictures} pictures stale`) : '',
+    )
+    const item = (colour, text) => el('span', {}, el('i', {style: {background: colour}}), text)
+    $('legend').replaceChildren(
+        el('span', {class: 'num'}, `${clips.length - missing} of ${clips.length} clips rendered`),
+        missing ? el('span', {}, el('i', {style: {background: 'repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px)'}}), `${missing} missing`) : '',
+        stale ? item('var(--stale)', `${stale} stale`) : '',
+        pinned ? el('span', {}, `${pinned} pinned`) : '',
+        clips.some(c => c.startsFrom) ? el('span', {}, el('i', {style: {background: 'var(--accent)', 'border-radius': '50%'}}), 'goes on from the clip before') : '',
+    )
+    $('wave-label').textContent = state.peaks ? (project.song ? 'Song' : 'Sound') : ''
+}
+
+const scroller = $('scroll')
+const fitScale = () => scroller.clientWidth / Math.max(1, state.project.seconds)
+const MAX_PPS = 160
+
+function setScale(pps, anchorTime, anchorX) {
+    state.pps = clamp(pps, fitScale(), MAX_PPS)
+    $('track').style.setProperty('--pps', state.pps)
+    $('zoom').value = String(Math.round(Math.log(state.pps / fitScale()) / Math.log(MAX_PPS / fitScale()) * 100) || 0)
+    if (anchorTime !== undefined) scroller.scrollLeft = anchorTime * state.pps - anchorX
+    drawCanvases()
+}
+
+function keepInView(t) {
+    const x = t * state.pps
+    if (x < scroller.scrollLeft || x > scroller.scrollLeft + scroller.clientWidth - 40) scroller.scrollLeft = x - 40
+}
+
+const readVar = name => getComputedStyle(document.documentElement).getPropertyValue(name)
+
+// the canvases stay as wide as the window of the timeline and draw what is in it: a whole song at full zoom is wider than a canvas can be
+function prepareCanvas(canvas, height) {
+    const ratio = devicePixelRatio || 1
+    const width = scroller.clientWidth
+    canvas.width = Math.round(width * ratio)
+    canvas.height = Math.round(height * ratio)
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+    const context = canvas.getContext('2d')
+    context.scale(ratio, ratio)
+    return {context, width}
+}
+
+function resolveColor(name) {
+    // light-dark() only means something to CSS: let it say what it comes to
+    const probe = $('track')
+    const before = probe.style.color
+    probe.style.color = `var(${name})`
+    const colour = getComputedStyle(probe).color
+    probe.style.color = before
+    return colour
+}
+
+function drawCanvases() {
+    if (!state.project) return
+    drawRuler()
+    drawWave()
+}
+
+function drawRuler() {
+    const {context, width} = prepareCanvas($('ruler'), 22)
+    const left = scroller.scrollLeft
+    const steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
+    const stepSize = steps.find(s => s * state.pps >= 70) ?? 600
+    context.font = `11px ${readVar('--mono')}`
+    context.textBaseline = 'middle'
+    const muted = resolveColor('--muted')
+    context.fillStyle = muted
+    context.strokeStyle = muted
+    context.globalAlpha = 1
+    const first = Math.floor(left / state.pps / stepSize) * stepSize
+    for (let s = first; s * state.pps - left < width && s <= state.project.seconds; s += stepSize) {
+        const x = Math.round(s * state.pps - left) + 0.5
+        context.globalAlpha = .55
+        context.beginPath()
+        context.moveTo(x, 15)
+        context.lineTo(x, 22)
+        context.stroke()
+        context.globalAlpha = 1
+        context.fillText(clock(s, false), x + 4, 10)
+    }
+}
+
+function drawWave() {
+    const {context, width} = prepareCanvas($('wave'), 40)
+    const {peaks} = state
+    if (!peaks) return
+    context.fillStyle = resolveColor('--muted')
+    context.globalAlpha = .75
+    const left = scroller.scrollLeft
+    const seconds = state.project.seconds
+    const middle = 20
+    for (let x = 0; x < width; x += 2) {
+        const from = (x + left) / state.pps / seconds * peaks.length
+        const to = (x + 2 + left) / state.pps / seconds * peaks.length
+        if (from >= peaks.length) break
+        let peak = 0
+        for (let i = Math.floor(from); i < Math.max(Math.floor(from) + 1, to) && i < peaks.length; i++) peak = Math.max(peak, peaks[i])
+        const height = Math.max(1, peak * 36)
+        context.fillRect(x, middle - height / 2, 1.5, height)
+    }
+}
+
+// pressing and dragging on a lane without clips moves the playhead
+for (const lane of [$('seek-ruler'), $('groups'), $('seek-wave'), $('lines')]) {
+    lane.addEventListener('pointerdown', event => {
+        const timeAt = e => (e.clientX - scroller.getBoundingClientRect().left + scroller.scrollLeft) / state.pps
+        const wasPlaying = state.playing
+        if (wasPlaying) setPlaying(false)
+        seek(timeAt(event))
+        const move = e => seek(timeAt(e))
+        const up = () => {
+            removeEventListener('pointermove', move)
+            removeEventListener('pointerup', up)
+            if (wasPlaying) setPlaying(true)
+        }
+        addEventListener('pointermove', move)
+        addEventListener('pointerup', up)
+    })
+}
+scroller.addEventListener('scroll', drawCanvases, {passive: true})
+scroller.addEventListener('wheel', event => {
+    if (!event.ctrlKey) {
+        // a plain wheel moves along the timeline: it has nothing to scroll up and down
+        if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) { scroller.scrollLeft += event.deltaY; event.preventDefault() }
+        return
+    }
+    event.preventDefault()
+    const x = event.clientX - scroller.getBoundingClientRect().left
+    state.fitted = false
+    setScale(state.pps * Math.exp(-event.deltaY * 0.002), (x + scroller.scrollLeft) / state.pps, x)
+}, {passive: false})
+$('zoom').addEventListener('input', () => {
+    const centre = state.t * state.pps - scroller.scrollLeft
+    const inView = centre >= 0 && centre <= scroller.clientWidth
+    const anchorX = inView ? centre : scroller.clientWidth / 2
+    const anchorTime = inView ? state.t : (scroller.scrollLeft + anchorX) / state.pps
+    state.fitted = Number($('zoom').value) === 0
+    setScale(fitScale() * Math.pow(MAX_PPS / fitScale(), Number($('zoom').value) / 100), anchorTime, anchorX)
+})
+$('fit').addEventListener('click', () => { state.fitted = true; setScale(fitScale()); scroller.scrollLeft = 0 })
+new ResizeObserver(() => {
+    if (!state.project) return
+    setScale(state.fitted ? fitScale() : state.pps)
+}).observe(scroller)
+
+////////// CONTROLS
+$('play').addEventListener('click', () => setPlaying(!state.playing))
+$('prev').addEventListener('click', () => step(-1))
+$('next').addEventListener('click', () => step(1))
+$('mute').addEventListener('click', () => { state.muted = !state.muted; applySound() })
+addEventListener('keydown', event => {
+    if (event.target.matches?.('input') || $('viewer').open || !state.project) return
+    const actions = {
+        ' ': () => setPlaying(!state.playing),
+        ArrowLeft: () => step(-1),
+        ArrowRight: () => step(1),
+        Home: () => seek(0),
+        End: () => seek(state.project.seconds - 0.01),
+        m: () => { state.muted = !state.muted; applySound() },
+    }
+    const action = actions[event.key]
+    if (!action || event.ctrlKey || event.metaKey || event.altKey) return
+    event.preventDefault()
+    action()
+})
+
+////////// DATA - the folder is the model: read again now and then, and when the window comes back
+async function loadProject({first = false} = {}) {
+    const response = await fetch('/api/project')
+    // a run can be writing a file just as it is read: what is on the page stays
+    if (!response.ok) {
+        if (first) throw new Error((await response.json()).error)
+        return
+    }
+    const text = await response.text()
+    if (text === state.projectText) return
+    state.projectText = text
+    const selected = state.clip?.id
+    state.project = JSON.parse(text)
+    document.title = `${state.project.title} · Workspace`
+    $('title').textContent = state.project.title
+    $('time-all').textContent = clock(state.project.seconds, false)
+    $('track').style.setProperty('--seconds', state.project.seconds)
+    if (state.project.song) {
+        const url = mediaUrl(state.project.song)
+        if (song.dataset.url !== url) { song.dataset.url = url; song.src = url }
+    }
+    state.clip = state.project.clips.find(c => c.id === selected)
+    loadFreshness()
+    if (first) return
+    // the plan or a render changed while the page was open: the same place, in what is there now
+    renderTimeline()
+    renderInspector()
+    setScale(state.fitted ? fitScale() : state.pps)
+    if (!state.playing) showClip(state.clip, state.clip ? state.t - state.clip.start : 0)
+    loadWaveform()
+}
+
+async function loadFreshness() {
+    const response = await fetch('/api/freshness')
+    if (!response.ok) return
+    state.fresh = await response.json()
+    for (const node of $('clips').children) {
+        const clip = state.project.clips.find(c => c.id === node.dataset.id)
+        if (!clip) continue
+        node.classList.remove('stale', 'current', 'pinned', 'unknown', 'missing')
+        node.classList.add(stateOf(clip))
+    }
+    renderSummary()
+    renderInspector()
+}
+
+async function loadWaveform() {
+    const response = await fetch('/api/waveform')
+    if (!response.ok) return
+    state.peaks = (await response.json()).peaks ?? undefined
+    renderSummary()
+    drawWave()
+}
+
+async function start() {
+    try {
+        await loadProject({first: true})
+    } catch (error) {
+        $('boot').replaceChildren(el('div', {}, el('p', {}, 'This project cannot be read.'), el('p', {}, el('code', {}, error.message))))
+        return
+    }
+    $('boot').hidden = true
+    $('boot').style.display = 'none'
+    $('app').hidden = false
+    renderTimeline()
+    state.fitted = true
+    setScale(fitScale())
+    const wanted = state.project.clips.find(c => c.id === location.hash.slice(1)) ?? state.project.clips[0]
+    if (wanted) seek(wanted.start)
+    else { renderInspector(); showClip(undefined, 0) }
+    applySound()
+    loadWaveform()
+    setInterval(() => { if (!document.hidden) loadProject() }, 10000)
+    addEventListener('focus', () => loadProject())
+}
+start()
+</script>
+</body>
+</html>

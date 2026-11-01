@@ -5,7 +5,7 @@ import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-
 import {extractFrame, probeVideo} from "../assemble.ts";
 import {log, styles} from "../log.ts";
 import {CONTEXT_SETTLE} from "../compose.ts";
-import {Renderer, type RenderWhat} from "../render.ts";
+import {pictureFingerprint, Renderer, type RenderWhat} from "../render.ts";
 import {renderStateOf} from "../render-state.ts";
 import {type Freshness, freshness} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
@@ -164,5 +164,5 @@ export class FilmRenderer extends Renderer {
 }
 
 /** What is rendered of a film, from the requests of its last plan run - for --dry-run and bun run status --film. */
-export const filmRenderState = (projectDir: string, filmId: string, config: FilmVideoConfig) =>
-    renderStateOf<FilmClipRequest>(projectDir, join(projectDir, 'assets.json'), join(projectDir, `${filmId}.mp4`), clip => filmClipFreshness(clip, projectDir, config) === 'stale')
+export const filmRenderState = (projectDir: string, filmId: string, config: FilmVideoConfig & Parameters<typeof pictureFingerprint>[2]) =>
+    renderStateOf<FilmClipRequest>(projectDir, join(projectDir, 'assets.json'), join(projectDir, `${filmId}.mp4`), config, clip => filmClipFreshness(clip, projectDir, config) === 'stale')

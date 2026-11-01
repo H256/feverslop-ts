@@ -90,6 +90,39 @@ export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: P
 // shows the change, instead of an anchor drawn from the prompt (renderSequenceSheet)
 export type PictureJob = { kind: 'character' | 'location' | 'prop', id: string, name: string, file: string, prompt: string, description: string, seed?: number, views?: string[], look?: { base: string, change: string } }
 
+type SheetConfig = Pick<RenderConfig, 'imageWorkflow' | 'imageResolution' | 'sequenceWorkflow'>
+
+/** What a picture's reference sheet is made from and where its files go - what it is rendered from, and what says whether the sheet there is stale. */
+function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig) {
+    const dir = `assets/sequence/${picture.kind}s/${picture.id}`
+    // with / also on Windows: anchorFile goes to the server as part of a path (a Linux ComfyUI refused "assets\sequence\…")
+    const anchorFile = `${dir}/anchor.png`
+    const anchorTarget = join(projectDir, anchorFile)
+    const videoFile = `${dir}/sequence.mp4`
+    const videoTarget = join(projectDir, videoFile)
+    // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
+    const anchorIsUsers = isUserFile(anchorTarget)
+    // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
+    const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
+    const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
+    const baseAnchorTarget = baseAnchorFile && join(projectDir, baseAnchorFile)
+    const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
+    // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
+    const expression = recordedExpression(`${join(projectDir, picture.file)}.json`)
+    const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change, LOOK_SEQUENCE_FRAMES, expression)
+        : picture.kind === 'character' ? characterSequencePrompt(picture.description, SEQUENCE_FRAMES, expression)
+        : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
+    const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, config, anchorIsUsers ? anchorTarget : undefined)
+    const anchorFingerprint = specId(anchor)
+    const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, config.sequenceWorkflow)
+    const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, config.sequenceWorkflow))
+    return {dir, anchorFile, anchorTarget, videoFile, videoTarget, anchorIsUsers, look, baseAnchorFile, baseAnchorTarget, sequenceFrames, sequencePrompt, beatTimes, anchor, anchorFingerprint, sequence, sheetFingerprint}
+}
+
+/** The id of the request a picture is rendered from, as its sidecar records it: its reference sheet with sequence sheets - a prop stays one plain picture - else the picture. */
+export const pictureFingerprint = (picture: PictureJob, projectDir: string, config: SheetConfig & Pick<RenderConfig, 'sequenceSheets'>) =>
+    config.sequenceSheets && picture.kind !== 'prop' ? sheetPlan(picture, projectDir, config).sheetFingerprint : specId(pictureSpec(picture, config))
+
 type Server = ComfyServer & { api: ComfyApi }
 
 /** What a render is, for the log and the statistics: the kind of result and the workflow (config name) that makes it. */
@@ -394,28 +427,7 @@ export class Renderer implements Disposable {
     async renderSequenceSheet(picture: PictureJob) {
         const target = join(this.projectDir, picture.file)
 
-        const dir = `assets/sequence/${picture.kind}s/${picture.id}`
-        // with / also on Windows: anchorFile goes to the server as part of a path (a Linux ComfyUI refused "assets\sequence\…")
-        const anchorFile = `${dir}/anchor.png`
-        const anchorTarget = join(this.projectDir, anchorFile)
-        const videoFile = `${dir}/sequence.mp4`
-        const videoTarget = join(this.projectDir, videoFile)
-        // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
-        const anchorIsUsers = isUserFile(anchorTarget)
-        // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
-        const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
-        const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
-        const baseAnchorTarget = baseAnchorFile && join(this.projectDir, baseAnchorFile)
-        const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
-        // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
-        const expression = recordedExpression(`${target}.json`)
-        const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change, LOOK_SEQUENCE_FRAMES, expression)
-            : picture.kind === 'character' ? characterSequencePrompt(picture.description, SEQUENCE_FRAMES, expression)
-            : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
-        const anchor = look ? lookAnchorSpec(picture.id, baseAnchorTarget!, look.change) : anchorSpec(picture, this.config, anchorIsUsers ? anchorTarget : undefined)
-        const anchorFingerprint = specId(anchor)
-        const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow)
-        const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, this.config.sequenceWorkflow))
+        const {dir, anchorFile, anchorTarget, videoFile, videoTarget, anchorIsUsers, look, baseAnchorFile, baseAnchorTarget, sequenceFrames, sequencePrompt, beatTimes, anchor, anchorFingerprint, sequence, sheetFingerprint} = sheetPlan(picture, this.projectDir, this.config)
         if (existsSync(target)) {
             const frameFiles = existsSync(join(this.projectDir, dir, 'frames')) ? readdirSync(join(this.projectDir, dir, 'frames')).map(f => join(dir, 'frames', f)) : []
             // the anchor goes too only when it changed: a sheet made again for its own prompt keeps its place or person - drawn
