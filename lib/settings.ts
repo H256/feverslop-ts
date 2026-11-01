@@ -156,6 +156,11 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
         comfy = parseComfyEntries(splitList(overrides.comfy), '--comfy')
         sources.comfy = 'flag'
     }
+    // a server of the settings file named by its URL stays that server: its name, and the credentials a URL does not carry
+    if (file.comfy?.length && sources.comfy !== 'file') {
+        const known = parseComfyEntries(file.comfy, `${settingsPath()}: comfy`)
+        comfy = comfy.map(server => known.find(entry => entry.url === server.url) ?? server)
+    }
     return {llm: {url: url && trimSlash(url), apiKey, model, parallel, ...(vision ? {vision} : {})}, comfy, sources}
 }
 

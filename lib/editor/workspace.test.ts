@@ -8,9 +8,11 @@ import {namedPictures} from "../render.ts";
 import {finalStateOf} from "../render-state.ts";
 import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import type {EditorTarget} from "./project.ts";
-import {readEditorProject, readListing} from "./project.ts";
+import {projectGroup, readEditorProject, readListing} from "./project.ts";
 import {allowedOptions, RunControl, runCommand} from "./runs.ts";
 import {editorHandler} from "./server.ts";
+import {loadSettings} from "../settings.ts";
+import {chosenUrls, readServer} from "./servers.ts";
 
 let root: string
 const here = process.cwd()
@@ -204,7 +206,8 @@ describe('what can be started', () => {
         expect(allowedOptions('music', 'demo', 'bun index.ts demo')).toEqual([])
         // what asks in the terminal, or changes the servers, or another project, or another script
         expect(allowedOptions('music', 'demo', 'bun index.ts demo --review')).toBeUndefined()
-        expect(allowedOptions('music', 'demo', 'bun index.ts demo --comfy=http://evil')).toBeUndefined()
+        // the servers are chosen again on the page: what the command said about them does not come along
+        expect(allowedOptions('music', 'demo', 'bun index.ts demo --comfy=http://evil')).toEqual([])
         expect(allowedOptions('music', 'demo', 'bun index.ts other --render=videos')).toBeUndefined()
         expect(allowedOptions('music', 'demo', 'bun tools/evil.ts demo')).toBeUndefined()
         expect(allowedOptions('music', 'demo', 'bun film.ts demo')).toBeUndefined()
@@ -263,6 +266,62 @@ describe('a run', () => {
     })
 })
 
+describe('the render servers', () => {
+    const server = {name: 'a', url: 'http://a'}
+    test('how busy one is, from its queue and stats', async () => {
+        const fetcher = (async (url: string) => Response.json(url.endsWith('/queue') ? {queue_running: [1], queue_pending: [1, 2]} : {devices: [{name: 'cuda:0 NVIDIA GeForce RTX 5090 : cudaMallocAsync', vram_free: 2 ** 30 * 7.25, vram_total: 2 ** 30 * 32}]})) as unknown as typeof fetch
+        expect(await readServer(server, fetcher)).toEqual({name: 'a', reachable: true, running: 1, pending: 2, device: 'NVIDIA GeForce RTX 5090', freeGb: 7.3, totalGb: 32})
+    })
+    test('one that does not answer or answers an error is not reachable, and does not fail the page', async () => {
+        const down = (async () => { throw new Error('refused') }) as unknown as typeof fetch
+        const bad = (async () => new Response('Bad Gateway', {status: 502})) as unknown as typeof fetch
+        for (const fetcher of [down, bad]) expect(await readServer(server, fetcher)).toEqual({name: 'a', reachable: false, running: 0, pending: 0})
+    })
+    const all = [{name: 'rtx', url: 'http://rtx'}, {name: 'radeon', url: 'http://radeon'}]
+    test('a choice by name comes to the URLs of the settings; all of them is the same as saying nothing', () => {
+        expect(chosenUrls(all, ['radeon'])).toEqual(['http://radeon'])
+        expect(chosenUrls(all, ['rtx', 'radeon'])).toBeUndefined()
+        expect(chosenUrls(all, undefined)).toBeUndefined()
+    })
+    test('no URL or unknown name gets through, and nothing is no choice', () => {
+        expect(() => chosenUrls(all, ['http://evil'])).toThrow('no server')
+        expect(() => chosenUrls(all, [])).toThrow('at least one')
+        expect(() => chosenUrls(all, 'rtx')).toThrow('at least one')
+    })
+    test('a server of the settings named by its URL keeps its name and credentials', async () => {
+        const file = join(root, 'settings-servers.json')
+        write(file, {comfy: [{url: 'http://rtx:8188', name: 'rtx', token: 'secret'}, {url: 'http://radeon', name: 'radeon'}]})
+        const before = {settings: process.env.FEVERSLOP_SETTINGS, comfy: process.env.FEVERSLOP_COMFY}
+        process.env.FEVERSLOP_SETTINGS = file
+        process.env.FEVERSLOP_COMFY = 'http://rtx:8188'
+        try {
+            const {comfy} = await loadSettings()
+            expect(comfy).toHaveLength(1)
+            expect(comfy[0]).toMatchObject({url: 'http://rtx:8188', name: 'rtx'})
+            expect(comfy[0]!.credentials).toBeDefined()
+            // another server stays what the URL says, without anything of the settings
+            expect((await loadSettings({comfy: 'http://other:1'})).comfy).toEqual([{url: 'http://other:1', name: 'other:1'}])
+        } finally {
+            if (before.settings === undefined) delete process.env.FEVERSLOP_SETTINGS
+            else process.env.FEVERSLOP_SETTINGS = before.settings
+            if (before.comfy === undefined) delete process.env.FEVERSLOP_COMFY
+            else process.env.FEVERSLOP_COMFY = before.comfy
+        }
+    })
+    test('a run goes to the chosen servers, and says so', async () => {
+        write(join(root, 'fake', 'index.ts'), `console.log(process.env.FEVERSLOP_COMFY ?? 'none')`)
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-servers')
+        mkdirSync(project.dir, {recursive: true})
+        expect(runs.start(project, {type: 'plan'}, ['http://radeon']).command).toBe('bun index.ts run-servers --comfy=http://radeon')
+        for (let i = 0; i < 200 && !runs.lines(project, 0).lines.length; i++) await Bun.sleep(25)
+        expect(runs.lines(project, 0).lines).toEqual(['http://radeon'])
+    })
+    test('a command with servers can be repeated: where it goes is chosen again', () => {
+        expect(allowedOptions('music', 'demo', 'bun index.ts demo --render=videos --comfy=http://evil')).toEqual(['--render=videos'])
+    })
+})
+
 describe('the start page', () => {
     test('a project in a line, from what lies in its folder', () => {
         const project = target('listed')
@@ -272,6 +331,15 @@ describe('the start page', () => {
         write(join(project.dir, 'assets/clips/slot-001_ff.png'))
         write(join(project.dir, 'assets/characters/ann.png'))
         expect(readListing(project)).toMatchObject({id: 'listed', kind: 'music', title: 'listed', clips: 2, rendered: 1, pictures: 1, final: 'missing', thumb: {file: 'assets/clips/slot-001_ff.png'}})
+    })
+    test('takes of one thing fold together, from their ids alone', () => {
+        const same = (...ids: string[]) => expect(new Set(ids.map(projectGroup)).size).toBe(1)
+        same('schwarzer-flur-261026', 'schwarzer-flur-261026-sing', 'schwarzer-flur-261026-sing-c', 'schwarzer-flur-261028', 'schwarzer-flur-261026-b')
+        same('witch-test', 'witch-test-2', 'witch-test-6')
+        same('gefangen', 'gefangen-261028', 'gefangen-202609282327', 'gefangen-261004-b')
+        expect(projectGroup('last-rehearsal')).not.toBe(projectGroup('second-earth-v2'))
+        expect(projectGroup('crimson-bloom')).toBe('crimson-bloom')
+        expect(projectGroup('a')).toBe('a')
     })
     test('a film by its title, and a broken project.json does not lose the card', () => {
         const film = target('titled', 'film')

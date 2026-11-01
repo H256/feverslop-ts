@@ -403,7 +403,18 @@ export async function clipRequestId({dir, kind}: EditorTarget, clipId: string): 
     return kind === 'film' ? filmClipFingerprint(request, dir, filmRenderConfig(await loadFilmConfig(dir))) : clipFingerprint(request, dir, await loadProjectConfig(dir))
 }
 
+/**
+ * Which projects are takes of one thing, from their ids alone: everything from a date on (schwarzer-flur-261026-sing-c), else a letter or number at the end (witch-test-3, -b).
+ * A wrong guess only folds or unfolds a card.
+ */
+export function projectGroup(id: string): string {
+    const dated = /^(.+?)-\d{6,}(?:-.*)?$/.exec(id)
+    if (dated) return dated[1]!
+    return id.replace(/-(?:\d{1,2}|[a-z]|v\d+)$/, '') || id
+}
+
 export type EditorListing = {
+    group: string,
     id: string, kind: EditorKind, title: string, clips: number, rendered: number, pictures: number,
     final: FinalState, lastRun?: EditorProject['lastRun'], changed: number, thumb?: { file: string, v: number },
 }
@@ -426,6 +437,7 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
     const thumb = ids.map(c => media(dir, `assets/clips/${c}_ff.png`)).find(Boolean)
     return {
         id, kind, title,
+        group: `${kind}/${projectGroup(id)}`,
         clips: ids.length,
         rendered: ids.filter(c => existsSync(join(dir, 'videos', `${c}.mp4`))).length,
         pictures: countOf(join(dir, 'assets', 'characters'), /\.png$/) + countOf(join(dir, 'assets', 'locations'), /\.png$/),

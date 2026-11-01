@@ -220,6 +220,20 @@ select.source { padding: 1px 6px; font-size: 12px; color: var(--muted); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
 .card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; text-align: left; padding: 0; width: 100%; }
 .card:hover { border-color: var(--muted); }
+.card-link { display: block; text-decoration: none; color: inherit; }
+.card .more { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--muted); padding: 4px 10px; font-size: 12px; text-align: left; }
+.card .more:hover { color: var(--text); background: var(--raised); }
+.pager { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 16px; }
+.pager .btn[aria-current=page] { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.servers { display: flex; gap: 10px; flex: none; font-size: 12px; color: var(--muted); }
+.server { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.server i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.server.busy i { background: var(--stale); }
+.server.down i { background: var(--danger); }
+.pick { border: 0; padding: 0; margin: 8px 0 0; }
+.pick legend { padding: 0; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+.pick label { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+.pick label.down { color: var(--muted); }
 .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .card .thumb { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: repeating-linear-gradient(135deg, var(--hatch) 0 6px, transparent 6px 12px); }
 .card .body { padding: 8px 10px 10px; display: block; }
@@ -290,6 +304,7 @@ dialog::backdrop { background: #000a; }
         <nav class="nav" id="nav"></nav>
         <div class="chips" id="chips"></div>
         <div class="spacer"></div>
+        <div class="servers" id="servers" aria-label="Render servers"></div>
         <nav class="nav"><a href="/" id="link-home">Projects</a><a href="/library" id="link-library">Library</a></nav>
         <fieldset class="theme" id="theme">
             <legend>Theme</legend>
@@ -451,16 +466,57 @@ for (const input of themeInputs) {
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => drawCanvases())
 
+////////// THE RENDER SERVERS - how busy they are, on every page, and which ones a run may use
+const servers = {list: [], chosen: undefined}
+const chosenServers = () => servers.chosen
+
+async function loadServers() {
+    const response = await fetch('/api/servers').catch(() => undefined)
+    if (!response?.ok) return
+    servers.list = (await response.json()).servers
+    $('servers').replaceChildren(...servers.list.map(server => el('span', {
+        class: `server${!server.reachable ? ' down' : server.running || server.pending ? ' busy' : ''}`,
+        title: server.reachable ? [server.device, server.freeGb !== undefined ? `${server.freeGb} of ${server.totalGb} GB free` : '', `${server.running} running, ${server.pending} waiting`].filter(Boolean).join(' · ') : 'Not reachable',
+    }, el('i'), serverLabel(server))))
+}
+const serverLabel = server => !server.reachable ? `${server.name} down` : server.running || server.pending ? `${server.name} ${server.running}+${server.pending}` : server.name
+
+function serverChoice() {
+    let kept = []
+    try {
+        kept = JSON.parse(localStorage.getItem('servers') ?? '[]')
+    } catch {}
+    const up = servers.list.filter(server => server.reachable)
+    const wanted = up.filter(server => kept.includes(server.name))
+    const boxes = servers.list.map(server => ({server, box: el('input', {type: 'checkbox', disabled: !server.reachable, checked: server.reachable && (!wanted.length || wanted.includes(server))})}))
+    const read = () => {
+        const names = boxes.filter(({box}) => box.checked).map(({server}) => server.name)
+        localStorage.setItem('servers', JSON.stringify(names))
+        // none of them reachable: the run says so itself
+        servers.chosen = names.length ? names : undefined
+    }
+    return {read, node: el('fieldset', {class: 'pick'}, el('legend', {}, 'Render on'), boxes.map(({server, box}) => el('label', {class: server.reachable ? '' : 'down'},
+        box,
+        el('span', {}, server.name),
+        el('span', {class: 'muted num'}, !server.reachable ? 'not reachable' : [`${server.running} running, ${server.pending} waiting`, server.freeGb !== undefined ? `${server.freeGb} GB free` : ''].filter(Boolean).join(' · ')))))}
+}
+
 ////////// ASKING - before anything that costs GPU time or moves a file
-function ask({title, lines = [], warnings = [], confirm, danger = false, extra}) {
+function ask({title, lines = [], warnings = [], confirm, danger = false, extra, render = false}) {
     const dialog = $('ask')
+    const choice = render ? serverChoice() : undefined
     return new Promise(resolve => {
-        const done = value => { dialog.close(); resolve(value) }
+        const done = value => {
+            if (value) choice?.read()
+            dialog.close()
+            resolve(value)
+        }
         dialog.replaceChildren(
             el('h2', {}, title),
             ...lines.map(line => el('p', {class: 'muted'}, line)),
             ...warnings.map(line => el('div', {class: 'warn'}, line)),
             extra ?? '',
+            choice?.node ?? '',
             el('div', {class: 'btn-row'},
                 el('button', {class: 'btn', onclick: () => done(false)}, 'Cancel'),
                 el('button', {class: `btn ${danger ? 'danger' : 'primary'}`, onclick: () => done(true)}, confirm)),
@@ -523,7 +579,8 @@ function followRun(root) {
 
 async function startRun(action) {
     if (run.current?.running) throw new Error('a run is going on - wait for it, or stop it')
-    const {run: started} = await api('run', {action})
+    const {run: started} = await api('run', {action, ...(servers.chosen ? {servers: servers.chosen} : {})})
+    servers.chosen = undefined
     run.wasRunning = true
     $('run-log').textContent = ''
     run.after = 0
@@ -542,26 +599,69 @@ $('run-stop').addEventListener('click', async () => {
 $('run-close').addEventListener('click', () => { $('rundock').hidden = true })
 
 ////////// THE START PAGE
+const PAGE_SIZE = 24
+// what a project's state counts as, for the filter: from what the list says, nothing is hashed for it
+const STATES = {
+    running: p => p.lastRun?.state === 'running',
+    failed: p => p.lastRun?.state === 'failed' || p.lastRun?.state === 'stopped',
+    unfinished: p => p.clips === 0 || p.rendered < p.clips || p.final !== 'current',
+    done: p => p.clips > 0 && p.rendered === p.clips && p.final === 'current',
+}
+
 async function homePage() {
     show('view-list')
     document.title = 'Workspace'
     $('title').textContent = 'All projects'
     $('link-home').setAttribute('aria-current', 'page')
     const {projects} = await api('projects')
-    const filter = {text: '', kind: 'all'}
     const statuses = new Map()
+    const expanded = new Set()
+    // what is shown lives in the address: Back from a project lands in the same place, and a view can be linked
+    const params = new URLSearchParams(location.search)
+    const filter = {text: params.get('q') ?? '', kind: params.get('kind') ?? 'all', state: params.get('state') ?? 'all', page: Math.max(1, Number(params.get('page')) || 1)}
+    const remember = (replace = false) => {
+        const next = new URLSearchParams()
+        if (filter.text) next.set('q', filter.text)
+        if (filter.kind !== 'all') next.set('kind', filter.kind)
+        if (filter.state !== 'all') next.set('state', filter.state)
+        if (filter.page > 1) next.set('page', String(filter.page))
+        const address = `/${next.size ? `?${next}` : ''}`
+        if (replace) history.replaceState(null, '', address)
+        else history.pushState(null, '', address)
+    }
     const grid = el('div', {class: 'cards'})
-    const search = el('input', {type: 'search', placeholder: 'Find a project', 'aria-label': 'Find a project', oninput: () => { filter.text = search.value.toLowerCase(); draw() }})
-    const seg = el('div', {class: 'seg'}, ...[['all', 'All'], ['music', 'Music videos'], ['film', 'Films']].map(([kind, label]) => el('button', {'aria-pressed': String(kind === 'all'), 'data-kind': kind, onclick: () => {
-        filter.kind = kind
-        for (const button of seg.children) button.setAttribute('aria-pressed', String(button.dataset.kind === kind))
+    const pager = el('nav', {class: 'pager', 'aria-label': 'Pages'})
+    const count = el('span', {class: 'muted num'})
+    const search = el('input', {type: 'search', placeholder: 'Find a project', 'aria-label': 'Find a project', value: filter.text, oninput: () => {
+        filter.text = search.value
+        filter.page = 1
+        remember(true)
         draw()
-    }}, label)))
-    const count = el('span', {class: 'muted'})
-    $('view-list').replaceChildren(el('div', {class: 'pagebar'}, el('h2', {}, 'Projects'), seg, search, count), grid)
+    }})
+    const segment = (key, options) => {
+        const seg = el('div', {class: 'seg'}, ...options.map(([value, label]) => el('button', {'aria-pressed': String(filter[key] === value), 'data-value': value, onclick: () => {
+            filter[key] = value
+            filter.page = 1
+            remember()
+            draw()
+        }}, label)))
+        return seg
+    }
+    const kinds = segment('kind', [['all', 'All'], ['music', 'Music videos'], ['film', 'Films']])
+    const states = segment('state', [['all', 'Any state'], ['running', 'Running'], ['failed', 'Failed'], ['unfinished', 'Unfinished'], ['done', 'Done']])
+    $('view-list').replaceChildren(el('div', {class: 'pagebar'}, el('h2', {}, 'Projects'), kinds, states, search, count), grid, pager)
+    addEventListener('popstate', () => {
+        const now = new URLSearchParams(location.search)
+        filter.text = now.get('q') ?? ''
+        filter.kind = now.get('kind') ?? 'all'
+        filter.state = now.get('state') ?? 'all'
+        filter.page = Math.max(1, Number(now.get('page')) || 1)
+        search.value = filter.text
+        draw()
+    })
 
     const rootOf = p => `/p/${p.kind}/${encodeURIComponent(p.id)}`
-    // what costs some hashing comes after the page is up, one project at a time, for the cards that are in view
+    // what costs some hashing comes after the page is up, one project at a time, only for the cards of this page
     const queue = []
     let working = false
     const pump = async () => {
@@ -580,16 +680,9 @@ async function homePage() {
         }
         working = false
     }
-    const observer = new IntersectionObserver(entries => {
-        for (const entry of entries) {
-            if (!entry.isIntersecting) continue
-            observer.unobserve(entry.target)
-            entry.target.loadStatus?.()
-        }
-    })
     const finalChip = {missing: ['No final video', 'chip'], current: ['Final video', 'chip good'], older: ['Final older than its clips', 'chip stale']}
     const runChip = {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']}
-    function card(project) {
+    function card(project, others = []) {
         const stale = el('span', {class: 'row'})
         const next = el('span', {class: 'next'}, ' ')
         const fill = status => {
@@ -600,7 +693,10 @@ async function homePage() {
             next.textContent = status.next.command ? `Next: ${status.next.why}` : 'Everything is done'
             next.title = [status.next.command, status.next.estimate].filter(Boolean).join('\n')
         }
-        const node = el('a', {class: 'card', href: `${rootOf(project)}/`},
+        const known = statuses.get(`${project.kind}/${project.id}`)
+        if (known) fill(known)
+        else queue.push({project, fill})
+        const link = el('a', {class: 'card-link', href: `${rootOf(project)}/`},
             project.thumb ? el('img', {class: 'thumb', src: thumbUrl(project.thumb, 640, `${rootOf(project)}/thumb`), alt: '', loading: 'lazy', decoding: 'async'}) : el('span', {class: 'thumb'}),
             el('span', {class: 'body'},
                 el('span', {class: 'name', title: project.id}, project.title),
@@ -611,21 +707,56 @@ async function homePage() {
                     el('span', {class: finalChip[project.final][1]}, finalChip[project.final][0]),
                     runChip[project.lastRun?.state] && el('span', {class: runChip[project.lastRun.state][1], title: project.lastRun.command}, runChip[project.lastRun.state][0])),
                 stale, next))
-        const known = statuses.get(`${project.kind}/${project.id}`)
-        if (known) fill(known)
-        else {
-            node.loadStatus = () => { queue.push({project, fill}); pump() }
-            observer.observe(node)
-        }
-        return node
+        return el('div', {class: 'card'}, link, others.length ? el('button', {class: 'more', 'aria-expanded': 'false', onclick: () => {
+            expanded.add(project.group)
+            draw()
+        }}, `${plural(others.length, 'more take')}`) : '')
     }
     function draw() {
-        const shown = projects.filter(p => (filter.kind === 'all' || p.kind === filter.kind) && (!filter.text || p.id.toLowerCase().includes(filter.text) || p.title.toLowerCase().includes(filter.text)))
-        count.textContent = plural(shown.length, 'project')
+        for (const button of kinds.children) button.setAttribute('aria-pressed', String(button.dataset.value === filter.kind))
+        for (const button of states.children) button.setAttribute('aria-pressed', String(button.dataset.value === filter.state))
+        const text = filter.text.trim().toLowerCase()
+        const hits = projects.filter(p => (filter.kind === 'all' || p.kind === filter.kind) && (filter.state === 'all' || STATES[filter.state]?.(p)) && (!text || p.id.toLowerCase().includes(text) || p.title.toLowerCase().includes(text)))
+        // the takes of one thing fold into the newest: a search shows every hit by itself. The list comes newest first
+        const entries = []
+        const seen = new Map()
+        for (const project of hits) {
+            const group = seen.get(project.group)
+            if (!text && group && !expanded.has(project.group)) group.others.push(project)
+            else {
+                const entry = {project, others: []}
+                entries.push(entry)
+                seen.set(project.group, entry)
+            }
+        }
+        const pages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE))
+        if (filter.page > pages) filter.page = pages
+        const first = (filter.page - 1) * PAGE_SIZE
+        const shown = entries.slice(first, first + PAGE_SIZE)
+        count.textContent = hits.length === entries.length ? plural(hits.length, 'project') : `${plural(entries.length, 'group')} · ${plural(hits.length, 'project')}`
         queue.length = 0
-        grid.replaceChildren(...shown.map(card))
+        grid.replaceChildren(...shown.map(entry => card(entry.project, entry.others)))
         if (!shown.length) grid.replaceChildren(el('div', {class: 'empty'}, projects.length ? 'Nothing fits.' : 'No projects here yet - start one with: bun run init'))
+        pump()
+        const go = page => () => {
+            filter.page = page
+            remember()
+            draw()
+            $('view-list').scrollTop = 0
+        }
+        // the first, the last and those around this one; a long list does not need every number
+        const numbers = [...new Set([1, filter.page - 1, filter.page, filter.page + 1, pages])].filter(n => n >= 1 && n <= pages).sort((a, b) => a - b)
+        pager.replaceChildren(...(pages > 1 ? [
+            el('button', {class: 'btn', disabled: filter.page === 1, onclick: go(filter.page - 1)}, '‹ Newer'),
+            ...numbers.flatMap((n, i) => [
+                i && n - numbers[i - 1] > 1 ? el('span', {class: 'muted'}, '…') : '',
+                el('button', {class: 'btn', 'aria-current': n === filter.page ? 'page' : false, onclick: go(n)}, String(n)),
+            ]),
+            el('button', {class: 'btn', disabled: filter.page === pages, onclick: go(filter.page + 1)}, 'Older ›'),
+            el('span', {class: 'muted num'}, `${first + 1}-${first + shown.length} of ${entries.length}`),
+        ] : []))
     }
+    remember(true)
     draw()
 }
 
@@ -691,6 +822,7 @@ async function libraryPage() {
             lines: ['The picture becomes the anchor, ComfyUI renders the reference sheet from it. An asset already in the library is never overwritten.'],
             extra: el('div', {}, field('Picture', file), field('Kind', kind), field('Library id', id), field('Name', name), field('Role', role), field('Description', description)),
             confirm: 'Render it',
+            render: true,
         })
         if (!yes) return
         const form = new FormData()
@@ -700,6 +832,8 @@ async function libraryPage() {
         form.set('name', name.value)
         form.set('role', role.value)
         form.set('description', description.value)
+        if (servers.chosen) form.set('servers', JSON.stringify(servers.chosen))
+        servers.chosen = undefined
         const response = await fetch('/api/library/create', {method: 'POST', body: form})
         const body = await response.json().catch(() => ({}))
         if (!response.ok) return showError(new Error(body.error ?? 'could not start'))
@@ -794,9 +928,11 @@ async function referencesPage() {
                     ...(asked.fixedSeed !== undefined ? [`"seed" is fixed in config.json (${asked.fixedSeed}): the same seed gives the same picture again.`] : []),
                 ],
                 confirm: 'Render it',
+                render: true,
             })
             if (!yes) return
-            const {run: started} = await api(`references/${encodeURIComponent(reference.id)}/rerender`, {newAnchor, ...(edited ? {prompt: prompt.value} : {})})
+            const {run: started} = await api(`references/${encodeURIComponent(reference.id)}/rerender`, {newAnchor, ...(edited ? {prompt: prompt.value} : {}), ...(servers.chosen ? {servers: servers.chosen} : {})})
+            servers.chosen = undefined
             run.wasRunning = true
             $('run-log').textContent = ''
             run.after = 0
@@ -1283,7 +1419,7 @@ function overridePanel(clip) {
             const name = el('input', {type: 'text', placeholder: 'behind the bar, looking at the door'})
             const shows = el('textarea', {rows: 3, placeholder: 'What is seen from there'})
             const field = (label, input) => el('label', {class: 'field'}, el('span', {}, label), input)
-            const yes = await ask({title: 'One more view of this place', lines: ['For where the sheet has no view that fits. Rendered from the anchor of the place, so the look stays the same. It appears here to choose from.'], extra: el('div', {}, field('Where the camera is', name), field('What it shows', shows)), confirm: 'Render it'})
+            const yes = await ask({title: 'One more view of this place', lines: ['For where the sheet has no view that fits. Rendered from the anchor of the place, so the look stays the same. It appears here to choose from.'], extra: el('div', {}, field('Where the camera is', name), field('What it shows', shows)), confirm: 'Render it', render: true})
             if (yes) await startRun({type: 'add-view', location: clip.views.locationId, name: name.value, shows: shows.value})
         }
         out.push(el('div', {class: 'section'}, el('button', {class: 'btn', onclick: () => addView().catch(showError)}, 'Add a view of this place')))
@@ -1326,12 +1462,13 @@ async function renderAgain(clip) {
             ...(later.length ? [`${later.join(', ')} go on from this clip. They go stale and are not rendered on their own.`] : []),
         ],
         confirm: 'Render it',
+        render: true,
     })
     if (yes) await startRun({type: 'clips', ids: [clip.id], again: !!clip.video})
 }
 
 async function previewOne(clips, label) {
-    const yes = await ask({title: `Preview ${label}?`, lines: ['A cheap render into previews/: fewer steps, a fraction of the pixels. It never replaces a clip.'], warnings: clips.some(c => c.startsFrom) ? ['A clip that goes on from another starts on the last frame of its preview and is marked as approximate.'] : [], confirm: 'Preview'})
+    const yes = await ask({title: `Preview ${label}?`, lines: ['A cheap render into previews/: fewer steps, a fraction of the pixels. It never replaces a clip.'], warnings: clips.some(c => c.startsFrom) ? ['A clip that goes on from another starts on the last frame of its preview and is marked as approximate.'] : [], confirm: 'Preview', render: true})
     if (yes) await startRun({type: 'clips', ids: clips.map(c => c.id), preview: true, again: clips.some(c => c.preview)})
 }
 
@@ -1347,6 +1484,7 @@ function retakeSection(clip) {
             lines: ['Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.'],
             warnings: ['Not proven yet: on a 32 GB Radeon the two-pass job ran out of memory, and one try took the server down (#157).', ...b >= seconds - 0.05 && clip.next ? [`This part reaches the end of the clip: ${chain(clip).join(', ')} go on from its last frame and are marked.`] : []],
             confirm: 'Render it anyway',
+            render: true,
         })
         if (yes) await startRun({type: 'retake', clip: clip.id, range}).catch(showError)
     }
@@ -1562,11 +1700,11 @@ function renderSummary() {
 }
 
 async function repeatLast(last) {
-    const yes = await ask({title: 'Run this again?', lines: [last.command], confirm: 'Run it'})
+    const yes = await ask({title: 'Run this again?', lines: [last.command], confirm: 'Run it', render: true})
     if (yes) await startRun({type: 'repeat', command: last.command})
 }
 async function runNext(next) {
-    const yes = await ask({title: next.why, lines: [next.command, next.estimate].filter(Boolean), confirm: 'Run it'})
+    const yes = await ask({title: next.why, lines: [next.command, next.estimate].filter(Boolean), confirm: 'Run it', render: true})
     if (yes) await startRun({type: 'next', command: next.command})
 }
 
@@ -1807,6 +1945,9 @@ async function timelinePage() {
     setInterval(() => { if (!document.hidden) loadProject().catch(() => {}) }, 10000)
     addEventListener('focus', () => loadProject().catch(() => {}))
 }
+
+loadServers()
+setInterval(() => { if (!document.hidden) loadServers() }, 10000)
 
 const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : timelinePage()}
 pages[route.view]().catch(error => {
