@@ -6,19 +6,11 @@ import {cli} from '../lib/cli.ts';
 import {existsSync, readdirSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
-import {loadProjectConfig} from "../lib/config.ts";
-import {projectInputs, stepUsed} from "../lib/inputs.ts";
-import {clipEstimate, pictureEstimate, type RenderState, renderState} from "../lib/render-state.ts";
 import {log, styles} from "../lib/log.ts";
-import {ProjectStore, STEP_NAMES} from "../lib/project.ts";
 import {projectExists} from "../lib/project-setup.ts";
-import {loadSettings} from "../lib/settings.ts";
-import {loadFilmConfig} from "../lib/film/config.ts";
-import {filmInputs, filmMode, filmStepUsed} from "../lib/film/inputs.ts";
-import {filmRenderConfig} from "../lib/film/pictures.ts";
-import {filmRenderState} from "../lib/film/render.ts";
 import {filmExists} from "../lib/film/setup.ts";
-import {FILM_STEP_NAMES, FILMS_DIR, FilmStore} from "../lib/film/store.ts";
+import {FILMS_DIR} from "../lib/film/store.ts";
+import {filmStatus, projectStatus, type StepState} from "../lib/status.ts";
 import {lastRun, runState} from "../lib/run-record.ts";
 import {lastRunLines} from "../lib/run-record-view.ts";
 cli('status')
@@ -33,96 +25,6 @@ const {values: args, positionals} = (() => {
     }
 })()
 const id = positionals[0]
-
-type StepState = 'done' | 'redo' | 'missing' | 'unused'
-type Next = { command: string, why: string, estimate?: string }
-// what is printed, of a music video's project or of a film
-type Status = {
-    id: string,
-    dir: string,
-    changed: { name: string, steps: string[] }[],
-    notes: [string, string][],      // more lines under the changed inputs: label, text
-    steps: { step: string, state: StepState }[],
-    render: RenderState<{ id: string }>,
-    next: Next,
-    json: Record<string, unknown>,  // the parts of --json that differ between the two
-}
-
-/** The next command, with what it costs where that is known: plan, pictures, clips, final video - the first that is not done. */
-async function nextOf(run: string, toPlan: string[], render: RenderState<{ id: string, frames: number }>, estimates: {
-    pictures: (count: number) => Promise<string>, clips: (clips: { frames: number }[]) => Promise<string>,
-}, finalName: string): Promise<Next> {
-    const {missingPictures, clips, missingClips, staleClips, finalState} = render
-    if (toPlan.length || !clips.length) return {command: run, why: toPlan.length ? `${toPlan.length} step(s) to generate: ${toPlan.join(', ')}` : 'no clip requests yet'}
-    if (missingPictures.length) return {command: `${run} --render=images`, why: `${missingPictures.length} picture(s) missing`, estimate: await estimates.pictures(missingPictures.length)}
-    if (missingClips.length || staleClips.length) {
-        return {
-            command: `${run} --render=videos${staleClips.length ? ' --refresh=clips' : ''}`,
-            why: [missingClips.length ? `${missingClips.length} clip(s) missing` : '', staleClips.length ? `${staleClips.length} stale` : ''].filter(Boolean).join(', '),
-            estimate: await estimates.clips([...missingClips, ...staleClips]),
-        }
-    }
-    if (finalState !== 'current') return {command: `${run} --render=final`, why: finalState === 'missing' ? `no ${finalName} yet` : `clips are newer than the ${finalName}`}
-    return {command: '', why: 'everything is done'}
-}
-
-async function projectStatus(id: string): Promise<Status> {
-    const project = new ProjectStore(id)
-    await project.load()
-    const config = await loadProjectConfig(project.dir)
-    const data = project.data
-
-    // what the next run will redo: changed inputs and settings, and stems whose files are gone - along the dependencies
-    const changed = project.changedInputs(await projectInputs(project.dir, config))
-    const lostStems = (['stems', 'instrumentStems'] as const).filter(step => data[step] && Object.values(data[step]!).some(file => !existsSync(join(project.dir, file))))
-    const redo = new Set(project.redoneBy([...changed.flatMap(c => c.steps), ...lostStems]))
-    const steps = STEP_NAMES.map(step => ({
-        step,
-        state: (!stepUsed(step, project.dir, data, config) ? 'unused' : redo.has(step) ? 'redo' : data[step] !== undefined ? 'done' : 'missing') as StepState,
-    }))
-
-    // renders, from the requests of the last plan run
-    const render = await renderState(project.dir, project.id, config)
-
-    const settings = await loadSettings({projectModel: config.llm.model})
-    const servers = settings.comfy.map(s => s.name)
-    const toPlan = steps.filter(s => s.state === 'redo' || s.state === 'missing').map(s => s.step)
-    const next = await nextOf(`bun index.ts ${project.id}`, toPlan, render, {
-        pictures: count => pictureEstimate(count, config, servers),
-        clips: clips => clipEstimate(clips, config, servers),
-    }, 'final video')
-    return {
-        id: project.id, dir: project.dir, changed, steps, render, next,
-        notes: lostStems.map(step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`]),
-        json: {project: project.id},
-    }
-}
-
-async function filmStatus(id: string): Promise<Status> {
-    const film = new FilmStore(id)
-    await film.load()
-    const config = await loadFilmConfig(film.dir)
-    const mode = await filmMode(film.dir)
-
-    const changed = film.changedInputs(await filmInputs(film.dir, config))
-    const redo = new Set(film.redoneBy(changed.flatMap(c => c.steps)))
-    const steps = FILM_STEP_NAMES.map(step => ({
-        step,
-        state: (!filmStepUsed(step, mode, film.data, config) ? 'unused' : redo.has(step) ? 'redo' : film.data[step] !== undefined ? 'done' : 'missing') as StepState,
-    }))
-    const renderConfig = filmRenderConfig(config)
-    const render = await filmRenderState(film.dir, film.id, renderConfig)
-
-    const settings = await loadSettings({projectModel: config.llm.model})
-    const servers = settings.comfy.map(s => s.name)
-    // the subtitles are translated when the film is assembled, not by a plan run
-    const toPlan = steps.filter(s => (s.state === 'redo' || s.state === 'missing') && s.step !== 'subtitles').map(s => s.step)
-    const next = await nextOf(`bun film.ts ${film.id}`, toPlan, render, {
-        pictures: count => pictureEstimate(count, renderConfig, servers),
-        clips: clips => clipEstimate(clips, renderConfig, servers),
-    }, 'film')
-    return {id: film.id, dir: film.dir, changed, steps, render, next, notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')]], json: {film: film.id}}
-}
 
 if (args.film) {
     if (!id || !filmExists(id)) {
