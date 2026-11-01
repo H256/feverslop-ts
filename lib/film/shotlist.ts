@@ -1,3 +1,4 @@
+import {secondsAt} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
 import type {FilmCast, SceneCoverage, Screenplay} from "./types.ts";
 
@@ -8,7 +9,7 @@ import type {FilmCast, SceneCoverage, Screenplay} from "./types.ts";
  */
 export function shotlistMarkdown({screenplay, cast, coverage, clips}: { screenplay: Screenplay, cast: FilmCast, coverage: SceneCoverage[], clips: FilmClip[] }) {
     const name = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
-    const out = [`# ${screenplay.title} - shot list`, '', `${clips.length} clips, ${clips.reduce((sum, c) => sum + c.shots.length, 0)} shots, ${(clips.reduce((sum, c) => sum + c.frames, 0) / 24).toFixed(1)} s. Edit the shots in \`project.json\` (\`coverage\`) and run again.`]
+    const out = [`# ${screenplay.title} - shot list`, '', `${clips.length} clips, ${clips.reduce((sum, c) => sum + c.shots.length, 0)} shots, ${secondsAt(clips.reduce((sum, c) => sum + c.frames, 0)).toFixed(1)} s. Edit the shots in \`project.json\` (\`coverage\`) and run again.`]
     for (const scene of screenplay.scenes) {
         const planned = coverage.find(c => c.sceneId === scene.id)
         const sceneClips = clips.filter(c => c.sceneId === scene.id)
