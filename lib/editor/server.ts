@@ -1,9 +1,27 @@
-import {existsSync, statSync} from "node:fs";
-import {extname, isAbsolute, join, relative, resolve, sep} from "node:path";
-import {type EditorTarget, readEditorFreshness, readEditorProject, waveformSource} from "./project.ts";
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {dirname, extname, isAbsolute, join, relative, resolve, sep} from "node:path";
+import {clipVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
+import type {ClipRequest} from "../compose.ts";
+import {loadProjectConfig} from "../config.ts";
+import {libraryDir, libraryIdPattern} from "../library.ts";
+import {withProjectLock} from "../lock.ts";
+import {listProjects, projectDir, projectExists, validProjectId} from "../project-setup.ts";
+import {clipEstimate, clipFailureRisks, pictureEstimate, readClipRequests} from "../render-state.ts";
+import {loadSettings} from "../settings.ts";
+import {filmStatus, projectStatus} from "../status.ts";
+import {readTimings} from "../timings.ts";
+import {loadFilmConfig} from "../film/config.ts";
+import {filmRenderConfig} from "../film/pictures.ts";
+import {filmDir, filmExists} from "../film/setup.ts";
+import {filmIds, readCasting, readLibrary, writeCastingEntry} from "./library.ts";
+import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
+import {picturesFile, readReferences, sheetOf} from "./references.ts";
+import {type RunAction, RunControl} from "./runs.ts";
+import {readPictureJobs} from "../render-state.ts";
 
-// The workspace's server: one HTML page, what it shows of the project as JSON, and the project's pictures, videos and
-// sound. It writes nothing and keeps nothing but the waveform of a song.
+// The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
+// goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
 
 const PAGE = join(import.meta.dir, 'page.html')
 // only what the page plays and shows - not project.json, the logs or the settings, whatever a path says
@@ -12,7 +30,7 @@ const MEDIA_TYPES: Record<string, string> = {
     '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.flac': 'audio/flac',
 }
 
-/** The file a /media/ path means, inside the project folder - undefined for anything else. */
+/** The file a /media/ path means, inside the folder - undefined for anything else. */
 export function mediaFile(dir: string, path: string): string | undefined {
     if (!(extname(path).toLowerCase() in MEDIA_TYPES)) return undefined
     const file = resolve(dir, path)
@@ -92,7 +110,7 @@ function limiter(atOnce: number) {
     let running = 0
     const waiting: (() => void)[] = []
     return async <T>(work: () => Promise<T>): Promise<T> => {
-        if (running >= atOnce) await new Promise<void>(resolve => waiting.push(resolve))
+        if (running >= atOnce) await new Promise<void>(next => waiting.push(next))
         running++
         try {
             return await work()
@@ -104,54 +122,300 @@ function limiter(atOnce: number) {
 }
 
 const json = (value: unknown, status = 200) => Response.json(value, {status, headers: {'Cache-Control': 'no-store'}})
+const message = (e: unknown) => e instanceof Error ? e.message : String(e)
 // a run can be writing a file just as it is read: the page keeps what it has and asks again
-const failure = (e: unknown) => json({error: e instanceof Error ? e.message : String(e)}, 503)
+const failure = (e: unknown) => json({error: message(e)}, 503)
+const refused = (e: unknown) => json({error: message(e)}, 409)
+const notFound = () => new Response('Not found', {status: 404})
+const stripColors = (text: string) => Bun.stripANSI(text)
 
-export function editorHandler(target: EditorTarget) {
+/** A request from anywhere but this page must not start GPU work or change files: another site's page can reach 127.0.0.1 too. */
+export function fromThisPage(request: Request): boolean {
+    const origin = request.headers.get('origin')
+    const site = request.headers.get('sec-fetch-site')
+    if (site && site !== 'same-origin' && site !== 'none') return false
+    return !origin || new URL(origin).host === new URL(request.url).host
+}
+
+const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+function targetOf(kind: string, id: string): EditorTarget | undefined {
+    if (!validProjectId(id)) return undefined
+    if (kind === 'music' && projectExists(id)) return {id, kind, dir: projectDir(id)}
+    if (kind === 'film' && filmExists(id)) return {id, kind, dir: filmDir(id)}
+    return undefined
+}
+
+const allTargets = (): EditorTarget[] => [
+    ...listProjects().map(id => ({id, kind: 'music' as EditorKind, dir: projectDir(id)})),
+    ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
+]
+
+const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset'])
+
+/** What rendering these clips is expected to cost: the time, what can go wrong, and that a fixed seed gives the same clip. */
+async function estimateClips(target: EditorTarget, ids: string[]) {
+    const requests = await readClipRequests<ClipRequest & { frames: number }>(target.dir)
+    const clips = requests.filter(c => ids.includes(c.id))
+    const projectConfig = target.kind === 'film' ? filmRenderConfig(await loadFilmConfig(target.dir)) : await loadProjectConfig(target.dir)
+    const settings = await loadSettings(target.kind === 'film' ? {projectModel: (await loadFilmConfig(target.dir)).llm.model} : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model})
+    const servers = settings.comfy.map(s => s.name)
+    return {
+        estimate: stripColors(await clipEstimate(clips, projectConfig, servers)),
+        risks: clipFailureRisks(readTimings(), clips, projectConfig.videoWorkflow, servers).map(stripColors),
+        fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined,
+    }
+}
+
+async function estimatePictures(target: EditorTarget, count: number) {
+    const projectConfig = target.kind === 'film' ? filmRenderConfig(await loadFilmConfig(target.dir)) : await loadProjectConfig(target.dir)
+    const settings = await loadSettings(target.kind === 'film' ? {projectModel: (await loadFilmConfig(target.dir)).llm.model} : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model})
+    return {estimate: stripColors(await pictureEstimate(count, projectConfig, settings.comfy.map(s => s.name))), fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined}
+}
+
+/** The lines of a run as they come, as server-sent events: a page can come and go, and follow a run it did not start. */
+function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number) {
+    let after = from
+    let timer: ReturnType<typeof setInterval> | undefined
+    const stream = new ReadableStream({
+        start(controller) {
+            const send = (event: string, data: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+            let wasRunning: boolean | undefined
+            const tick = () => {
+                try {
+                    const {lines, next} = runs.lines(target, after)
+                    after = next
+                    if (lines.length) send('lines', {lines: lines.map(stripColors), next})
+                    const current = runs.current(target)
+                    if ((current?.running ?? false) !== wasRunning) {
+                        wasRunning = current?.running ?? false
+                        send('state', current ?? null)
+                    }
+                } catch {
+                    // a log being replaced, or the page gone: the next tick sees
+                }
+            }
+            tick()
+            timer = setInterval(tick, 700)
+            request.signal.addEventListener('abort', () => {
+                clearInterval(timer)
+                try {
+                    controller.close()
+                } catch {}
+            })
+        },
+        cancel() {
+            clearInterval(timer)
+        },
+    })
+    return new Response(stream, {headers: {'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store'}})
+}
+
+export function editorHandler(runs = new RunControl()) {
     const waveforms = new Map<string, Promise<number[] | undefined>>()
     const thumbnails = new Map<string, Promise<Uint8Array | undefined>>()
     const oneByOne = limiter(THUMBNAILS_AT_ONCE)
-    return async (request: Request): Promise<Response> => {
-        if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Read only', {status: 405})
-        const url = new URL(request.url)
-        const path = url.pathname
-        if (path === '/') return new Response(Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
+
+    const page = () => new Response(Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
+
+    const thumbnail = async (file: string | undefined, url: URL, request: Request) => {
+        const width = Number(url.searchParams.get('w') ?? THUMBNAIL_WIDTHS[0])
+        if (!file || !THUMBNAIL_WIDTHS.includes(width) || !['.png', '.jpg', '.jpeg', '.webp'].includes(extname(file).toLowerCase())) return notFound()
+        const key = `${file}:${width}:${statSync(file).mtimeMs}`
+        if (!thumbnails.has(key)) thumbnails.set(key, oneByOne(() => makeThumbnail(file, width)).catch(() => undefined))
+        const bytes = await thumbnails.get(key)
+        // ffmpeg could not make one: the picture itself will do
+        if (!bytes) return serveMedia(file, request, url.searchParams.has('v'))
+        return new Response(bytes, {headers: {'Content-Type': 'image/jpeg', 'Cache-Control': url.searchParams.has('v') ? 'private, max-age=86400, immutable' : 'no-cache'}})
+    }
+
+    const projectApi = async (target: EditorTarget, rest: string[], request: Request, url: URL): Promise<Response> => {
+        const [what, id, action] = rest
+        const post = request.method === 'POST'
+        const body = async <T>() => await request.json() as T
+
+        if (!post) {
+            try {
+                if (what === 'project') return json(await readEditorProject(target))
+                if (what === 'freshness') return json(await readEditorFreshness(target))
+                if (what === 'status') {
+                    const status = await (target.kind === 'film' ? filmStatus(target.id) : projectStatus(target.id))
+                    const {render, next, steps, changed} = status
+                    return json({
+                        steps, changed,
+                        pictures: {total: render.pictures.length, missing: render.missingPictures.length, stale: render.stalePictures.length},
+                        clips: {total: render.clips.length, missing: render.missingClips.length, stale: render.staleClips.length},
+                        final: render.finalState,
+                        next: {...next, why: stripColors(next.why), estimate: next.estimate && stripColors(next.estimate)},
+                    })
+                }
+                if (what === 'waveform') {
+                    const source = waveformSource(await readEditorProject(target))
+                    const file = source && mediaFile(target.dir, source)
+                    if (!file) return json({peaks: null})
+                    const key = `${file}:${statSync(file).mtimeMs}`
+                    if (!waveforms.has(key)) waveforms.set(key, readWaveform(file).catch(() => undefined))
+                    return json({peaks: await waveforms.get(key) ?? null})
+                }
+                if (what === 'run') return json({run: runs.current(target) ?? null})
+                if (what === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
+                if (what === 'versions' && id) {
+                    const current = await clipRequestId(target, id)
+                    return json({versions: clipVersions(target.dir, id).map(version => ({...version, v: Math.round(version.made), fromThisPlan: version.fingerprint === undefined ? undefined : version.fingerprint === current}))})
+                }
+                if (what === 'references') return json({references: await readReferences(target)})
+                if (what === 'casting') {
+                    const project = await readEditorProject(target)
+                    return json(await readCasting(target, project.clips))
+                }
+            } catch (e) {
+                return failure(e)
+            }
+            return notFound()
+        }
+
         try {
-            if (path === '/api/project') return json(await readEditorProject(target))
-            if (path === '/api/freshness') return json(await readEditorFreshness(target))
-            if (path === '/api/waveform') {
-                const source = waveformSource(await readEditorProject(target))
-                const file = source && mediaFile(target.dir, source)
-                if (!file) return json({peaks: null})
-                const key = `${file}:${statSync(file).mtimeMs}`
-                if (!waveforms.has(key)) waveforms.set(key, readWaveform(file).catch(() => undefined))
-                return json({peaks: await waveforms.get(key) ?? null})
+            const started = (run: unknown) => json({run})
+            if (what === 'run') {
+                const {action: wanted} = await body<{ action: RunAction }>()
+                if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures') return refused(new Error('no such action'))
+                // a prompt comes in through its own route below, never as a path from the page
+                if (wanted.type === 'pictures') delete wanted.promptFile
+                return started(runs.start(target, wanted))
+            }
+            if (what === 'stop') return json({stopped: runs.stop(target)})
+            if (what === 'estimate') {
+                const asked = await body<{ clips?: string[], pictures?: number }>()
+                return json(asked.clips ? await estimateClips(target, asked.clips) : await estimatePictures(target, asked.pictures ?? 1))
+            }
+            if (what === 'versions' && id && action === 'pick') {
+                const {version} = await body<{ version: string }>()
+                const result = await withProjectLock(target.dir, target.id, () => restoreClipVersion(target.dir, id, version))
+                return json({picked: version, putAway: relative(target.dir, result.putAway).replace(/\\/g, '/')})
+            }
+            if (what === 'references' && id && action === 'rerender') {
+                const {newAnchor, prompt} = await body<{ newAnchor?: boolean, prompt?: string }>()
+                const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
+                if (!job) return refused(new Error(`no picture ${id}`))
+                let promptFile: string | undefined
+                if (prompt !== undefined && prompt.trim() !== job.prompt.trim()) {
+                    promptFile = join(mkdtempSync(join(tmpdir(), 'workspace-prompt-')), `${id}.txt`)
+                    writeFileSync(promptFile, prompt)
+                }
+                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile}))
+            }
+            if (what === 'references' && id && action === 'pick') {
+                const {version} = await body<{ version: string }>()
+                const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
+                if (!job) return refused(new Error(`no picture ${id}`))
+                await withProjectLock(target.dir, target.id, () => restorePictureVersion(target.dir, job, version, sheetOf(job)))
+                return json({picked: version})
+            }
+            if (what === 'casting') {
+                const {kind, id: role, value} = await body<{ kind: 'character' | 'location', id: string, value: string }>()
+                await writeCastingEntry(target, kind, role, value)
+                return json({written: true})
+            }
+            if (what === 'override' && id) {
+                if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))
+                const override = await body<EditorOverride | null>()
+                const file = overrideFile(target.dir, id)
+                if (!existsSync(join(target.dir, 'output', 'clips', `${id}.json`))) return refused(new Error(`no clip ${id}`))
+                await withProjectLock(target.dir, target.id, () => {
+                    if (!override || (override.placeView === undefined && !override.order?.length && !override.without?.length)) rmSync(file, {force: true})
+                    else {
+                        mkdirSync(dirname(file), {recursive: true})
+                        writeFileSync(file, JSON.stringify(override, null, 2) + '\n')
+                    }
+                })
+                return json({written: true})
+            }
+        } catch (e) {
+            return refused(e)
+        }
+        return notFound()
+    }
+
+    const libraryApi = async (rest: string[], request: Request, url: URL): Promise<Response> => {
+        const dir = await libraryDir()
+        const target: EditorTarget = {id: 'library', kind: 'music', dir}
+        if (request.method !== 'POST') {
+            if (rest[0] === 'assets') return json(await readLibrary())
+            if (rest[0] === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
+            return notFound()
+        }
+        if (rest[0] === 'create') {
+            const form = await request.formData()
+            const picture = form.get('anchor')
+            const kind = form.get('kind')
+            const id = String(form.get('id') ?? '')
+            if (!(picture instanceof File) || (kind !== 'character' && kind !== 'location') || !libraryIdPattern.test(id)) return refused(new Error('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes'))
+            const folder = mkdtempSync(join(tmpdir(), 'workspace-anchor-'))
+            const anchor = join(folder, `anchor${extname(picture.name) || '.png'}`)
+            await Bun.write(anchor, picture)
+            const optional = (name: string) => {
+                const value = String(form.get(name) ?? '').trim()
+                return value ? [`--${name}=${value}`] : []
+            }
+            try {
+                return json({run: runs.startTool(target, 'tools/create-asset.ts', [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')])})
+            } catch (e) {
+                return refused(e)
+            }
+        }
+        return notFound()
+    }
+
+    return async (request: Request): Promise<Response> => {
+        const url = new URL(request.url)
+        // a page of another site cannot read these through a name it points at this machine
+        if (!LOCAL_HOSTS.has(url.hostname)) return new Response('Forbidden', {status: 403})
+        const post = request.method === 'POST'
+        if (!post && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Not allowed', {status: 405})
+        if (post && !fromThisPage(request)) return new Response('Forbidden', {status: 403})
+        const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
+        try {
+            if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page()
+            if (parts[0] === 'api') {
+                if (parts[1] === 'projects' && !post) return json({projects: allTargets().flatMap(target => {
+                    try {
+                        return [readListing(target)]
+                    } catch {
+                        return []
+                    }
+                }).sort((a, b) => b.changed - a.changed)})
+                if (parts[1] === 'library') return libraryApi(parts.slice(2), request, url)
+                return notFound()
+            }
+            if (parts[0] === 'library' && (parts[1] === 'media' || parts[1] === 'thumb')) {
+                const inside = parts.slice(2).join('/')
+                // an asset being made is not part of the library yet
+                const file = inside.startsWith('.') ? undefined : mediaFile(await libraryDir(), inside)
+                if (parts[1] === 'thumb') return thumbnail(file, url, request)
+                return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
+            }
+            if (parts[0] === 'p') {
+                const target = targetOf(parts[1] ?? '', parts[2] ?? '')
+                if (!target) return notFound()
+                const area = parts[3]
+                if (area === 'api') return projectApi(target, parts.slice(4), request, url)
+                if (area === 'media' || area === 'thumb') {
+                    const file = mediaFile(target.dir, parts.slice(4).join('/'))
+                    if (area === 'thumb') return thumbnail(file, url, request)
+                    return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
+                }
+                return post ? notFound() : page()
             }
         } catch (e) {
             return failure(e)
         }
-        if (path.startsWith('/thumb/')) {
-            const file = mediaFile(target.dir, decodeURIComponent(path.slice('/thumb/'.length)))
-            const width = Number(url.searchParams.get('w') ?? THUMBNAIL_WIDTHS[0])
-            if (!file || !THUMBNAIL_WIDTHS.includes(width) || !['.png', '.jpg', '.jpeg', '.webp'].includes(extname(file).toLowerCase())) return new Response('Not found', {status: 404})
-            const key = `${file}:${width}:${statSync(file).mtimeMs}`
-            if (!thumbnails.has(key)) thumbnails.set(key, oneByOne(() => makeThumbnail(file, width)).catch(() => undefined))
-            const bytes = await thumbnails.get(key)
-            // ffmpeg could not make one: the picture itself will do
-            if (!bytes) return serveMedia(file, request, url.searchParams.has('v'))
-            return new Response(bytes, {headers: {'Content-Type': 'image/jpeg', 'Cache-Control': url.searchParams.has('v') ? 'private, max-age=86400, immutable' : 'no-cache'}})
-        }
-        if (path.startsWith('/media/')) {
-            const file = mediaFile(target.dir, decodeURIComponent(path.slice('/media/'.length)))
-            return file ? serveMedia(file, request, url.searchParams.has('v')) : new Response('Not found', {status: 404})
-        }
-        return new Response('Not found', {status: 404})
+        return notFound()
     }
 }
 
 /** Serves on the first free port from `port` on, on this machine only. */
-export function startEditor(target: EditorTarget, port: number) {
-    const fetch = editorHandler(target)
+export function startEditor(port: number) {
+    const fetch = editorHandler()
     for (let attempt = 0; ; attempt++) {
         try {
             return Bun.serve({hostname: '127.0.0.1', port: port + attempt, idleTimeout: 0, fetch})

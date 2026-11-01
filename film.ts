@@ -11,13 +11,13 @@ import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {FPS, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
 import {burnSubtitles, muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
-import {buildFilmClipRequests} from "./lib/film/compose.ts";
+import {buildFilmClipRequests, clipOverrides} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips,type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {chooseShotViews, readSheetViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
-import type {PictureJob} from "./lib/render.ts";
+import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from "./lib/render.ts";
 import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate} from "./lib/render-state.ts";
@@ -44,7 +44,7 @@ import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
 import {ask, configureLlm} from "./lib/llm.ts";
-import {log, styles} from "./lib/log.ts";
+import {keepLogIn, log, styles} from "./lib/log.ts";
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from "./lib/prompts.ts";
 import {validProjectId} from "./lib/project-setup.ts";
 
@@ -67,6 +67,8 @@ const {values: args, positionals} = (() => {
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
+                'new-anchor': {type: 'boolean', default: false},
+                'picture-prompt': {type: 'string', default: ''},
                 'fix-script': {type: 'boolean', default: false},
                 'allow-import-gaps': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
@@ -90,7 +92,8 @@ const {values: args, positionals} = (() => {
 const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
 const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
-if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
+if (args.again && !render.has('videos') && !render.has('images')) log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
+if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has('images'))) log.usageError('--new-anchor and --picture-prompt go with --render=images --only=... --again', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 if (args.review && args['dry-run']) log.usageError('--review and --dry-run do not go together: a dry run generates nothing to look at', usage)
@@ -109,6 +112,7 @@ const film = new FilmStore(filmId!)
 // --dry-run only reads: no lock, nothing saved
 if (!args['dry-run']) {
     lockProject(film.dir, `film ${film.id}`)
+    keepLogIn(join(film.dir, 'logs', `${versionStamp()}.log`))
     beginRun(film.dir, 'film.ts')
 }
 await film.load()
@@ -497,6 +501,7 @@ async function planClips() {
     clips = packClips(screenplay, withShotViews(coverage, shotViews), config.continuity, maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity))
     requests = buildFilmClipRequests({
         screenplay, cast, clips,
+        overrides: clipOverrides(film.dir),
         soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
         stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
         voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
@@ -535,9 +540,20 @@ if (render.has('images') || render.has('videos')) {
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
         const renderPicture = (picture: PictureJob) => config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
-        await renderAll(pictures.filter(p => !p.baseId), renderPicture)
+        const only = new Set(args.only.split(',').filter(Boolean))
+        const named = namedPictures(pictures, only, args.again && !render.has('videos'))
+        // an edited prompt: this one picture, from these words, kept as it is from then on
+        const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
+        if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
+        const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
+        if (args.again && pictures.some(p => only.has(p.id))) {
+            warnFixedSeed(config.seed)
+            for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, film.dir, renderConfig, args['new-anchor'] || edited !== undefined)}`)}`)
+        }
+        await renderAll(chosen.filter(p => !p.baseId), renderPicture)
         // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
-        await renderAll(pictures.filter(p => p.baseId), p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}))
+        await renderAll(chosen.filter(p => p.baseId), p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}))
+        if (edited !== undefined) pinEditedPicture(chosen[0]!, film.dir, edited)
     }
     // a sheet rendered just now gets its views read, and the clips their view, before they are rendered
     if (render.has('images') && render.has('videos') && config.sequenceSheets && !config.locationViews) await planClips()

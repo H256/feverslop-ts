@@ -58,6 +58,21 @@ export function startedOnContext(projectDir: string, id: string): boolean {
     }
 }
 
+/**
+ * Where each clip is in the film as it is assembled, in frames - not always where the plan has it: a clip with dialogue is used with
+ * every frame the model rendered, a clip that goes on from the one before leaves out the first frame, which is that one's last.
+ */
+export function filmClipSpans(projectDir: string, requests: { id: string, frames: number, dialogue: unknown[], startsFrom?: string }[]): { start: number, frames: number }[] {
+    let cursor = 0
+    return requests.map((clip, n) => {
+        const used = clip.dialogue.length ? renderedFramesOf(projectDir, clip.id) ?? clip.frames : clip.frames
+        const skipped = clip.startsFrom !== undefined && clip.startsFrom === requests[n - 1]?.id && !startedOnContext(projectDir, clip.id) ? 1 : 0
+        const span = {start: cursor, frames: used - skipped}
+        cursor += span.frames
+        return span
+    })
+}
+
 const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
 
 /**

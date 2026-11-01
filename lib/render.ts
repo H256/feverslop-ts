@@ -1,6 +1,6 @@
 import {nameService} from "./service-error.ts";
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
 import {basename, dirname, extname, join, posix} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
@@ -16,7 +16,7 @@ import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequ
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
-import {archiveFiles, versionStamp} from "./archive.ts";
+import {archiveFiles, pictureFiles, versionStamp} from "./archive.ts";
 import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
@@ -117,6 +117,40 @@ function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig)
     const sequence = sequenceSpec('sequence', picture.id, anchor, sequencePrompt, config.sequenceWorkflow)
     const sheetFingerprint = specId(sequenceSpec('sheet', picture.id, anchor, sequencePrompt, config.sequenceWorkflow))
     return {dir, anchorFile, anchorTarget, videoFile, videoTarget, anchorIsUsers, look, baseAnchorFile, baseAnchorTarget, sequenceFrames, sequencePrompt, beatTimes, anchor, anchorFingerprint, sequence, sheetFingerprint}
+}
+
+/**
+ * Puts a picture away so that it is rendered again (--again): the picture, and of a reference sheet its video and frames. The anchor
+ * stays - the same person or place from other views - unless `newAnchor` asks for another one. A look's anchor is a frame of its sheet.
+ */
+export function putAwayPicture(picture: PictureJob, projectDir: string, config: Pick<RenderConfig, 'sequenceSheets'>, newAnchor: boolean) {
+    const sheet = config.sequenceSheets && picture.kind !== 'prop' ? `assets/sequence/${picture.kind}s/${picture.id}` : undefined
+    const keepAnchor = !newAnchor && !picture.look
+    const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && sheet && (file === `${sheet}/anchor.png` || file === `${sheet}/anchor.png.json`)))
+    return archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, files)
+}
+
+/** A picture rendered from a prompt the user edited: kept as it is (lib/provenance.ts), whatever the plan's own prompt says - the edited prompt is in its sidecar. */
+export function pinEditedPicture(picture: PictureJob, projectDir: string, editedPrompt: string) {
+    const sheet = `assets/sequence/${picture.kind}s/${picture.id}`
+    for (const file of [`${picture.file}.json`, `${sheet}/anchor.png.json`]) {
+        const path = join(projectDir, file)
+        if (!existsSync(path)) continue
+        writeFileSync(path, JSON.stringify({...JSON.parse(readFileSync(path, 'utf8')), pinned: true, editedPrompt}, null, 2))
+    }
+}
+
+/**
+ * Which pictures a run with --only renders: the ones it names, or all when it names none of them (--only then is about clips). With
+ * --again every name has to be a picture when no clips are rendered - every one is GPU time, a typo must not pass.
+ */
+export function namedPictures<P extends { id: string }>(pictures: P[], only: Set<string>, mustBePictures: boolean): P[] {
+    const named = pictures.filter(p => only.has(p.id))
+    if (mustBePictures) {
+        const unknown = [...only].filter(id => !pictures.some(p => p.id === id))
+        if (unknown.length) throw new Error(`--only: no picture ${unknown.join(', ')} - the pictures are ${pictures.map(p => p.id).join(', ')}`)
+    }
+    return named.length ? named : pictures
 }
 
 /** The id of the request a picture is rendered from, as its sidecar records it: its reference sheet with sequence sheets - a prop stays one plain picture - else the picture. */

@@ -13,17 +13,19 @@ const write = (file: string, content: unknown) => {
 }
 const shot = (at: number, label = 'Shot 1') => ({label, at, framing: 'wide shot', camera: 'still', subjects: []})
 
-const music = () => join(root, 'music')
-const film = () => join(root, 'film')
+const music = () => join(root, 'projects', 'music')
+const film = () => join(root, 'films', 'film')
+const here = process.cwd()
 
 beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'editor-'))
+    process.chdir(root)
     const assets = {pictures: [{label: '<Picture 1>', file: 'assets/locations/hall.png', subject: 'S1', kind: 'location', id: 'hall', name: 'The hall', description: 'a hall'}], audio: [{label: '<Audio 1>', file: 'x', songStart: 0, songEnd: 2, stem: 'vocals'}]}
     const clip = (n: number, frameStart: number, more = {}) => ({id: `slot-00${n}`, index: n, start: frameStart / 24, end: (frameStart + 48) / 24, duration: 2, frameStart, frames: 48, section: n < 3 ? 'Verse' : 'Chorus', beatId: 'b1', shots: [shot(0, `Shot ${n}`)], assets, prompt: `prompt ${n}`, ...more})
     write(join(music(), 'output/clips/slot-001.json'), clip(1, 0, {vocals: [{at: 0.5, end: 1.5, line: 0, text: 'sung', singers: [{id: 'a', subject: 'Ann', speaker: 'S1'}]}]}))
     write(join(music(), 'output/clips/slot-002.json'), clip(2, 48, {startsFrom: 'slot-001'}))
     write(join(music(), 'output/clips/slot-003.json'), clip(3, 96))
-    write(join(music(), 'output/timeline.json'), {song: join(music(), 'input/song.wav'), bpm: 120, durationSec: 10})
+    write(join(music(), 'output/timeline.json'), {song: join('projects', 'music', 'input', 'song.wav'), bpm: 120, durationSec: 10})
     write(join(music(), 'output/assets.json'), [{kind: 'location', id: 'hall', name: 'The hall', file: 'assets/locations/hall.png', prompt: 'a hall', description: 'a hall'}])
     write(join(music(), 'input/song.wav'), 'RIFF')
     write(join(music(), 'assets/locations/hall.png'), 'png')
@@ -36,7 +38,10 @@ beforeAll(() => {
     write(join(film(), 'assets.json'), [])
     write(join(film(), 'project.json'), {screenplay: {title: 'The Film', language: 'en', scenes: [{id: 's1', setting: 'INT', location: 'HALL', time: 'DAY', elements: []}]}, coverage: [{sceneId: 's1', soundscape: '', staging: 'stand', shots: [{framing: 'close-up', camera: 'still', characters: [], action: 'they talk', lines: [], seconds: 2, people: {a: {state: 'stands'}}}]}], cast: {characters: [{id: 'a', name: 'Ann'}], locations: []}})
 })
-afterAll(() => rmSync(root, {recursive: true, force: true}))
+afterAll(() => {
+    process.chdir(here)
+    rmSync(root, {recursive: true, force: true})
+})
 
 describe('reading a project', () => {
     test('a music video: clips on the timeline, the planned shots of each, what is rendered', async () => {
@@ -58,6 +63,19 @@ describe('reading a project', () => {
         expect(project.groups).toEqual([{id: 's1', label: 's1 · HALL', start: 0, end: 2}])
         expect(project.clips[0]!.lines).toEqual([{at: 0, end: 1, text: 'hello', who: 'Ann'}, {at: 1, end: 2, text: 'hi', who: 'Bob'}])
         expect(project.clips[0]!.shots[0]).toMatchObject({framing: 'close-up', action: 'they talk', people: [{name: 'Ann', text: 'stands'}]})
+    })
+    test('a film: a clip is where the film has it, with the frames of a clip with dialogue', async () => {
+        const dir = join(root, 'films', 'spans')
+        const clip = (id: string, frameStart: number, frames: number, dialogue: unknown[], more = {}) => ({id, sceneId: 's1', seconds: frames / 24, frameStart, frames, shots: [], dialogue, assets: {pictures: []}, prompt: '', ...more})
+        write(join(dir, 'output/clips/clip-001.json'), clip('clip-001', 0, 48, [{at: 0, line: 0, speaker: 'A', speakerId: 's', kind: 'on', text: 'hi'}]))
+        write(join(dir, 'output/clips/clip-002.json'), clip('clip-002', 48, 24, []))
+        write(join(dir, 'output/clips/clip-003.json'), clip('clip-003', 72, 24, [], {startsFrom: 'clip-002'}))
+        write(join(dir, 'videos/clip-001.mp4.json'), {renderedFrames: 60})
+        write(join(dir, 'videos/clip-002.mp4.json'), {renderedFrames: 40})
+        const project = await readEditorProject({id: 'spans', dir, kind: 'film'})
+        // 60 frames of the first, 24 of the second, and the third without its first frame
+        expect(project.clips.map(c => [c.start, c.end])).toEqual([[0, 2.5], [2.5, 3.5], [3.5, 3.5 + 23 / 24]])
+        expect(project.seconds).toBe(3.5 + 23 / 24)
     })
     test('an empty folder is a project without a plan', async () => {
         const dir = join(root, 'empty')
@@ -109,7 +127,8 @@ describe('freshness', () => {
 })
 
 describe('serving', () => {
-    const get = (path: string, init?: RequestInit) => editorHandler({id: 'music', dir: music(), kind: 'music'})(new Request(`http://localhost${path}`, init))
+    const handler = editorHandler()
+    const get = (path: string, init?: RequestInit) => handler(new Request(`http://localhost/p/music/music${path}`, init))
 
     test('only media inside the project', () => {
         expect(mediaFile(music(), 'videos/slot-001.mp4')).toBe(join(music(), 'videos/slot-001.mp4'))
@@ -122,9 +141,9 @@ describe('serving', () => {
     })
     test('a path out of the folder is not found', async () => {
         write(join(root, 'outside.mp4'), 'secret')
-        expect((await get('/media/..%2Foutside.mp4')).status).toBe(404)
+        expect((await get('/media/..%2F..%2F..%2Foutside.mp4')).status).toBe(404)
         expect((await get('/media/project.json')).status).toBe(404)
-        expect((await get('/thumb/..%2Foutside.mp4')).status).toBe(404)
+        expect((await get('/thumb/..%2F..%2F..%2Foutside.mp4')).status).toBe(404)
     })
     test('byte ranges', () => {
         expect(byteRange('bytes=0-3', 10)).toEqual({first: 0, last: 3})
@@ -146,25 +165,30 @@ describe('serving', () => {
         expect(whole.headers.get('accept-ranges')).toBe('bytes')
         expect((await get('/media/videos/slot-001.mp4', {headers: {range: 'bytes=50-'}})).status).toBe(416)
     })
-    test('it only reads', async () => {
-        expect((await get('/api/project', {method: 'POST'})).status).toBe(405)
+    test('nothing but the page itself can change anything', async () => {
+        expect((await get('/api/stop', {method: 'POST', headers: {origin: 'http://evil.example'}, body: '{}'})).status).toBe(403)
+        expect((await get('/api/stop', {method: 'POST', headers: {'sec-fetch-site': 'cross-site'}, body: '{}'})).status).toBe(403)
+        expect((await get('/api/project', {method: 'DELETE'})).status).toBe(405)
+        expect((await handler(new Request('http://evil.example/api/projects'))).status).toBe(403)
     })
     test('the page and what it asks for', async () => {
-        const page = await get('/')
+        const page = await handler(new Request('http://localhost/'))
         expect(page.headers.get('content-type')).toContain('text/html')
         expect(await page.text()).toContain('prefers-color-scheme')
         expect(await (await get('/api/project')).json()).toMatchObject({id: 'music', kind: 'music'})
         expect(await (await get('/api/freshness')).json()).toMatchObject({clips: {'slot-001': 'stale'}})
-        expect((await get('/nothing')).status).toBe(404)
+        expect((await get('/api/nothing')).status).toBe(404)
+        expect((await handler(new Request('http://localhost/p/music/none/api/project'))).status).toBe(404)
+        expect((await handler(new Request('http://localhost/p/music/..%2Ffilms/api/project'))).status).toBe(404)
     })
     test('a thumbnail of any other width is not made', async () => {
         expect((await get('/thumb/assets/locations/hall.png?w=7')).status).toBe(404)
         expect((await get('/thumb/videos/slot-001.mp4')).status).toBe(404)
     })
     test('a project that cannot be read says so instead of breaking', async () => {
-        const dir = join(root, 'broken')
+        const dir = join(root, 'projects', 'broken')
         write(join(dir, 'output/clips/slot-001.json'), '{"id": ')
-        const response = await editorHandler({id: 'broken', dir, kind: 'music'})(new Request('http://localhost/api/project'))
+        const response = await editorHandler()(new Request('http://localhost/p/music/broken/api/project'))
         expect(response.status).toBe(503)
         expect((await response.json() as { error: string }).error).toBeTruthy()
     })

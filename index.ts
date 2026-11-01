@@ -20,7 +20,7 @@ import {playingCases, playingIssues} from "./lib/playing-check.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
-import {clipFingerprint, type PictureJob, Renderer} from "./lib/render.ts";
+import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines} from "./lib/lyrics.ts";
 import {projectLyricSections} from "./lib/music.ts";
@@ -73,6 +73,8 @@ const {values: args, positionals} = (() => {
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
+                'new-anchor': {type: 'boolean', default: false},
+                'picture-prompt': {type: 'string', default: ''},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
@@ -110,7 +112,8 @@ const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
 const unknownRefresh = [...refreshKinds].filter(k => k !== 'pictures' && k !== 'clips')
 if (unknownRefresh.length) log.usageError(`--refresh: unknown "${unknownRefresh.join(', ')}" - use pictures, clips`, usage)
 // --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
-if (args.again && !render.has('videos')) log.usageError('--again goes with --render=videos: it renders the clips named in --only again, with a new seed', usage)
+if (args.again && !render.has('videos') && !render.has('images')) log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
+if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has('images'))) log.usageError('--new-anchor and --picture-prompt go with --render=images --only=... --again', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
@@ -1125,9 +1128,20 @@ if (render.has('images') || render.has('videos')) {
     // everything at once - the renderer runs one job per server and queues the rest
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-        const todoPictures = pictures.filter(p => !existsSync(join(project.dir, p.file)))
+        const only = new Set(args.only.split(',').filter(Boolean))
+        const named = namedPictures(pictures, only, args.again && !render.has('videos'))
+        // an edited prompt: this one picture, from these words, kept as it is from then on
+        const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
+        if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
+        const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
+        if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
+            warnFixedSeed(config.seed)
+            for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, args['new-anchor'] || edited !== undefined)}`)}`)
+        }
+        const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
         log.step('Estimate', styles.muted(await pictureEstimate(todoPictures.length, config, settings.comfy.map(server => server.name))))
-        await renderAll(pictures, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+        await renderAll(chosen, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+        if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
     }
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {

@@ -1,0 +1,379 @@
+import {afterAll, beforeAll, describe, expect, test} from "bun:test";
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {dirname, join} from "node:path";
+import {clipVersions, pictureVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
+import {lockHolder, lockProject, withProjectLock} from "../lock.ts";
+import {namedPictures} from "../render.ts";
+import {finalStateOf} from "../render-state.ts";
+import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
+import type {EditorTarget} from "./project.ts";
+import {readEditorProject, readListing} from "./project.ts";
+import {allowedOptions, RunControl, runCommand} from "./runs.ts";
+import {editorHandler} from "./server.ts";
+
+let root: string
+const here = process.cwd()
+const write = (file: string, content: unknown = 'x') => {
+    mkdirSync(dirname(file), {recursive: true})
+    writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content))
+}
+const old = new Date(1_000_000)
+const target = (id: string, kind: 'music' | 'film' = 'music'): EditorTarget => ({id, kind, dir: join(root, kind === 'film' ? 'films' : 'projects', id)})
+
+beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'workspace-'))
+    process.chdir(root)
+})
+afterAll(() => {
+    process.chdir(here)
+    rmSync(root, {recursive: true, force: true})
+})
+
+describe('versions of a clip', () => {
+    const project = () => target('versions').dir
+    const clip = 'slot-001'
+    beforeAll(() => {
+        const dir = project()
+        write(join(dir, `videos/${clip}.mp4`), 'now')
+        write(join(dir, `videos/${clip}.mp4.json`), {seed: 3, fingerprint: 'c'})
+        write(join(dir, `assets/clips/${clip}_ff.png`), 'now-ff')
+        write(join(dir, `assets/clips/${clip}_lf.png`), 'now-lf')
+        const again = join(dir, `old/attempts/${clip}-20261101-120000`)
+        write(join(again, `${clip}.mp4`), 'again')
+        write(join(again, `${clip}.mp4.json`), {seed: 1, fingerprint: 'a', workflow: 'wf', size: '1x1'})
+        write(join(again, `${clip}_ff.png`), 'again-ff')
+        write(join(again, `${clip}_lf.png`), 'again-lf')
+        utimesSync(join(again, `${clip}.mp4`), old, old)
+        const stale = join(dir, `old/attempts/stale-20261101-110000-videos-${clip}.mp4`)
+        write(join(stale, `${clip}.mp4`), 'stale')
+        write(join(stale, `${clip}.mp4.json`), {seed: 2})
+        write(join(dir, `old/leaks/${clip}-seed-77.mp4`), 'leak')
+        // of another clip, and a preview of this one: not its versions
+        write(join(dir, 'old/attempts/slot-0011-20261101-120000/slot-0011.mp4'))
+        write(join(dir, `old/attempts/${clip}-preview-20261101-120000/${clip}.mp4`))
+    })
+    test('all three kinds of place, the newest first, none of another clip', () => {
+        const versions = clipVersions(project(), clip)
+        expect(versions.map(v => v.source).sort()).toEqual(['again', 'leak', 'stale'])
+        expect(versions.at(-1)!.source).toBe('again')
+        expect(versions.find(v => v.source === 'leak')).toMatchObject({seed: 77, video: `old/leaks/${clip}-seed-77.mp4`})
+        expect(versions.find(v => v.source === 'again')).toMatchObject({seed: 1, workflow: 'wf', firstFrame: `old/attempts/${clip}-20261101-120000/${clip}_ff.png`})
+    })
+    test('putting one back moves all of it, puts away what is there, and counts as new: the final video is older than it', () => {
+        const dir = project()
+        write(join(dir, 'versions.mp4'), 'final')
+        expect(finalStateOf(dir, join(dir, 'versions.mp4'), [{id: clip}])).toBe('current')
+        restoreClipVersion(dir, clip, `old/attempts/${clip}-20261101-120000`)
+        expect(readFileSync(join(dir, `videos/${clip}.mp4`), 'utf8')).toBe('again')
+        expect(JSON.parse(readFileSync(join(dir, `videos/${clip}.mp4.json`), 'utf8')).seed).toBe(1)
+        expect(readFileSync(join(dir, `assets/clips/${clip}_lf.png`), 'utf8')).toBe('again-lf')
+        expect(existsSync(join(dir, `old/attempts/${clip}-20261101-120000`))).toBe(false)
+        // set to an hour ago: what was restored has to count as newer than a final video made before it
+        const anHourAgo = new Date(Date.now() - 3_600_000)
+        utimesSync(join(dir, 'versions.mp4'), anHourAgo, anHourAgo)
+        expect(statSync(join(dir, `videos/${clip}.mp4`)).mtimeMs).toBeGreaterThan(anHourAgo.getTime())
+        expect(finalStateOf(dir, join(dir, 'versions.mp4'), [{id: clip}])).toBe('older')
+        // what was there is a version now, with its seed and frames
+        const putAway = clipVersions(dir, clip).find(v => v.seed === 3)!
+        expect(readFileSync(join(dir, putAway.video), 'utf8')).toBe('now')
+        expect(readFileSync(join(dir, putAway.lastFrame!), 'utf8')).toBe('now-lf')
+    })
+    test('one from the backdrop check has only its video: a sidecar with its seed, frames left to the next run', () => {
+        const dir = project()
+        restoreClipVersion(dir, clip, `old/leaks/${clip}-seed-77.mp4`)
+        expect(readFileSync(join(dir, `videos/${clip}.mp4`), 'utf8')).toBe('leak')
+        expect(JSON.parse(readFileSync(join(dir, `videos/${clip}.mp4.json`), 'utf8')).seed).toBe(77)
+        expect(existsSync(join(dir, `assets/clips/${clip}_ff.png`))).toBe(false)
+    })
+    test('a version that is not one is refused, and nothing moves', () => {
+        const dir = project()
+        const before = readFileSync(join(dir, `videos/${clip}.mp4`), 'utf8')
+        expect(() => restoreClipVersion(dir, clip, '../../secret')).toThrow('has no version')
+        expect(readFileSync(join(dir, `videos/${clip}.mp4`), 'utf8')).toBe(before)
+    })
+})
+
+describe('versions of a picture', () => {
+    const dir = () => target('pictures').dir
+    const picture = {id: 'hall', file: 'assets/locations/hall.png'}
+    const sheet = 'assets/sequence/locations/hall'
+    beforeAll(() => {
+        write(join(dir(), picture.file), 'now')
+        write(join(dir(), `${sheet}/anchor.png`), 'now-anchor')
+        write(join(dir(), `${sheet}/frames/frame_00.png`), 'now-frame')
+        const again = join(dir(), 'old/attempts/hall-20261101-120000')
+        write(join(again, 'hall.png'), 'then')
+        write(join(again, 'hall.png.json'), {seed: 5, prompt: 'then'})
+        write(join(again, 'anchor.png'), 'then-anchor')
+        write(join(again, 'sequence.mp4'), 'then-video')
+        write(join(again, 'frame_00.png'), 'then-frame')
+        write(join(dir(), 'old/attempts/stale-20261101-110000-assets-locations-hall.png/hall.png'), 'older')
+        write(join(dir(), 'old/attempts/hall-library-20261101-100000/hall.png'), 'library')
+    })
+    test('every kind, with what a sheet has', () => {
+        const versions = pictureVersions(dir(), picture)
+        expect(versions.map(v => v.source).sort()).toEqual(['again', 'library', 'stale'])
+        expect(versions.find(v => v.source === 'again')).toMatchObject({seed: 5, prompt: 'then', anchor: 'old/attempts/hall-20261101-120000/anchor.png', video: 'old/attempts/hall-20261101-120000/sequence.mp4'})
+    })
+    test('putting one back puts its flat files where a sheet has them, and all of what is there away', () => {
+        restorePictureVersion(dir(), picture, 'old/attempts/hall-20261101-120000', sheet)
+        const read = (file: string) => readFileSync(join(dir(), file), 'utf8')
+        expect(read(picture.file)).toBe('then')
+        expect(read(`${sheet}/anchor.png`)).toBe('then-anchor')
+        expect(read(`${sheet}/sequence.mp4`)).toBe('then-video')
+        expect(read(`${sheet}/frames/frame_00.png`)).toBe('then-frame')
+        const putAway = pictureVersions(dir(), picture).find(v => v.anchor && readFileSync(join(dir(), v.picture), 'utf8') === 'now')!
+        expect(readFileSync(join(dir(), putAway.anchor!), 'utf8')).toBe('now-anchor')
+    })
+})
+
+describe('which pictures --only means', () => {
+    const pictures = [{id: 'a'}, {id: 'b'}]
+    test('the ones it names, or all when it is about clips', () => {
+        expect(namedPictures(pictures, new Set(['a']), false)).toEqual([{id: 'a'}])
+        expect(namedPictures(pictures, new Set(['slot-001']), false)).toEqual(pictures)
+        expect(namedPictures(pictures, new Set(), false)).toEqual(pictures)
+    })
+    test('with --again and no clips a name that is no picture is an error: every one is GPU time', () => {
+        expect(() => namedPictures(pictures, new Set(['a', 'typo']), true)).toThrow('no picture typo')
+    })
+})
+
+describe('the lock', () => {
+    test('held while the work is done, free afterwards, and it holds a run off', async () => {
+        const dir = target('locked').dir
+        mkdirSync(dir, {recursive: true})
+        let during: number | undefined
+        await withProjectLock(dir, 'x', () => { during = lockHolder(dir) })
+        expect(during).toBe(process.pid)
+        expect(lockHolder(dir)).toBeUndefined()
+    })
+    test('the work is refused while another process holds it', async () => {
+        const dir = target('held').dir
+        write(join(dir, '.lock'), String(process.ppid))
+        await expect(withProjectLock(dir, 'x', () => {})).rejects.toThrow('another run')
+        expect(lockHolder(dir)).toBe(process.ppid)
+    })
+    test('a lock of a process that is gone is not held', () => {
+        const dir = target('gone').dir
+        write(join(dir, '.lock'), '2147483646')
+        expect(lockHolder(dir)).toBeUndefined()
+    })
+    test('released also when the work fails', async () => {
+        const dir = target('fails').dir
+        mkdirSync(dir, {recursive: true})
+        await expect(withProjectLock(dir, 'x', () => { throw new Error('no') })).rejects.toThrow('no')
+        expect(lockHolder(dir)).toBeUndefined()
+    })
+    test('the CLI lock still is what it was', () => {
+        const dir = target('cli').dir
+        mkdirSync(dir, {recursive: true})
+        const release = lockProject(dir, 'x')
+        expect(lockHolder(dir)).toBe(process.pid)
+        release()
+    })
+})
+
+describe('what can be started', () => {
+    const music = {id: 'demo', kind: 'music' as const}
+    const film = {id: 'demo', kind: 'film' as const}
+    test('what is asked for comes to a command of the pipeline', () => {
+        expect(runCommand(music, {type: 'clips', ids: ['slot-001', 'slot-002'], again: true})).toEqual({script: 'index.ts', args: ['demo', '--render=videos', '--only=slot-001,slot-002', '--again']})
+        expect(runCommand(film, {type: 'clips', ids: ['clip-001']})).toEqual({script: 'film.ts', args: ['demo', '--render=videos', '--only=clip-001']})
+        expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, newAnchor: true})).toEqual({script: 'index.ts', args: ['demo', '--render=images', '--only=hall', '--again', '--new-anchor']})
+        expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
+        expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: '3.2-5'})).toEqual({script: 'index.ts', args: ['demo', '--retake=slot-007:3.2-5']})
+        expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: 'shot2'}).args[1]).toBe('--retake=slot-007:shot2')
+    })
+    test('nothing but ids gets into a command', () => {
+        expect(() => runCommand(music, {type: 'clips', ids: ['--comfy=http://evil']})).toThrow('no such clips')
+        expect(() => runCommand(music, {type: 'clips', ids: []})).toThrow('no such clips')
+        expect(() => runCommand(music, {type: 'pictures', ids: ['a b']})).toThrow('no such pictures')
+        expect(() => runCommand(music, {type: 'retake', clip: 'slot-007', range: '1-2 --again'})).toThrow('not a part')
+        expect(() => runCommand(music, {type: 'export-asset', asset: 'a', as: '--film'})).toThrow('no such asset')
+    })
+    test('a command of the last run or of status only with rendering in it', () => {
+        expect(allowedOptions('music', 'demo', 'bun index.ts demo --render=videos --refresh=clips')).toEqual(['--render=videos', '--refresh=clips'])
+        expect(allowedOptions('film', 'demo', 'bun film.ts demo --render=final')).toEqual(['--render=final'])
+        expect(allowedOptions('music', 'demo', 'bun index.ts demo')).toEqual([])
+        // what asks in the terminal, or changes the servers, or another project, or another script
+        expect(allowedOptions('music', 'demo', 'bun index.ts demo --review')).toBeUndefined()
+        expect(allowedOptions('music', 'demo', 'bun index.ts demo --comfy=http://evil')).toBeUndefined()
+        expect(allowedOptions('music', 'demo', 'bun index.ts other --render=videos')).toBeUndefined()
+        expect(allowedOptions('music', 'demo', 'bun tools/evil.ts demo')).toBeUndefined()
+        expect(allowedOptions('music', 'demo', 'bun film.ts demo')).toBeUndefined()
+    })
+})
+
+describe('a run', () => {
+    // a stand-in for the pipeline: says something, and lives as long as it is told to
+    const script = (name: string, source: string) => write(join(root, 'fake', name), source)
+    const until = async (done: () => boolean) => {
+        for (let i = 0; i < 200 && !done(); i++) await Bun.sleep(25)
+        expect(done()).toBe(true)
+    }
+    test('its lines can be followed, and how it ended is known', async () => {
+        script('index.ts', `console.log('one'); console.error('two'); process.stdout.write('three'); process.exit(3)`)
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-a')
+        mkdirSync(project.dir, {recursive: true})
+        const started = runs.start(project, {type: 'plan'})
+        expect(started).toMatchObject({source: 'here', running: true, command: 'bun index.ts run-a'})
+        await until(() => runs.current(project)?.running === false)
+        await Bun.sleep(50)
+        expect(runs.current(project)).toMatchObject({running: false, code: 3})
+        const {lines, next} = runs.lines(project, 0)
+        expect(lines.toSorted()).toEqual(['one', 'three', 'two'])
+        expect(runs.lines(project, next).lines).toEqual([])
+    })
+    test('a second one is refused, stopping ends it', async () => {
+        script('index.ts', `console.log('started'); await Bun.sleep(60000)`)
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-b')
+        mkdirSync(project.dir, {recursive: true})
+        runs.start(project, {type: 'plan'})
+        expect(() => runs.start(project, {type: 'plan'})).toThrow('a run is going on')
+        await until(() => runs.lines(project, 0).lines.includes('started'))
+        expect(runs.stop(project)).toBe(true)
+        await until(() => runs.current(project)?.running === false)
+        expect(runs.stop(project)).toBe(false)
+    })
+    test('nothing is started while a run in the terminal holds the lock; it can be seen', () => {
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-c')
+        write(join(project.dir, '.lock'), String(process.ppid))
+        expect(() => runs.start(project, {type: 'plan'})).toThrow('being worked on by another run')
+        expect(runs.current(project)).toMatchObject({source: 'terminal', running: true, pid: process.ppid})
+    })
+    test('a run in the terminal: its log is followed', () => {
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-d')
+        write(join(project.dir, '.lock'), String(process.ppid))
+        write(join(project.dir, 'logs/20260101-000000.log'), 'first\nsecond\n')
+        const {lines, next} = runs.lines(project, 0)
+        expect(lines).toEqual(['first', 'second'])
+        write(join(project.dir, 'logs/20260101-000000.log'), 'first\nsecond\nthird\n')
+        expect(runs.lines(project, next).lines).toEqual(['third'])
+    })
+})
+
+describe('the start page', () => {
+    test('a project in a line, from what lies in its folder', () => {
+        const project = target('listed')
+        write(join(project.dir, 'output/clips/slot-001.json'), {id: 'slot-001'})
+        write(join(project.dir, 'output/clips/slot-002.json'), {id: 'slot-002'})
+        write(join(project.dir, 'videos/slot-001.mp4'))
+        write(join(project.dir, 'assets/clips/slot-001_ff.png'))
+        write(join(project.dir, 'assets/characters/ann.png'))
+        expect(readListing(project)).toMatchObject({id: 'listed', kind: 'music', title: 'listed', clips: 2, rendered: 1, pictures: 1, final: 'missing', thumb: {file: 'assets/clips/slot-001_ff.png'}})
+    })
+    test('a film by its title, and a broken project.json does not lose the card', () => {
+        const film = target('titled', 'film')
+        write(join(film.dir, 'project.json'), {screenplay: {title: 'The Title', scenes: []}})
+        write(join(film.dir, 'input/idea.txt'))
+        expect(readListing(film).title).toBe('The Title')
+        write(join(film.dir, 'project.json'), '{"screenplay": ')
+        expect(readListing(film).title).toBe('titled')
+    })
+    test('all projects and films, and the page at every address', async () => {
+        write(join(target('listed').dir, 'input/idea.txt'))
+        const handler = editorHandler()
+        const {projects} = await (await handler(new Request('http://localhost/api/projects'))).json() as { projects: { id: string, kind: string }[] }
+        expect(projects.some(p => p.id === 'listed' && p.kind === 'music')).toBe(true)
+        expect(projects.some(p => p.id === 'titled' && p.kind === 'film')).toBe(true)
+        for (const path of ['/', '/library', '/p/music/listed/', '/p/music/listed/references', '/p/film/titled/casting']) expect((await handler(new Request(`http://localhost${path}`))).headers.get('content-type')).toContain('text/html')
+    })
+})
+
+describe('marks', () => {
+    const clip = (id: string, more = {}) => ({id, frameStart: 0, frames: 24, section: 'A', beatId: 'b', shots: [], assets: {pictures: [], audio: []}, prompt: '', ...more})
+    test('what is known against a clip, from what is on disk', async () => {
+        const project = target('marked')
+        const {dir} = project
+        write(join(dir, 'output/clips/slot-001.json'), clip('slot-001', {dropped: ['Ann']}))
+        write(join(dir, 'output/clips/slot-002.json'), clip('slot-002', {startsFrom: 'slot-001'}))
+        write(join(dir, 'output/clips/slot-003.json'), clip('slot-003'))
+        write(join(dir, 'videos/slot-002.mp4'))
+        utimesSync(join(dir, 'videos/slot-002.mp4'), old, old)
+        write(join(dir, 'assets/clips/slot-001_lf.png'))
+        write(join(dir, 'videos/slot-003.mp4'))
+        write(join(dir, 'old/leaks/slot-003-seed-1.mp4'))
+        write(join(dir, 'logs/last-run.json'), {command: 'bun index.ts marked', pid: 1, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), exitCode: 1, failures: ['clip slot-001: HIP out of memory']})
+        const {statSync: stat} = await import('node:fs')
+        write(join(dir, 'output/leak-scan.json'), {clips: {'slot-003': {video: Math.round(stat(join(dir, 'videos/slot-003.mp4')).mtimeMs), from: 1, to: 2, samples: 3}, 'slot-002': {video: 1, from: 1, to: 2, samples: 3}}})
+        const {clips} = await readEditorProject(project)
+        const kinds = (id: string) => clips.find(c => c.id === id)!.marks.map(m => m.kind).toSorted()
+        expect(kinds('slot-001')).toEqual(['dropped', 'failed'])
+        // the scan of slot-002 was of another version of the file: it says nothing about this one
+        expect(kinds('slot-002')).toEqual(['older-start'])
+        expect(kinds('slot-003')).toEqual(['backdrop', 'backdrop-attempt'])
+    })
+})
+
+describe('the casting', () => {
+    const cast = {characters: [{id: 'ann', name: 'Ann'}, {id: 'band', name: 'Band', isGroup: true}], locations: [{id: 'hall', name: 'Hall'}]}
+    const project = () => target('cast')
+    const save = async () => {
+        write(join(root, 'library/characters/kael/asset.json'), {name: 'Kael', description: 'a man', source: 'x/y'})
+        write(join(root, 'library/characters/kael/picture.png'))
+        process.env.FEVERSLOP_LIBRARY = join(root, 'library')
+    }
+    beforeAll(async () => {
+        await save()
+        const {dir} = project()
+        write(join(dir, 'project.json'), {cast})
+        write(join(dir, 'input/idea.txt'))
+        write(join(dir, 'assets/characters/ann.png'))
+        write(join(dir, 'casting.json'), JSON.stringify({characters: {ann: 'project:ann', band: 'project:band'}, locations: {hall: 'library:gone'}}, null, 2))
+    })
+    afterAll(() => { delete process.env.FEVERSLOP_LIBRARY })
+    test('every role with its entry, the clips that use it and what is wrong', async () => {
+        const casting = await readCasting(project(), [{id: 'slot-001', pictures: [{file: 'assets/characters/ann.png'}]}, {id: 'slot-002', pictures: []}])
+        expect(casting.options.character).toEqual(['kael'])
+        const ann = casting.roles.find(r => r.id === 'ann')!
+        expect(ann).toMatchObject({entry: 'project:ann', clips: ['slot-001'], picture: {file: 'assets/characters/ann.png'}, errors: []})
+        expect(casting.roles.find(r => r.id === 'hall')!.errors[0]).toContain('library has no location "gone"')
+    })
+    test('a choice changes that one entry and nothing else', async () => {
+        await writeCastingEntry(project(), 'character', 'ann', 'library:kael')
+        expect(JSON.parse(readFileSync(join(project().dir, 'casting.json'), 'utf8'))).toEqual({characters: {ann: 'library:kael', band: 'project:band'}, locations: {hall: 'library:gone'}})
+    })
+    test('an asset the library does not have, or anything else, is refused', async () => {
+        await expect(writeCastingEntry(project(), 'character', 'ann', 'library:typo')).rejects.toThrow('neither')
+        await expect(writeCastingEntry(project(), 'character', 'ann', 'project:band')).rejects.toThrow('neither')
+    })
+    test('never while a run holds the lock', async () => {
+        const {dir} = project()
+        write(join(dir, '.lock'), String(process.ppid))
+        await expect(writeCastingEntry(project(), 'character', 'ann', 'project:ann')).rejects.toThrow('another run')
+        rmSync(join(dir, '.lock'))
+    })
+    test('the library knows who uses an asset from the casting files', async () => {
+        const {assets} = await readLibrary()
+        expect(assets.find(a => a.id === 'kael')).toMatchObject({kind: 'character', name: 'Kael', picture: {file: 'characters/kael/picture.png'}, usedBy: [{kind: 'music', id: 'cast', role: 'ann'}]})
+    })
+    test('what is being made in the library is not served', async () => {
+        const library = join(root, 'library')
+        write(join(library, '.work/x.png'))
+        const handler = editorHandler()
+        expect((await handler(new Request('http://localhost/library/media/.work/x.png'))).status).toBe(404)
+        expect((await handler(new Request('http://localhost/library/media/characters/kael/picture.png'))).status).toBe(200)
+        expect((await handler(new Request('http://localhost/library/media/characters/kael/asset.json'))).status).toBe(404)
+    })
+})
+
+describe('a choice per clip of a film', () => {
+    test('kept in its own small file, gone again when there is no choice; only for clips there are', async () => {
+        const film = target('chosen', 'film')
+        write(join(film.dir, 'input/idea.txt'))
+        write(join(film.dir, 'output/clips/clip-001.json'), {id: 'clip-001'})
+        const handler = editorHandler()
+        const post = (clip: string, body: unknown) => handler(new Request(`http://localhost/p/film/chosen/api/override/${clip}`, {method: 'POST', body: JSON.stringify(body)}))
+        expect((await post('clip-001', {placeView: 3})).status).toBe(200)
+        expect(JSON.parse(readFileSync(join(film.dir, 'clip-overrides/clip-001.json'), 'utf8'))).toEqual({placeView: 3})
+        expect((await post('clip-001', null)).status).toBe(200)
+        expect(existsSync(join(film.dir, 'clip-overrides/clip-001.json'))).toBe(false)
+        expect((await post('clip-999', {placeView: 3})).status).toBe(409)
+    })
+})

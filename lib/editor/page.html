@@ -24,6 +24,7 @@ document.documentElement.dataset.theme = localStorage.getItem('theme') ?? 'syste
     --stale: light-dark(#8f6200, #f2bd3a);
     --stale-soft: light-dark(#f8ecc9, #3a2d0c);
     --danger: light-dark(#b42318, #ff7a70);
+    --danger-soft: light-dark(#fbe4e1, #3b1a18);
     --ok: light-dark(#17693f, #5ed29a);
     --hatch: light-dark(#d6d5d0, #24272b);
     --sans: "Inter", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
@@ -36,26 +37,32 @@ document.documentElement.dataset.theme = localStorage.getItem('theme') ?? 'syste
 [hidden] { display: none !important; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 var(--sans); overflow: hidden; }
-button, input { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
+a { color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 h1, h2, h3, p { margin: 0; }
 .muted { color: var(--muted); }
 .num { font-variant-numeric: tabular-nums; }
 
 .app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+.page { min-height: 0; min-width: 0; }
+.spacer { flex: 1; }
 
 /* top bar */
 .top { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--line); min-width: 0; }
 .mark { width: 18px; height: 18px; flex: none; border-radius: 5px; background: var(--accent); display: grid; place-items: center; color: var(--accent-text); }
 .top h1 { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; background: var(--raised); color: var(--muted); font-size: 12px; white-space: nowrap; }
+.nav { display: flex; gap: 2px; flex: none; }
+.nav a { padding: 3px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+.nav a:hover { color: var(--text); background: var(--raised); }
+.nav a[aria-current=page] { color: var(--text); background: var(--raised); font-weight: 500; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; background: var(--raised); color: var(--muted); font-size: 12px; white-space: nowrap; border: 0; }
 .chip.stale { background: var(--stale-soft); color: var(--stale); }
-.chip.bad { color: var(--danger); }
+.chip.bad { background: var(--danger-soft); color: var(--danger); }
 .chip.good { color: var(--ok); }
-.chip a { color: inherit; }
+button.chip:hover { color: var(--text); }
 .chips { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
-.spacer { flex: 1; }
 .theme { display: flex; flex: none; padding: 2px; gap: 2px; border-radius: 8px; background: var(--raised); border: 0; margin: 0; }
 .theme legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .theme label { display: grid; place-items: center; width: 28px; height: 24px; border-radius: 6px; color: var(--muted); cursor: pointer; }
@@ -65,16 +72,29 @@ h1, h2, h3, p { margin: 0; }
 .theme input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 1px; }
 svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; display: block; }
 
+/* buttons and fields */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--text); white-space: nowrap; }
+.btn:hover { background: var(--raised); }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.1); background: var(--accent); }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.field { display: block; margin-bottom: 10px; }
+.field > span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+input[type=text], input[type=search], input[type=number], select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; }
+.field input, .field textarea, .field select, .section > textarea { width: 100%; }
+textarea { font: 12px/1.6 var(--mono); resize: vertical; }
+
 /* monitor and inspector */
 .work { display: grid; grid-template-columns: minmax(0, 1fr) 400px; min-height: 0; }
 .monitor { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
 /* a monitor stays dark in both themes: a picture is judged against black */
 .stage { position: relative; background: #000; min-height: 0; overflow: hidden; }
 .stage video, .stage .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.stage video[hidden], .stage .poster[hidden] { display: none; }
 .stage .poster { opacity: .35; }
 .notice { position: absolute; left: 50%; top: 50%; translate: -50% -50%; color: #fff; background: #000a; padding: 6px 14px; border-radius: 99px; font-size: 13px; white-space: nowrap; }
-.notice[hidden] { display: none; }
+.preview-flag { position: absolute; left: 12px; top: 12px; color: #fff; background: #000a; padding: 2px 10px; border-radius: 99px; font-size: 12px; }
 .transport { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
 .tbtn { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent; color: var(--text); flex: none; }
 .tbtn:hover { background: var(--raised); }
@@ -83,11 +103,13 @@ svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-w
 .tbtn.play svg { fill: currentColor; stroke: none; }
 .time { font: 13px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+select.source { padding: 1px 6px; font-size: 12px; color: var(--muted); }
 
 .inspector { display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--surface); border-left: 1px solid var(--line); min-height: 0; min-width: 0; }
 .ihead { padding: 12px 14px 8px; }
 .ihead h2 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; font-family: var(--mono); }
 .ihead p { color: var(--muted); }
+.ihead .warn { margin: 6px 0 0; }
 .tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
 .tabs button { padding: 7px 8px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); margin-bottom: -1px; }
 .tabs button:hover { color: var(--text); }
@@ -112,11 +134,12 @@ svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-w
 .refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .ref { display: block; width: 100%; padding: 0; background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; text-align: left; }
 .ref:hover { border-color: var(--muted); }
+.ref.chosen { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .ref img, .ref .noimg { display: block; width: 100%; aspect-ratio: 16/10; object-fit: cover; background: var(--hatch); }
-.ref .noimg { display: grid; place-items: center; color: var(--danger); font-size: 12px; }
+.ref .noimg { display: grid; place-items: center; color: var(--muted); font-size: 12px; }
 .ref div { padding: 5px 8px 6px; }
 .ref b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ref small { color: var(--muted); display: flex; gap: 6px; }
+.ref small { color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 6px; }
 .ref small .stale { color: var(--stale); }
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; }
 .facts dt { color: var(--muted); }
@@ -130,17 +153,23 @@ svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-w
 .cmd code { flex: 1; font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
 .cmd button { flex: none; border: 0; background: transparent; border-radius: 5px; color: var(--muted); padding: 3px; }
 .cmd button:hover { background: var(--hover); color: var(--text); }
-.warn { background: var(--stale-soft); color: var(--stale); padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; }
+.warn { background: var(--stale-soft); color: var(--stale); padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; font-size: 12px; }
+.warn.bad { background: var(--danger-soft); color: var(--danger); }
+.note { background: var(--raised); padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+.version { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; }
+.version img, .version .noimg { width: 92px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; background: var(--hatch); display: block; }
+.version .btn-row { margin-top: 5px; }
 
 /* timeline */
 .timeline { background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
 .tbar { display: flex; align-items: center; gap: 12px; padding: 5px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
-.legend { display: flex; gap: 12px; color: var(--muted); font-size: 12px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.legend { display: flex; gap: 12px; color: var(--muted); font-size: 12px; min-width: 0; overflow: hidden; white-space: nowrap; align-items: center; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.legend label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; }
 .zoom { display: flex; align-items: center; gap: 6px; color: var(--muted); flex: none; }
 .zoom input { width: 120px; accent-color: var(--accent); }
-.zoom button { border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: 0 8px; color: var(--muted); }
-.zoom button:hover { color: var(--text); background: var(--raised); }
+.zoom button, .legend button { border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: 0 8px; color: var(--muted); }
+.zoom button:hover, .legend button:hover { color: var(--text); background: var(--raised); }
 .tbody { display: grid; grid-template-columns: 62px minmax(0, 1fr); }
 .labels { border-right: 1px solid var(--line); font-size: 11px; color: var(--muted); }
 .labels div { display: flex; align-items: center; padding-left: 12px; }
@@ -172,18 +201,70 @@ svg.icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-w
 .clip.stale::before { content: ""; position: absolute; z-index: 1; left: 0; right: 0; top: 0; height: 4px; background: var(--stale); }
 .clip.stale .tag { top: 6px; }
 .clip .goes { position: absolute; z-index: 1; left: 3px; bottom: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1.5px #000a; }
+.clip .flag { position: absolute; z-index: 1; right: 3px; bottom: 3px; width: 8px; height: 8px; border-radius: 2px; background: var(--danger); box-shadow: 0 0 0 1.5px #000a; }
+.clip .has-preview { position: absolute; z-index: 1; right: 3px; top: 3px; font: 10px var(--mono); color: #fff; background: #000a; border-radius: 3px; padding: 0 3px; }
+.dimmed .clip:not(.flagged) { opacity: .25; }
 @container (width < 48px) { .clip .tag { display: none; } }
 @container (width < 14px) { .clip .goes { display: none; } }
 .playhead { position: absolute; top: 0; bottom: 0; left: calc(var(--t, 0) * var(--pps) * 1px); width: 1.5px; background: var(--accent); pointer-events: none; z-index: 3; }
 .playhead::before { content: ""; position: absolute; left: -4.25px; top: 0; width: 10px; height: 10px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 45%, 50% 100%, 0 45%); }
 
+/* lists of cards: the start page, the library, the references, the casting */
+.scrollpage { overflow-y: auto; height: 100%; padding: 16px 20px 40px; }
+.pagebar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.pagebar h2 { font-size: 16px; font-weight: 600; }
+.pagebar input[type=search] { width: 240px; }
+.seg { display: flex; padding: 2px; gap: 2px; background: var(--raised); border-radius: 8px; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 2px 10px; border-radius: 6px; }
+.seg button[aria-pressed=true] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px #0003; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; text-align: left; padding: 0; width: 100%; }
+.card:hover { border-color: var(--muted); }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card .thumb { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: repeating-linear-gradient(135deg, var(--hatch) 0 6px, transparent 6px 12px); }
+.card .body { padding: 8px 10px 10px; display: block; }
+.card .name { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.card .next { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; min-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar { display: block; height: 3px; background: var(--raised); margin-top: 6px; border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 460px; height: 100%; min-height: 0; }
+.detail { background: var(--surface); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 16px 30px; min-height: 0; }
+.detail > img, .detail > video { width: 100%; display: block; background: #000; border-radius: 6px; margin-bottom: 10px; cursor: zoom-in; }
+.detail h2 { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+.strip img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 4px; background: #000; cursor: zoom-in; display: block; }
+.role { display: grid; grid-template-columns: 96px minmax(0, 1fr) 260px; gap: 12px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; align-items: center; }
+.role img, .role .noimg { width: 96px; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; background: var(--hatch); display: block; }
+.role .warn { margin: 4px 0 0; }
+
+/* the run: what goes on, at the foot of every page */
+.rundock { background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
+.runbar { display: flex; gap: 10px; align-items: center; padding: 5px 12px; min-width: 0; }
+.runbar code { font: 12px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; animation: pulse 1.4s infinite; }
+.dot.done { animation: none; background: var(--muted); }
+.dot.failed { animation: none; background: var(--danger); }
+@keyframes pulse { 50% { opacity: .35; } }
+.runlog { height: 220px; overflow: auto; margin: 0; padding: 8px 12px; font: 12px/1.5 var(--mono); background: var(--bg); border-top: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); padding: 0; max-width: min(92vw, 1200px); max-height: 90vh; }
 dialog::backdrop { background: #000a; }
-dialog img { display: block; max-width: 100%; max-height: 68vh; margin: 0 auto; background: #000; }
-dialog .caption { padding: 12px 16px; max-height: 20vh; overflow: auto; }
-dialog .caption p { color: var(--muted); font-size: 12px; margin-top: 2px; }
-dialog form { position: absolute; right: 8px; top: 8px; margin: 0; }
-dialog form button { border: 0; border-radius: 6px; background: #000a; color: #fff; padding: 3px 9px; }
+.viewer img { display: block; max-width: 100%; max-height: 68vh; margin: 0 auto; background: #000; }
+.viewer .caption { padding: 12px 16px; max-height: 20vh; overflow: auto; }
+.viewer .caption p { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.viewer form { position: absolute; right: 8px; top: 8px; margin: 0; }
+.viewer form button { border: 0; border-radius: 6px; background: #000a; color: #fff; padding: 3px 9px; }
+.ask { width: 480px; padding: 16px 18px; }
+.ask h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.ask p { margin-bottom: 6px; }
+.ask .btn-row { justify-content: flex-end; margin-top: 12px; }
+.compare { width: min(92vw, 1200px); padding: 12px; }
+.compare .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.compare video { width: 100%; background: #000; border-radius: 6px; display: block; }
+.compare .btn-row { margin-top: 10px; }
+.toast { position: fixed; left: 50%; bottom: 20px; translate: -50% 0; background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 8px; z-index: 10; max-width: 80vw; }
+.toast.bad { background: var(--danger); color: #fff; }
 
 .boot { display: grid; place-items: center; height: 100%; color: var(--muted); text-align: center; padding: 24px; }
 .boot code { font-family: var(--mono); color: var(--text); }
@@ -191,21 +272,25 @@ dialog form button { border: 0; border-radius: 6px; background: #000a; color: #f
 @media (max-width: 960px) {
     body { overflow: auto; }
     .app { height: auto; }
-    .work { grid-template-columns: minmax(0, 1fr); }
+    .work, .split { grid-template-columns: minmax(0, 1fr); }
     .stage { aspect-ratio: 16/9; }
     .inspector { border-left: 0; border-top: 1px solid var(--line); max-height: 60vh; }
     .chips { display: none; }
+    .role { grid-template-columns: 72px minmax(0, 1fr); }
+    .role > :last-child { grid-column: 1 / -1; }
 }
-@media (prefers-reduced-motion: no-preference) { .tbtn, .clip::after, .theme label { transition: background-color .12s, box-shadow .12s, color .12s; } }
+@media (prefers-reduced-motion: no-preference) { .tbtn, .clip::after, .theme label { transition: background-color .12s, box-shadow .12s; } }
 </style>
 </head>
 <body>
-<div class="app" id="app" hidden>
+<div class="app">
     <header class="top">
-        <span class="mark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="M6 4v16l14-8z" fill="currentColor" stroke="none"/></svg></span>
-        <h1 id="title"></h1>
+        <a class="mark" href="/" title="All projects" aria-label="All projects"><svg class="icon" viewBox="0 0 24 24" style="width:11px;height:11px"><path d="M6 4v16l14-8z" fill="currentColor" stroke="none"/></svg></a>
+        <h1 id="title">Workspace</h1>
+        <nav class="nav" id="nav"></nav>
         <div class="chips" id="chips"></div>
         <div class="spacer"></div>
+        <nav class="nav"><a href="/" id="link-home">Projects</a><a href="/library" id="link-library">Library</a></nav>
         <fieldset class="theme" id="theme">
             <legend>Theme</legend>
             <input type="radio" name="theme" id="theme-system" value="system"><label for="theme-system" title="Follow the system setting"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span hidden>System</span></label>
@@ -214,67 +299,87 @@ dialog form button { border: 0; border-radius: 6px; background: #000a; color: #f
         </fieldset>
     </header>
 
-    <main class="work">
-        <section class="monitor" aria-label="Monitor">
-            <div class="stage" id="stage">
-                <video id="video-a" playsinline preload="auto"></video>
-                <video id="video-b" playsinline preload="auto" hidden></video>
-                <img class="poster" id="poster" alt="" hidden>
-                <div class="notice" id="notice" hidden></div>
-            </div>
-            <div class="transport">
-                <button class="tbtn" id="prev" title="Previous clip (←)" aria-label="Previous clip"><svg class="icon" viewBox="0 0 24 24"><path d="M6 5v14M19 5l-10 7 10 7z"/></svg></button>
-                <button class="tbtn play" id="play" title="Play or pause (Space)" aria-label="Play"><svg class="icon" viewBox="0 0 24 24"><path id="play-icon" d="M7 4v16l13-8z"/></svg></button>
-                <button class="tbtn" id="next" title="Next clip (→)" aria-label="Next clip"><svg class="icon" viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z"/></svg></button>
-                <span class="time"><span id="time-now">0:00.0</span> <span class="muted">/ <span id="time-all">0:00</span></span></span>
-                <span class="now muted" id="now"></span>
-                <div class="spacer"></div>
-                <span class="chip" id="source" title="What the monitor plays: the final video when it is newer than all its clips, else the clips one by one"></span>
-                <button class="tbtn" id="mute" title="Sound on or off (M)" aria-label="Sound on or off"><svg class="icon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="sound-waves" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg></button>
-            </div>
-        </section>
-
-        <aside class="inspector" aria-label="Clip">
-            <div class="ihead" id="ihead"></div>
-            <div class="tabs" role="tablist" id="tabs"></div>
-            <div class="panel" role="tabpanel" id="panel"></div>
-        </aside>
-    </main>
-
-    <section class="timeline" aria-label="Timeline">
-        <div class="tbar">
-            <div class="legend" id="legend"></div>
-            <div class="spacer"></div>
-            <div class="zoom">
-                <button id="fit" title="Show the whole video">Fit</button>
-                <label for="zoom" class="muted">Zoom</label>
-                <input type="range" id="zoom" min="0" max="100" value="0" title="Ctrl + wheel over the timeline">
-            </div>
-        </div>
-        <div class="tbody">
-            <div class="labels" aria-hidden="true">
-                <div class="lane-ruler"></div>
-                <div class="lane-groups" id="groups-label"></div>
-                <div class="lane-wave" id="wave-label">Sound</div>
-                <div class="lane-clips">Clips</div>
-                <div class="lane-lines" id="lines-label"></div>
-            </div>
-            <div class="scroll" id="scroll">
-                <div class="track" id="track">
-                    <div class="lane lane-ruler" id="seek-ruler"><canvas id="ruler"></canvas></div>
-                    <div class="lane lane-groups" id="groups"></div>
-                    <div class="lane lane-wave" id="seek-wave"><canvas id="wave"></canvas></div>
-                    <div class="lane lane-clips" id="clips"></div>
-                    <div class="lane lane-lines" id="lines"></div>
-                    <div class="playhead" id="playhead"></div>
+    <div class="page" id="page">
+        <div class="boot" id="boot">Loading…</div>
+        <div class="scrollpage" id="view-list" hidden></div>
+        <div class="split" id="view-split" hidden><div class="scrollpage" id="split-list"></div><aside class="detail" id="split-detail"></aside></div>
+        <div id="view-timeline" hidden style="display:grid;grid-template-rows:minmax(0,1fr) auto;height:100%;min-height:0">
+            <main class="work">
+                <section class="monitor" aria-label="Monitor">
+                    <div class="stage" id="stage">
+                        <video id="video-a" playsinline preload="auto"></video>
+                        <video id="video-b" playsinline preload="auto" hidden></video>
+                        <img class="poster" id="poster" alt="" hidden>
+                        <div class="notice" id="notice" hidden></div>
+                        <div class="preview-flag" id="preview-flag" hidden></div>
+                    </div>
+                    <div class="transport">
+                        <button class="tbtn" id="prev" title="Previous clip (←)" aria-label="Previous clip"><svg class="icon" viewBox="0 0 24 24"><path d="M6 5v14M19 5l-10 7 10 7z"/></svg></button>
+                        <button class="tbtn play" id="play" title="Play or pause (Space)" aria-label="Play"><svg class="icon" viewBox="0 0 24 24"><path id="play-icon" d="M7 4v16l13-8z"/></svg></button>
+                        <button class="tbtn" id="next" title="Next clip (→)" aria-label="Next clip"><svg class="icon" viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z"/></svg></button>
+                        <span class="time"><span id="time-now">0:00.0</span> <span class="muted">/ <span id="time-all">0:00</span></span></span>
+                        <span class="now muted" id="now"></span>
+                        <div class="spacer"></div>
+                        <select class="source" id="source" title="What the monitor plays"></select>
+                        <button class="tbtn" id="mute" title="Sound on or off (M)" aria-label="Sound on or off"><svg class="icon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="sound-waves" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg></button>
+                    </div>
+                </section>
+                <aside class="inspector" aria-label="Clip">
+                    <div class="ihead" id="ihead"></div>
+                    <div class="tabs" role="tablist" id="tabs"></div>
+                    <div class="panel" role="tabpanel" id="panel"></div>
+                </aside>
+            </main>
+            <section class="timeline" aria-label="Timeline">
+                <div class="tbar">
+                    <div class="legend" id="legend"></div>
+                    <div class="spacer"></div>
+                    <div class="zoom">
+                        <button id="fit" title="Show the whole video">Fit</button>
+                        <label for="zoom" class="muted">Zoom</label>
+                        <input type="range" id="zoom" min="0" max="100" value="0" title="Ctrl + wheel over the timeline">
+                    </div>
                 </div>
-            </div>
+                <div class="tbody">
+                    <div class="labels" aria-hidden="true">
+                        <div class="lane-ruler"></div>
+                        <div class="lane-groups" id="groups-label"></div>
+                        <div class="lane-wave" id="wave-label">Sound</div>
+                        <div class="lane-clips">Clips</div>
+                        <div class="lane-lines" id="lines-label"></div>
+                    </div>
+                    <div class="scroll" id="scroll">
+                        <div class="track" id="track">
+                            <div class="lane lane-ruler" id="seek-ruler"><canvas id="ruler"></canvas></div>
+                            <div class="lane lane-groups" id="groups"></div>
+                            <div class="lane lane-wave" id="seek-wave"><canvas id="wave"></canvas></div>
+                            <div class="lane lane-clips" id="clips"></div>
+                            <div class="lane lane-lines" id="lines"></div>
+                            <div class="playhead" id="playhead"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
+    </div>
+
+    <section class="rundock" id="rundock" hidden aria-label="Run">
+        <div class="runbar">
+            <span class="dot" id="run-dot"></span>
+            <span id="run-state"></span>
+            <code id="run-command"></code>
+            <div class="spacer"></div>
+            <button class="btn" id="run-log-toggle">Log</button>
+            <button class="btn danger" id="run-stop" hidden>Stop</button>
+            <button class="btn" id="run-close" hidden aria-label="Close">✕</button>
+        </div>
+        <pre class="runlog" id="run-log" hidden></pre>
     </section>
 </div>
 <audio id="song" preload="auto" hidden></audio>
-<div class="boot" id="boot">Loading…</div>
-<dialog id="viewer"><form method="dialog"><button aria-label="Close">✕</button></form><img id="viewer-img" alt=""><div class="caption" id="viewer-caption"></div></dialog>
+<dialog class="viewer" id="viewer"><form method="dialog"><button aria-label="Close">✕</button></form><img id="viewer-img" alt=""><div class="caption" id="viewer-caption"></div></dialog>
+<dialog class="ask" id="ask"></dialog>
+<dialog class="compare" id="compare"></dialog>
 
 <script type="module">
 const $ = id => document.getElementById(id)
@@ -290,13 +395,33 @@ function el(tag, props = {}, ...children) {
         else if (key in node && key !== 'list') node[key] = value
         else node.setAttribute(key, value)
     }
-    node.append(...children.flat().filter(child => child !== undefined && child !== null && child !== false))
+    node.append(...children.flat(3).filter(child => child !== undefined && child !== null && child !== false && child !== ''))
     return node
 }
 
+////////// WHERE WE ARE - every page is an address of its own
+const parts = location.pathname.split('/').filter(Boolean).map(decodeURIComponent)
+const route = parts[0] === 'p' ? {view: 'project', kind: parts[1], id: parts[2], page: parts[3] ?? 'timeline'} : parts[0] === 'library' ? {view: 'library'} : {view: 'home'}
+const base = route.view === 'project' ? `/p/${route.kind}/${encodeURIComponent(route.id)}` : ''
 const encoded = file => file.split('/').map(encodeURIComponent).join('/')
-const mediaUrl = ({file, v}) => `/media/${encoded(file)}${v ? `?v=${v}` : ''}`
-const thumbUrl = ({file, v}, width = 320) => `/thumb/${encoded(file)}?w=${width}${v ? `&v=${v}` : ''}`
+const mediaUrl = ({file, v}, root = `${base}/media`) => `${root}/${encoded(file)}${v ? `?v=${v}` : ''}`
+const thumbUrl = ({file, v}, width = 320, root = `${base}/thumb`) => `${root}/${encoded(file)}?w=${width}${v ? `&v=${v}` : ''}`
+
+async function api(path, body) {
+    const response = await fetch(`${base}/api/${path}`, body === undefined ? undefined : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.error ?? `${response.status}`)
+    return data
+}
+
+function toast(text, bad = false) {
+    document.querySelector('.toast')?.remove()
+    const node = el('div', {class: `toast${bad ? ' bad' : ''}`, role: 'status'}, text)
+    document.body.append(node)
+    setTimeout(() => node.remove(), bad ? 7000 : 3000)
+}
+const showError = error => toast(error.message ?? String(error), true)
+
 const clock = (seconds, precise = true) => {
     const whole = Math.max(0, seconds)
     const minutes = Math.floor(whole / 60)
@@ -304,12 +429,18 @@ const clock = (seconds, precise = true) => {
     return precise ? `${minutes}:${rest.toFixed(1).padStart(4, '0')}` : `${minutes}:${String(Math.floor(rest)).padStart(2, '0')}`
 }
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value))
+const dateOf = ms => new Date(ms).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'})
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+function show(view) {
+    $('boot').hidden = true
+    for (const id of ['view-list', 'view-split', 'view-timeline']) $(id).hidden = id !== view
+}
 
 ////////// THEME - the system's, or a choice kept in this browser
 const themeInputs = [...document.querySelectorAll('#theme input')]
-const themeOf = () => document.documentElement.dataset.theme
 for (const input of themeInputs) {
-    input.checked = input.value === themeOf()
+    input.checked = input.value === document.documentElement.dataset.theme
     input.addEventListener('change', () => {
         document.documentElement.dataset.theme = input.value
         if (input.value === 'system') localStorage.removeItem('theme')
@@ -319,7 +450,468 @@ for (const input of themeInputs) {
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => drawCanvases())
 
-////////// STATE
+////////// ASKING - before anything that costs GPU time or moves a file
+function ask({title, lines = [], warnings = [], confirm, danger = false, extra}) {
+    const dialog = $('ask')
+    return new Promise(resolve => {
+        const done = value => { dialog.close(); resolve(value) }
+        dialog.replaceChildren(
+            el('h2', {}, title),
+            ...lines.map(line => el('p', {class: 'muted'}, line)),
+            ...warnings.map(line => el('div', {class: 'warn'}, line)),
+            extra ?? '',
+            el('div', {class: 'btn-row'},
+                el('button', {class: 'btn', onclick: () => done(false)}, 'Cancel'),
+                el('button', {class: `btn ${danger ? 'danger' : 'primary'}`, onclick: () => done(true)}, confirm)),
+        )
+        dialog.addEventListener('cancel', () => resolve(false), {once: true})
+        dialog.showModal()
+    })
+}
+
+function openViewer(picture, title, name, text, roots = {}) {
+    $('viewer-img').src = mediaUrl(picture, roots.media)
+    $('viewer-img').alt = name ?? title
+    $('viewer-caption').replaceChildren(el('b', {}, [title.replace(/[<>]/g, ''), name].filter(Boolean).join(' · ')), text ? el('p', {}, text) : '')
+    $('viewer').showModal()
+}
+$('viewer').addEventListener('click', event => { if (event.target === $('viewer')) $('viewer').close() })
+
+////////// THE RUN - started here or in the terminal, it is followed from every page of the project
+const run = {source: undefined, current: undefined, after: 0, onEnd: () => {}, wasRunning: false}
+
+function renderRun(current) {
+    run.current = current
+    const dock = $('rundock')
+    if (!current) { dock.hidden = true; return }
+    const failed = !current.running && current.code !== undefined && current.code !== 0
+    dock.hidden = false
+    $('run-dot').className = `dot${current.running ? '' : failed ? ' failed' : ' done'}`
+    $('run-state').textContent = current.running ? (current.source === 'terminal' ? 'Running in the terminal' : 'Running') : failed ? `Failed (${current.code})` : 'Finished'
+    $('run-command').textContent = current.command
+    $('run-stop').hidden = !current.running
+    $('run-close').hidden = current.running
+}
+
+function followRun(root) {
+    run.source?.close()
+    const source = new EventSource(`${root}/api/${root.endsWith('library') ? '' : ''}run-events?after=${run.after}`)
+    run.source = source
+    source.addEventListener('lines', event => {
+        const {lines, next} = JSON.parse(event.data)
+        run.after = next
+        const log = $('run-log')
+        const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 30
+        log.append(lines.join('\n') + '\n')
+        // what is far back goes: the log stays quick
+        if (log.textContent.length > 400000) log.textContent = log.textContent.slice(-200000)
+        if (atEnd) log.scrollTop = log.scrollHeight
+    })
+    source.addEventListener('state', event => {
+        const current = JSON.parse(event.data)
+        renderRun(current)
+        if (current?.running) run.wasRunning = true
+        else if (run.wasRunning) {
+            run.wasRunning = false
+            toast(current?.code ? `The run failed - see the log` : 'The run is done', !!current?.code)
+            if (current?.code) { $('run-log').hidden = false }
+            run.onEnd()
+        }
+    })
+}
+
+async function startRun(action) {
+    if (run.current?.running) throw new Error('a run is going on - wait for it, or stop it')
+    const {run: started} = await api('run', {action})
+    run.wasRunning = true
+    $('run-log').textContent = ''
+    run.after = 0
+    renderRun(started)
+    followRun(base)
+}
+
+$('run-log-toggle').addEventListener('click', () => {
+    $('run-log').hidden = !$('run-log').hidden
+    if (!$('run-log').hidden) $('run-log').scrollTop = $('run-log').scrollHeight
+})
+$('run-stop').addEventListener('click', async () => {
+    const yes = await ask({title: 'Stop this run?', lines: [run.current?.command ?? '', 'Finished outputs stay. Jobs already on a server are picked up by the next run.'], confirm: 'Stop', danger: true})
+    if (yes) await api('stop', {}).catch(showError)
+})
+$('run-close').addEventListener('click', () => { $('rundock').hidden = true })
+
+////////// THE START PAGE
+async function homePage() {
+    show('view-list')
+    document.title = 'Workspace'
+    $('title').textContent = 'All projects'
+    $('link-home').setAttribute('aria-current', 'page')
+    const {projects} = await api('projects')
+    const filter = {text: '', kind: 'all'}
+    const statuses = new Map()
+    const grid = el('div', {class: 'cards'})
+    const search = el('input', {type: 'search', placeholder: 'Find a project', 'aria-label': 'Find a project', oninput: () => { filter.text = search.value.toLowerCase(); draw() }})
+    const seg = el('div', {class: 'seg'}, ...[['all', 'All'], ['music', 'Music videos'], ['film', 'Films']].map(([kind, label]) => el('button', {'aria-pressed': String(kind === 'all'), 'data-kind': kind, onclick: () => {
+        filter.kind = kind
+        for (const button of seg.children) button.setAttribute('aria-pressed', String(button.dataset.kind === kind))
+        draw()
+    }}, label)))
+    const count = el('span', {class: 'muted'})
+    $('view-list').replaceChildren(el('div', {class: 'pagebar'}, el('h2', {}, 'Projects'), seg, search, count), grid)
+
+    const rootOf = p => `/p/${p.kind}/${encodeURIComponent(p.id)}`
+    // what costs some hashing comes after the page is up, one project at a time, for the cards that are in view
+    const queue = []
+    let working = false
+    const pump = async () => {
+        if (working) return
+        working = true
+        while (queue.length) {
+            const {project, fill} = queue.shift()
+            try {
+                const response = await fetch(`${rootOf(project)}/api/status`)
+                if (response.ok) {
+                    const status = await response.json()
+                    statuses.set(`${project.kind}/${project.id}`, status)
+                    fill(status)
+                }
+            } catch {}
+        }
+        working = false
+    }
+    const observer = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+            observer.unobserve(entry.target)
+            entry.target.loadStatus?.()
+        }
+    })
+    const finalChip = {missing: ['No final video', 'chip'], current: ['Final video', 'chip good'], older: ['Final older than its clips', 'chip stale']}
+    const runChip = {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']}
+    function card(project) {
+        const stale = el('span', {class: 'row'})
+        const next = el('span', {class: 'next'}, ' ')
+        const fill = status => {
+            stale.replaceChildren(
+                status.clips.stale ? el('span', {class: 'chip stale'}, `${status.clips.stale} clips stale`) : '',
+                status.pictures.stale ? el('span', {class: 'chip stale'}, `${status.pictures.stale} pictures stale`) : '',
+            )
+            next.textContent = status.next.command ? `Next: ${status.next.why}` : 'Everything is done'
+            next.title = [status.next.command, status.next.estimate].filter(Boolean).join('\n')
+        }
+        const node = el('a', {class: 'card', href: `${rootOf(project)}/`},
+            project.thumb ? el('img', {class: 'thumb', src: thumbUrl(project.thumb, 640, `${rootOf(project)}/thumb`), alt: '', loading: 'lazy', decoding: 'async'}) : el('span', {class: 'thumb'}),
+            el('span', {class: 'body'},
+                el('span', {class: 'name', title: project.id}, project.title),
+                el('span', {class: 'muted num'}, `${project.rendered} of ${plural(project.clips, 'clip')} rendered`),
+                el('span', {class: 'bar'}, el('i', {style: {width: `${project.clips ? project.rendered / project.clips * 100 : 0}%`}})),
+                el('span', {class: 'row'},
+                    el('span', {class: 'chip'}, project.kind === 'film' ? 'Film' : 'Music video'),
+                    el('span', {class: finalChip[project.final][1]}, finalChip[project.final][0]),
+                    runChip[project.lastRun?.state] && el('span', {class: runChip[project.lastRun.state][1], title: project.lastRun.command}, runChip[project.lastRun.state][0])),
+                stale, next))
+        const known = statuses.get(`${project.kind}/${project.id}`)
+        if (known) fill(known)
+        else {
+            node.loadStatus = () => { queue.push({project, fill}); pump() }
+            observer.observe(node)
+        }
+        return node
+    }
+    function draw() {
+        const shown = projects.filter(p => (filter.kind === 'all' || p.kind === filter.kind) && (!filter.text || p.id.toLowerCase().includes(filter.text) || p.title.toLowerCase().includes(filter.text)))
+        count.textContent = plural(shown.length, 'project')
+        queue.length = 0
+        grid.replaceChildren(...shown.map(card))
+        if (!shown.length) grid.replaceChildren(el('div', {class: 'empty'}, projects.length ? 'Nothing fits.' : 'No projects here yet - start one with: bun run init'))
+    }
+    draw()
+}
+
+////////// THE LIBRARY
+const libraryRoots = {media: '/library/media', thumb: '/library/thumb'}
+async function libraryPage() {
+    show('view-split')
+    document.title = 'Library · Workspace'
+    $('title').textContent = 'Asset library'
+    $('link-library').setAttribute('aria-current', 'page')
+    let selected
+    const filter = {text: '', kind: 'all'}
+    let data = await api('library/assets')
+
+    const grid = el('div', {class: 'cards'})
+    const search = el('input', {type: 'search', placeholder: 'Find an asset', 'aria-label': 'Find an asset', oninput: () => { filter.text = search.value.toLowerCase(); draw() }})
+    const seg = el('div', {class: 'seg'}, ...[['all', 'All'], ['character', 'Characters'], ['location', 'Places']].map(([kind, label]) => el('button', {'aria-pressed': String(kind === 'all'), 'data-kind': kind, onclick: () => {
+        filter.kind = kind
+        for (const button of seg.children) button.setAttribute('aria-pressed', String(button.dataset.kind === kind))
+        draw()
+    }}, label)))
+    const where = el('span', {class: 'muted', title: data.dir})
+    $('split-list').replaceChildren(el('div', {class: 'pagebar'}, el('h2', {}, 'Library'), seg, search, where, el('div', {class: 'spacer'}), el('button', {class: 'btn primary', onclick: newAsset}, 'New asset from a picture')), grid)
+
+    function draw() {
+        const shown = data.assets.filter(a => (filter.kind === 'all' || a.kind === filter.kind) && (!filter.text || a.id.includes(filter.text) || a.name.toLowerCase().includes(filter.text)))
+        where.textContent = plural(shown.length, 'asset')
+        grid.replaceChildren(...shown.map(asset => el('button', {class: `card${selected === asset ? ' selected' : ''}`, onclick: () => { selected = asset; draw(); detail() }},
+            asset.picture ? el('img', {class: 'thumb', src: thumbUrl(asset.picture, 640, libraryRoots.thumb), alt: '', loading: 'lazy', decoding: 'async'}) : el('span', {class: 'thumb'}),
+            el('span', {class: 'body'},
+                el('span', {class: 'name'}, asset.name),
+                el('span', {class: 'muted'}, asset.id),
+                el('span', {class: 'row'},
+                    el('span', {class: 'chip'}, asset.kind === 'character' ? 'Character' : 'Place'),
+                    asset.usedBy.length ? el('span', {class: 'chip good'}, `In ${plural(asset.usedBy.length, 'project')}`) : el('span', {class: 'chip'}, 'Not used yet'))))))
+        if (!shown.length) grid.replaceChildren(el('div', {class: 'empty'}, data.assets.length ? 'Nothing fits.' : 'The library is empty. Put an asset in from the References page of a project, or make one from a picture.'))
+    }
+    function detail() {
+        const asset = selected
+        if (!asset) return $('split-detail').replaceChildren(el('div', {class: 'empty'}, 'Pick an asset.'))
+        $('split-detail').replaceChildren(
+            asset.picture ? el('img', {src: thumbUrl(asset.picture, 640, libraryRoots.thumb), alt: asset.name, onclick: () => openViewer(asset.picture, asset.name, asset.id, asset.description, libraryRoots)}) : '',
+            el('h2', {}, asset.name),
+            el('p', {class: 'muted section'}, `${asset.kind === 'character' ? 'Character' : 'Place'} · ${asset.id}`),
+            el('div', {class: 'section'}, el('h3', {}, 'Description'), el('p', {}, asset.description)),
+            asset.anchors ? el('div', {class: 'section'}, el('h3', {}, 'Background features'), el('p', {}, asset.anchors)) : '',
+            asset.video ? el('div', {class: 'section'}, el('h3', {}, 'Sequence'), el('video', {src: mediaUrl(asset.video, libraryRoots.media), controls: true, preload: 'metadata', style: {width: '100%'}})) : '',
+            asset.frames.length ? el('div', {class: 'section'}, el('h3', {}, 'Views'), el('div', {class: 'strip'}, asset.frames.map((frame, n) => el('img', {src: thumbUrl(frame, 320, libraryRoots.thumb), alt: `View ${n + 1}`, loading: 'lazy', onclick: () => openViewer(frame, `View ${n + 1}`, asset.name, '', libraryRoots)})))) : '',
+            el('div', {class: 'section'}, el('h3', {}, 'Used by'), asset.usedBy.length ? asset.usedBy.map(use => el('div', {}, el('a', {href: `/p/${use.kind}/${encodeURIComponent(use.id)}/casting`}, use.id), el('span', {class: 'muted'}, ` as ${use.role}`))) : el('p', {class: 'muted'}, 'No project plays this one yet. Choose it on the Casting page of a project.')),
+            el('dl', {class: 'facts'}, asset.source ? [el('dt', {}, 'Comes from'), el('dd', {}, asset.source)] : '', asset.created ? [el('dt', {}, 'Made'), el('dd', {}, asset.created)] : ''),
+        )
+    }
+    async function newAsset() {
+        const kind = el('select', {}, el('option', {value: 'character'}, 'Character'), el('option', {value: 'location'}, 'Place'))
+        const file = el('input', {type: 'file', accept: 'image/*', required: true})
+        const id = el('input', {type: 'text', placeholder: 'kael-red'})
+        const name = el('input', {type: 'text', placeholder: 'Optional'})
+        const role = el('input', {type: 'text', placeholder: 'Optional, e.g. lead singer'})
+        const description = el('textarea', {rows: 3, placeholder: 'Optional - without it a vision model describes the picture'})
+        const field = (label, input) => el('label', {class: 'field'}, el('span', {}, label), input)
+        const yes = await ask({
+            title: 'New asset from a picture',
+            lines: ['The picture becomes the anchor, ComfyUI renders the reference sheet from it. An asset already in the library is never overwritten.'],
+            extra: el('div', {}, field('Picture', file), field('Kind', kind), field('Library id', id), field('Name', name), field('Role', role), field('Description', description)),
+            confirm: 'Render it',
+        })
+        if (!yes) return
+        const form = new FormData()
+        form.set('anchor', file.files[0] ?? '')
+        form.set('kind', kind.value)
+        form.set('id', id.value.trim())
+        form.set('name', name.value)
+        form.set('role', role.value)
+        form.set('description', description.value)
+        const response = await fetch('/api/library/create', {method: 'POST', body: form})
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok) return showError(new Error(body.error ?? 'could not start'))
+        run.wasRunning = true
+        $('run-log').textContent = ''
+        run.after = 0
+        renderRun(body.run)
+        followLibraryRun()
+    }
+    function followLibraryRun() {
+        run.source?.close()
+        run.source = new EventSource(`/api/library/run-events?after=0`)
+        run.source.addEventListener('lines', event => {
+            const {lines, next} = JSON.parse(event.data)
+            run.after = next
+            $('run-log').append(lines.join('\n') + '\n')
+            $('run-log').scrollTop = $('run-log').scrollHeight
+        })
+        run.source.addEventListener('state', event => {
+            const current = JSON.parse(event.data)
+            renderRun(current)
+            if (!current?.running && run.wasRunning) {
+                run.wasRunning = false
+                toast(current?.code ? 'Making the asset failed - see the log' : 'The asset is in the library', !!current?.code)
+                if (current?.code) $('run-log').hidden = false
+                api('library/assets').then(next => { data = next; draw(); detail() })
+            }
+        })
+    }
+    draw()
+    detail()
+    followLibraryRun()
+}
+
+////////// A PROJECT - THE PAGES AROUND THE TIMELINE
+function projectChrome(title) {
+    $('title').textContent = title
+    document.title = `${title} · Workspace`
+    $('nav').replaceChildren(...[['timeline', 'Timeline', ''], ['references', 'References', 'references'], ['casting', 'Casting', 'casting']].map(([page, label, path]) =>
+        el('a', {href: `${base}/${path}`, 'aria-current': route.page === page ? 'page' : false}, label)))
+}
+
+const FRESH_LABEL = {current: 'Current', stale: 'Stale', pinned: 'Pinned'}
+
+async function referencesPage() {
+    show('view-split')
+    const [{references}, project, fresh] = await Promise.all([api('references'), api('project'), api('freshness').catch(() => ({pictures: {}}))])
+    projectChrome(project.title)
+    let selected = references.find(r => r.id === location.hash.slice(1)) ?? references[0]
+    const groups = [['character', 'Characters'], ['location', 'Places'], ['prop', 'Props']]
+    const list = () => {
+        $('split-list').replaceChildren(
+            ...(references.length ? [] : [el('div', {class: 'empty'}, `No pictures planned yet - run ${project.command}`)]),
+            ...groups.filter(([kind]) => references.some(r => r.kind === kind)).map(([kind, label]) => el('div', {class: 'section'}, el('div', {class: 'pagebar'}, el('h2', {}, label)), el('div', {class: 'cards'}, references.filter(r => r.kind === kind).map(reference => {
+                const state = fresh.pictures[reference.id]
+                return el('button', {class: `card${selected === reference ? ' selected' : ''}`, onclick: () => { selected = reference; history.replaceState(null, '', `#${reference.id}`); list(); detail() }},
+                    reference.picture ? el('img', {class: 'thumb', src: thumbUrl(reference.picture, 640), alt: '', loading: 'lazy', decoding: 'async'}) : el('span', {class: 'thumb'}),
+                    el('span', {class: 'body'},
+                        el('span', {class: 'name'}, reference.name),
+                        el('span', {class: 'muted'}, `${plural(reference.clips.length, 'clip')} use this`),
+                        el('span', {class: 'row'},
+                            !reference.picture ? el('span', {class: 'chip bad'}, 'Missing') : state === 'stale' ? el('span', {class: 'chip stale'}, 'Stale') : state === 'pinned' ? el('span', {class: 'chip'}, 'Pinned') : '',
+                            reference.library ? el('span', {class: 'chip'}, `library:${reference.library}`) : '',
+                            reference.look ? el('span', {class: 'chip'}, 'Another look') : '',
+                            reference.versions.length ? el('span', {class: 'chip'}, plural(reference.versions.length, 'older version')) : '')))
+            })))),
+        )
+    }
+    function detail() {
+        const reference = selected
+        if (!reference) return $('split-detail').replaceChildren(el('div', {class: 'empty'}, 'Nothing here yet.'))
+        const state = fresh.pictures[reference.id]
+        const blocked = !!reference.library || state === 'pinned'
+        const prompt = el('textarea', {rows: 7, value: reference.prompt, 'aria-label': 'Prompt', disabled: reference.look ? true : undefined})
+        const sideEffects = () => [
+            reference.clips.length ? `${plural(reference.clips.length, 'clip')} made from this picture will go stale. They are not rendered on their own.` : '',
+            reference.readsViews ? 'A new sheet changes what is read from it: the vision model reads the views again at the next run, and shots can get another view.' : '',
+        ].filter(Boolean)
+        const rerender = async newAnchor => {
+            const edited = prompt.value.trim() !== reference.prompt.trim()
+            const asked = await api('estimate', {pictures: 1}).catch(() => ({estimate: ''}))
+            const yes = await ask({
+                title: `Render ${reference.name} again?`,
+                lines: [
+                    newAnchor || edited ? 'A new anchor: another person or place from another seed, and everything after it is new.' : 'A new sheet from the same anchor: the same person or place, other views.',
+                    asked.estimate,
+                    edited ? 'The edited prompt is kept with this picture, which stays pinned: the plan never replaces it on its own. The prompt of the plan stays as it was.' : '',
+                ].filter(Boolean),
+                warnings: [
+                    ...sideEffects(),
+                    ...(newAnchor && reference.looks.length ? [`Its other looks are drawn from this anchor and go stale too: ${reference.looks.join(', ')}.`] : []),
+                    ...(asked.fixedSeed !== undefined ? [`"seed" is fixed in config.json (${asked.fixedSeed}): the same seed gives the same picture again.`] : []),
+                ],
+                confirm: 'Render it',
+            })
+            if (!yes) return
+            const {run: started} = await api(`references/${encodeURIComponent(reference.id)}/rerender`, {newAnchor, ...(edited ? {prompt: prompt.value} : {})})
+            run.wasRunning = true
+            $('run-log').textContent = ''
+            run.after = 0
+            renderRun(started)
+            followRun(base)
+        }
+        const pick = async version => {
+            const yes = await ask({title: 'Make this version the current one?', lines: ['What is there now is put away and stays selectable.'], warnings: sideEffects(), confirm: 'Make it current'})
+            if (!yes) return
+            await api(`references/${encodeURIComponent(reference.id)}/pick`, {version: version.id})
+            location.reload()
+        }
+        const exportable = reference.kind !== 'prop' && reference.picture
+        const putIntoLibrary = async () => {
+            const as = el('input', {type: 'text', value: reference.id})
+            const yes = await ask({title: `Put ${reference.name} into the library?`, lines: ['Its picture, its whole sheet and its texts are copied. An asset the library already has is never overwritten.'], extra: el('label', {class: 'field'}, el('span', {}, 'Library id'), as), confirm: 'Put it in'})
+            if (yes) await startRun({type: 'export-asset', asset: reference.id, as: as.value.trim()}).catch(showError)
+        }
+        $('split-detail').replaceChildren(
+            reference.picture ? el('img', {src: thumbUrl(reference.picture, 640), alt: reference.name, onclick: () => openViewer(reference.picture, reference.name, reference.id, reference.description)}) : el('div', {class: 'empty'}, 'Not rendered yet'),
+            el('h2', {}, reference.name),
+            el('p', {class: 'muted section'}, `${reference.kind} · ${reference.id}${state ? ` · ${FRESH_LABEL[state]}` : ''}`),
+            reference.look ? el('div', {class: 'note'}, `Another look of ${reference.look.base}: ${reference.look.change}`) : '',
+            reference.library ? el('div', {class: 'note'}, `Played by library:${reference.library}. It is not rendered here: change it on the `, el('a', {href: `${base}/casting`}, 'Casting'), ' page.') : '',
+            state === 'pinned' && !reference.library ? el('div', {class: 'note'}, 'Pinned: your own picture, or one made before fingerprints or from an edited prompt. The pipeline leaves it alone.') : '',
+            state === 'stale' ? el('div', {class: 'warn'}, 'Made from another prompt or anchor than the plan has now.') : '',
+            el('div', {class: 'section'}, el('h3', {}, 'Prompt'), prompt),
+            el('div', {class: 'section btn-row'},
+                el('button', {class: 'btn primary', disabled: blocked, title: blocked ? 'Pinned or played by the library' : '', onclick: () => rerender(false).catch(showError)}, reference.hasSheet ? 'New sheet, same anchor' : 'Render again'),
+                reference.hasSheet && !reference.look ? el('button', {class: 'btn', disabled: blocked, onclick: () => rerender(true).catch(showError)}, 'New anchor') : '',
+                exportable ? el('button', {class: 'btn', onclick: putIntoLibrary}, 'Put into the library') : ''),
+            reference.video ? el('div', {class: 'section'}, el('h3', {}, 'Sequence'), el('video', {src: mediaUrl(reference.video), controls: true, preload: 'metadata', style: {width: '100%'}})) : '',
+            reference.frames.length ? el('div', {class: 'section'}, el('h3', {}, 'Views'), el('div', {class: 'strip'}, reference.frames.map((frame, n) => el('img', {src: thumbUrl(frame), alt: `View ${n + 1}`, loading: 'lazy', onclick: () => openViewer(frame, `View ${n + 1}`, reference.name)})))) : '',
+            el('div', {class: 'section'}, el('h3', {}, `Used by ${plural(reference.clips.length, 'clip')}`), el('div', {class: 'btn-row'}, reference.clips.map(clip => el('a', {class: 'chip', href: `${base}/#${clip}`}, clip)))),
+            reference.versions.length ? el('div', {class: 'section'}, el('h3', {}, 'Older versions'), reference.versions.map(version => el('article', {class: 'version'},
+                el('img', {src: thumbUrl(version.picture), alt: '', loading: 'lazy', onclick: () => openViewer(version.picture, 'Older version', reference.name, version.prompt), style: {cursor: 'zoom-in'}}),
+                el('div', {},
+                    el('div', {}, dateOf(version.made)),
+                    el('div', {class: 'muted'}, [{again: 'rendered again', stale: 'from an older plan', library: 'before the library took over'}[version.source], version.seed !== undefined ? `seed ${version.seed}` : ''].filter(Boolean).join(' · ')),
+                    el('div', {class: 'btn-row'}, el('button', {class: 'btn', disabled: !!reference.library, onclick: () => pick(version).catch(showError)}, 'Make current')))))) : '',
+        )
+    }
+    list()
+    detail()
+    run.onEnd = () => location.reload()
+    followRun(base)
+}
+
+async function castingPage() {
+    show('view-list')
+    const [casting, project] = await Promise.all([api('casting'), api('project')])
+    projectChrome(project.title)
+    let changed = false
+    const role = member => {
+        const options = casting.options[member.kind]
+        const select = el('select', {'aria-label': `Who plays ${member.name}`, onchange: () => choose(member, select)},
+            el('option', {value: `project:${member.id}`}, 'Rendered in this project'),
+            options.map(id => el('option', {value: `library:${id}`}, `library: ${id}`)))
+        select.value = member.entry ?? `project:${member.id}`
+        if (member.entry && select.value !== member.entry) select.append(el('option', {value: member.entry, selected: true}, member.entry))
+        return el('article', {class: 'role'},
+            member.picture ? el('img', {src: thumbUrl(member.picture), alt: '', onclick: () => openViewer(member.picture, member.name, member.id), style: {cursor: 'zoom-in'}}) : el('span', {class: 'noimg'}),
+            el('div', {},
+                el('b', {}, member.name), el('span', {class: 'muted'}, ` ${member.id}`),
+                el('div', {class: 'muted'}, [member.kind === 'character' ? (member.role || 'Character') : 'Place', plural(member.clips.length, 'clip')].join(' · ')),
+                member.libraryId && !member.copied ? el('div', {class: 'warn'}, 'Not copied yet: the next run takes it from the library.') : '',
+                member.errors.map(line => el('div', {class: 'warn bad'}, line)),
+                member.warnings.map(line => el('div', {class: 'warn'}, line))),
+            select)
+    }
+    async function choose(member, select) {
+        const value = select.value
+        const was = member.entry ?? `project:${member.id}`
+        const asked = member.clips.length ? await api('estimate', {clips: member.clips}).catch(() => ({})) : {}
+        const yes = await ask({
+            title: `${member.name}: ${value}?`,
+            lines: [
+                'This changes one entry in casting.json. The next plan run copies the asset, pins it and takes its description.',
+                asked.estimate ? `Rendering the clips again: ${asked.estimate}` : '',
+            ].filter(Boolean),
+            warnings: member.clips.length ? [`Their prompts change with the description, so ${plural(member.clips.length, 'clip')} go stale: ${member.clips.join(', ')}. Nothing is rendered on its own.`] : [],
+            confirm: 'Change it',
+        })
+        if (!yes) { select.value = was; return }
+        try {
+            await api('casting', {kind: member.kind, id: member.id, value})
+            member.entry = value
+            changed = true
+            draw()
+            toast('casting.json is changed')
+        } catch (error) {
+            select.value = was
+            showError(error)
+        }
+    }
+    function draw() {
+        const section = (title, kind) => {
+            const members = casting.roles.filter(r => r.kind === kind)
+            return members.length ? el('div', {class: 'section'}, el('div', {class: 'pagebar'}, el('h2', {}, title)), members.map(role)) : ''
+        }
+        $('view-list').replaceChildren(
+            changed ? el('div', {class: 'note btn-row'}, el('span', {}, 'The change takes effect with the next plan run.'), el('button', {class: 'btn primary', onclick: () => startRun({type: 'plan'}).catch(showError)}, 'Plan now')) : '',
+            casting.errors.map(line => el('div', {class: 'warn bad'}, line)),
+            casting.warnings.map(line => el('div', {class: 'warn'}, line)),
+            casting.roles.length ? '' : el('div', {class: 'empty'}, `No cast yet - run ${project.command}`),
+            section('Characters', 'character'),
+            section('Places', 'location'),
+            el('p', {class: 'muted'}, `For a finished project, replacing a character in what is planned is the other way: bun run ${project.kind === 'film' ? 'film:replace-character' : 'replace-character'} ${project.id}`),
+        )
+    }
+    draw()
+    run.onEnd = () => location.reload()
+    followRun(base)
+}
+
+////////// THE TIMELINE: STATE
 const state = {
     project: undefined,
     projectText: '',
@@ -332,6 +924,9 @@ const state = {
     pps: 1,                 // pixels per second of the timeline
     fitted: true,
     muted: false,
+    source: 'auto',         // what the monitor plays: auto, clips, previews
+    onlyFlagged: false,
+    status: undefined,
 }
 const song = $('song')
 const videos = [$('video-a'), $('video-b')]
@@ -340,21 +935,47 @@ const video = () => videos[active]
 const standby = () => videos[1 - active]
 
 const stateOf = clip => !clip.video ? 'missing' : state.fresh.clips[clip.id] ?? 'unknown'
+const flagged = clip => !clip.video || stateOf(clip) === 'stale' || clip.marks.length > 0
 const clipAt = t => state.project.clips.find(c => t >= c.start && t < c.end)
 // A final video newer than all its clips is those clips, cut and with their sound in one file: nothing can run apart in it. Only without
 // one do the clips play one by one, and a song in an element of its own under them stays some hundredths of a second off.
-const playsFinal = () => state.project?.final.state === 'current' && !!state.project.final.file
+const finalPlayable = () => state.project?.final.state === 'current' && !!state.project.final.file
+const playsFinal = () => state.source === 'auto' && finalPlayable()
 const usesSong = () => !!state.project?.song && !playsFinal()
+// what a clip plays from: previews asked for, or nothing else there - marked on the monitor
+const fileOf = clip => state.source === 'previews' ? clip.preview ?? clip.video : clip.video ?? clip.preview
 
 ////////// MONITOR
 const setSrc = (node, url) => { if (node.dataset.url !== url) { node.dataset.url = url; node.src = url } }
 
+function renderSourceChoice() {
+    const select = $('source')
+    const hasPreviews = state.project.clips.some(c => c.preview)
+    const options = [
+        finalPlayable() ? ['auto', 'Final video'] : ['auto', usesSong() ? 'Clips over the song' : 'Clips'],
+        ...(finalPlayable() ? [['clips', usesSong() ? 'Clips over the song' : 'Clips']] : []),
+        ...(hasPreviews ? [['previews', 'Previews']] : []),
+    ]
+    select.replaceChildren(...options.map(([value, label]) => el('option', {value}, label)))
+    if (!options.some(([value]) => value === state.source)) state.source = 'auto'
+    select.value = state.source
+}
+$('source').addEventListener('change', () => {
+    state.source = $('source').value
+    if (usesSong()) song.currentTime = state.t
+    else song.pause()
+    showClip(state.clip, state.clip ? state.t - state.clip.start : 0)
+    if (state.playing) setPlaying(true)
+    applySound()
+})
+
 function showClip(clip, offset) {
     const notice = $('notice')
     const poster = $('poster')
+    const flag = $('preview-flag')
     notice.hidden = true
     poster.hidden = true
-    $('source').textContent = playsFinal() ? 'Final video' : usesSong() ? 'Clips over the song' : 'Clips'
+    flag.hidden = true
     if (playsFinal()) {
         setSrc(video(), mediaUrl(state.project.final))
         video().hidden = false
@@ -366,7 +987,8 @@ function showClip(clip, offset) {
         if (state.playing) video().play().catch(() => {})
         return
     }
-    if (!clip?.video) {
+    const file = clip && fileOf(clip)
+    if (!file) {
         for (const node of videos) { node.hidden = true; node.pause() }
         notice.hidden = false
         notice.textContent = clip ? 'Not rendered' : state.project.clips.length ? 'No clip here' : 'No clips planned yet'
@@ -377,7 +999,11 @@ function showClip(clip, offset) {
         }
         return
     }
-    const url = mediaUrl(clip.video)
+    if (file === clip.preview) {
+        flag.hidden = false
+        flag.textContent = clip.preview.approximate ? 'Preview - approximate' : 'Preview'
+    }
+    const url = mediaUrl(file)
     if (video().dataset.url !== url && standby().dataset.url === url) {
         video().pause()
         active = 1 - active
@@ -391,7 +1017,8 @@ function showClip(clip, offset) {
     if (state.playing) video().play().catch(() => {})
     // the clip after this one is loaded in advance, so that the cut is a cut and not a wait
     const following = state.project.clips[state.project.clips.indexOf(clip) + 1]
-    if (following?.video) setSrc(standby(), mediaUrl(following.video))
+    const nextFile = following && fileOf(following)
+    if (nextFile) setSrc(standby(), mediaUrl(nextFile))
 }
 
 function applySound() {
@@ -439,7 +1066,7 @@ function setPlaying(playing) {
         if (state.t >= state.project.seconds - 0.05) seek(0)
         lastTick = performance.now()
         if (usesSong()) song.play().catch(() => setPlaying(false))
-        if (playsFinal() || clipAt(state.t)?.video) video().play().catch(() => {})
+        if (playsFinal() || (clipAt(state.t) && fileOf(clipAt(state.t)))) video().play().catch(() => {})
         requestAnimationFrame(tick)
     } else {
         song.pause()
@@ -456,7 +1083,7 @@ function tick(now) {
     let t
     if (playsFinal()) t = video().ended ? state.project.seconds : video().currentTime
     else if (usesSong()) t = song.ended ? state.project.seconds : song.currentTime
-    else if (clip?.video && !video().hidden) t = video().ended ? clip.end : clip.start + video().currentTime
+    else if (clip && fileOf(clip) && !video().hidden) t = video().ended ? clip.end : clip.start + video().currentTime
     else t = state.t + elapsed      // nothing plays here: the time goes on by the clock, as it does in the final video
 
     if (t >= state.project.seconds) {
@@ -471,7 +1098,7 @@ function tick(now) {
         showClip(here, here ? t - here.start : 0)
     } else {
         moveTo(t)
-        if (usesSong() && here?.video) followSong(t - here.start)
+        if (usesSong() && here && fileOf(here)) followSong(t - here.start)
     }
     requestAnimationFrame(tick)
 }
@@ -500,12 +1127,20 @@ function step(direction) {
     seek(clips[target].start)
 }
 
+function stepFlagged(direction) {
+    const clips = state.project.clips.filter(flagged)
+    if (!clips.length) return
+    const next = direction > 0 ? clips.find(c => c.start > state.t + 0.01) ?? clips[0] : clips.findLast(c => c.start < state.t - 0.01) ?? clips.at(-1)
+    seek(next.start)
+}
+
 ////////// INSPECTOR
 const TABS = [
     ['prompt', 'Prompt', () => undefined],
     ['shots', 'Shots', clip => clip.shots.length],
     ['refs', 'References', clip => clip.pictures.length + clip.audio.length],
     ['render', 'Render', () => undefined],
+    ['versions', 'Versions', () => state.versions?.clip === state.clip?.id ? state.versions.list.length || undefined : undefined],
 ]
 const STATE_CHIPS = {
     missing: ['Not rendered', 'chip'],
@@ -520,13 +1155,14 @@ function renderInspector() {
     $('ihead').replaceChildren(...(clip ? [
         el('h2', {}, clip.id, el('span', {class: STATE_CHIPS[stateOf(clip)][1], style: {'font-family': 'var(--sans)', 'font-weight': '400'}}, STATE_CHIPS[stateOf(clip)][0])),
         el('p', {class: 'num'}, `${clock(clip.start)} – ${clock(clip.end)} · ${(clip.end - clip.start).toFixed(1)}s · ${state.project.groups.find(g => g.id === clip.group)?.label ?? clip.group}`),
+        ...clip.marks.map(mark => el('div', {class: `warn${mark.kind === 'failed' || mark.kind === 'backdrop' ? ' bad' : ''}`}, mark.text)),
     ] : [el('h2', {}, 'No clip'), el('p', {}, 'Nothing at the playhead')]))
     $('tabs').replaceChildren(...(clip ? TABS : []).map(([id, name, count]) => {
         const n = count(clip)
         return el('button', {role: 'tab', 'aria-selected': String(state.tab === id), onclick: () => { state.tab = id; renderInspector(); $('panel').scrollTop = 0 }}, name, n ? el('small', {}, String(n)) : undefined)
     }))
     if (!clip) return $('panel').replaceChildren(el('div', {class: 'empty'}, state.project.clips.length ? 'Pick a clip on the timeline.' : `No plan yet - run ${state.project.command}`))
-    const panels = {prompt: promptPanel, shots: shotsPanel, refs: refsPanel, render: renderPanel}
+    const panels = {prompt: promptPanel, shots: shotsPanel, refs: refsPanel, render: renderPanel, versions: versionsPanel}
     $('panel').replaceChildren(...panels[state.tab](clip))
 }
 
@@ -570,12 +1206,12 @@ const pictureState = file => {
 
 function refsPanel(clip) {
     const out = []
-    if (clip.dropped.length) out.push(el('div', {class: 'warn'}, `No picture for lack of room: ${clip.dropped.join(', ')}`))
+    const why = picture => picture.kind === 'location' ? (clip.views?.chosen ? `view ${clip.views.chosen}: ${clip.views.options[clip.views.chosen - 1].name}` : 'the place') : picture.kind === 'frame' ? 'the frame it goes on from' : picture.kind
     out.push(el('div', {class: 'section'}, el('h3', {}, 'Pictures'), el('div', {class: 'refs'}, clip.pictures.map(picture => {
         const fresh = pictureState(picture.file)
         return el('button', {class: 'ref', title: picture.description, onclick: () => picture.exists && openViewer(picture, picture.label, picture.name, picture.description)},
             picture.exists ? el('img', {src: thumbUrl(picture, 640), alt: picture.name, loading: 'lazy', decoding: 'async'}) : el('span', {class: 'noimg'}, 'Missing'),
-            el('div', {}, el('b', {}, picture.name || picture.label), el('small', {}, picture.label.replace(/[<>]/g, ''), ` · ${picture.kind}`, fresh === 'stale' && el('span', {class: 'stale'}, 'stale'), fresh === 'pinned' && el('span', {}, 'pinned'))))
+            el('div', {}, el('b', {}, picture.name || picture.label), el('small', {}, picture.label.replace(/[<>]/g, ''), ' · ', why(picture), fresh === 'stale' && el('span', {class: 'stale'}, 'stale'), fresh === 'pinned' && el('span', {}, 'pinned'))))
     }))))
     if (clip.audio.length) {
         out.push(el('div', {class: 'section'}, el('h3', {}, 'Sound'), el('dl', {class: 'facts'}, clip.audio.flatMap(audio => [
@@ -583,7 +1219,99 @@ function refsPanel(clip) {
             el('dd', {class: 'num'}, `${audio.stem ?? ''} · ${audio.songStart.toFixed(1)}s – ${audio.songEnd.toFixed(1)}s of the song`),
         ]))))
     }
+    if (state.project.kind === 'film') out.push(...overridePanel(clip))
     return out
+}
+
+// a film clip's own choice of its place's view and its references: kept in a small file, the plan is not touched
+function overridePanel(clip) {
+    const override = {placeView: clip.override?.placeView, without: [...(clip.override?.without ?? [])], order: [...(clip.override?.order ?? [])]}
+    const save = async next => {
+        await api(`override/${clip.id}`, next)
+        await loadProject()
+        toast('Kept for this clip. It takes effect with the next plan run, and the clip then goes stale.')
+    }
+    const planButton = el('button', {class: 'btn', onclick: () => startRun({type: 'plan'}).catch(showError)}, 'Plan now')
+    const out = []
+    if (clip.views?.options.length) {
+        const chosen = override.placeView ?? clip.views.chosen
+        out.push(el('div', {class: 'section'}, el('h3', {}, 'View of the place'), el('div', {class: 'refs'}, clip.views.options.map(option => el('button', {class: `ref${option.n === chosen ? ' chosen' : ''}`, title: option.shows, onclick: () => save({...override, placeView: option.n}).catch(showError)},
+            option.v ? el('img', {src: thumbUrl(option), alt: '', loading: 'lazy'}) : el('span', {class: 'noimg'}, 'Not rendered'),
+            el('div', {}, el('b', {}, option.name), el('small', {}, `View ${option.n}${option.n === clip.views.chosen ? ' · in the plan' : ''}`)))))))
+    }
+    const people = clip.pictures.filter(p => p.kind !== 'frame')
+    if (people.length > 1) {
+        const move = (picture, direction) => {
+            const order = people.map(p => p.id)
+            const at = order.indexOf(picture.id)
+            order.splice(at, 1)
+            order.splice(clamp(at + direction, 0, order.length), 0, picture.id)
+            save({...override, order}).catch(showError)
+        }
+        out.push(el('div', {class: 'section'}, el('h3', {}, 'References and their order'), people.map((picture, n) => el('div', {class: 'btn-row', style: {'margin-bottom': '4px'}},
+            el('span', {style: {flex: 1}}, `${n + 1}. ${picture.name}`),
+            el('button', {class: 'btn', disabled: n === 0, 'aria-label': `${picture.name} up`, onclick: () => move(picture, -1)}, '↑'),
+            el('button', {class: 'btn', disabled: n === people.length - 1, 'aria-label': `${picture.name} down`, onclick: () => move(picture, 1)}, '↓'),
+            el('button', {class: 'btn', onclick: () => save({...override, without: [...override.without, picture.id]}).catch(showError)}, 'Leave out')))))
+    }
+    if (override.without.length) out.push(el('div', {class: 'note btn-row'}, el('span', {style: {flex: 1}}, `Left out: ${override.without.join(', ')}`), el('button', {class: 'btn', onclick: () => save({...override, without: []}).catch(showError)}, 'Put back')))
+    if (clip.override) out.push(el('div', {class: 'note'}, el('p', {style: {'margin-bottom': '6px'}}, 'This clip has a choice of its own. It takes effect with the next plan run, and the clip then goes stale.'), el('div', {class: 'btn-row'}, planButton, el('button', {class: 'btn', onclick: () => save(null).catch(showError)}, 'Back to the plan'))))
+    return out
+}
+
+function chain(clip) {
+    const later = []
+    for (let next = clip.next; next; next = state.project.clips.find(c => c.id === next)?.next) later.push(next)
+    return later
+}
+
+async function renderAgain(clip) {
+    const asked = await api('estimate', {clips: [clip.id]}).catch(() => ({risks: []}))
+    const later = chain(clip)
+    const yes = await ask({
+        title: `${clip.video ? 'Render' : 'Render'} ${clip.id}${clip.video ? ' again' : ''}?`,
+        lines: [clip.video ? 'A new seed. The version there now is put away and stays selectable.' : '', asked.estimate].filter(Boolean),
+        warnings: [
+            ...(asked.risks ?? []),
+            ...(asked.fixedSeed !== undefined ? [`"seed" is fixed in config.json (${asked.fixedSeed}): the same seed gives the same clip again.`] : []),
+            ...(later.length ? [`${later.join(', ')} go on from this clip. They go stale and are not rendered on their own.`] : []),
+        ],
+        confirm: 'Render it',
+    })
+    if (yes) await startRun({type: 'clips', ids: [clip.id], again: !!clip.video})
+}
+
+async function previewOne(clips, label) {
+    const yes = await ask({title: `Preview ${label}?`, lines: ['A cheap render into previews/: fewer steps, a fraction of the pixels. It never replaces a clip.'], warnings: clips.some(c => c.startsFrom) ? ['A clip that goes on from another starts on the last frame of its preview and is marked as approximate.'] : [], confirm: 'Preview'})
+    if (yes) await startRun({type: 'clips', ids: clips.map(c => c.id), preview: true, again: clips.some(c => c.preview)})
+}
+
+function retakeSection(clip) {
+    const seconds = clip.end - clip.start
+    const from = el('input', {type: 'number', min: 0, max: seconds, step: 0.1, value: 0, style: {width: '76px'}, 'aria-label': 'From second'})
+    const to = el('input', {type: 'number', min: 0, max: seconds, step: 0.1, value: Math.min(2, seconds).toFixed(1), style: {width: '76px'}, 'aria-label': 'To second'})
+    const hasLines = (a, b) => clip.lines.some(line => line.at < b && (line.end ?? seconds) > a)
+    const go = async (range, a, b) => {
+        if (state.project.kind === 'film' && hasLines(a, b)) return showError(new Error('A part with dialogue cannot be rendered on its own yet: the sound of a film comes with the picture.'))
+        const yes = await ask({
+            title: `Render ${clip.id}: ${range} again?`,
+            lines: ['Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.'],
+            warnings: b >= seconds - 0.05 && clip.next ? [`This part reaches the end of the clip: ${chain(clip).join(', ')} go on from its last frame and are marked.`] : [],
+            confirm: 'Render it',
+        })
+        if (yes) await startRun({type: 'retake', clip: clip.id, range}).catch(showError)
+    }
+    return el('div', {class: 'section'}, el('h3', {}, 'Render a part again'),
+        clip.shots.length > 1 ? el('div', {class: 'btn-row', style: {'margin-bottom': '6px'}}, clip.shots.map((shot, n) => {
+            const end = clip.shots[n + 1]?.at ?? seconds
+            return el('button', {class: 'btn', title: `${shot.at}s - ${end.toFixed(1)}s`, onclick: () => go(`shot${n + 1}`, shot.at, end).catch(showError)}, `Shot ${n + 1}`)
+        })) : '',
+        el('div', {class: 'btn-row'}, from, el('span', {class: 'muted'}, 'to'), to, el('span', {class: 'muted'}, 's'),
+            el('button', {class: 'btn', onclick: () => {
+                const a = Number(from.value), b = Number(to.value)
+                if (!(b > a)) return showError(new Error('the end of the part has to be after its start'))
+                go(`${a}-${b}`, a, b).catch(showError)
+            }}, 'Render this part')))
 }
 
 function renderPanel(clip) {
@@ -592,8 +1320,13 @@ function renderPanel(clip) {
     const jump = id => el('button', {class: 'link', onclick: () => seek(state.project.clips.find(c => c.id === id).start)}, id)
     const out = []
     if (fresh === 'stale') out.push(el('div', {class: 'warn'}, 'Made from another prompt, picture or start frame than the plan has now.'))
+    out.push(el('div', {class: 'section btn-row'},
+        el('button', {class: 'btn primary', onclick: () => renderAgain(clip).catch(showError)}, clip.video ? 'Render again' : 'Render'),
+        el('button', {class: 'btn', onclick: () => previewOne([clip], clip.id).catch(showError)}, clip.preview ? 'Preview again' : 'Preview')))
+    if (clip.video) out.push(retakeSection(clip))
     out.push(el('div', {class: 'section'}, el('h3', {}, 'File'), facts(
-        ['Video', clip.video ? el('a', {href: mediaUrl(clip.video), target: '_blank', rel: 'noopener', style: {color: 'inherit'}}, clip.video.file) : 'not rendered'],
+        ['Video', clip.video ? el('a', {href: mediaUrl(clip.video), target: '_blank', rel: 'noopener'}, clip.video.file) : 'not rendered'],
+        ['Preview', clip.preview ? el('a', {href: mediaUrl(clip.preview), target: '_blank', rel: 'noopener'}, clip.preview.file) : undefined],
         ['Workflow', clip.video?.workflow],
         ['Size', clip.video?.size],
         ['Seed', clip.video?.seed === undefined ? undefined : String(clip.video.seed)],
@@ -613,9 +1346,75 @@ function renderPanel(clip) {
             el('figcaption', {}, name))))))
     }
     const command = `${state.project.command} --render=videos --only=${clip.id}${clip.video ? ' --again' : ''}`
-    out.push(el('div', {class: 'section'}, el('h3', {}, clip.video ? 'Render again in the terminal' : 'Render in the terminal'), copyable(command)))
+    out.push(el('div', {class: 'section'}, el('h3', {}, 'The same in the terminal'), copyable(command)))
     return out
 }
+
+function versionsPanel(clip) {
+    if (state.versions?.clip !== clip.id) {
+        api(`versions/${clip.id}`).then(({versions}) => {
+            state.versions = {clip: clip.id, list: versions}
+            if (state.clip === clip && state.tab === 'versions') renderInspector()
+        }).catch(showError)
+        return [el('div', {class: 'empty'}, 'Looking…')]
+    }
+    if (!state.versions.list.length) return [el('div', {class: 'empty'}, 'No older versions. What is rendered again is kept here.')]
+    const sources = {again: 'rendered again', stale: 'from an older plan', leak: 'had a grey backdrop'}
+    return [el('div', {class: 'section'}, state.versions.list.map(version => el('article', {class: 'version'},
+        version.firstFrame ? el('img', {src: thumbUrl({file: version.firstFrame}), alt: '', loading: 'lazy'}) : el('span', {class: 'noimg'}),
+        el('div', {},
+            el('div', {}, dateOf(version.made)),
+            el('div', {class: 'muted'}, [sources[version.source], version.seed !== undefined ? `seed ${version.seed}` : '', version.size].filter(Boolean).join(' · ')),
+            version.fromThisPlan === false ? el('div', {class: 'muted', style: {color: 'var(--stale)'}}, 'Made from another plan: it will count as stale.') : '',
+            el('div', {class: 'btn-row'},
+                clip.video ? el('button', {class: 'btn', onclick: () => compare(clip, version)}, 'Compare') : '',
+                el('button', {class: 'btn', onclick: () => pickVersion(clip, version).catch(showError)}, 'Make current'))))))]
+}
+
+async function pickVersion(clip, version) {
+    const later = chain(clip)
+    const yes = await ask({
+        title: `Make this version of ${clip.id} the current one?`,
+        lines: ['What is there now is put away and stays selectable. The final video is then older than its clips.'],
+        warnings: [
+            ...(version.fromThisPlan === false ? ['It was made from another plan and counts as stale.'] : []),
+            ...(version.source === 'leak' ? ['It has only its video. Its first and last frame are made by the next run.'] : []),
+            ...(later.length ? [`${later.join(', ')} go on from this clip and are marked.`] : []),
+        ],
+        confirm: 'Make it current',
+    })
+    if (!yes) return
+    if (state.playing) setPlaying(false)
+    await api(`versions/${clip.id}/pick`, {version: version.id})
+    state.versions = undefined
+    await loadProject()
+    state.source = 'auto'
+    renderSourceChoice()
+    seek(state.t)
+    toast(`${clip.id} is now that version`)
+}
+
+function compare(clip, version) {
+    const dialog = $('compare')
+    const a = el('video', {src: mediaUrl(clip.video), controls: true, preload: 'auto', playsInline: true})
+    const b = el('video', {src: mediaUrl({file: version.video}), controls: true, preload: 'auto', muted: true, playsInline: true})
+    const together = async () => {
+        b.currentTime = a.currentTime = 0
+        await Promise.all([a.play(), b.play()]).catch(() => {})
+    }
+    const close = () => { a.pause(); b.pause(); dialog.close() }
+    dialog.replaceChildren(
+        el('div', {class: 'pair'},
+            el('div', {}, el('p', {class: 'muted'}, 'Now'), a),
+            el('div', {}, el('p', {class: 'muted'}, `${dateOf(version.made)}${version.seed !== undefined ? ` · seed ${version.seed}` : ''}`), b)),
+        el('div', {class: 'btn-row'},
+            el('button', {class: 'btn primary', onclick: together}, 'Play both from the start'),
+            el('div', {class: 'spacer'}),
+            el('button', {class: 'btn', onclick: () => { close(); pickVersion(clip, version).catch(showError) }}, 'Make the right one current'),
+            el('button', {class: 'btn', onclick: close}, 'Close')))
+    dialog.showModal()
+}
+$('compare').addEventListener('close', () => { for (const node of $('compare').querySelectorAll('video')) node.pause() })
 
 function copyable(text) {
     const button = el('button', {title: 'Copy', 'aria-label': 'Copy', onclick: async () => {
@@ -635,14 +1434,6 @@ function copyIcon() {
     return svg
 }
 
-function openViewer(picture, title, name, text) {
-    $('viewer-img').src = mediaUrl(picture)
-    $('viewer-img').alt = name ?? title
-    $('viewer-caption').replaceChildren(el('b', {}, [title.replace(/[<>]/g, ''), name].filter(Boolean).join(' · ')), text ? el('p', {}, text) : '')
-    $('viewer').showModal()
-}
-$('viewer').addEventListener('click', event => { if (event.target === $('viewer')) $('viewer').close() })
-
 ////////// TIMELINE
 // a colour per section or scene name, the same one wherever it comes back
 const HUES = [25, 255, 145, 320, 80, 200, 0, 290]
@@ -658,16 +1449,19 @@ function renderTimeline() {
     $('clips').replaceChildren(...project.clips.map(clip => {
         const seconds = clip.end - clip.start
         const stand = clip.firstFrame ?? clip.pictures.find(p => p.kind === 'location' && p.exists) ?? clip.pictures.find(p => p.exists)
-        return el('button', {class: `clip ${stateOf(clip)}${clip === state.clip ? ' selected' : ''}`, 'data-id': clip.id, title: `${clip.id} · ${clock(clip.start)} – ${clock(clip.end)}`, style: span(clip.start, seconds), 'aria-label': `${clip.id}, ${STATE_CHIPS[stateOf(clip)][0]}`, onclick: () => seek(clip.start)},
+        return el('button', {class: `clip ${stateOf(clip)}${clip === state.clip ? ' selected' : ''}${flagged(clip) ? ' flagged' : ''}`, 'data-id': clip.id, title: [`${clip.id} · ${clock(clip.start)} – ${clock(clip.end)}`, ...clip.marks.map(m => m.text)].join('\n'), style: span(clip.start, seconds), 'aria-label': `${clip.id}, ${STATE_CHIPS[stateOf(clip)][0]}${clip.marks.length ? `, ${plural(clip.marks.length, 'mark')}` : ''}`, onclick: () => seek(clip.start)},
             stand && el('img', {src: thumbUrl(stand), alt: '', decoding: 'async', draggable: false}),
             clip.shots.slice(1).map(shot => el('span', {class: 'tick', style: {left: `${shot.at / seconds * 100}%`}})),
             el('span', {class: 'tag'}, clip.id.replace(/^\D+/, '')),
-            clip.startsFrom && el('span', {class: 'goes', title: `Goes on from ${clip.startsFrom}`}))
+            clip.startsFrom && el('span', {class: 'goes', title: `Goes on from ${clip.startsFrom}`}),
+            clip.marks.length ? el('span', {class: 'flag'}) : '',
+            clip.preview ? el('span', {class: 'has-preview', title: clip.preview.approximate ? 'Has an approximate preview' : 'Has a preview'}, 'P') : '')
     }))
     $('lines').replaceChildren(...project.clips.flatMap(clip => clip.lines.map(line => {
         const end = line.end ?? clip.end - clip.start
         return el('div', {class: 'spoken', title: line.who ? `${line.who}: ${line.text}` : line.text, style: span(clip.start + line.at, Math.max(0.1, end - line.at))}, el('span', {}, line.text))
     })))
+    renderSourceChoice()
     renderSummary()
 }
 
@@ -677,17 +1471,22 @@ function renderSummary() {
     const missing = clips.filter(c => !c.video).length
     const stale = clips.filter(c => stateOf(c) === 'stale').length
     const pinned = clips.filter(c => stateOf(c) === 'pinned').length
+    const marked = clips.filter(c => c.marks.length).length
+    const flaggedCount = clips.filter(flagged).length
     const stalePictures = project.pictures.filter(p => state.fresh.pictures[p.id] === 'stale').length
     const missingPictures = project.pictures.filter(p => !p.exists).length
     const final = {missing: ['No final video', 'chip'], current: ['Final video current', 'chip good'], older: ['Final video older than its clips', 'chip stale']}[project.final.state]
-    const run = project.lastRun
-    const runChip = run && {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']}[run.state]
+    const last = project.lastRun
+    const runChip = last && {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']}[last.state]
+    const next = state.status?.next
     $('chips').replaceChildren(
         el('span', {class: 'chip'}, project.kind === 'film' ? 'Film' : 'Music video'),
-        el('span', {class: `chip ${final[1].replace('chip', '')}`}, project.final.file ? el('a', {href: mediaUrl(project.final), target: '_blank', rel: 'noopener'}, final[0]) : final[0]),
-        runChip ? el('span', {class: runChip[1], title: [run.command, ...run.failures].join('\n')}, runChip[0]) : '',
-        missingPictures ? el('span', {class: 'chip bad'}, `${missingPictures} pictures missing`) : '',
-        stalePictures ? el('span', {class: 'chip stale'}, `${stalePictures} pictures stale`) : '',
+        el('span', {class: final[1]}, project.final.file ? el('a', {href: mediaUrl(project.final), target: '_blank', rel: 'noopener'}, final[0]) : final[0]),
+        runChip ? el('span', {class: runChip[1], title: [last.command, ...last.failures].join('\n')}, runChip[0]) : '',
+        last && (last.state === 'failed' || last.state === 'stopped') ? el('button', {class: 'chip', title: last.command, onclick: () => repeatLast(last).catch(showError)}, 'Repeat') : '',
+        missingPictures ? el('a', {class: 'chip bad', href: `${base}/references`}, `${missingPictures} pictures missing`) : '',
+        stalePictures ? el('a', {class: 'chip stale', href: `${base}/references`}, `${stalePictures} pictures stale`) : '',
+        next?.command ? el('button', {class: 'chip', title: [next.command, next.estimate].filter(Boolean).join('\n'), onclick: () => runNext(next).catch(showError)}, `Next: ${next.why}`) : '',
     )
     const item = (colour, text) => el('span', {}, el('i', {style: {background: colour}}), text)
     $('legend').replaceChildren(
@@ -695,9 +1494,28 @@ function renderSummary() {
         missing ? el('span', {}, el('i', {style: {background: 'repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px)'}}), `${missing} missing`) : '',
         stale ? item('var(--stale)', `${stale} stale`) : '',
         pinned ? el('span', {}, `${pinned} pinned`) : '',
-        clips.some(c => c.startsFrom) ? el('span', {}, el('i', {style: {background: 'var(--accent)', 'border-radius': '50%'}}), 'goes on from the clip before') : '',
+        marked ? item('var(--danger)', `${plural(marked, 'mark')}`) : '',
+        clips.some(c => c.startsFrom) ? el('span', {}, el('i', {style: {background: 'var(--accent)', 'border-radius': '50%'}}), 'goes on') : '',
+        flaggedCount ? el('label', {}, el('input', {type: 'checkbox', checked: state.onlyFlagged, onchange: event => {
+            state.onlyFlagged = event.target.checked
+            $('clips').classList.toggle('dimmed', state.onlyFlagged)
+        }}), 'Only flagged') : '',
+        flaggedCount ? el('button', {title: 'The flagged clip before', onclick: () => stepFlagged(-1)}, '‹') : '',
+        flaggedCount ? el('button', {title: 'The next flagged clip', onclick: () => stepFlagged(1)}, '›') : '',
+        clips.some(c => c.video) ? el('button', {title: 'Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU', onclick: () => startRun({type: 'leak-scan'}).catch(showError)}, 'Scan for backdrops') : '',
+        clips.length ? el('button', {title: 'Cheap renders of all clips into previews/', onclick: () => previewOne(clips, `all ${clips.length} clips`).catch(showError)}, 'Preview all') : '',
+        clips.some(c => c.preview) ? el('button', {title: 'A low-resolution video of the whole thing from the previews', onclick: () => startRun({type: 'final', preview: true}).catch(showError)}, 'Preview video') : '',
     )
     $('wave-label').textContent = state.peaks ? (project.song ? 'Song' : 'Sound') : ''
+}
+
+async function repeatLast(last) {
+    const yes = await ask({title: 'Run this again?', lines: [last.command], confirm: 'Run it'})
+    if (yes) await startRun({type: 'repeat', command: last.command})
+}
+async function runNext(next) {
+    const yes = await ask({title: next.why, lines: [next.command, next.estimate].filter(Boolean), confirm: 'Run it'})
+    if (yes) await startRun({type: 'next', command: next.command})
 }
 
 const scroller = $('scroll')
@@ -705,7 +1523,7 @@ const fitScale = () => scroller.clientWidth / Math.max(1, state.project.seconds)
 const MAX_PPS = 160
 
 function setScale(pps, anchorTime, anchorX) {
-    state.pps = clamp(pps, fitScale(), MAX_PPS)
+    state.pps = clamp(pps, fitScale(), Math.max(MAX_PPS, fitScale()))
     $('track').style.setProperty('--pps', state.pps)
     $('zoom').value = String(Math.round(Math.log(state.pps / fitScale()) / Math.log(MAX_PPS / fitScale()) * 100) || 0)
     if (anchorTime !== undefined) scroller.scrollLeft = anchorTime * state.pps - anchorX
@@ -743,7 +1561,7 @@ function resolveColor(name) {
 }
 
 function drawCanvases() {
-    if (!state.project) return
+    if (!state.project || $('view-timeline').hidden) return
     drawRuler()
     drawWave()
 }
@@ -831,7 +1649,7 @@ $('zoom').addEventListener('input', () => {
 })
 $('fit').addEventListener('click', () => { state.fitted = true; setScale(fitScale()); scroller.scrollLeft = 0 })
 new ResizeObserver(() => {
-    if (!state.project) return
+    if (!state.project || $('view-timeline').hidden) return
     setScale(state.fitted ? fitScale() : state.pps)
 }).observe(scroller)
 
@@ -841,7 +1659,7 @@ $('prev').addEventListener('click', () => step(-1))
 $('next').addEventListener('click', () => step(1))
 $('mute').addEventListener('click', () => { state.muted = !state.muted; applySound() })
 addEventListener('keydown', event => {
-    if (event.target.matches?.('input') || $('viewer').open || !state.project) return
+    if (event.target.matches?.('input, select, textarea') || document.querySelector('dialog[open]') || !state.project) return
     const actions = {
         ' ': () => setPlaying(!state.playing),
         ArrowLeft: () => step(-1),
@@ -858,7 +1676,7 @@ addEventListener('keydown', event => {
 
 ////////// DATA - the folder is the model: read again now and then, and when the window comes back
 async function loadProject({first = false} = {}) {
-    const response = await fetch('/api/project')
+    const response = await fetch(`${base}/api/project`)
     // a run can be writing a file just as it is read: what is on the page stays
     if (!response.ok) {
         if (first) throw new Error((await response.json()).error)
@@ -878,7 +1696,9 @@ async function loadProject({first = false} = {}) {
         if (song.dataset.url !== url) { song.dataset.url = url; song.src = url }
     }
     state.clip = state.project.clips.find(c => c.id === selected)
+    state.versions = undefined
     loadFreshness()
+    loadStatus()
     if (first) return
     // the plan or a render changed while the page was open: the same place, in what is there now
     renderTimeline()
@@ -889,7 +1709,7 @@ async function loadProject({first = false} = {}) {
 }
 
 async function loadFreshness() {
-    const response = await fetch('/api/freshness')
+    const response = await fetch(`${base}/api/freshness`)
     if (!response.ok) return
     state.fresh = await response.json()
     for (const node of $('clips').children) {
@@ -897,29 +1717,31 @@ async function loadFreshness() {
         if (!clip) continue
         node.classList.remove('stale', 'current', 'pinned', 'unknown', 'missing')
         node.classList.add(stateOf(clip))
+        node.classList.toggle('flagged', flagged(clip))
     }
     renderSummary()
     renderInspector()
 }
 
+async function loadStatus() {
+    const response = await fetch(`${base}/api/status`)
+    if (!response.ok) return
+    state.status = await response.json()
+    renderSummary()
+}
+
 async function loadWaveform() {
-    const response = await fetch('/api/waveform')
+    const response = await fetch(`${base}/api/waveform`)
     if (!response.ok) return
     state.peaks = (await response.json()).peaks ?? undefined
     renderSummary()
     drawWave()
 }
 
-async function start() {
-    try {
-        await loadProject({first: true})
-    } catch (error) {
-        $('boot').replaceChildren(el('div', {}, el('p', {}, 'This project cannot be read.'), el('p', {}, el('code', {}, error.message))))
-        return
-    }
-    $('boot').hidden = true
-    $('boot').style.display = 'none'
-    $('app').hidden = false
+async function timelinePage() {
+    await loadProject({first: true})
+    show('view-timeline')
+    projectChrome(state.project.title)
     renderTimeline()
     state.fitted = true
     setScale(fitScale())
@@ -928,10 +1750,18 @@ async function start() {
     else { renderInspector(); showClip(undefined, 0) }
     applySound()
     loadWaveform()
-    setInterval(() => { if (!document.hidden) loadProject() }, 10000)
-    addEventListener('focus', () => loadProject())
+    run.onEnd = () => loadProject().catch(() => {})
+    followRun(base)
+    setInterval(() => { if (!document.hidden) loadProject().catch(() => {}) }, 10000)
+    addEventListener('focus', () => loadProject().catch(() => {}))
 }
-start()
+
+const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : timelinePage()}
+pages[route.view]().catch(error => {
+    show('none')
+    $('boot').hidden = false
+    $('boot').replaceChildren(el('div', {}, el('p', {}, 'This cannot be read right now.'), el('p', {}, el('code', {}, error.message))))
+})
 </script>
 </body>
 </html>

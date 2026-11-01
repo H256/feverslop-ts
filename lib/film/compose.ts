@@ -1,3 +1,5 @@
+import {existsSync, readdirSync, readFileSync} from "node:fs";
+import {join} from "node:path";
 import {escapeRegExp} from "../shot-plan.ts";
 import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
 import {languageName} from "../config.ts";
@@ -55,6 +57,16 @@ export type FilmInput = {
     // picture as well, and the prompt has no `<Picture N>` for it (the same image twice was blended in a second time, shifted)
     pinStartFrame?: boolean,
     props?: FilmProp[],                              // the props of the film - a shot names the ones in its picture (Shot.props)
+    // the user's choice per clip (clip-overrides/<clip>.json, chosen in the workspace): another view of the place, references left out, their order
+    overrides?: Record<string, ClipOverride>,
+}
+export type ClipOverride = { placeView?: number, order?: string[], without?: string[] }
+
+/** The choices of the user per clip, in clip-overrides/ of the film: a file only applies while it exists. */
+export function clipOverrides(dir: string): Record<string, ClipOverride> {
+    const folder = join(dir, 'clip-overrides')
+    if (!existsSync(folder)) return {}
+    return Object.fromEntries(readdirSync(folder).filter(f => f.endsWith('.json')).map(f => [f.slice(0, -5), JSON.parse(readFileSync(join(folder, f), 'utf8')) as ClipOverride]))
 }
 
 // one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
@@ -72,7 +84,14 @@ export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
 // does the plan of every shot say where its people are?
 const shots_planned = (clip: FilmClip) => clip.shots.length > 0 && clip.shots.every(shot => shot.characters.length === 0 || Object.values(shot.people ?? {}).some(p => p.state))
 
-function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame, props = []}: FilmInput): FilmClipRequest {
+// a reference the choice names comes in its order, first; the others keep theirs behind it (sort is stable)
+const orderOf = (override: ClipOverride | undefined, id: string) => {
+    const at = override?.order?.indexOf(id) ?? -1
+    return at < 0 ? Infinity : at
+}
+
+function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, locationDescriptions, locationViews, soundscapes, stagings, voices, lookBrief, pinStartFrame, props = [], overrides = {}}: FilmInput): FilmClipRequest {
+    const override = overrides[clip.id]
     const scene = screenplay.scenes.find(s => s.id === clip.sceneId)!
     const location = locationOf(cast, scene.location)
     const sceneLines = dialogueOf(scene)
@@ -99,7 +118,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     // and the place is described by what that view shows, not by the description of the hero picture: written from where the hero picture looks
     // ("the seats beyond the stage edge"), it won over a view from the seats - the video model turned round to the view the words had
     const views = location ? locationViews?.[location.id] : undefined
-    const pictured = views?.length ? Math.min(views.length, Math.max(1, clip.shots.find(s => s.placeView)?.placeView ?? 1)) : undefined
+    const pictured = views?.length ? Math.min(views.length, Math.max(1, override?.placeView ?? clip.shots.find(s => s.placeView)?.placeView ?? 1)) : undefined
     const subjects = [
         ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: locationViewAsset(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
         ...characters.map(c => {
@@ -109,7 +128,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             return {kind: 'character' as const, id: c.id, pictureId, name: c.name, description: characterDescriptions[pictureId] ?? characterDescriptions[c.id] ?? c.appearance}
         }),
         ...propsPictured.map(p => ({kind: 'prop' as const, id: p.id, pictureId: p.id, name: p.name, description: p.description})),
-    ].map((s, n) => ({...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`}))
+    ].filter(s => !override?.without?.includes(s.id)).sort((a, b) => orderOf(override, a.id) - orderOf(override, b.id)).map((s, n) => ({...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`}))
     const locationSubject = subjects.find(s => s.kind === 'location')
     const castSubjects = subjects.filter(s => s.kind === 'character')
     const propSubjects = subjects.filter(s => s.kind === 'prop')

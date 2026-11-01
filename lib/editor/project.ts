@@ -1,4 +1,4 @@
-import {existsSync, readFileSync, statSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {isAbsolute, join, relative} from "node:path";
 import {boundaryFrameAsset, type ClipRequest} from "../compose.ts";
 import {loadProjectConfig} from "../config.ts";
@@ -12,8 +12,8 @@ import {lastRun, type RunState, runState} from "../run-record.ts";
 import {asBeatShots} from "../shot-plan.ts";
 import type {FilmClipRequest} from "../film/compose.ts";
 import {loadFilmConfig} from "../film/config.ts";
-import {filmRenderConfig} from "../film/pictures.ts";
-import {filmClipFreshness} from "../film/render.ts";
+import {filmRenderConfig, locationViewAsset} from "../film/pictures.ts";
+import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
@@ -25,7 +25,11 @@ export type EditorPerson = { name: string, text: string }
 export type EditorShot = { label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[] }
 // a sung or spoken line: seconds from the clip's start
 export type EditorLine = { at: number, end?: number, text: string, who: string }
-export type EditorPicture = { label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number }
+export type EditorPicture = { id: string, label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number }
+export type EditorMark = { kind: 'failed' | 'backdrop' | 'backdrop-attempt' | 'older-start' | 'dropped', text: string }
+// a film: the views of its place the clip can be given, and the one it has
+export type EditorViews = { locationId: string, chosen?: number, options: { n: number, name: string, shows: string, file: string, v?: number }[] }
+export type EditorOverride = { placeView?: number, order?: string[], without?: string[] }
 export type EditorClip = {
     id: string,
     frameStart: number,
@@ -45,6 +49,10 @@ export type EditorClip = {
     video?: { file: string, v: number, workflow?: string, size?: string, seed?: number, renderedFrames?: number },
     firstFrame?: { file: string, v: number },
     lastFrame?: { file: string, v: number },
+    marks: EditorMark[],
+    views?: EditorViews,
+    override?: EditorOverride,
+    preview?: { file: string, v: number, approximate?: boolean },
 }
 export type EditorGroup = { id: string, label: string, start: number, end: number }
 export type EditorProject = {
@@ -86,9 +94,9 @@ const videoOf = (dir: string, id: string): EditorClip['video'] => {
     return {...found, workflow, size, seed, renderedFrames}
 }
 
-const pictureOf = (dir: string) => (p: { label: string, file: string, kind: string, name: string, subject: string, description: string }): EditorPicture => {
+const pictureOf = (dir: string) => (p: { id: string, label: string, file: string, kind: string, name: string, subject: string, description: string }): EditorPicture => {
     const found = media(dir, p.file)
-    return {label: p.label, file: p.file, kind: p.kind, name: p.name, subject: p.subject, description: p.description, exists: !!found, ...(found ? {v: found.v} : {})}
+    return {id: p.id, label: p.label, file: p.file, kind: p.kind, name: p.name, subject: p.subject, description: p.description, exists: !!found, ...(found ? {v: found.v} : {})}
 }
 
 const picturesOf = (dir: string, jobs: PictureJob[]) => jobs.map(p => {
@@ -117,6 +125,56 @@ const lastRunOf = (dir: string): EditorProject['lastRun'] => {
     return run ? {state: runState(run), command: run.command, startedAt: run.startedAt, failures: run.failures ?? (run.error ? [run.error] : [])} : undefined
 }
 
+type Scan = { clips?: Record<string, { video: number, from: number, to: number, samples: number }> }
+
+/** What is known against a clip, read from what is on disk - nothing here starts a scan or asks a model. */
+function marksOf(dir: string, clip: { id: string, startsFrom?: string, dropped?: string[] }, run: EditorProject['lastRun'], scan: Scan): EditorMark[] {
+    const marks: EditorMark[] = []
+    const video = join(dir, 'videos', `${clip.id}.mp4`)
+    const rendered = existsSync(video)
+    if (run?.state === 'failed') for (const failure of run.failures) if (failure.includes(`clip ${clip.id}:`)) marks.push({kind: 'failed', text: failure})
+    // found in this very file - a scan of an older version says nothing about this one
+    const found = scan.clips?.[clip.id]
+    if (found && rendered && found.video === Math.round(statSync(video).mtimeMs)) marks.push({kind: 'backdrop', text: `Grey studio backdrop, ${found.from.toFixed(1)} - ${found.to.toFixed(1)} s`})
+    const leaks = join(dir, 'old', 'leaks')
+    const attempts = existsSync(leaks) ? readdirSync(leaks).filter(f => f.startsWith(`${clip.id}-seed-`)).length : 0
+    if (attempts) marks.push({kind: 'backdrop-attempt', text: `${attempts} earlier attempt${attempts > 1 ? 's' : ''} had a grey backdrop and ${attempts > 1 ? 'were' : 'was'} rendered again`})
+    if (clip.startsFrom && rendered) {
+        const frame = join(dir, `assets/clips/${clip.startsFrom}_lf.png`)
+        if (existsSync(frame) && statSync(frame).mtimeMs > statSync(video).mtimeMs) marks.push({kind: 'older-start', text: `Starts on an older version of the last frame of ${clip.startsFrom}`})
+    }
+    if (clip.dropped?.length) marks.push({kind: 'dropped', text: `No picture for lack of room: ${clip.dropped.join(', ')}`})
+    return marks
+}
+
+const readScan = (dir: string): Scan => {
+    try {
+        return readJson<Scan>(join(dir, 'output', 'leak-scan.json')) ?? {}
+    } catch {
+        return {}
+    }
+}
+
+/** A clip's choice of the view of its place and its references: a small file per clip, only there when something was chosen. */
+export const overrideFile = (dir: string, clipId: string) => join(dir, 'clip-overrides', `${clipId}.json`)
+const overrideOf = (dir: string, clipId: string): EditorOverride | undefined => {
+    try {
+        return readJson<EditorOverride>(overrideFile(dir, clipId))
+    } catch {
+        return undefined
+    }
+}
+
+const previewOf = (dir: string, clipId: string): EditorClip['preview'] => {
+    const found = media(dir, `previews/${clipId}.mp4`)
+    if (!found) return undefined
+    try {
+        return {...found, approximate: readJson<{ approximate?: boolean }>(join(dir, `previews/${clipId}.mp4.json`))?.approximate}
+    } catch {
+        return found
+    }
+}
+
 const withNext = (clips: EditorClip[]) => clips.map(clip => {
     const next = clips.find(c => c.startsFrom === clip.id)?.id
     return next ? {...clip, next} : clip
@@ -139,6 +197,8 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
     // the clips of a beat follow each other: the shots of its clips before this one come first
     const shotsDone = new Map<string, number>()
+    const run = lastRunOf(dir)
+    const scan = readScan(dir)
     const clips = requests.map((clip): EditorClip => {
         const beat = data.beats?.find(b => b.id === clip.beatId)
         const plan = data.shotMoments?.[clip.beatId] && asBeatShots(data.shotMoments[clip.beatId]!)
@@ -170,6 +230,8 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
             video: videoOf(dir, clip.id),
             firstFrame: media(dir, boundaryFrameAsset(clip.id, 'ff')),
             lastFrame: media(dir, boundaryFrameAsset(clip.id, 'lf')),
+            marks: marksOf(dir, clip, run, scan),
+            preview: previewOf(dir, clip.id),
         }
     })
     const end = clips.at(-1)?.end ?? 0
@@ -183,7 +245,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         clips: withNext(clips),
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'output', 'assets.json'))),
         final: finalOf(dir, id, requests),
-        lastRun: lastRunOf(dir),
+        lastRun: run,
         command: `bun index.ts ${id}`,
     }
 }
@@ -199,12 +261,24 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         return scene ? `${sceneId} · ${scene.location}` : sceneId
     }
     const shotsDone = new Map<string, number>()
-    const clips = requests.map((clip): EditorClip => {
+    const run = lastRunOf(dir)
+    const scan = readScan(dir)
+    const viewsOf = (clip: FilmClipRequest): EditorViews | undefined => {
+        const location = clip.assets.pictures.find(p => p.kind === 'location')
+        if (!location) return undefined
+        const known = data.locationViews?.[location.id] ?? data.sheetViews?.[location.id]?.views
+        if (!known?.length) return undefined
+        const options = known.map((view, n) => ({n: n + 1, name: view.name, shows: view.shows, file: locationViewAsset(location.id, n + 1), v: media(dir, locationViewAsset(location.id, n + 1))?.v}))
+        return {locationId: location.id, chosen: options.find(o => o.file === location.file)?.n, options}
+    }
+    // on the timeline a clip is where the film has it: the final video and the clips have to agree
+    const spans = filmClipSpans(dir, requests)
+    const clips = requests.map((clip, n): EditorClip => {
         const coverage = data.coverage?.find(c => c.sceneId === clip.sceneId)
         const offset = shotsDone.get(clip.sceneId) ?? 0
         shotsDone.set(clip.sceneId, offset + clip.shots.length)
-        const start = secondsAt(clip.frameStart)
-        const seconds = secondsAt(clip.frames)
+        const start = secondsAt(spans[n]!.start)
+        const seconds = secondsAt(spans[n]!.frames)
         const scene = sceneOf(clip.sceneId)
         return {
             id: clip.id,
@@ -232,6 +306,10 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
             video: videoOf(dir, clip.id),
             firstFrame: media(dir, `assets/clips/${clip.id}_ff.png`),
             lastFrame: media(dir, `assets/clips/${clip.id}_lf.png`),
+            marks: marksOf(dir, clip, run, scan),
+            views: viewsOf(clip),
+            override: overrideOf(dir, clip.id),
+            preview: previewOf(dir, clip.id),
         }
     })
     return {
@@ -241,7 +319,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         clips: withNext(clips),
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'assets.json'))),
         final: finalOf(dir, id, requests),
-        lastRun: lastRunOf(dir),
+        lastRun: run,
         command: `bun film.ts ${id}`,
     }
 }
@@ -268,6 +346,46 @@ export async function readEditorFreshness({dir, kind}: EditorTarget): Promise<Ed
     return {
         clips: Object.fromEntries(clips.filter(c => rendered(`videos/${c.id}.mp4`)).map(c => [c.id, freshness(join(dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, dir, config))])),
         pictures: Object.fromEntries(pictures.filter(p => rendered(p.file)).map(p => [p.id, freshness(join(dir, p.file), pictureFingerprint(p, dir, config))])),
+    }
+}
+
+/** The id of the request a clip is rendered from now - a version with another one was made from another plan. */
+export async function clipRequestId({dir, kind}: EditorTarget, clipId: string): Promise<string | undefined> {
+    const request = readJson<ClipRequest & FilmClipRequest>(join(dir, 'output', 'clips', `${clipId}.json`))
+    if (!request) return undefined
+    return kind === 'film' ? filmClipFingerprint(request, dir, filmRenderConfig(await loadFilmConfig(dir))) : clipFingerprint(request, dir, await loadProjectConfig(dir))
+}
+
+export type EditorListing = {
+    id: string, kind: EditorKind, title: string, clips: number, rendered: number, pictures: number,
+    final: FinalState, lastRun?: EditorProject['lastRun'], changed: number, thumb?: { file: string, v: number },
+}
+
+const countOf = (folder: string, pattern: RegExp) => existsSync(folder) ? readdirSync(folder).filter(f => pattern.test(f)).length : 0
+
+/** One project on the start page, from what lies in its folder: no hashing, so that many of them stay quick. */
+export function readListing({id, dir, kind}: EditorTarget): EditorListing {
+    const clipsDir = join(dir, 'output', 'clips')
+    const ids = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
+    const project = join(dir, 'project.json')
+    const title = kind === 'film' ? (() => {
+        try {
+            const data = readJson<FilmProject>(project)
+            return data?.screenplay?.title ?? data?.brief?.title ?? id
+        } catch {
+            return id
+        }
+    })() : id
+    const thumb = ids.map(c => media(dir, `assets/clips/${c}_ff.png`)).find(Boolean)
+    return {
+        id, kind, title,
+        clips: ids.length,
+        rendered: ids.filter(c => existsSync(join(dir, 'videos', `${c}.mp4`))).length,
+        pictures: countOf(join(dir, 'assets', 'characters'), /\.png$/) + countOf(join(dir, 'assets', 'locations'), /\.png$/),
+        final: finalStateOf(dir, join(dir, `${id}.mp4`), ids.map(c => ({id: c}))),
+        lastRun: lastRunOf(dir),
+        changed: Math.round(statSync(existsSync(project) ? project : dir).mtimeMs),
+        thumb,
     }
 }
 
