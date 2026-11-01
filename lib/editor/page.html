@@ -1345,8 +1345,8 @@ function retakeSection(clip) {
         const yes = await ask({
             title: `Render ${clip.id}: ${range} again?`,
             lines: ['Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.'],
-            warnings: b >= seconds - 0.05 && clip.next ? [`This part reaches the end of the clip: ${chain(clip).join(', ')} go on from its last frame and are marked.`] : [],
-            confirm: 'Render it',
+            warnings: ['Not proven yet: on a 32 GB Radeon the two-pass job ran out of memory, and one try took the server down (#157).', ...b >= seconds - 0.05 && clip.next ? [`This part reaches the end of the clip: ${chain(clip).join(', ')} go on from its last frame and are marked.`] : []],
+            confirm: 'Render it anyway',
         })
         if (yes) await startRun({type: 'retake', clip: clip.id, range}).catch(showError)
     }

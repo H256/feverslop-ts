@@ -98,8 +98,8 @@ describe('the jobs', () => {
         const guideAt = (result: { workflow: unknown }) => of(result, 'MiniMaxH3AddGuide').map(n => n.inputs.frame_idx).filter(at => at !== 0)
         expect(guideAt(h3Ref2Video({...music, endFrame: {image: 'after.png', at: 40}}))).toEqual([40])
         expect(guideAt(h3Ref2VideoFilm({...film, endFrame: {image: 'after.png', at: 40}}))).toEqual([40])
-        // each pass has its own latent, so each has the guide
-        expect(guideAt(h3Ref2Video2Pass({...music, endFrame: {image: 'after.png', at: 40}}))).toEqual([40, 40])
+        // the first pass only: the second changes little, and encoding at the full size ran out of memory
+        expect(guideAt(h3Ref2Video2Pass({...music, endFrame: {image: 'after.png', at: 40}}))).toEqual([40])
         expect(guideAt(h3Ref2Video(music))).toEqual([])
     })
     test('sizes scale on the area, in multiples of 32', () => {

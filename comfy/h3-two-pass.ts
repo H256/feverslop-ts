@@ -70,10 +70,12 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // The guides are keyframes on the latent's own grid (comfy/ldm/minimax/model.py): a pinned frame encoded for pass 1
     // does not fit the upscaled latent, so each pass anchors the song and the first frame on its own latent. The
     // text and the reference pictures stay those of pass 1 - pass 2 only refines what pass 1 laid out.
-    const guide = (latent: NodeRef<"LATENT">) => {
+    // A part of a clip (opts.endFrame): the pictures around it guide pass 1 only. Pass 2 changes little, and encoding them at the full size ran out of memory on 32 GB.
+    const guide = (latent: NodeRef<"LATENT">, refine = false) => {
         const guided = song
             ? wf.MiniMaxH3AddGuide({positive: references.positive, latent, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO}).positive
             : references.positive
+        if (refine && opts.endFrame) return guided
         const started = startFrame
             ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
             : guided
@@ -127,7 +129,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // noise, seed + 1: the noise of pass 1 again on the large latent repeats its pattern.
     const second = wf.SamplerCustomAdvanced({
         noise: wf.RandomNoise({noise_seed: opts.seed + 1}).NOISE,
-        guider: wf.BasicGuider({model: base.model, conditioning: guide(large)}).GUIDER,
+        guider: wf.BasicGuider({model: base.model, conditioning: guide(large, true)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: 'euler'}).SAMPLER,
         sigmas: wf.BasicScheduler({scheduler: 'beta', steps: 4, denoise: 0.2, model: unet.MODEL}).SIGMAS,
         latent_image: large,

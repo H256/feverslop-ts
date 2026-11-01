@@ -30,6 +30,12 @@ const DEFAULT_SONG_DURATION = 360
 // the frames before a part of a clip rendered again that its render starts on (--retake), 5 + 17·k: 22 of them ran out of memory
 // in MiniMaxH3AddGuide on a 32 GB card in a two-pass job, also with its memory freed before
 export const RETAKE_LEAD = 5
+// the guides of a part of a clip are encoded on the card next to everything else: at 2 MP that ran out of memory on 32 GB (--retake). The node brings them to the size of its latent anyway
+const GUIDE_SCALE = "scale='min(iw,960)':-2"
+const smallerPicture = (file: string) => {
+    const partial = file.replace(/\.png$/, '.small.png')
+    return runProcess(['ffmpeg', '-y', '-v', 'error', '-i', file, '-vf', GUIDE_SCALE, partial], {errorMessage: err => `ffmpeg could not make ${file} smaller:\n${err}`}).then(() => renameSync(partial, file))
+}
 // the shot a further view of a place comes from (renderExtraView): long enough for one slow move, in a length the model takes
 const EXTRA_VIEW_FRAMES = 73
 const CONNECT_TIMEOUT_MS = 60 * 1000
@@ -783,19 +789,22 @@ export class Renderer implements Disposable {
         const guides: { startClip?: string, startFrame?: string, endFrame?: { image: string, at: number } } = {}
         if (plan.lead) {
             const head = `${work}_head.mp4`
-            await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `trim=start_frame=${plan.first - plan.lead}:end_frame=${plan.first},setpts=PTS-STARTPTS`, '-an', '-c:v', 'libx264', '-crf', '10', '-pix_fmt', 'yuv420p', join(this.projectDir, head)],
+            await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `trim=start_frame=${plan.first - plan.lead}:end_frame=${plan.first},setpts=PTS-STARTPTS,${GUIDE_SCALE}`, '-an', '-c:v', 'libx264', '-crf', '10', '-pix_fmt', 'yuv420p', join(this.projectDir, head)],
                 {errorMessage: err => `ffmpeg could not cut the frames before the part of ${clip.id}:\n${err}`})
             guides.startClip = remote(head)
         } else if (plan.singleStart) {
             const before = `${work}_before.png`
             await extractFrame(video, plan.first - 1, join(this.projectDir, before))
+            await smallerPicture(join(this.projectDir, before))
             guides.startFrame = remote(before)
         }
         if (plan.endAt !== undefined) {
             const after = `${work}_after.png`
             await extractFrame(video, plan.end, join(this.projectDir, after))
+            await smallerPicture(join(this.projectDir, after))
             guides.endFrame = {image: remote(after), at: plan.endAt}
         }
+        log.warn('--retake is not proven yet: on a 32 GB Radeon its two-pass job ran out of memory while encoding the guides, and one try took the server down (#157) - try it on one short part first')
         log.step('Part', `${clip.id} ${styles.muted(`frames ${plan.first}-${plan.end} of ${fileFrames}, ${plan.lead ? `${plan.lead} frames before it` : plan.singleStart ? 'the frame before it' : 'from its start'}${plan.endAt !== undefined ? ', the frame after it' : ''} as guides - ${plan.render} frames rendered`)}`)
         const prompt = retakePrompt(clip.prompt, shotsIn(plan, cuts))
         const rendered = join(this.projectDir, `${work}.mp4`)
