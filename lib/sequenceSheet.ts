@@ -6,7 +6,7 @@
 // ffmpeg instead of OpenCV/Pillow to stay within this project's stack.
 import {mkdirSync, renameSync} from "node:fs";
 import {dirname} from "node:path";
-import {FPS} from "./frames.ts";
+import {formatTimestamp, FPS} from "./frames.ts";
 import {captureProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
 
 export const SEQUENCE_FRAMES = 124   // ~5.17s @ 24fps - matches the predecessor project's default
@@ -25,12 +25,6 @@ export const EXPRESSIONS: Record<string, string> = {
     confused: 'one brow raised and the other lowered, head tilted slightly, lips pursed to one side',
     excited: 'eyes wide and bright, brows raised, mouth open in an eager grin',
     contemplative: 'eyes gazing off to the side, brows slightly furrowed, lips closed and relaxed',
-}
-
-function formatTimestamp(seconds: number): string {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `${String(m).padStart(2, '0')}:${s.toFixed(3).padStart(6, '0')}`
 }
 
 function beatTimestamps(totalShots: number, frames: number): number[] {
