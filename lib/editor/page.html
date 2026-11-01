@@ -1482,6 +1482,7 @@ function renderSummary() {
     $('chips').replaceChildren(
         el('span', {class: 'chip'}, project.kind === 'film' ? 'Film' : 'Music video'),
         el('span', {class: final[1]}, project.final.file ? el('a', {href: mediaUrl(project.final), target: '_blank', rel: 'noopener'}, final[0]) : final[0]),
+        project.previewVideo ? el('a', {class: 'chip', href: mediaUrl(project.previewVideo), target: '_blank', rel: 'noopener'}, 'Preview video') : '',
         runChip ? el('span', {class: runChip[1], title: [last.command, ...last.failures].join('\n')}, runChip[0]) : '',
         last && (last.state === 'failed' || last.state === 'stopped') ? el('button', {class: 'chip', title: last.command, onclick: () => repeatLast(last).catch(showError)}, 'Repeat') : '',
         missingPictures ? el('a', {class: 'chip bad', href: `${base}/references`}, `${missingPictures} pictures missing`) : '',

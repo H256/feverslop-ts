@@ -67,6 +67,7 @@ export type EditorProject = {
     clips: EditorClip[],
     pictures: { id: string, kind: string, name: string, file: string, exists: boolean, v?: number }[],
     final: { state: FinalState, file?: string, v?: number },
+    previewVideo?: { file: string, v: number },
     lastRun?: { state: RunState, command: string, startedAt: string, failures: string[] },
     command: string,            // how this project is run, for the commands the page shows
 }
@@ -114,6 +115,8 @@ export function groupsOf(clips: EditorClip[], label: (id: string) => string): Ed
     }
     return groups
 }
+
+const previewVideoOf = (dir: string, id: string) => media(dir, `${id}-preview.mp4`)
 
 const finalOf = (dir: string, id: string, clips: { id: string }[]): EditorProject['final'] => {
     const state = finalStateOf(dir, join(dir, `${id}.mp4`), clips)
@@ -245,6 +248,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         clips: withNext(clips),
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'output', 'assets.json'))),
         final: finalOf(dir, id, requests),
+        previewVideo: previewVideoOf(dir, id),
         lastRun: run,
         command: `bun index.ts ${id}`,
     }
@@ -319,6 +323,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         clips: withNext(clips),
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'assets.json'))),
         final: finalOf(dir, id, requests),
+        previewVideo: previewVideoOf(dir, id),
         lastRun: run,
         command: `bun film.ts ${id}`,
     }

@@ -20,7 +20,8 @@ For changing FeverSlop TS itself. Using it: the [README](../README.md).
 | `lib/assemble.ts`, `lib/timeline-export.ts` | the final video and the editor timelines |
 | `lib/casting.ts`, `lib/library.ts`, `lib/asset-import.ts` | `casting.json`, the asset library, import/export |
 | `lib/timings.ts`, `lib/stats.ts`, `lib/stats-report.ts`, `lib/stats-view.ts`, `lib/predict.ts` | measured durations, stats aggregation/presentation, the estimates of `--dry-run`/`status` |
-| `editor.ts`, `lib/editor/` | the workspace in the browser: `project.ts` reads a music video or a film into one shape, `server.ts` serves it and the media, `page.html` is the whole page - no framework, no build step (#152) |
+| `editor.ts`, `lib/editor/` | the workspace in the browser: `project.ts` reads a music video or a film into one shape, `references.ts` and `library.ts` the pictures, library and casting, `runs.ts` starts the CLI, `server.ts` serves it all, `page.html` is the whole page - no framework, no build step (#152) |
+| `lib/retake.ts`, `lib/archive.ts` | a part of a clip rendered again; versions of clips and pictures, put away and put back |
 | `lib/log.ts` | terminal output, the run log in `logs/`, errors |
 | `comfy/` | workflows (`comfy/workflows/`), helpers and the generated node types - [custom-workflows.md](custom-workflows.md) |
 | `tools/` | the `bun run …` scripts; `tools/*.py` the audio analysis, run with `uv` |

@@ -44,6 +44,9 @@ export type RenderConfig = {
     // a light grade and sharpen of the final video(s), written as <name>-finished.mp4 next to them (lib/finish.ts):
     // false (default) = off, true = the mild one, an object = the mild one with its fields replaced
     finish: boolean | Partial<Finish>,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    // --preview: the factor on the pixels (0.25 = half the width and height) and the sampling steps of a workflow with the turbo LoRA.
+    // A two-pass workflow renders only its first pass, whatever these say
+    preview: { scale: number, steps: number },
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
@@ -94,6 +97,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     finalFps: 24,
     interpolationModel: 'rife_v4.26_heavy.safetensors',
     finish: false,
+    preview: {scale: 0.25, steps: 4},
     singers: [],
     singerVoice: 'auto',
     lyricsLanguage: 'en',
@@ -115,6 +119,11 @@ export const finalFpsProblem = (value: unknown): string | undefined =>
         : `finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(value)}`
 export const interpolationModelProblem = (value: unknown): string | undefined =>
     typeof value === 'string' && value.trim() ? undefined : `interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(value)}`
+export const previewProblem = (value: unknown): string | undefined => {
+    const preview = value as { scale?: unknown, steps?: unknown } | null
+    return preview && typeof preview === 'object' && typeof preview.scale === 'number' && preview.scale > 0 && preview.scale <= 1 && Number.isInteger(preview.steps) && (preview.steps as number) >= 1 ? undefined
+        : `preview must be like {"scale": 0.25, "steps": 4} - scale above 0 up to 1, steps a whole number from 1, got ${JSON.stringify(value)}`
+}
 export function finishSettingProblem(value: unknown): string | undefined {
     if (typeof value !== 'boolean') {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return `finish must be true, false or an object like {"sharpen": 0.3}, got ${JSON.stringify(value)}`
@@ -147,6 +156,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     warnUnknownKeys(raw, [...Object.keys(defaults), 'alignLyrics'], file)
 
     if (!Number.isInteger(config.seed) || config.seed < -1) fail(`seed must be -1 or a whole number >= 0, got ${JSON.stringify(config.seed)}`)
+    const previewWrong = previewProblem(config.preview)
+    if (previewWrong) fail(previewWrong)
     for (const key of ['imageResolution', 'videoResolution'] as const) {
         const value = config[key]
         if (!(value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)))) {

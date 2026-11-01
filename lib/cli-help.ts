@@ -7,6 +7,8 @@ const rendering: [string, string][] = [
     ['--again', 'Render the clips or pictures in --only once more with a new seed; the old version is kept. Needs --render=videos or images'],
     ['--new-anchor', 'With --render=images --again: a reference sheet gets a new anchor too - another person or place, not only other views'],
     ['--picture-prompt=FILE', 'With --render=images --only=ID --again: render this one picture from the words in FILE and keep it (pinned)'],
+    ['--preview', 'With --render=videos: cheap renders into previews/ (config.json "preview"), never a clip. With --render=final: a low-resolution video from them'],
+    ['--retake=CLIP:PART', 'Render part of a clip again, between the frames around it: slot-007:3.2-5.0 in seconds, or slot-007:shot2. The old clip is kept'],
     ['--refresh=pictures,clips', 'Render again what was made from an older plan; the old files go to old/attempts/'],
     ['--strict', 'Refuse stale clips in the final video instead of only listing them'],
 ]

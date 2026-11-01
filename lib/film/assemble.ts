@@ -30,7 +30,7 @@ export async function loudnessOf(file: string): Promise<number | undefined> {
  * the model needs certain lengths - and joined, with the sound the model made for each clip. Unlike the music-video
  * pipeline there is no soundtrack under the film, so the clips' own sound is the film's sound.
  */
-export async function assembleFilm({clips, projectDir, target, levelMatching = false}: {
+export async function assembleFilm({clips, projectDir, target, levelMatching = false, sources}: {
     // useRendered: use every frame the model rendered, not only the planned ones - for a clip with dialogue, whose last word can fall
     // into the few frames after the planned end
     // continuesPrevious: the clip starts on the last frame of the clip right before it in the film - that frame is already there, the clip's first frame is the same picture and is left out (it would stand twice and stutter)
@@ -38,8 +38,9 @@ export async function assembleFilm({clips, projectDir, target, levelMatching = f
     projectDir: string,
     target: string,
     levelMatching?: boolean,        // every clip's sound is brought towards the same loudness
+    sources?: string[],             // other files for the clips than the ones in videos/ - the preview video
 }) {
-    const files = clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
+    const files = sources ?? clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
     if (missing.length) throw new Error(`Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`)
 

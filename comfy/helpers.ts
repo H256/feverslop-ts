@@ -85,14 +85,25 @@ export type VideoWorkflowOptions = {
     seed: number,
     resolution: Resolution,
     aspect?: Aspect,            // config videoAspect - "16:9" (landscape) when not given
+    // a cheap render (--preview): a factor on the pixels (pass it to resolution()), and the sampling steps of a workflow with the
+    // turbo LoRA. A two-pass workflow stops after its first pass. Without it a workflow renders as it always does
+    preview?: PreviewOptions,
+    // part of a clip rendered again (--retake): the render is also guided to this picture at this frame - the frame right after the part
+    endFrame?: EndFrame,
     filenamePrefix: string,
 }
+export type PreviewOptions = { scale: number, steps: number }
+export type EndFrame = { image: string, at: number }
 export type VideoWorkflow = (opts: VideoWorkflowOptions) => WorkflowResult
 
 /**
  * What a continuing clip starts on, as images for MiniMaxH3AddGuide at frame 0: the frames of opts.startClip (the last
  * frames of the clip before - the node places a batch of 5 + 17·k as consecutive frames) or the one picture opts.startFrame.
  */
+export function endGuide<C extends NodeRef>(wf: WorkflowBuilder, positive: C, latent: NodeRef<"LATENT">, vae: NodeRef<"VAE">, endFrame: EndFrame | undefined): C {
+    return endFrame ? wf.MiniMaxH3AddGuide({positive: positive as never, latent, frame_idx: endFrame.at, vae, image: wf.LoadImage({image: dyn(endFrame.image)}).IMAGE}).positive as unknown as C : positive
+}
+
 export function startImages(wf: WorkflowBuilder, opts: Pick<VideoWorkflowOptions, 'startFrame' | 'startClip'>): NodeRef<"IMAGE"> | undefined {
     if (opts.startClip) return wf.VHS_LoadVideo({video: dyn(opts.startClip), force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1}).IMAGE
     if (opts.startFrame) return wf.LoadImage({image: dyn(opts.startFrame)}).IMAGE
@@ -203,11 +214,18 @@ export function pixelSize(setting: Resolution, shape: Orientation | Aspect, work
     return w > h ? {width: long, height: short} : {width: short, height: long}
 }
 
+/** A size with `scale` times its pixels: each side by the square root of it, in multiples of 32. */
+export function scaledSize(size: PixelSize, scale: number): PixelSize {
+    if (scale === 1) return size
+    const side = (n: number) => Math.max(32, Math.round(n * Math.sqrt(scale) / 32) * 32)
+    return {width: side(size.width), height: side(size.height)}
+}
+
 /**
  * Width and height for a resolution setting - node outputs, typed to go straight into width/height widgets, and the
  * same size in pixels (`pixels`) for the workflow's result.
  */
-export function resolution(workflow: WorkflowBuilder, setting: Resolution, shape: Orientation | Aspect, workflowDefault: Exclude<Resolution, -1>): { width: number, height: number, pixels: PixelSize } {
-    const pixels = pixelSize(setting, shape, workflowDefault)
+export function resolution(workflow: WorkflowBuilder, setting: Resolution, shape: Orientation | Aspect, workflowDefault: Exclude<Resolution, -1>, scale = 1): { width: number, height: number, pixels: PixelSize } {
+    const pixels = scaledSize(pixelSize(setting, shape, workflowDefault), scale)
     return {width: widget(workflow.PrimitiveInt({value: pixels.width}).INT), height: widget(workflow.PrimitiveInt({value: pixels.height}).INT), pixels}
 }

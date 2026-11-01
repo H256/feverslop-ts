@@ -25,7 +25,9 @@ import {readTimings} from "./lib/timings.ts";
 import {formatSlotRanges} from "./lib/assemble.ts";
 import {reviewed} from "./lib/review.ts";
 import {archiveClip} from "./lib/film/archive.ts";
-import {versionStamp} from "./lib/archive.ts";
+import {archiveFiles, versionStamp} from "./lib/archive.ts";
+import {previewSources} from "./lib/assemble.ts";
+import {parseRetake} from "./lib/retake.ts";
 import {clipChains, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import type {AssetKind} from "./lib/asset-import.ts";
 import {castFromLibrary, copyKey} from "./lib/casting.ts";
@@ -55,7 +57,7 @@ cli('film')
 
 
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--dry-run] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--dry-run] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -67,6 +69,8 @@ const {values: args, positionals} = (() => {
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
+                preview: {type: 'boolean', default: false},
+                retake: {type: 'string', default: ''},
                 'new-anchor': {type: 'boolean', default: false},
                 'picture-prompt': {type: 'string', default: ''},
                 'fix-script': {type: 'boolean', default: false},
@@ -93,6 +97,17 @@ const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r ===
 const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
 if (args.again && !render.has('videos') && !render.has('images')) log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
+// --preview: cheap renders into previews/ that never replace a clip (config.json "preview"), or the video of the whole film made of them
+if (args.preview && !render.has('videos') && !render.has('final')) log.usageError('--preview goes with --render=videos or --render=final', usage)
+if (args.preview && render.has('videos') && render.has('final')) log.usageError('--preview: first the previews (--render=videos), then their video (--render=final)', usage)
+if (args.retake && render.size) log.usageError('--retake is a run of its own: it renders one part of one clip', usage)
+const retake = args.retake ? (() => {
+    try {
+        return parseRetake(args.retake)
+    } catch (e) {
+        return log.usageError((e as Error).message, usage)
+    }
+})() : undefined
 if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has('images'))) log.usageError('--new-anchor and --picture-prompt go with --render=images --only=... --again', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
@@ -528,7 +543,7 @@ async function planClips() {
 await planClips()
 
 /////////// 11 · RENDERING WITH COMFYUI
-if (render.has('images') || render.has('videos')) {
+if (render.has('images') || render.has('videos') || retake) {
     const renderConfig = filmRenderConfig(config)
     // the project id is part of ComfyUI's folder - "film-" keeps it apart from a music video of the same name
     using renderer = new FilmRenderer(`film-${film.id}`, film.dir, renderConfig, settings.comfy)
@@ -537,6 +552,11 @@ if (render.has('images') || render.has('videos')) {
     log.section('11 · RENDERING WITH COMFYUI')
     log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${renderConfig.imageWorkflow})${config.sequenceSheets ? `, sequence sheets (${renderConfig.sequenceWorkflow})` : ''}`))
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
+    if (retake) {
+        const clip = requests.find(r => r.id === retake.clip)
+        if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${requests.map(r => r.id).join(', ')}`)
+        await renderer.renderFilmRetake(clip, retake)
+    }
     if (render.has('images')) {
         log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
         const renderPicture = (picture: PictureJob) => config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)
@@ -568,14 +588,15 @@ if (render.has('images') || render.has('videos')) {
         for (const risk of clipFailureRisks(readTimings(), selected.filter(c => args.again || !existsSync(join(film.dir, 'videos', `${c.id}.mp4`))), renderConfig.videoWorkflow, settings.comfy.map(server => server.name))) log.warn(risk)
         // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
         const renderClips = (clips: typeof requests) => renderAll(clipChains(clips), async chain => {
-            for (const clip of chain) await renderer.renderFilmClip(clip, requests.find(r => r.id === clip.startsFrom))
+            for (const clip of chain) await (args.preview ? renderer.renderFilmPreview(clip) : renderer.renderFilmClip(clip, requests.find(r => r.id === clip.startsFrom)))
         })
         // on request, and only for the clips named: they are put away in old/attempts/ and rendered again, with a new seed
         if (args.again) {
             warnFixedSeed(config.seed)
             const stamp = versionStamp()
-            for (const clip of selected) log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${archiveClip(film.dir, clip.id, stamp)}`)}`)
-            warnClipsGoingOn(selected, requests)
+            for (const clip of selected) log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${args.preview ? archiveFiles(film.dir, `${clip.id}-preview-${stamp}`, [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]) : archiveClip(film.dir, clip.id, stamp)}`)}`)
+            // a preview leaves no last frame behind - the clips after it are not affected
+            if (!args.preview) warnClipsGoingOn(selected, requests)
         }
         await renderClips(selected)
 
@@ -583,7 +604,13 @@ if (render.has('images') || render.has('videos')) {
 }
 
 /////////// 12 · ASSEMBLING THE FILM
-if (render.has('final')) {
+if (render.has('final') && args.preview) {
+    // a quick look at cut, timing and continuity: from the previews with their own sound, without finish, score or subtitles, and never the film
+    log.section('12 · THE PREVIEW VIDEO')
+    const target = join(film.dir, `${film.id}-preview.mp4`)
+    const result = await assembleFilm({clips: requests.map(r => ({id: r.id, frames: r.frames})), projectDir: film.dir, target, sources: await previewSources(film.dir, requests)})
+    log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}`)}`)
+} else if (render.has('final')) {
     log.section('12 · ASSEMBLING THE FILM')
     const only = new Set(args.only.split(',').filter(Boolean))
     const unknown = [...only].filter(id => !requests.some(r => r.id === id))

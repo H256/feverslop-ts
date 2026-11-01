@@ -37,7 +37,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
 | `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command - `--film` for a film |
 | `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt - `--film` for a film |
-| `bun run editor <id>`   | the workspace in the browser: the whole video on one timeline, every clip playable with its prompt, shots and references next to it; dark, light or the system's theme. Reads only - `--film` for a film, `--port=4173` for another port |
+| `bun run editor [id]`   | the workspace in the browser - see [The workspace](#the-workspace). `--film` for a film, `--port=4173` for another port |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
@@ -594,6 +594,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `locationView`                        | `"auto"` (default) = the shot planning chooses one of the five views of the place for every shot (step `shotViews`, 11c) and a clip gets the one of its first shot as its place picture; `-1` = the whole reference sheet (all five views side by side - the video model shows that back as a grid with a black patch in the first seconds), `0`-`4` = that one view for every clip (front, right, behind, left, wide). Needs the sequence sheets (`sequenceSheets`, on by default) - without them the picture is the plain one. The choice is made from the text of the plan and the names of the views, never from the pictures: a language model that cannot read images is enough, and it is deliberately kept that way |
 | `fightClips`                          | `false` (default) = fight beats are cut like every beat; `true` = the clips of a fight beat (a "hit" with a crowd of creatures) are cut into one-bar pieces with one shot each and only the people of the shot as references - see `docs/comfyui.md` |
 | `vocalGap`                            | `1.5` (default) = a clip whose singing starts more than 1.5 s after its start is cut where the voice comes in (on the downbeat right before it when that is within 0.3 s), one whose singing stops more than 1.5 s before its end is cut where it stops - the silence becomes a clip of its own, and two silent pieces next to each other one clip. A generation that opens on seconds of silence starts the lip movement early, whatever the prompt says. More clips: 42 instead of 33 on tides. `0` = off. Needs the lyrics timing (`alignLyrics`); a project made before keeps its clips until `--redo=timeline` |
+| `preview`                             | `{"scale": 0.25, "steps": 4}` - what `--preview` renders with: `scale` is a factor on the pixels (0.25 = half the width and height), `steps` the sampling steps of a workflow with the turbo LoRA. A two-pass workflow renders only its first pass, a workflow on the base model keeps its steps |
 | `leakRetries`                         | `0` (default) = off; `1` or more = a clip that came out as the reference pictures lined up on their grey backdrop is rendered again with another seed, that many times at most (needs `"seed": -1`). Already rendered clips: `bun run leak-scan <project-id>` - see `docs/comfyui.md` |
 | `seed`                                | `-1` = random for every render (the seed used is saved in the `.json`), `0` or more = fixed              |
 | `imageResolution`, `videoResolution`  | `-1` = the workflow's own size, `1.1` = megapixels, `"1920x1088"` = fixed size                            |
@@ -858,6 +859,23 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
 - The project must be planned (`project.json` with the cast). The character keeps this project's name, role and prop -
   the tool warns when the description does not name the prop, or gives another gender than the story. Group members
   are not imported one by one; use `replace-character` for them.
+
+### The workspace
+
+`bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`:
+
+- **Projects**: how far each one is, what its last run did, and what comes next.
+- **Timeline**: the whole video on one timeline with sections or scenes, sound, clips with their shots, and sung or spoken lines; every clip playable in place with its prompt, shots and references next to it. A final video newer than its clips is played as it is, otherwise the clips one by one. Clips with something against them are flagged: missing, stale, failed in the last run, a grey backdrop (`Scan for backdrops`).
+- **A clip**: render it again with the estimate before the click, render one shot or part of it, compare and pick versions, make a preview.
+- **References**: every picture with its prompt, sheet, older versions and the clips that use it: a new sheet from the same anchor, a new anchor, an edited prompt (the picture then stays pinned), or into the library.
+- **Casting**: `casting.json` as a page. A choice changes that one entry; the next plan run takes the asset.
+- **Library**: the asset library, who uses what, a new asset from a picture.
+
+Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
+
+The same in the terminal: `--render=images --only=<picture> --again [--new-anchor] [--picture-prompt=<file>]`, `--render=videos --only=<clip> --preview`, `--render=final --preview` (`<id>-preview.mp4`), `--retake=slot-007:3.2-5.0` or `--retake=slot-007:shot2`.
+
+A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json`. It applies from the next plan run on, and the clip then counts as stale.
 
 ### The asset library
 
