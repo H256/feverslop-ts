@@ -1,6 +1,7 @@
 import {describe, expect, test} from "bun:test";
 import type {StoryBeat} from "./project.ts";
 import {beatsPrompt, blockingPrompt, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
+import {PERSON_FIELDS, SHOT_FIELDS} from "./shot-plan.ts";
 
 const beat = {id: 'beat-01', order: 1, summary: 'Runa walks in.', moments: ['Runa walks in.'], locationId: 'hall', characterIds: ['runa'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
 const context: PlanContext = {
@@ -82,6 +83,17 @@ describe('the fixed layout of the place', () => {
         const without = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
         expect(without.input).not.toContain('"layout"')
         expect(withLayout.instructions).toBe(without.instructions)
+    })
+})
+
+describe('the answer format and its parser', () => {
+    test('every field the parser reads is asked for, and shown in the example shot', () => {
+        const {instructions} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        const [spec, example] = instructions.split('One shot as it should be written')
+        for (const part of [spec!, example!]) {
+            for (const field of SHOT_FIELDS) expect(part).toMatch(new RegExp(`^${field}: `, 'm'))
+            for (const field of PERSON_FIELDS) expect(part).toMatch(new RegExp(`^person: .*\\| ${field}: `, 'm'))
+        }
     })
 })
 

@@ -256,6 +256,13 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  * Lines of JSON are no better than a quote in the middle of a sentence, and a broken bracket cost a whole beat; here
  * a line that does not fit is just skipped. Markdown around a key (bullets, bold, fences) is tolerated.
  */
+/** The fields of a "person:" line and of a shot, as the planner prompt asks for them (lib/shot-planner.ts) - a field not in here is skipped. */
+export const PERSON_FIELDS = ['state', 'frame', 'motion', 'playing', 'singing'] as const
+export const SHOT_FIELDS = ['framing', 'size', 'camera', 'view', 'hold', 'risky', 'characters', 'action', 'rest', 'hands'] as const
+const personSplit = new RegExp(`\\s*\\|\\s*(?=(?:${PERSON_FIELDS.join('|')})\\s*:)`, 'i')
+const personField = new RegExp(`^(${PERSON_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')
+const shotField = new RegExp(`^(${SHOT_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')
+
 export function parseShotLines(answer: string): { staging?: string, starts: Record<string, string>, ends: Record<string, string>, shots: Record<string, unknown>[] } {
     const shots: Record<string, unknown>[] = []
     const starts: Record<string, string> = {}
@@ -280,17 +287,17 @@ export function parseShotLines(answer: string): { staging?: string, starts: Reco
         if (/^start\s*:?\s*$/i.test(line)) { inEnds = false; current = undefined; continue }
         if (inEnds || !current) continue
         if ((m = line.match(/^person\s*:\s*(.+)$/i))) {
-            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion|playing|singing)\s*:)/i)
+            const parts = m[1]!.split(personSplit)
             const name = parts[0]!.trim()
             const entry: Record<string, string> = {}
             for (const part of parts.slice(1)) {
-                const kv = part.match(/^(state|frame|motion|playing|singing)\s*:\s*(.*)$/i)
+                const kv = part.match(personField)
                 if (kv) entry[kv[1]!.toLowerCase()] = kv[2]!.trim()
             }
             if (name) (current.people as Record<string, unknown>)[name] = entry
             continue
         }
-        if ((m = line.match(/^(framing|size|camera|view|hold|risky|characters|action|rest|hands)\s*:\s*(.*)$/i))) {
+        if ((m = line.match(shotField))) {
             const key = m[1]!.toLowerCase()
             const value = m[2]!.trim()
             if (key === 'hold') current.hold = /^(yes|true)\b/i.test(value)
