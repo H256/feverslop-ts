@@ -239,6 +239,15 @@ const dependsOn: Record<StepName, StepName[]> = {
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
 
 /**
+ * The beats a run plans the shots of again: shot plans exist, but not for these (a beat whose answers stayed unusable, a
+ * beat whose singers were changed on the workspace's Singers page). The others stay - see "Planning again" in index.ts.
+ */
+export function unplannedBeats(data: Pick<Project, 'beats' | 'shotMoments'>): string[] {
+    if (!data.shotMoments || !data.beats) return []
+    return data.beats.filter(b => data.shotMoments![b.id] === undefined).map(b => b.id)
+}
+
+/**
  * The --redo for data changed by hand (an imported picture's texts): the steps with a result that read one of `changed`,
  * without those another of them redoes anyway. The changed steps themselves are never in it - redoing one would ask the
  * language model again and overwrite what was put there.

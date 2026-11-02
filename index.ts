@@ -44,7 +44,7 @@ import {reviewed} from "./lib/review.ts";
 import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
 import {type LibraryAsset, libraryDir} from "./lib/library.ts";
 import {type AssetKind} from "./lib/asset-import.ts";
-import {redoAfter} from "./lib/project.ts";
+import {redoAfter, unplannedBeats} from "./lib/project.ts";
 import {handsOf} from "./lib/project.ts";
 import {
     castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, propInUsePrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
@@ -759,11 +759,16 @@ const plannedBefore = args['legacy-moments'] ? undefined : (() => {
     if (!before || beats.every(b => before[b.id] !== undefined)) return undefined
     return Object.fromEntries(Object.entries(before).filter(([, plan]) => !Array.isArray(plan))) as Record<string, BeatShots>
 })()
+// the views of the place per shot of the beats that stay planned: step 11c asks only for the others
+let viewsKept: Record<string, number[]> | undefined
 if (plannedBefore) {
     const missing = beats.filter(b => !plannedBefore[b.id]).map(b => b.id)
     log.step('Planning again', styles.muted(`${missing.join(', ')} - no plan of their own yet, the other ${beats.length - missing.length} stay`))
     delete project.data.shotMoments
-    // the beats planned now have no view yet - the views of the others stay (see shotViews)
+    // the beats planned now have no view yet - the views of the others stay (see shotViews). Kept aside, not in the step:
+    // 11c read them from the step after this had deleted it, and asked every beat again
+    const views = project.data.shotViews
+    if (views) viewsKept = Object.fromEntries(Object.entries(views).filter(([beatId]) => plannedBefore[beatId]))
     delete project.data.shotViews
 }
 const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
@@ -964,7 +969,7 @@ const locationView = config.sequenceSheets ? config.locationView : -1
 // The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
 // the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
 // a beat without an entry (its answer failed, or it had no plan then) is asked again on the next run, the others stay
-const viewsBefore = project.data.shotViews
+const viewsBefore = project.data.shotViews ?? viewsKept
 if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
 const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
     // the beats don't depend on each other here - asked at once, up to llm.parallel
@@ -1299,6 +1304,8 @@ async function dryRun() {
     log.section('DRY RUN - nothing is done')
     for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
     log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
+    const unplanned = redone.includes('shotMoments') ? [] : unplannedBeats(project.data)
+    if (unplanned.length) log.step('Planned again', `${unplanned.map(styles.name).join(', ')} ${styles.muted('- no shot plan yet, the other beats stay')}`)
     if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
 
     if (!render.has('images') && !render.has('videos') && !render.has('final')) return
