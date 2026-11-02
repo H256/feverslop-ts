@@ -7,10 +7,10 @@ import {log} from "../log.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
-import {filmPictureAsset, locationViewAsset, statePictureId} from "./pictures.ts";
+import {placeViewFrame, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from "./types.ts";
-import {joinAnd, positions} from "../compose.ts";
+import {joinAnd, pictureAsset, positions} from "../compose.ts";
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
@@ -116,7 +116,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const views = location ? locationViews?.[location.id] : undefined
     const pictured = views?.length ? Math.min(views.length, Math.max(1, override?.placeView ?? clip.shots.find(s => s.placeView)?.placeView ?? 1)) : undefined
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: views![pictured - 1]!.file ?? locationViewAsset(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: views![pictured - 1]!.file ?? placeViewFrame(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
         ...characters.map(c => {
             // the look the character is in when they first appear in this clip - the clip has one picture of them
             const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]
@@ -277,7 +277,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         }))),
         assets: {
             pictures: [
-                ...subjects.map(s => ({label: s.picture, file: 'file' in s && s.file ? s.file : filmPictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                ...subjects.map(s => ({label: s.picture, file: 'file' in s && s.file ? s.file : pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 ...(clip.startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
             ],
         },

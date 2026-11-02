@@ -12,7 +12,7 @@ import type {ProjectConfig} from "./config.ts";
 
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
-export const pictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+export const pictureAsset = (kind: 'character' | 'location' | 'prop', id: string) => `assets/${kind}s/${id}.png`
 // one view of a location's reference sheet - the frame the sheet's panel was made from, not a crop of the small panel
 export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view).padStart(2, '0')}.png`
 // one reference image per member of a group character, instead of the single shared id - see computeMemberCounts

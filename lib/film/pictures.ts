@@ -5,12 +5,10 @@ import {defaults, type RenderConfig} from "../config.ts";
 import {log} from "../log.ts";
 import type {PictureJob} from "../render.ts";
 import type {FilmCast, FilmProject, FilmProp} from "./types.ts";
-
-// the same place the music-video pipeline keeps its reference pictures, inside films/<id>/
-export const filmPictureAsset = (kind: 'character' | 'location' | 'prop', id: string) => `assets/${kind}s/${id}.png`
+import {pictureAsset} from "../compose.ts";
 
 /** One view of a location's reference sheet as a picture of its own (view 1..5 = frame 0..4 of the sheet video) - the video model gets the one view, not the grid. */
-export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view - 1).padStart(2, '0')}.png`
+export const placeViewFrame = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view - 1).padStart(2, '0')}.png`
 
 /** A character in another look has the picture of its own: <character id>--<state id>. */
 export const statePictureId = (characterId: string, stateId: string) => `${characterId}--${stateId}`
@@ -29,21 +27,21 @@ export const propPicturePrompt = (prop: FilmProp) =>
 export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'> & Pick<Partial<FilmProject>, 'locationViews' | 'props'>): FilmPictureJob[] {
     return [
         ...cast.locations.map(l => ({
-            kind: 'location' as const, id: l.id, file: filmPictureAsset('location', l.id), name: l.name,
+            kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name,
             prompt: data.locationLooks?.[l.id] ?? '', description: data.locationDescriptions?.[l.id] ?? '',
             // the four views after the first, as the sheet's video is asked to cut to them
             ...(data.locationViews?.[l.id]?.length === 5 ? {views: data.locationViews[l.id]!.slice(1).map(v => v.shows)} : {}),
         })),
         ...cast.characters.filter(c => !c.voiceOnly).map(c => ({
-            kind: 'character' as const, id: c.id, file: filmPictureAsset('character', c.id), name: c.name,
+            kind: 'character' as const, id: c.id, file: pictureAsset('character', c.id), name: c.name,
             prompt: data.characterLooks?.[c.id] ?? '', description: data.characterDescriptions?.[c.id] ?? '',
         })),
         ...cast.characters.filter(c => !c.voiceOnly).flatMap(c => (c.states ?? []).map(s => ({
-            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, look: {base: c.id, change: s.change}, file: filmPictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
+            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, look: {base: c.id, change: s.change}, file: pictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
             prompt: data.characterLooks?.[statePictureId(c.id, s.id)] ?? '', description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
         }))),
         ...(data.props ?? []).map(p => ({
-            kind: 'prop' as const, id: p.id, file: filmPictureAsset('prop', p.id), name: p.name, prompt: propPicturePrompt(p), description: p.description,
+            kind: 'prop' as const, id: p.id, file: pictureAsset('prop', p.id), name: p.name, prompt: propPicturePrompt(p), description: p.description,
         })),
     ]
 }

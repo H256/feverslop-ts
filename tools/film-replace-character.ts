@@ -10,7 +10,8 @@ import * as p from "@clack/prompts";
 import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from "node:fs";
 import {basename, dirname, join} from "node:path";
 import {loadFilmConfig} from "../lib/film/config.ts";
-import {filmPictureAsset, filmRenderConfig} from "../lib/film/pictures.ts";
+import {pictureAsset} from "../lib/compose.ts";
+import {filmRenderConfig} from "../lib/film/pictures.ts";
 import {FilmRenderer} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
@@ -85,7 +86,7 @@ const imagePath = answer(await p.text({
 }))
 
 const config = await loadFilmConfig(dir)
-const finalPicture = join(dir, filmPictureAsset('character', char.id))
+const finalPicture = join(dir, pictureAsset('character', char.id))
 // with sequence sheets the picture the clips use is made from the anchor - the new image is the anchor then
 const targetFile = config.sequenceSheets
     ? join(dir, 'assets', 'sequence', 'characters', char.id, 'anchor.png')
@@ -215,7 +216,7 @@ if (config.sequenceSheets) {
         const settings = await loadSettings({projectModel: config.llm.model})
         using renderer = new FilmRenderer(`film-${id}`, dir, filmRenderConfig(config), settings.comfy)
         const picture: PictureJob = {
-            kind: 'character', id: char.id, file: filmPictureAsset('character', char.id), name: char.name,
+            kind: 'character', id: char.id, file: pictureAsset('character', char.id), name: char.name,
             // the prompt only makes the anchor image, which was supplied here - never read
             prompt: '',
             description,

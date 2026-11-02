@@ -4,7 +4,7 @@ import {visionUrls} from "../describe-picture.ts";
 import {picturesReadable} from "../llm.ts";
 import {log, styles} from "../log.ts";
 import {askFilmJson as askJson} from "./json.ts";
-import {locationViewAsset} from "./pictures.ts";
+import {placeViewFrame} from "./pictures.ts";
 import {sheetViewsPrompt, shotViewsPrompt} from "./prompts.ts";
 import type {FilmStore} from "./store.ts";
 import type {FilmCast, LocationView, SceneCoverage} from "./types.ts";
@@ -33,7 +33,7 @@ export function withExtraViews<V extends { name: string, shows: string }>(projec
 
 /** The frames of a place's sheet, one per view - all of them, or none while the sheet is not rendered. */
 export function sheetFrames(projectDir: string, locationId: string): string[] {
-    const files = Array.from({length: VIEWS}, (_, n) => join(projectDir, locationViewAsset(locationId, n + 1)))
+    const files = Array.from({length: VIEWS}, (_, n) => join(projectDir, placeViewFrame(locationId, n + 1)))
     return files.every(existsSync) ? files : []
 }
 
