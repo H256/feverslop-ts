@@ -56,6 +56,8 @@ export const by = {
 
 export type Dimension = keyof typeof by
 const JOIN = ' · '
+/** The parts of a key of several dimensions (byAll), in the order of the dimensions. */
+export const keyParts = (key: string) => key.split(JOIN)
 
 /** A key of several dimensions ("variant,gpu"): a row per combination, the parts joined - none when one part has none. */
 export function byAll(dimensions: Dimension[]) {
@@ -72,7 +74,7 @@ export function byAll(dimensions: Dimension[]) {
  */
 export function referenceOf(rows: Row[], dimensions: number): (row: Row) => Row | undefined {
     if (dimensions < 2) return () => rows.find(r => r.n > 0)
-    const head = (r: Row) => r.key.split(JOIN)[0]
+    const head = (r: Row) => keyParts(r.key)[0]
     return row => rows.find(r => r.n > 0 && head(r) === head(row))
 }
 
