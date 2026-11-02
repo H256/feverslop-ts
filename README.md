@@ -862,7 +862,7 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
 
 ### The workspace
 
-`bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`:
+`bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`. Step by step, with screenshots: [docs/workspace-guide.md](docs/workspace-guide.md) (in German).
 
 - **Projects**: how far each one is, what its last run did, and what comes next. Pages, a search over all of them and filters by kind and state; the takes of one thing fold into one card. All of it is in the address, so *Back* from a project lands in the same place.
 - **Render servers**: on every page, how busy each one is. Before a render you choose which ones it may use; it is the same as `--comfy=`.
@@ -872,6 +872,7 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
 - **References**: every picture with its prompt, sheet, older versions and the clips that use it: a new sheet from the same anchor, a new anchor, an edited prompt (the picture then stays pinned), or into the library.
 - **Casting**: `casting.json` as a page. A choice changes that one entry; the next plan run takes the asset.
 - **Library**: the asset library, who uses what, a new asset from a picture.
+- **Refinish**: an older project larger, at 48 fps and finished, from the clips it has: see [Making an older project over](#making-an-older-project-over).
 
 Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
 
