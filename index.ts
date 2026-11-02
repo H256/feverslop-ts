@@ -14,12 +14,12 @@ import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {playingCases, playingIssues} from "./lib/playing-check.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
-import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
+import {boundaryFrameAsset, buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {parseRetake} from "./lib/retake.ts";
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -256,7 +256,6 @@ const songFile = songFileOf(project.dir)
 
 // re-read: the song block above may have just written lyrics.txt/music-style.txt for the first time
 const lyrics = await readInput('lyrics.txt')
-const musicStyle = await readInput('music-style.txt')
 const storyIdea = await readInput('story-idea.txt')
 let style = await readInput('style.txt')
 // No style.txt on a project that has no look yet: the LLM shortlists a few styles from the list (lib/styles.ts) that

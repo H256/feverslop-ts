@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync} from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, extname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {clipVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
