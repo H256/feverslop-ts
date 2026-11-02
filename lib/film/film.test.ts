@@ -510,7 +510,7 @@ describe('location views', () => {
         expect(request!.prompt).toContain('the camera stands at the water and looks at the dunes. The picture shows the place from the water side, looking back toward the dunes.')
         expect(request!.prompt).not.toContain('the water beyond it')
         // a shot in another view says what that side shows
-        expect(request!.prompt).toContain('The background is the place seen from the left: seen along the place from the left - that side is not in the picture.')
+        expect(request!.prompt).toContain('The background is the place seen from the left: seen along the place from the left - the camera looks that way only.')
     })
     test('without a view the description of the place stays', async () => {
         const {buildFilmClipRequests} = await import("./compose.ts")

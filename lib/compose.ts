@@ -706,14 +706,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // lip-sync is ruled out, not the emotion: eyes, brows and posture stay free to follow the shot
                 const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
                 const silentClause = silentSingers.length
-                    ? ` ${silentSingers.length > 1 ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`)) : `${silentSingers[0]!.label}, ${silentSingers[0]!.name},`} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing the emotion of the moment through the eyes and brows.`
+                    ? ` ${silentSingers.length > 1 ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`)) : `${silentSingers[0]!.label}, ${silentSingers[0]!.name},`} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent, the face showing the emotion of the moment through the eyes and brows.`
                     : ''
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
                 // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
                 const others = onSinger ? shot.focus.filter(s => !singing?.singers.includes(s.id)) : []
                 const othersClause = others.length
-                    ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent: no singing, no mouth movement, no sound from ${others.length > 1 ? 'them' : 'it'}.`
+                    ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 const where = (still: boolean) => locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, the ${locationSubject.name}` : ''
@@ -750,10 +750,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // three people act
                 const unstaged = shot.plan ? shot.focus.filter(s => !stagedPeople?.[s.id]) : []
                 const restClause = unstaged.length
-                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, none of them stands idle or only watches`}.`
+                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, busy with something of their own`}.`
                     : ''
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
-                const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, nobody steps closer or away, the camera does not move.' : ''
+                const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, everyone keeps their distance to the camera, and the camera stays locked in place.' : ''
                 const inFrame = shot.focus.length
                     ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor ? ` Behind them: ${locationAnchor}.` : ''}${holdClause}`
                     : `${viewClause}${holdClause}`
@@ -767,7 +767,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     const shotEnd = cuts[j + 1] ?? duration
                     const held = [...shot.continuing, ...shot.starting].flatMap(v => v.words
                         .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
-                        .map(w => ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, only the jaw and the throat move slightly, the mouth does not open and close again.`))
+                        .map(w => ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, the mouth staying open in it for the whole note, only the jaw and the throat moving slightly.`))
                         .join('')
                     return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
                 }
@@ -804,7 +804,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ? withLabels(flatShotMoments[0].action, planTokens)
                 : opensScene
                 ? withLabels(beat.summary, beatTokens)
-                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${lead ? ` Its first ${lead.toFixed(2)} seconds are the end of the previous clip, given as its frames: the picture, the people and their movement go on from them without a cut, and [Shot 1] continues from there.` : ''}${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut.' : ''}`
+                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${lead ? ` Its first ${lead.toFixed(2)} seconds are the end of the previous clip, given as its frames: the picture, the people and their movement go on from them in one continuous take, and [Shot 1] continues from there.` : ''}${framePicture ? ` The video begins on ${framePicture} and goes on from it in one continuous take.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
@@ -851,9 +851,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         const spans = drumSpans(t)
                         return `${t.label}: partially_copy - its rhythm and hits drive the drumming motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the drums still` : ''}; it also grounds the cut and blocking timing for the whole scene.`
                     })()
-                    : `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
+                    : `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene.`
                 : t.stem === 'song'
-                    ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene; drives no visible performance.`
+                    ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene.`
                     : t.stem === 'vocals'
                         ? `${t.label}: partially_copy - its timbre and phrasing drive the lip movements of ${voices}, confined to ${formatTimestamp(vocalsWindow!.start)}-${formatTimestamp(vocalsWindow!.end)}; elsewhere in the clip ${voices} keeps lips closed and still.`
                         : t.parts ? `${t.label}: partially_copy - ${t.parts.map(p => `its ${stemName[p.stem]} drives the instrument motion of ${playersOf(p)}`).join(', ')}${partSpans(t.parts).length ? ', each confined to their own span' : ''}.`
@@ -896,7 +896,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 styleOpening(lookBrief),
                 ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
                 // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
-                ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands inside ${locationSubject.label}, at the positions described below.`] : []),
+                ...(locationSubject && castSubjects.length ? [`The whole picture is ${locationSubject.label}: every figure stands inside it, at the positions described below, surrounded by the place itself.`] : []),
                 // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not
                 ...(staging && !slot.micro ? [`Layout of the place: ${withLabels(staging, planTokens)}`] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
