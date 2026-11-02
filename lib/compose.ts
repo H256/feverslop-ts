@@ -6,15 +6,16 @@ import {handsOf} from "./project.ts";
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
+import {sequenceSheetDir, sheetFrame} from "./sequenceSheet.ts";
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
 // Format: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
 
 // Asset paths, relative to the project folder. The pictures are placeholders -
 // generate them from the Krea 2 prompts (output/assets.json) and drop them in these paths
-export const pictureAsset = (kind: 'character' | 'location', id: string) => `assets/${kind}s/${id}.png`
+export const pictureAsset = (kind: 'character' | 'location' | 'prop', id: string) => `assets/${kind}s/${id}.png`
 // one view of a location's reference sheet - the frame the sheet's panel was made from, not a crop of the small panel
-export const locationViewAsset = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view).padStart(2, '0')}.png`
+export const locationViewAsset = (id: string, view: number) => sheetFrame(sequenceSheetDir('location', id), view)
 // one reference image per member of a group character, instead of the single shared id - see computeMemberCounts
 export const groupMemberId = (characterId: string, member: number) => `${characterId}-v${member}`
 
@@ -146,7 +147,7 @@ const cameraMoves = {
 // cycle here used to repeat the same label (e.g. "on the right") for two different subjects in a crowded
 // shot, which reads as "these two are the same/interchangeable" and lets the model conflate them - e.g. a
 // named combatant and an unrelated background character rendered as if fighting each other.
-const positions = [
+export const positions = [
     'in the front on the left', 'in the front, center', 'in the front on the right',
     'a step behind them on the left', 'a step behind them, center', 'a step behind them on the right',
     'further back on the left', 'further back on the right',
@@ -1006,4 +1007,4 @@ function normalizeLyric(line: string) {
     return /[.?!]$/.test(clean) ? clean : `${clean}.`
 }
 
-const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
+export const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')

@@ -6,6 +6,7 @@ import {basename, join} from "node:path";
 import type {Project} from "./project.ts";
 import {boundaryFrameAsset} from "./compose.ts";
 import {plainText} from "./refs.ts";
+import {sequenceSheetDir, sheetAnchor, sheetVideo} from "./sequenceSheet.ts";
 
 type Card = { title: string, subtitle?: string, images?: { src: string, label?: string }[], videos?: { src: string, label?: string }[], text?: string, wide?: boolean }
 
@@ -28,9 +29,9 @@ function castCards(dir: string, kind: 'character' | 'location', cast: { id: stri
         .map(id => {
             const owner = cast[order(id)]!
             const member = memberOf(id, known)
-            const sequence = `assets/sequence/${kind}s/${id}`
-            const anchor = media(dir, `${sequence}/anchor.png`)
-            const video = media(dir, `${sequence}/sequence.mp4`)
+            const sequence = sequenceSheetDir(kind, id)
+            const anchor = media(dir, sheetAnchor(sequence))
+            const video = media(dir, sheetVideo(sequence))
             return {
                 title: member ? `${owner.name} #${Number(member) + 1}` : owner.name,
                 subtitle: owner.role,

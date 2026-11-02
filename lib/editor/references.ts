@@ -5,6 +5,7 @@ import {readCastingFile} from "../casting.ts";
 import type {PictureJob} from "../render.ts";
 import {readClipRequests, readPictureJobs} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
+import {sequenceSheetDir, sheetAnchor, sheetFrames, sheetVideo} from "../sequenceSheet.ts";
 
 // Every reference picture of a project: its prompt, its files, its older versions and the clips that use it.
 
@@ -24,7 +25,7 @@ export type EditorReference = {
 }
 
 export const picturesFile = ({dir, kind}: EditorTarget) => kind === 'film' ? join(dir, 'assets.json') : join(dir, 'output', 'assets.json')
-export const sheetOf = (picture: { kind: string, id: string }) => picture.kind === 'prop' ? undefined : `assets/sequence/${picture.kind}s/${picture.id}`
+export const sheetOf = (picture: { kind: string, id: string }) => picture.kind === 'prop' ? undefined : sequenceSheetDir(picture.kind, picture.id)
 
 export async function readReferences(target: EditorTarget): Promise<EditorReference[]> {
     const {dir, kind} = target
@@ -36,14 +37,14 @@ export async function readReferences(target: EditorTarget): Promise<EditorRefere
     } catch {}
     return jobs.map(job => {
         const sheet = sheetOf(job)
-        const framesDir = sheet ? join(dir, sheet, 'frames') : undefined
+        const framesDir = sheet ? join(dir, sheetFrames(sheet)) : undefined
         const entry = job.kind === 'character' ? casting.characters?.[job.id] : job.kind === 'location' ? casting.locations?.[job.id] : undefined
         return {
             id: job.id, kind: job.kind, name: job.name, prompt: job.prompt, description: job.description, file: job.file,
             picture: versioned(dir, job.file),
-            anchor: sheet ? versioned(dir, `${sheet}/anchor.png`) : undefined,
-            video: sheet ? versioned(dir, `${sheet}/sequence.mp4`) : undefined,
-            frames: framesDir && existsSync(framesDir) ? readdirSync(framesDir).filter(f => f.endsWith('.png')).sort().flatMap(f => versioned(dir, `${sheet}/frames/${f}`) ?? []) : [],
+            anchor: sheet ? versioned(dir, sheetAnchor(sheet)) : undefined,
+            video: sheet ? versioned(dir, sheetVideo(sheet)) : undefined,
+            frames: framesDir && existsSync(framesDir) ? readdirSync(framesDir).filter(f => f.endsWith('.png')).sort().flatMap(f => versioned(dir, `${sheetFrames(sheet!)}/${f}`) ?? []) : [],
             hasSheet: !!sheet && existsSync(join(dir, sheet)),
             look: job.look,
             looks: jobs.filter(other => other.look?.base === job.id).map(other => other.id),

@@ -12,6 +12,7 @@ import {filmRenderConfig} from "../lib/film/pictures.ts";
 import {FilmRenderer} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
 import {extraViews} from "../lib/film/views.ts";
+import {sequenceSheetDir, sheetAnchor} from "../lib/sequenceSheet.ts";
 cli('add-view')
 
 const usage = 'usage: bun run add-view <film-id> <location-id> --name=<where the camera is> --shows=<what is seen from there> [--comfy=URL]'
@@ -23,7 +24,7 @@ const shows = flag('shows')
 if (!id || !locationId || !name || !shows) log.usageError('Which film, which place, and what the view shows?', usage)
 if (!filmExists(id!)) log.usageError(`No film "${id}" in films/`, usage)
 const dir = filmDir(id!)
-const anchor = `assets/sequence/locations/${locationId}/anchor.png`
+const anchor = sheetAnchor(sequenceSheetDir('location', locationId!))
 if (!existsSync(join(dir, anchor))) log.usageError(`${locationId} has no anchor picture to start from (${anchor}) - render its sheet first: bun film.ts ${id} --render=images`, usage)
 lockProject(dir, `film ${id}`)
 const config = await loadFilmConfig(dir)

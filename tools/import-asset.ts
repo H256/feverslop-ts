@@ -20,6 +20,7 @@ import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
 import {type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
+import {sheetAnchor} from "../lib/sequenceSheet.ts";
 cli('import-asset')
 
 
@@ -206,7 +207,7 @@ log.success('Done - nothing was rendered.')
 async function fromPicture(): Promise<string | undefined> {
     const isCharacter = data.cast?.characters.some(c => c.id === target.id)
     const views = isCharacter ? characterViews(join(dir, sheet)) : []
-    const image = views.length ? views : [join(dir, sheet, 'anchor.png'), join(dir, picture)].find(existsSync)
+    const image = views.length ? views : [join(dir, sheetAnchor(sheet)), join(dir, picture)].find(existsSync)
     if (!image) return undefined
     const settings = await loadSettings({projectModel: config.llm.model})
     configureLlm(settings.llm)

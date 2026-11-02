@@ -22,6 +22,7 @@ import type {Character, Project} from "../lib/project.ts";
 import {type PictureJob, Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
+import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from "../lib/sequenceSheet.ts";
 cli('replace-character')
 
 
@@ -81,7 +82,7 @@ const imagePath = answer(await p.text({
 
 const config = await loadProjectConfig(dir)
 const targetFile = config.sequenceSheets
-    ? join(dir, 'assets', 'sequence', 'characters', assetId, 'anchor.png')
+    ? join(dir, sheetAnchor(sequenceSheetDir('character', assetId)))
     : join(dir, pictureAsset('character', assetId))
 
 mkdirSync(dirname(targetFile), {recursive: true})
@@ -99,12 +100,12 @@ changes.push(`the new image is saved as ${targetFile}`)
 
 // everything downstream of the anchor was built from the OLD image and is now stale
 if (config.sequenceSheets) {
-    const seqDir = join(dir, 'assets', 'sequence', 'characters', assetId)
+    const seqDir = join(dir, sequenceSheetDir('character', assetId))
     const finalPicture = join(dir, pictureAsset('character', assetId))
     const stale = [
         finalPicture, `${finalPicture}.json`,
-        join(seqDir, 'sequence.mp4'), join(seqDir, 'sequence.mp4.json'), join(seqDir, 'sequence.mp4.pending.json'),
-        join(seqDir, 'frames'),
+        join(seqDir, SHEET_VIDEO), join(seqDir, `${SHEET_VIDEO}.json`), join(seqDir, `${SHEET_VIDEO}.pending.json`),
+        join(seqDir, SHEET_FRAMES),
     ]
     const removed = stale.filter(existsSync)
     for (const f of removed) rmSync(f, {recursive: true, force: true})

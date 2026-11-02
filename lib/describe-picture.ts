@@ -6,6 +6,7 @@ import {join} from "node:path";
 import {ask} from "./llm.ts";
 import {runProcess} from "./process.ts";
 import {characterImageDescriptionPrompt, locationImageDescriptionPrompt} from "./prompts.ts";
+import {sheetAnchor, sheetFrame} from "./sequenceSheet.ts";
 
 // full-resolution pictures made a local vision model hang for minutes on one request - a description needs no more than this
 const VISION_MAX_WIDTH = 512
@@ -15,7 +16,7 @@ const VISION_MAX_WIDTH = 512
  * front, frame 4 the back - lib/sequenceSheet.ts) - the clips are given the sheet, and an anchor cut at the waist says nothing
  * of the legs and shoes the sheet shows.
  */
-export const characterViews = (sheetDir: string) => [join(sheetDir, 'anchor.png'), join(sheetDir, 'frames', 'frame_00.png'), join(sheetDir, 'frames', 'frame_04.png')].filter(existsSync)
+export const characterViews = (sheetDir: string) => [sheetAnchor(sheetDir), sheetFrame(sheetDir, 0), sheetFrame(sheetDir, 4)].map(file => join(file)).filter(existsSync)
 
 /** Pictures as data URLs for a vision-capable model, at a small size. */
 export function visionUrls(files: string[]): Promise<string[]> {

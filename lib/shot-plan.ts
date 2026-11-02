@@ -27,10 +27,6 @@ function playingOf(value: unknown): { playing?: true, plays?: string } {
     return plays ? {playing: true, plays} : {playing: true}
 }
 
-/** Does the text name this character (by name or id, as a whole word)? */
-export const mentionsCharacter = (value: string, character: Pick<Character, 'name' | 'id'>) =>
-    [character.name, character.id].some(n => n.length > 1 && new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(n)}(?![\\p{L}\\p{N}])`, 'iu').test(value))
-
 /** A plan from before the staging was a list of actions - it still works, with only the actions. */
 export const asBeatShots = (value: BeatShots | string[]): BeatShots =>
     Array.isArray(value) ? {shots: value.map(action => ({action}))} : value

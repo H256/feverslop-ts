@@ -106,6 +106,20 @@ function characterViews(description: string, times: number[], first: number, exp
     return views.map(view => still ? `${view} ${still}` : view).join(' ')
 }
 
+// A sheet's files, in its folder - in a project at sequenceSheetDir, in a work folder or the library wherever that keeps it. With / also
+// on Windows: these paths go to the server as well (a Linux ComfyUI refused "assets\sequence\…").
+export const SHEET_ANCHOR = 'anchor.png'
+export const SHEET_VIDEO = 'sequence.mp4'
+export const SHEET_FRAMES = 'frames'
+export const sequenceSheetDir = (kind: string, id: string) => `assets/sequence/${kind}s/${id}`
+export const sheetAnchor = (sheet: string) => `${sheet}/${SHEET_ANCHOR}`
+export const sheetVideo = (sheet: string) => `${sheet}/${SHEET_VIDEO}`
+export const sheetFrames = (sheet: string) => `${sheet}/${SHEET_FRAMES}`
+/** A frame of a sheet, counted from 0. */
+export const sheetFrame = (sheet: string, frame: number) => `${sheetFrames(sheet)}/frame_${String(frame).padStart(2, '0')}.png`
+/** The further views of a place, rendered one by one (bun run add-view). */
+export const sheetViews = (sheet: string) => `${sheet}/views`
+
 /**
  * The five views of a location sheet, in the order of the sheet's frames (assets/sequence/locations/<id>/frames/frame_0N.png) -
  * what locationSequencePrompt asks the video for (without designed views). What the shot planning chooses from.

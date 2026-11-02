@@ -7,9 +7,10 @@ import {log} from "../log.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
 import {mentions, withoutSentencesNaming} from "./names.ts";
-import {filmPictureAsset, locationViewAsset, statePictureId} from "./pictures.ts";
+import {placeViewFrame, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from "./types.ts";
+import {joinAnd, pictureAsset, positions} from "../compose.ts";
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
@@ -71,11 +72,6 @@ export function clipOverrides(dir: string): Record<string, ClipOverride> {
 
 // one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
 // same person" to the video model
-const positions = [
-    'in the front on the left', 'in the front, center', 'in the front on the right',
-    'a step behind them on the left', 'a step behind them, center', 'a step behind them on the right',
-    'further back on the left', 'further back on the right',
-]
 
 export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
     return input.clips.map(clip => buildClip(clip, input))
@@ -120,7 +116,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const views = location ? locationViews?.[location.id] : undefined
     const pictured = views?.length ? Math.min(views.length, Math.max(1, override?.placeView ?? clip.shots.find(s => s.placeView)?.placeView ?? 1)) : undefined
     const subjects = [
-        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: views![pictured - 1]!.file ?? locationViewAsset(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
+        ...(location ? [{kind: 'location' as const, id: location.id, pictureId: location.id, ...(pictured ? {file: views![pictured - 1]!.file ?? placeViewFrame(location.id, pictured)} : {}), name: location.name, description: pictured ? `${views![pictured - 1]!.shows.replace(/[.\s]+$/, '')}. The picture shows the place ${views![pictured - 1]!.name}.` : (locationDescriptions[location.id] ?? location.description).trim()}] : []),
         ...characters.map(c => {
             // the look the character is in when they first appear in this clip - the clip has one picture of them
             const stateId = clip.shots.find(s => s.characters.includes(c.id))?.states?.[c.id]
@@ -281,7 +277,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         }))),
         assets: {
             pictures: [
-                ...subjects.map(s => ({label: s.picture, file: 'file' in s && s.file ? s.file : filmPictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
+                ...subjects.map(s => ({label: s.picture, file: 'file' in s && s.file ? s.file : pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
                 ...(clip.startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
             ],
         },
@@ -303,4 +299,3 @@ function normalizeLine(line: string) {
 // described there into whichever place it is shown (the crystal trees of one location showed up in another)
 const styleOpening = (lookBrief: string) => lookBrief.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean).slice(0, 1).join(' ')
 
-const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')

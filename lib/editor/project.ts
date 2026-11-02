@@ -14,7 +14,7 @@ import {explainFailure, type Explained} from "./progress.ts";
 import {asBeatShots} from "../shot-plan.ts";
 import type {FilmClipRequest} from "../film/compose.ts";
 import {loadFilmConfig} from "../film/config.ts";
-import {filmRenderConfig, locationViewAsset} from "../film/pictures.ts";
+import {filmRenderConfig, placeViewFrame} from "../film/pictures.ts";
 import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
 import {withExtraViews} from "../film/views.ts";
@@ -341,7 +341,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         const known = data.locationViews?.[location.id] ?? data.sheetViews?.[location.id]?.views
         if (!known?.length) return undefined
         const options = withExtraViews(dir, {[location.id]: known})[location.id]!.map((view, n) => {
-            const file = 'file' in view ? view.file : locationViewAsset(location.id, n + 1)
+            const file = 'file' in view ? view.file : placeViewFrame(location.id, n + 1)
             return {n: n + 1, name: view.name, shows: view.shows, file, v: media(dir, file)?.v}
         })
         return {locationId: location.id, chosen: options.find(o => o.file === location.file)?.n, options}
