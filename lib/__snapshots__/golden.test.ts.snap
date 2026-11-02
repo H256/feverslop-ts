@@ -15202,6 +15202,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
     },
     {
       "aspect": "9:16",
+      "contextFrames": 22,
       "fingerprint": "33821467e030b92",
       "frameStart": 372,
       "frames": 48,
@@ -20435,6 +20436,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
       "workflow": "h3-ref2video",
     },
     {
+      "contextFrames": 22,
       "fingerprint": "d40bfb8487b97b02",
       "frameStart": 372,
       "frames": 48,

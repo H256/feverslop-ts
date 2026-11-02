@@ -4,7 +4,7 @@ import {cli} from '../lib/cli.ts';
 // at every join next to the change at an ordinary cut - the cuts are the yardstick of how much clips differ anyway.
 // Reads the raw clips in videos/ with ffmpeg only - no ComfyUI, no LLM, nothing is written.
 // usage: bun run texture-chains <project-id> [--film] [--json]
-import {existsSync, readFileSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {probeVideo} from "../lib/assemble.ts";
 import {clipChains} from "../lib/batch.ts";
@@ -25,15 +25,22 @@ type Clip = { id: string, startsFrom?: string }
 const requests = (await readClipRequests<Clip>(dir)).filter(c => existsSync(join(dir, 'videos', `${c.id}.mp4`)))
 if (!requests.length) log.usageError(`${dir} has no rendered clips with a plan`, usage)
 
-// how a clip goes on from the one before: on its context frames, on its last frame, or not at all (a cut)
+// how a clip goes on from the one before: on its context frames, on its last frame, or not at all (a cut). The sidecar
+// says so; a music video's clip rendered before its sidecar kept contextFrames is known by the tail of the clip before
+// (assets/clips/<id>_tail<N>.mp4, cut for its job) - there, and no newer than the clip
+const clipsAssets = join(dir, 'assets', 'clips')
+const tails = existsSync(clipsAssets) ? readdirSync(clipsAssets).filter(f => /_tail\d+\.mp4$/.test(f)) : []
 const joinOf = (clip: Clip): 'context' | 'last frame' | 'cut' => {
     if (!clip.startsFrom) return 'cut'
-    const sidecar = join(dir, 'videos', `${clip.id}.mp4.json`)
+    const video = join(dir, 'videos', `${clip.id}.mp4`)
     try {
-        return existsSync(sidecar) && Number.isInteger(JSON.parse(readFileSync(sidecar, 'utf8')).contextFrames) ? 'context' : 'last frame'
+        const sidecar = JSON.parse(readFileSync(`${video}.json`, 'utf8')) as { contextFrames?: number }
+        if (Number.isInteger(sidecar.contextFrames)) return 'context'
     } catch {
-        return 'last frame'
+        // no sidecar: judged by the tail alone
     }
+    const tail = tails.find(f => f.startsWith(`${clip.startsFrom}_tail`))
+    return tail && statSync(join(clipsAssets, tail)).mtimeMs <= statSync(video).mtimeMs ? 'context' : 'last frame'
 }
 
 const textures = new Map<string, Texture>()
