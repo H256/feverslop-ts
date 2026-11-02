@@ -54,6 +54,34 @@ changes the plan, `projectInputs`.
 
 ## Tests and checks
 
+### Workspace startup without a configured machine
+
+```bash
+bun test ./lib/editor/startup.test.ts
+```
+
+This starts the real editor CLI from an empty temporary working directory, with a missing settings file and inherited
+`FEVERSLOP_*`/`COMFY` overrides removed. It checks help for the music, film and editor entry points, missing-project
+errors, HTML delivery, empty project/library APIs and an unavailable render server. The latter is a local HTTP stand-in;
+the check never needs an LLM or GPU. Child processes and temporary data are cleaned up. No frontend build is needed.
+
+To also verify that no ignored files or generated ComfyUI types are required, use a fresh clone (or extract `git archive
+HEAD` into a new directory), then run:
+
+```bash
+bun install --frozen-lockfile
+bun test ./lib/editor/startup.test.ts
+bun run typecheck
+```
+
+Installation needs access to the package registry or a populated package cache. These are process/HTTP smoke tests:
+they do **not** execute the page's JavaScript or verify browser layout, navigation, playback or editing. Before a frontend
+refactor, additionally check the overview and empty library in a browser, then use disposable music/film projects for
+navigation, unsaved edits, timeline seeking, clip transitions and render-progress checks. Do not start paid generation
+or overwrite real project data merely to test startup.
+
+### Existing checks
+
 ```bash
 bun test              # the unit tests, next to the code as *.test.ts
 bun run typecheck     # TypeScript, including the workflows against comfy/nodes.ts
