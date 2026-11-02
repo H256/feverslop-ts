@@ -18,7 +18,7 @@ import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
 import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
-import {type CastChange, castingRedo, readBook, readCast, writeCast, writeStory} from "./preproduction.ts";
+import {type CastChange, castingRedo, readBook, readCast, stageOf, writeCast, writeStory} from "./preproduction.ts";
 import {readTiming, type TimingChange, writeTiming} from "./timing.ts";
 import {runProgress} from "./progress.ts";
 import {CLIP_ID, type RunAction, RunControl} from "./runs.ts";
@@ -167,7 +167,9 @@ const allTargets = (): EditorTarget[] => [
     ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
 ]
 
-const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'add-view', 'refinish'])
+const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'add-view', 'refinish', 'look-pictures'])
+/** A music video planned up to the look: a picture is rendered there and then, the shots are not planned for it (#540). */
+const atLook = (target: EditorTarget) => target.kind === 'music' && stageOf(target) === 'look'
 
 /** What rendering these clips is expected to cost: the time, what can go wrong, and that a fixed seed gives the same clip. */
 async function estimateClips(target: EditorTarget, ids: string[]) {
@@ -314,7 +316,10 @@ export function editorHandler(runs = new RunControl()) {
                 const {action: wanted, servers} = await body<{ action: RunAction, servers?: string[] }>()
                 if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures') return refused(new Error('no such action'))
                 // a prompt comes in through its own route below, never as a path from the page
-                if (wanted.type === 'pictures') delete wanted.promptFile
+                if (wanted.type === 'pictures') {
+                    delete wanted.promptFile
+                    wanted.look = atLook(target)
+                }
                 return started(runs.start(target, wanted, await urlsOfChoice(servers)))
             }
             if (what === 'stop') return json({stopped: runs.stop(target)})
@@ -336,7 +341,7 @@ export function editorHandler(runs = new RunControl()) {
                     promptFile = join(mkdtempSync(join(tmpdir(), 'workspace-prompt-')), `${id}.txt`)
                     writeFileSync(promptFile, prompt)
                 }
-                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile}, await urlsOfChoice(servers)))
+                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile, look: atLook(target)}, await urlsOfChoice(servers)))
             }
             if (what === 'references' && id && action === 'pick') {
                 const {version} = await body<{ version: string }>()

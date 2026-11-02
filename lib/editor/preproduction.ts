@@ -39,6 +39,9 @@ export function planStateOf(kind: EditorKind, data: Data): { stage?: PlanStage, 
     return {stage, next: nextStage(stage)}
 }
 
+/** The last stage the plan of this project has, read from its project.json. */
+export const stageOf = (target: EditorTarget): PlanStage | undefined => planStateOf(target.kind, dataOf(target)).stage
+
 ////////// A CHANGED casting.json - what the next plan run has to make again (issue #527)
 
 // the steps a library asset stands in for: its texts replace theirs in the run (index.ts castTexts, film.ts fromLibrary)
