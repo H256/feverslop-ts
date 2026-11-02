@@ -14,6 +14,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     'import-asset': {args: '<project-id> [asset-id] [--from=project[:id]|library:id]', description: 'Import a character or location into a project.'},
     'export-asset': {args: '<project-id> <asset-id> [--as=library-id]', description: 'Export a character or location to the shared library.'},
     'create-asset': {args: '<character|location> <library-id> --anchor=picture [--name=name] [--role=role] [--description=text] [--like=project]', description: 'Create a library asset from a reference picture.'},
+    'film:check-joins': {args: '<film-id> [--only=clip-004] [--again]', description: 'Check the cuts within a scene with a vision model: posture, clothes and props across the cut. Only reports.'},
     'film:gallery': {args: '', description: 'Write films/index.html with the available films.'},
     'film:migrate': {args: '<film-id> <old-film-folder> [--apply]', description: 'Preview or apply migration of compatible rendered clips.'},
     'leak-scan': {args: '<project-id> [--film]', description: 'Check rendered clips for leaked studio backdrops.'},

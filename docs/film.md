@@ -27,6 +27,7 @@ Needs [Bun](https://bun.com) and an LLM server - the same one as the music-video
 | `bun film.ts <film-id> --render=videos [--only=clip-005,clip-006]` | render the clips (all, or only some - try one first) |
 | `bun film.ts <film-id> --render=videos --only=clip-005 --again` | render the named clips **again with a new seed** (every one is GPU time; `--only` is required): the old version is put away in `old/attempts/`. A clip that goes on from the last frame of one of them is named - it is not rendered again unless you name it too |
 | `bun film.ts <film-id> --render=final [--only=clip-005,clip-006]` | assemble `films/<id>/<id>.mp4` from the rendered clips; with `--only` a try-out, `<id>-partial.mp4`. `--render=all` = images, then videos, then the film |
+| `bun run film:check-joins <film-id> [--only=clip-005]` | the cuts within a scene, checked by a model that reads pictures - see [Checking the cuts](#checking-the-cuts) |
 | `bun run film:gallery` | `films/index.html`: every film on one page - the film to watch, cast and places, links to the shot list and the screenplay |
 | `bun run film:migrate <film-id> <copy-of-the-old-film-folder> [--apply]` | after a changed plan (renumbered clips): clips whose prompt is the same keep their video under the new number. Without `--apply` only the result is shown |
 | `bun test` | tests for the pure parts (`lib/film/film.test.ts`) |
@@ -207,6 +208,18 @@ with the change (`change` of the state) - the face and build come from the ancho
 anchor of the normal picture makes the look stale. Without sequence sheets a state is drawn from the normal picture's prompt with only the
 change applied and with the same seed. The shot planning says per shot which look a character is in; a clip uses the picture of the look its character is in
 when they first appear in it. Not set in a film planned before - `--redo=cast` makes them.
+
+## Checking the cuts
+
+A cut within a scene goes to another camera position, and every clip is drawn by itself: people can come out in another posture, other
+clothes or with something else in the hand than in the clip before - the staging of the scene asks for the same, but only says it.
+`bun run film:check-joins <film-id>` gives a model that reads pictures (`bun run setup vision`) the last frame the film uses of a clip and
+the first frame of the next one, with the scene's staging, and asks what differs across the cut. A clip that goes on from the one before
+is skipped: it starts on that frame. Camera angle, framing and a small movement are no difference.
+
+It only reports: the differences per cut, and the command to render the flagged clips again (`--render=videos --only=... --again`). A
+model's judgement on two pictures is a reason to look, not to spend a render. The answers are kept in `output/join-check.json` - a cut is
+asked again only when one of its frames or the staging changed, or with `--again`. `--only=clip-005` checks the cuts into these clips.
 
 ## Replacing a character
 
