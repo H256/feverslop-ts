@@ -5,7 +5,7 @@ import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-
 import {probeVideo} from "../assemble.ts";
 import {secondsAt} from "../frames.ts";
 import {log, styles} from "../log.ts";
-import {CONTEXT_SETTLE} from "../compose.ts";
+import {boundaryFrameAsset, CONTEXT_SETTLE} from "../compose.ts";
 import {pictureFingerprint, Renderer, RETAKE_LEAD, type RenderWhat} from "../render.ts";
 import type {RetakeAsk} from "../retake.ts";
 import type {RenderSpec} from "../render-spec.ts";
@@ -13,7 +13,7 @@ import {renderStateOf} from "../render-state.ts";
 import {type Freshness, freshness} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
 import {workflowDir} from "../config.ts";
-import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
+import type {FilmClipRequest} from "./compose.ts";
 import {clipRequestRef} from "../previous-output.ts";
 
 /** What a clip was rendered from - the film refuses to use a clip made from another prompt or length. */
@@ -76,8 +76,6 @@ export function filmClipSpans(projectDir: string, requests: { id: string, frames
         return span
     })
 }
-
-const firstFrame = (clipId: string) => filmBoundaryFrame(clipId).replace(/_lf\.png$/, '_ff.png')
 
 /**
  * The music-video renderer, plus the film's clips: the same server handling, resumable jobs and downloads (Renderer.render),
@@ -153,13 +151,13 @@ export class FilmRenderer extends Renderer {
         const target = join(this.projectDir, file)
         const spec = filmClipSpec({...clip, promptHash: promptHash(clip)}, this.projectDir, this.config)
         const request = specId(spec)
-        if (existsSync(target) && !this.staleFile('clips', file, request, [file, `${file}.json`, firstFrame(clip.id), filmBoundaryFrame(clip.id)])) {
+        if (existsSync(target) && !this.staleFile('clips', file, request, [file, `${file}.json`, boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])) {
             log.step('Exists', styles.muted(file))
             const meta = `${target}.json`
             const renderedFrom = existsSync(meta) ? (await Bun.file(meta).json()).promptHash : undefined
             if (renderedFrom !== undefined && renderedFrom !== promptHash(clip)) log.warn(`${file} was rendered from another prompt than the plan has now - delete it (and its .json) to render it again`)
             // it starts on the last frame of the clip before - rendered again since, that frame is another one
-            const startFrame = clip.startsFrom ? join(this.projectDir, filmBoundaryFrame(clip.startsFrom)) : undefined
+            const startFrame = clip.startsFrom ? join(this.projectDir, boundaryFrameAsset(clip.startsFrom, 'lf')) : undefined
             if (startFrame && existsSync(startFrame) && statSync(startFrame).mtimeMs > statSync(target).mtimeMs) {
                 log.warn(`${file} starts on an older version of ${clip.startsFrom}'s last frame - delete it to render it again`)
             }
@@ -190,7 +188,7 @@ export class FilmRenderer extends Renderer {
             const result = module.default({
                 prompt: clip.prompt,
                 pictures: clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => `${this.remoteDir}/${p.file}`),
-                ...(context ? {startClip: `${this.remoteDir}/${context.asset}`} : this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${filmBoundaryFrame(clip.startsFrom)}`} : {}),
+                ...(context ? {startClip: `${this.remoteDir}/${context.asset}`} : this.config.pinStartFrame && clip.startsFrom ? {startFrame: `${this.remoteDir}/${boundaryFrameAsset(clip.startsFrom, 'lf')}`} : {}),
                 frames,
                 seed,
                 resolution: this.config.videoResolution,
@@ -226,10 +224,6 @@ export class FilmRenderer extends Renderer {
         }, null, 2))
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used${rendered.hasAudio ? ', with audio' : ''}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)
-    }
-
-    protected override boundaryFrameFiles(clipId: string): [string, string] {
-        return [firstFrame(clipId), filmBoundaryFrame(clipId)]
     }
 
     // a clip with dialogue is used with every frame the model rendered (assembleFilm useRendered)

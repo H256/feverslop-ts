@@ -1,5 +1,6 @@
 import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, utimesSync, writeFileSync} from "node:fs";
 import {basename, dirname, join} from "node:path";
+import {boundaryFrameAsset} from "./compose.ts";
 import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from "./sequenceSheet.ts";
 
 /**
@@ -67,7 +68,7 @@ export function clipVersions(projectDir: string, clipId: string): ClipVersion[] 
         const record = readRecord(join(attempts, folder, `${video}.json`))
         const inFolder = (file: string) => existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined
         versions.push({
-            id: attempt(folder), video: `${attempt(folder)}/${video}`, firstFrame: inFolder(`${clipId}_ff.png`), lastFrame: inFolder(`${clipId}_lf.png`), source,
+            id: attempt(folder), video: `${attempt(folder)}/${video}`, firstFrame: inFolder(basename(boundaryFrameAsset(clipId, 'ff'))), lastFrame: inFolder(basename(boundaryFrameAsset(clipId, 'lf'))), source,
             made: statSync(join(attempts, folder, video)).mtimeMs,
             seed: typeof record.seed === 'number' ? record.seed : undefined,
             workflow: typeof record.workflow === 'string' ? record.workflow : undefined,
@@ -100,7 +101,7 @@ export function restoreClipVersion(projectDir: string, clipId: string, versionId
     const version = clipVersions(projectDir, clipId).find(v => v.id === versionId)
     if (!version) throw new Error(`${clipId} has no version ${versionId}`)
     const video = `videos/${clipId}.mp4`
-    const frames = [`assets/clips/${clipId}_ff.png`, `assets/clips/${clipId}_lf.png`]
+    const frames = [boundaryFrameAsset(clipId, 'ff'), boundaryFrameAsset(clipId, 'lf')]
     const putAway = archiveFiles(projectDir, `${clipId}-${versionStamp()}`, [video, `${video}.json`, ...frames])
     const now = new Date()
     if (version.source === 'leak') {
