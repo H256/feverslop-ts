@@ -28,7 +28,7 @@ import {archiveClip} from "./lib/film/archive.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {previewSources} from "./lib/assemble.ts";
 import {parseRetake} from "./lib/retake.ts";
-import {clipChains, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
+import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import type {AssetKind} from "./lib/asset-import.ts";
 import {castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
@@ -40,7 +40,7 @@ import {namedByScene} from "./lib/film/names.ts";
 import {maxShotsFor} from "./lib/film/shot-checks.ts";
 import {timelineEdl} from "./lib/film/timeline.ts";
 import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDialogue, omittedSourceLines, toCast, toProps, toScreenplay} from "./lib/film/screenplay.ts";
-import {filmExists} from "./lib/film/setup.ts";
+import {filmExists, filmIds} from "./lib/film/setup.ts";
 import {applyAnnotations, parseFountain} from "./lib/film/fountain-import.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
 import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
@@ -120,7 +120,7 @@ if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join
 
 const filmId = positionals[0]
 if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
-    const existing = existsSync(FILMS_DIR) ? readdirSync(FILMS_DIR, {withFileTypes: true}).filter(d => d.isDirectory()).map(d => d.name) : []
+    const existing = filmIds()
     log.usageError(`${filmId ? `No film "${filmId}" in ${FILMS_DIR}/` : 'No film id given'} - ${existing.length ? `the films here are: ${existing.join(', ')}. ` : ''}Create one with: bun run film:init`, usage)
 }
 
@@ -584,9 +584,7 @@ if (render.has('images') || render.has('videos') || retake) {
     if (render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
         const only = new Set(args.only.split(',').filter(Boolean))
-        const selected = requests.filter(r => only.size === 0 || only.has(r.id))
-        const unknown = [...only].filter(id => !requests.some(r => r.id === id))
-        if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
+        const selected = onlyClips(requests, only)
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${requests.length} (--only)`) : ''}`)
         for (const risk of clipFailureRisks(readTimings(), selected.filter(c => args.again || !existsSync(join(film.dir, 'videos', `${c.id}.mp4`))), renderConfig.videoWorkflow, settings.comfy.map(server => server.name))) log.warn(risk)
         // a clip that starts on the last frame of the one before waits for it: those render one after the other, each chain next to the others
@@ -616,9 +614,7 @@ if (render.has('final') && args.preview) {
 } else if (render.has('final')) {
     log.section('12 · ASSEMBLING THE FILM')
     const only = new Set(args.only.split(',').filter(Boolean))
-    const unknown = [...only].filter(id => !requests.some(r => r.id === id))
-    if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${requests.map(r => r.id).join(', ')}`)
-    const selected = requests.filter(r => only.size === 0 || only.has(r.id))
+    const selected = onlyClips(requests, only)
     // some of the clips only: a try-out, never the film itself
     const target = join(film.dir, only.size ? `${film.id}-partial.mp4` : `${film.id}.mp4`)
     log.step('Sound', styles.muted('the sound the model made for each clip, with a short fade at every cut'))
@@ -713,7 +709,7 @@ async function dryRun() {
     }
     if (render.has('videos')) {
         const only = new Set(args.only.split(',').filter(Boolean))
-        const selected = state.clips.filter(c => !only.size || only.has(c.id))
+        const selected = onlyClips(state.clips, only)
         const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
         for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) log.warn(risk)
         log.step('Clips', todo.length ? `${await clipEstimate(todo, renderConfig, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))

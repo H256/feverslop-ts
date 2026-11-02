@@ -29,6 +29,16 @@ export function clipChains<T extends { id: string, startsFrom?: string }>(clips:
     return chains
 }
 
+/**
+ * The clips --only names, or all when it names none. Every name has to be a clip: a typo must not pass as "none of them" -
+ * film.ts, index.ts and refinish ask the same way.
+ */
+export function onlyClips<T extends { id: string }>(clips: T[], only: Set<string>): T[] {
+    const unknown = [...only].filter(id => !clips.some(c => c.id === id))
+    if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${clips.map(c => c.id).join(', ')}`)
+    return clips.filter(c => !only.size || only.has(c.id))
+}
+
 /** A clip that is rendered again with a fixed seed comes out the same (--again). */
 export function warnFixedSeed(seed: number) {
     if (seed !== -1) log.warn(`"seed" is ${seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)

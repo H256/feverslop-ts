@@ -7,23 +7,19 @@ import {log} from '../lib/log.ts';
 // render the new sequence sheet right away.
 // usage: bun run replace-character <project-id>
 import * as p from "@clack/prompts";
-import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from "node:fs";
-import {basename, dirname, join} from "node:path";
+import {existsSync} from "node:fs";
+import {join} from "node:path";
 import {computeMemberCounts, groupMemberId, pictureAsset} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
-import {ask, configureLlm} from "../lib/llm.ts";
+import {configureLlm} from "../lib/llm.ts";
 import {styles} from "../lib/log.ts";
-import {runProcess} from "../lib/process.ts";
-import {pinnedSidecar} from "../lib/provenance.ts";
 import {genderNote} from "../lib/gender-check.ts";
-import {characterImageDescriptionPrompt} from "../lib/prompts.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {Character, Project} from "../lib/project.ts";
 import {type PictureJob, Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
-import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from "../lib/sequenceSheet.ts";
-import {clipRequestsDir} from "../lib/previous-output.ts";
+import {askDescription, clearSheetOfOldAnchor, installPicture, renderedClipsWith, replacedPictureFile} from "../lib/replace-character.ts";
 cli('replace-character')
 
 
@@ -82,82 +78,13 @@ const imagePath = answer(await p.text({
 }))
 
 const config = await loadProjectConfig(dir)
-const targetFile = config.sequenceSheets
-    ? join(dir, sheetAnchor(sequenceSheetDir('character', assetId)))
-    : join(dir, pictureAsset('character', assetId))
-
-mkdirSync(dirname(targetFile), {recursive: true})
-const partial = `${targetFile}.partial.png`
-// ffmpeg reads whatever format was given and normalizes it to the plain PNG every path here expects
-await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', imagePath, '-frames:v', '1', partial], {
-    errorMessage: err => `ffmpeg could not read ${imagePath} as an image:\n${err}`,
-})
-renameSync(partial, targetFile)
-// the user's own picture: kept as it is whatever the look prompts say later, never reported as stale (lib/provenance.ts);
-// the clips made with the old one are, through the picture's content, and are listed when the video is assembled
-await Bun.write(`${targetFile}.json`, JSON.stringify(pinnedSidecar(`replaced with ${basename(imagePath)}`), null, 2))
-log.success(`Saved ${targetFile}`)
-changes.push(`the new image is saved as ${targetFile}`)
-
+const targetFile = replacedPictureFile(dir, assetId, config.sequenceSheets)
+await installPicture(dir, assetId, targetFile, imagePath, changes)
 // everything downstream of the anchor was built from the OLD image and is now stale
-if (config.sequenceSheets) {
-    const seqDir = join(dir, sequenceSheetDir('character', assetId))
-    const finalPicture = join(dir, pictureAsset('character', assetId))
-    const stale = [
-        finalPicture, `${finalPicture}.json`,
-        join(seqDir, SHEET_VIDEO), join(seqDir, `${SHEET_VIDEO}.json`), join(seqDir, `${SHEET_VIDEO}.pending.json`),
-        join(seqDir, SHEET_FRAMES),
-    ]
-    const removed = stale.filter(existsSync)
-    for (const f of removed) rmSync(f, {recursive: true, force: true})
-    if (removed.length) {
-        log.info(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
-        changes.push('the old reference sheet and sequence video were deleted')
-        sheetCleared = true
-    }
-}
+if (config.sequenceSheets) sheetCleared = clearSheetOfOldAnchor(dir, assetId, changes)
 
-const descMode = answer(await p.select({
-    message: 'Update the description used in clip/video prompts?',
-    options: [
-        {value: 'vision', label: 'Generate it from the image (vision-capable LLM)'},
-        {value: 'manual', label: 'Type it myself'},
-        {value: 'skip', label: 'Leave the current description unchanged'},
-    ],
-}))
-
-let newDescription: string | undefined
-if (descMode === 'vision') {
-    const settings = await loadSettings({projectModel: config.llm.model})
-    configureLlm(settings.llm)
-    // full-resolution reference pictures (e.g. 1088x1920) made a real local vision model hang for minutes on a
-    // single request - a description doesn't need that much detail, and a small side (VISION_MAX_WIDTH) came back
-    // in ~25s instead. Downscaled into a temp file - the saved anchor itself stays full resolution.
-    const VISION_MAX_WIDTH = 512
-    const downscaled = `${targetFile}.vision.png`
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', targetFile, '-vf', `scale=${VISION_MAX_WIDTH}:-1`, downscaled], {
-        errorMessage: err => `ffmpeg could not downscale ${targetFile} for the vision request:\n${err}`,
-    })
-    const base64 = Buffer.from(await Bun.file(downscaled).arrayBuffer()).toString('base64')
-    rmSync(downscaled, {force: true})
-    log.info('Asking the vision model - can take a while, see the spinner below')
-    try {
-        newDescription = (await ask(characterImageDescriptionPrompt(`data:image/png;base64,${base64}`, char))).trim() || undefined
-        if (newDescription) {
-            log.success('Description generated from the image:')
-            log.info(newDescription)
-        }
-    } catch (e) {
-        log.warn(`Vision description failed - the connected model may not support images (${(e as Error).message})`)
-    }
-    if (!newDescription) {
-        const typed = answer(await p.text({message: 'Type a description instead (leave empty to keep the current one)'}))
-        newDescription = typed || undefined
-    }
-} else if (descMode === 'manual') {
-    const typed = answer(await p.text({message: 'New description (leave empty to keep the current one)'}))
-    newDescription = typed || undefined
-}
+const configureProjectLlm = async () => configureLlm((await loadSettings({projectModel: config.llm.model})).llm)
+const newDescription = await askDescription(targetFile, char, configureProjectLlm, answer)
 
 if (newDescription) {
     if (memberCount > 1) {
@@ -174,8 +101,7 @@ if (newDescription) {
 
     // a picture of another gender than the story writes: the beats say "she", the picture is a man (or the other way round)
     try {
-        const settings = await loadSettings({projectModel: config.llm.model})
-        configureLlm(settings.llm)
+        await configureProjectLlm()
         const own = (data.beats ?? []).map(b => b.summary).filter(s => typeof s === 'string' && s.includes(char.name)).slice(0, 4).join(' ')
         const note = await genderNote(char.name, `${char.role ?? ''} ${own}`.trim().slice(0, 2500), newDescription)
         if (note) {
@@ -192,21 +118,10 @@ const description = newDescription
     ?? ''
 
 // clips already rendered before this swap are not touched - list them instead of guessing whether to redo them
-const clipsDir = clipRequestsDir(dir)
-if (existsSync(clipsDir)) {
-    const affected: string[] = []
-    for (const entry of readdirSync(clipsDir)) {
-        if (!entry.endsWith('.json')) continue
-        const clip = await Bun.file(join(clipsDir, entry)).json()
-        const slotId = entry.replace(/\.json$/, '')
-        if (clip.assets?.pictures?.some((pic: { id: string }) => pic.id === char.id) && existsSync(join(dir, 'videos', `${slotId}.mp4`))) {
-            affected.push(slotId)
-        }
-    }
-    if (affected.length) {
-        log.warn(`${affected.length} already-rendered clip(s) reference ${char.name} and were not touched: ${affected.join(', ')}`)
-        log.info(`Delete the ones you want redone (videos/<clip-id>.mp4, its .json) and render again.`)
-    }
+const affected = await renderedClipsWith(dir, char.id)
+if (affected.length) {
+    log.warn(`${affected.length} already-rendered clip(s) reference ${char.name} and were not touched: ${affected.join(', ')}`)
+    log.info(`Delete the ones you want redone (videos/<clip-id>.mp4, its .json) and render again.`)
 }
 
 if (config.sequenceSheets) {

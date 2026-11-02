@@ -9,7 +9,7 @@ import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {archiveFiles, versionStamp} from "../lib/archive.ts";
 import {assembleFinal, probeVideo} from "../lib/assemble.ts";
-import {renderAll} from "../lib/batch.ts";
+import {onlyClips, renderAll} from "../lib/batch.ts";
 import type {ClipRequest} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {finishCopy} from "../lib/final-pass.ts";
@@ -67,9 +67,7 @@ beginRun(dir, 'tools/refinish.ts')
 // a music video's and a film's: what is different between them, in one place
 const requests = await readClipRequests<ClipRequest & FilmClipRequest>(dir)
 if (!requests.length) throw new Error(`${dir} has no clip requests - it was never planned`)
-const unknown = [...only].filter(clip => !requests.some(r => r.id === clip))
-if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')}`)
-const selected = requests.filter(r => !only.size || only.has(r.id))
+const selected = onlyClips(requests, only)
 const missing = selected.filter(r => !existsSync(join(dir, 'videos', `${r.id}.mp4`))).map(r => r.id)
 if (missing.length) throw new Error(`not rendered: ${missing.join(', ')} - this works from the clips there are`)
 

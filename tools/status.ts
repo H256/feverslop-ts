@@ -3,12 +3,11 @@ import {cli} from '../lib/cli.ts';
 // pictures and clips are rendered, missing or stale, and the command that comes next. Read-only - no lock, no LLM, no
 // ComfyUI; the render estimate comes from the measured timings. --film: the same for a film in films/.
 // usage: bun run status <project-id> [--json] [--film]
-import {existsSync, readdirSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {log, styles} from "../lib/log.ts";
-import {projectExists} from "../lib/project-setup.ts";
-import {filmExists} from "../lib/film/setup.ts";
+import {listProjects, projectExists} from "../lib/project-setup.ts";
+import {filmExists, filmIds} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import {filmStatus, projectStatus, type StepState} from "../lib/status.ts";
 import {lastRun, runState} from "../lib/run-record.ts";
@@ -28,12 +27,10 @@ const id = positionals[0]
 
 if (args.film) {
     if (!id || !filmExists(id)) {
-        const films = existsSync(FILMS_DIR) ? readdirSync(FILMS_DIR, {withFileTypes: true}).filter(d => d.isDirectory() && existsSync(join(FILMS_DIR, d.name, 'input'))).map(d => d.name) : []
-        log.usageError(`${id ? `No film "${id}" in ${FILMS_DIR}/` : 'Which film?'} - the films here are: ${films.join(', ')}`, usage)
+        log.usageError(`${id ? `No film "${id}" in ${FILMS_DIR}/` : 'Which film?'} - the films here are: ${filmIds().join(', ')}`, usage)
     }
 } else if (!id || !projectExists(id)) {
-    const projects = existsSync('projects') ? readdirSync('projects', {withFileTypes: true}).filter(d => d.isDirectory() && existsSync(join('projects', d.name, 'input'))).map(d => d.name) : []
-    log.usageError(`${id ? `No project "${id}" in projects/` : 'Which project?'} - the projects here are: ${projects.join(', ')}`, usage)
+    log.usageError(`${id ? `No project "${id}" in projects/` : 'Which project?'} - the projects here are: ${listProjects().join(', ')}`, usage)
 }
 
 const {dir, changed, notes, steps, render, next, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)
