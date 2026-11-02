@@ -10,12 +10,12 @@ export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 const SIZES = ['wide', 'medium', 'close', 'extreme'] as const
 /**
- * How many people a shot of a size class holds - the planner prompt says the same (lib/shot-planner.ts). The class is the
+ * How many people a shot of a size class holds - the planner prompt takes its numbers from here (lib/shot-planner.ts). The class is the
  * planner's own reading of its framing: it classed a "medium close-up" as medium, so three people passed in it, and an
  * extreme close-up held as many as a close shot - 27 crowded close shots in tribal-261019 (#339). The prompt now says
  * what each class is, and an extreme close-up is a class of its own.
  */
-const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {extreme: 1, close: 2, medium: 3, wide: undefined}
+export const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {extreme: 1, close: 2, medium: 3, wide: undefined}
 /** A flag the planner answered: true, or "yes" in the line format. */
 const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
 /** The planner's "playing:" - what the hands do on the instrument (a phrase), a bare "yes", or "no" / nothing. */
