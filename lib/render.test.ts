@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {aboveRecommended, pixelSize} from "../comfy/helpers.ts";
+import {aboveRecommended, MAX_REF_AUDIOS, pixelSize} from "../comfy/helpers.ts";
 import {twoPassSizes} from "../comfy/h3-two-pass.ts";
 import {boardStatus, contextLength, dispatchOrder, pickServer, renderedFrames, resumesJob} from "./render.ts";
 
@@ -63,6 +63,18 @@ describe('the turbo workflows', () => {
         expect(aboveRecommended(0.6, '1344x768')).toBe(false)
         expect(aboveRecommended(-1, '1344x768')).toBe(false)
         expect(aboveRecommended(2, undefined)).toBe(false)
+        // a megapixel is 1024x1024, as pixelSize renders it: 1.0 is 1376x768, more than 1344x768 (#495)
+        expect(pixelSize(1, 'landscape', 0.4)).toEqual({width: 1376, height: 768})
+        expect(aboveRecommended(1, '1344x768')).toBe(true)
+        expect(aboveRecommended(0.98, '1344x768')).toBe(false)
+    })
+    test('more audio tracks than the model takes stop before the graph is built, not on the server mid-render (#501)', async () => {
+        const audios = Array.from({length: MAX_REF_AUDIOS + 1}, (_, i) => `track-${i}.wav`)
+        for (const name of ['h3-ref2video', 'h3-ref2video-cpu-clip', 'h3-ref2video-full', 'h3-ref2video-2pass']) {
+            const module = await import(`../comfy/workflows/${name}.ts`)
+            expect(() => module.default({prompt: 'p', pictures: ['a.png'], audios, song: 's.wav', songStart: 0, frames: 22, duration: 1, seed: 1, resolution: -1, filenamePrefix: 'x'}))
+                .toThrow(`${name}: 4 audio tracks, MiniMaxH3ReferenceToVideo takes at most 3 (ref_audio_0..ref_audio_2)`)
+        }
     })
     test('the turbo workflows build a graph with the shift and the simple scheduler', async () => {
         for (const name of ['h3-ref2video', 'h3-ref2video-cpu-clip', 'h3-ref2video-film']) {

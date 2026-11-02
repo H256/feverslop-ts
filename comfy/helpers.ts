@@ -34,6 +34,13 @@ export const MAX_REFERENCE_IMAGES = 9
 // 'ref_audios.ref_audio_3'", seen live on clip slot-030)
 export const MAX_REF_AUDIOS = 3
 
+/** The audio tracks of a video workflow, checked against MAX_REF_AUDIOS before anything is built - the server only says so mid-render, after all uploads. */
+export function refAudios(workflow: string, audios: string[] | undefined): string[] {
+    const tracks = audios ?? []
+    if (tracks.length > MAX_REF_AUDIOS) throw new Error(`${workflow}: ${tracks.length} audio tracks, MiniMaxH3ReferenceToVideo takes at most ${MAX_REF_AUDIOS} (ref_audio_0..ref_audio_${MAX_REF_AUDIOS - 1})`)
+    return tracks
+}
+
 // The contract of a workflow file in comfy/workflows/ - see docs/custom-workflows.md.
 // Its default export takes these options and returns the graph plus the node whose files are downloaded.
 // size: what the output is rendered at, when the workflow knows it - lib/render.ts checks the file against it
@@ -153,8 +160,11 @@ export type VideoWorkflowModule = { default: VideoWorkflow, renderFrames?: Rende
 export function aboveRecommended(setting: Resolution, recommended: RecommendedResolution | undefined): boolean {
     if (!recommended || setting === -1) return false
     const pixels = (size: string) => size.split('x').map(Number).reduce((a, b) => a * b, 1)
-    return (typeof setting === 'number' ? setting * 1e6 : pixels(setting)) > pixels(recommended)
+    return (typeof setting === 'number' ? setting * MEGAPIXEL : pixels(setting)) > pixels(recommended)
 }
+
+// a megapixel as ComfyUI counts it - the one pixelSize renders with
+const MEGAPIXEL = 1024 * 1024
 
 /**
  * A value the server didn't list when nodes.ts was generated - an uploaded file, a model installed later.
@@ -207,7 +217,7 @@ export function pixelSize(setting: Resolution, shape: Orientation | Aspect, work
     const value = setting === -1 ? workflowDefault : setting
     const {w, h} = aspectOf(shape)
     if (typeof value === 'number') {
-        const scale = Math.sqrt(value * 1024 * 1024 / (w * h))
+        const scale = Math.sqrt(value * MEGAPIXEL / (w * h))
         return {width: roundHalfEven(w * scale / 32) * 32, height: roundHalfEven(h * scale / 32) * 32}
     }
     const [a, b] = value.split('x').map(Number) as [number, number]

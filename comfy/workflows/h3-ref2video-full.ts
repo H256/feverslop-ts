@@ -2,7 +2,7 @@
 // branch) - res_multistep, simple, 20 steps, no CFG (BasicGuider) and no sigma shift. About 2.5x the sampling time of the
 // 8-step turbo, for more detail, prompt adherence and motion - a person far from the camera has a face here.
 // Everything else (references, audio tracks, the song guide, the pinned first frame) is the same as h3-ref2video.
-import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, h3RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, refAudios, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, h3RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
 export const renderFrames = h3RenderFrames
@@ -22,7 +22,7 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
     // same start/duration. Not clip.frames: MiniMaxH3ReferenceToVideo only accepts a few frame counts and
     // rounds up (see renderFrames below) - the ref_audio has to cover the length actually rendered, or the
     // model runs out of audio before the video ends.
-    const tracks = (opts.audios ?? []).map(name => wf.TrimAudioDuration({
+    const tracks = refAudios('h3-ref2video-full', opts.audios).map(name => wf.TrimAudioDuration({
         audio: wf.LoadAudio({audio: dyn(name)}).AUDIO,
         start_index: opts.songStart,
         duration: opts.duration,
