@@ -38,7 +38,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/style
 import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
 import * as clack from "@clack/prompts";
 import {pictureProp, propMissing} from "./lib/prop-check.ts";
-import {projectInputs, songFileOf, stepUsed} from "./lib/inputs.ts";
+import {projectInputs, songFileOf, stepUsed, readInputFile} from "./lib/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
 import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
@@ -164,7 +164,7 @@ if (args.gallery) {
 if (!args['dry-run']) for (const step of redoSteps) project.invalidate(step)
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
-const readInput = async (name: string) => existsSync(project.input(name)) ? (await Bun.file(project.input(name)).text()).trim() : ''
+const readInput = (name: string) => readInputFile(project.input(name))
 // true if `value`'s fingerprint differs from the one project.syncInputs() recorded after the previous run - a
 // read-only check, for a step that needs to know this before that call itself has run (and recorded) this run's
 // values; undefined (nothing recorded yet, e.g. the first run) never counts as changed

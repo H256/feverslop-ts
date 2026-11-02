@@ -52,6 +52,7 @@ import {validProjectId} from "./lib/project-setup.ts";
 
 import {loadSettings} from "./lib/settings.ts";
 import {shuffledStyles, stylesById} from "./lib/styles.ts";
+import {readInputFile} from "./lib/inputs.ts";
 cli('film')
 
 
@@ -143,7 +144,7 @@ const keptBasis = keptCoverage ? coverageBasis() : undefined
 // a dry run only says what would be redone (see dryRun below)
 if (!args['dry-run']) for (const step of redoSteps) film.invalidate(step)
 
-const readInput = async (name: string) => existsSync(film.input(name)) ? (await Bun.file(film.input(name)).text()).trim() : ''
+const readInput = (name: string) => readInputFile(film.input(name))
 
 /////////// INPUTS AND CONFIG
 log.section(`FILM · ${film.id}`)
