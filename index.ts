@@ -1056,7 +1056,7 @@ for (const audio of clips.flatMap(c => c.assets.audio)) {
 }
 
 for (const clip of clips) {
-    await Bun.write(join(outputDir, 'clips', `${clip.id}.json`), JSON.stringify(clip, null, 2))
+    await Bun.write(join(clipRequestsIn(outputDir), `${clip.id}.json`), JSON.stringify(clip, null, 2))
     // one debug-listenable file per track, cut from its own stem to this clip's span - not what's actually
     // uploaded for rendering any more (lib/render.ts uploads and trims the whole stem itself), just handy to
     // hear exactly what a track covers
@@ -1125,7 +1125,7 @@ if (changes) {
             added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
             gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
         ].filter(Boolean).join(' · '))
-        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(outputDir, PREVIOUS, 'clips', `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
+        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(clipRequestsIn(join(outputDir, PREVIOUS)), `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
     }
 }
 
