@@ -4,7 +4,7 @@ import {loadProjectConfig} from "./config.ts";
 import {projectInputs, stepUsed} from "./inputs.ts";
 import {clipEstimate, pictureEstimate, type RenderState, renderState} from "./render-state.ts";
 import {styles} from "./log.ts";
-import {ProjectStore, STEP_NAMES} from "./project.ts";
+import {ProjectStore, STEP_NAMES, unplannedBeats} from "./project.ts";
 import {loadSettings} from "./settings.ts";
 import {loadFilmConfig} from "./film/config.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./film/inputs.ts";
@@ -57,6 +57,9 @@ export async function projectStatus(id: string): Promise<Status> {
     const changed = project.changedInputs(await projectInputs(project.dir, config))
     const lostStems = (['stems', 'instrumentStems'] as const).filter(step => data[step] && Object.values(data[step]!).some(file => !existsSync(join(project.dir, file))))
     const redo = new Set(project.redoneBy([...changed.flatMap(c => c.steps), ...lostStems]))
+    // beats without a shot plan among planned ones: the next run plans just those
+    const unplanned = unplannedBeats(data)
+    if (unplanned.length) redo.add('shotMoments')
     const steps = STEP_NAMES.map(step => ({
         step,
         state: (!stepUsed(step, project.dir, data, config) ? 'unused' : redo.has(step) ? 'redo' : data[step] !== undefined ? 'done' : 'missing') as StepState,
@@ -74,7 +77,10 @@ export async function projectStatus(id: string): Promise<Status> {
     }, 'final video')
     return {
         id: project.id, dir: project.dir, changed, steps, render, next,
-        notes: lostStems.map(step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`]),
+        notes: [
+            ...lostStems.map(step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`] as [string, string]),
+            ...(unplanned.length ? [['Unplanned', `${unplanned.map(styles.name).join(', ')} ${styles.muted('- no shot plan, the next run plans just these')}`] as [string, string]] : []),
+        ],
         json: {project: project.id},
     }
 }

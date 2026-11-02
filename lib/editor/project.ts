@@ -28,7 +28,7 @@ export type EditorKind = 'music' | 'film'
 export type EditorPerson = { name: string, text: string }
 export type EditorShot = { label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[] }
 // a sung or spoken line: seconds from the clip's start
-export type EditorLine = { at: number, end?: number, text: string, who: string }
+export type EditorLine = { at: number, end?: number, text: string, who: string, line?: number }
 export type EditorPicture = { id: string, label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number }
 export type EditorMark = { kind: 'failed' | 'backdrop' | 'backdrop-attempt' | 'older-start' | 'dropped', text: string }
 // a film: the views of its place the clip can be given, and the one it has
@@ -77,6 +77,7 @@ export type EditorProject = {
     finals: EditorFinal[],      // every finished video there is of it: the final one, finished, at another frame rate
     lastRun?: { state: RunState, command: string, startedAt: string, failures: string[], explained: Explained[] },
     command: string,            // how this project is run, for the commands the page shows
+    sings?: boolean,            // someone sings: who sings which line can be changed (the Singers page)
 }
 
 export type EditorFinal = { file: string, v: number, label: string, state: FinalState, preview: boolean, width?: number, height?: number, fps?: number }
@@ -291,7 +292,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
                     people: Object.entries(planned?.people ?? {}).map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
                 }
             }),
-            lines: (clip.vocals ?? []).map(v => ({at: v.at, end: v.end, text: v.text, who: v.singers.map(s => s.subject).join(', ')})),
+            lines: (clip.vocals ?? []).map(v => ({at: v.at, end: v.end, text: v.text, who: v.singers.map(s => s.subject).join(', '), line: v.line})),
             pictures: clip.assets.pictures.map(pictureOf(dir)),
             audio: clip.assets.audio.map(a => ({label: a.label, stem: a.stem, songStart: a.songStart, songEnd: a.songEnd})),
             dropped: clip.dropped ?? [],
@@ -319,6 +320,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun index.ts ${id}`,
+        sings: !!data.singing,
     }
 }
 

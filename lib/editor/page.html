@@ -276,6 +276,37 @@ select.source { padding: 1px 6px; font-size: 12px; color: var(--muted); }
 .role { display: grid; grid-template-columns: 96px minmax(0, 1fr) 260px; gap: 12px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; align-items: center; }
 .role img, .role .noimg { width: 96px; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; background: var(--hatch); display: block; }
 .role .warn { margin: 4px 0 0; }
+/* the singers: who sings which line - one colour per singer, the same in the list and on the side */
+.sung-section { margin-bottom: 18px; }
+.sung-head { display: flex; align-items: center; gap: 10px; padding: 4px 10px 6px; position: sticky; top: -16px; background: var(--bg); z-index: 1; }
+.sung-head h3 { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.sung-head .all { margin-left: auto; display: flex; gap: 4px; align-items: center; color: var(--muted); font-size: 12px; }
+.sung { display: grid; grid-template-columns: 28px 52px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 8px; border: 1px solid transparent; border-left-width: 3px; }
+.sung:hover { background: var(--surface); }
+.sung:focus-visible, .sung:focus-within { background: var(--surface); border-color: var(--line); outline: none; }
+.sung.changed { border-left-color: var(--accent); }
+.sung.empty { border-left-color: var(--danger); }
+.sung.flash { animation: flash 1.6s; }
+@keyframes flash { 0%, 40% { background: var(--accent-soft); } }
+.sung time { color: var(--muted); font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.sung .text small { display: block; color: var(--muted); font-size: 11px; }
+.sung .text small.bad { color: var(--danger); }
+.sung .listen { width: 26px; height: 26px; }
+.sung .listen.on { background: var(--accent); color: var(--accent-text); }
+.sung .listen:disabled { opacity: .3; cursor: default; }
+.who { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.sing { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px 1px 4px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.sing i { width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font: 600 9px var(--sans); font-style: normal; border: 1px solid light-dark(oklch(.55 .12 var(--h)), oklch(.72 .12 var(--h))); color: light-dark(oklch(.45 .12 var(--h)), oklch(.8 .1 var(--h))); }
+.sing:hover { color: var(--text); border-color: var(--muted); }
+.sing[aria-pressed=true] { background: light-dark(oklch(.92 .05 var(--h)), oklch(.31 .06 var(--h))); color: light-dark(oklch(.32 .09 var(--h)), oklch(.89 .07 var(--h))); border-color: transparent; }
+.sing[aria-pressed=true] i { background: light-dark(oklch(.55 .12 var(--h)), oklch(.72 .12 var(--h))); color: var(--surface); border-color: transparent; }
+.sing[aria-pressed=mixed] { border-style: dashed; color: var(--text); }
+.singer { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; border-left: 4px solid light-dark(oklch(.6 .12 var(--h)), oklch(.7 .12 var(--h))); }
+.singer img, .singer .noimg { width: 64px; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--hatch); display: block; }
+.singer .about { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; }
+.singer kbd, .pagebar kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); }
+.changes { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+.changes ul { margin: 4px 0 10px; padding-left: 18px; color: var(--muted); font-size: 12px; }
 
 /* the run: what goes on, at the foot of every page */
 .rundock { background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
@@ -904,10 +935,11 @@ async function libraryPage() {
 }
 
 ////////// A PROJECT - THE PAGES AROUND THE TIMELINE
-function projectChrome(title) {
+function projectChrome(title, project) {
     $('title').textContent = title
     document.title = `${title} · Workspace`
-    $('nav').replaceChildren(...[['timeline', 'Timeline', ''], ['references', 'References', 'references'], ['casting', 'Casting', 'casting']].map(([page, label, path]) =>
+    const pages = [['timeline', 'Timeline', ''], ['references', 'References', 'references'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : [])]
+    $('nav').replaceChildren(...pages.map(([page, label, path]) =>
         el('a', {href: `${base}/${path}`, 'aria-current': route.page === page ? 'page' : false}, label)))
 }
 
@@ -927,7 +959,7 @@ const TERMS = {
 async function referencesPage() {
     show('view-split')
     const [{references}, project, fresh] = await Promise.all([api('references'), api('project'), api('freshness').catch(() => ({pictures: {}}))])
-    projectChrome(project.title)
+    projectChrome(project.title, project)
     let selected = references.find(r => r.id === location.hash.slice(1)) ?? references[0]
     const groups = [['character', 'Characters'], ['location', 'Places'], ['prop', 'Props']]
     const list = () => {
@@ -1030,7 +1062,7 @@ async function referencesPage() {
 async function castingPage() {
     show('view-list')
     const [casting, project] = await Promise.all([api('casting'), api('project')])
-    projectChrome(project.title)
+    projectChrome(project.title, project)
     let changed = false
     const role = member => {
         const options = casting.options[member.kind]
@@ -1091,6 +1123,246 @@ async function castingPage() {
     }
     draw()
     run.onEnd = () => location.reload()
+    followRun(base)
+}
+
+////////// THE SINGERS - who sings which line. What is changed here replaces the language model's answer (step singing); the
+// beats it touches lose their shot plan, and the next plan run plans just those again
+async function singersPage() {
+    show('view-split')
+    const [{singing: first}, project] = await Promise.all([api('singing'), api('project')])
+    projectChrome(project.title, project)
+    let view = first
+    if (!view) {
+        $('split-list').replaceChildren(el('div', {class: 'empty'}, 'Nobody sings in this project: "singers" in config.json is empty, or the plan has not chosen them yet.'))
+        $('split-detail').replaceChildren()
+        return
+    }
+    const nameOf = id => view.characters.find(c => c.id === id)?.name ?? id
+    const short = id => nameOf(id).split(/\s+/)[0]
+    let pool, hue, assigned, filter = 'all', saved
+    const reset = () => {
+        // the singers of the song first, in their order: their colours and number keys stay put while lines are changed
+        pool = [...view.singers]
+        hue = new Map(pool.map((id, n) => [id, HUES[n % HUES.length]]))
+        assigned = new Map(view.lines.map(l => [l.line, new Set(l.singers)]))
+    }
+    reset()
+    const original = line => view.lines.find(l => l.line === line).singers
+    const isChanged = line => {
+        const now = assigned.get(line.line)
+        return now.size !== line.singers.length || line.singers.some(id => !now.has(id))
+    }
+    const changes = () => {
+        const lines = view.lines.filter(isChanged)
+        const beats = [...new Set(lines.flatMap(l => l.beats))]
+        const beatOf = id => view.beats.find(b => b.id === id)
+        const added = []
+        for (const beat of beats) {
+            const singersHere = new Set(lines.filter(l => l.beats.includes(beat)).flatMap(l => [...assigned.get(l.line)]))
+            for (const id of singersHere) if (!beatOf(beat)?.characterIds.includes(id)) added.push({beat, id})
+        }
+        // a new singer, or one who no longer sings, changes every clip they are in: a silent singer keeps the mouth closed there
+        const used = new Set([...assigned.values()].flatMap(set => [...set]))
+        const newSingers = [...used].filter(id => !view.singers.includes(id))
+        const formerSingers = view.singers.filter(id => !used.has(id))
+        const clipsOf = id => view.characters.find(ch => ch.id === id)?.clips ?? []
+        return {
+            lines, beats, added, newSingers, formerSingers,
+            replanned: beats.filter(b => beatOf(b)?.planned),
+            clips: [...new Set([...beats.flatMap(b => beatOf(b)?.clips ?? []), ...[...newSingers, ...formerSingers].flatMap(clipsOf)])].sort(),
+            empty: view.lines.filter(l => !assigned.get(l.line).size),
+            unplaced: lines.filter(l => !l.beats.length),
+        }
+    }
+
+    // listening to a line: the vocals stem tells a man's voice from a woman's, which is what a wrong pick usually is
+    const audio = view.audio ? new Audio(mediaUrl(view.audio)) : undefined
+    let playing
+    const stop = () => { audio?.pause(); playing = undefined; for (const b of document.querySelectorAll('.listen.on')) b.classList.remove('on') }
+    const listen = (line, button) => {
+        if (!audio || line.start === undefined) return
+        if (playing === line.line) return stop()
+        stop()
+        playing = line.line
+        button?.classList.add('on')
+        audio.currentTime = Math.max(0, line.start - 0.15)
+        audio.play().catch(showError)
+        const until = (line.end ?? line.start + 4) + 0.25
+        const watch = () => {
+            if (playing !== line.line) return
+            if (audio.currentTime >= until || audio.paused) return stop()
+            requestAnimationFrame(watch)
+        }
+        requestAnimationFrame(watch)
+    }
+
+    const toggle = (line, id) => {
+        const set = assigned.get(line)
+        if (set.has(id)) set.delete(id)
+        else set.add(id)
+        saved = undefined
+        draw()
+    }
+    const toggleAll = (lines, id) => {
+        const all = lines.every(l => assigned.get(l.line).has(id))
+        for (const l of lines) all ? assigned.get(l.line).delete(id) : assigned.get(l.line).add(id)
+        saved = undefined
+        draw()
+    }
+    const chip = (id, pressed, onclick, title) => el('button', {
+        class: 'sing', style: {'--h': hue.get(id)}, 'aria-pressed': pressed, title, tabindex: -1, onclick,
+    }, el('i', {}, String(pool.indexOf(id) + 1)), short(id))
+
+    function lineRow(line) {
+        const now = assigned.get(line.line)
+        const changed = isChanged(line)
+        const was = changed ? `was ${original(line.line).map(nameOf).join(' + ')}` : ''
+        const where = line.beats.length ? `${line.beats.join(', ')} · ${plural(line.clips.length, 'clip')}` : 'in no clip of the plan'
+        return el('div', {
+            class: `sung${changed ? ' changed' : ''}${now.size ? '' : ' empty'}`, id: `line-${line.line}`, tabindex: 0, 'data-line': line.line,
+            onkeydown: event => lineKey(event, line),
+        },
+            el('button', {class: `tbtn listen${playing === line.line ? ' on' : ''}`, tabindex: -1, disabled: !audio || line.start === undefined, title: audio ? 'Listen to the line (Space)' : 'No vocals stem or song to listen to', 'aria-label': 'Listen', onclick: event => listen(line, event.currentTarget)},
+                playIcon()),
+            el('time', {}, line.start !== undefined ? clock(line.start) : ''),
+            el('div', {class: 'text'}, line.text,
+                !now.size ? el('small', {class: 'bad'}, 'Nobody sings this line') : el('small', {}, [was, where].filter(Boolean).join(' · '))),
+            el('div', {class: 'who'}, pool.map(id => chip(id, now.has(id), () => toggle(line.line, id), `${nameOf(id)} sings this line (${pool.indexOf(id) + 1})`))))
+    }
+
+    function lineKey(event, line) {
+        if (event.ctrlKey || event.metaKey || event.altKey) return
+        const rows = [...document.querySelectorAll('.sung')]
+        const at = rows.indexOf(event.currentTarget)
+        const digit = /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : -1
+        if (digit >= 0 && pool[digit]) { event.preventDefault(); toggle(line.line, pool[digit]) }
+        else if (event.key === 'ArrowDown' || event.key === 'j') { event.preventDefault(); rows[at + 1]?.focus() }
+        else if (event.key === 'ArrowUp' || event.key === 'k') { event.preventDefault(); rows[at - 1]?.focus() }
+        else if (event.key === ' ') { event.preventDefault(); listen(line, event.currentTarget.querySelector('.listen')) }
+    }
+
+    // el() makes elements in the HTML namespace: an icon is made like copyIcon()
+    const playIcon = () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        svg.setAttribute('class', 'icon')
+        svg.setAttribute('viewBox', '0 0 24 24')
+        svg.innerHTML = '<path d="M7 4v16l13-8z" fill="currentColor" stroke="none"/>'
+        return svg
+    }
+
+    function drawList() {
+        const sections = []
+        for (const line of view.lines) {
+            const name = line.section ?? ''
+            if (!sections.length || sections.at(-1).name !== name) sections.push({name, lines: []})
+            sections.at(-1).lines.push(line)
+        }
+        const shown = line => filter === 'all' || (filter === 'changed' ? isChanged(line) : assigned.get(line.line).size > 1)
+        const focused = document.activeElement?.closest?.('.sung')?.dataset.line
+        $('split-list').replaceChildren(
+            el('div', {class: 'pagebar'},
+                el('h2', {}, 'Who sings which line'),
+                el('div', {class: 'seg'}, [['all', 'All lines'], ['changed', 'Changed'], ['together', 'Sung together']].map(([value, label]) =>
+                    el('button', {'aria-pressed': filter === value, onclick: () => { filter = value; draw() }}, label))),
+                el('span', {class: 'muted', style: {'font-size': '12px'}}, el('kbd', {}, '1'), '–', el('kbd', {}, String(Math.min(9, pool.length))), ' a singer on the line in focus · ', el('kbd', {}, '↑'), el('kbd', {}, '↓'), ' line · ', el('kbd', {}, 'Space'), ' listen')),
+            ...sections.map(section => {
+                const lines = section.lines.filter(shown)
+                if (!lines.length) return ''
+                return el('div', {class: 'sung-section'},
+                    el('div', {class: 'sung-head'}, el('h3', {}, section.name || 'Lines'),
+                        el('span', {class: 'muted num'}, lines[0].start !== undefined ? clock(lines[0].start, false) : ''),
+                        pool.length > 1 ? el('span', {class: 'all'}, 'All of these:', pool.map(id => {
+                            const has = lines.filter(l => assigned.get(l.line).has(id)).length
+                            return chip(id, has === lines.length ? true : has ? 'mixed' : false, () => toggleAll(lines, id), `${nameOf(id)} sings every line of this part - or none`)
+                        })) : ''),
+                    lines.map(lineRow))
+            }),
+            filter !== 'all' && !view.lines.some(shown) ? el('div', {class: 'empty'}, filter === 'changed' ? 'Nothing changed yet.' : 'No line is sung by more than one.') : '',
+        )
+        if (focused !== undefined) document.querySelector(`.sung[data-line="${focused}"]`)?.focus({preventScroll: true})
+    }
+
+    function drawSide() {
+        const c = changes()
+        const counts = id => view.lines.filter(l => assigned.get(l.line).has(id)).length
+        const others = view.characters.filter(ch => !pool.includes(ch.id))
+        const add = el('select', {'aria-label': 'Add a singer', style: {width: '100%'}, onchange: () => {
+            const id = add.value
+            if (!id) return
+            pool.push(id)
+            hue.set(id, HUES[(pool.length - 1) % HUES.length])
+            draw()
+        }}, el('option', {value: ''}, 'Add a singer from the cast…'), others.map(ch => el('option', {value: ch.id}, ch.role ? `${ch.name} - ${ch.role}` : ch.name)))
+        const blocked = c.empty.length ? `${plural(c.empty.length, 'line')} without a singer` : run.current?.running ? 'A run is going on' : ''
+        $('split-detail').replaceChildren(
+            el('h2', {}, 'Singers'),
+            el('p', {class: 'muted', style: {'margin-bottom': '10px'}}, 'The lead first. A line can be sung by several at once: a duet, a chorus.'),
+            ...pool.map((id, n) => {
+                const character = view.characters.find(ch => ch.id === id)
+                return el('div', {class: 'singer', style: {'--h': hue.get(id)}},
+                    character?.picture ? el('img', {src: thumbUrl(character.picture), alt: '', onclick: () => openViewer(character.picture, nameOf(id), id), style: {cursor: 'zoom-in'}}) : el('span', {class: 'noimg'}),
+                    el('div', {},
+                        el('b', {}, nameOf(id)), ' ', el('kbd', {}, String(n + 1)),
+                        el('div', {class: 'muted num'}, plural(counts(id), 'line')),
+                        character?.role ? el('div', {class: 'muted about', title: character.role}, character.role) : '',
+                        !counts(id) ? el('div', {class: 'muted', style: {'font-size': '12px'}}, view.singers.includes(id) ? 'Sings nothing now: no longer a singer once saved.' : 'Not saved: give them a line.') : ''))
+            }),
+            others.length ? add : '',
+            el('div', {class: 'changes'},
+                saved ? el('div', {class: 'note'}, saved) : '',
+                !c.lines.length ? el('p', {class: 'muted'}, view.unplanned.length
+                    ? `${view.unplanned.join(', ')} ${view.unplanned.length > 1 ? 'have' : 'has'} no shot plan: the next plan run plans ${view.unplanned.length > 1 ? 'them' : 'it'}.`
+                    : 'Change who sings a line, and the shots of its beat are planned again - only that beat, on its floor plan. Nothing is rendered.') : [
+                    el('b', {}, plural(c.lines.length, 'line') + ' changed'),
+                    el('ul', {},
+                        c.replanned.length ? el('li', {}, `${c.replanned.join(', ')} ${c.replanned.length > 1 ? 'lose their' : 'loses its'} shot plan and ${c.replanned.length > 1 ? 'are' : 'is'} planned again: the language model, no GPU`) : '',
+                        c.newSingers.map(id => el('li', {}, `${nameOf(id)} becomes a singer of the song: in all ${plural(view.characters.find(ch => ch.id === id)?.clips.length ?? 0, 'clip')} with ${nameOf(id)} the prompt changes (a singer who is not singing keeps the mouth closed)`)),
+                        c.formerSingers.map(id => el('li', {}, `${nameOf(id)} no longer sings: the prompts of all ${plural(view.characters.find(ch => ch.id === id)?.clips.length ?? 0, 'clip')} with ${nameOf(id)} change`)),
+                        c.clips.length ? el('li', {title: c.clips.join(', ')}, `${plural(c.clips.length, 'clip')} go stale${c.clips.length <= 8 ? `: ${c.clips.join(', ')}` : ''}. Nothing is rendered on its own.`) : '',
+                        c.added.map(({beat, id}) => el('li', {}, `${nameOf(id)} is not in ${beat} yet: added to it - ${beat} is then staged without its floor plan`)),
+                        c.unplaced.length ? el('li', {}, `${plural(c.unplaced.length, 'line')} in no clip: only the assignment changes`) : ''),
+                    c.empty.length ? el('div', {class: 'warn bad'}, `Every line needs a singer: ${c.empty.map(l => `"${l.text}"`).slice(0, 3).join(', ')}${c.empty.length > 3 ? ' …' : ''}`) : '',
+                    el('div', {class: 'btn-row'},
+                        el('button', {class: 'btn', onclick: () => { reset(); draw() }}, 'Discard'),
+                        el('button', {class: 'btn', disabled: !!blocked, title: blocked, onclick: () => save(false).catch(showError)}, 'Save'),
+                        el('button', {class: 'btn primary', disabled: !!blocked, title: blocked || 'Save, then plan the shots of these beats again', onclick: () => save(true).catch(showError)}, 'Save and plan')),
+                ],
+                !c.lines.length && view.unplanned.length ? el('button', {class: 'btn primary', disabled: !!run.current?.running, onclick: () => startRun({type: 'plan'}).catch(showError)}, 'Plan now') : '',
+                el('p', {class: 'muted', style: {'font-size': '12px', 'margin-top': '14px'}}, 'Kept in project.json until lyrics.txt or "singers" in config.json change, or --redo=singing asks the language model again.')),
+        )
+    }
+
+    function draw() {
+        drawList()
+        drawSide()
+    }
+
+    async function save(plan) {
+        const c = changes()
+        const result = await api('singing', {lines: c.lines.map(l => ({line: l.line, singers: [...assigned.get(l.line)]}))})
+        view = (await api('singing')).singing
+        reset()
+        saved = result.replanned.length ? `Saved. ${result.replanned.join(', ')} ${plan ? 'are planned now' : 'are planned with the next plan run'}.` : 'Saved.'
+        draw()
+        if (plan && view.unplanned.length) await startRun({type: 'plan'})
+    }
+
+    addEventListener('beforeunload', event => { if (changes().lines.length) event.preventDefault() })
+    draw()
+    const wanted = /^#line-(\d+)$/.exec(location.hash)
+    const row = wanted && $(`line-${wanted[1]}`)
+    if (row) {
+        row.scrollIntoView({block: 'center'})
+        row.focus({preventScroll: true})
+        row.classList.add('flash')
+    }
+    run.onEnd = async () => {
+        if (changes().lines.length) return
+        view = (await api('singing')).singing ?? view
+        reset()
+        draw()
+    }
     followRun(base)
 }
 
@@ -1715,7 +1987,9 @@ function shotsPanel(clip) {
         shot.people.map(person => el('div', {class: 'person'}, el('b', {}, person.name), ` ${person.text}`)),
     ))))
     if (clip.lines.length) {
-        out.push(el('div', {class: 'section'}, el('h3', {}, state.project.kind === 'film' ? 'Dialogue' : 'Sung'), clip.lines.map(line => el('div', {class: 'line'},
+        // who sings a line is changed on a page of its own: the inspector only leads there
+        const change = state.project.sings ? el('a', {class: 'link', style: {'margin-left': '8px', 'font-family': 'var(--sans)', 'text-transform': 'none', 'letter-spacing': 0}, href: `${base}/singers#line-${clip.lines[0].line}`}, 'Change singers') : ''
+        out.push(el('div', {class: 'section'}, el('h3', {}, state.project.kind === 'film' ? 'Dialogue' : 'Sung', change), clip.lines.map(line => el('div', {class: 'line'},
             el('time', {}, `${line.at.toFixed(1)}s`),
             el('div', {}, line.text, line.who && el('small', {}, line.who))))))
     }
@@ -2357,7 +2631,7 @@ async function loadWaveform() {
 async function timelinePage() {
     await loadProject({first: true})
     show('view-timeline')
-    projectChrome(state.project.title)
+    projectChrome(state.project.title, state.project)
     renderTimeline()
     state.fitted = true
     setScale(fitScale())
@@ -2375,7 +2649,7 @@ async function timelinePage() {
 loadServers()
 setInterval(() => { if (!document.hidden) loadServers() }, 10000)
 
-const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : timelinePage()}
+const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'singers' ? singersPage() : timelinePage()}
 pages[route.view]().catch(error => {
     show('none')
     $('boot').hidden = false
