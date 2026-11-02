@@ -10,7 +10,7 @@ import {withoutSentencesNaming} from "./names.ts";
 import {placeViewFrame, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from "./types.ts";
-import {joinAnd, pictureAsset, positions} from "../compose.ts";
+import {boundaryFrameAsset, joinAnd, pictureAsset, positions} from "../compose.ts";
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
@@ -24,7 +24,6 @@ const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward 
 // a voice description. The music-video code is not shared on purpose - it is built around stems and downbeats.
 
 // the last frame of a rendered clip, which a continuing clip starts from
-export const filmBoundaryFrame = (clipId: string) => `assets/clips/${clipId}_lf.png`
 
 export type FilmClipRequest = {
     id: string,
@@ -278,7 +277,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         assets: {
             pictures: [
                 ...subjects.map(s => ({label: s.picture, file: 'file' in s && s.file ? s.file : pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
-                ...(clip.startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: filmBoundaryFrame(clip.startsFrom), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
+                ...(clip.startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: boundaryFrameAsset(clip.startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: clip.startsFrom, name: `last frame of ${clip.startsFrom}`, description: ''}] : []),
             ],
         },
         prompt,

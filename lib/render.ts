@@ -1037,17 +1037,13 @@ export class Renderer implements Disposable {
      */
     // renderedFrames: set for a clip just rendered - its frames are always rewritten; without, only missing ones are made
     protected async saveBoundaryFrames(clip: { id: string, frames: number }, video: string, renderedFrames?: number) {
-        const [first, last] = this.boundaryFrameFiles(clip.id)
+        const [first, last] = [boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')]
         if (renderedFrames === undefined && existsSync(join(this.projectDir, first)) && existsSync(join(this.projectDir, last))) return
         mkdirSync(join(this.projectDir, dirname(first)), {recursive: true})
         const frames = this.framesUsed(clip, renderedFrames ?? (await probeVideo(video)).frames)
         await extractFrame(video, 0, join(this.projectDir, first))
         await extractFrame(video, frames - 1, join(this.projectDir, last))
         log.step('Saved', `${first}, ${last} ${styles.muted(`frames 0 and ${frames - 1}`)}`)
-    }
-
-    protected boundaryFrameFiles(clipId: string): [string, string] {
-        return [boundaryFrameAsset(clipId, 'ff'), boundaryFrameAsset(clipId, 'lf')]
     }
 
     /** How many frames of the file the video uses. A clip rendered too short (warned about above) ends on its own last frame. */

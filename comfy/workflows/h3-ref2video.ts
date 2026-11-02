@@ -1,8 +1,8 @@
 // Originally exported from ComfyUI as r2v_audio_fullmix_guide_1-pass_turbo.json (see README's "Workflows" section)
-import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, h3RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
-export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
+export const renderFrames = h3RenderFrames
 
 // the size the turbo LoRA is made for (768p) - a larger videoResolution is rendered all the same, with a warning
 export const recommendedResolution: RecommendedResolution = '1344x768'

@@ -16,7 +16,7 @@ const TARGET_LUFS = -20
 const MAX_GAIN_DB = 9
 
 /** Integrated loudness (EBU R128) of a clip's sound in LUFS, undefined for silence. */
-export async function loudnessOf(file: string): Promise<number | undefined> {
+async function loudnessOf(file: string): Promise<number | undefined> {
     const proc = Bun.spawn(['ffmpeg', '-v', 'info', '-nostats', '-i', file, '-vn', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'], {stdout: 'pipe', stderr: 'pipe'})
     const output = await new Response(proc.stderr).text()
     await proc.exited

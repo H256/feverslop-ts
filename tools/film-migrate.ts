@@ -8,7 +8,8 @@ import {log} from '../lib/log.ts';
 // changed. Without --apply only the result is shown; with --apply the videos of the film are replaced by the carried-over ones (the copy keeps everything).
 // usage: bun run film:migrate <film-id> <folder-with-the-old-state> [--apply]
 import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {join, resolve} from "node:path";
+import {basename, join, resolve} from "node:path";
+import {boundaryFrameAsset} from "../lib/compose.ts";
 import {promptHash} from "../lib/film/render.ts";
 import {filmDir} from "../lib/film/setup.ts";
 import {clipRequestRef, clipRequestsDir} from "../lib/previous-output.ts";
@@ -79,9 +80,10 @@ for (const [newId, was] of keep) {
     const n = newRequests.find(r => r.id === newId)!
     copyFileSync(join(old, `videos/${was.id}.mp4`), join(videos, `${newId}.mp4`))
     writeFileSync(join(videos, `${newId}.mp4.json`), JSON.stringify({...read(join(old, `videos/${was.id}.mp4.json`)), frameStart: n.frameStart, frames: n.frames, request: clipRequestRef(newId)}, null, 2))
-    for (const suffix of ['_lf.png', '_ff.png']) {
-        const from = [join(old, `assets/clips/${was.id}${suffix}`), join(old, `clips-frames/${was.id}${suffix}`)].find(existsSync)
-        if (from) copyFileSync(from, join(frames, `${newId}${suffix}`))
+    for (const which of ['lf', 'ff'] as const) {
+        // clips-frames/: where an old film kept them
+        const from = [join(old, boundaryFrameAsset(was.id, which)), join(old, 'clips-frames', basename(boundaryFrameAsset(was.id, which)))].find(existsSync)
+        if (from) copyFileSync(from, join(film, boundaryFrameAsset(newId, which)))
     }
 }
 // the assembled film is built from clips that are not all there any more

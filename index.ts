@@ -9,7 +9,7 @@ import {mkdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
-import {clipChains, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
+import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
@@ -1164,12 +1164,10 @@ if (render.has('images') || render.has('videos') || retake) {
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
-        const selected = clips.filter(c => only.size === 0 || only.has(c.id))
+        const selected = onlyClips(clips, only)
         log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
         // on request, and only for the clips named: the old version is put away in old/attempts/, then the clip is rendered again
         if (args.again) {
-            const unknown = [...only].filter(id => !clips.some(c => c.id === id))
-            if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${clips.map(c => c.id).join(', ')}`)
             warnFixedSeed(config.seed)
             const stamp = versionStamp()
             for (const clip of selected) {
@@ -1313,7 +1311,7 @@ async function dryRun() {
     }
     if (render.has('videos')) {
         const only = new Set(args.only.split(',').filter(Boolean))
-        const selected = state.clips.filter(c => !only.size || only.has(c.id))
+        const selected = onlyClips(state.clips, only)
         const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
         for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) log.warn(risk)
         log.step('Clips', todo.length ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))

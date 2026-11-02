@@ -129,6 +129,8 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | `pinStartFrame`   | `true`           | continuing clips (README: [Continuous scenes](../README.md#continuous-scenes)): `true` = the clip is locked to the last frame of the clip before it as its real first frame (`MiniMaxH3AddGuide` with `image`, `h3-ref2video` only), `false` = that frame is only one of the reference pictures |
 | `contextFrames`   | `0`              | `22` or `39`: a continuing clip gets the last frames of the clip before as a frame batch, locked to its start (`MiniMaxH3AddGuide` at frame 0, ComfyUI's own nodes); rendered that much longer, the head cut off again (`lib/render.ts`, `trimHead`). Instead of the one pinned frame |
 | `fightClips`      | `false`          | `true` = the clips of a fight beat (kind `hit` with a crowd of creatures in it) are cut into one-bar pieces of about two seconds, one shot each, and a piece has only the people of its shot as references - more clips, shorter, and the opponent is always in the picture. The planner stages such a beat as single blows and reactions (`micro`). Changing it redoes `blocking` (and so `shotMoments`) |
+| `vocalGap`        | `1.5`            | seconds: a clip whose singing starts more than this after its start, or stops more than this before its end, is cut there, so the silence is a clip of its own and no lip movement starts early (`splitAtVocalGaps` in `lib/music.ts`). `0` = off. Needs `alignLyrics`. Changing it redoes `timeline` (and everything after it) |
+| `preview`         | `{"scale": 0.25, "steps": 4}` | what `--preview` renders with: `scale` is a factor on the pixels (0.25 = half the width and height), `steps` the sampling steps of a workflow with the turbo LoRA. A two-pass workflow renders only its first pass, a workflow on the base model keeps its steps |
 | `leakRetries`     | `0`              | a rendered clip that came out as the reference pictures lined up on their grey studio backdrop (seed-dependent, rare) is put away in `old/leaks/` and rendered again with another seed, up to this many times. `0` = off. Needs `"seed": -1`. `bun run leak-scan <project-id>` looks through the clips already rendered and prints the command to render the flagged ones again |
 | `songWorkflow`    | `"yue2-song"`    | `--render=song`: a file name in `comfy/workflows/`, without `.ts` |
 | `songDuration`    | `-1`             | `--render=song`: an upper bound in seconds for the generated song, `-1` = the workflow's own (360 s) |
@@ -141,7 +143,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 
 Changing `singerVoice` after pictures were rendered: existing pictures are kept (a picture that exists is not rendered again), so delete the old character pictures to get the new cast.
 
-The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`) change the plan, the others only the render. The
+The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`, `vocalGap`) change the plan, the others only the render. The
 config is read and checked at every run - a wrong value stops with a message naming the field, an unknown field
 (a typo like `"singer"`) gets a warning.
 

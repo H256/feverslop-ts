@@ -7,8 +7,7 @@ import {libraryDir, libraryFolder, libraryIds, readLibraryAsset} from "../librar
 import {withProjectLock} from "../lock.ts";
 import {listProjects, projectDir} from "../project-setup.ts";
 import type {Project} from "../project.ts";
-import {filmDir} from "../film/setup.ts";
-import {FILMS_DIR} from "../film/store.ts";
+import {filmDir, filmIds} from "../film/setup.ts";
 import type {FilmProject} from "../film/types.ts";
 import type {EditorTarget} from "./project.ts";
 
@@ -16,8 +15,6 @@ import type {EditorTarget} from "./project.ts";
 // the page only changes the entry in casting.json, and the next run copies the asset, pins it and writes its texts.
 
 const versioned = (dir: string, file: string) => existsSync(join(dir, file)) ? {file, v: Math.round(statSync(join(dir, file)).mtimeMs)} : undefined
-
-export const filmIds = () => existsSync(FILMS_DIR) ? readdirSync(FILMS_DIR, {withFileTypes: true}).filter(d => d.isDirectory() && existsSync(join(FILMS_DIR, d.name, 'input'))).map(d => d.name) : []
 
 function castingOf(dir: string): CastingFile {
     try {

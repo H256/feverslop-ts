@@ -6,8 +6,7 @@ import {parseArgs} from "node:util";
 import {startEditor} from "./lib/editor/server.ts";
 import {listProjects, projectExists} from "./lib/project-setup.ts";
 import {log, styles} from "./lib/log.ts";
-import {filmExists} from "./lib/film/setup.ts";
-import {filmIds} from "./lib/editor/library.ts";
+import {filmExists, filmIds} from "./lib/film/setup.ts";
 import {FILMS_DIR} from "./lib/film/store.ts";
 cli('editor')
 

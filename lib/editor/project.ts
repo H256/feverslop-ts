@@ -190,7 +190,7 @@ function marksOf(dir: string, clip: { id: string, startsFrom?: string, dropped?:
     const attempts = existsSync(leaks) ? readdirSync(leaks).filter(f => f.startsWith(`${clip.id}-seed-`)).length : 0
     if (attempts) marks.push({kind: 'backdrop-attempt', text: `${attempts} earlier attempt${attempts > 1 ? 's' : ''} had a grey backdrop and ${attempts > 1 ? 'were' : 'was'} rendered again`})
     if (clip.startsFrom && rendered) {
-        const frame = join(dir, `assets/clips/${clip.startsFrom}_lf.png`)
+        const frame = join(dir, boundaryFrameAsset(clip.startsFrom, 'lf'))
         if (existsSync(frame) && statSync(frame).mtimeMs > statSync(video).mtimeMs) marks.push({kind: 'older-start', text: `Starts on an older version of the last frame of ${clip.startsFrom}`})
     }
     if (clip.dropped?.length) marks.push({kind: 'dropped', text: `No picture for lack of room: ${clip.dropped.join(', ')}`})
@@ -380,8 +380,8 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
             audio: [],
             dropped: [],
             video: videoOf(dir, clip.id),
-            firstFrame: media(dir, `assets/clips/${clip.id}_ff.png`),
-            lastFrame: media(dir, `assets/clips/${clip.id}_lf.png`),
+            firstFrame: media(dir, boundaryFrameAsset(clip.id, 'ff')),
+            lastFrame: media(dir, boundaryFrameAsset(clip.id, 'lf')),
             marks: marksOf(dir, clip, run, scan),
             views: viewsOf(clip),
             override: overrideOf(dir, clip.id),
@@ -467,7 +467,7 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
             return id
         }
     })() : id
-    const thumb = ids.map(c => media(dir, `assets/clips/${c}_ff.png`)).find(Boolean)
+    const thumb = ids.map(c => media(dir, boundaryFrameAsset(c, 'ff'))).find(Boolean)
     return {
         id, kind, title,
         group: `${kind}/${projectGroup(id)}`,

@@ -3,7 +3,7 @@
 // makes its own ambience. As in ComfyUI's own template (video_minimax_h3_r2v) MiniMaxH3ReferenceToVideo already returns an
 // empty video+audio latent: it is sampled as it is, and the result is decoded twice - the picture with the video VAE, the
 // sound with the audio VAE.
-import {afterCleanup, type Aspect, dyn, endGuide, type EndFrame, type PreviewOptions, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, type RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, type Aspect, dyn, endGuide, type EndFrame, type PreviewOptions, startImages, FPS, MAX_REFERENCE_IMAGES, type RecommendedResolution, h3RenderFrames, type Resolution, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 export type FilmVideoWorkflowOptions = {
     prompt: string,
@@ -24,7 +24,7 @@ export type FilmVideoWorkflowOptions = {
 }
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final film
-export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
+export const renderFrames = h3RenderFrames
 
 // the size the turbo LoRA is made for (768p) - a larger videoResolution is rendered all the same, with a warning
 export const recommendedResolution: RecommendedResolution = '1344x768'

@@ -1,6 +1,6 @@
 // Non-interactive helpers for tools/film-init.ts: where a new film's files go and how they're written -
 // films/<id>/{input/*, config.json}.
-import {existsSync} from "node:fs";
+import {existsSync, readdirSync} from "node:fs";
 import {join} from "node:path";
 import type {FilmConfig} from "./config.ts";
 import {FILMS_DIR} from "./store.ts";
@@ -14,6 +14,14 @@ export type FilmSeed = {
 
 export const filmDir = (id: string) => join(FILMS_DIR, id)
 export const filmExists = (id: string) => existsSync(filmDir(id))
+
+const filmsWith = (marker: string) => existsSync(FILMS_DIR)
+    ? readdirSync(FILMS_DIR, {withFileTypes: true}).filter(d => d.isDirectory() && existsSync(join(FILMS_DIR, d.name, marker))).map(d => d.name).sort()
+    : []
+/** The films in films/: a folder with its input/ (bun run film:init writes it). */
+export const filmIds = () => filmsWith('input')
+/** The films planned at least once: their project.json is written. */
+export const plannedFilmIds = () => filmsWith('project.json')
 
 /** Writes a new film's input files and config.json (only the keys given - everything else stays default). */
 export async function writeFilm(id: string, seed: FilmSeed) {

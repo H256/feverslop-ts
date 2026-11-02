@@ -2,6 +2,7 @@ import {cli} from '../lib/cli.ts';
 import {log} from '../lib/log.ts';
 import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
+import {plannedFilmIds} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import type {FilmProject} from "../lib/film/types.ts";
 import {clipRequestsDir} from "../lib/previous-output.ts";
@@ -41,7 +42,7 @@ function card(id: string) {
 </article>`
 }
 
-const films = existsSync(FILMS_DIR) ? readdirSync(FILMS_DIR, {withFileTypes: true}).filter(d => d.isDirectory() && existsSync(join(FILMS_DIR, d.name, 'project.json'))).map(d => d.name).sort() : []
+const films = plannedFilmIds()
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Films</title>
 <style>
