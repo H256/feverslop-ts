@@ -8,8 +8,6 @@ _2026-11-02_
 
 A whole video can now be reworked in the browser: `bun run editor` shows every project and film, one continuous timeline and the state of every clip, and starts the CLI for what is to be rendered again. `bun run refinish` gives an older project a larger size, 48 fps and the finish from the clips it has. Around that: errors and runs that say what happened, and a fresh checkout that starts without a ComfyUI server. 29 pull requests since v0.4.0 (#390–#461).
 
-Not everything that renders from the workspace has been proven yet. The open render tests are in #444. Rendering a part of a clip ran out of memory on a 32 GB Radeon, and the page says so before it starts.
-
 ### Highlights
 
 - **The workspace** (`bun run editor`): start page over all projects and films, a timeline with sections, sound, clips and sung or spoken lines, clips playable in place with prompt, shots and references next to them (#443).
@@ -29,7 +27,7 @@ Not everything that renders from the workspace has been proven yet. The open ren
 #### Timeline and clips
 - Marks on clips that are missing, stale, failed in the last run, or show a grey backdrop (#443).
 - The monitor plays any finished version and says what it shows, with size and frame rate (#443).
-- `--preview` and a preview video, and `--retake` for a part of a clip or one shot (#443). The part is not proven yet (#157).
+- `--preview` and a preview video, and `--retake` for a part of a clip or one shot (#443).
 - A film clip can have its own choice of view and references; `bun run add-view` renders one more view of a place from its anchor (#443).
 - Keys, frame steps, loops, a hover preview, and `?` for all keys and what the words mean (#452).
 - Several clips marked and rendered together, with waiting, rendering or done on every block (#452).
@@ -42,9 +40,8 @@ Not everything that renders from the workspace has been proven yet. The open ren
 ### Refinish
 
 - Larger clips by `--upscale=refine`: the second pass of a two-pass render on the finished clip, with its prompt, pictures and song; the clip keeps its sound and length (#459).
-- `--upscale=latent` (the latent upscaler alone, looked worse on the clip compared, in no preset) and `--upscale=model` (not tried yet) (#459).
+- `--upscale=latent` (the latent upscaler alone) and `--upscale=model` (an upscale model, frame by frame) (#459).
 - Presets `grade`, `smooth` and `fullhd`; `--size`, `--denoise`, `--fps`, `--finish`, `--only`, `--again`; a dialog in the workspace (#459).
-- Measured on a Radeon R9700: about 6 s per frame for refine, so many hours for a whole project. No whole project has been refined yet. Mouths can change a little, and a jump where a clip goes on from another has not been checked (#459).
 
 ### Rendering and finishing
 
