@@ -108,6 +108,21 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
 
 // What is wrong with a render setting, or undefined - the film's config checks these the same way
+export const invalidJsonProblem = (error: unknown) =>
+    `is not valid JSON (${error instanceof Error ? error.message : String(error)}) - fix it, or delete the file to use the defaults`
+export const seedProblem = (value: unknown): string | undefined =>
+    Number.isInteger(value) && (value as number) >= -1 ? undefined : `seed must be -1 or a whole number >= 0, got ${JSON.stringify(value)}`
+export const resolutionProblem = (key: string, value: unknown): string | undefined =>
+    value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)) ? undefined : `${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`
+export const workflowProblem = (key: string, name: unknown): string | undefined =>
+    existsSync(join(workflowDir, `${name}.ts`)) ? undefined : `${key}: no workflow comfy/workflows/${name}.ts`
+export function llmProblem(llm: unknown): string | undefined {
+    if (!llm || typeof llm !== 'object' || Array.isArray(llm)) return `llm must be an object like {"model": "…"}, got ${JSON.stringify(llm)}`
+    const keys = Object.keys(llm).filter(key => key !== 'model')
+    if (keys.length) return `llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${keys.join(', ')}`
+    const {model} = llm as { model?: unknown }
+    return model !== undefined && (typeof model !== 'string' || !model.trim()) ? `llm.model must be a model id of the LLM server, got ${JSON.stringify(model)}` : undefined
+}
 export const aspectProblem = (value: unknown): string | undefined =>
     /^[1-9]\d*:[1-9]\d*$/.test(String(value)) ? undefined : `videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(value)}`
 export const contextFramesProblem = (value: unknown): string | undefined =>
@@ -145,7 +160,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         try {
             raw = await Bun.file(file).json()
         } catch (e) {
-            fail(`is not valid JSON (${e instanceof Error ? e.message : String(e)}) - fix it, or delete the file to use the defaults`)
+            fail(invalidJsonProblem(e))
         }
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object like {"seed": 42}')
@@ -155,14 +170,13 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     // the keys of `config` can't be the allowed ones - a typo'd key from `raw` is in there too
     warnUnknownKeys(raw, [...Object.keys(defaults), 'alignLyrics'], file)
 
-    if (!Number.isInteger(config.seed) || config.seed < -1) fail(`seed must be -1 or a whole number >= 0, got ${JSON.stringify(config.seed)}`)
+    const seedWrong = seedProblem(config.seed)
+    if (seedWrong) fail(seedWrong)
     const previewWrong = previewProblem(config.preview)
     if (previewWrong) fail(previewWrong)
     for (const key of ['imageResolution', 'videoResolution'] as const) {
-        const value = config[key]
-        if (!(value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)))) {
-            fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
-        }
+        const wrong = resolutionProblem(key, config[key])
+        if (wrong) fail(wrong)
     }
     const aspectWrong = aspectProblem(config.videoAspect)
     if (aspectWrong) fail(aspectWrong)
@@ -177,7 +191,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (leakWrong) fail(leakWrong)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
-        if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
+        const wrong = workflowProblem(key, config[key])
+        if (wrong) fail(wrong)
     }
     if (!Number.isFinite(config.songDuration) || (config.songDuration !== -1 && config.songDuration <= 0)) {
         fail(`songDuration must be -1 (the workflow's own default) or a positive number of seconds, got ${JSON.stringify(config.songDuration)}`)
@@ -196,12 +211,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (typeof config.alignLyrics !== 'boolean') fail(`alignLyrics must be true or false, got ${JSON.stringify(config.alignLyrics)}`)
     if (config.singers.length && !config.alignLyrics) fail('singers need the lyrics timing - remove "alignLyrics": false')
 
-    if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
-    const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
-    if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)
-    if (config.llm.model !== undefined && (typeof config.llm.model !== 'string' || !config.llm.model.trim())) {
-        fail(`llm.model must be a model id of the LLM server, got ${JSON.stringify(config.llm.model)}`)
-    }
+    const llmWrong = llmProblem(config.llm)
+    if (llmWrong) fail(llmWrong)
     return config
 }
 

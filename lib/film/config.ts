@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Aspect, Resolution} from "../../comfy/helpers.ts";
-import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, languageName, leakRetriesProblem, workflowDir} from "../config.ts";
+import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, invalidJsonProblem, languageName, leakRetriesProblem, llmProblem, resolutionProblem, seedProblem, workflowProblem} from "../config.ts";
 import type {Finish} from "../finish.ts";
 import {log, warnUnknownKeys} from "../log.ts";
 
@@ -101,7 +101,7 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
         try {
             raw = await Bun.file(file).json()
         } catch (e) {
-            fail(`is not valid JSON (${e instanceof Error ? e.message : String(e)}) - fix it, or delete the file to use the defaults`)
+            fail(invalidJsonProblem(e))
         }
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object like {"targetDuration": 120}')
@@ -114,17 +114,17 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (!Number.isFinite(config.targetDuration) || (config.targetDuration !== -1 && config.targetDuration < 10)) {
         fail(`targetDuration must be -1 (as long as the story needs) or at least 10 seconds, got ${JSON.stringify(config.targetDuration)}`)
     }
-    if (!Number.isInteger(config.seed) || config.seed < -1) fail(`seed must be -1 or a whole number >= 0, got ${JSON.stringify(config.seed)}`)
+    const seedWrong = seedProblem(config.seed)
+    if (seedWrong) fail(seedWrong)
     for (const key of ['imageResolution', 'videoResolution'] as const) {
-        const value = config[key]
-        if (!(value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)))) {
-            fail(`${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`)
-        }
+        const wrong = resolutionProblem(key, config[key])
+        if (wrong) fail(wrong)
     }
     const aspectWrong = aspectProblem(config.videoAspect)
     if (aspectWrong) fail(aspectWrong)
     for (const key of ['imageWorkflow', 'videoWorkflow'] as const) {
-        if (!existsSync(join(workflowDir, `${config[key]}.ts`))) fail(`${key}: no workflow comfy/workflows/${config[key]}.ts`)
+        const wrong = workflowProblem(key, config[key])
+        if (wrong) fail(wrong)
     }
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
@@ -137,11 +137,7 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)
     if (typeof config.levelMatching !== 'boolean') fail(`levelMatching must be true or false, got ${JSON.stringify(config.levelMatching)}`)
     if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40) fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
-    if (!config.llm || typeof config.llm !== 'object' || Array.isArray(config.llm)) fail(`llm must be an object like {"model": "…"}, got ${JSON.stringify(config.llm)}`)
-    const llmKeys = Object.keys(config.llm).filter(key => key !== 'model')
-    if (llmKeys.length) fail(`llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${llmKeys.join(', ')}`)
-    if (config.llm.model !== undefined && (typeof config.llm.model !== 'string' || !config.llm.model.trim())) {
-        fail(`llm.model must be a model id of the LLM server, got ${JSON.stringify(config.llm.model)}`)
-    }
+    const llmWrong = llmProblem(config.llm)
+    if (llmWrong) fail(llmWrong)
     return {...config, targetDurationSet: 'targetDuration' in raw}
 }
