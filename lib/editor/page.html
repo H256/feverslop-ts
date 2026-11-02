@@ -276,6 +276,16 @@ select.source { padding: 1px 6px; font-size: 12px; color: var(--muted); }
 .role { display: grid; grid-template-columns: 96px minmax(0, 1fr) 260px; gap: 12px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; align-items: center; }
 .role img, .role .noimg { width: 96px; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; background: var(--hatch); display: block; }
 .role .warn { margin: 4px 0 0; }
+/* the preproduction: the stages of the plan, each planned and looked at before the next (issue #526) */
+.stages { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px; }
+.stages .stage { padding: 2px 10px; border-radius: 99px; background: var(--raised); color: var(--muted); font-size: 12px; white-space: nowrap; text-decoration: none; }
+.stages .stage.done { color: var(--ok); }
+.stages .stage.next { color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.stages .arrow { color: var(--muted); font-size: 11px; }
+.member { padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+.member .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.member textarea { font: 13px/1.5 var(--sans); }
+textarea.book { width: 100%; min-height: 50vh; font: 14px/1.6 var(--sans); }
 /* the singers: who sings which line - one colour per singer, the same in the list and on the side */
 .sung-section { margin-bottom: 18px; }
 .sung-head { display: flex; align-items: center; gap: 10px; padding: 4px 10px 6px; position: sticky; top: -16px; background: var(--bg); z-index: 1; }
@@ -771,7 +781,8 @@ async function homePage() {
                 el('span', {class: 'row'},
                     el('span', {class: 'chip'}, project.kind === 'film' ? 'Film' : 'Music video'),
                     el('span', {class: finalChip[project.final][1]}, finalChip[project.final][0]),
-                    runChip[project.lastRun?.state] && el('span', {class: runChip[project.lastRun.state][1], title: project.lastRun.command}, runChip[project.lastRun.state][0])),
+                    runChip[project.lastRun?.state] && el('span', {class: runChip[project.lastRun.state][1], title: project.lastRun.command}, runChip[project.lastRun.state][0]),
+                    project.stage ? el('span', {class: 'chip', title: 'Planned up to this stage, nothing rendered yet'}, `Planned: ${stageName(project.stage, project.kind).toLowerCase()}`) : ''),
                 stale, next))
         return el('div', {class: 'card'}, link, others.length ? el('button', {class: 'more', 'aria-expanded': 'false', onclick: () => {
             expanded.add(project.group)
@@ -938,7 +949,8 @@ async function libraryPage() {
 function projectChrome(title, project) {
     $('title').textContent = title
     document.title = `${title} · Workspace`
-    const pages = [['timeline', 'Timeline', ''], ['references', 'References', 'references'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : [])]
+    // in the order a film is made: the book, who plays, who sings, how it looks - the timeline is where it all comes together
+    const pages = [['timeline', 'Timeline', ''], ['story', project?.kind === 'film' ? 'Screenplay' : 'Story', 'story'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : []), ['references', 'References', 'references']]
     $('nav').replaceChildren(...pages.map(([page, label, path]) =>
         el('a', {href: `${base}/${path}`, 'aria-current': route.page === page ? 'page' : false}, label)))
 }
@@ -1059,11 +1071,109 @@ async function referencesPage() {
     followRun(base)
 }
 
+////////// THE PREPRODUCTION - as a film is made: the book, then who plays and where, then the look, then the shots - each planned
+// and looked at before what is built on it, and all of it before anything is rendered (issue #526). Every stage is the language model
+const STAGES = ['story', 'cast', 'look', 'plan']
+const stageName = (stage, kind) => ({story: kind === 'film' ? 'Screenplay' : 'Story', cast: 'Cast', look: 'Look', plan: 'Shot plan'})[stage]
+const STAGE_PAGE = {story: 'story', cast: 'casting', look: 'references', plan: ''}
+const stageDoes = (stage, kind) => ({
+    story: kind === 'film' ? 'The screenplay, from the idea or from the script.' : 'The story, from the lyrics and the story idea.',
+    cast: kind === 'film' ? 'Who is in it and where it is, from the screenplay.' : 'Who is in it and where it is, from the story - and who sings which line.',
+    look: kind === 'film' ? 'The look of the film, and how everyone, every place and every prop looks.' : 'The look of the video, and how everyone and every place looks.',
+    plan: kind === 'film' ? 'The shots of every scene.' : 'The beats of the story on the song, and the shots of every clip.',
+})[stage]
+
+/** Plans up to this stage, or everything (until undefined) - asked first: what it makes, and that it renders nothing. */
+async function planStage(project, until) {
+    const from = STAGES.indexOf(project.plan.next ?? 'plan')
+    const to = until ? STAGES.indexOf(until) : STAGES.length - 1
+    const making = STAGES.slice(from, to + 1)
+    const yes = await ask({
+        title: until ? `Plan up to the ${stageName(until, project.kind).toLowerCase()}?` : 'Plan everything?',
+        lines: [
+            ...making.map(stage => `${stageName(stage, project.kind)}: ${stageDoes(stage, project.kind)}`),
+            project.plan.stage ? 'The language model only. Nothing is rendered.' : 'The language model; a music video has its song read first (stems and the lyrics timing, when set). Nothing is rendered.',
+            until ? 'It stops there: look at it here, change it, and go on.' : 'Rendering is asked for on the timeline afterwards.',
+        ],
+        confirm: 'Plan it',
+    })
+    if (yes) await startRun({type: 'plan', ...(until && until !== 'plan' ? {until} : {})})
+}
+
+/** The stages of the plan, what is done and what comes next, with the button that plans it. */
+function stageBar(project) {
+    const {stage, next} = project.plan
+    const done = stage ? STAGES.indexOf(stage) : -1
+    const busy = !!run.current?.running
+    return el('div', {class: 'stages'},
+        STAGES.flatMap((s, n) => [
+            n ? el('span', {class: 'arrow'}, '›') : '',
+            el(STAGE_PAGE[s] !== undefined && n <= done ? 'a' : 'span', {class: `stage${n <= done ? ' done' : s === next ? ' next' : ''}`, title: stageDoes(s, project.kind), href: n <= done ? `${base}/${STAGE_PAGE[s]}` : undefined}, `${n <= done ? '✓ ' : ''}${stageName(s, project.kind)}`),
+        ]),
+        el('span', {class: 'arrow'}, '›'),
+        el('span', {class: `stage${project.clips.some(c => c.video) ? ' done' : ''}`, title: 'Rendering: the pictures, the clips and the final video - GPU time, asked for on the timeline'}, 'Rendering'),
+        el('div', {class: 'spacer'}),
+        next ? el('button', {class: 'btn primary', disabled: busy, title: stageDoes(next, project.kind), onclick: () => planStage(project, next).catch(showError)}, `Plan the ${stageName(next, project.kind).toLowerCase()}`) : '',
+        next && next !== 'plan' ? el('button', {class: 'btn', disabled: busy, title: 'Every stage up to the shots in one run, without stopping', onclick: () => planStage(project, undefined).catch(showError)}, 'Plan everything') : '',
+    )
+}
+
+/** What a step that goes is, in words - the page names the steps a change drops. */
+const listSteps = steps => steps.join(', ')
+/** Children for replaceChildren, which takes no arrays: nested lists flattened, the empty ones left out - as el does it. */
+const nodes = (...items) => items.flat(4).filter(c => c !== undefined && c !== null && c !== false && c !== '')
+
+async function storyPage() {
+    show('view-list')
+    const [book, project] = await Promise.all([api('book'), api('project')])
+    const film = project.kind === 'film'
+    projectChrome(project.title, project)
+    const text = el('textarea', {class: 'book', rows: 24, value: book.text ?? '', 'aria-label': film ? 'Screenplay' : 'Story', readOnly: !book.editable})
+    const save = el('button', {class: 'btn primary', disabled: true, onclick: () => saveStory().catch(showError)}, 'Save the story')
+    text.addEventListener('input', () => { save.disabled = text.value.trim() === (book.text ?? '').trim() })
+    async function saveStory() {
+        const yes = await ask({
+            title: 'Save the story?',
+            lines: ['The story in project.json is replaced by this text.', book.builtOn.length ? 'The next plan run makes what goes again, from this story: the language model only, nothing is rendered.' : ''].filter(Boolean),
+            warnings: book.builtOn.length ? [`What is built on the story goes: ${listSteps(book.builtOn)}.`, ...(project.clips.some(c => c.video) ? ['Pictures and clips made before stay, and are stale once the plan has new prompts for them.'] : [])] : [],
+            confirm: 'Save it',
+        })
+        if (!yes) return
+        const result = await api('book', {text: text.value})
+        toast(result.changed ? 'The story is saved' : 'Nothing changed')
+        location.reload()
+    }
+    async function writeAgain() {
+        const yes = await ask({
+            title: 'Write the story again?',
+            lines: ['The language model writes a new story from the lyrics and the story idea, and the run stops after it.'],
+            warnings: [`The story there is now goes${book.builtOn.length ? `, and with it ${listSteps(book.builtOn)}` : ''}. A story changed by hand goes too.`],
+            confirm: 'Write it again',
+        })
+        if (yes) await startRun({type: 'plan', redo: ['story'], until: 'story'})
+    }
+    $('view-list').replaceChildren(...nodes(
+        stageBar(project),
+        el('div', {class: 'pagebar'}, el('h2', {}, film ? 'Screenplay' : 'Story')),
+        book.text === undefined ? el('div', {class: 'empty'}, `No ${film ? 'screenplay' : 'story'} yet - plan it with the button above.`) : [
+            film ? el('div', {class: 'note'}, 'The screenplay is read here. It is changed in the script in input/, or in project.json (screenplay), and then planned again with --redo.') : '',
+            el('div', {class: 'section'}, text),
+            book.editable ? el('div', {class: 'section btn-row'}, save,
+                el('button', {class: 'btn', disabled: !!run.current?.running, onclick: () => writeAgain().catch(showError)}, 'Write it again')) : '',
+            book.editable && book.builtOn.length ? el('p', {class: 'muted'}, `Saving a changed story drops what is built on it: ${listSteps(book.builtOn)}. The next plan run makes those again.`) : '',
+        ],
+    ))
+    run.onEnd = () => location.reload()
+    followRun(base)
+}
+
 async function castingPage() {
     show('view-list')
-    const [casting, project] = await Promise.all([api('casting'), api('project')])
+    const [casting, project, {cast}, pending] = await Promise.all([api('casting'), api('project'), api('cast'), api('casting-redo')])
     projectChrome(project.title, project)
-    let changed = false
+    const film = project.kind === 'film'
+    let changed = pending.changes.length > 0
+    let editing = false
     const role = member => {
         const options = casting.options[member.kind]
         const select = el('select', {'aria-label': `Who plays ${member.name}`, onchange: () => choose(member, select)},
@@ -1106,20 +1216,107 @@ async function castingPage() {
             showError(error)
         }
     }
+    // a changed casting.json: the run takes it over, and plans again what was planned from the old texts - asked first
+    async function planNow() {
+        const {changes, redo} = await api('casting-redo')
+        // a plan stopped at a stage stays there: the cast is taken over, the next stage is asked for by itself
+        const until = project.plan.stage && project.plan.stage !== 'plan' ? project.plan.stage : undefined
+        const yes = await ask({
+            title: 'Plan with this casting?',
+            lines: [
+                ...changes,
+                redo.length ? `Planned again from the new texts: ${listSteps(redo)}. The language model only, nothing is rendered.` : 'Nothing planned so far is built on the old texts: the run only takes the casting over. Nothing is rendered.',
+            ],
+            warnings: redo.length && project.clips.length ? ['Clips with these roles are stale afterwards. Rendering them again is asked for on the timeline.'] : [],
+            confirm: 'Plan now',
+        })
+        if (yes) await startRun({type: 'plan', ...(redo.length ? {redo} : {}), ...(until ? {until} : {})})
+    }
+
+    // the cast by hand: names, roles and what they are, without the library - and for a music video who is in it at all
+    const draft = cast && {characters: cast.characters.map(c => ({...c})), locations: cast.locations.map(l => ({...l}))}
+    const input = (value, label, onchange, {area = false, rows = 2, placeholder} = {}) => {
+        const node = el(area ? 'textarea' : 'input', {...(area ? {rows} : {type: 'text'}), value: value ?? '', 'aria-label': label, placeholder, oninput: () => onchange(node.value)})
+        return el('label', {class: 'field'}, el('span', {}, label), node)
+    }
+    const memberForm = (member, kind, list) => el('article', {class: 'member'},
+        el('div', {class: 'head'},
+            el('b', {}, member.id ?? 'new'),
+            member.group ? el('span', {class: 'chip', title: 'A group character: several people of one kind. Its members are kept as they are.'}, 'Group') : '',
+            member.voiceOnly ? el('span', {class: 'chip', title: 'Never on screen'}, 'Voice only') : '',
+            el('div', {class: 'spacer'}),
+            draft && cast.canAdd ? el('button', {class: 'btn', title: kind === 'character' ? 'Out of the cast: the beats and shots are planned without them' : 'Out of the cast: the beats are planned without it', onclick: () => {
+                list.splice(list.indexOf(member), 1)
+                draw()
+            }}, 'Remove') : ''),
+        input(member.name, 'Name', v => { member.name = v }),
+        kind === 'character' ? [
+            input(member.role, 'Role in the story', v => { member.role = v }, {area: true}),
+            film ? [
+                member.voiceOnly ? '' : input(member.appearance, 'Appearance', v => { member.appearance = v }, {area: true, rows: 3}),
+                input(member.voice, 'Voice', v => { member.voice = v }),
+            ] : input(member.prop, 'Prop (optional)', v => { member.prop = v }, {placeholder: 'What they carry or play - an instrument, a lantern'}),
+        ] : film ? input(member.description, 'Description', v => { member.description = v }, {area: true, rows: 3}) : '',
+    )
+    async function saveCast() {
+        const yes = await ask({
+            title: 'Save the cast?',
+            lines: [
+                'The cast in project.json is changed. Ids stay: a renamed role keeps its pictures and its entry in casting.json.',
+                cast.builtOn.length ? 'The next plan run makes what goes again, from this cast: the language model only, nothing is rendered.' : 'Nothing is planned from the cast yet: the next stage is planned from this one.',
+            ],
+            warnings: [
+                ...(cast.builtOn.length ? [`What is built on the cast goes: ${listSteps(cast.builtOn)}.`] : []),
+                ...(cast.builtOn.includes('singing') ? ['Who sings which line is asked again - a choice made on the Singers page goes too.'] : []),
+                ...(project.clips.some(c => c.video) ? ['Pictures and clips made before stay, and are stale once the plan has new prompts for them.'] : []),
+                ...(!film ? ['The story still tells what it told: a role that is now someone else entirely is best changed in the story too (Story page).'] : []),
+            ],
+            confirm: 'Save it',
+        })
+        if (!yes) return
+        const result = await api('cast', draft)
+        toast(result.changed ? `The cast is saved${result.dropped.length ? ` - ${plural(result.dropped.length, 'step')} to plan again` : ''}` : 'Nothing changed')
+        location.reload()
+    }
+
     function draw() {
         const section = (title, kind) => {
             const members = casting.roles.filter(r => r.kind === kind)
             return members.length ? el('div', {class: 'section'}, el('div', {class: 'pagebar'}, el('h2', {}, title)), members.map(role)) : ''
         }
-        $('view-list').replaceChildren(
-            changed ? el('div', {class: 'note btn-row'}, el('span', {}, 'The change takes effect with the next plan run.'), el('button', {class: 'btn primary', onclick: () => startRun({type: 'plan'}).catch(showError)}, 'Plan now')) : '',
+        const formSection = (title, kind, list) => el('div', {class: 'section'},
+            el('div', {class: 'pagebar'}, el('h2', {}, title),
+                cast.canAdd ? el('button', {class: 'btn', onclick: () => {
+                    list.push(kind === 'character' ? {name: '', role: ''} : {name: ''})
+                    draw()
+                }}, kind === 'character' ? 'Add a character' : 'Add a place') : ''),
+            list.map(member => memberForm(member, kind, list)),
+            list.length ? '' : el('p', {class: 'muted'}, kind === 'character' ? 'Nobody yet.' : 'No place yet - a music video needs one.'))
+        const busy = !!run.current?.running
+        $('view-list').replaceChildren(...nodes(
+            stageBar(project),
+            changed && !editing ? el('div', {class: 'note btn-row'}, el('span', {}, 'casting.json has changes the plan does not have yet: they take effect with the next plan run.'), el('button', {class: 'btn primary', disabled: busy, onclick: () => planNow().catch(showError)}, 'Plan now')) : '',
             ...casting.errors.map(line => el('div', {class: 'warn bad'}, line)),
             ...casting.warnings.map(line => el('div', {class: 'warn'}, line)),
-            casting.roles.length ? '' : el('div', {class: 'empty'}, `No cast yet - run ${project.command}`),
-            section('Characters', 'character'),
-            section('Places', 'location'),
-            el('p', {class: 'muted'}, `For a finished project, replacing a character in what is planned is the other way: bun run ${project.kind === 'film' ? 'film:replace-character' : 'replace-character'} ${project.id}`),
-        )
+            !cast ? el('div', {class: 'empty'}, 'No cast yet - plan it with the button above.') : editing ? [
+                el('div', {class: 'note'}, film
+                    ? 'The names and texts of the screenplay\'s roles and places. Who is in it is the script\'s: that is changed there.'
+                    : 'Names, roles and props, and who is in it at all - without the library. Best right after the cast is planned: then nothing is built on it yet.'),
+                formSection('Characters', 'character', draft.characters),
+                formSection('Places', 'location', draft.locations),
+                el('div', {class: 'section btn-row'},
+                    el('button', {class: 'btn primary', disabled: busy, onclick: () => saveCast().catch(showError)}, 'Save the cast'),
+                    el('button', {class: 'btn', onclick: () => location.reload()}, 'Cancel'),
+                    cast.builtOn.length ? el('span', {class: 'muted'}, `Saving drops what is built on the cast: ${listSteps(cast.builtOn)}.`) : ''),
+            ] : [
+                el('div', {class: 'section btn-row'},
+                    el('button', {class: 'btn', disabled: busy, title: 'Change names, roles and what they are by hand - no library needed', onclick: () => { editing = true; draw() }}, film ? 'Edit the roles and places' : 'Edit the cast'),
+                    el('span', {class: 'muted'}, 'Or give a role a library asset with the choice next to it.')),
+                section('Characters', 'character'),
+                section('Places', 'location'),
+            ],
+            el('p', {class: 'muted'}, `For a finished project, replacing a character in what is planned is the other way: bun run ${film ? 'film:replace-character' : 'replace-character'} ${project.id}`),
+        ))
     }
     draw()
     run.onEnd = () => location.reload()
@@ -1955,7 +2152,11 @@ function renderInspector() {
         const n = count(clip)
         return el('button', {role: 'tab', 'aria-selected': String(state.tab === id), onclick: () => { state.tab = id; renderInspector(); $('panel').scrollTop = 0 }}, name, n ? el('small', {}, String(n)) : undefined)
     }))
-    if (!clip) return $('panel').replaceChildren(el('div', {class: 'empty'}, state.project.clips.length ? 'Pick a clip on the timeline.' : `No plan yet - run ${state.project.command}`))
+    if (!clip) return $('panel').replaceChildren(...(state.project.clips.length ? [el('div', {class: 'empty'}, 'Pick a clip on the timeline.')] : [
+        el('div', {class: 'section'}, el('h3', {}, 'The plan'), stageBar(state.project)),
+        el('p', {class: 'muted'}, 'There are no clips yet. Plan it stage by stage, as a film is made: the story, then the cast, then the look, then the shots - each one looked at and changed before the next is built on it. All of it is the language model; nothing is rendered before you ask on this timeline.'),
+        el('p', {class: 'muted'}, `In the terminal: ${state.project.command} --until=story|cast|look`),
+    ]))
     const panels = {prompt: promptPanel, shots: shotsPanel, refs: refsPanel, render: renderPanel, versions: versionsPanel}
     $('panel').replaceChildren(...panels[state.tab](clip))
 }
@@ -2649,7 +2850,7 @@ async function timelinePage() {
 loadServers()
 setInterval(() => { if (!document.hidden) loadServers() }, 10000)
 
-const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'singers' ? singersPage() : timelinePage()}
+const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'story' ? storyPage() : route.page === 'singers' ? singersPage() : timelinePage()}
 pages[route.view]().catch(error => {
     show('none')
     $('boot').hidden = false

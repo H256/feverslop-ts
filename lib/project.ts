@@ -252,21 +252,38 @@ export function unplannedBeats(data: Pick<Project, 'beats' | 'shotMoments'>): st
  * without those another of them redoes anyway. The changed steps themselves are never in it - redoing one would ask the
  * language model again and overwrite what was put there.
  */
-export function redoAfter(changed: StepName[], data: Partial<Record<StepName, unknown>>): StepName[] {
-    const readers = STEP_NAMES.filter(step => data[step] !== undefined && !changed.includes(step) && dependsOn[step].some(dep => changed.includes(dep)))
-    const downstream = (from: StepName): Set<StepName> => {
-        const seen = new Set<StepName>()
-        const visit = (name: StepName) => {
-            for (const step of STEP_NAMES) if (dependsOn[step].includes(name) && !seen.has(step)) {
-                seen.add(step)
-                visit(step)
-            }
-        }
-        visit(from)
-        return seen
-    }
-    return readers.filter(step => !readers.some(other => other !== step && downstream(other).has(step)))
+export const redoAfter = (changed: StepName[], data: Partial<Record<StepName, unknown>>): StepName[] => redoAfterIn(dependsOn, changed, data)
+
+/** As redoAfter, over the steps of a pipeline: `graph` says which steps each step reads from (a film has its own, lib/film/store.ts). */
+export function redoAfterIn<S extends string>(graph: Record<S, S[]>, changed: S[], data: Partial<Record<S, unknown>>): S[] {
+    const steps = Object.keys(graph) as S[]
+    const readers = steps.filter(step => data[step] !== undefined && !changed.includes(step) && graph[step].some(dep => changed.includes(dep)))
+    return readers.filter(step => !readers.some(other => other !== step && downstreamIn(graph, other).has(step)))
 }
+
+/** Every step built on this one, near or far. */
+function downstreamIn<S extends string>(graph: Record<S, S[]>, from: S): Set<S> {
+    const steps = Object.keys(graph) as S[]
+    const seen = new Set<S>()
+    const visit = (name: S) => {
+        for (const step of steps) if (graph[step].includes(name) && !seen.has(step)) {
+            seen.add(step)
+            visit(step)
+        }
+    }
+    visit(from)
+    return seen
+}
+
+/**
+ * Every step with a result that is built on one of `changed`, near or far, in the order of the pipeline - what has to go when
+ * they are changed by hand (the workspace's story and cast), so that no run goes on from what was made of the old ones.
+ */
+export function builtOnIn<S extends string>(graph: Record<S, S[]>, changed: S[], data: Partial<Record<S, unknown>>): S[] {
+    const reached = new Set(changed.flatMap(name => [...downstreamIn(graph, name)]))
+    return (Object.keys(graph) as S[]).filter(step => reached.has(step) && !changed.includes(step) && data[step] !== undefined)
+}
+export const builtOn = (changed: StepName[], data: Partial<Record<StepName, unknown>>): StepName[] => builtOnIn(dependsOn, changed, data)
 
 const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
 
