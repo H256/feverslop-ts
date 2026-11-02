@@ -18,6 +18,7 @@ import {filmRenderConfig, placeViewFrame} from "../film/pictures.ts";
 import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
 import {withExtraViews} from "../film/views.ts";
+import {filmStage, musicStage, nextStage, type PlanStage} from "../stages.ts";
 import {clipRequestFile, clipRequestsDir} from "../previous-output.ts";
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
@@ -78,6 +79,7 @@ export type EditorProject = {
     lastRun?: { state: RunState, command: string, startedAt: string, failures: string[], explained: Explained[] },
     command: string,            // how this project is run, for the commands the page shows
     sings?: boolean,            // someone sings: who sings which line can be changed (the Singers page)
+    plan: { stage?: PlanStage, next?: PlanStage },  // how far the plan is: the last stage it has, the one a plan run makes next (lib/stages.ts)
 }
 
 export type EditorFinal = { file: string, v: number, label: string, state: FinalState, preview: boolean, width?: number, height?: number, fps?: number }
@@ -320,6 +322,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun index.ts ${id}`,
+        plan: {stage: musicStage(data), next: nextStage(musicStage(data))},
         sings: !!data.singing,
     }
 }
@@ -403,6 +406,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun film.ts ${id}`,
+        plan: {stage: filmStage(data), next: nextStage(filmStage(data))},
     }
 }
 
@@ -452,6 +456,7 @@ export type EditorListing = {
     group: string,
     id: string, kind: EditorKind, title: string, clips: number, rendered: number, pictures: number,
     final: FinalState, lastRun?: EditorProject['lastRun'], changed: number, thumb?: { file: string, v: number },
+    stage?: PlanStage,          // a project without clips yet: how far its plan is
 }
 
 const countOf = (folder: string, pattern: RegExp) => existsSync(folder) ? readdirSync(folder).filter(f => pattern.test(f)).length : 0
@@ -461,14 +466,16 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
     const clipsDir = clipRequestsDir(dir)
     const ids = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
     const project = join(dir, 'project.json')
-    const title = kind === 'film' ? (() => {
+    // a film's title is in it; a project without clips is read for how far its plan is - one with clips is planned
+    const data = kind === 'film' || !ids.length ? (() => {
         try {
-            const data = readJson<FilmProject>(project)
-            return data?.screenplay?.title ?? data?.brief?.title ?? id
+            return readJson<Project & FilmProject>(project)
         } catch {
-            return id
+            return undefined        // a run is just writing it
         }
-    })() : id
+    })() : undefined
+    const title = kind === 'film' ? data?.screenplay?.title ?? data?.brief?.title ?? id : id
+    const stage = !ids.length && data ? (kind === 'film' ? filmStage(data) : musicStage(data)) : undefined
     const thumb = ids.map(c => media(dir, boundaryFrameAsset(c, 'ff'))).find(Boolean)
     return {
         id, kind, title,
@@ -480,6 +487,7 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
         lastRun: lastRunOf(dir),
         changed: Math.round(statSync(existsSync(project) ? project : dir).mtimeMs),
         thumb,
+        ...(stage ? {stage} : {}),
     }
 }
 

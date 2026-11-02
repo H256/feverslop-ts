@@ -214,6 +214,8 @@ bun index.ts --show=cast,clips        # the details of these cached steps, clips
 bun index.ts --redo=beats --render=videos --dry-run   # what this would redo and render (with an estimate) - nothing is done
 bun index.ts --review                 # stop after the story, the cast, the look and the beats when they were just generated:
                                        # accept, edit them in $EDITOR (text, or JSON for cast and beats), generate again, or stop
+bun index.ts --until=cast             # plan up to the story, the cast or the look and stop there (story|cast|look): look at it
+                                       # and change it (the workspace's Story and Casting pages), the next run goes on from it
 bun index.ts --render=all             # also render with ComfyUI and assemble <project-id>.mp4, see below
 bun index.ts --export=mlt,openshot    # write timeline.mlt (Shotcut/Kdenlive) and/or timeline.osp (OpenShot): clips on one track, the song under them (or --export=all)
 bun index.ts --gallery                # write projects/<id>/gallery.html: cast, storyboard and videos at a glance
@@ -864,13 +866,15 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
 
 `bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`. Step by step, with screenshots: [docs/workspace-guide.md](docs/workspace-guide.md) (in German).
 
+- **Planning in stages**: as a film is made - the story (a film: the screenplay), then the cast, then the look, then the shots, and only then the rendering. A bar on the Story and Casting pages, and on the timeline of a project without clips, says how far the plan is and plans the next stage (`--until=story|cast|look`), or everything up to the shots. Every stage is the language model only.
+- **Story**: the story of a music video, to read, change by hand or have written again; a film's screenplay to read. A changed story drops everything planned from it, the next plan run makes that again.
 - **Projects**: how far each one is, what its last run did, and what comes next. Pages, a search over all of them and filters by kind and state; the takes of one thing fold into one card. All of it is in the address, so *Back* from a project lands in the same place.
 - **Render servers**: on every page, how busy each one is. Before a render you choose which ones it may use; it is the same as `--comfy=`.
 - **Timeline**: the whole video on one timeline with sections or scenes, sound, clips with their shots, and sung or spoken lines; every clip playable in place with its prompt, shots and references next to it. A final video newer than its clips is played as it is, otherwise the clips one by one. Clips with something against them are flagged: missing, stale, failed in the last run, a grey backdrop (`Scan for backdrops`).
 - **A clip**: render it again with the estimate before the click, render one shot or part of it, compare and pick versions, make a preview. After a render the old and the new one open side by side.
 - **Several clips**: Ctrl or Shift click marks clips on the timeline, to render them together. During a run every block says waiting, rendering or done. *Review* goes through the marked clips, else the flagged ones, one by one with keys. `?` shows all keys and what the words mean.
 - **References**: every picture with its prompt, sheet, older versions and the clips that use it: a new sheet from the same anchor, a new anchor, an edited prompt (the picture then stays pinned), or into the library.
-- **Casting**: `casting.json` as a page. A choice changes that one entry; the next plan run takes the asset.
+- **Casting**: `casting.json` as a page. A choice changes that one entry; *Plan now* takes the asset over and plans again what was planned from the role's old texts (the `--redo` the run would only name), after saying which steps that is. *Edit the cast* changes the cast itself, without the library: names, roles and props, and for a music video who is in it at all (a film's script says that, its roles and places keep their ids and change their texts). Saving drops what was planned from the old cast; best right after `--until=cast`, when nothing is built on it yet.
 - **Library**: the asset library, who uses what, a new asset from a picture.
 - **Refinish**: an older project larger, at 48 fps and finished, from the clips it has: see [Making an older project over](#making-an-older-project-over).
 

@@ -18,6 +18,7 @@ import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
 import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
+import {type CastChange, castingRedo, readBook, readCast, writeCast, writeStory} from "./preproduction.ts";
 import {runProgress} from "./progress.ts";
 import {CLIP_ID, type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
@@ -278,6 +279,9 @@ export function editorHandler(runs = new RunControl()) {
                     const project = await readEditorProject(target)
                     return json(await readCasting(target, project.clips))
                 }
+                if (what === 'casting-redo') return json(await castingRedo(target))
+                if (what === 'cast') return json({cast: readCast(target) ?? null})
+                if (what === 'book') return json(readBook(target))
             } catch (e) {
                 return failure(e)
             }
@@ -327,6 +331,8 @@ export function editorHandler(runs = new RunControl()) {
                 return json({written: true})
             }
             if (what === 'singing') return json(await writeSinging(target, await body<SingingChange>()))
+            if (what === 'cast') return json(await writeCast(target, await body<CastChange>()))
+            if (what === 'book') return json(await writeStory(target, (await body<{ text?: unknown }>()).text))
             if (what === 'override' && id) {
                 if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))
                 const override = await body<EditorOverride | null>()

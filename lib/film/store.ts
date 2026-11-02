@@ -2,6 +2,7 @@ import {existsSync, renameSync} from "node:fs";
 import {join} from "node:path";
 import {log, styles} from "../log.ts";
 import {dropPartials, keepEach} from "../partials.ts";
+import {builtOnIn, redoAfterIn} from "../project.ts";
 import type {FilmProject} from "./types.ts";
 
 export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials' | 'castingCopies' | 'sheetViews' | 'shotViews'>
@@ -29,6 +30,11 @@ const dependsOn: Record<FilmStepName, FilmStepName[]> = {
 }
 
 export const FILM_STEP_NAMES = Object.keys(dependsOn) as FilmStepName[]
+
+/** The --redo for a film's data changed by hand - as redoAfter of the music video (lib/project.ts). */
+export const filmRedoAfter = (changed: FilmStepName[], data: FilmProject): FilmStepName[] => redoAfterIn(dependsOn, changed, data)
+/** The steps of a film with a result built on these, near or far - as builtOn of the music video. */
+export const filmBuiltOn = (changed: FilmStepName[], data: FilmProject): FilmStepName[] => builtOnIn(dependsOn, changed, data)
 
 export const FILMS_DIR = 'films'
 

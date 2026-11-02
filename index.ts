@@ -41,6 +41,7 @@ import {pictureProp, propMissing} from "./lib/prop-check.ts";
 import {projectInputs, songFileOf, stepUsed, readInputFile} from "./lib/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
+import {parseUntil, stopAfter} from "./lib/stages.ts";
 import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
 import {type LibraryAsset, libraryDir} from "./lib/library.ts";
 import {type AssetKind} from "./lib/asset-import.ts";
@@ -61,7 +62,7 @@ cli('plan')
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview] [--retake=slot-007:3.2-5.0]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict] [--debug] [--review] [--dry-run] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -99,6 +100,8 @@ const {values: args, positionals} = (() => {
                 show: {type: 'string', default: ''},
                 // stop after story, cast, look and beats when they were just generated: accept, edit, again, stop
                 review: {type: 'boolean', default: false},
+                // plan up to this stage and stop - the story, the cast or the look (lib/stages.ts): looked at and changed before what is built on it
+                until: {type: 'string', default: ''},
             },
         })
     } catch (e) {
@@ -130,6 +133,14 @@ const retake = args.retake ? (() => {
 if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has('images'))) log.usageError('--new-anchor and --picture-prompt go with --render=images --only=... --again', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
+const until = (() => {
+    try {
+        return parseUntil(args.until)
+    } catch (e) {
+        return log.usageError((e as Error).message, usage)
+    }
+})()
+if (until && (render.size || args.retake || args.gallery || args.export || args['dry-run'])) log.usageError('--until plans up to a stage and stops - it goes with no --render, --retake, --gallery, --export or --dry-run', usage)
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
@@ -347,6 +358,7 @@ if (storyBase === 'NO STORY') throw new Error('Neither lyrics nor a story idea g
 ////////// SUMMARIZE THE STORY
 const storySummary = await project.step('summary', '4 · SUMMARIZING THE STORY', () => ask(summaryPrompt(storyBase)))
 log.box('Summary', storySummary)
+stopAfter(until, 'story', project.file, `bun index.ts ${projectId}`)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
 const cast = await reviewed(project, args.review, 'cast', () => project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
@@ -463,6 +475,8 @@ if (singing) {
         for (const line of singing.lines) log.line(`   ${styles.muted(line.singers.map(nameOf).join(' + ').padEnd(24))} ${line.text}`)
     }
 }
+
+stopAfter(until, 'cast', project.file, `bun index.ts ${projectId}`)
 
 /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
 const lookBrief = await reviewed(project, args.review, 'lookBrief',
@@ -602,6 +616,8 @@ if (castChanged.size) {
     if (redo.length) log.warn(`${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${projectId} --redo=${redo.join(',')}`)
 }
 for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
+
+stopAfter(until, 'look', project.file, `bun index.ts ${projectId}`)
 
 ////////// BREAKING THE STORY INTO BEATS
 // one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
