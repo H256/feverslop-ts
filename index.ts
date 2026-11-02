@@ -14,12 +14,12 @@ import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, parseLyricSections, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
+import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
 import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
 import {playingCases, playingIssues} from "./lib/playing-check.ts";
 import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
-import {boundaryFrameAsset, buildClipRequests, type ClipRequest, computeMemberCounts, isContinuous, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
+import {boundaryFrameAsset, buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {parseRetake} from "./lib/retake.ts";
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
@@ -28,7 +28,7 @@ import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, previewSources, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
-import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
+import {clipRequestsDir, clipRequestsIn, PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
@@ -38,7 +38,7 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/style
 import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
 import * as clack from "@clack/prompts";
 import {pictureProp, propMissing} from "./lib/prop-check.ts";
-import {projectInputs, songFileOf, stepUsed} from "./lib/inputs.ts";
+import {projectInputs, songFileOf, stepUsed, readInputFile} from "./lib/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
 import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
@@ -164,7 +164,7 @@ if (args.gallery) {
 if (!args['dry-run']) for (const step of redoSteps) project.invalidate(step)
 
 const toId = (name: string) => slugify(name, {lower: true, strict: true})
-const readInput = async (name: string) => existsSync(project.input(name)) ? (await Bun.file(project.input(name)).text()).trim() : ''
+const readInput = (name: string) => readInputFile(project.input(name))
 // true if `value`'s fingerprint differs from the one project.syncInputs() recorded after the previous run - a
 // read-only check, for a step that needs to know this before that call itself has run (and recorded) this run's
 // values; undefined (nothing recorded yet, e.g. the first run) never counts as changed
@@ -256,7 +256,6 @@ const songFile = songFileOf(project.dir)
 
 // re-read: the song block above may have just written lyrics.txt/music-style.txt for the first time
 const lyrics = await readInput('lyrics.txt')
-const musicStyle = await readInput('music-style.txt')
 const storyIdea = await readInput('story-idea.txt')
 let style = await readInput('style.txt')
 // No style.txt on a project that has no look yet: the LLM shortlists a few styles from the list (lib/styles.ts) that
@@ -1044,7 +1043,7 @@ for (const clip of clips) {
 const outputDir = join(project.dir, 'output')
 // the output of the run before goes to output/.previous/ - to say below which requests this run changed
 startOutput(outputDir)
-mkdirSync(join(outputDir, 'clips'), {recursive: true})
+mkdirSync(clipRequestsIn(outputDir), {recursive: true})
 mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
 // a track mixed of several instrument stems (lib/compose.ts mixStem) is a stem file of its own, made once per set of stems -
@@ -1057,7 +1056,7 @@ for (const audio of clips.flatMap(c => c.assets.audio)) {
 }
 
 for (const clip of clips) {
-    await Bun.write(join(outputDir, 'clips', `${clip.id}.json`), JSON.stringify(clip, null, 2))
+    await Bun.write(join(clipRequestsIn(outputDir), `${clip.id}.json`), JSON.stringify(clip, null, 2))
     // one debug-listenable file per track, cut from its own stem to this clip's span - not what's actually
     // uploaded for rendering any more (lib/render.ts uploads and trims the whole stem itself), just handy to
     // hear exactly what a track covers
@@ -1115,7 +1114,7 @@ for (const clip of clips) {
     log.box(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section} · ${clip.beatId}`, clip.prompt)
 }
 hideDetails(false)
-if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${join(project.dir, 'output', 'clips')} (--show=clips prints them here)`))
+if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${clipRequestsDir(project.dir)} (--show=clips prints them here)`))
 const changes = requestChanges(outputDir)
 if (changes) {
     const {changed, added, gone} = changes
@@ -1126,7 +1125,7 @@ if (changes) {
             added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
             gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
         ].filter(Boolean).join(' · '))
-        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(outputDir, PREVIOUS, 'clips', `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
+        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(clipRequestsIn(join(outputDir, PREVIOUS)), `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
     }
 }
 
@@ -1252,7 +1251,7 @@ if (exportFormats.length) {
 log.section('✔ DONE')
 log.step('Clips', `${clips.length} H3 requests covering ${formatTime(clips.at(-1)?.end ?? 0)} of ${formatTime(music.durationSec)}`)
 log.step('Timeline', join(outputDir, 'timeline.json'))
-log.step('Requests', join(outputDir, 'clips'))
+log.step('Requests', clipRequestsIn(outputDir))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
 // what this run did: the steps it generated, its LLM calls and renders, its warnings

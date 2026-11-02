@@ -2,7 +2,6 @@ import {existsSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import type {FilmConfig} from "./config.ts";
 import {defaults, type RenderConfig} from "../config.ts";
-import {log} from "../log.ts";
 import type {PictureJob} from "../render.ts";
 import type {FilmCast, FilmProject, FilmProp} from "./types.ts";
 import {pictureAsset} from "../compose.ts";

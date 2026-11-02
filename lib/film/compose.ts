@@ -6,7 +6,7 @@ import {languageName} from "../config.ts";
 import {log} from "../log.ts";
 import {formatTimestamp, round} from "../frames.ts";
 import {dialogueOf, type FilmClip} from "./coverage.ts";
-import {mentions, withoutSentencesNaming} from "./names.ts";
+import {withoutSentencesNaming} from "./names.ts";
 import {placeViewFrame, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from "./types.ts";

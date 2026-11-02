@@ -22,10 +22,13 @@ export const characterViews = (sheetDir: string) => [sheetAnchor(sheetDir), shee
 export function visionUrls(files: string[]): Promise<string[]> {
     return Promise.all(files.map(async (image, i) => {
         const small = `${image}.vision-${i}.png`
-        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', image, '-vf', `scale=${VISION_MAX_WIDTH}:-1`, small], {errorMessage: err => `ffmpeg could not downscale ${image}:\n${err}`})
-        const url = `data:image/png;base64,${Buffer.from(await Bun.file(small).arrayBuffer()).toString('base64')}`
-        rmSync(small, {force: true})
-        return url
+        // the small copy goes also when ffmpeg fails: left over, it looked like a picture of an asset of its own (lib/asset-import.ts)
+        try {
+            await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', image, '-vf', `scale=${VISION_MAX_WIDTH}:-1`, small], {errorMessage: err => `ffmpeg could not downscale ${image}:\n${err}`})
+            return `data:image/png;base64,${Buffer.from(await Bun.file(small).arrayBuffer()).toString('base64')}`
+        } finally {
+            rmSync(small, {force: true})
+        }
     }))
 }
 

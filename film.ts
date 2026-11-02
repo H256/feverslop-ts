@@ -21,7 +21,7 @@ import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from "
 import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate} from "./lib/render-state.ts";
-import {readTimings} from "./lib/timings.ts";
+import {keepTimingsIn, readTimings} from "./lib/timings.ts";
 import {formatSlotRanges} from "./lib/assemble.ts";
 import {reviewed} from "./lib/review.ts";
 import {archiveClip} from "./lib/film/archive.ts";
@@ -52,6 +52,8 @@ import {validProjectId} from "./lib/project-setup.ts";
 
 import {loadSettings} from "./lib/settings.ts";
 import {shuffledStyles, stylesById} from "./lib/styles.ts";
+import {readInputFile} from "./lib/inputs.ts";
+import {clipRequestsIn} from "./lib/previous-output.ts";
 cli('film')
 
 
@@ -129,6 +131,7 @@ if (!args['dry-run']) {
     lockProject(film.dir, `film ${film.id}`)
     keepLogIn(join(film.dir, 'logs', `${versionStamp()}.log`))
     beginRun(film.dir, 'film.ts')
+    keepTimingsIn(film.dir)
 }
 await film.load()
 // --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
@@ -142,7 +145,7 @@ const keptBasis = keptCoverage ? coverageBasis() : undefined
 // a dry run only says what would be redone (see dryRun below)
 if (!args['dry-run']) for (const step of redoSteps) film.invalidate(step)
 
-const readInput = async (name: string) => existsSync(film.input(name)) ? (await Bun.file(film.input(name)).text()).trim() : ''
+const readInput = (name: string) => readInputFile(film.input(name))
 
 /////////// INPUTS AND CONFIG
 log.section(`FILM · ${film.id}`)
@@ -526,9 +529,9 @@ async function planClips() {
     const outputDir = join(film.dir, 'output')
     // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
     const planned = new Set(requests.map(r => `${r.id}.json`))
-    const clipsDir = join(outputDir, 'clips')
+    const clipsDir = clipRequestsIn(outputDir)
     if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
-    for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
+    for (const request of requests) await Bun.write(join(clipRequestsIn(outputDir), `${request.id}.json`), JSON.stringify(request, null, 2))
     await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
         title: screenplay.title,
         language: screenplay.language,
@@ -538,7 +541,7 @@ async function planClips() {
     await Bun.write(join(outputDir, 'timeline.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
     await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
     for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
-    log.step('Clips', `${clips.length} ${styles.muted(`· ${secondsAt(clips.reduce((sum, c) => sum + c.frames, 0)).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${join(outputDir, 'clips')}`)}`)
+    log.step('Clips', `${clips.length} ${styles.muted(`· ${secondsAt(clips.reduce((sum, c) => sum + c.frames, 0)).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${clipRequestsIn(outputDir)}`)}`)
 }
 await planClips()
 

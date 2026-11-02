@@ -12,7 +12,7 @@ import {FPS} from "../lib/frames.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
-import {answer, askResolution, askStyle, askText, multiline} from "../lib/wizard.ts";
+import {answer, askResolution, askStyle, askText} from "../lib/wizard.ts";
 cli('init')
 
 

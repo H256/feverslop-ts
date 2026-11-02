@@ -10,12 +10,12 @@ export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 const SIZES = ['wide', 'medium', 'close', 'extreme'] as const
 /**
- * How many people a shot of a size class holds - the planner prompt says the same (lib/shot-planner.ts). The class is the
+ * How many people a shot of a size class holds - the planner prompt takes its numbers from here (lib/shot-planner.ts). The class is the
  * planner's own reading of its framing: it classed a "medium close-up" as medium, so three people passed in it, and an
  * extreme close-up held as many as a close shot - 27 crowded close shots in tribal-261019 (#339). The prompt now says
  * what each class is, and an extreme close-up is a class of its own.
  */
-const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {extreme: 1, close: 2, medium: 3, wide: undefined}
+export const SHOT_ROOM: Record<(typeof SIZES)[number], number | undefined> = {extreme: 1, close: 2, medium: 3, wide: undefined}
 /** A flag the planner answered: true, or "yes" in the line format. */
 const yes = (value: unknown) => value === true || (typeof value === 'string' && /^\s*(yes|true)\b/i.test(value))
 /** The planner's "playing:" - what the hands do on the instrument (a phrase), a bare "yes", or "no" / nothing. */
@@ -110,13 +110,18 @@ function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, charact
  * first, then in the order the shot's action names them - and drops the rest of the entries. The dropped stay in the
  * shot's characters, in the picture without a direction of their own, instead of costing another planner call.
  */
+/** Who a shot is about first: by tier (lower first), then in the order the action names them, then as they came. */
+function rankForeground(ids: string[], action: string, characters: Character[], tier: (id: string) => number): string[] {
+    const named = readTokens(action, characters).ids
+    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
+    return [...ids].sort((a, b) => tier(a) - tier(b) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+}
+
 function trimForeground(people: NonNullable<ShotPlan['people']>, action: string, characters: Character[], singing: string[]): { people: NonNullable<ShotPlan['people']>, dropped: string[] } {
     const ids = Object.keys(people)
     if (ids.length <= MAX_FOREGROUND) return {people, dropped: []}
-    // in the order of the action's tokens: who it names first, it is about first
-    const named = readTokens(action, characters).ids
-    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
-    const ranked = [...ids].sort((a, b) => Number(singing.includes(b)) - Number(singing.includes(a)) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+    // the singers first, then in the order of the action's tokens: who it names first, it is about first
+    const ranked = rankForeground(ids, action, characters, id => singing.includes(id) ? 0 : 1)
     const keep = new Set(ranked.slice(0, MAX_FOREGROUND))
     return {people: Object.fromEntries(ids.filter(id => keep.has(id)).map(id => [id, people[id]!])), dropped: ids.filter(id => !keep.has(id))}
 }
@@ -131,10 +136,8 @@ const heardIn = (props: ShotProps | undefined, j: number) => (props ?? []).filte
  * problem names the others, heard off camera. If someone who sings or is heard has to go, a wide shot is offered instead.
  */
 function crowdedShot(j: number, ids: string[], size: string, room: number, action: string, characters: Character[], singing: string[], heard: string[]): string {
-    const named = readTokens(action, characters).ids
-    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
     const rank = (id: string) => singing.includes(id) ? 0 : heard.includes(id) ? 1 : 2
-    const ranked = [...ids].sort((a, b) => rank(a) - rank(b) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+    const ranked = rankForeground(ids, action, characters, rank)
     const names = (list: string[]) => list.map(id => nameOfId(characters, id)).join(', ')
     const keep = ids.filter(id => ranked.indexOf(id) < room)
     const leave = ids.filter(id => ranked.indexOf(id) >= room)
@@ -256,6 +259,13 @@ export function readBeatPlan(raw: unknown, beat: StoryBeat, characters: Characte
  * Lines of JSON are no better than a quote in the middle of a sentence, and a broken bracket cost a whole beat; here
  * a line that does not fit is just skipped. Markdown around a key (bullets, bold, fences) is tolerated.
  */
+/** The fields of a "person:" line and of a shot, as the planner prompt asks for them (lib/shot-planner.ts) - a field not in here is skipped. */
+export const PERSON_FIELDS = ['state', 'frame', 'motion', 'playing', 'singing'] as const
+export const SHOT_FIELDS = ['framing', 'size', 'camera', 'view', 'hold', 'risky', 'characters', 'action', 'rest', 'hands'] as const
+const personSplit = new RegExp(`\\s*\\|\\s*(?=(?:${PERSON_FIELDS.join('|')})\\s*:)`, 'i')
+const personField = new RegExp(`^(${PERSON_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')
+const shotField = new RegExp(`^(${SHOT_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')
+
 export function parseShotLines(answer: string): { staging?: string, starts: Record<string, string>, ends: Record<string, string>, shots: Record<string, unknown>[] } {
     const shots: Record<string, unknown>[] = []
     const starts: Record<string, string> = {}
@@ -280,17 +290,17 @@ export function parseShotLines(answer: string): { staging?: string, starts: Reco
         if (/^start\s*:?\s*$/i.test(line)) { inEnds = false; current = undefined; continue }
         if (inEnds || !current) continue
         if ((m = line.match(/^person\s*:\s*(.+)$/i))) {
-            const parts = m[1]!.split(/\s*\|\s*(?=(?:state|frame|motion|playing|singing)\s*:)/i)
+            const parts = m[1]!.split(personSplit)
             const name = parts[0]!.trim()
             const entry: Record<string, string> = {}
             for (const part of parts.slice(1)) {
-                const kv = part.match(/^(state|frame|motion|playing|singing)\s*:\s*(.*)$/i)
+                const kv = part.match(personField)
                 if (kv) entry[kv[1]!.toLowerCase()] = kv[2]!.trim()
             }
             if (name) (current.people as Record<string, unknown>)[name] = entry
             continue
         }
-        if ((m = line.match(/^(framing|size|camera|view|hold|risky|characters|action|rest|hands)\s*:\s*(.*)$/i))) {
+        if ((m = line.match(shotField))) {
             const key = m[1]!.toLowerCase()
             const value = m[2]!.trim()
             if (key === 'hold') current.hold = /^(yes|true)\b/i.test(value)

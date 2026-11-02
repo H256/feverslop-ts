@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync} from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, extname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {clipVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
@@ -21,6 +21,7 @@ import {runProgress} from "./progress.ts";
 import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
+import {clipRequestFile} from "../previous-output.ts";
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -328,7 +329,7 @@ export function editorHandler(runs = new RunControl()) {
                 if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))
                 const override = await body<EditorOverride | null>()
                 const file = overrideFile(target.dir, id)
-                if (!existsSync(join(target.dir, 'output', 'clips', `${id}.json`))) return refused(new Error(`no clip ${id}`))
+                if (!existsSync(clipRequestFile(target.dir, id))) return refused(new Error(`no clip ${id}`))
                 await withProjectLock(target.dir, target.id, () => {
                     if (!override || (override.placeView === undefined && !override.order?.length && !override.without?.length)) rmSync(file, {force: true})
                     else {

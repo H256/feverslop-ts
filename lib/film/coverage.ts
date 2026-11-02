@@ -1,5 +1,5 @@
 import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
-import {FPS, frameAt, MAX_CLIP_SEC, round} from "../frames.ts";
+import {frameAt, MAX_CLIP_SEC, round} from "../frames.ts";
 import {mentions} from "./names.ts";
 import {characterOf, speechSeconds} from "./screenplay.ts";
 import {collapseEmptyScene, softProblems} from "./shot-checks.ts";

@@ -24,7 +24,7 @@ export const assetPaths = (kind: AssetKind, id: string): AssetLayout => ({
 export function assetIds(projectDir: string, kind: AssetKind): string[] {
     const ids = new Set<string>()
     const pictures = join(projectDir, 'assets', `${kind}s`)
-    if (existsSync(pictures)) for (const f of readdirSync(pictures)) if (f.endsWith('.png') && !f.includes('.partial')) ids.add(f.slice(0, -4))
+    if (existsSync(pictures)) for (const f of readdirSync(pictures)) if (f.endsWith('.png') && !unfinished(f)) ids.add(f.slice(0, -4))
     const sheets = join(projectDir, 'assets', 'sequence', `${kind}s`)
     if (existsSync(sheets)) for (const d of readdirSync(sheets)) if (statSync(join(sheets, d)).isDirectory()) ids.add(d)
     return [...ids].sort()

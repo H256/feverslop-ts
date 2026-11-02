@@ -15,6 +15,7 @@ import {runProcess} from "../lib/process.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import {Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
+import {clipRequestFile} from "../lib/previous-output.ts";
 cli('interpolate')
 
 
@@ -39,7 +40,7 @@ const song = existsSync(songFile) ? songFile : undefined
 
 using renderer = new Renderer(id, dir, config, settings.comfy)
 for (const clipId of only) {
-    const requestFile = join(dir, 'output', 'clips', `${clipId}.json`)
+    const requestFile = clipRequestFile(dir, clipId)
     if (!existsSync(requestFile)) throw new Error(`${clipId}: no output/clips/${clipId}.json - plan the project first`)
     const clip = JSON.parse(readFileSync(requestFile, 'utf8')) as { id: string, frames: number, frameStart: number, shots?: { at: number }[] }
     for (const model of models) {

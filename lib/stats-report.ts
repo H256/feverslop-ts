@@ -1,4 +1,4 @@
-import {by, byAll, groupRows, percentChange, referenceOf, type Dimension, type Row} from './stats.ts';
+import {by, byAll, groupRows, keyParts, percentChange, referenceOf, type Dimension, type Row} from './stats.ts';
 import {cost, type Price, type TokenSums} from './predict.ts';
 import type {Timing} from './timings.ts';
 
@@ -83,14 +83,14 @@ export function buildReport(source: Timing[], options: ReportOptions, prices: Re
     const renderRows = groupRows(renders, byAll(dimensions))
     const llmRows = groupRows(llmCalls, by.model)
     const baselineRows = options.kind === 'llm' ? llmRows : renderRows
-    const matches = (r: Row) => r.key === options.baseline || r.key.split(' · ').at(-1) === options.baseline
+    const matches = (r: Row) => r.key === options.baseline || keyParts(r.key).at(-1) === options.baseline
     if (options.baseline && !baselineRows.some(matches)) throw new Error(`--baseline: no group matches "${options.baseline}" in the selected measurements`)
     const select = (rows: Row[], dims: number, explicit: boolean) => {
         const reference = referenceOf(rows, dims)
         const annotated = rows.map(row => {
             if (!options.compare && !options.baseline) return row
             const first = explicit && options.baseline
-                ? rows.find(r => matches(r) && (dims < 2 || r.key.split(' · ')[0] === row.key.split(' · ')[0]))
+                ? rows.find(r => matches(r) && (dims < 2 || keyParts(r.key)[0] === keyParts(row.key)[0]))
                 : reference(row)
             const comparable = first && !row.unknownWorkload && !first.unknownWorkload && row.workloads.length === 1
                 && first.workloads.length === 1 && row.workloads[0] === first.workloads[0]

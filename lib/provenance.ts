@@ -25,6 +25,12 @@ function readSidecar(file: string): Record<string, unknown> | undefined {
     }
 }
 
+/** The prompt a rendered file's sidecar records, if it has one. */
+export const recordedPrompt = (file: string) => {
+    const value = readSidecar(file)?.prompt
+    return typeof value === 'string' ? value : undefined
+}
+
 /** The fingerprint a rendered file's sidecar records, if it has one. */
 export const recordedFingerprint = (file: string) => {
     const value = readSidecar(file)?.fingerprint

@@ -576,7 +576,6 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const shotCount = shotCountFor(slot, beat, opensScene)
         const bars = music.downbeats.filter(t => t >= slot.start - 0.05 && t < slot.end - 0.05)
         const energyLevel = slot.energy < 0.4 ? 'low' : slot.energy < 0.7 ? 'mid' : 'high'
-        const notes = slot.lyrics.filter(l => l.startsWith('(')).map(l => l.replace(/[()]/g, ''))
 
         // a character of the clip becomes its <Subject N>, anybody else their plain name: from the {Name} tokens of the text,
         // or - in a beat or plan from before them - from the name or id ("Der Mann", "der-mann") written in it

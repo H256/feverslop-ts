@@ -4,6 +4,7 @@ import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import type {FilmProject} from "../lib/film/types.ts";
+import {clipRequestsDir} from "../lib/previous-output.ts";
 cli('film:gallery')
 
 
@@ -21,7 +22,7 @@ function card(id: string) {
     const title = project.brief?.title ?? id
     const final = existsSync(join(dir, `${id}.mp4`)) ? `${id}.mp4` : existsSync(join(dir, `${id}-partial.mp4`)) ? `${id}-partial.mp4` : undefined
     const rendered = existsSync(join(dir, 'videos')) ? readdirSync(join(dir, 'videos')).filter(f => f.endsWith('.mp4')).length : 0
-    const clips = existsSync(join(dir, 'output/clips')) ? readdirSync(join(dir, 'output/clips')).filter(f => /^clip-\d+\.json$/.test(f)).length : 0
+    const clips = existsSync(clipRequestsDir(dir)) ? readdirSync(clipRequestsDir(dir)).filter(f => /^clip-\d+\.json$/.test(f)).length : 0
     const style = existsSync(join(dir, 'input/style.txt')) ? readFileSync(join(dir, 'input/style.txt'), 'utf8').trim().split(/(?<=[.!?])\s/)[0] ?? '' : ''
     const picture = (kind: 'characters' | 'locations', name: string, entry: string) => {
         const file = ['png', 'jpg', 'jpeg', 'webp'].map(ext => `assets/${kind}/${entry}.${ext}`).find(f => existsSync(join(dir, f)))

@@ -7,10 +7,12 @@ import type {Project, StepName, TrackedInput} from "./project.ts";
 // built on, each with the steps it redoes. One place for index.ts (which redoes them) and bun run status (which only says so).
 
 /** An input file's text, trimmed - '' when there is none. */
-export async function readInput(dir: string, name: string) {
-    const file = join(dir, 'input', name)
+export async function readInputFile(file: string) {
     return existsSync(file) ? (await Bun.file(file).text()).trim() : ''
 }
+
+/** input/<name> of a project or a film, trimmed - '' when there is none. */
+export const readInput = (dir: string, name: string) => readInputFile(join(dir, 'input', name))
 
 /** The song a project uses: input/song.wav, else a hand-supplied input/song.mp3 or song.flac - song.wav when there is none (yet). */
 export function songFileOf(dir: string) {
