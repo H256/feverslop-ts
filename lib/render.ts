@@ -13,7 +13,7 @@ import {extractFrame, framesOnGrid, probeVideo, trimHead} from "./assemble.ts";
 import {paddedClip, withOriginalSound} from "./refinish.ts";
 import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
-import {freshness, isUserFile} from "./provenance.ts";
+import {freshness, isUserFile, recordedFingerprint, recordedPrompt} from "./provenance.ts";
 import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
@@ -78,24 +78,6 @@ export async function renderedFrames(clip: { frames: number, startsFrom?: string
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
 /** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
-/** The fingerprint a picture's sidecar recorded - none when there is no picture yet. */
-function recordedFingerprint(sidecar: string): string | undefined {
-    try {
-        return (JSON.parse(readFileSync(sidecar, 'utf8')) as { fingerprint?: string }).fingerprint
-    } catch {
-        return undefined
-    }
-}
-
-/** The expression of the sheet at `sidecar`, as its recorded prompt has it - none when there is no sheet yet. */
-function recordedExpression(sidecar: string): string | undefined {
-    try {
-        return expressionOf((JSON.parse(readFileSync(sidecar, 'utf8')) as { prompt?: string }).prompt)
-    } catch {
-        return undefined
-    }
-}
-
 export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect'>>) =>
     specId(clipSpec(clip, projectDir, config))
 
@@ -121,7 +103,7 @@ function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig)
     const baseAnchorTarget = baseAnchorFile && join(projectDir, baseAnchorFile)
     const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
     // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
-    const expression = recordedExpression(`${join(projectDir, picture.file)}.json`)
+    const expression = expressionOf(recordedPrompt(join(projectDir, picture.file)))
     const {prompt: sequencePrompt, beatTimes} = look ? characterLookSequencePrompt(look.change, LOOK_SEQUENCE_FRAMES, expression)
         : picture.kind === 'character' ? characterSequencePrompt(picture.description, SEQUENCE_FRAMES, expression)
         : locationSequencePrompt(picture.description, SEQUENCE_FRAMES, picture.views)
@@ -479,7 +461,7 @@ export class Renderer implements Disposable {
             const frameFiles = existsSync(join(this.projectDir, sheetFrames(dir))) ? readdirSync(join(this.projectDir, sheetFrames(dir))).map(f => join(sheetFrames(dir), f)) : []
             // the anchor goes too only when it changed: a sheet made again for its own prompt keeps its place or person - drawn
             // anew from another seed, last-rehearsal's places came back as other rooms. A look's anchor is a frame of its sheet.
-            const anchorKept = anchorIsUsers || (!look && recordedFingerprint(`${anchorTarget}.json`) === anchorFingerprint)
+            const anchorKept = anchorIsUsers || (!look && recordedFingerprint(anchorTarget) === anchorFingerprint)
             const away = [picture.file, `${picture.file}.json`, videoFile, `${videoFile}.json`, ...frameFiles, ...(anchorKept ? [] : [anchorFile, `${anchorFile}.json`])]
             if (!this.staleFile('pictures', picture.file, sheetFingerprint, away)) return log.step('Exists', styles.muted(picture.file))
         }
