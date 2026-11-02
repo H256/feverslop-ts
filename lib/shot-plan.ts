@@ -110,13 +110,18 @@ function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, charact
  * first, then in the order the shot's action names them - and drops the rest of the entries. The dropped stay in the
  * shot's characters, in the picture without a direction of their own, instead of costing another planner call.
  */
+/** Who a shot is about first: by tier (lower first), then in the order the action names them, then as they came. */
+function rankForeground(ids: string[], action: string, characters: Character[], tier: (id: string) => number): string[] {
+    const named = readTokens(action, characters).ids
+    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
+    return [...ids].sort((a, b) => tier(a) - tier(b) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+}
+
 function trimForeground(people: NonNullable<ShotPlan['people']>, action: string, characters: Character[], singing: string[]): { people: NonNullable<ShotPlan['people']>, dropped: string[] } {
     const ids = Object.keys(people)
     if (ids.length <= MAX_FOREGROUND) return {people, dropped: []}
-    // in the order of the action's tokens: who it names first, it is about first
-    const named = readTokens(action, characters).ids
-    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
-    const ranked = [...ids].sort((a, b) => Number(singing.includes(b)) - Number(singing.includes(a)) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+    // the singers first, then in the order of the action's tokens: who it names first, it is about first
+    const ranked = rankForeground(ids, action, characters, id => singing.includes(id) ? 0 : 1)
     const keep = new Set(ranked.slice(0, MAX_FOREGROUND))
     return {people: Object.fromEntries(ids.filter(id => keep.has(id)).map(id => [id, people[id]!])), dropped: ids.filter(id => !keep.has(id))}
 }
@@ -131,10 +136,8 @@ const heardIn = (props: ShotProps | undefined, j: number) => (props ?? []).filte
  * problem names the others, heard off camera. If someone who sings or is heard has to go, a wide shot is offered instead.
  */
 function crowdedShot(j: number, ids: string[], size: string, room: number, action: string, characters: Character[], singing: string[], heard: string[]): string {
-    const named = readTokens(action, characters).ids
-    const at = (id: string) => named.includes(id) ? named.indexOf(id) : Number.MAX_SAFE_INTEGER
     const rank = (id: string) => singing.includes(id) ? 0 : heard.includes(id) ? 1 : 2
-    const ranked = [...ids].sort((a, b) => rank(a) - rank(b) || at(a) - at(b) || ids.indexOf(a) - ids.indexOf(b))
+    const ranked = rankForeground(ids, action, characters, rank)
     const names = (list: string[]) => list.map(id => nameOfId(characters, id)).join(', ')
     const keep = ids.filter(id => ranked.indexOf(id) < room)
     const leave = ids.filter(id => ranked.indexOf(id) >= room)
