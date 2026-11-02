@@ -414,7 +414,7 @@ console.log(JSON.stringify(workflow.build({outputs: {result: output}}).workflow,
 - [ ] size through `resolution(…)`, old size nodes removed
 - [ ] video: one `LoadImage` per `opts.pictures` entry, in order
 - [ ] video: song trimmed with `opts.songStart` / `opts.duration`, length from `opts.frames`
-- [ ] video: `opts.vocals`, if set, trimmed the same way and used as the second reference audio
+- [ ] optional voice reference: if using `opts.vocals`, trim it the same way and use it as the second reference audio; shipped workflows currently leave it unused
 - [ ] video: `renderFrames` exported if the model only renders certain lengths
 - [ ] exactly one save node, and `output` is its `__id`
 - [ ] saves PNG (image) or MP4 (video)

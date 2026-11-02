@@ -70,7 +70,7 @@ export type VideoWorkflowOptions = {
     pictures: string[],         // ComfyUI input names in <Picture N> order, e.g. "feverslop-ts/<project>/assets/characters/thorin.png"
     // ComfyUI input name of the song's isolated vocals - only for clips with a singer, and only when there's a
     // vocals entry in `audios` (which of its entries is the vocals stem, given again here so the workflow can
-    // offer it as a loose ref_audio labeled correctly).
+    // optionally offer it as a loose ref_audio labeled correctly; shipped workflows leave it unused).
     vocals?: string,
     // the ComfyUI input name of each track's *whole* separated stem file, in <Audio N> order (see
     // lib/compose.ts) - lib/render.ts uploads the full stem, and the workflow trims each one to this clip's

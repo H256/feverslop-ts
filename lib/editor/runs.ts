@@ -9,7 +9,7 @@ import type {EditorKind, EditorTarget} from "./project.ts";
 
 const ROOT = join(import.meta.dir, '..', '..')
 const LINES_KEPT = 4000
-const CLIP_ID = /^[a-z]+-\d+$/
+export const CLIP_ID = /^[a-z]+-\d+$/
 const PICTURE_ID = /^[a-z0-9][a-z0-9-]*$/
 
 export type RunAction =

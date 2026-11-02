@@ -99,12 +99,6 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         return {images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO, size: sizes.first}
     }
 
-    // a preview: what the first pass laid out, at its quarter of the pixels - the same picture a full render would go on from
-    if (opts.preview) {
-        const laidOut = afterCleanup(wf, first.output, {offload_model: true, offload_cache: false})
-        return {images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO, size: sizes.first}
-    }
-
     // x2, to exactly the final size: the upscaler takes the video half of the AV latent only; the audio half goes on as it is.
     // device 'cuda' on both machines: a ROCm build of PyTorch serves the AMD card as "cuda" too, while 'rocm' is refused by a CUDA build
     // The upscaler loads its model past ComfyUI's memory management, so ComfyUI frees nothing for it: with pass 1's UNet

@@ -473,7 +473,7 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
         group: `${kind}/${projectGroup(id)}`,
         clips: ids.length,
         rendered: ids.filter(c => existsSync(join(dir, 'videos', `${c}.mp4`))).length,
-        pictures: countOf(join(dir, 'assets', 'characters'), /\.png$/) + countOf(join(dir, 'assets', 'locations'), /\.png$/),
+        pictures: countOf(join(dir, 'assets', 'characters'), /\.png$/) + countOf(join(dir, 'assets', 'locations'), /\.png$/) + countOf(join(dir, 'assets', 'props'), /\.png$/),
         final: finalStateOf(dir, join(dir, `${id}.mp4`), ids.map(c => ({id: c}))),
         lastRun: lastRunOf(dir),
         changed: Math.round(statSync(existsSync(project) ? project : dir).mtimeMs),
