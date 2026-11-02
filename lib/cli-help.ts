@@ -14,6 +14,7 @@ const rendering: [string, string][] = [
 ]
 const planning: [string, string][] = [
     ['--review', 'Stop after each main step that was just generated: accept, edit, generate again or stop'],
+    ['--until=STAGE', 'Plan up to story, cast or look and stop there; the next run goes on from it'],
     ['--dry-run', 'Say what this command would redo and render, with an estimate where one is known; does nothing'],
 ]
 const servers: [string, string][] = [

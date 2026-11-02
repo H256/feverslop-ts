@@ -3,6 +3,9 @@ import {join} from "node:path";
 import {lockHolder} from "../lock.ts";
 import {lastRun, runState} from "../run-record.ts";
 import type {EditorKind, EditorTarget} from "./project.ts";
+import {STEP_NAMES} from "../project.ts";
+import {UNTIL_STAGES} from "../stages.ts";
+import {FILM_STEP_NAMES} from "../film/store.ts";
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
 // terminal, so the two exclude each other, and it is asked for by what it should do - never as a command line from the page.
@@ -16,7 +19,8 @@ export type RunAction =
     | { type: 'clips', ids: string[], again?: boolean, preview?: boolean }
     | { type: 'pictures', ids: string[], again?: boolean, newAnchor?: boolean, promptFile?: string }
     | { type: 'final', preview?: boolean }
-    | { type: 'plan' }
+    // until: plan up to this stage and stop (lib/stages.ts); redo: steps planned again first - what a changed casting.json or cast asks for
+    | { type: 'plan', until?: string, redo?: string[] }
     | { type: 'refresh', what: ('pictures' | 'clips')[] }
     | { type: 'retake', clip: string, range: string }
     | { type: 'repeat', command: string }
@@ -31,7 +35,7 @@ const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
 // what a command of the last run or of `status` may hold to be started from the page: rendering, nothing that asks in the terminal, no keys.
 // Which servers a run goes to is chosen again on the page, so what the command said about them is left out
 const SERVERS_FLAG = /^--comfy=/
-const ALLOWED_FLAGS = /^--(render=[a-z,]+|only=[a-z0-9,-]+|again|new-anchor|refresh=[a-z,]+|strict|preview|retake=[a-z0-9:.,-]+)$/
+const ALLOWED_FLAGS = /^--(render=[a-z,]+|only=[a-z0-9,-]+|again|new-anchor|refresh=[a-z,]+|strict|preview|retake=[a-z0-9:.,-]+|until=[a-z]+|redo=[a-zA-Z,]+)$/
 
 /** A command line as `status` or the last run give it, when it is one the page may start: its options. */
 export function allowedOptions(kind: EditorKind, id: string, command: string): string[] | undefined {
@@ -55,8 +59,13 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []))
         case 'final':
             return run('--render=final', ...(action.preview ? ['--preview'] : []))
-        case 'plan':
-            return run()
+        case 'plan': {
+            const steps: readonly string[] = kind === 'film' ? FILM_STEP_NAMES : STEP_NAMES
+            const redo = action.redo ?? []
+            if (!Array.isArray(redo) || redo.some(step => typeof step !== 'string' || !steps.includes(step))) throw new Error(`no such steps: ${JSON.stringify(redo)}`)
+            if (action.until !== undefined && !(UNTIL_STAGES as readonly string[]).includes(action.until)) throw new Error(`no such stage: ${action.until}`)
+            return run(...(redo.length ? [`--redo=${redo.join(',')}`] : []), ...(action.until ? [`--until=${action.until}`] : []))
+        }
         case 'refresh': {
             const what = action.what.filter(w => w === 'pictures' || w === 'clips')
             if (!what.length) throw new Error('nothing to refresh')
