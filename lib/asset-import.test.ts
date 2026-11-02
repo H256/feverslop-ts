@@ -56,6 +56,8 @@ describe('importPlan / importAsset', () => {
     })
     test('assetIds: the ids with a picture or a sheet', () => {
         expect(assetIds(project({...sheet('mara'), 'assets/characters/lyra.png': 'x', 'assets/characters/lyra.png.partial.png': 'x'}), 'character')).toEqual(['lyra', 'mara'])
+        // the small copy a picture description makes, left over when ffmpeg failed (#464)
+        expect(assetIds(project({...sheet('mara'), 'assets/characters/lyra.png': 'x', 'assets/characters/lyra.png.vision-0.png': 'x'}), 'character')).toEqual(['lyra', 'mara'])
     })
 })
 
