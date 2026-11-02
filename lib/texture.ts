@@ -90,9 +90,3 @@ export async function clipTexture(file: string, size: { width: number, height: n
 
 /** The factor per link that takes the first value to the last over the chain: (last / first)^(1 / links). */
 export const perLink = (values: number[]) => values.length < 2 || !(values[0]! > 0) ? 1 : (values.at(-1)! / values[0]!) ** (1 / (values.length - 1))
-
-export function median(values: number[]): number {
-    const sorted = [...values].sort((a, b) => a - b)
-    const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
-}

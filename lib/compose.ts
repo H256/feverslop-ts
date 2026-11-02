@@ -804,6 +804,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ? withLabels(flatShotMoments[0].action, planTokens)
                 : opensScene
                 ? withLabels(beat.summary, beatTokens)
+                : !startsFrom
+                ? `The scene goes on at the same time and place, after a cut: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.`
                 : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${lead ? ` Its first ${lead.toFixed(2)} seconds are the end of the previous clip, given as its frames: the picture, the people and their movement go on from them in one continuous take, and [Shot 1] continues from there.` : ''}${framePicture ? ` The video begins on ${framePicture} and goes on from it in one continuous take.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
