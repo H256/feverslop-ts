@@ -19,7 +19,7 @@ const ADLIB_SURE = 0.7          // ... or whisper is this sure of the words (qui
 const ADLIB_MIN_WORD_PROBABILITY = 0.3
 const GUESS_MIN_ACTIVE = 0.4    // share of a guessed (never heard) word that has to lie inside vocal activity - else nobody sings it
 const ADLIB_REPLACES_BELOW = 0.5 // a lyric line that was mostly not heard gives way to ad-libs sung over it
-const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
+export const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
 const LINE_GAP_BARS = 4         // more silence than this between two words of one line: one of them was matched somewhere else
                                 // (largest real gap inside a line over the projects folder: 3.55 bars, the wrong ones 4.2 to 30)
 

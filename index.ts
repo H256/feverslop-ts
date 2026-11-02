@@ -346,7 +346,7 @@ if (lyricsTiming) {
         log.line(`   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`)
     }
     const unsure = lowConfidence(lyricsTiming)
-    if (unsure.length) log.warn(`${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them and fix lyricsTiming in ${project.file} by hand if needed, then --redo=timeline`)
+    if (unsure.length) log.warn(`${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them on the workspace's Timing page (bun run editor), or fix lyricsTiming in ${project.file} by hand, then --redo=timeline`)
 }
 
 ////////// CRAFT A STORY FOR THE LYRICS
