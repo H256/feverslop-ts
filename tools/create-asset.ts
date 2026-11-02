@@ -11,8 +11,8 @@ import {basename, dirname, join} from "node:path";
 import {type AssetKind, assetPaths, copyAsset} from "../lib/asset-import.ts";
 import {pictureAsset} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
-import {characterViews, describePicture} from "../lib/describe-picture.ts";
-import {libraryDir, libraryFolder, libraryIdPattern, libraryLayout, readLibraryAsset, writeLibraryAsset} from "../lib/library.ts";
+import {characterViews, describeOrFail, visionFailed} from "../lib/describe-picture.ts";
+import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken} from "../lib/library.ts";
 import {ask, askJson, configureLlm} from "../lib/llm.ts";
 import {runProcess} from "../lib/process.ts";
 import {locationAnchorPrompt, locationLayoutPrompt} from "../lib/prompts.ts";
@@ -43,7 +43,8 @@ const like = flag('like')
 if (like && !projectExists(like)) fail(`projects/${like} does not exist`)
 
 const library = await libraryDir()
-if (await readLibraryAsset(library, kind, id!)) fail(`The library already has a ${kind} "${id}" (${join(library, libraryFolder(kind, id!))}) - it is never overwritten; choose another id`)
+const taken = await libraryTaken(library, kind, id!)
+if (taken) fail(`${taken}; choose another id`)
 const name = flag('name') ?? id!.split('-').map(w => w[0]!.toUpperCase() + w.slice(1)).join(' ')
 const role = flag('role') ?? (kind === 'character' ? 'a character' : '')
 
@@ -71,11 +72,11 @@ writeFileSync(`${anchor}.json`, JSON.stringify(pinnedSidecar(`made from ${basena
 let description = flag('description')
 if (!description) {
     say('Describing the picture with the vision model - can take a while')
-    try {
-        description = await describePicture(anchor, kind === 'character' ? {kind, name, role} : {kind, name})
-    } catch (e) {
-        if (!interactive) fail(`The vision description failed (${(e as Error).message}) - give one with --description=…`)
-        log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
+    const described = await describeOrFail(anchor, kind === 'character' ? {kind, name, role} : {kind, name})
+    description = described.description
+    if (described.failed) {
+        if (!interactive) fail(`The vision description failed (${described.failed}) - give one with --description=…`)
+        log.warn(visionFailed(described.failed))
     }
     if (interactive) description = answer(await p.text({message: 'Description used in the clip prompts', initialValue: description ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
     else if (description) log.info(description)
@@ -105,28 +106,20 @@ say('Rendering the reference sheet')
 // One given with --description stays as it is.
 if (kind === 'character' && !flag('description')) {
     say('Describing the character once more, from its sheet')
-    try {
-        const fromSheet = await describePicture(characterViews(join(work, sheet)), {kind, name, role})
-        if (fromSheet) description = fromSheet
-    } catch (e) {
-        log.warn(`The description from the sheet failed - the one from the picture is kept (${(e as Error).message})`)
-    }
+    const fromSheet = await describeOrFail(characterViews(join(work, sheet)), {kind, name, role})
+    if (fromSheet.description) description = fromSheet.description
+    if (fromSheet.failed) log.warn(`The description from the sheet failed - the one from the picture is kept (${fromSheet.failed})`)
     if (interactive) description = answer(await p.text({message: 'Description used in the clip prompts (from the sheet)', initialValue: description ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
     else log.info(description!)
 }
 
 const {copied} = copyAsset({dir: work, layout: assetPaths(kind, id!), label: `create-asset ${basename(anchorPicture)}`}, {dir: library, layout: libraryLayout(kind, id!), archiveName: id!})
-writeLibraryAsset(library, {
+rmSync(work, {recursive: true, force: true})
+finishLibraryAsset(library, {
     kind, id: id!, name, description: description!,
     ...(anchors ? {anchors} : {}), ...(layout ? {layout} : {}),
     source: `picture ${basename(anchorPicture)}`,
-    created: new Date().toISOString().slice(0, 10),
-})
-rmSync(work, {recursive: true, force: true})
-const done = `${name} is in the library as ${kind} "${id}" (${copied} files): ${join(library, libraryFolder(kind, id!))} - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`
-log.success(done)
-log.output(join(library, libraryFolder(kind, id!)))
-log.next(`bun run import-asset <project-id> <asset-id> --from=library:${id}`)
+}, copied, {success: true, tail: ` - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`})
 
 // cancelled with Ctrl+C / Esc - the work folder stays, the next run starts it again
 function answer<T>(value: T) {

@@ -13,7 +13,7 @@ import {libraryDir, libraryIds, libraryLayout, readLibraryAsset} from "../lib/li
 import {loadProjectConfig} from "../lib/config.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {configureLlm} from "../lib/llm.ts";
-import {characterViews, describePicture} from "../lib/describe-picture.ts";
+import {characterViews, describeOrFail, visionFailed} from "../lib/describe-picture.ts";
 import {styles} from "../lib/log.ts";
 import {pictureProp, propMissing} from "../lib/prop-check.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
@@ -213,15 +213,11 @@ async function fromPicture(): Promise<string | undefined> {
     const settings = await loadSettings({projectModel: config.llm.model})
     configureLlm(settings.llm)
     log.info('Asking the vision model - can take a while')
-    try {
-        const character = data.cast?.characters.find(c => c.id === target.id)
-        const text = await describePicture(image, character ? {kind: 'character', name: character.name, role: character.role} : {kind: 'location', name: target.name})
-        if (text) log.info(text)
-        return text
-    } catch (e) {
-        log.warn(`The vision description failed - the connected model may not take images (${(e as Error).message})`)
-        return undefined
-    }
+    const character = data.cast?.characters.find(c => c.id === target.id)
+    const {description, failed} = await describeOrFail(image, character ? {kind: 'character', name: character.name, role: character.role} : {kind: 'location', name: target.name})
+    if (failed) log.warn(visionFailed(failed))
+    if (description) log.info(description)
+    return description
 }
 
 function fail(message: string): never {

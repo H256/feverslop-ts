@@ -8,7 +8,7 @@ import {log} from '../lib/log.ts';
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {type AssetKind, assetIds, assetPaths, copyAsset} from "../lib/asset-import.ts";
-import {libraryDir, libraryFolder, libraryIdPattern, libraryLayout, readLibraryAsset, writeLibraryAsset} from "../lib/library.ts";
+import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken} from "../lib/library.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {Project} from "../lib/project.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
@@ -44,7 +44,8 @@ if (!assetIds(dir, kind).includes(assetId!)) fail(`${id} has no finished picture
 const library = await libraryDir()
 const libraryId = as ?? assetId!
 if (!libraryIdPattern.test(libraryId)) fail(`"${libraryId}" is no usable library id - lowercase letters, digits and dashes`)
-if (await readLibraryAsset(library, kind, libraryId)) fail(`The library already has a ${kind} "${libraryId}" (${join(library, libraryFolder(kind, libraryId))}) - it is never overwritten; give this one another id: --as=<library id>`)
+const taken = await libraryTaken(library, kind, libraryId)
+if (taken) fail(`${taken}; give this one another id: --as=<library id>`)
 
 const description = (kind === 'character' ? data.characterDescriptions : data.locationDescriptions)?.[assetId!]
 if (!description) fail(`${id} has no description of ${assetId} yet - plan it further first: ${run}`)
@@ -52,15 +53,11 @@ const {copied} = copyAsset(
     {dir, layout: assetPaths(kind, assetId!), label: `${id}`},
     {dir: library, layout: libraryLayout(kind, libraryId), archiveName: libraryId},
 )
-writeLibraryAsset(library, {
+finishLibraryAsset(library, {
     kind, id: libraryId,
     name: (character ?? location)!.name,
     description: description!,
     ...(kind === 'location' && !isFilm && (data as Project).locationAnchors?.[assetId!] ? {anchors: (data as Project).locationAnchors![assetId!]} : {}),
     ...(kind === 'location' && !isFilm && (data as Project).locationLayouts?.[assetId!] ? {layout: (data as Project).locationLayouts![assetId!]} : {}),
     source: `${id}/${assetId}`,
-    created: new Date().toISOString().slice(0, 10),
-})
-log.info(`${(character ?? location)!.name} is in the library as ${kind} "${libraryId}" (${copied} files): ${join(library, libraryFolder(kind, libraryId))}`)
-log.output(join(library, libraryFolder(kind, libraryId)))
-log.next(`bun run import-asset <project-id> <asset-id> --from=library:${libraryId}`)
+}, copied)

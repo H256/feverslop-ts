@@ -41,3 +41,18 @@ export async function describePicture(images: string | string[], subject: { kind
     const prompt = subject.kind === 'character' ? characterImageDescriptionPrompt(urls, subject) : locationImageDescriptionPrompt(urls[0]!, subject.name)
     return (await ask(prompt)).trim() || undefined
 }
+
+/** What a tool says when the vision description failed - the same words in every tool that falls back to another way. */
+export const visionFailed = (reason: string) => `The vision description failed - the connected model may not take images (${reason})`
+
+/**
+ * describePicture for a tool that has another way to a description: a model that fails gives `failed` (the reason) instead of
+ * throwing. What then happens - stop, ask, or go on without - is the tool's.
+ */
+export async function describeOrFail(...args: Parameters<typeof describePicture>): Promise<{ description?: string, failed?: string }> {
+    try {
+        return {description: await describePicture(...args)}
+    } catch (e) {
+        return {failed: (e as Error).message}
+    }
+}
