@@ -1,5 +1,5 @@
 import {expect, test} from "bun:test";
-import {type Gray, laplacianEnergy, median, perLink, shrink, textureOf} from "./texture.ts";
+import {type Gray, laplacianEnergy, perLink, shrink, textureOf} from "./texture.ts";
 
 // a reproducible noisy picture: a soft gradient with grain of the given strength
 const picture = (grain: number, width = 96, height = 64, seed = 7): Gray => {
@@ -42,6 +42,4 @@ test('the structure scale is the picture shrunk by 4, each pixel the mean of the
 test('per link: the factor that takes the first value of a chain to its last', () => {
     expect(perLink([1, 1.3, 1.69])).toBeCloseTo(1.3, 6)
     expect(perLink([2])).toBe(1)
-    expect(median([3, 1, 2])).toBe(2)
-    expect(median([4, 1, 2, 3])).toBe(2.5)
 })

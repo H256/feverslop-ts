@@ -24,6 +24,7 @@ import {clipEstimate, clipFailureRisks, pictureEstimate} from "./lib/render-stat
 import {keepTimingsIn, readTimings} from "./lib/timings.ts";
 import {formatSlotRanges} from "./lib/assemble.ts";
 import {reviewed} from "./lib/review.ts";
+import {parseUntil, stopAfter} from "./lib/stages.ts";
 import {archiveClip} from "./lib/film/archive.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {previewSources} from "./lib/assemble.ts";
@@ -59,7 +60,7 @@ cli('film')
 
 
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--dry-run] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -83,6 +84,8 @@ const {values: args, positionals} = (() => {
                 debug: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
                 review: {type: 'boolean', default: false},
+                // plan up to this stage and stop - the screenplay, the cast or the look (lib/stages.ts)
+                until: {type: 'string', default: ''},
                 'dry-run': {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
@@ -114,6 +117,14 @@ if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has
 if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 if (args.review && args['dry-run']) log.usageError('--review and --dry-run do not go together: a dry run generates nothing to look at', usage)
+const until = (() => {
+    try {
+        return parseUntil(args.until)
+    } catch (e) {
+        return log.usageError((e as Error).message, usage)
+    }
+})()
+if (until && (render.size || args.retake || args['dry-run'])) log.usageError('--until plans up to a stage and stops - it goes with no --render, --retake or --dry-run', usage)
 const redoSteps = args.redo.split(',').filter(Boolean) as FilmStepName[]
 const unknownRedo = redoSteps.filter(s => !(FILM_STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${FILM_STEP_NAMES.join(', ')}`, usage)
@@ -291,6 +302,8 @@ try {
 for (const note of scriptNotes) log.warn(`script: ${note}`)
 if (scriptNotes.length) log.step('Script', styles.muted(mode === 'screenplay' ? 'the film follows the script as it is - --fix-script repairs it (old version kept), or edit project.json (screenplay)' : 'the film follows the script as it is - edit project.json (screenplay) to resolve these before rendering'))
 
+stopAfter(until, 'story', film.file, `bun film.ts ${filmId}`)
+
 /////////// 4 · CAST
 const cast = await reviewed(film, args.review, 'cast', () => film.step('cast', '4 · CASTING CHARACTERS & LOCATIONS', async () => {
     const attempt = (problems: string[] = []) => askJson<Parameters<typeof toCast>[0]>(castPrompt(screenplay, outline, problems, mode === 'screenplay' ? source : undefined, brief.setting))
@@ -336,6 +349,8 @@ if (config.sequenceSheets && config.locationViews) for (const l of cast.location
 const fromLibrary = (kind: AssetKind, values: Record<string, string>) => {
     for (const [key, asset] of casting.assets) if (key.startsWith(`${kind}:`)) values[key.slice(kind.length + 1)] = asset.description
 }
+
+stopAfter(until, 'cast', film.file, `bun film.ts ${filmId}`)
 
 /////////// 5 · SUMMARY
 const summary = await film.step('summary', '5 · SUMMARIZING THE STORY', () => ask(summaryPrompt(screenplay, cast)))
@@ -455,6 +470,7 @@ for (const prop of props) log.step(prop.id, styles.muted(prop.description))
 
 const pictures = filmPictures(cast, {characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationViews, props})
 await Bun.write(join(film.dir, 'assets.json'), JSON.stringify(pictures, null, 2))
+stopAfter(until, 'look', film.file, `bun film.ts ${filmId}`)
 
 /////////// 9 · SHOTS - every scene broken into shots, one LLM call per scene
 // the length of the film: asked for in the config (an idea always has one), shared out to the scenes by the length of their script

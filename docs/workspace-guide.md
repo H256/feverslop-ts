@@ -35,6 +35,23 @@ Drei Dinge gelten überall:
 
 Jede Karte zeigt, wie weit ein Projekt ist und was als Nächstes käme. Oben filterst du nach Art (**Music videos**, **Films**) und Zustand (**Running**, **Failed**, **Unfinished**, **Done**) und suchst über **Find a project**. Oben rechts siehst du, welche Render-Server erreichbar und wie ausgelastet sie sind. Ein Klick auf die Karte öffnet die Timeline.
 
+## Ein Projekt in Stufen planen
+
+Ein neues Projekt planst du am besten so, wie ein Film entsteht: erst das Buch, dann die Besetzung, dann der Look, dann die Einstellungen. Erst danach wird gerendert. So änderst du die Figuren, bevor irgendetwas auf ihnen aufbaut, und lange bevor GPU-Zeit anfällt.
+
+| Stufe | Was entsteht | Wo du es ansiehst |
+|---|---|---|
+| **Story** (beim Film: **Screenplay**) | die Geschichte aus Songtext und Story-Idee, beim Film das Drehbuch | **Story** |
+| **Cast** | Figuren und Orte, beim Musikvideo auch, wer welche Zeile singt | **Casting**, **Singers** |
+| **Look** | der Look des Videos, das Aussehen jeder Figur und jedes Orts | **References** (beim Film) |
+| **Shot plan** | die Beats auf dem Song und die Einstellungen jedes Clips | **Timeline** |
+
+Oben auf **Story** und **Casting**, und auf der Timeline eines Projekts ohne Clips, steht eine Leiste mit den Stufen. Erledigte Stufen sind abgehakt. Der Knopf rechts plant die nächste Stufe und hält dann an, zum Beispiel **Plan the cast**. **Plan everything** plant ohne Halt bis zu den Einstellungen. Das alles macht nur das Sprachmodell, gerendert wird nichts. Im Terminal geht dasselbe mit `--until=story`, `--until=cast` oder `--until=look`.
+
+**Die Story ändern:** Auf **Story** steht der Text zum Bearbeiten. **Save the story** speichert ihn. Alles, was aus der alten Story geplant war, fällt dabei weg, und der nächste Planlauf macht es neu. **Write it again** lässt das Sprachmodell eine neue Story schreiben. Ein Drehbuch steht hier nur zum Lesen: Es wird im Skript unter `input/` geändert.
+
+**Den Cast ändern:** Siehe [Besetzung und Bibliothek](#besetzung-und-bibliothek). Am besten direkt nach **Plan the cast**: Dann baut noch nichts auf ihm auf.
+
 ## Ein Video ansehen
 
 ![Timeline mit Monitor und Clip-Details](images/workspace/timeline.jpg)
@@ -114,7 +131,11 @@ Bei einem gepinnten Bild sind die Render-Knöpfe gesperrt. Clips, die das Bild b
 
 ![Casting-Seite mit einer Auswahl je Rolle](images/workspace/casting.jpg)
 
-**Casting** zeigt jede Rolle und jeden Ort mit einer Auswahl: **Rendered in this project** oder ein Asset aus der Bibliothek. Eine Änderung schreibt nur einen Eintrag in `casting.json`. Wirksam wird sie mit dem nächsten Planlauf (**Plan now**). Die betroffenen Clips werden dann stale, gerendert wird nichts von selbst.
+**Casting** zeigt jede Rolle und jeden Ort mit einer Auswahl: **Rendered in this project** oder ein Asset aus der Bibliothek. Eine Änderung schreibt nur einen Eintrag in `casting.json`. Wirksam wird sie mit dem nächsten Planlauf (**Plan now**). Der Dialog davor nennt, welche Schritte aus den alten Texten der Rolle geplant waren und jetzt neu geplant werden. Die betroffenen Clips werden dann stale, gerendert wird nichts von selbst.
+
+**Edit the cast** ändert den Cast selbst, ganz ohne Bibliothek: Name, Rolle in der Story und Requisite jeder Figur, die Namen der Orte. Beim Musikvideo kannst du Figuren und Orte auch hinzufügen (**Add a character**, **Add a place**) und entfernen (**Remove**). Beim Film legt das Drehbuch fest, wer vorkommt: Dort änderst du Name, Rolle, Aussehen und Stimme. Die Ids bleiben, eine umbenannte Figur behält also ihre Bilder und ihren Eintrag in `casting.json`.
+
+**Save the cast** nennt vorher, was aus dem alten Cast geplant war und wegfällt: die Looks, beim Musikvideo auch die Sängerwahl, später die Beats und Einstellungen. Der nächste Planlauf macht es neu, nur mit dem Sprachmodell. Wird aus einer Figur eine ganz andere, änderst du sie am besten auch in der Story: Die erzählt sonst noch von der alten.
 
 **Library** (oben rechts) zeigt alle Assets und wo sie benutzt werden. **New asset from a picture** legt eines aus einem Bild an. Aus einem Projekt heraus geht es unter **References** mit **Put into the library**. Ein vorhandenes Asset wird dabei nie überschrieben.
 

@@ -10,7 +10,7 @@ import {pictureFingerprint, Renderer, RETAKE_LEAD, type RenderWhat} from "../ren
 import type {RetakeAsk} from "../retake.ts";
 import type {RenderSpec} from "../render-spec.ts";
 import {renderStateOf} from "../render-state.ts";
-import {type Freshness, freshness} from "../provenance.ts";
+import {type Freshness, freshness, recordedContextFrames} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
 import {workflowDir} from "../config.ts";
 import type {FilmClipRequest} from "./compose.ts";
@@ -63,13 +63,7 @@ export const filmAssemblyClips = (projectDir: string, clips: FilmClipRequest[]) 
 
 /** Was the clip rendered with context frames (its first frame is a new one, not the last frame of the clip before)? */
 export function startedOnContext(projectDir: string, id: string): boolean {
-    const sidecar = join(projectDir, `videos/${id}.mp4.json`)
-    if (!existsSync(sidecar)) return false
-    try {
-        return Number.isInteger(JSON.parse(readFileSync(sidecar, 'utf8')).contextFrames)
-    } catch {
-        return false
-    }
+    return recordedContextFrames(join(projectDir, 'videos', `${id}.mp4`)) !== undefined
 }
 
 /**

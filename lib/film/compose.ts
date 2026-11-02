@@ -222,6 +222,8 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
+        : !clip.startsFrom
+        ? 'The scene goes on at the same time and place, after a cut: everyone is already where the first shot below has them from the very first frame.'
         : `The scene continues directly from the previous clip, at the same time and place: everyone is already where the first shot below has them, mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it in one continuous take: the camera and the people keep the speed and direction of movement they have in it, every movement carrying straight on.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take: the camera and the people keep the speed and direction of movement they have in it, every movement carrying straight on.' : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
