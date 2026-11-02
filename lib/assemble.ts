@@ -49,7 +49,7 @@ export const framesOnGrid = (info: Pick<VideoInfo, 'frames' | 'fps'>) =>
     Math.abs(info.fps - FPS) > 0.01 ? Math.round(info.frames * FPS / info.fps) : info.frames
 
 /** The duration of an audio or video file in seconds, from its container. */
-export async function probeDuration(file: string): Promise<number> {
+async function probeDuration(file: string): Promise<number> {
     const stdout = await runProcess(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], {errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
     const seconds = Number(stdout.trim())
     if (!Number.isFinite(seconds)) throw new Error(`${file} has no readable duration`)
