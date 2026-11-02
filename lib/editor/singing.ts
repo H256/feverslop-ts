@@ -4,6 +4,7 @@ import {assetPaths} from "../asset-import.ts";
 import type {ClipRequest} from "../compose.ts";
 import {withProjectLock} from "../lock.ts";
 import type {Project, Singing} from "../project.ts";
+import {normalizeParts, singersOfParts, type SingingPart} from "../singing-parts.ts";
 import {readClipRequests} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
 
@@ -19,6 +20,9 @@ export type SingingLine = {
     start?: number,             // seconds in the song
     end?: number,
     singers: string[],
+    parts?: SingingPart[],      // the singer changes within the line: from word n on (lib/singing-parts.ts)
+    words: { text: string, start: number, end: number }[],  // the line's words with their song times - where a part can start
+    estimated: boolean,         // the times are barely found in the transcript, only spread over the line: a split can be off
     beats: string[],            // the beats of the clips it is sung in
     clips: string[],
 }
@@ -31,7 +35,8 @@ export type SingingView = {
     unplanned: string[],        // beats without a shot plan: the next plan run plans them
     audio?: { file: string, v: number },    // what to listen to a line in: the vocals stem, else the song
 }
-export type SingingChange = { lines: { line: number, singers: string[] }[] }
+// a line is sung by `singers` as a whole, or with `parts` by each part's singers from its word on (singers is then ignored)
+export type SingingChange = { lines: { line: number, singers: string[], parts?: SingingPart[] }[] }
 export type SingingResult = {
     changed: number[],          // the lines that changed
     replanned: string[],        // the beats that lost their shot plan
@@ -71,7 +76,9 @@ export function singingView(dir: string, data: Project, requests: Request[]): Si
     return {
         singers: singing.singers,
         lines: singing.lines.map(l => ({
-            line: l.line, text: l.text, singers: l.singers,
+            line: l.line, text: l.text, singers: l.singers, ...(l.parts ? {parts: l.parts} : {}),
+            words: (timing.get(l.line)?.words ?? []).map(w => ({text: w.text, start: w.start, end: w.end})),
+            estimated: (timing.get(l.line)?.confidence ?? 1) < 0.5,
             section: timing.get(l.line)?.section, start: timing.get(l.line)?.start, end: timing.get(l.line)?.end,
             beats: [...sung.get(l.line)?.beats ?? []], clips: [...sung.get(l.line)?.clips ?? []],
         })),
@@ -105,20 +112,32 @@ export function applySinging(data: Project, change: SingingChange, requests: Req
     if (!singing) throw new Error('nobody sings in this project - "singers" in config.json is empty')
     const characters = data.cast?.characters ?? []
     if (!Array.isArray(change?.lines)) throw new Error('no lines')
-    const wanted = new Map<number, string[]>()
+    const wordsOf = (line: number) => data.lyricsTiming?.lines.find(l => l.line === line)?.words.length ?? 0
+    const wanted = new Map<number, { singers: string[], parts?: SingingPart[] }>()
     for (const entry of change.lines) {
         if (!singing.lines.some(l => l.line === entry.line)) throw new Error(`no sung line ${entry.line}`)
-        if (!Array.isArray(entry.singers) || !entry.singers.length) throw new Error(`line ${entry.line + 1} needs a singer`)
-        const unknown = entry.singers.filter(id => !characters.some(c => c.id === id))
+        if (entry.parts !== undefined && !Array.isArray(entry.parts)) throw new Error(`line ${entry.line + 1}: parts must be a list`)
+        if (entry.parts?.some(p => !Number.isInteger(p?.from) || !Array.isArray(p.singers) || !p.singers.length)) throw new Error(`line ${entry.line + 1}: every part needs a word and a singer`)
+        if (entry.parts?.length && !wordsOf(entry.line)) throw new Error(`line ${entry.line + 1} has no word times - its singer cannot change within it`)
+        const parts = normalizeParts(entry.parts, wordsOf(entry.line))
+        // parts that come to one (the split taken back, or all parts by the same singers): the line is sung by theirs
+        const singers = entry.parts?.length ? singersOfParts(parts ?? entry.parts) : [...new Set(Array.isArray(entry.singers) ? entry.singers : [])]
+        if (!singers.length) throw new Error(`line ${entry.line + 1} needs a singer`)
+        const unknown = singers.filter(id => !characters.some(c => c.id === id))
         if (unknown.length) throw new Error(`not in the cast: ${unknown.join(', ')}`)
-        wanted.set(entry.line, [...new Set(entry.singers)])
+        wanted.set(entry.line, {singers, ...(parts ? {parts} : {})})
     }
     const same = (a: string[], b: string[]) => a.length === b.length && a.every(id => b.includes(id))
-    const changed = singing.lines.filter(l => wanted.has(l.line) && !same(l.singers, wanted.get(l.line)!)).map(l => l.line)
+    const sameParts = (a: SingingPart[] | undefined, b: SingingPart[] | undefined) => (a?.length ?? 0) === (b?.length ?? 0) && (a ?? []).every((p, k) => p.from === b![k]!.from && same(p.singers, b![k]!.singers))
+    const changed = singing.lines.filter(l => wanted.has(l.line) && (!same(l.singers, wanted.get(l.line)!.singers) || !sameParts(l.parts, wanted.get(l.line)!.parts))).map(l => l.line)
     const result: SingingResult = {changed, replanned: [], added: [], newSingers: [], formerSingers: [], staleClips: []}
     if (!changed.length) return result
 
-    const lines: Singing['lines'] = singing.lines.map(l => changed.includes(l.line) ? {...l, singers: wanted.get(l.line)!} : l)
+    const lines: Singing['lines'] = singing.lines.map(l => {
+        if (!changed.includes(l.line)) return l
+        const {parts: _, ...rest} = l
+        return {...rest, ...wanted.get(l.line)!}
+    })
     const used = new Set(lines.flatMap(l => l.singers))
     data.singing = {singers: [...singing.singers.filter(id => used.has(id)), ...[...used].filter(id => !singing.singers.includes(id))], lines}
     result.newSingers = data.singing.singers.filter(id => !singing.singers.includes(id))
@@ -129,7 +148,7 @@ export function applySinging(data: Project, change: SingingChange, requests: Req
     for (const beatId of beats) {
         const beat = data.beats?.find(b => b.id === beatId)
         if (!beat) continue
-        const singersHere = new Set(changed.filter(line => sung.get(line)?.beats.has(beatId)).flatMap(line => wanted.get(line)!))
+        const singersHere = new Set(changed.filter(line => sung.get(line)?.beats.has(beatId)).flatMap(line => wanted.get(line)!.singers))
         const missing = [...singersHere].filter(id => !beat.characterIds.includes(id))
         if (missing.length) {
             beat.characterIds = [...beat.characterIds, ...missing]

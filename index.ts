@@ -460,7 +460,7 @@ if (singing) {
     const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
     log.step('Singers', singing.singers.map(id => styles.name(nameOf(id))).join(', '))
     if (singing.singers.length > 1) {
-        for (const line of singing.lines) log.line(`   ${styles.muted(line.singers.map(nameOf).join(' + ').padEnd(24))} ${line.text}`)
+        for (const line of singing.lines) log.line(`   ${styles.muted(line.singers.map(nameOf).join(line.parts ? ' / ' : ' + ').padEnd(24))} ${line.text}`)
     }
 }
 
@@ -748,7 +748,7 @@ for (const slot of clipSlots) {
 // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
 // still does). This step asks for exactly one distinct, progressing action per shot instead.
 const beatProps = propActivity ? propActivityPerBeat({slots: clipSlots, mapping, beats, characters: cast.characters}, propActivity) : undefined
-const beatSinging = singingPerBeat({slots: clipSlots, mapping, beats, singing})
+const beatSinging = singingPerBeat({slots: clipSlots, mapping, beats, singing, lyricsTiming})
 // One call per beat does not fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So the
 // beats are blocked first, one after the other - the floor plan, where everybody starts and ends, each beat from the end
 // of the one before - and then the shots of every beat are written from its blocking, the beats at once (steps 11a and 11b).
@@ -1030,6 +1030,7 @@ const clips = buildClipRequests({
     music,
     language,
     singing,
+    lyricsTiming,
     shotMoments,
     propActivity,
     stemsAvailable: Boolean(stems),

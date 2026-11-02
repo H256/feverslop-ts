@@ -87,9 +87,37 @@ describe('singingView', () => {
         delete data.shotMoments!.b2
         const view = singingView('/nowhere', data, requests)!
         expect(view.characters.find(c => c.id === 'ben')!.clips).toEqual(['c-1', 'c-3'])
-        expect(view.lines[2]).toEqual({line: 2, text: 'line 2', singers: ['ann'], section: 'Chorus', start: 4, end: 5.5, beats: ['b2'], clips: ['c-3']})
+        expect(view.lines[2]).toEqual({line: 2, text: 'line 2', singers: ['ann'], words: [], estimated: false, section: 'Chorus', start: 4, end: 5.5, beats: ['b2'], clips: ['c-3']})
         expect(view.unplanned).toEqual(['b2'])
         expect(view.characters.find(c => c.id === 'ben')!.beats).toEqual(['b1'])
         expect(view.beats[0]).toEqual({id: 'b1', characterIds: ['ann', 'ben'], planned: true, clips: ['c-1', 'c-2']})
+    })
+})
+
+describe('applySinging - a singer change within a line', () => {
+    const withWords = () => {
+        const data = project()
+        data.lyricsTiming!.lines[1]!.words = ['we', 'rise', 'and', 'fall'].map((text, n) => ({text, start: 2 + n * 0.4, end: 2.3 + n * 0.4}))
+        return data
+    }
+
+    test('parts are kept sorted from word 0, the line sung by all of their singers', () => {
+        const data = withWords()
+        const result = applySinging(data, {lines: [{line: 1, singers: [], parts: [{from: 2, singers: ['ben']}, {from: 0, singers: ['ann']}]}]}, requests)
+        expect(result.changed).toEqual([1])
+        expect(data.singing!.lines[1]).toEqual({line: 1, text: 'line 1', singers: ['ann', 'ben'], parts: [{from: 0, singers: ['ann']}, {from: 2, singers: ['ben']}]})
+    })
+
+    test('a change of the split alone is a change; taking the split back leaves no parts', () => {
+        const data = withWords()
+        applySinging(data, {lines: [{line: 1, singers: [], parts: [{from: 0, singers: ['ann']}, {from: 2, singers: ['ben']}]}]}, requests)
+        expect(applySinging(data, {lines: [{line: 1, singers: [], parts: [{from: 0, singers: ['ann']}, {from: 3, singers: ['ben']}]}]}, requests).changed).toEqual([1])
+        // both parts sung by Ann: one part, so no parts at all
+        applySinging(data, {lines: [{line: 1, singers: [], parts: [{from: 0, singers: ['ann']}, {from: 3, singers: ['ann']}]}]}, requests)
+        expect(data.singing!.lines[1]).toEqual({line: 1, text: 'line 1', singers: ['ann']})
+    })
+
+    test('no parts on a line without word times', () => {
+        expect(() => applySinging(project(), {lines: [{line: 1, singers: [], parts: [{from: 0, singers: ['ann']}, {from: 1, singers: ['ben']}]}]}, requests)).toThrow('no word times')
     })
 })

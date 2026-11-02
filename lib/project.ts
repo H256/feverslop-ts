@@ -146,8 +146,10 @@ export type LyricsTiming = { lines: TimedLine[] }
 // The part of a sung line inside one clip, times relative to the clip's first frame
 export type SlotVocal = { line: number, text: string, start: number, end: number, words: TimedWord[] }
 
-// Who sings: character ids, and per sung line (numbered like TimedLine.line) the singer(s)
-export type Singing = { singers: string[], lines: { line: number, text: string, singers: string[] }[] }
+// Who sings: character ids, and per sung line (numbered like TimedLine.line) the singer(s). A line whose singer changes
+// within it has parts: each from a word of the line on (the index into TimedLine.words) with its own singers - `singers`
+// is then all of theirs (lib/singing-parts.ts)
+export type Singing = { singers: string[], lines: { line: number, text: string, singers: string[], parts?: { from: number, singers: string[] }[] }[] }
 
 export type Assignment = { slotId: string, beatId: string }
 
