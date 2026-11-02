@@ -51,7 +51,10 @@ export default function myImage(opts: ImageWorkflowOptions): WorkflowResult {
 }
 ```
 
-There are two kinds, defined in `comfy/helpers.ts`:
+There are four kinds, one options type each, all defined in `comfy/helpers.ts`. The two below do most of the work; the other
+two are an **audio workflow** (`songWorkflow`, `AudioWorkflowOptions`), which makes the song for `--render=song`, and a
+**sequence workflow** (`sequenceWorkflow`, `SequenceWorkflowOptions`), which makes the turnaround video of a reference sheet
+(see [comfyui.md → Reference sheets](comfyui.md#reference-sheets)).
 
 **Image workflows** (`imageWorkflow` in `config.json`) - render one reference picture:
 
@@ -73,6 +76,12 @@ Must save exactly one **PNG**.
 | `pictures`       | `string[]`              | ComfyUI input names of the reference pictures, in `<Picture N>` order - already uploaded          |
 | `song`           | `string`                | ComfyUI input name of the full song - already uploaded                                           |
 | `vocals`         | `string \| undefined`   | only for clips with a singer: ComfyUI input name of the song's isolated vocals (`<Audio 2>`) - already uploaded |
+| `audios`         | `string[]`              | ComfyUI input names of each track's *whole* separated stem, in `<Audio N>` order - already uploaded; the workflow trims each one to the clip's span itself (`songStart`, `duration`). At most `MAX_REF_AUDIOS` (3) |
+| `startFrame`     | `string \| undefined`   | a continuing clip (`pinStartFrame`): ComfyUI input name of the picture the clip has to start on - lock it to frame 0 (`startImages()` + `MiniMaxH3AddGuide`) |
+| `startClip`      | `string \| undefined`   | a continuing clip (`contextFrames`): ComfyUI input name of a short video, the last frames of the clip before - lock all of them to the start (`startImages()`). Instead of `startFrame` |
+| `aspect`         | `Aspect \| undefined`   | the `videoAspect` setting - pass it to `resolution()`; `"16:9"` when not given |
+| `preview`        | `{scale, steps} \| undefined` | `--preview`: see [Previews and parts of a clip](#previews-and-parts-of-a-clip-video) |
+| `endFrame`       | `{image, at} \| undefined` | `--retake`: see [Previews and parts of a clip](#previews-and-parts-of-a-clip-video) |
 | `songStart`      | `number`                | where the audio starts, seconds - exactly on the clip's first frame                              |
 | `frames`         | `number`                | the number of frames to render - already a length the model accepts (see `renderFrames` below)   |
 | `duration`       | `number`                | `frames / FPS` - how much audio to trim, covering the whole render                               |
@@ -87,11 +96,13 @@ final video, so a workflow that drops or adds frames at the start breaks the syn
 A video workflow can also export `renderFrames`, for models that only render certain lengths:
 
 ```ts
-import type {RenderFrames} from "../helpers.ts";
+import {h3RenderFrames} from "../helpers.ts";
 
-// the clip needs `frames` frames - return the length to render instead, never less
-export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
+// the clip needs `frames` frames - the length to render instead, never less: H3 renders 5 + 17·k
+export const renderFrames = h3RenderFrames
 ```
+
+A workflow on another model writes its own, typed `RenderFrames` from `helpers.ts`.
 
 FeverSlop TS calls it with the frames the clip needs and passes the result as `opts.frames`; the extra frames are cut
 off in the final video. Without `renderFrames`, `opts.frames` is exactly what the clip needs. Details:
@@ -260,7 +271,7 @@ wf.MiniMaxH3ReferenceToVideo({length: widget(length.INT), /* … */})
 ```
 
 If the model only accepts certain frame counts, export a `renderFrames` function that rounds up to the next valid one
-(see [the contract](#the-workflow-contract)). `h3-ref2video.ts` has it for H3's 5 + 17·k frames. Without it, a model
+(see [the contract](#the-workflow-contract)). For H3's 5 + 17·k frames that is `h3RenderFrames` from `helpers.ts`. Without it, a model
 that rounds the length itself would silently return a different frame count than planned.
 
 ### Previews and parts of a clip (video)

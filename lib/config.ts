@@ -40,10 +40,10 @@ export type RenderConfig = {
     // the frame rate of a second final video, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by
     // frame interpolation (lib/interpolate.ts, a ComfyUI job per clip). 24 (default) = off
     finalFps: number,
-    interpolationModel: string,
+    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
     // a light grade and sharpen of the final video(s), written as <name>-finished.mp4 next to them (lib/finish.ts):
     // false (default) = off, true = the mild one, an object = the mild one with its fields replaced
-    finish: boolean | Partial<Finish>,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    finish: boolean | Partial<Finish>,
     // --preview: the factor on the pixels (0.25 = half the width and height) and the sampling steps of a workflow with the turbo LoRA.
     // A two-pass workflow renders only its first pass, whatever these say
     preview: { scale: number, steps: number },

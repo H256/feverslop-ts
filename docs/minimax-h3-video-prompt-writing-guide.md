@@ -1,6 +1,6 @@
 > Mirrored from https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
-> (retrieved 2026-09-24) - check the HF source for updates; this is the prompt format lib/compose.ts and
-> lib/compose-experimental.ts generate. It has no dedicated lip-sync section (see project memory).
+> (retrieved 2026-09-24) - check the HF source for updates; this is the prompt format lib/compose.ts (music
+> video) and lib/film/compose.ts (film) generate. It has no dedicated lip-sync section (see project memory).
 
 # Full-Reference Mode Rewrite Output Format Guide
 
