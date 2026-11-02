@@ -8425,6 +8425,46 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
     },
     "22": {
       "_meta": {
+        "title": "VHS_LoadVideo",
+      },
+      "class_type": "VHS_LoadVideo",
+      "inputs": {
+        "custom_height": 0,
+        "custom_width": 0,
+        "force_rate": 0,
+        "frame_load_cap": 0,
+        "select_every_nth": 1,
+        "skip_first_frames": 0,
+        "video": "fs/p/assets/clips/slot-006_tail22.mp4",
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "22",
+          0,
+        ],
+        "latent": [
+          "15",
+          1,
+        ],
+        "positive": [
+          "21",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "24": {
+      "_meta": {
         "title": "ModelAttentionBackend",
       },
       "class_type": "ModelAttentionBackend",
@@ -8436,23 +8476,23 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
         ],
       },
     },
-    "23": {
+    "25": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "21",
+          "23",
           0,
         ],
         "model": [
-          "22",
+          "24",
           0,
         ],
       },
     },
-    "24": {
+    "26": {
       "_meta": {
         "title": "RandomNoise",
       },
@@ -8461,7 +8501,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
         "noise_seed": 42,
       },
     },
-    "25": {
+    "27": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -8470,7 +8510,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
         "sampler_name": "euler",
       },
     },
-    "26": {
+    "28": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -8485,14 +8525,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
         "steps": 8,
       },
     },
-    "27": {
+    "29": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "23",
+          "25",
           0,
         ],
         "latent_image": [
@@ -8500,45 +8540,15 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
           1,
         ],
         "noise": [
-          "24",
-          0,
-        ],
-        "sampler": [
-          "25",
-          0,
-        ],
-        "sigmas": [
           "26",
           0,
         ],
-      },
-    },
-    "28": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
+        "sampler": [
           "27",
           0,
         ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "VAEDecode",
-      },
-      "class_type": "VAEDecode",
-      "inputs": {
-        "samples": [
+        "sigmas": [
           "28",
-          0,
-        ],
-        "vae": [
-          "1",
           0,
         ],
       },
@@ -8555,6 +8565,36 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
     },
     "30": {
       "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "29",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "31": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "30",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "32": {
+      "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
@@ -8568,7 +8608,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-cpu-clip: context fram
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "29",
+          "31",
           0,
         ],
         "loop_count": 0,

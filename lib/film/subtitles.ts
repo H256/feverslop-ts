@@ -61,6 +61,14 @@ const time = (seconds: number) => {
 
 export const toSrt = (cues: Cue[]) => cues.map((cue, i) => `${i + 1}\n${time(cue.start)} --> ${time(cue.end)}\n${cue.text}\n`).join('\n')
 
+/**
+ * The subtitles of a film the way its config has them: burned in (always visible) or a track of the mp4 (the player switches it
+ * on) - not both, the text would be there twice.
+ */
+export function addSubtitles(film: string, srt: string, config: { burnSubtitles: boolean, subtitles: string }) {
+    return config.burnSubtitles ? burnSubtitles(film, srt) : muxSubtitles(film, srt, config.subtitles === 'script' ? undefined : config.subtitles)
+}
+
 /** The film with the subtitles as a (switchable) track - the video and the sound are copied, not encoded again. */
 export async function muxSubtitles(film: string, srt: string, language?: string) {
     const partial = `${film}.subs.mp4`

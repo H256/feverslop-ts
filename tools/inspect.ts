@@ -33,10 +33,7 @@ if (Bun.argv.includes('--film')) {
 }
 if (!id || !projectExists(id)) log.usageError(id ? `No project "${id}" in projects/` : 'Which project?', usage)
 const dir = projectDir(id!)
-const clipsDir = clipRequestsDir(dir)
-const clipIds = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
-if (!clipIds.length) log.usageError(`${clipsDir} has no clip requests - plan the project first: bun index.ts ${id}`, usage)
-if (!clipId || !clipIds.includes(clipId)) log.usageError(`${clipId ? `No clip "${clipId}"` : 'Which clip?'} - the clips are ${clipIds[0]} to ${clipIds.at(-1)}`, usage)
+const {clipsDir, clipIds} = requestedClip(dir, clipId, `project first: bun index.ts ${id}`)
 
 const clip: ClipRequest = await Bun.file(join(clipsDir, `${clipId}.json`)).json()
 const data: Project = existsSync(join(dir, 'project.json')) ? await Bun.file(join(dir, 'project.json')).json() : {}
@@ -56,7 +53,6 @@ const characters = data.cast?.characters ?? []
 // the beats and plans write characters as {Name} - shown here with their plain names
 const plain = (text: string) => plainText(text, characters)
 const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
-const line = (label: string, value: string) => log.info(`${styles.label(label.padEnd(12))} ${value}`)
 
 log.section(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section}`)
 line('Length', `${clip.duration}s, ${clip.frames} frames from frame ${clip.frameStart}`)
@@ -76,8 +72,7 @@ if (beat) {
 
 const plan = data.shotMoments?.[clip.beatId] && asBeatShots(data.shotMoments[clip.beatId]!)
 if (plan) {
-    const earlier = await Promise.all(clipIds.filter(other => other < clip.id).map(other => Bun.file(join(clipsDir, `${other}.json`)).json() as Promise<ClipRequest>))
-    const offset = earlier.filter(c => c.beatId === clip.beatId).reduce((sum, c) => sum + c.shots.length, 0)
+    const offset = await shotOffset<ClipRequest>(clipsDir, clipIds, clip.id, c => c.beatId === clip.beatId)
     log.section(`STAGED SHOTS ${offset + 1}-${offset + clip.shots.length} OF ${plan.shots.length}`)
     if (plan.staging) line('Staging', plain(plan.staging))
     plan.shots.slice(offset, offset + clip.shots.length).forEach((shot, n) => {
@@ -93,24 +88,11 @@ if (plan) {
     for (const shot of clip.shots) log.info(`${styles.name(shot.label)} ${styles.muted(`at ${shot.at}s · ${shot.framing} · ${shot.camera}`)}`)
 }
 
-log.section('REFERENCES')
-for (const picture of clip.assets.pictures) {
-    const there = existsSync(join(dir, picture.file))
-    log.info(`${styles.name(picture.label.padEnd(12))} ${picture.kind.padEnd(9)} ${picture.name.padEnd(24)} ${there ? styles.muted(picture.file) : styles.warning(`${picture.file} - missing`)}`)
-}
+showReferences(dir, clip.assets.pictures)
 for (const audio of clip.assets.audio) log.info(`${styles.name(audio.label.padEnd(12))} audio     ${(audio.stem ?? '').padEnd(24)} ${styles.muted(`${audio.songStart}s - ${audio.songEnd}s of the song`)}`)
 
-log.section('RENDER')
 const video = join(dir, 'videos', `${clip.id}.mp4`)
-if (!existsSync(video)) line('Video', styles.muted(`not rendered - bun index.ts ${id} --render=videos --only=${clip.id}`))
-else {
-    const state = freshness(video, clipFingerprint(clip, dir, config))
-    const sidecar = existsSync(`${video}.json`) ? await Bun.file(`${video}.json`).json() as Record<string, unknown> : {}
-    line('Video', `${video} ${styles.muted([sidecar.workflow, sidecar.size, sidecar.seed !== undefined ? `seed ${sidecar.seed}` : ''].filter(Boolean).join(' · '))}`)
-    line('Request', state === 'stale'
-        ? styles.warning(`stale - made from another request than the plan has now (--render=videos --refresh=clips, or --only=${clip.id} --again)`)
-        : state === 'current' ? 'current - made from this request' : styles.muted('not compared (your own file, or made before fingerprints)'))
-}
+await showRender(video, clip.id, `bun index.ts ${id}`, () => freshness(video, clipFingerprint(clip, dir, config)), () => [])
 
 log.box('Prompt', clip.prompt)
 
@@ -118,10 +100,7 @@ log.box('Prompt', clip.prompt)
 async function inspectFilm(id: string | undefined, clipId: string | undefined) {
     if (!id || !filmExists(id)) log.usageError(id ? `No film "${id}" in ${FILMS_DIR}/` : 'Which film?', usage)
     const dir = filmDir(id!)
-    const clipsDir = clipRequestsDir(dir)
-    const clipIds = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
-    if (!clipIds.length) log.usageError(`${clipsDir} has no clip requests - plan the film first: bun film.ts ${id}`, usage)
-    if (!clipId || !clipIds.includes(clipId)) log.usageError(`${clipId ? `No clip "${clipId}"` : 'Which clip?'} - the clips are ${clipIds[0]} to ${clipIds.at(-1)}`, usage)
+    const {clipsDir, clipIds} = requestedClip(dir, clipId, `film first: bun film.ts ${id}`)
 
     const clip: FilmClipRequest = await Bun.file(join(clipsDir, `${clipId}.json`)).json()
     const data: FilmProject = existsSync(join(dir, 'project.json')) ? await Bun.file(join(dir, 'project.json')).json() : {}
@@ -129,8 +108,7 @@ async function inspectFilm(id: string | undefined, clipId: string | undefined) {
     const video = join(dir, 'videos', `${clip.id}.mp4`)
     const coverage = data.coverage?.find(c => c.sceneId === clip.sceneId)
     // the clips of a scene follow each other: the shots of the clips of the same scene before this one come first
-    const earlier = await Promise.all(clipIds.filter(other => other < clip.id).map(other => Bun.file(join(clipsDir, `${other}.json`)).json() as Promise<FilmClipRequest>))
-    const offset = earlier.filter(c => c.sceneId === clip.sceneId).reduce((sum, c) => sum + c.shots.length, 0)
+    const offset = await shotOffset<FilmClipRequest>(clipsDir, clipIds, clip.id, c => c.sceneId === clip.sceneId)
     const shots = coverage?.shots.slice(offset, offset + clip.shots.length) ?? []
     if (jsonOutput()) {
         log.json({
@@ -142,7 +120,6 @@ async function inspectFilm(id: string | undefined, clipId: string | undefined) {
     }
     const characters = data.cast?.characters ?? []
     const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
-    const line = (label: string, value: string) => log.info(`${styles.label(label.padEnd(12))} ${value}`)
 
     const scene = data.screenplay?.scenes.find(s => s.id === clip.sceneId)
     log.section(`${clip.id} · ${clip.sceneId}${scene ? ` · ${scene.setting} ${scene.location} - ${scene.time}` : ''}`)
@@ -165,22 +142,50 @@ async function inspectFilm(id: string | undefined, clipId: string | undefined) {
         for (const d of clip.dialogue) log.info(`${styles.name(`${d.speakerId} ${d.speaker}`)} ${styles.muted(`at ${d.at}s · ${d.kind}`)} ${d.text}`)
     }
 
+    showReferences(dir, clip.assets.pictures)
+    await showRender(video, clip.id, `bun film.ts ${id}`, () => filmClipFreshness(clip, dir, renderConfig),
+        sidecar => [sidecar.contextFrames !== undefined ? `${sidecar.contextFrames} context frames` : ''])
+
+    log.box('Prompt', clip.prompt)
+}
+
+// What the two halves share - function declarations, so the --film branch at the top can call them before this point.
+
+function line(label: string, value: string) {
+    log.info(`${styles.label(label.padEnd(12))} ${value}`)
+}
+
+/** The planned clips of a project or film - stops when `clipId` is none of them. `planFirst`: what to plan first, and how. */
+function requestedClip(dir: string, clipId: string | undefined, planFirst: string) {
+    const clipsDir = clipRequestsDir(dir)
+    const clipIds = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
+    if (!clipIds.length) log.usageError(`${clipsDir} has no clip requests - plan the ${planFirst}`, usage)
+    if (!clipId || !clipIds.includes(clipId)) log.usageError(`${clipId ? `No clip "${clipId}"` : 'Which clip?'} - the clips are ${clipIds[0]} to ${clipIds.at(-1)}`, usage)
+    return {clipsDir, clipIds}
+}
+
+/** Where the clip's shots start among the planned shots of its beat or scene: the clips of the same one before it come first. */
+async function shotOffset<C extends { shots: unknown[] }>(clipsDir: string, clipIds: string[], clipId: string, sameGroup: (other: C) => boolean) {
+    const earlier = await Promise.all(clipIds.filter(other => other < clipId).map(other => Bun.file(join(clipsDir, `${other}.json`)).json() as Promise<C>))
+    return earlier.filter(sameGroup).reduce((sum, c) => sum + c.shots.length, 0)
+}
+
+function showReferences(dir: string, pictures: { label: string, kind: string, name: string, file: string }[]) {
     log.section('REFERENCES')
-    for (const picture of clip.assets.pictures) {
+    for (const picture of pictures) {
         const there = existsSync(join(dir, picture.file))
         log.info(`${styles.name(picture.label.padEnd(12))} ${picture.kind.padEnd(9)} ${picture.name.padEnd(24)} ${there ? styles.muted(picture.file) : styles.warning(`${picture.file} - missing`)}`)
     }
+}
 
+/** Whether the clip is rendered, from which request, and what its sidecar says. `render`: the command that renders it. */
+async function showRender(video: string, clipId: string, render: string, state: () => ReturnType<typeof freshness>, more: (sidecar: Record<string, unknown>) => string[]) {
     log.section('RENDER')
-    if (!existsSync(video)) line('Video', styles.muted(`not rendered - bun film.ts ${id} --render=videos --only=${clip.id}`))
-    else {
-        const state = filmClipFreshness(clip, dir, renderConfig)
-        const sidecar = existsSync(`${video}.json`) ? await Bun.file(`${video}.json`).json() as Record<string, unknown> : {}
-        line('Video', `${video} ${styles.muted([sidecar.workflow, sidecar.size, sidecar.seed !== undefined ? `seed ${sidecar.seed}` : '', sidecar.contextFrames !== undefined ? `${sidecar.contextFrames} context frames` : ''].filter(Boolean).join(' · '))}`)
-        line('Request', state === 'stale'
-            ? styles.warning(`stale - made from another request than the plan has now (--render=videos --refresh=clips, or --only=${clip.id} --again)`)
-            : state === 'current' ? 'current - made from this request' : styles.muted('not compared (your own file, or made before fingerprints)'))
-    }
-
-    log.box('Prompt', clip.prompt)
+    if (!existsSync(video)) return line('Video', styles.muted(`not rendered - ${render} --render=videos --only=${clipId}`))
+    const current = state()
+    const sidecar = existsSync(`${video}.json`) ? await Bun.file(`${video}.json`).json() as Record<string, unknown> : {}
+    line('Video', `${video} ${styles.muted([sidecar.workflow, sidecar.size, sidecar.seed !== undefined ? `seed ${sidecar.seed}` : '', ...more(sidecar)].filter(Boolean).join(' · '))}`)
+    line('Request', current === 'stale'
+        ? styles.warning(`stale - made from another request than the plan has now (--render=videos --refresh=clips, or --only=${clipId} --again)`)
+        : current === 'current' ? 'current - made from this request' : styles.muted('not compared (your own file, or made before fingerprints)'))
 }

@@ -12,7 +12,7 @@ import {assembleFinal, probeVideo} from "../lib/assemble.ts";
 import {onlyClips, renderAll} from "../lib/batch.ts";
 import type {ClipRequest} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
-import {finishCopy} from "../lib/final-pass.ts";
+import {finishCopy, interpolateClips} from "../lib/final-pass.ts";
 import {finishOf} from "../lib/finish.ts";
 import {FPS, secondsAt} from "../lib/frames.ts";
 import {songFileOf} from "../lib/inputs.ts";
@@ -26,13 +26,14 @@ import {readClipRequests} from "../lib/render-state.ts";
 import {Renderer} from "../lib/render.ts";
 import {beginRun} from "../lib/run-record-view.ts";
 import {loadSettings} from "../lib/settings.ts";
+import {keepTimingsIn} from "../lib/timings.ts";
 import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from "../lib/film/assemble.ts";
 import type {FilmClipRequest} from "../lib/film/compose.ts";
 import {loadFilmConfig} from "../lib/film/config.ts";
 import {filmRenderConfig} from "../lib/film/pictures.ts";
-import {FilmRenderer, startedOnContext} from "../lib/film/render.ts";
+import {FilmRenderer, filmAssemblyClips} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
-import {burnSubtitles, muxSubtitles} from "../lib/film/subtitles.ts";
+import {addSubtitles} from "../lib/film/subtitles.ts";
 cli('refinish')
 
 const usage = 'usage: bun run refinish <id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001,...] [--again] [--comfy=URL]'
@@ -61,6 +62,7 @@ const only = new Set(args.only.split(',').filter(Boolean))
 const variant = variantOf(options)
 const folder = clipFolder(variant)
 lockProject(dir, id!)
+keepTimingsIn(dir)
 keepLogIn(join(dir, 'logs', `${versionStamp()}.log`))
 beginRun(dir, 'tools/refinish.ts')
 
@@ -122,19 +124,13 @@ const target = join(dir, finalName(id!, variant))
 const finishing = options.finish ? finishOf(config.finish === false ? true : config.finish) : undefined
 const multiplier = options.fps !== FPS ? multiplierFor(options.fps)! : 1
 const smooth = target.replace(/\.mp4$/, `-${options.fps}fps.mp4`)
-const interpolate = async (shown: { id: string, frames: number, shots?: { at: number }[] }[]) => {
-    const folderOf = `${options.upscale === 'none' ? 'videos/interpolated' : `${folder}/interpolated`}`
-    const files = shown.map(clip => join(dir, folderOf, `${clip.id}.mp4`))
-    mkdirSync(join(dir, folderOf), {recursive: true})
-    log.step('Frame rate', `${options.fps} fps - ${config.interpolationModel}, x${multiplier} per shot`)
-    await renderAll(shown.map((clip, i) => ({clip, file: files[i]!, source: sources[i]!})), ({clip, file, source}) => renderer.renderInterpolation(clip, config.interpolationModel, multiplier, file, source))
-    return files
-}
+const interpolate = async (shown: { id: string, frames: number, shots?: { at: number }[] }[]) =>
+    (await interpolateClips(renderer, shown, config.interpolationModel, options.fps, {folder: options.upscale === 'none' ? 'videos/interpolated' : `${folder}/interpolated`, sources})).files
 
 if (args.film) {
     const film = filmConfig!
     const assembled = await assembleFilm({
-        clips: requests.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === requests[i - 1]?.id && !startedOnContext(dir, r.id)})),
+        clips: filmAssemblyClips(dir, requests),
         projectDir: dir, target, levelMatching: film.levelMatching, sources,
     })
     log.step('Saved', `${target} ${styles.muted(`${assembled.width}x${assembled.height}, ${assembled.duration}`)}`)
@@ -152,7 +148,7 @@ if (args.film) {
     }
     // the subtitles the film has: nothing is translated here
     const srt = join(dir, `${id}.srt`)
-    if (existsSync(srt)) for (const video of videos) await (film.burnSubtitles ? burnSubtitles(video, srt) : muxSubtitles(video, srt, film.subtitles === 'script' ? undefined : film.subtitles))
+    if (existsSync(srt)) for (const video of videos) await addSubtitles(video, srt, film)
 } else {
     const music = config as Awaited<ReturnType<typeof loadProjectConfig>>
     const songFile = songFileOf(dir)

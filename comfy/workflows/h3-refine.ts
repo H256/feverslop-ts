@@ -1,7 +1,7 @@
 // A finished clip made larger with the second pass of comfy/h3-two-pass.ts, instead of the latent of a first pass: the clip's frames are encoded,
 // the video latent is upscaled to the size asked for, and a short sample at a low denoise draws the detail, with the clip's own prompt, pictures and song
 // as guides. Nothing is decoded as sound: the clip keeps the sound it has (lib/refinish.ts), so a film's voices stay what they were.
-import {afterCleanup, type Aspect, dyn, MAX_REFERENCE_IMAGES, type PixelSize, resolution, h3RenderFrames, FPS, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, refAudios, type Aspect, dyn, MAX_REFERENCE_IMAGES, type PixelSize, resolution, h3RenderFrames, FPS, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 import type {NodeRef} from "@saintno/comfyui-sdk";
 
 // MiniMaxH3ReferenceToVideo only takes 5 + 17·k frames - a clip of another length is filled up first and cut back after
@@ -32,7 +32,7 @@ export default function h3Refine(opts: RefineOptions): WorkflowResult {
     // on the CPU: the encoder fills 28 GB of a 32 GB card, and in VRAM the frames of the clip do not fit next to it (Radeon, 2026-11-01)
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'cpu'})
 
-    const tracks = (opts.audios ?? []).map(audio => wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(audio)}).AUDIO, start_index: opts.songStart!, duration: opts.duration!}))
+    const tracks = refAudios('h3-refine', opts.audios).map(audio => wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(audio)}).AUDIO, start_index: opts.songStart!, duration: opts.duration!}))
     const song = opts.song ? wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song)}).AUDIO, start_index: opts.songStart!, duration: opts.duration!}) : undefined
 
     // as in the two passes: the text and the pictures are taken in at half the final size, pass 2 only refines

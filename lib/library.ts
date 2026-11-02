@@ -9,6 +9,7 @@
 import {existsSync, mkdirSync, readdirSync, writeFileSync} from "node:fs";
 import {join, resolve} from "node:path";
 import type {AssetKind, AssetLayout} from "./asset-import.ts";
+import {log} from "./log.ts";
 import type {LocationLayout} from "./project.ts";
 import {readSettingsFile} from "./settings.ts";
 
@@ -56,6 +57,25 @@ export function writeLibraryAsset(dir: string, asset: LibraryAsset) {
     const folder = join(dir, libraryFolder(asset.kind, asset.id))
     mkdirSync(folder, {recursive: true})
     writeFileSync(join(folder, 'asset.json'), JSON.stringify(asset, null, 2) + '\n')
+}
+
+/** Why the library takes no new asset of this id - it has one, and an asset there is never overwritten. Undefined: the id is free. */
+export async function libraryTaken(dir: string, kind: AssetKind, id: string): Promise<string | undefined> {
+    if (await readLibraryAsset(dir, kind, id)) return `The library already has a ${kind} "${id}" (${join(dir, libraryFolder(kind, id))}) - it is never overwritten`
+}
+
+/**
+ * The last step of a tool that puts an asset into the library, after its files are copied: the record, dated today, and what to do
+ * with it next. `copied`: how many files went in; `tail` goes after the message.
+ */
+export function finishLibraryAsset(dir: string, asset: Omit<LibraryAsset, 'created'>, copied: number, opts: { tail?: string, success?: boolean } = {}) {
+    writeLibraryAsset(dir, {...asset, created: new Date().toISOString().slice(0, 10)})
+    const folder = join(dir, libraryFolder(asset.kind, asset.id))
+    const message = `${asset.name} is in the library as ${asset.kind} "${asset.id}" (${copied} files): ${folder}${opts.tail ?? ''}`
+    if (opts.success) log.success(message)
+    else log.info(message)
+    log.output(folder)
+    log.next(`bun run import-asset <project-id> <asset-id> --from=library:${asset.id}`)
 }
 
 /** The ids of a kind in the library that have their record. */

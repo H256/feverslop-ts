@@ -10,7 +10,7 @@ import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from "./li
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {FPS, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
-import {burnSubtitles, muxSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
+import {addSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests, clipOverrides} from "./lib/film/compose.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips,type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
@@ -18,7 +18,7 @@ import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {chooseShotViews, readSheetViews, withExtraViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
 import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from "./lib/render.ts";
-import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
+import {FilmRenderer, filmAssemblyClips, filmClipFreshness, filmRenderState} from "./lib/film/render.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate} from "./lib/render-state.ts";
 import {keepTimingsIn, readTimings} from "./lib/timings.ts";
@@ -626,8 +626,7 @@ if (render.has('final') && args.preview) {
         if (args.strict) throw new Error(message)
         log.warn(message)
     }
-    // a clip with dialogue keeps all the frames the model rendered: its last word can fall behind the planned end
-    const result = await assembleFilm({clips: selected.map((r, i) => ({id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0, continuesPrevious: r.startsFrom !== undefined && r.startsFrom === selected[i - 1]?.id && !startedOnContext(film.dir, r.id)})), projectDir: film.dir, target, levelMatching: config.levelMatching})
+    const result = await assembleFilm({clips: filmAssemblyClips(film.dir, selected), projectDir: film.dir, target, levelMatching: config.levelMatching})
 
     // a score in input/ is mixed under the film
     const score = SCORE_EXTENSIONS.map(ext => film.input(`score.${ext}`)).find(file => existsSync(file))
@@ -667,11 +666,7 @@ if (render.has('final') && args.preview) {
     if (cues.length) {
         const srt = target.replace(/\.mp4$/, '.srt')
         await Bun.write(srt, toSrt(cues))
-        // burned in (always visible) or a track of the mp4 (the player switches it on) - not both, the text would be there twice
-        for (const video of videos) {
-            if (config.burnSubtitles) await burnSubtitles(video, srt)
-            else await muxSubtitles(video, srt, config.subtitles === 'script' ? undefined : config.subtitles)
-        }
+        for (const video of videos) await addSubtitles(video, srt, config)
         log.step('Subtitles', `${srt} ${styles.muted(`${cues.length} cues, ${config.burnSubtitles ? 'burned into the picture' : 'also a track in the mp4'}${videos.length > 1 ? ` of all ${videos.length} films` : ''} - timing is estimated`)}`)
     } else if (config.subtitles !== 'off') {
         log.step('Subtitles', styles.muted(config.subtitles === 'script' ? 'none - the screenplay has no translations under its lines (config.json: "subtitles": "en" translates them)' : 'none - every line is in that language already'))

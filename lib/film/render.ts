@@ -51,6 +51,16 @@ function renderedFramesOf(projectDir: string, id: string): number | undefined {
     }
 }
 
+/**
+ * The clips as assembleFilm takes them, in the order they are joined: a clip with dialogue keeps all the frames the model rendered
+ * (its last word can fall behind the planned end), a clip that starts on the last frame of the one right before it leaves that frame
+ * out - unless it was rendered on context frames, whose first frame is a new one.
+ */
+export const filmAssemblyClips = (projectDir: string, clips: FilmClipRequest[]) => clips.map((r, i) => ({
+    id: r.id, frames: r.frames, useRendered: r.dialogue.length > 0,
+    continuesPrevious: r.startsFrom !== undefined && r.startsFrom === clips[i - 1]?.id && !startedOnContext(projectDir, r.id),
+}))
+
 /** Was the clip rendered with context frames (its first frame is a new one, not the last frame of the clip before)? */
 export function startedOnContext(projectDir: string, id: string): boolean {
     const sidecar = join(projectDir, `videos/${id}.mp4.json`)

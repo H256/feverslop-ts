@@ -4,7 +4,7 @@
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the base model again, euler/beta, 4 steps, denoise 0.2, with a
 // noise of its own, at the final size (#343).
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, endGuide, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
+import {afterCleanup, refAudios, endGuide, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
@@ -37,7 +37,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const silent = opts.song === undefined
     if (silent && opts.audios?.length) throw new Error(`${name}: audio tracks without the song - a clip has both or no sound going in`)
     if (!silent && (opts.songStart === undefined || opts.duration === undefined)) throw new Error(`${name}: the song without songStart and duration`)
-    const tracks = (opts.audios ?? []).map(audio => wf.TrimAudioDuration({
+    const tracks = refAudios(name, opts.audios).map(audio => wf.TrimAudioDuration({
         audio: wf.LoadAudio({audio: dyn(audio)}).AUDIO,
         start_index: opts.songStart!,
         duration: opts.duration!,

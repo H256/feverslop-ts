@@ -10,12 +10,14 @@ import {parseArgs} from "node:util";
 import {loadProjectConfig} from "../lib/config.ts";
 import {FPS, secondsAt} from "../lib/frames.ts";
 import {songFileOf} from "../lib/inputs.ts";
+import {lockProject} from "../lib/lock.ts";
 import {log} from "../lib/log.ts";
 import {runProcess} from "../lib/process.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import {Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {clipRequestFile} from "../lib/previous-output.ts";
+import {keepTimingsIn} from "../lib/timings.ts";
 cli('interpolate')
 
 
@@ -32,6 +34,8 @@ if (!id || !projectExists(id) || !only.length || !models.length || !Number.isInt
     process.exit(1)
 }
 const dir = projectDir(id)
+lockProject(dir, `interpolate ${id}`)
+keepTimingsIn(dir)
 const config = await loadProjectConfig(dir)
 const settings = await loadSettings({projectModel: config.llm.model, ...(args.comfy ? {comfy: args.comfy} : {})})
 // the song as index.ts finds it - undefined when there is none
