@@ -19,7 +19,7 @@ import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
 import {sceneScores, shotCuts, shotPieces} from "./interpolate.ts";
 import {archiveFiles, pictureFiles, versionStamp} from "./archive.ts";
-import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sheetLayout} from "./sequenceSheet.ts";
+import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sequenceSheetDir, sheetAnchor, sheetFrame, sheetFrames, sheetLayout, sheetVideo, sheetViews} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 
@@ -107,17 +107,17 @@ type SheetConfig = Pick<RenderConfig, 'imageWorkflow' | 'imageResolution' | 'seq
 
 /** What a picture's reference sheet is made from and where its files go - what it is rendered from, and what says whether the sheet there is stale. */
 function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig) {
-    const dir = `assets/sequence/${picture.kind}s/${picture.id}`
+    const dir = sequenceSheetDir(picture.kind, picture.id)
     // with / also on Windows: anchorFile goes to the server as part of a path (a Linux ComfyUI refused "assets\sequence\…")
-    const anchorFile = `${dir}/anchor.png`
+    const anchorFile = sheetAnchor(dir)
     const anchorTarget = join(projectDir, anchorFile)
-    const videoFile = `${dir}/sequence.mp4`
+    const videoFile = sheetVideo(dir)
     const videoTarget = join(projectDir, videoFile)
     // the sheet is made from the anchor - the user's own picture (tools/replace-character) as it is, else from the prompt it is rendered from
     const anchorIsUsers = isUserFile(anchorTarget)
     // another look of a character starts on the anchor of its normal picture: no anchor of its own is drawn, its video shows the change
     const look = picture.look && picture.kind === 'character' && !anchorIsUsers ? picture.look : undefined
-    const baseAnchorFile = look && `assets/sequence/${picture.kind}s/${look.base}/anchor.png`
+    const baseAnchorFile = look && sheetAnchor(sequenceSheetDir(picture.kind, look.base))
     const baseAnchorTarget = baseAnchorFile && join(projectDir, baseAnchorFile)
     const sequenceFrames = look ? LOOK_SEQUENCE_FRAMES : SEQUENCE_FRAMES
     // a sheet made before the expression came from its words keeps the one it was drawn with - else it would count as stale
@@ -137,16 +137,16 @@ function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig)
  * stays - the same person or place from other views - unless `newAnchor` asks for another one. A look's anchor is a frame of its sheet.
  */
 export function putAwayPicture(picture: PictureJob, projectDir: string, config: Pick<RenderConfig, 'sequenceSheets'>, newAnchor: boolean) {
-    const sheet = config.sequenceSheets && picture.kind !== 'prop' ? `assets/sequence/${picture.kind}s/${picture.id}` : undefined
+    const sheet = config.sequenceSheets && picture.kind !== 'prop' ? sequenceSheetDir(picture.kind, picture.id) : undefined
     const keepAnchor = !newAnchor && !picture.look
-    const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && sheet && (file === `${sheet}/anchor.png` || file === `${sheet}/anchor.png.json`)))
+    const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && sheet && (file === sheetAnchor(sheet) || file === `${sheetAnchor(sheet)}.json`)))
     return archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, files)
 }
 
 /** A picture rendered from a prompt the user edited: kept as it is (lib/provenance.ts), whatever the plan's own prompt says - the edited prompt is in its sidecar. */
 export function pinEditedPicture(picture: PictureJob, projectDir: string, editedPrompt: string) {
-    const sheet = `assets/sequence/${picture.kind}s/${picture.id}`
-    for (const file of [`${picture.file}.json`, `${sheet}/anchor.png.json`]) {
+    const sheet = sequenceSheetDir(picture.kind, picture.id)
+    for (const file of [`${picture.file}.json`, `${sheetAnchor(sheet)}.json`]) {
         const path = join(projectDir, file)
         if (!existsSync(path)) continue
         writeFileSync(path, JSON.stringify({...JSON.parse(readFileSync(path, 'utf8')), pinned: true, editedPrompt}, null, 2))
@@ -476,7 +476,7 @@ export class Renderer implements Disposable {
 
         const {dir, anchorFile, anchorTarget, videoFile, videoTarget, anchorIsUsers, look, baseAnchorFile, baseAnchorTarget, sequenceFrames, sequencePrompt, beatTimes, anchor, anchorFingerprint, sequence, sheetFingerprint} = sheetPlan(picture, this.projectDir, this.config)
         if (existsSync(target)) {
-            const frameFiles = existsSync(join(this.projectDir, dir, 'frames')) ? readdirSync(join(this.projectDir, dir, 'frames')).map(f => join(dir, 'frames', f)) : []
+            const frameFiles = existsSync(join(this.projectDir, sheetFrames(dir))) ? readdirSync(join(this.projectDir, sheetFrames(dir))).map(f => join(sheetFrames(dir), f)) : []
             // the anchor goes too only when it changed: a sheet made again for its own prompt keeps its place or person - drawn
             // anew from another seed, last-rehearsal's places came back as other rooms. A look's anchor is a frame of its sheet.
             const anchorKept = anchorIsUsers || (!look && recordedFingerprint(`${anchorTarget}.json`) === anchorFingerprint)
@@ -520,7 +520,7 @@ export class Renderer implements Disposable {
             await Bun.write(`${videoTarget}.json`, JSON.stringify({workflow: this.config.sequenceWorkflow, seed, frames: sequenceFrames, beatTimes, prompt: sequencePrompt}, null, 2))
         }
 
-        const framesDir = join(this.projectDir, dir, 'frames')
+        const framesDir = join(this.projectDir, sheetFrames(dir))
         mkdirSync(framesDir, {recursive: true})
         // the workflow may render another length than asked for (the video model only takes certain frame counts) -
         // the frames are picked from the video as it really is, not from the length that was requested
@@ -528,7 +528,7 @@ export class Renderer implements Disposable {
         if (rendered.frames !== sequenceFrames) log.warn(`${videoFile} has ${rendered.frames} frames, ${sequenceFrames} were requested - the sheet frames are picked from the ${rendered.frames} it has`)
         const frameIndices = look ? lookSheetFrames(beatTimes, rendered.frames) : selectFrameIndices(beatTimes, rendered.frames)
         const framePaths = await Promise.all(frameIndices.map(async (frameIndex, i) => {
-            const framePath = join(framesDir, `frame_${String(i).padStart(2, '0')}.png`)
+            const framePath = join(this.projectDir, sheetFrame(dir, i))
             if (!existsSync(framePath)) await extractFrame(videoTarget, frameIndex, framePath)
             return framePath
         }))
@@ -832,9 +832,10 @@ export class Renderer implements Disposable {
      * the anchor, so the look stays the same. Kept next to the sheet (views/view-<n>.png), with its name and what it shows beside it.
      */
     async renderExtraView(locationId: string, n: number, name: string, shows: string): Promise<string> {
-        const anchor = `assets/sequence/locations/${locationId}/anchor.png`
-        const video = `assets/sequence/locations/${locationId}/views/view-${n}.mp4`
-        const picture = `assets/sequence/locations/${locationId}/views/view-${n}.png`
+        const sheet = sequenceSheetDir('location', locationId)
+        const anchor = sheetAnchor(sheet)
+        const video = `${sheetViews(sheet)}/view-${n}.mp4`
+        const picture = `${sheetViews(sheet)}/view-${n}.png`
         const prompt = `The camera moves through this same place in one slow, unbroken move and comes to rest ${name}, where it shows ${shows}. The same place, the same light, the same fixtures throughout: nothing is added or doubled. Nobody is in the picture.`
         mkdirSync(join(this.projectDir, dirname(video)), {recursive: true})
         const spec: RenderSpec = {kind: 'sequence', id: `${locationId}-view-${n}`, parts: [prompt, this.config.sequenceWorkflow, fileFingerprint(join(this.projectDir, anchor))]}

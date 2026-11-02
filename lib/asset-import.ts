@@ -7,6 +7,7 @@ import {cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync} fro
 import {dirname, join, relative} from "node:path";
 import {archiveFiles, versionStamp} from "./archive.ts";
 import {pinnedSidecar} from "./provenance.ts";
+import {SHEET_FRAMES, sequenceSheetDir} from "./sequenceSheet.ts";
 
 export type AssetKind = 'character' | 'location'
 
@@ -16,7 +17,7 @@ export type AssetLayout = { picture: string, sheet: string }
 /** The files of an asset in a project. */
 export const assetPaths = (kind: AssetKind, id: string): AssetLayout => ({
     picture: `assets/${kind}s/${id}.png`,
-    sheet: `assets/sequence/${kind}s/${id}`,
+    sheet: sequenceSheetDir(kind, id),
 })
 
 /** The ids of a kind that have a picture or a sheet in a project folder. */
@@ -53,7 +54,7 @@ export function copyPlan(sourceDir: string, source: AssetLayout, target: AssetLa
         .filter(f => !f.endsWith('.json') && !unfinished(f))
         .map(from => {
             const to = from === source.picture ? target.picture : `${target.sheet}${from.slice(source.sheet.length)}`
-            return {from, to, pin: !to.slice(target.sheet.length).includes('/frames/')}
+            return {from, to, pin: !to.slice(target.sheet.length).includes(`/${SHEET_FRAMES}/`)}
         })
 }
 

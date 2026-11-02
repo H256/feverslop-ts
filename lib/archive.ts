@@ -1,5 +1,6 @@
 import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, utimesSync, writeFileSync} from "node:fs";
 import {basename, dirname, join} from "node:path";
+import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from "./sequenceSheet.ts";
 
 /**
  * Puts files of a project away in <project>/old/attempts/<name>/ - for something that is rendered again (--again) and whose old version
@@ -141,7 +142,7 @@ export function pictureVersions(projectDir: string, picture: { id: string, file:
         const record = readRecord(join(attempts, folder, `${name}.json`))
         const inFolder = (file: string) => existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined
         versions.push({
-            id: attempt(folder), picture: `${attempt(folder)}/${name}`, anchor: inFolder('anchor.png'), video: inFolder('sequence.mp4'), source,
+            id: attempt(folder), picture: `${attempt(folder)}/${name}`, anchor: inFolder(SHEET_ANCHOR), video: inFolder(SHEET_VIDEO), source,
             made: statSync(join(attempts, folder, name)).mtimeMs,
             seed: typeof record.seed === 'number' ? record.seed : undefined,
             prompt: typeof record.prompt === 'string' ? record.prompt : undefined,
@@ -158,9 +159,9 @@ export function pictureVersions(projectDir: string, picture: { id: string, file:
 export function pictureFiles(projectDir: string, picture: { file: string }, sheet?: string): string[] {
     const files = [picture.file, `${picture.file}.json`]
     if (!sheet) return files
-    files.push(`${sheet}/sequence.mp4`, `${sheet}/sequence.mp4.json`, `${sheet}/anchor.png`, `${sheet}/anchor.png.json`)
-    const frames = join(projectDir, sheet, 'frames')
-    if (existsSync(frames)) files.push(...readdirSync(frames).map(f => `${sheet}/frames/${f}`))
+    files.push(sheetVideo(sheet), `${sheetVideo(sheet)}.json`, sheetAnchor(sheet), `${sheetAnchor(sheet)}.json`)
+    const frames = join(projectDir, sheetFrames(sheet))
+    if (existsSync(frames)) files.push(...readdirSync(frames).map(f => `${sheetFrames(sheet)}/${f}`))
     return files
 }
 

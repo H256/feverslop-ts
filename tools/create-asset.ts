@@ -20,7 +20,7 @@ import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {LocationLayout} from "../lib/project.ts";
 import {pinnedSidecar} from "../lib/provenance.ts";
 import {Renderer} from "../lib/render.ts";
-import {LOCATION_VIEWS} from "../lib/sequenceSheet.ts";
+import {LOCATION_VIEWS, sheetAnchor} from "../lib/sequenceSheet.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
 cli('create-asset')
@@ -59,7 +59,7 @@ configureLlm(settings.llm)
 const work = join(library, '.work', `${kind}-${id}`)
 rmSync(work, {recursive: true, force: true})
 const {sheet} = assetPaths(kind, id!)
-const anchor = join(work, sheet, 'anchor.png')
+const anchor = join(work, sheetAnchor(sheet))
 mkdirSync(dirname(anchor), {recursive: true})
 // ffmpeg reads whatever format was given and writes the plain PNG every path here expects
 await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', anchorPicture, '-frames:v', '1', `${anchor}.partial.png`], {errorMessage: err => `ffmpeg could not read ${anchorPicture} as a picture:\n${err}`})

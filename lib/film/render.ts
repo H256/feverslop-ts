@@ -2,7 +2,7 @@ import {existsSync, mkdirSync, readFileSync, statSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {type RecommendedResolution, type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
-import {extractFrame, probeVideo} from "../assemble.ts";
+import {probeVideo} from "../assemble.ts";
 import {secondsAt} from "../frames.ts";
 import {log, styles} from "../log.ts";
 import {CONTEXT_SETTLE} from "../compose.ts";

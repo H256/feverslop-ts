@@ -6,9 +6,10 @@ import {log} from "../log.ts";
 import type {PictureJob} from "../render.ts";
 import type {FilmCast, FilmProject, FilmProp} from "./types.ts";
 import {pictureAsset} from "../compose.ts";
+import {sequenceSheetDir, sheetAnchor, sheetFrame} from "../sequenceSheet.ts";
 
 /** One view of a location's reference sheet as a picture of its own (view 1..5 = frame 0..4 of the sheet video) - the video model gets the one view, not the grid. */
-export const placeViewFrame = (id: string, view: number) => `assets/sequence/locations/${id}/frames/frame_${String(view - 1).padStart(2, '0')}.png`
+export const placeViewFrame = (id: string, view: number) => sheetFrame(sequenceSheetDir('location', id), view - 1)
 
 /** A character in another look has the picture of its own: <character id>--<state id>. */
 export const statePictureId = (characterId: string, stateId: string) => `${characterId}--${stateId}`
@@ -48,7 +49,7 @@ export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterL
 
 /** The seed the normal picture of a character was drawn with (read from what was saved next to it) - undefined while it is not rendered. */
 export function pictureSeed(projectDir: string, characterId: string): number | undefined {
-    for (const file of [`assets/characters/${characterId}.png.json`, `assets/sequence/characters/${characterId}/anchor.png.json`]) {
+    for (const file of [`assets/characters/${characterId}.png.json`, `${sheetAnchor(sequenceSheetDir('character', characterId))}.json`]) {
         const path = join(projectDir, file)
         if (existsSync(path)) {
             const seed = JSON.parse(readFileSync(path, 'utf8')).seed

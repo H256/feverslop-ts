@@ -26,6 +26,7 @@ import {characterImageDescriptionPrompt} from "../lib/prompts.ts";
 import type {PictureJob} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
+import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from "../lib/sequenceSheet.ts";
 cli('film:replace-character')
 
 
@@ -89,7 +90,7 @@ const config = await loadFilmConfig(dir)
 const finalPicture = join(dir, pictureAsset('character', char.id))
 // with sequence sheets the picture the clips use is made from the anchor - the new image is the anchor then
 const targetFile = config.sequenceSheets
-    ? join(dir, 'assets', 'sequence', 'characters', char.id, 'anchor.png')
+    ? join(dir, sheetAnchor(sequenceSheetDir('character', char.id)))
     : finalPicture
 
 // the picture that is replaced is kept next to it, in old/ - one wrong click doesn't lose it
@@ -115,11 +116,11 @@ changes.push(`the new image is saved as ${targetFile}`)
 
 // everything downstream of the anchor was built from the OLD image and is now stale
 if (config.sequenceSheets) {
-    const seqDir = join(dir, 'assets', 'sequence', 'characters', char.id)
+    const seqDir = join(dir, sequenceSheetDir('character', char.id))
     const stale = [
         finalPicture, `${finalPicture}.json`,
-        join(seqDir, 'sequence.mp4'), join(seqDir, 'sequence.mp4.json'), join(seqDir, 'sequence.mp4.pending.json'),
-        join(seqDir, 'frames'),
+        join(seqDir, SHEET_VIDEO), join(seqDir, `${SHEET_VIDEO}.json`), join(seqDir, `${SHEET_VIDEO}.pending.json`),
+        join(seqDir, SHEET_FRAMES),
     ]
     const removed = stale.filter(existsSync)
     for (const f of removed) rmSync(f, {recursive: true, force: true})

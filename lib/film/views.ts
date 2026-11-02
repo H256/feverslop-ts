@@ -8,6 +8,7 @@ import {placeViewFrame} from "./pictures.ts";
 import {sheetViewsPrompt, shotViewsPrompt} from "./prompts.ts";
 import type {FilmStore} from "./store.ts";
 import type {FilmCast, LocationView, SceneCoverage} from "./types.ts";
+import {sequenceSheetDir, sheetViews} from "../sequenceSheet.ts";
 
 // Which view of a place each shot is in, without designed views (config.locationViews). A clip was given the whole location sheet,
 // and the video model took its first view as the background whatever the shot's camera said (last-rehearsal: the rows of seats
@@ -18,7 +19,7 @@ const VIEWS = 5
 
 /** The further views of a place, rendered one by one (bun run add-view): after the five of its sheet, with the file each one is in. */
 export function extraViews(projectDir: string, locationId: string): { name: string, shows: string, file: string }[] {
-    const folder = `assets/sequence/locations/${locationId}/views`
+    const folder = sheetViews(sequenceSheetDir('location', locationId))
     if (!existsSync(join(projectDir, folder))) return []
     return readdirSync(join(projectDir, folder)).filter(f => /^view-\d+\.png$/.test(f)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5))).map(f => {
         const {name, shows} = JSON.parse(readFileSync(join(projectDir, folder, `${f}.json`), 'utf8')) as { name: string, shows: string }
