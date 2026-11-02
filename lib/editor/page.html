@@ -1081,8 +1081,8 @@ async function castingPage() {
         }
         $('view-list').replaceChildren(
             changed ? el('div', {class: 'note btn-row'}, el('span', {}, 'The change takes effect with the next plan run.'), el('button', {class: 'btn primary', onclick: () => startRun({type: 'plan'}).catch(showError)}, 'Plan now')) : '',
-            casting.errors.map(line => el('div', {class: 'warn bad'}, line)),
-            casting.warnings.map(line => el('div', {class: 'warn'}, line)),
+            ...casting.errors.map(line => el('div', {class: 'warn bad'}, line)),
+            ...casting.warnings.map(line => el('div', {class: 'warn'}, line)),
             casting.roles.length ? '' : el('div', {class: 'empty'}, `No cast yet - run ${project.command}`),
             section('Characters', 'character'),
             section('Places', 'location'),
