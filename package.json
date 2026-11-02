@@ -22,6 +22,7 @@
     "film:replace-character": "bun tools/film-replace-character.ts",
     "film:gallery": "bun tools/film-gallery.ts",
     "film:migrate": "bun tools/film-migrate.ts",
+    "film:check-joins": "bun tools/film-check-joins.ts",
     "leak-scan": "bun tools/leak-scan.ts",
     "interpolate": "bun tools/interpolate.ts",
     "stats": "bun tools/stats.ts",
