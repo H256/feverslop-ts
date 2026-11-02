@@ -1,11 +1,11 @@
 // A finished clip made larger with the second pass of comfy/h3-two-pass.ts, instead of the latent of a first pass: the clip's frames are encoded,
 // the video latent is upscaled to the size asked for, and a short sample at a low denoise draws the detail, with the clip's own prompt, pictures and song
 // as guides. Nothing is decoded as sound: the clip keeps the sound it has (lib/refinish.ts), so a film's voices stay what they were.
-import {afterCleanup, type Aspect, dyn, MAX_REFERENCE_IMAGES, type PixelSize, resolution, type RenderFrames, FPS, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, type Aspect, dyn, MAX_REFERENCE_IMAGES, type PixelSize, resolution, h3RenderFrames, FPS, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 import type {NodeRef} from "@saintno/comfyui-sdk";
 
 // MiniMaxH3ReferenceToVideo only takes 5 + 17·k frames - a clip of another length is filled up first and cut back after
-export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
+export const renderFrames = h3RenderFrames
 
 export type RefineOptions = {
     prompt: string,

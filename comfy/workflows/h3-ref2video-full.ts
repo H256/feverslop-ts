@@ -2,10 +2,10 @@
 // branch) - res_multistep, simple, 20 steps, no CFG (BasicGuider) and no sigma shift. About 2.5x the sampling time of the
 // 8-step turbo, for more detail, prompt adherence and motion - a person far from the camera has a face here.
 // Everything else (references, audio tracks, the song guide, the pinned first frame) is the same as h3-ref2video.
-import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, type RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, endGuide, startImages, FPS, MAX_REFERENCE_IMAGES, h3RenderFrames, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
 
 // MiniMaxH3ReferenceToVideo only renders 5 + 17·k frames - round up, the rest is cut off in the final video
-export const renderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
+export const renderFrames = h3RenderFrames
 
 
 export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowResult {

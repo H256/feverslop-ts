@@ -140,6 +140,8 @@ export type InterpolationWorkflow = (opts: InterpolationWorkflowOptions) => Work
  * video is assembled. Without it, a clip is rendered with exactly the frames it needs.
  */
 export type RenderFrames = (frames: number) => number
+/** The lengths MiniMaxH3ReferenceToVideo renders, 5 + 17·k frames: a clip that needs `frames` is rendered at the next one up. */
+export const h3RenderFrames: RenderFrames = frames => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
 /**
  * Optional export of a video workflow: the largest size its model is made for, landscape (a LoRA trained up to 768p). A larger
  * videoResolution is rendered as it is set - the run only says so, once (aboveRecommended).
