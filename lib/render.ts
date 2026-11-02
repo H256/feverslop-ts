@@ -1,15 +1,16 @@
 import {nameService} from "./service-error.ts";
 import {ComfyApi, type ImageInfo} from "@saintno/comfyui-sdk";
 import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
-import {basename, dirname, extname, join, posix} from "node:path";
+import {basename, dirname, extname, join, posix, relative} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
-import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type PixelSize, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, framesOnGrid, probeVideo, trimHead} from "./assemble.ts";
+import {paddedClip, withOriginalSound} from "./refinish.ts";
 import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {freshness, isUserFile} from "./provenance.ts";
@@ -854,6 +855,98 @@ export class Renderer implements Disposable {
         return picture
     }
 
+    /**
+     * A finished clip made larger with the second pass of a two-pass render (comfy/workflows/h3-refine.ts), with its prompt, pictures and, in a music video, its
+     * tracks and song. It keeps its own sound and its own length. `song`: the stems and the song of a music video.
+     */
+    async renderRefined(clip: { id: string, prompt: string, frames: number, frameStart: number, assets: { pictures: { kind: string, file: string }[], audio?: { stem?: string }[] } }, source: string, target: string, size: PixelSize, denoise: number, song?: Record<string, string>) {
+        const missing = clip.assets.pictures.filter(p => p.kind !== 'frame' && !existsSync(join(this.projectDir, p.file)))
+        if (missing.length) throw new Error(`${clip.id}: missing pictures: ${missing.map(p => p.file).join(', ')}`)
+        const stems = (clip.assets.audio ?? []).map(a => a.stem!)
+        const lost = stems.filter(stem => !song?.[stem] || !existsSync(song[stem]!))
+        if (song && lost.length) throw new Error(`${clip.id}: missing stem file(s): ${lost.join(', ')}`)
+        if (song && !existsSync(song.song!)) throw new Error(`${clip.id}: the song is missing: ${song.song}`)
+        const {default: refine, renderFrames} = await loadWorkflow<typeof import("../comfy/workflows/h3-refine.ts")>('h3-refine')
+        const info = await probeVideo(source)
+        const frames = framesOnGrid(info)
+        const length = renderFrames(frames)
+        // what goes up is the clip, or the clip filled up to a length the model takes
+        const work = `${target.replace(/\.mp4$/, '')}`
+        const clipFile = length === frames ? source : `${work}.padded.mp4`
+        if (length !== frames) await paddedClip(source, clipFile, length - frames)
+        const remoteClip = `${this.remoteDir}/${relative(this.projectDir, target).replace(/\\/g, '/').replace(/\.mp4$/, '.source.mp4')}`
+        const rendered = `${work}.rendered.mp4`
+        const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['refine', fileFingerprint(source), clip.prompt, size, denoise]}
+        const songRemote = song ? `${this.remoteDir}/stems/song${extname(song.song!)}` : undefined
+        const {seed} = await this.render({label: `refine ${clip.id}`, spec, kind: 'clip', workflow: 'h3-refine', resolution: `${size.width}x${size.height}`}, rendered, '.mp4', async () => {
+            const seed = resolveSeed(this.config.seed)
+            const pictures = clip.assets.pictures.filter(p => p.kind !== 'frame')
+            const result = refine({
+                prompt: clip.prompt,
+                pictures: pictures.map(p => `${this.remoteDir}/${p.file}`),
+                video: remoteClip,
+                frames: length,
+                size,
+                aspect: this.config.videoAspect,
+                denoise,
+                ...(song ? {audios: stems.map(stem => `${this.remoteDir}/stems/${stem}.wav`), song: songRemote, songStart: secondsAt(clip.frameStart), duration: secondsAt(length)} : {}),
+                seed,
+                filenamePrefix: `${this.remoteDir}/refined/${basename(dirname(target))}/${clip.id}`,
+            })
+            const uploads = [
+                ...pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`})),
+                {from: clipFile, to: remoteClip},
+                ...(song ? [...stems.map(stem => ({from: song[stem]!, to: `${this.remoteDir}/stems/${stem}.wav`})), {from: song.song!, to: songRemote!}] : []),
+            ]
+            return {result, uploads, meta: {seed}}
+        })
+        await withOriginalSound(rendered, source, frames, length !== frames, target)
+        rmSync(rendered, {force: true})
+        if (clipFile !== source) rmSync(clipFile, {force: true})
+        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'h3-refine', seed, denoise, size: `${size.width}x${size.height}`, frames, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
+        log.step('Saved', `${relative(this.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height} · ${this.took(rendered)}`)}`)
+    }
+
+    /** A finished clip made larger with the latent upscaler alone (comfy/workflows/h3-latent-upscale.ts): nothing sampled. It keeps its own sound and its own length. */
+    async renderLatentUpscaled(clipId: string, source: string, target: string, size: PixelSize) {
+        const {default: upscale} = await loadWorkflow<typeof import("../comfy/workflows/h3-latent-upscale.ts")>('h3-latent-upscale')
+        const {renderFrames} = await loadWorkflow<typeof import("../comfy/workflows/h3-refine.ts")>('h3-refine')
+        const frames = framesOnGrid(await probeVideo(source))
+        const length = renderFrames(frames)
+        const clipFile = length === frames ? source : target.replace(/\.mp4$/, '.padded.mp4')
+        if (length !== frames) await paddedClip(source, clipFile, length - frames)
+        const remoteClip = `${this.remoteDir}/${relative(this.projectDir, target).replace(/\\/g, '/').replace(/\.mp4$/, '.source.mp4')}`
+        const rendered = target.replace(/\.mp4$/, '.rendered.mp4')
+        const spec: RenderSpec = {kind: 'clip', id: clipId, parts: ['latent', fileFingerprint(source), size]}
+        await this.render({label: `latent upscale ${clipId}`, spec, kind: 'clip', workflow: 'h3-latent-upscale', resolution: `${size.width}x${size.height}`}, rendered, '.mp4', async () => ({
+            result: upscale({video: remoteClip, size, filenamePrefix: `${this.remoteDir}/refined/${basename(dirname(target))}/${clipId}`}),
+            uploads: [{from: clipFile, to: remoteClip}],
+            meta: {},
+        }))
+        await withOriginalSound(rendered, source, frames, length !== frames, target)
+        rmSync(rendered, {force: true})
+        if (clipFile !== source) rmSync(clipFile, {force: true})
+        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'h3-latent-upscale', size: `${size.width}x${size.height}`, frames, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
+        log.step('Saved', `${relative(this.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height}`)}`)
+    }
+
+    /** A finished clip made larger with an upscale model on ComfyUI, frame by frame (comfy/workflows/video-upscale.ts). It keeps its own sound. */
+    async renderUpscaled(clipId: string, source: string, target: string, model: string, size: PixelSize) {
+        const {default: upscale} = await loadWorkflow<typeof import("../comfy/workflows/video-upscale.ts")>('video-upscale')
+        const remoteClip = `${this.remoteDir}/${relative(this.projectDir, target).replace(/\\/g, '/').replace(/\.mp4$/, '.source.mp4')}`
+        const rendered = target.replace(/\.mp4$/, '.rendered.mp4')
+        const spec: RenderSpec = {kind: 'clip', id: clipId, parts: ['upscale', fileFingerprint(source), model, size]}
+        await this.render({label: `upscale ${clipId}`, spec, kind: 'clip', workflow: 'video-upscale', resolution: `${size.width}x${size.height}`}, rendered, '.mp4', async () => ({
+            result: upscale({video: remoteClip, model, size, filenamePrefix: `${this.remoteDir}/refined/${basename(dirname(target))}/${clipId}`}),
+            uploads: [{from: source, to: remoteClip}],
+            meta: {},
+        }))
+        await withOriginalSound(rendered, source, 0, false, target)
+        rmSync(rendered, {force: true})
+        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'video-upscale', model, size: `${size.width}x${size.height}`, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
+        log.step('Saved', `${relative(this.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height}`)}`)
+    }
+
     /** A part of a music-video clip rendered again, with the song at its place. */
     async renderClipRetake(clip: ClipRequest, stemFiles: Record<string, string>, ask: RetakeAsk) {
         const workflow = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
@@ -873,18 +966,19 @@ export class Renderer implements Disposable {
      * to `target` at FPS * multiplier. Only the frames the final video uses, cut into the clip's shots where the picture cuts. Rendered again when
      * the clip, its cuts, the model or the multiplier changed.
      */
-    async renderInterpolation(clip: { id: string, frames: number, shots?: { at: number }[] }, model: string, multiplier: number, target: string) {
-        const video = join(this.projectDir, 'videos', `${clip.id}.mp4`)
-        if (!existsSync(video)) throw new Error(`${clip.id}: videos/${clip.id}.mp4 is not rendered yet`)
+    async renderInterpolation(clip: { id: string, frames: number, shots?: { at: number }[] }, model: string, multiplier: number, target: string, source?: string) {
+        const video = source ?? join(this.projectDir, 'videos', `${clip.id}.mp4`)
+        if (!existsSync(video)) throw new Error(`${clip.id}: ${video} is not rendered yet`)
         // the cuts as the picture has them - the model cuts near the planned time, not on it (lib/interpolate.ts)
         const pieces = shotPieces(clip.frames, shotCuts(clip.frames, (clip.shots ?? []).map(s => s.at), await sceneScores(video)))
         const spec: RenderSpec = {kind: 'interpolation', id: clip.id, parts: [fileFingerprint(video), pieces, model, multiplier]}
         if (existsSync(target) && freshness(target, specId(spec)) === 'current') return log.step('Exists', basename(target))
         mkdirSync(dirname(target), {recursive: true})
         await this.render({label: `interpolation ${clip.id}`, spec, kind: 'interpolation', workflow: 'frame-interpolate'}, target, '.mp4', async () => {
-            const remote = `${this.remoteDir}/videos/${clip.id}.mp4`
+            // another version of a clip under its own name on the server: it must not be taken for this one
+            const remote = `${this.remoteDir}/${source ? relative(this.projectDir, source).replace(/\\/g, '/') : `videos/${clip.id}.mp4`}`
             const {default: interpolate} = await loadWorkflow<{ default: InterpolationWorkflow }>('frame-interpolate')
-            const result = interpolate({video: remote, pieces, model, multiplier, filenamePrefix: `${this.remoteDir}/interpolated/${clip.id}`})
+            const result = interpolate({video: remote, pieces, model, multiplier, filenamePrefix: `${this.remoteDir}/${source ? `${relative(this.projectDir, dirname(source)).replace(/\\/g, '/')}/interpolated` : 'interpolated'}/${clip.id}`})
             return {result, uploads: [{from: video, to: remote}], meta: {}}
         })
         const rendered = await probeVideo(target)

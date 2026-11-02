@@ -28,7 +28,8 @@
     "status": "bun tools/status.ts",
     "inspect": "bun tools/inspect.ts",
     "editor": "bun editor.ts",
-    "add-view": "bun tools/add-view.ts"
+    "add-view": "bun tools/add-view.ts",
+    "refinish": "bun tools/refinish.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

@@ -24,6 +24,7 @@ export type RunAction =
     | { type: 'leak-scan' }
     | { type: 'export-asset', asset: string, as?: string }
     | { type: 'add-view', location: string, name: string, shows: string }
+    | { type: 'refinish', preset?: string, upscale?: string, size?: string, denoise?: number, fps?: number, finish?: boolean, only?: string[] }
 
 const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
 
@@ -66,12 +67,31 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return run(`--retake=${action.clip}:${action.range}`)
         case 'repeat':
         case 'next': {
+            // a refinish of this project, with nothing but its own options
+            const again = /^bun tools\/refinish\.ts (\S+)((?: --[a-z]+(?:=[A-Za-z0-9.,_-]+)?)*)$/.exec(action.command.trim())
+            if (again && again[1] === id) return {script: 'tools/refinish.ts', args: [id, ...again[2]!.trim().split(' ').filter(option => option && !SERVERS_FLAG.test(option))]}
             const options = allowedOptions(kind, id, action.command)
             if (!options) throw new Error(`this command cannot be started from here - run it in the terminal: ${action.command}`)
             return run(...options)
         }
         case 'leak-scan':
             return {script: 'tools/leak-scan.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}
+        case 'refinish': {
+            const args = [id, ...(kind === 'film' ? ['--film'] : [])]
+            const say = (name: string, value: unknown, pattern: RegExp) => {
+                if (value === undefined || value === '') return
+                if (!pattern.test(String(value))) throw new Error(`no such ${name}: ${value}`)
+                args.push(`--${name}=${value}`)
+            }
+            say('preset', action.preset, /^[a-z-]+$/)
+            say('upscale', action.upscale, /^(none|refine|latent|model)$/)
+            say('size', action.size, /^(fullhd|2x|\d+x\d+)$/)
+            say('denoise', action.denoise, /^(0(\.\d+)?|1)$/)
+            say('fps', action.fps, /^\d+$/)
+            if (action.finish) args.push('--finish')
+            if (action.only?.length) args.push(`--only=${checked(action.only, CLIP_ID, 'clips')}`)
+            return {script: 'tools/refinish.ts', args}
+        }
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim()) throw new Error('a further view is for a place of a film, with a name and what it shows')
             return {script: 'tools/add-view.ts', args: [id, action.location, `--name=${action.name.trim()}`, `--shows=${action.shows.trim()}`]}

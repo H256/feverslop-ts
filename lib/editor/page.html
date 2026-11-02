@@ -1134,7 +1134,8 @@ const usesSong = () => !!state.project?.song && !playsFinal()
 const sizeOf = item => item.width ? `${item.width}×${item.height}` : ''
 const fpsOf = item => item.fps ? `${Math.round(item.fps * 100) / 100} fps` : ''
 // what a clip plays from: previews asked for, or nothing else there - marked on the monitor
-const fileOf = clip => state.source === 'previews' ? clip.preview ?? clip.video : clip.video ?? clip.preview
+const refinedOf = clip => state.source.startsWith('variant:') ? clip.refined?.find(r => r.variant === state.source.slice('variant:'.length)) : undefined
+const fileOf = clip => refinedOf(clip) ?? (state.source === 'previews' ? clip.preview ?? clip.video : clip.video ?? clip.preview)
 
 ////////// MONITOR
 const setSrc = (node, url) => { if (node.dataset.url !== url) { node.dataset.url = url; node.src = url } }
@@ -1142,11 +1143,12 @@ const setSrc = (node, url) => { if (node.dataset.url !== url) { node.dataset.url
 const sourceKey = () => `source:${route.kind}/${route.id}`
 function renderSourceChoice() {
     const select = $('source')
-    const {finals, clips, song} = state.project
+    const {finals, clips, song, refinedVariants} = state.project
     const clipsLabel = song ? 'Clips over the song' : 'Clips'
     const options = [
         ...finals.map(final => [`final:${final.file}`, [final.label, sizeOf(final), final.state === 'older' ? 'older than its clips' : ''].filter(Boolean).join(' · ')]),
         ['clips', clipsLabel],
+        ...refinedVariants.map(variant => [`variant:${variant}`, `Clips: ${variant}`]),
         ...(clips.some(c => c.preview) ? [['previews', 'Previews of the clips']] : []),
     ]
     select.replaceChildren(...options.map(([value, label]) => el('option', {value}, label)))
@@ -1847,6 +1849,48 @@ function retakeSection(clip) {
             }}, 'Render this part')))
 }
 
+function refinedSection(clip) {
+    if (!clip.refined?.length) return ''
+    return el('div', {class: 'section'}, el('h3', {}, 'Larger versions'), clip.refined.map(version => el('article', {class: 'version', style: {'grid-template-columns': 'minmax(0, 1fr)'}},
+        el('div', {},
+            el('div', {}, version.variant),
+            el('div', {class: 'muted num'}, [version.size?.replace('x', '×'), version.denoise !== undefined ? `denoise ${version.denoise}` : '', version.seed !== undefined ? `seed ${version.seed}` : ''].filter(Boolean).join(' · ')),
+            el('div', {class: 'btn-row'}, clip.video ? el('button', {class: 'btn', onclick: () => compare(clip, {video: version.file, made: version.v, seed: version.seed}, {refined: version.variant})}, 'Compare with the original') : '')))))
+}
+
+async function refinishDialog() {
+    const field = (label, input) => el('label', {class: 'field'}, el('span', {}, label), input)
+    const preset = el('select', {},
+        el('option', {value: 'grade'}, 'Grade and sharpen only: no GPU'),
+        el('option', {value: 'smooth'}, '48 fps, grade and sharpen'),
+        el('option', {value: 'fullhd'}, 'Full HD by a refine pass, 48 fps, grade and sharpen'),
+        el('option', {value: 'custom'}, 'Say it one by one'))
+    const upscale = el('select', {}, ...[['none', 'Not larger'], ['refine', 'Refine: second pass, denoise as below'], ['latent', 'Latent upscaler alone: fast, but artefacts'], ['model', 'Upscale model: RealESRGAN_x2plus']].map(([value, label]) => el('option', {value}, label)))
+    const size = el('select', {}, ...[['fullhd', 'Full HD (1920×1088)'], ['2x', 'Twice the size']].map(([value, label]) => el('option', {value}, label)))
+    const denoise = el('input', {type: 'number', min: 0.05, max: 1, step: 0.05, value: 0.2})
+    const fps = el('select', {}, ...[['24', 'Stay at 24 fps'], ['48', '48 fps'], ['60', '60 fps']].map(([value, label]) => el('option', {value}, label)))
+    const finish = el('input', {type: 'checkbox', checked: true})
+    const custom = el('div', {hidden: true}, field('Larger', upscale), field('Size', size), field('Denoise (refine)', denoise), field('Frame rate', fps), el('label', {class: 'field', style: {display: 'flex', gap: '8px'}}, finish, el('span', {style: {margin: 0}}, 'Grade and sharpen')))
+    preset.addEventListener('change', () => { custom.hidden = preset.value !== 'custom' })
+    const marked = markedClips()
+    const yes = await ask({
+        title: 'Make this project over',
+        lines: [
+            'From the clips it has: no plan run, no new prompts. videos/ and the final video stay as they are; the clips of a variant get a folder of their own, its final videos a name of their own.',
+            marked.length ? `Only the ${plural(marked.length, 'marked clip')}: larger clips, no final video.` : 'All clips, and the final videos.',
+        ],
+        warnings: ['Refine is slow, about 6 s per frame on the Radeon, and can change mouths a little: try a marked clip first, and compare.'],
+        extra: el('div', {}, field('What', preset), custom),
+        confirm: 'Start',
+        render: true,
+    })
+    if (!yes) return
+    const only = marked.length ? {only: marked.map(c => c.id)} : {}
+    await startRun(preset.value === 'custom'
+        ? {type: 'refinish', upscale: upscale.value, size: size.value, denoise: Number(denoise.value), fps: Number(fps.value), finish: finish.checked, ...only}
+        : {type: 'refinish', preset: preset.value, ...only})
+}
+
 function renderPanel(clip) {
     const fresh = stateOf(clip)
     const facts = (...rows) => el('dl', {class: 'facts'}, rows.filter(([, value]) => value !== undefined && value !== '').flatMap(([name, value]) => [el('dt', {}, name), el('dd', {}, value)]))
@@ -1857,6 +1901,7 @@ function renderPanel(clip) {
         el('button', {class: 'btn primary', onclick: () => renderAgain(clip).catch(showError)}, clip.video ? 'Render again' : 'Render'),
         el('button', {class: 'btn', onclick: () => previewOne([clip], clip.id).catch(showError)}, clip.preview ? 'Preview again' : 'Preview')))
     if (clip.video) out.push(retakeSection(clip))
+    out.push(refinedSection(clip))
     out.push(el('div', {class: 'section'}, el('h3', {}, 'File'), facts(
         ['Video', clip.video ? el('a', {href: mediaUrl(clip.video), target: '_blank', rel: 'noopener'}, clip.video.file) : 'not rendered'],
         ['Preview', clip.preview ? el('a', {href: mediaUrl(clip.preview), target: '_blank', rel: 'noopener'}, clip.preview.file) : undefined],
@@ -1929,7 +1974,7 @@ async function pickVersion(clip, version) {
     toast(`${clip.id} is now that version`)
 }
 
-function compare(clip, version, {fresh = false} = {}) {
+function compare(clip, version, {fresh = false, refined} = {}) {
     const dialog = $('compare')
     const a = el('video', {src: mediaUrl(clip.video), controls: true, preload: 'auto', playsInline: true})
     const b = el('video', {src: mediaUrl({file: version.video}), controls: true, preload: 'auto', muted: true, playsInline: true})
@@ -1940,12 +1985,12 @@ function compare(clip, version, {fresh = false} = {}) {
     const close = () => { a.pause(); b.pause(); dialog.close() }
     dialog.replaceChildren(
         el('div', {class: 'pair'},
-            el('div', {}, el('p', {class: 'muted'}, fresh ? 'Just rendered' : 'Now'), a),
-            el('div', {}, el('p', {class: 'muted'}, `${dateOf(version.made)}${version.seed !== undefined ? ` · seed ${version.seed}` : ''}`), b)),
+            el('div', {}, el('p', {class: 'muted'}, refined ? 'The original' : fresh ? 'Just rendered' : 'Now'), a),
+            el('div', {}, el('p', {class: 'muted'}, refined ?? `${dateOf(version.made)}${version.seed !== undefined ? ` · seed ${version.seed}` : ''}`), b)),
         el('div', {class: 'btn-row'},
             el('button', {class: 'btn primary', onclick: together}, 'Play both from the start'),
             el('div', {class: 'spacer'}),
-            el('button', {class: 'btn', onclick: () => { close(); pickVersion(clip, version).catch(showError) }}, fresh ? 'Go back to the old one' : 'Make the right one current'),
+            refined ? '' : el('button', {class: 'btn', onclick: () => { close(); pickVersion(clip, version).catch(showError) }}, fresh ? 'Go back to the old one' : 'Make the right one current'),
             el('button', {class: fresh ? 'btn primary' : 'btn', onclick: close}, fresh ? 'Keep the new one' : 'Close')))
     dialog.showModal()
 }
@@ -2045,6 +2090,7 @@ function renderSummary() {
         state.marked.size ? el('button', {onclick: () => { state.marked.clear(); showMarks() }}, 'Clear') : '',
         flaggedCount ? el('button', {title: 'Mark all flagged clips', onclick: () => { for (const c of clips.filter(flagged)) state.marked.add(c.id); showMarks() }}, 'Mark flagged') : '',
         clips.some(c => c.video) ? el('button', {title: 'Go through the marked clips, else the flagged ones, else all: one by one, with keys', onclick: () => startReview(reviewList())}, 'Review') : '',
+        clips.some(c => c.video) ? el('button', {title: 'Larger, 48 fps, grade and sharpen, from the clips there are: nothing is overwritten', onclick: () => refinishDialog().catch(showError)}, 'Refinish') : '',
         clips.some(c => c.video) ? el('button', {title: 'Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU', onclick: () => startRun({type: 'leak-scan'}).catch(showError)}, 'Scan for backdrops') : '',
         clips.length ? el('button', {title: 'Cheap renders of all clips into previews/', onclick: () => previewOne(clips, `all ${clips.length} clips`).catch(showError)}, 'Preview all') : '',
         clips.some(c => c.preview) ? el('button', {title: 'A low-resolution video of the whole thing from the previews', onclick: () => startRun({type: 'final', preview: true}).catch(showError)}, 'Preview video') : '',
