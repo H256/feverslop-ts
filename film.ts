@@ -21,7 +21,7 @@ import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from "
 import {FilmRenderer, filmClipFreshness, filmRenderState, startedOnContext} from "./lib/film/render.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate} from "./lib/render-state.ts";
-import {readTimings} from "./lib/timings.ts";
+import {keepTimingsIn, readTimings} from "./lib/timings.ts";
 import {formatSlotRanges} from "./lib/assemble.ts";
 import {reviewed} from "./lib/review.ts";
 import {archiveClip} from "./lib/film/archive.ts";
@@ -129,6 +129,7 @@ if (!args['dry-run']) {
     lockProject(film.dir, `film ${film.id}`)
     keepLogIn(join(film.dir, 'logs', `${versionStamp()}.log`))
     beginRun(film.dir, 'film.ts')
+    keepTimingsIn(film.dir)
 }
 await film.load()
 // --scenes=s6,s7 with --redo=coverage: only these scenes are planned again, the shots of the others (and the clips rendered from them) stay
