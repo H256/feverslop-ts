@@ -2,6 +2,84 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.5.0 – the workspace, and older projects made over without a new render
+
+_2026-11-02_
+
+A whole video can now be reworked in the browser: `bun run editor` shows every project and film, one continuous timeline and the state of every clip, and starts the CLI for what is to be rendered again. `bun run refinish` gives an older project a larger size, 48 fps and the finish from the clips it has. Around that: errors and runs that say what happened, and a fresh checkout that starts without a ComfyUI server. 29 pull requests since v0.4.0 (#390–#461).
+
+### Highlights
+
+- **The workspace** (`bun run editor`): start page over all projects and films, a timeline with sections, sound, clips and sung or spoken lines, clips playable in place with prompt, shots and references next to them (#443).
+- **Rework from the page**: render a clip again, compare and pick versions, make previews, render several marked clips with progress on the timeline, go through clips by key in a review (#443, #452). Everything that renders is the CLI, under the same lock as in the terminal.
+- **Refinish** (`bun run refinish`): an older project larger, at 48 fps and finished, without a plan run and without overwriting anything. Every variant has its own folder and final videos, and can be compared with the original (#459).
+- **A guide to the workspace**, step by step with screenshots, in German (#461).
+- **Errors that say who failed and at what**, failed renders named, and how the last run ended kept with its command (#418, #419).
+
+### Workspace
+
+#### Pages
+- Start page: how far each project is, its last run and what comes next, with pages, search, filters by kind and state, and the takes of one thing folded into one card (#443, #451).
+- References: every picture with its prompt, sheet, older versions and the clips that use it; a new sheet from the same anchor, a new anchor, an edited prompt, or into the library (#443).
+- Casting: `casting.json` as a page (#443). Library: who uses what, a new asset from a picture (#443).
+- Render servers on every page: how busy each one is, and a choice of servers before a render (#451).
+
+#### Timeline and clips
+- Marks on clips that are missing, stale, failed in the last run, or show a grey backdrop (#443).
+- The monitor plays any finished version and says what it shows, with size and frame rate (#443).
+- `--preview` and a preview video, and `--retake` for a part of a clip or one shot (#443).
+- A film clip can have its own choice of view and references; `bun run add-view` renders one more view of a place from its anchor (#443).
+- Keys, frame steps, loops, a hover preview, and `?` for all keys and what the words mean (#452).
+- Several clips marked and rendered together, with waiting, rendering or done on every block (#452).
+- Review: through the marked or flagged clips one by one, and old and new side by side after a render (#452).
+- Plain words for failures, with what to do (#452).
+
+#### Run control
+- Start, follow and stop a run from the page, also one started in the terminal (#443).
+
+### Refinish
+
+- Larger clips by `--upscale=refine`: the second pass of a two-pass render on the finished clip, with its prompt, pictures and song; the clip keeps its sound and length (#459).
+- `--upscale=latent` (the latent upscaler alone) and `--upscale=model` (an upscale model, frame by frame) (#459).
+- Presets `grade`, `smooth` and `fullhd`; `--size`, `--denoise`, `--fps`, `--finish`, `--only`, `--again`; a dialog in the workspace (#459).
+
+### Rendering and finishing
+
+- A clip with context frames is planned shorter by exactly those frames, so it stays within what the model can take (#402).
+- A request that timed out on a server that answers again is retried, and the job is picked up from its pending file (#404).
+- Color match keeps the gain near 1 and leaves nearly black frames alone, so a blackout no longer clips bright shots (#406).
+- The estimate compares clips in the sizes their timings record: three clips no longer come out at 1h 25m when they take 9 minutes each (#407).
+- A warning when a server often failed on clips of this length (#421).
+
+### Shot planning
+
+- Walking direction relative to the camera, no steps back, and the layout tied to the first view (#413).
+
+### Init
+
+- Asks for the final frame rate and for the finish (#399).
+- FLAC accepted as the song, next to wav and mp3 (#415).
+- The crash in the custom render settings fixed, and the error when choosing singers (#397).
+
+### LLM
+
+- A server without a Responses API falls back to Chat Completions, also for calls with pictures (#409, #411).
+
+### CLI, runs and errors
+
+- Runs name failed renders and keep the command and how the last run ended (#418).
+- A failing server or tool says who failed and at what (#419).
+- `--help` explains every option and `--redo` step of `index.ts` and `film.ts` (#420).
+- A key given as `--llm-key KEY` is left out of the run record (#424).
+- A fresh checkout runs without the generated `comfy/nodes.ts`: planning, `--help` and the tests no longer need a ComfyUI server (#425).
+
+### Code and docs
+
+- One place each for prompt helpers, the gender check, the `--again` warning, `MAX_CLIP_SEC`, timestamps and clip durations (#432–#437).
+- Golden snapshots no longer depend on the bytes ffmpeg writes (#417).
+- Docs: dead references removed, props and views in the film steps, environment variables, examples (#390).
+- `docs/workspace-guide.md`, in German, with screenshots (#461).
+
 ## v0.4.0 – the film pipeline catches up, init for your own songs, a vision model of its own
 
 _2026-10-25_
