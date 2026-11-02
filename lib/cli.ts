@@ -18,6 +18,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     'film:gallery': {args: '', description: 'Write films/index.html with the available films.'},
     'film:migrate': {args: '<film-id> <old-film-folder> [--apply]', description: 'Preview or apply migration of compatible rendered clips.'},
     'leak-scan': {args: '<project-id> [--film]', description: 'Check rendered clips for leaked studio backdrops.'},
+    'texture-chains': {args: '<project-id> [--film] [--json]', description: 'Measure whether continuing clips get grittier from link to link. Only reads.', json: true},
     interpolate: {args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]', description: 'Interpolate the rendered clips of a project.'},
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},

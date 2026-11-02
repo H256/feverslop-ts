@@ -24,6 +24,7 @@
     "film:migrate": "bun tools/film-migrate.ts",
     "film:check-joins": "bun tools/film-check-joins.ts",
     "leak-scan": "bun tools/leak-scan.ts",
+    "texture-chains": "bun tools/texture-chains.ts",
     "interpolate": "bun tools/interpolate.ts",
     "stats": "bun tools/stats.ts",
     "status": "bun tools/status.ts",
