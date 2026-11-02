@@ -80,6 +80,7 @@ export type EditorProject = {
     command: string,            // how this project is run, for the commands the page shows
     sings?: boolean,            // someone sings: who sings which line can be changed (the Singers page)
     plan: { stage?: PlanStage, next?: PlanStage },  // how far the plan is: the last stage it has, the one a plan run makes next (lib/stages.ts)
+    timed?: boolean,            // the lyrics are aligned: when they are sung can be changed (the Timing page)
 }
 
 export type EditorFinal = { file: string, v: number, label: string, state: FinalState, preview: boolean, width?: number, height?: number, fps?: number }
@@ -324,6 +325,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         command: `bun index.ts ${id}`,
         plan: {stage: musicStage(data), next: nextStage(musicStage(data))},
         sings: !!data.singing,
+        timed: !!data.lyricsTiming,
     }
 }
 

@@ -334,6 +334,35 @@ textarea.book { width: 100%; min-height: 50vh; font: 14px/1.6 var(--sans); }
 .sung .listen.small { width: 22px; height: 22px; }
 .sung .listen.small svg { width: 11px; height: 11px; }
 .changes ul { margin: 4px 0 10px; padding-left: 18px; color: var(--muted); font-size: 12px; }
+/* the timing: the waveform of the vocals around one line, its words to drag, the lines below to pick one */
+.tedit-wrap { position: sticky; top: -16px; z-index: 2; background: var(--bg); padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.tedit-head { margin-bottom: 6px; }
+.tedit-head b { font-weight: 600; }
+.tedit { position: relative; height: 176px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; outline: none; }
+.tedit:focus-visible { border-color: var(--accent); }
+.twave { position: absolute; left: 0; right: 0; top: 46px; display: block; cursor: pointer; }
+.tlayer { position: absolute; inset: 0; pointer-events: none; }
+.tlayer > * { pointer-events: auto; }
+.tline { position: absolute; top: 6px; height: 18px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 11px; line-height: 18px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; }
+.tline.changed { background: var(--accent); color: var(--accent-text); }
+.tword { position: absolute; top: 28px; height: 136px; border-radius: 4px; background: light-dark(#cf3d1b22, #ff6f4d26); border: 1px solid var(--accent); cursor: grab; min-width: 3px; }
+.tword span { position: absolute; left: 4px; right: 2px; top: 1px; font-size: 12px; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.tword.chosen { background: light-dark(#cf3d1b44, #ff6f4d4d); box-shadow: 0 0 0 1px var(--accent); }
+.tword.crossed { border-color: var(--danger); }
+.tword.other { border-color: var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.tword .grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.tword .grip.l { left: -3px; }
+.tword .grip.r { right: -3px; }
+.tcut { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--stale); pointer-events: none; }
+.tcut span { position: absolute; left: 3px; bottom: 2px; font: 10px var(--mono); color: var(--stale); }
+.thead { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--text); pointer-events: none; }
+.tlines { display: grid; gap: 2px; }
+.tline-row { display: grid; grid-template-columns: 56px 110px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; padding: 4px 10px; border: 1px solid transparent; border-left-width: 3px; border-radius: 6px; background: transparent; }
+.tline-row:hover { background: var(--surface); }
+.tline-row.selected { background: var(--surface); border-color: var(--line); }
+.tline-row.changed { border-left-color: var(--accent); }
+.tline-row time { font: 12px var(--mono); color: var(--muted); }
+.tline-row > span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 
 /* the run: what goes on, at the foot of every page */
 .rundock { background: var(--surface); border-top: 1px solid var(--line); min-width: 0; }
@@ -967,7 +996,7 @@ function projectChrome(title, project) {
     $('title').textContent = title
     document.title = `${title} · Workspace`
     // in the order a film is made: the book, who plays, who sings, how it looks - the timeline is where it all comes together
-    const pages = [['timeline', 'Timeline', ''], ['story', project?.kind === 'film' ? 'Screenplay' : 'Story', 'story'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : []), ['references', 'References', 'references']]
+    const pages = [['timeline', 'Timeline', ''], ['story', project?.kind === 'film' ? 'Screenplay' : 'Story', 'story'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : []), ...(project?.timed ? [['timing', 'Timing', 'timing']] : []), ['references', 'References', 'references']]
     $('nav').replaceChildren(...pages.map(([page, label, path]) =>
         el('a', {href: `${base}/${path}`, 'aria-current': route.page === page ? 'page' : false}, label)))
 }
@@ -1662,6 +1691,405 @@ async function singersPage() {
         if (changes().lines.length) return
         view = (await api('singing')).singing ?? view
         reset()
+        draw()
+    }
+    followRun(base)
+}
+
+////////// THE TIMING - when the lyrics are sung. A line the alignment barely found has guessed times; here its words are moved on
+// the waveform of the vocals. The cut of the song stays: the clips' vocals are worked out again, and the beats whose clips sing
+// something else lose their shot plan - the next plan run plans just those again
+async function timingPage() {
+    show('view-split')
+    const [{timing: first}, project] = await Promise.all([api('timing'), api('project')])
+    projectChrome(project.title, project)
+    let view = first
+    if (!view) {
+        $('split-list').replaceChildren(el('div', {class: 'empty'}, 'The lyrics have no timing in this project: "alignLyrics" is off, or the plan has not aligned them yet.'))
+        $('split-detail').replaceChildren()
+        return
+    }
+    // the vocals at 100 values a second: fine enough to see where a word starts
+    const wave = await api('timing-wave').then(r => r.peaks).catch(() => undefined)
+    const WAVE_RATE = 100
+    const MIN_WORD = 0.05
+
+    let edits, history, selected, word, filter = 'all', saved, pad = 2.5
+    const reset = () => {
+        edits = new Map()       // line -> words [{start, end}] as moved here, not saved yet
+        history = []            // for Ctrl+Z: the edits before each change
+        saved = undefined
+    }
+    reset()
+    const lineOf = n => view.lines.find(l => l.line === n)
+    const wordsOf = line => edits.get(line.line) ?? line.words
+    const startOf = line => wordsOf(line)[0]?.start ?? 0
+    const endOf = line => wordsOf(line).at(-1)?.end ?? 0
+    const isChanged = line => edits.has(line.line)
+    const cutsIn = (from, to) => view.cuts.slice(1).filter(c => c.start > from && c.start < to)
+    const crossing = line => wordsOf(line).flatMap(w => cutsIn(w.start + 0.02, w.end - 0.02).map(c => ({word: w, cut: c})))
+    selected = view.lines.find(l => l.estimated)?.line ?? view.lines[0]?.line
+
+    const remember = () => {
+        history.push(new Map([...edits].map(([k, v]) => [k, v.map(w => ({...w}))])))
+        if (history.length > 200) history.shift()
+    }
+    const undo = () => {
+        if (!history.length) return
+        edits = history.pop()
+        saved = undefined
+        draw()
+    }
+    // a change to the words of a line: kept in order, apart, at least MIN_WORD long, inside the song
+    const setWords = (line, words) => {
+        const max = view.duration
+        const fixed = words.map(w => ({start: Math.max(0, Math.min(w.start, max - MIN_WORD)), end: Math.min(max, Math.max(w.end, w.start + MIN_WORD))}))
+        const original = line.words
+        const same = fixed.every((w, n) => Math.abs(w.start - original[n].start) < 0.0005 && Math.abs(w.end - original[n].end) < 0.0005)
+        if (same) edits.delete(line.line)
+        else edits.set(line.line, fixed.map((w, n) => ({...w, text: original[n].text})))
+        saved = undefined
+    }
+    const moveLine = (line, by) => setWords(line, wordsOf(line).map(w => ({start: w.start + by, end: w.end + by})))
+    // a word moved, or one of its edges: a neighbour it runs into gives way, down to MIN_WORD - an estimated line has its
+    // words spread without gaps, and a word that could not push would not move at all
+    const moveWord = (line, n, by, edge) => {
+        const words = wordsOf(line).map(w => ({...w}))
+        const w = words[n], prev = words[n - 1], next = words[n + 1]
+        const low = prev ? prev.start + MIN_WORD : 0
+        const high = next ? next.end - MIN_WORD : view.duration
+        if (edge === 'start') w.start = clamp(w.start + by, low, w.end - MIN_WORD)
+        else if (edge === 'end') w.end = clamp(w.end + by, w.start + MIN_WORD, high)
+        else {
+            const length = w.end - w.start
+            w.start = clamp(w.start + by, low, high - length)
+            w.end = w.start + length
+        }
+        if (prev && prev.end > w.start) prev.end = w.start
+        if (next && next.start < w.end) next.start = w.end
+        setWords(line, words)
+    }
+
+    // listening: the line, a word, or from a moment on - with the playhead on the waveform
+    const audio = view.audio ? new Audio(mediaUrl(view.audio)) : undefined
+    let playing
+    const stop = () => { audio?.pause(); playing = undefined; drawHead() }
+    const play = (from, to) => {
+        if (!audio) return
+        stop()
+        playing = {to}
+        audio.currentTime = Math.max(0, from)
+        audio.play().catch(showError)
+        const tick = () => {
+            if (!playing) return
+            if (audio.currentTime >= playing.to || audio.paused) return stop()
+            drawHead()
+            requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+    }
+    const playLine = line => play(startOf(line) - 0.3, endOf(line) + 0.4)
+
+    // THE EDITOR: the waveform around the chosen line, its words to drag, the lines next to it faded, the cuts of the clips
+    const editor = el('div', {class: 'tedit', tabindex: 0, onkeydown: editorKey})
+    const canvas = el('canvas', {class: 'twave'})
+    const layer = el('div', {class: 'tlayer'})
+    const head = el('div', {class: 'thead'})
+    editor.append(canvas, layer, head)
+    const windowOf = () => {
+        const line = lineOf(selected)
+        if (!line) return {from: 0, to: 10}
+        const from = Math.max(0, startOf(line) - pad)
+        return {from, to: Math.min(view.duration, Math.max(endOf(line) + pad, from + 4))}
+    }
+    const xOf = t => { const {from, to} = windowOf(); return (t - from) / (to - from) * layer.clientWidth }
+    const tOf = x => { const {from, to} = windowOf(); return from + x / Math.max(1, layer.clientWidth) * (to - from) }
+    const pxPerSec = () => { const {from, to} = windowOf(); return layer.clientWidth / (to - from) }
+
+    function drawWave() {
+        const {from, to} = windowOf()
+        const width = layer.clientWidth, height = 120
+        const ratio = devicePixelRatio || 1
+        canvas.width = width * ratio
+        canvas.height = height * ratio
+        canvas.style.width = `${width}px`
+        canvas.style.height = `${height}px`
+        const g = canvas.getContext('2d')
+        g.scale(ratio, ratio)
+        g.clearRect(0, 0, width, height)
+        if (wave) {
+            g.fillStyle = resolveColor('--muted')
+            g.globalAlpha = .55
+            for (let x = 0; x < width; x++) {
+                const a = Math.floor((from + x / width * (to - from)) * WAVE_RATE)
+                const b = Math.max(a + 1, Math.floor((from + (x + 1) / width * (to - from)) * WAVE_RATE))
+                let level = 0
+                for (let i = a; i < b && i < wave.length; i++) level = Math.max(level, wave[i])
+                const h = Math.max(1, level * (height - 8))
+                g.fillRect(x, (height - h) / 2, 1, h)
+            }
+            g.globalAlpha = 1
+        }
+        // a second ruler: whole seconds
+        g.fillStyle = resolveColor('--muted')
+        g.font = '10px ' + getComputedStyle(document.body).fontFamily
+        for (let s = Math.ceil(from); s <= to; s++) {
+            const x = (s - from) / (to - from) * width
+            g.fillRect(x, height - 5, 1, 5)
+            g.fillText(clock(s, false), x + 3, height - 1)
+        }
+    }
+
+    function drawLayer() {
+        const {from, to} = windowOf()
+        const items = []
+        for (const cut of cutsIn(from, to)) items.push(el('div', {class: 'tcut', style: {left: `${xOf(cut.start)}px`}, title: `Clip ${cut.id} starts here${cut.beat ? ` (${cut.beat})` : ''}`}, el('span', {}, cut.id.replace(/^\D+/, ''))))
+        for (const line of view.lines) {
+            const words = wordsOf(line)
+            if (!words.length || words.at(-1).end < from || words[0].start > to) continue
+            const own = line.line === selected
+            if (own) {
+                const bar = el('div', {class: `tline${isChanged(line) ? ' changed' : ''}`, style: {left: `${xOf(startOf(line))}px`, width: `${Math.max(4, xOf(endOf(line)) - xOf(startOf(line)))}px`}, title: 'Drag: move the whole line · ← → with the line chosen'}, line.text)
+                drag(bar, by => moveLine(line, by))
+                items.push(bar)
+            }
+            words.forEach((w, n) => {
+                const cut = own && cutsIn(w.start + 0.02, w.end - 0.02).length
+                const box = el('div', {
+                    class: `tword${own ? '' : ' other'}${own && word === n ? ' chosen' : ''}${cut ? ' crossed' : ''}`,
+                    style: {left: `${xOf(w.start)}px`, width: `${Math.max(3, xOf(w.end) - xOf(w.start))}px`},
+                    title: `${w.text} · ${clock(w.start)}–${clock(w.end)}${cut ? ' · a clip cut falls into this word' : ''}`,
+                }, el('span', {}, w.text))
+                if (own) {
+                    const left = el('i', {class: 'grip l'}), right = el('i', {class: 'grip r'})
+                    box.append(left, right)
+                    drag(box, by => moveWord(line, n, by), () => { word = n })
+                    drag(left, by => moveWord(line, n, by, 'start'), () => { word = n })
+                    drag(right, by => moveWord(line, n, by, 'end'), () => { word = n })
+                    box.addEventListener('dblclick', () => play(w.start - 0.05, w.end + 0.1))
+                } else box.addEventListener('click', () => choose(line.line))
+                items.push(box)
+            })
+        }
+        layer.replaceChildren(...items)
+        drawHead()
+    }
+    function drawHead() {
+        const {from, to} = windowOf()
+        const t = playing && audio ? audio.currentTime : undefined
+        head.hidden = t === undefined || t < from || t > to
+        if (!head.hidden) head.style.left = `${xOf(t)}px`
+    }
+
+    // dragging in seconds: one undo step per drag, the editor drawn as it goes, the rest when it ends
+    function drag(node, move, start) {
+        node.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return
+            event.stopPropagation()
+            event.preventDefault()
+            start?.()
+            remember()
+            // on the window, not the node: the layer is drawn anew while dragging, and the node with it
+            let last = event.clientX
+            const pps = pxPerSec()
+            const onMove = e => {
+                const by = (e.clientX - last) / pps
+                if (!by) return
+                last = e.clientX
+                move(by)
+                drawLayer()
+            }
+            const onUp = () => {
+                removeEventListener('pointermove', onMove)
+                removeEventListener('pointerup', onUp)
+                if (history.length && JSON.stringify([...history.at(-1)]) === JSON.stringify([...edits])) history.pop()
+                draw()
+            }
+            addEventListener('pointermove', onMove)
+            addEventListener('pointerup', onUp)
+        })
+    }
+    // a click on the waveform plays from there
+    canvas.addEventListener('click', event => {
+        const t = tOf(event.offsetX)
+        play(t, t + 3)
+    })
+    editor.addEventListener('wheel', event => {
+        if (!event.ctrlKey) return
+        event.preventDefault()
+        pad = clamp(pad * (event.deltaY > 0 ? 1.25 : 0.8), 0.3, 30)
+        drawEditor()
+    }, {passive: false})
+
+    function editorKey(event) {
+        if (event.ctrlKey && event.key === 'z') { event.preventDefault(); return undo() }
+        if (event.ctrlKey || event.metaKey || event.altKey) return
+        const line = lineOf(selected)
+        if (!line) return
+        const step = event.shiftKey ? 0.5 : 0.05
+        const at = view.lines.indexOf(line)
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault()
+            remember()
+            const by = event.key === 'ArrowLeft' ? -step : step
+            word === undefined ? moveLine(line, by) : moveWord(line, word, by)
+            draw()
+        }
+        else if (event.key === 'Tab') { event.preventDefault(); word = word === undefined ? (event.shiftKey ? line.words.length - 1 : 0) : word + (event.shiftKey ? -1 : 1); if (word < 0 || word >= line.words.length) word = undefined; drawEditor() }
+        else if (event.key === 'Escape') { word = undefined; drawEditor() }
+        else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const next = view.lines[at + (event.key === 'ArrowDown' ? 1 : -1)]; if (next) choose(next.line) }
+        else if (event.key === ' ') {
+            event.preventDefault()
+            if (playing) return stop()
+            const w = word !== undefined && wordsOf(line)[word]
+            w ? play(w.start - 0.05, w.end + 0.1) : playLine(line)
+        }
+        else if (event.key === '+' || event.key === '-') { pad = clamp(pad * (event.key === '+' ? 0.8 : 1.25), 0.3, 30); drawEditor() }
+    }
+
+    function choose(n) {
+        selected = n
+        word = undefined
+        draw()
+        document.querySelector(`.tline-row[data-line="${n}"]`)?.scrollIntoView({block: 'nearest'})
+        editor.focus({preventScroll: true})
+    }
+
+    function drawEditor() {
+        const line = lineOf(selected)
+        const cross = line ? crossing(line) : []
+        $('tedit-head').replaceChildren(
+            line ? el('b', {}, line.text) : '',
+            line ? el('span', {class: 'muted num'}, `${line.section} · ${clock(startOf(line))}–${clock(endOf(line))}`) : '',
+            line?.estimated && !isChanged(line) ? el('span', {class: 'chip stale', title: 'Barely found in the transcript: the times are spread over the line, a guess'}, 'estimated') : '',
+            line && isChanged(line) ? el('span', {class: 'chip', style: {color: 'var(--accent)'}}, 'moved') : '',
+            el('div', {class: 'spacer'}),
+            line ? el('button', {class: 'btn', onclick: () => playLine(line)}, 'Listen') : '',
+            line && isChanged(line) ? el('button', {class: 'btn', title: 'Back to the saved times', onclick: () => { remember(); edits.delete(line.line); draw() }}, 'Reset line') : '',
+            el('button', {class: 'btn', disabled: !history.length, title: 'Ctrl+Z', onclick: undo}, 'Undo'),
+            el('button', {class: 'btn', title: 'Ctrl+wheel, + / -', onclick: () => { pad = clamp(pad * 0.8, 0.3, 30); drawEditor() }}, '+'),
+            el('button', {class: 'btn', title: 'Ctrl+wheel, + / -', onclick: () => { pad = clamp(pad * 1.25, 0.3, 30); drawEditor() }}, '−'))
+        // lines of one singer one after the other: one running into the next is mostly a line moved too far
+        const at = line ? view.lines.indexOf(line) : -1
+        const before = view.lines[at - 1], after = view.lines[at + 1]
+        const overlaps = line ? [before && endOf(before) > startOf(line) + 0.02 ? before : undefined, after && startOf(after) < endOf(line) - 0.02 ? after : undefined].filter(Boolean) : []
+        $('tedit-note').replaceChildren(
+            cross.length ? el('div', {class: 'warn'}, `A clip cut falls into ${cross.map(c => `"${c.word.text}"`).join(', ')}: the word is then sung half in one clip, half in the next. Move it, or cut the song again on the right.`) : '',
+            overlaps.length ? el('div', {class: 'warn'}, `This line overlaps ${overlaps.map(l => `"${l.text}"`).join(' and ')}. Fine for two singers at once - otherwise move one of them.`) : '')
+        drawWave()
+        drawLayer()
+    }
+
+    function drawList() {
+        const shown = line => filter === 'all' || (filter === 'estimated' ? line.estimated : isChanged(line))
+        const rows = view.lines.filter(shown).map(line => el('button', {
+            class: `tline-row${line.line === selected ? ' selected' : ''}${isChanged(line) ? ' changed' : ''}`, 'data-line': line.line, onclick: () => choose(line.line),
+        },
+            el('time', {}, clock(startOf(line))),
+            el('span', {class: 'muted'}, line.section),
+            el('span', {}, line.text),
+            el('span', {}, line.estimated && !isChanged(line) ? el('span', {class: 'chip stale'}, 'estimated') : isChanged(line) ? el('span', {class: 'chip', style: {color: 'var(--accent)'}}, 'moved') : line.byHand ? el('span', {class: 'chip'}, 'by hand') : '',
+                crossing(line).length ? el('span', {class: 'chip bad', title: 'A clip cut falls into a word'}, 'cut') : '')))
+        $('tlines').replaceChildren(...rows.length ? rows : [el('div', {class: 'empty'}, filter === 'estimated' ? 'No line is estimated: every line was found in the transcript.' : 'Nothing moved yet.')])
+        $('tfilter').replaceChildren(...[['all', 'All lines'], ['estimated', `Estimated (${view.lines.filter(l => l.estimated).length})`], ['changed', 'Moved']].map(([value, label]) =>
+            el('button', {'aria-pressed': filter === value, onclick: () => { filter = value; drawList() }}, label)))
+    }
+
+    // what saving does: the clips whose vocals change, the beats planned again - worked out as the server does it, roughly
+    function changes() {
+        const lines = view.lines.filter(isChanged)
+        const touched = new Set()
+        for (const line of lines) {
+            const span = [Math.min(startOf(line), line.words[0].start), Math.max(endOf(line), line.words.at(-1).end)]
+            for (const cut of view.cuts) if (cut.end > span[0] && cut.start < span[1] && cut.beat) touched.add(cut.beat)
+        }
+        const beats = [...touched]
+        return {
+            lines, beats,
+            replanned: beats.filter(b => view.beats.find(x => x.id === b)?.planned),
+            clips: [...new Set(beats.flatMap(b => view.beats.find(x => x.id === b)?.clips ?? []))].sort(),
+            crossing: lines.flatMap(crossing),
+        }
+    }
+
+    function drawSide() {
+        const c = changes()
+        const busy = run.current?.running
+        $('split-detail').replaceChildren(
+            el('h2', {}, 'Timing of the lyrics'),
+            el('p', {class: 'muted', style: {'margin-bottom': '10px'}}, 'Where the words are sung, from the alignment with the transcript. A line it barely found is only spread over the line: estimated.'),
+            el('dl', {class: 'facts', style: {'margin-bottom': '12px'}},
+                el('dt', {}, 'Drag'), el('dd', {}, 'a word, its edges, or the bar above the words: the whole line'),
+                el('dt', {}, '← →'), el('dd', {}, 'the line by 0.05 s, with Shift by 0.5 s - Tab picks a word, Esc the line again'),
+                el('dt', {}, 'Space'), el('dd', {}, 'listen to the line or the word; a click on the waveform plays from there'),
+                el('dt', {}, '↑ ↓'), el('dd', {}, 'the line before or after'),
+                el('dt', {}, 'Ctrl+Z'), el('dd', {}, 'undo')),
+            el('div', {class: 'changes'},
+                saved ? el('div', {class: 'note'}, saved) : '',
+                !c.lines.length ? el('p', {class: 'muted'}, view.unplanned.length
+                    ? `${view.unplanned.join(', ')} ${view.unplanned.length > 1 ? 'have' : 'has'} no shot plan: the next plan run plans ${view.unplanned.length > 1 ? 'them' : 'it'}.`
+                    : 'Move a line, and the clips it is sung in get its new times. The cut of the song stays.') : [
+                    el('b', {}, plural(c.lines.length, 'line') + ' moved'),
+                    el('ul', {},
+                        c.replanned.length ? el('li', {}, `${c.replanned.join(', ')} ${c.replanned.length > 1 ? 'are' : 'is'} planned again if what ${c.replanned.length > 1 ? 'their' : 'its'} clips sing changes: the language model, no GPU`) : '',
+                        c.clips.length ? el('li', {title: c.clips.join(', ')}, `up to ${plural(c.clips.length, 'clip')} go stale${c.clips.length <= 8 ? `: ${c.clips.join(', ')}` : ''}. Nothing is rendered on its own.`) : '',
+                        el('li', {}, 'The moved lines count as placed by hand: no longer estimated.')),
+                    c.crossing.length ? el('div', {class: 'warn'}, `A clip cut falls into ${plural(c.crossing.length, 'word')}. Saving keeps the cut; cutting the song again places the cuts around the new times, but plans every shot again.`) : '',
+                    el('div', {class: 'btn-row'},
+                        el('button', {class: 'btn', onclick: () => { reset(); draw() }}, 'Discard'),
+                        el('button', {class: 'btn', disabled: busy, title: busy ? 'A run is going on' : '', onclick: () => save('none').catch(showError)}, 'Save'),
+                        el('button', {class: 'btn primary', disabled: busy, title: busy ? 'A run is going on' : 'Save, then plan the shots of these beats again', onclick: () => save('plan').catch(showError)}, 'Save and plan')),
+                    el('div', {class: 'btn-row', style: {'margin-top': '8px'}},
+                        el('button', {class: 'btn', disabled: busy, title: 'Save, then cut the song into clips again around the new times (--redo=timeline): every shot is planned again', onclick: () => cutAgain().catch(showError)}, 'Save and cut the song again…')),
+                ],
+                !c.lines.length && view.unplanned.length ? el('button', {class: 'btn primary', disabled: busy, onclick: () => startRun({type: 'plan'}).catch(showError)}, 'Plan now') : '',
+                el('p', {class: 'muted', style: {'font-size': '12px', 'margin-top': '14px'}}, 'Kept in project.json (lyricsTiming) until lyrics.txt changes or --redo=lyricsTiming aligns the lyrics again.')),
+        )
+    }
+
+    function draw() {
+        drawEditor()
+        drawList()
+        drawSide()
+    }
+
+    async function save(then) {
+        const c = changes()
+        const result = await api('timing', {lines: c.lines.map(l => ({line: l.line, words: wordsOf(l).map(w => ({start: w.start, end: w.end}))}))})
+        view = (await api('timing')).timing
+        reset()
+        saved = [
+            `Saved: ${plural(result.slots.length, 'clip')} sing${result.slots.length === 1 ? 's' : ''} something else now.`,
+            result.replanned.length ? `${result.replanned.join(', ')} ${then === 'plan' ? 'are planned now' : 'are planned with the next plan run'}.` : '',
+        ].filter(Boolean).join(' ')
+        draw()
+        if (then === 'plan' && view.unplanned.length) await startRun({type: 'plan'})
+        if (then === 'cut') await startRun({type: 'plan', redo: ['timeline']})
+    }
+    async function cutAgain() {
+        const yes = await ask({
+            title: 'Cut the song again?',
+            lines: ['The new times are saved, then the song is cut into clips again around them (--redo=timeline).', 'Every shot of the video is planned again by the language model, and every clip whose cut or plan changes goes stale. Nothing is rendered on its own.'],
+            warnings: ['On a whole song that takes a while: the blocking and the shots of every beat.'],
+            confirm: 'Save and cut again',
+        })
+        if (yes) await save('cut')
+    }
+
+    $('split-list').replaceChildren(
+        el('div', {class: 'pagebar'}, el('h2', {}, 'When the lyrics are sung'), el('div', {class: 'seg', id: 'tfilter'})),
+        el('div', {class: 'tedit-wrap'}, el('div', {class: 'tedit-head btn-row', id: 'tedit-head'}), editor, el('div', {id: 'tedit-note'})),
+        el('div', {class: 'tlines', id: 'tlines'}),
+    )
+    addEventListener('resize', () => drawEditor())
+    addEventListener('beforeunload', event => { if (edits.size) event.preventDefault() })
+    const wanted = /^#line-(\d+)$/.exec(location.hash)
+    if (wanted && lineOf(Number(wanted[1]))) selected = Number(wanted[1])
+    draw()
+    editor.focus({preventScroll: true})
+    run.onEnd = async () => {
+        if (edits.size) return
+        view = (await api('timing')).timing ?? view
         draw()
     }
     followRun(base)
@@ -2954,7 +3382,7 @@ async function timelinePage() {
 loadServers()
 setInterval(() => { if (!document.hidden) loadServers() }, 10000)
 
-const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'story' ? storyPage() : route.page === 'singers' ? singersPage() : timelinePage()}
+const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'story' ? storyPage() : route.page === 'singers' ? singersPage() : route.page === 'timing' ? timingPage() : timelinePage()}
 pages[route.view]().catch(error => {
     show('none')
     $('boot').hidden = false

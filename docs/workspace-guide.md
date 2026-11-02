@@ -151,6 +151,17 @@ Rechts steht, was das Speichern auslöst: Die Beats, in denen eine geänderte Ze
 
 Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich `lyrics.txt` oder `singers` in `config.json` ändern oder `--redo=singing` das Modell neu fragt.
 
+## Wann die Lyrics gesungen werden
+
+**Timing** (bei Musikvideos mit abgeglichenen Lyrics) zeigt oben die Wellenform des Vocals-Stems um eine Zeile, darüber ihre Wörter als Kästen, darunter alle Zeilen. **Estimated** filtert die Zeilen, die der Abgleich mit dem Transkript kaum gefunden hat: Ihre Zeiten sind nur über die Zeile verteilt und können Sekunden danebenliegen.
+
+- Ein Wort ziehen verschiebt es, seine Ränder ziehen ändert Anfang oder Ende. Stößt es an ein Nachbarwort, gibt dieses nach.
+- Der Balken über den Wörtern verschiebt die ganze Zeile. **← →** verschiebt sie um 0,05 s, mit Shift um 0,5 s. **Tab** wählt ein Wort, dann gelten die Pfeile für das Wort, **Esc** wieder für die Zeile.
+- **Leertaste** spielt die Zeile oder das gewählte Wort, ein Doppelklick ein Wort, ein Klick in die Wellenform spielt ab dort. **Strg+Mausrad** oder **+ / −** zoomt, **Strg+Z** macht rückgängig.
+- Gestrichelte Linien sind die Schnitte zwischen den Clips. Fällt ein Schnitt in ein Wort, wird das Wort rot umrandet und die Seite warnt.
+
+**Save** behält die Schnitte: Die Vocals jedes Clips werden aus den neuen Zeiten neu berechnet, nur Beats mit geänderten Clips verlieren ihren Shot-Plan. **Save and plan** plant sie gleich neu. **Save and cut the song again…** schneidet den Song um die neuen Zeiten neu (`--redo=timeline`) und plant dabei jeden Shot neu, das dauert. Verschobene Zeilen gelten als von Hand gesetzt und nicht mehr als geschätzt. Die Zeiten stehen in `project.json` (`lyricsTiming`), bis sich `lyrics.txt` ändert oder `--redo=lyricsTiming` neu abgleicht.
+
 ## Ein älteres Projekt aufwerten
 
 ![Refinish-Dialog](images/workspace/refinish.jpg)

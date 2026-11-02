@@ -19,6 +19,7 @@ import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, 
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
 import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
 import {type CastChange, castingRedo, readBook, readCast, writeCast, writeStory} from "./preproduction.ts";
+import {readTiming, type TimingChange, writeTiming} from "./timing.ts";
 import {runProgress} from "./progress.ts";
 import {CLIP_ID, type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
@@ -91,6 +92,16 @@ export function peaks(samples: Int16Array, buckets: number): number[] {
     const levels = sums.map((sum, bucket) => counts[bucket] ? Math.sqrt(sum / counts[bucket]!) : 0)
     const loudest = Math.max(...levels, 1)
     return levels.map(level => Math.round(level / loudest * 1000) / 1000)
+}
+
+/** The loudness at a fixed rate (values per second) - fine enough to see where a word starts, for the Timing page. */
+async function readFineWaveform(file: string, perSecond: number): Promise<number[] | undefined> {
+    const rate = 8000
+    const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(rate), '-f', 's16le', '-'], {stdout: 'pipe', stderr: 'ignore', stdin: 'ignore'})
+    const bytes = await new Response(proc.stdout).arrayBuffer()
+    if (await proc.exited !== 0) return undefined
+    const samples = new Int16Array(bytes, 0, Math.floor(bytes.byteLength / 2))
+    return peaks(samples, Math.max(1, Math.round(samples.length / rate * perSecond)))
 }
 
 async function readWaveform(file: string): Promise<number[] | undefined> {
@@ -275,6 +286,15 @@ export function editorHandler(runs = new RunControl()) {
                 }
                 if (what === 'references') return json({references: await readReferences(target)})
                 if (what === 'singing') return json({singing: target.kind === 'music' ? await readSinging(target) ?? null : null})
+                if (what === 'timing') return json({timing: target.kind === 'music' ? await readTiming(target) ?? null : null})
+                if (what === 'timing-wave') {
+                    const audio = target.kind === 'music' ? (await readTiming(target))?.audio : undefined
+                    const file = audio && mediaFile(target.dir, audio.file)
+                    if (!file) return json({peaks: null})
+                    const key = `fine:${file}:${statSync(file).mtimeMs}`
+                    if (!waveforms.has(key)) waveforms.set(key, readFineWaveform(file, 100).catch(() => undefined))
+                    return json({peaks: await waveforms.get(key) ?? null})
+                }
                 if (what === 'casting') {
                     const project = await readEditorProject(target)
                     return json(await readCasting(target, project.clips))
@@ -333,6 +353,7 @@ export function editorHandler(runs = new RunControl()) {
             if (what === 'singing') return json(await writeSinging(target, await body<SingingChange>()))
             if (what === 'cast') return json(await writeCast(target, await body<CastChange>()))
             if (what === 'book') return json(await writeStory(target, (await body<{ text?: unknown }>()).text))
+            if (what === 'timing') return json(await writeTiming(target, await body<TimingChange>()))
             if (what === 'override' && id) {
                 if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))
                 const override = await body<EditorOverride | null>()
