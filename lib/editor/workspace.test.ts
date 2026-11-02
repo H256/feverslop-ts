@@ -1,10 +1,10 @@
 import {afterAll, beforeAll, describe, expect, test} from "bun:test";
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, join} from "node:path";
+import {basename, dirname, join} from "node:path";
 import {clipVersions, pictureVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
 import {lockHolder, lockProject, withProjectLock} from "../lock.ts";
-import {namedPictures} from "../render.ts";
+import {namedPictures, putAwayPicture} from "../render.ts";
 import {finalStateOf} from "../render-state.ts";
 import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import type {EditorTarget} from "./project.ts";
@@ -128,6 +128,34 @@ describe('versions of a picture', () => {
         expect(read(`${sheet}/frames/frame_00.png`)).toBe('then-frame')
         const putAway = pictureVersions(dir(), picture).find(v => v.anchor && readFileSync(join(dir(), v.picture), 'utf8') === 'now')!
         expect(readFileSync(join(dir(), putAway.anchor!), 'utf8')).toBe('now-anchor')
+    })
+})
+
+describe('a sheet made again on the same anchor', () => {
+    const dir = () => target('same-anchor').dir
+    const picture = {kind: 'location' as const, id: 'yard', file: 'assets/locations/yard.png', name: 'Yard', prompt: '', description: ''}
+    const sheet = 'assets/sequence/locations/yard'
+    test('its version keeps a copy of the anchor, which stays where it is - and putting the version back is whole', () => {
+        write(join(dir(), picture.file), 'first')
+        write(join(dir(), `${sheet}/anchor.png`), 'the-anchor')
+        write(join(dir(), `${sheet}/sequence.mp4`), 'first-video')
+        const kept = putAwayPicture(picture, dir(), {sequenceSheets: true}, false)
+        expect(readFileSync(join(dir(), `${sheet}/anchor.png`), 'utf8')).toBe('the-anchor')
+        expect(readFileSync(join(kept, 'anchor.png'), 'utf8')).toBe('the-anchor')
+        // a new anchor and sheet since then - the version brings back the anchor its sheet was made from
+        write(join(dir(), picture.file), 'second')
+        write(join(dir(), `${sheet}/anchor.png`), 'new-anchor')
+        restorePictureVersion(dir(), picture, `old/attempts/${basename(kept)}`, sheet)
+        expect(readFileSync(join(dir(), `${sheet}/anchor.png`), 'utf8')).toBe('the-anchor')
+        expect(readFileSync(join(dir(), `${sheet}/sequence.mp4`), 'utf8')).toBe('first-video')
+    })
+    test('a version put away without its anchor (before they kept one) leaves the sheet with the anchor that was there, not none', () => {
+        write(join(dir(), `${sheet}/anchor.png`), 'current-anchor')
+        write(join(dir(), 'old/attempts/yard-20261101-090000/yard.png'), 'old-picture')
+        write(join(dir(), 'old/attempts/yard-20261101-090000/sequence.mp4'), 'old-video')
+        restorePictureVersion(dir(), picture, 'old/attempts/yard-20261101-090000', sheet)
+        expect(readFileSync(join(dir(), `${sheet}/anchor.png`), 'utf8')).toBe('current-anchor')
+        expect(readFileSync(join(dir(), `${sheet}/sequence.mp4`), 'utf8')).toBe('old-video')
     })
 })
 

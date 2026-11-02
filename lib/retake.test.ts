@@ -24,6 +24,10 @@ describe('what a part of a clip is', () => {
         expect(retakeFrames({clip: 'c', shot: 1}, 100, [40, 70])).toEqual({first: 0, end: 40})
         expect(retakeFrames({clip: 'c', shot: 2}, 100, [40, 70])).toEqual({first: 40, end: 70})
         expect(retakeFrames({clip: 'c', shot: 3}, 100, [40, 70])).toEqual({first: 70, end: 100})
+        // as shotCuts gives them: the 0 of the first shot among them - shot2 is still the second shot
+        expect(retakeFrames({clip: 'c', shot: 1}, 100, [0, 40, 70])).toEqual({first: 0, end: 40})
+        expect(retakeFrames({clip: 'c', shot: 2}, 100, [0, 40, 70])).toEqual({first: 40, end: 70})
+        expect(shotsIn({first: 40, end: 70}, [0, 40, 70])).toEqual([2])
     })
     test('never more than the file has, and never nothing', () => {
         expect(retakeFrames({clip: 'c', seconds: [1, 99]}, 100, [])).toEqual({first: 24, end: 100})

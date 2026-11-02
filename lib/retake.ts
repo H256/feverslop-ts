@@ -15,14 +15,17 @@ export function parseRetake(text: string): RetakeAsk {
     return {clip: match[1]!, seconds: [Number(match[2]), Number(match[3])]}
 }
 
+// where each shot of the file starts, the first one at 0 - `cuts` as lib/interpolate.ts finds them (shotCuts) has 0 among them
+const shotStarts = (cuts: number[]) => [0, ...cuts.filter(cut => cut > 0)]
+
 /**
  * The frames [first, end) of the clip's file the part means. Shots are named where the picture cuts: `cuts` are the first frames of the
- * shots after the first one, as lib/interpolate.ts finds them. Never frames the file does not have, and never nothing.
+ * shots, as lib/interpolate.ts finds them - with or without the 0 of the first one. Never frames the file does not have, and never nothing.
  */
 export function retakeFrames(ask: RetakeAsk, fileFrames: number, cuts: number[]): { first: number, end: number } {
     let first: number, end: number
     if (ask.shot !== undefined) {
-        const starts = [0, ...cuts]
+        const starts = shotStarts(cuts)
         if (ask.shot < 1 || ask.shot > starts.length) throw new Error(`${ask.clip} has ${starts.length} shot(s), not a shot ${ask.shot}`)
         first = starts[ask.shot - 1]!
         end = starts[ask.shot] ?? fileFrames
@@ -71,7 +74,7 @@ export function retakePrompt(prompt: string, shots: number[]): string {
 
 /** The numbers of the shots (from 1) a part of the clip touches. */
 export function shotsIn({first, end}: { first: number, end: number }, cuts: number[]): number[] {
-    const starts = [0, ...cuts]
+    const starts = shotStarts(cuts)
     return starts.flatMap((start, n) => first < (starts[n + 1] ?? Infinity) && end > start ? [n + 1] : [])
 }
 

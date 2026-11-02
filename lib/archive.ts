@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, utimesSync, writeFileSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, utimesSync, writeFileSync} from "node:fs";
 import {basename, dirname, join} from "node:path";
 import {boundaryFrameAsset} from "./compose.ts";
 import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from "./sequenceSheet.ts";
@@ -181,5 +181,11 @@ export function restorePictureVersion(projectDir: string, picture: { id: string,
         else if (sheet) putBack(from, join(projectDir, sheet, /^(sequence\.mp4|anchor\.png)(\.json)?$/.test(file) ? file : `frames/${file}`), now)
     }
     if (!readdirSync(folder).length) rmdirSync(folder)
+    // a version put away before versions kept their anchor (a sheet made again on the same anchor) has none: the anchor that was
+    // there goes back rather than none - a sheet without its anchor cannot be made again
+    if (sheet) for (const file of [SHEET_ANCHOR, `${SHEET_ANCHOR}.json`]) {
+        const target = join(projectDir, sheet, file)
+        if (!existsSync(target) && existsSync(join(putAway, file))) copyFileSync(join(putAway, file), target)
+    }
     return {putAway}
 }
