@@ -316,6 +316,23 @@ textarea.book { width: 100%; min-height: 50vh; font: 14px/1.6 var(--sans); }
 .singer .about { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; }
 .singer kbd, .pagebar kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); }
 .changes { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+/* a singer change within a line: the words, a place to click between two of them, one row of singers per part */
+.words { line-height: 1.9; }
+.word { border-bottom: 2px solid light-dark(oklch(.6 .12 var(--h, 0) / .55), oklch(.7 .12 var(--h, 0) / .55)); padding-bottom: 1px; }
+.sung:not(.has-parts) .word { border-bottom-color: transparent; }
+.gap { display: inline-block; width: 9px; height: 1.2em; margin: 0 1px; padding: 0; border: 0; border-radius: 3px; background: transparent; vertical-align: -3px; cursor: col-resize; position: relative; }
+.gap::after { content: ""; position: absolute; left: 3.5px; top: 0; bottom: 0; width: 2px; border-radius: 1px; background: transparent; }
+.sung:hover .gap:hover::after, .gap:focus-visible::after { background: var(--muted); }
+.gap.split::after { background: var(--accent); }
+.gap.split:hover::after { background: var(--danger); }
+.sung .text small.estimated { color: var(--stale); }
+.parts { display: grid; gap: 3px; justify-items: end; }
+.part { display: grid; grid-template-columns: 22px minmax(0, 150px) auto; gap: 6px; align-items: center; padding: 1px 4px; border-radius: 6px; }
+.part.active { background: var(--raised); }
+.part.empty .from { color: var(--danger); }
+.part .from { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.sung .listen.small { width: 22px; height: 22px; }
+.sung .listen.small svg { width: 11px; height: 11px; }
 .changes ul { margin: 4px 0 10px; padding-left: 18px; color: var(--muted); font-size: 12px; }
 
 /* the run: what goes on, at the foot of every page */
@@ -1337,30 +1354,43 @@ async function singersPage() {
     }
     const nameOf = id => view.characters.find(c => c.id === id)?.name ?? id
     const short = id => nameOf(id).split(/\s+/)[0]
-    let pool, hue, assigned, filter = 'all', saved
+    // every line as parts: one part from word 0 when its singer does not change within it (lib/singing-parts.ts)
+    const partsOfView = line => (line.parts ?? [{from: 0, singers: line.singers}]).map(p => ({from: p.from, singers: new Set(p.singers)}))
+    let pool, hue, assigned, active, filter = 'all', saved
     const reset = () => {
         // the singers of the song first, in their order: their colours and number keys stay put while lines are changed
         pool = [...view.singers]
         hue = new Map(pool.map((id, n) => [id, HUES[n % HUES.length]]))
-        assigned = new Map(view.lines.map(l => [l.line, new Set(l.singers)]))
+        assigned = new Map(view.lines.map(l => [l.line, partsOfView(l)]))
+        active = new Map()      // the part of a line the number keys go to
     }
     reset()
-    const original = line => view.lines.find(l => l.line === line).singers
-    const isChanged = line => {
-        const now = assigned.get(line.line)
-        return now.size !== line.singers.length || line.singers.some(id => !now.has(id))
+    const partsOf = line => assigned.get(line.line)
+    const singersOf = line => new Set(partsOf(line).flatMap(p => [...p.singers]))
+    // as the server keeps them: neighbours with the same singers are one part
+    const kept = parts => {
+        const out = []
+        for (const p of parts) {
+            const ids = [...p.singers].sort()
+            if (out.length && out.at(-1).singers.join() === ids.join()) continue
+            out.push({from: out.length ? p.from : 0, singers: ids})
+        }
+        return out
     }
+    const same = (a, b) => JSON.stringify(kept(a)) === JSON.stringify(kept(b))
+    const isChanged = line => !same(partsOf(line), partsOfView(line))
+    const describe = parts => parts.map(p => [...p.singers].map(nameOf).join(' + ')).join(' / ')
     const changes = () => {
         const lines = view.lines.filter(isChanged)
         const beats = [...new Set(lines.flatMap(l => l.beats))]
         const beatOf = id => view.beats.find(b => b.id === id)
         const added = []
         for (const beat of beats) {
-            const singersHere = new Set(lines.filter(l => l.beats.includes(beat)).flatMap(l => [...assigned.get(l.line)]))
+            const singersHere = new Set(lines.filter(l => l.beats.includes(beat)).flatMap(l => [...singersOf(l)]))
             for (const id of singersHere) if (!beatOf(beat)?.characterIds.includes(id)) added.push({beat, id})
         }
         // a new singer, or one who no longer sings, changes every clip they are in: a silent singer keeps the mouth closed there
-        const used = new Set([...assigned.values()].flatMap(set => [...set]))
+        const used = new Set(view.lines.flatMap(l => [...singersOf(l)]))
         const newSingers = [...used].filter(id => !view.singers.includes(id))
         const formerSingers = view.singers.filter(id => !used.has(id))
         const clipsOf = id => view.characters.find(ch => ch.id === id)?.clips ?? []
@@ -1368,64 +1398,123 @@ async function singersPage() {
             lines, beats, added, newSingers, formerSingers,
             replanned: beats.filter(b => beatOf(b)?.planned),
             clips: [...new Set([...beats.flatMap(b => beatOf(b)?.clips ?? []), ...[...newSingers, ...formerSingers].flatMap(clipsOf)])].sort(),
-            empty: view.lines.filter(l => !assigned.get(l.line).size),
+            empty: view.lines.filter(l => partsOf(l).some(p => !p.singers.size)),
             unplaced: lines.filter(l => !l.beats.length),
         }
     }
 
-    // listening to a line: the vocals stem tells a man's voice from a woman's, which is what a wrong pick usually is
+    // listening to a line or a part of it: the vocals stem tells a man's voice from a woman's, which is what a wrong pick usually is
     const audio = view.audio ? new Audio(mediaUrl(view.audio)) : undefined
     let playing
     const stop = () => { audio?.pause(); playing = undefined; for (const b of document.querySelectorAll('.listen.on')) b.classList.remove('on') }
-    const listen = (line, button) => {
-        if (!audio || line.start === undefined) return
-        if (playing === line.line) return stop()
+    const listen = (key, start, end, button) => {
+        if (!audio || start === undefined) return
+        if (playing === key) return stop()
         stop()
-        playing = line.line
+        playing = key
         button?.classList.add('on')
-        audio.currentTime = Math.max(0, line.start - 0.15)
+        audio.currentTime = Math.max(0, start - 0.15)
         audio.play().catch(showError)
-        const until = (line.end ?? line.start + 4) + 0.25
+        const until = (end ?? start + 4) + 0.25
         const watch = () => {
-            if (playing !== line.line) return
+            if (playing !== key) return
             if (audio.currentTime >= until || audio.paused) return stop()
             requestAnimationFrame(watch)
         }
         requestAnimationFrame(watch)
     }
+    const spanOf = (line, k) => {
+        const parts = partsOf(line)
+        if (parts.length < 2 || !line.words.length) return {start: line.start, end: line.end}
+        const last = (parts[k + 1]?.from ?? line.words.length) - 1
+        return {start: line.words[parts[k].from]?.start, end: line.words[last]?.end}
+    }
 
-    const toggle = (line, id) => {
-        const set = assigned.get(line)
-        if (set.has(id)) set.delete(id)
-        else set.add(id)
-        saved = undefined
-        draw()
+    const edited = () => { saved = undefined; draw() }
+    const toggle = (line, id, k = active.get(line.line) ?? 0) => {
+        const part = partsOf(line)[k] ?? partsOf(line)[0]
+        part.singers.has(id) ? part.singers.delete(id) : part.singers.add(id)
+        active.set(line.line, partsOf(line).indexOf(part))
+        edited()
     }
     const toggleAll = (lines, id) => {
-        const all = lines.every(l => assigned.get(l.line).has(id))
-        for (const l of lines) all ? assigned.get(l.line).delete(id) : assigned.get(l.line).add(id)
-        saved = undefined
-        draw()
+        const all = lines.every(l => partsOf(l).every(p => p.singers.has(id)))
+        for (const l of lines) for (const p of partsOf(l)) all ? p.singers.delete(id) : p.singers.add(id)
+        edited()
+    }
+    // a click between two words: the singer changes there - or, on a change that is there, it is taken back
+    const split = (line, word) => {
+        const parts = partsOf(line)
+        const at = parts.findIndex(p => p.from === word)
+        if (at > 0) {
+            parts.splice(at, 1)
+            active.set(line.line, at - 1)
+        } else {
+            const k = parts.findLastIndex(p => p.from < word)
+            parts.splice(k + 1, 0, {from: word, singers: new Set(parts[k].singers)})
+            active.set(line.line, k + 1)
+        }
+        edited()
     }
     const chip = (id, pressed, onclick, title) => el('button', {
         class: 'sing', style: {'--h': hue.get(id)}, 'aria-pressed': pressed, title, tabindex: -1, onclick,
     }, el('i', {}, String(pool.indexOf(id) + 1)), short(id))
 
+    // the words of a line, each part underlined in the colour of its first singer, with a place to click between two words
+    function words(line) {
+        if (line.words.length < 2) return line.text
+        const parts = partsOf(line)
+        const partAt = n => parts.findLastIndex(p => p.from <= n)
+        return line.words.map((w, n) => {
+            const part = parts[partAt(n)]
+            const first = [...part.singers][0]
+            const word = el('span', {class: 'word', style: first ? {'--h': hue.get(first)} : {}, 'data-part': parts.length > 1 ? partAt(n) : false}, w.text)
+            if (n === 0) return word
+            const isSplit = parts.some(p => p.from === n)
+            return [el('button', {
+                class: `gap${isSplit ? ' split' : ''}`, tabindex: -1,
+                title: isSplit ? 'Take this change of singer back' : `The singer changes here: from "${w.text}" on`,
+                'aria-label': isSplit ? `Take the change before "${w.text}" back` : `Change the singer before "${w.text}"`,
+                onclick: event => { event.stopPropagation(); split(line, n) },
+            }), word]
+        })
+    }
+
+    function partRows(line) {
+        const parts = partsOf(line)
+        const playable = !!audio && line.start !== undefined
+        if (parts.length < 2) return el('div', {class: 'who'}, pool.map(id => chip(id, parts[0].singers.has(id), () => toggle(line, id, 0), `${nameOf(id)} sings this line (${pool.indexOf(id) + 1})`)))
+        const current = active.get(line.line) ?? 0
+        return el('div', {class: 'parts'}, parts.map((part, k) => {
+            const {start, end} = spanOf(line, k)
+            const label = line.words.slice(part.from, parts[k + 1]?.from ?? line.words.length).map(w => w.text).join(' ')
+            return el('div', {class: `part${k === current ? ' active' : ''}${part.singers.size ? '' : ' empty'}`},
+                el('button', {class: `tbtn listen small${playing === `${line.line}:${k}` ? ' on' : ''}`, tabindex: -1, disabled: !playable, title: 'Listen to this part', 'aria-label': 'Listen to this part', onclick: event => listen(`${line.line}:${k}`, start, end, event.currentTarget)}, playIcon()),
+                el('span', {class: 'from', title: label}, label),
+                el('div', {class: 'who'}, pool.map(id => chip(id, part.singers.has(id), () => toggle(line, id, k), `${nameOf(id)} sings "${label}" (${pool.indexOf(id) + 1})`))))
+        }))
+    }
+
     function lineRow(line) {
-        const now = assigned.get(line.line)
+        const parts = partsOf(line)
         const changed = isChanged(line)
-        const was = changed ? `was ${original(line.line).map(nameOf).join(' + ')}` : ''
+        const nobody = parts.some(p => !p.singers.size)
+        const was = changed ? `was ${describe(partsOfView(line))}` : ''
         const where = line.beats.length ? `${line.beats.join(', ')} · ${plural(line.clips.length, 'clip')}` : 'in no clip of the plan'
+        const note = nobody ? el('small', {class: 'bad'}, parts.length > 1 ? 'A part of this line has no singer' : 'Nobody sings this line')
+            : el('small', {}, [was, where].filter(Boolean).join(' · '))
         return el('div', {
-            class: `sung${changed ? ' changed' : ''}${now.size ? '' : ' empty'}`, id: `line-${line.line}`, tabindex: 0, 'data-line': line.line,
+            class: `sung${changed ? ' changed' : ''}${nobody ? ' empty' : ''}${parts.length > 1 ? ' has-parts' : ''}`, id: `line-${line.line}`, tabindex: 0, 'data-line': line.line,
             onkeydown: event => lineKey(event, line),
         },
-            el('button', {class: `tbtn listen${playing === line.line ? ' on' : ''}`, tabindex: -1, disabled: !audio || line.start === undefined, title: audio ? 'Listen to the line (Space)' : 'No vocals stem or song to listen to', 'aria-label': 'Listen', onclick: event => listen(line, event.currentTarget)},
+            el('button', {class: `tbtn listen${playing === String(line.line) ? ' on' : ''}`, tabindex: -1, disabled: !audio || line.start === undefined, title: audio ? 'Listen to the line (Space)' : 'No vocals stem or song to listen to', 'aria-label': 'Listen', onclick: event => listen(String(line.line), line.start, line.end, event.currentTarget)},
                 playIcon()),
             el('time', {}, line.start !== undefined ? clock(line.start) : ''),
-            el('div', {class: 'text'}, line.text,
-                !now.size ? el('small', {class: 'bad'}, 'Nobody sings this line') : el('small', {}, [was, where].filter(Boolean).join(' · '))),
-            el('div', {class: 'who'}, pool.map(id => chip(id, now.has(id), () => toggle(line.line, id), `${nameOf(id)} sings this line (${pool.indexOf(id) + 1})`))))
+            el('div', {class: 'text'},
+                el('div', {class: 'words', title: line.words.length > 1 ? 'Click between two words: the singer changes there' : ''}, words(line)),
+                note,
+                parts.length > 1 && line.estimated ? el('small', {class: 'estimated'}, 'The times of these words are only estimated: the change can sit off - listen to the parts') : ''),
+            partRows(line))
     }
 
     function lineKey(event, line) {
@@ -1433,10 +1522,21 @@ async function singersPage() {
         const rows = [...document.querySelectorAll('.sung')]
         const at = rows.indexOf(event.currentTarget)
         const digit = /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : -1
-        if (digit >= 0 && pool[digit]) { event.preventDefault(); toggle(line.line, pool[digit]) }
+        const parts = partsOf(line).length
+        if (digit >= 0 && pool[digit]) { event.preventDefault(); toggle(line, pool[digit]) }
+        else if ((event.key === 'ArrowRight' || event.key === 'ArrowLeft') && parts > 1) {
+            event.preventDefault()
+            active.set(line.line, clamp((active.get(line.line) ?? 0) + (event.key === 'ArrowRight' ? 1 : -1), 0, parts - 1))
+            draw()
+        }
         else if (event.key === 'ArrowDown' || event.key === 'j') { event.preventDefault(); rows[at + 1]?.focus() }
         else if (event.key === 'ArrowUp' || event.key === 'k') { event.preventDefault(); rows[at - 1]?.focus() }
-        else if (event.key === ' ') { event.preventDefault(); listen(line, event.currentTarget.querySelector('.listen')) }
+        else if (event.key === ' ') {
+            event.preventDefault()
+            const k = active.get(line.line) ?? 0
+            if (parts > 1) { const {start, end} = spanOf(line, k); listen(`${line.line}:${k}`, start, end, event.currentTarget.querySelectorAll('.part .listen')[k]) }
+            else listen(String(line.line), line.start, line.end, event.currentTarget.querySelector('.listen'))
+        }
     }
 
     // el() makes elements in the HTML namespace: an icon is made like copyIcon()
@@ -1455,14 +1555,14 @@ async function singersPage() {
             if (!sections.length || sections.at(-1).name !== name) sections.push({name, lines: []})
             sections.at(-1).lines.push(line)
         }
-        const shown = line => filter === 'all' || (filter === 'changed' ? isChanged(line) : assigned.get(line.line).size > 1)
+        const shown = line => filter === 'all' || (filter === 'changed' ? isChanged(line) : singersOf(line).size > 1)
         const focused = document.activeElement?.closest?.('.sung')?.dataset.line
         $('split-list').replaceChildren(
             el('div', {class: 'pagebar'},
                 el('h2', {}, 'Who sings which line'),
-                el('div', {class: 'seg'}, [['all', 'All lines'], ['changed', 'Changed'], ['together', 'Sung together']].map(([value, label]) =>
+                el('div', {class: 'seg'}, [['all', 'All lines'], ['changed', 'Changed'], ['together', 'Several singers']].map(([value, label]) =>
                     el('button', {'aria-pressed': filter === value, onclick: () => { filter = value; draw() }}, label))),
-                el('span', {class: 'muted', style: {'font-size': '12px'}}, el('kbd', {}, '1'), '–', el('kbd', {}, String(Math.min(9, pool.length))), ' a singer on the line in focus · ', el('kbd', {}, '↑'), el('kbd', {}, '↓'), ' line · ', el('kbd', {}, 'Space'), ' listen')),
+                el('span', {class: 'muted', style: {'font-size': '12px'}}, el('kbd', {}, '1'), '–', el('kbd', {}, String(Math.min(9, pool.length))), ' a singer · ', el('kbd', {}, '←'), el('kbd', {}, '→'), ' part · ', el('kbd', {}, '↑'), el('kbd', {}, '↓'), ' line · ', el('kbd', {}, 'Space'), ' listen · click between two words: the singer changes there')),
             ...sections.map(section => {
                 const lines = section.lines.filter(shown)
                 if (!lines.length) return ''
@@ -1470,8 +1570,9 @@ async function singersPage() {
                     el('div', {class: 'sung-head'}, el('h3', {}, section.name || 'Lines'),
                         el('span', {class: 'muted num'}, lines[0].start !== undefined ? clock(lines[0].start, false) : ''),
                         pool.length > 1 ? el('span', {class: 'all'}, 'All of these:', pool.map(id => {
-                            const has = lines.filter(l => assigned.get(l.line).has(id)).length
-                            return chip(id, has === lines.length ? true : has ? 'mixed' : false, () => toggleAll(lines, id), `${nameOf(id)} sings every line of this part - or none`)
+                            const has = lines.filter(l => partsOf(l).every(p => p.singers.has(id))).length
+                            const some = lines.some(l => singersOf(l).has(id))
+                            return chip(id, has === lines.length ? true : some ? 'mixed' : false, () => toggleAll(lines, id), `${nameOf(id)} sings every line of this part - or none`)
                         })) : ''),
                     lines.map(lineRow))
             }),
@@ -1482,7 +1583,7 @@ async function singersPage() {
 
     function drawSide() {
         const c = changes()
-        const counts = id => view.lines.filter(l => assigned.get(l.line).has(id)).length
+        const counts = id => view.lines.filter(l => singersOf(l).has(id)).length
         const others = view.characters.filter(ch => !pool.includes(ch.id))
         const add = el('select', {'aria-label': 'Add a singer', style: {width: '100%'}, onchange: () => {
             const id = add.value
@@ -1494,7 +1595,7 @@ async function singersPage() {
         const blocked = c.empty.length ? `${plural(c.empty.length, 'line')} without a singer` : run.current?.running ? 'A run is going on' : ''
         $('split-detail').replaceChildren(
             el('h2', {}, 'Singers'),
-            el('p', {class: 'muted', style: {'margin-bottom': '10px'}}, 'The lead first. A line can be sung by several at once: a duet, a chorus.'),
+            el('p', {class: 'muted', style: {'margin-bottom': '10px'}}, 'The lead first. A line can be sung by several at once (a duet, a chorus), or change its singer between two words.'),
             ...pool.map((id, n) => {
                 const character = view.characters.find(ch => ch.id === id)
                 return el('div', {class: 'singer', style: {'--h': hue.get(id)}},
@@ -1519,7 +1620,7 @@ async function singersPage() {
                         c.clips.length ? el('li', {title: c.clips.join(', ')}, `${plural(c.clips.length, 'clip')} go stale${c.clips.length <= 8 ? `: ${c.clips.join(', ')}` : ''}. Nothing is rendered on its own.`) : '',
                         c.added.map(({beat, id}) => el('li', {}, `${nameOf(id)} is not in ${beat} yet: added to it - ${beat} is then staged without its floor plan`)),
                         c.unplaced.length ? el('li', {}, `${plural(c.unplaced.length, 'line')} in no clip: only the assignment changes`) : ''),
-                    c.empty.length ? el('div', {class: 'warn bad'}, `Every line needs a singer: ${c.empty.map(l => `"${l.text}"`).slice(0, 3).join(', ')}${c.empty.length > 3 ? ' …' : ''}`) : '',
+                    c.empty.length ? el('div', {class: 'warn bad'}, `Every line and part needs a singer: ${c.empty.map(l => `"${l.text}"`).slice(0, 3).join(', ')}${c.empty.length > 3 ? ' …' : ''}`) : '',
                     el('div', {class: 'btn-row'},
                         el('button', {class: 'btn', onclick: () => { reset(); draw() }}, 'Discard'),
                         el('button', {class: 'btn', disabled: !!blocked, title: blocked, onclick: () => save(false).catch(showError)}, 'Save'),
@@ -1537,7 +1638,10 @@ async function singersPage() {
 
     async function save(plan) {
         const c = changes()
-        const result = await api('singing', {lines: c.lines.map(l => ({line: l.line, singers: [...assigned.get(l.line)]}))})
+        const result = await api('singing', {lines: c.lines.map(l => {
+            const parts = kept(partsOf(l))
+            return parts.length > 1 ? {line: l.line, singers: [...singersOf(l)], parts} : {line: l.line, singers: parts[0].singers}
+        })})
         view = (await api('singing')).singing
         reset()
         saved = result.replanned.length ? `Saved. ${result.replanned.join(', ')} ${plan ? 'are planned now' : 'are planned with the next plan run'}.` : 'Saved.'

@@ -1,7 +1,8 @@
 import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
 import {readTokens, replaceTokens} from "./refs.ts";
-import type {Assignment, BeatShots, Character, Location, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
+import {splitBySinger} from "./singing-parts.ts";
+import type {Assignment, BeatShots, Character, Location, LyricsTiming, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {handsOf} from "./project.ts";
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
@@ -100,6 +101,7 @@ export type Input = {
     music: MusicMap,
     language: string,           // for <d>[...], e.g. "English"
     singing?: Singing,          // performance mode
+    lyricsTiming?: LyricsTiming,    // the words' times: where a singer changes within a line (singing.lines[].parts)
     // beatId -> the staged shots of the beat (step 11b: action, who is in the picture, where they stand) - replaces the
     // beat.moments spread when given. A plan from before the staging is a list of actions and works without the staging
     shotMoments?: Record<string, BeatShots | string[]>,
@@ -297,7 +299,7 @@ export function propActivityPerBeat(
 // alone let the planner give a verse of the lead to the whole band ("they belt the final phrases in tight harmony").
 export type BeatSinging = { singerIds: string[], singingPerShot: boolean[], singersPerShot: string[][] }
 export function singingPerBeat(
-    {slots, mapping, beats, singing}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing'>,
+    {slots, mapping, beats, singing, lyricsTiming}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing' | 'lyricsTiming'>,
 ): Record<string, BeatSinging> {
     if (!singing) return {}
     const windows = shotWindowsPerBeat({slots, mapping, beats})
@@ -306,11 +308,15 @@ export function singingPerBeat(
     for (const beat of beats) {
         const singerIds = singing.singers.filter(id => beat.characterIds.includes(id))
         if (!singerIds.length) continue
-        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => slotById.get(m.slotId)?.vocals?.map(v => ({
-            start: slotById.get(m.slotId)!.start + v.start,
-            end: slotById.get(m.slotId)!.start + v.end,
-            singers: singing.lines.find(l => l.line === v.line)?.singers ?? singerIds,
-        })) ?? [])
+        // a line whose singer changes in it is as many pieces, each with its own singers (lib/singing-parts.ts)
+        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => {
+            const slot = slotById.get(m.slotId)
+            return (slot?.vocals ?? []).flatMap(v => splitBySinger(v, slot!.start, singing.lines.find(l => l.line === v.line), lyricsTiming, singerIds)).map(piece => ({
+                start: slot!.start + piece.start,
+                end: slot!.start + piece.end,
+                singers: piece.singers,
+            }))
+        })
         const beatWindows = windows[beat.id] ?? []
         result[beat.id] = {
             singerIds,
@@ -387,11 +393,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
-        // performance mode: the parts of lines sung in this clip, each with its singer(s)
-        const singersOf = new Map(singing?.lines.map(l => [l.line, l.singers]))
+        // performance mode: the parts of lines sung in this clip, each with its singer(s) - split where a singer changes within a line
+        const lineOf = new Map(singing?.lines.map(l => [l.line, l]))
         const performed = singing && slot.vocals
             ? slot.vocals
-                .map(v => ({...v, singerIds: (singersOf.get(v.line) ?? singing.singers).filter(id => characters.some(c => c.id === id))}))
+                .flatMap(v => splitBySinger(v, slot.start, lineOf.get(v.line), input.lyricsTiming, singing.singers))
+                .map(({singers, ...v}) => ({...v, singerIds: singers.filter(id => characters.some(c => c.id === id))}))
                 .filter(v => v.singerIds.length)
             : []
         // the singers are always on screen, first, in the order they sing - even if the beat forgot them

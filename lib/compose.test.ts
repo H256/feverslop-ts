@@ -247,4 +247,18 @@ describe('singingPerBeat', () => {
         expect(shots[0]).toEqual(['lead'])
         expect(shots.at(-1)).toEqual(['lead', 'band'])
     })
+
+    test('a line whose singer changes within it: each shot has the singer of the words sung in it', () => {
+        const beat = {id: 'b1', order: 1, summary: 's', moments: ['m'], locationId: 'hall', characterIds: ['ann', 'ben'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
+        // one line over the whole clip: Ann sings its first four words (0.2-3.5 s), Ben the last four (4.2-7.8 s)
+        const words = Array.from({length: 8}, (_, n) => ({text: `w${n}`, start: n < 4 ? 0.2 + n * 0.8 : 4.2 + (n - 4) * 0.9, end: n < 4 ? 0.9 + n * 0.8 : 4.9 + (n - 4) * 0.9}))
+        const slot = {id: 'slot-001', index: 0, section: 'Verse', start: 0, end: 8, bars: 4, energy: 0.3, lyrics: [], vocals: [{line: 0, text: words.map(w => w.text).join(' '), start: 0.2, end: 7.8, words}]}
+        const lyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: slot.vocals[0]!.text, start: 0.2, end: 7.8, words, confidence: 1}]}
+        const singing = {singers: ['ann', 'ben'], lines: [{line: 0, text: slot.vocals[0]!.text, singers: ['ann', 'ben'], parts: [{from: 0, singers: ['ann']}, {from: 4, singers: ['ben']}]}]}
+        const shots = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing, lyricsTiming}).b1!.singersPerShot
+        expect(shots[0]).toEqual(['ann'])
+        expect(shots.at(-1)).toEqual(['ben'])
+        // without the word times the whole line is sung by both, in every shot
+        expect(singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing}).b1!.singersPerShot.at(-1)).toEqual(['ann', 'ben'])
+    })
 })

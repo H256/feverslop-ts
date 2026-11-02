@@ -143,7 +143,9 @@ Bei einem gepinnten Bild sind die Render-Knöpfe gesperrt. Clips, die das Bild b
 
 **Singers** (nur bei Musikvideos, in denen jemand singt) listet jede gesungene Zeile, nach Songteilen gruppiert. Hinter jeder Zeile stehen die Sänger als Schalter: Einer singt sie allein, mehrere singen sie zusammen (Duett, Chor). **All of these** schaltet einen Sänger für einen ganzen Songteil. Mit **Add a singer from the cast…** kommt jemand aus dem Cast dazu, der bisher nicht singt. Der Knopf ▶ (oder Leertaste) spielt die Zeile aus dem Vocals-Stem: So hört man, ob eine Frauen- oder Männerstimme singt. Auf der Timeline führt **Change singers** im Tab Shots zur ersten Zeile des Clips.
 
-Tasten auf einer Zeile: **1** bis **9** schaltet den Sänger mit dieser Nummer, **↑ ↓** geht zur nächsten Zeile.
+**Wechselt der Sänger mitten in der Zeile**, klickst du zwischen die beiden Wörter: Dort beginnt ein neuer Teil. Jeder Teil bekommt eigene Sänger-Schalter und einen eigenen ▶. Die Wörter sind in der Farbe ihres Sängers unterstrichen. Ein Klick auf die Trennstelle nimmt sie zurück. Zwei Teile mit denselben Sängern werden beim Speichern wieder einer. Die Trennstelle sitzt auf den Wortzeiten aus dem Abgleich mit dem Transkript. Bei einer Zeile, die dort kaum gefunden wurde, sind sie nur geschätzt; die Seite sagt das, dann hilft ▶ pro Teil.
+
+Tasten auf einer Zeile: **1** bis **9** schaltet den Sänger mit dieser Nummer (bei einer geteilten Zeile im gewählten Teil), **← →** wählt den Teil, **↑ ↓** geht zur nächsten Zeile, **Leertaste** spielt die Zeile oder den gewählten Teil.
 
 Rechts steht, was das Speichern auslöst: Die Beats, in denen eine geänderte Zeile gesungen wird, verlieren ihren Shot-Plan. Ihre Clips werden stale. Steht ein Sänger noch nicht in so einem Beat, wird er hinzugefügt, und der Beat wird ohne seinen Grundriss neu inszeniert. **Save and plan** startet danach den Planlauf. Er fragt das Sprachmodell nur nach diesen Beats, alle anderen Beats und die Story bleiben, gerendert wird nichts. `bun run status` und `--dry-run` nennen die Beats ohne Plan.
 
