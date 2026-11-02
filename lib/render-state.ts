@@ -7,6 +7,7 @@ import {freshness} from "./provenance.ts";
 import {clipFingerprint, type PictureJob, pictureFingerprint, renderedFrames, workflowHash} from "./render.ts";
 import {SEQUENCE_FRAMES} from "./sequenceSheet.ts";
 import {readTimings, type Timing} from "./timings.ts";
+import {clipRequestsDir} from "./previous-output.ts";
 
 // What is rendered of a project, read from the requests of its last plan run (output/) - for bun run status and --dry-run.
 
@@ -27,7 +28,7 @@ export const readPictureJobs = async (picturesFile: string): Promise<PictureJob[
 
 /** The clip requests of the last plan run, in order. */
 export async function readClipRequests<C>(projectDir: string): Promise<C[]> {
-    const clipsDir = join(projectDir, 'output', 'clips')
+    const clipsDir = clipRequestsDir(projectDir)
     return existsSync(clipsDir) ? await Promise.all(readdirSync(clipsDir).filter(f => f.endsWith('.json')).sort().map(f => Bun.file(join(clipsDir, f)).json())) : []
 }
 

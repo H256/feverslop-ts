@@ -21,6 +21,7 @@ import {type LocationLayout, type Project, redoAfter, type StepName} from "../li
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
 import {sheetAnchor} from "../lib/sequenceSheet.ts";
+import {clipRequestsDir} from "../lib/previous-output.ts";
 cli('import-asset')
 
 
@@ -189,7 +190,7 @@ if (redo.length) {
     log.warn(`The plan was made with the old description${changed.length > 1 ? 's' : ''} - to make it again with the new one:`)
     log.info(`bun index.ts ${id} --redo=${redo.join(',')}`)
 }
-const clipsDir = join(dir, 'output', 'clips')
+const clipsDir = clipRequestsDir(dir)
 if (existsSync(clipsDir)) {
     const rendered: string[] = []
     for (const entry of readdirSync(clipsDir)) {

@@ -11,6 +11,7 @@ import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, 
 import {join, resolve} from "node:path";
 import {promptHash} from "../lib/film/render.ts";
 import {filmDir} from "../lib/film/setup.ts";
+import {clipRequestRef, clipRequestsDir} from "../lib/previous-output.ts";
 cli('film:migrate')
 
 
@@ -30,8 +31,8 @@ const apply = flags.includes('--apply')
 const read = (file: string) => JSON.parse(readFileSync(file, 'utf8'))
 const requests = (dir: string): Request[] => existsSync(dir) ? readdirSync(dir).filter(f => /^clip-\d+\.json$/.test(f)).sort().map(f => read(join(dir, f))) : []
 
-const oldRequests = requests(join(old, 'output/clips'))
-const newRequests = requests(join(film, 'output/clips'))
+const oldRequests = requests(clipRequestsDir(old))
+const newRequests = requests(clipRequestsDir(film))
 if (!oldRequests.length || !newRequests.length) {
     log.error(`no clip requests in ${!oldRequests.length ? old : film} - plan the film first (output/clips/clip-001.json ...)`)
     process.exit(1)
@@ -77,7 +78,7 @@ mkdirSync(frames, {recursive: true})
 for (const [newId, was] of keep) {
     const n = newRequests.find(r => r.id === newId)!
     copyFileSync(join(old, `videos/${was.id}.mp4`), join(videos, `${newId}.mp4`))
-    writeFileSync(join(videos, `${newId}.mp4.json`), JSON.stringify({...read(join(old, `videos/${was.id}.mp4.json`)), frameStart: n.frameStart, frames: n.frames, request: `output/clips/${newId}.json`}, null, 2))
+    writeFileSync(join(videos, `${newId}.mp4.json`), JSON.stringify({...read(join(old, `videos/${was.id}.mp4.json`)), frameStart: n.frameStart, frames: n.frames, request: clipRequestRef(newId)}, null, 2))
     for (const suffix of ['_lf.png', '_ff.png']) {
         const from = [join(old, `assets/clips/${was.id}${suffix}`), join(old, `clips-frames/${was.id}${suffix}`)].find(existsSync)
         if (from) copyFileSync(from, join(frames, `${newId}${suffix}`))

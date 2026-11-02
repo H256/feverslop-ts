@@ -28,7 +28,7 @@ import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, previewSources, formatSlotRanges} from "./lib/assemble.ts";
 import {freshness} from "./lib/provenance.ts";
-import {PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
+import {clipRequestsDir, clipRequestsIn, PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
 import {writeGallery} from "./lib/gallery.ts";
 import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
 import {FPS, formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
@@ -1043,7 +1043,7 @@ for (const clip of clips) {
 const outputDir = join(project.dir, 'output')
 // the output of the run before goes to output/.previous/ - to say below which requests this run changed
 startOutput(outputDir)
-mkdirSync(join(outputDir, 'clips'), {recursive: true})
+mkdirSync(clipRequestsIn(outputDir), {recursive: true})
 mkdirSync(join(outputDir, 'audio'), {recursive: true})
 
 // a track mixed of several instrument stems (lib/compose.ts mixStem) is a stem file of its own, made once per set of stems -
@@ -1114,7 +1114,7 @@ for (const clip of clips) {
     log.box(`${clip.id} · ${formatTime(clip.start)} – ${formatTime(clip.end)} · ${clip.section} · ${clip.beatId}`, clip.prompt)
 }
 hideDetails(false)
-if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${join(project.dir, 'output', 'clips')} (--show=clips prints them here)`))
+if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${clipRequestsDir(project.dir)} (--show=clips prints them here)`))
 const changes = requestChanges(outputDir)
 if (changes) {
     const {changed, added, gone} = changes
@@ -1251,7 +1251,7 @@ if (exportFormats.length) {
 log.section('✔ DONE')
 log.step('Clips', `${clips.length} H3 requests covering ${formatTime(clips.at(-1)?.end ?? 0)} of ${formatTime(music.durationSec)}`)
 log.step('Timeline', join(outputDir, 'timeline.json'))
-log.step('Requests', join(outputDir, 'clips'))
+log.step('Requests', clipRequestsIn(outputDir))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
 // what this run did: the steps it generated, its LLM calls and renders, its warnings

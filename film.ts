@@ -53,6 +53,7 @@ import {validProjectId} from "./lib/project-setup.ts";
 import {loadSettings} from "./lib/settings.ts";
 import {shuffledStyles, stylesById} from "./lib/styles.ts";
 import {readInputFile} from "./lib/inputs.ts";
+import {clipRequestsIn} from "./lib/previous-output.ts";
 cli('film')
 
 
@@ -528,7 +529,7 @@ async function planClips() {
     const outputDir = join(film.dir, 'output')
     // a plan that got shorter leaves the requests of its last clips behind - they would look like clips of the film
     const planned = new Set(requests.map(r => `${r.id}.json`))
-    const clipsDir = join(outputDir, 'clips')
+    const clipsDir = clipRequestsIn(outputDir)
     if (existsSync(clipsDir)) for (const entry of readdirSync(clipsDir)) if (entry.endsWith('.json') && !planned.has(entry)) rmSync(join(clipsDir, entry))
     for (const request of requests) await Bun.write(join(outputDir, 'clips', `${request.id}.json`), JSON.stringify(request, null, 2))
     await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({

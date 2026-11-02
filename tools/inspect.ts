@@ -21,6 +21,7 @@ import {filmClipFreshness} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
 import {FILMS_DIR} from "../lib/film/store.ts";
 import type {FilmProject} from "../lib/film/types.ts";
+import {clipRequestsDir} from "../lib/previous-output.ts";
 cli('inspect')
 
 
@@ -32,7 +33,7 @@ if (Bun.argv.includes('--film')) {
 }
 if (!id || !projectExists(id)) log.usageError(id ? `No project "${id}" in projects/` : 'Which project?', usage)
 const dir = projectDir(id!)
-const clipsDir = join(dir, 'output', 'clips')
+const clipsDir = clipRequestsDir(dir)
 const clipIds = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
 if (!clipIds.length) log.usageError(`${clipsDir} has no clip requests - plan the project first: bun index.ts ${id}`, usage)
 if (!clipId || !clipIds.includes(clipId)) log.usageError(`${clipId ? `No clip "${clipId}"` : 'Which clip?'} - the clips are ${clipIds[0]} to ${clipIds.at(-1)}`, usage)
@@ -117,7 +118,7 @@ log.box('Prompt', clip.prompt)
 async function inspectFilm(id: string | undefined, clipId: string | undefined) {
     if (!id || !filmExists(id)) log.usageError(id ? `No film "${id}" in ${FILMS_DIR}/` : 'Which film?', usage)
     const dir = filmDir(id!)
-    const clipsDir = join(dir, 'output', 'clips')
+    const clipsDir = clipRequestsDir(dir)
     const clipIds = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
     if (!clipIds.length) log.usageError(`${clipsDir} has no clip requests - plan the film first: bun film.ts ${id}`, usage)
     if (!clipId || !clipIds.includes(clipId)) log.usageError(`${clipId ? `No clip "${clipId}"` : 'Which clip?'} - the clips are ${clipIds[0]} to ${clipIds.at(-1)}`, usage)

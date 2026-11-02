@@ -42,6 +42,13 @@ export function startOutput(outputDir: string) {
     if (existsSync(parked)) whileHeld(parked, () => renameSync(parked, join(outputDir, PREVIOUS)))
 }
 
+// Where the clip requests of a plan run lie: output/clips/<id>.json, and those of the run before in output/.previous/clips/
+export const clipRequestsIn = (outputDir: string) => join(outputDir, 'clips')
+export const clipRequestsDir = (projectDir: string) => clipRequestsIn(join(projectDir, 'output'))
+export const clipRequestFile = (projectDir: string, clipId: string) => join(clipRequestsDir(projectDir), `${clipId}.json`)
+/** The request of a clip as a render's sidecar names it, relative to the project and with / on every system. */
+export const clipRequestRef = (clipId: string) => `output/clips/${clipId}.json`
+
 /** The clip requests of a clips folder, by clip id: the file's text. */
 export function readRequests(clipsDir: string): Map<string, string> {
     if (!existsSync(clipsDir)) return new Map()
@@ -53,8 +60,8 @@ export type RequestChanges = { changed: string[], added: string[], gone: string[
 /** Which requests differ between two runs - undefined when there was no run before to compare with. */
 export function requestChanges(outputDir: string): RequestChanges | undefined {
     if (!existsSync(join(outputDir, PREVIOUS))) return undefined
-    const before = readRequests(join(outputDir, PREVIOUS, 'clips'))
-    const after = readRequests(join(outputDir, 'clips'))
+    const before = readRequests(clipRequestsIn(join(outputDir, PREVIOUS)))
+    const after = readRequests(clipRequestsIn(outputDir))
     return {
         changed: [...after].filter(([id, text]) => before.has(id) && before.get(id) !== text).map(([id]) => id),
         added: [...after.keys()].filter(id => !before.has(id)),

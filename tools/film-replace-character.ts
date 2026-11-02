@@ -27,6 +27,7 @@ import type {PictureJob} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
 import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from "../lib/sequenceSheet.ts";
+import {clipRequestsDir} from "../lib/previous-output.ts";
 cli('film:replace-character')
 
 
@@ -196,7 +197,7 @@ if (newDescription) {
 const description = newDescription ?? data.characterDescriptions?.[char.id] ?? ''
 
 // clips already rendered before this swap are not touched - list them instead of guessing whether to redo them
-const clipsDir = join(dir, 'output', 'clips')
+const clipsDir = clipRequestsDir(dir)
 if (existsSync(clipsDir)) {
     const affected: string[] = []
     for (const entry of readdirSync(clipsDir)) {

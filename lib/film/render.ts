@@ -14,6 +14,7 @@ import {type Freshness, freshness} from "../provenance.ts";
 import {filmClipSpec, specId} from "../render-spec.ts";
 import {workflowDir} from "../config.ts";
 import {type FilmClipRequest, filmBoundaryFrame} from "./compose.ts";
+import {clipRequestRef} from "../previous-output.ts";
 
 /** What a clip was rendered from - the film refuses to use a clip made from another prompt or length. */
 export const promptHash = (clip: { prompt: string, frames: number }) => Bun.hash(`${clip.frames}
@@ -221,7 +222,7 @@ export class FilmRenderer extends Renderer {
             fingerprint: request,           // the same for everything it is made from (lib/provenance.ts)
             renderedFrames: rendered.frames,
             size: `${rendered.width}x${rendered.height}`,
-            request: `output/clips/${clip.id}.json`,
+            request: clipRequestRef(clip.id),
         }, null, 2))
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used${rendered.hasAudio ? ', with audio' : ''}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)

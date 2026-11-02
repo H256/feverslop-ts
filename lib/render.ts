@@ -22,6 +22,7 @@ import {archiveFiles, pictureFiles, versionStamp} from "./archive.ts";
 import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sequenceSheetDir, sheetAnchor, sheetFrame, sheetFrames, sheetLayout, sheetVideo, sheetViews} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
+import {clipRequestRef} from "./previous-output.ts";
 
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
 const DEFAULT_SONG_DURATION = 360
@@ -661,7 +662,7 @@ export class Renderer implements Disposable {
             fingerprint: request,           // what it was made from (lib/provenance.ts) - another one now makes it stale
             renderedFrames: rendered.frames,
             size: `${rendered.width}x${rendered.height}`,
-            request: `output/clips/${clip.id}.json`,
+            request: clipRequestRef(clip.id),
         }, null, 2))
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used · ${this.took(target)}`)}`)
         await this.saveBoundaryFrames(clip, target, rendered.frames)

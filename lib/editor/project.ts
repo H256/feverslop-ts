@@ -18,6 +18,7 @@ import {filmRenderConfig, placeViewFrame} from "../film/pictures.ts";
 import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
 import {withExtraViews} from "../film/views.ts";
+import {clipRequestFile, clipRequestsDir} from "../previous-output.ts";
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
 // nothing kept. The fast part (/api/project) only looks at which files are there; whether they are stale means hashing every
@@ -430,7 +431,7 @@ export async function readEditorFreshness({dir, kind}: EditorTarget): Promise<Ed
 
 /** The id of the request a clip is rendered from now - a version with another one was made from another plan. */
 export async function clipRequestId({dir, kind}: EditorTarget, clipId: string): Promise<string | undefined> {
-    const request = readJson<ClipRequest & FilmClipRequest>(join(dir, 'output', 'clips', `${clipId}.json`))
+    const request = readJson<ClipRequest & FilmClipRequest>(clipRequestFile(dir, clipId))
     if (!request) return undefined
     return kind === 'film' ? filmClipFingerprint(request, dir, filmRenderConfig(await loadFilmConfig(dir))) : clipFingerprint(request, dir, await loadProjectConfig(dir))
 }
@@ -455,7 +456,7 @@ const countOf = (folder: string, pattern: RegExp) => existsSync(folder) ? readdi
 
 /** One project on the start page, from what lies in its folder: no hashing, so that many of them stay quick. */
 export function readListing({id, dir, kind}: EditorTarget): EditorListing {
-    const clipsDir = join(dir, 'output', 'clips')
+    const clipsDir = clipRequestsDir(dir)
     const ids = existsSync(clipsDir) ? readdirSync(clipsDir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : []
     const project = join(dir, 'project.json')
     const title = kind === 'film' ? (() => {
