@@ -189,7 +189,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
             : ''
         // where the camera is, and where everyone is and what they hold at the start of the shot (what the shots before changed is already so)
         const placeView = shot.placeView ? locationViews?.[location?.id ?? '']?.[shot.placeView - 1] : undefined
-        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? (shot.placeView === pictured ? ` The background is ${locationSubject.picture}.` : ` The background is the place seen ${placeView.name}: ${placeView.shows.replace(/[.\s]+$/, '')} - that side is not in the picture.`) : ''}` : ''
+        const view = shot.view ? ` The camera is ${withLabels(shot.view)}.${placeView && locationSubject ? (shot.placeView === pictured ? ` The background is ${locationSubject.picture}.` : ` The background is the place seen ${placeView.name}: ${placeView.shows.replace(/[.\s]+$/, '')} - the camera looks that way only.`) : ''}` : ''
         // a person who is only a shoulder at the near edge of the picture (an over-the-shoulder listener) is drawn from "In frame" alone: said where they really stand, the video model draws a second, whole person there
         const starts = shot.focus.filter(s => shot.people?.[s.id]?.state && !shot.people[s.id]!.foreground)
         // a held shot: what the picture IS from the first frame to the last, said positively - "no push-in" does not hold the video model back, a picture that stays does
@@ -207,13 +207,13 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
         const silent = speaking.size ? shot.focus.filter(s => !speaking.has(s.id)) : []
         const silentClause = silent.length
-            ? ` ${silent.length > 1 ? joinAnd(silent.map(s => `${s.label} (${s.name})`)) : `${silent[0]!.label}, ${silent[0]!.name},`} ${silent.length > 1 ? 'keep' : 'keeps'} their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.`
+            ? ` ${silent.length > 1 ? joinAnd(silent.map(s => `${s.label} (${s.name})`)) : `${silent[0]!.label}, ${silent[0]!.name},`} ${silent.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent, the face showing what they feel through the eyes and brows.`
             : ''
         // The video model makes up speech - a babble of invented words - for people it shows when the prompt does not say that nobody
         // speaks. Every shot without a line of dialogue says so.
         // (voices the script itself describes - whispers, a chant - stay: wordless and indistinct)
         const noSpeech = !shot.spoken.length && shot.focus.length
-            ? (voicesInScene ? ' No words are spoken in this shot: any voices, whispers or chanting in it are indistinct and wordless.' : ' Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.')
+            ? (voicesInScene ? ' The voices, whispers or chanting in this shot are indistinct and wordless.' : ' Everyone in this shot is silent, lips together and still; the only sounds are the place and the action.')
             : ''
         return `${opening}${fromFrame}${view}${inFrame}${start}${motion}${propClause}${holdClause} ${withLabels(shot.action)}${lines ? ` ${lines}` : ''}${silentClause}${noSpeech}`.replace(/\s+/g, ' ').trim()
     })
@@ -222,7 +222,7 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
     const appearsIn = (label: string) => shots.filter(s => s.focus.some(f => f.label === label)).map(s => s.label).join(', ')
     const sceneClause = clip.opensScene
         ? `The scene begins at ${scene.time.toLowerCase()}.`
-        : `The scene continues directly from the previous clip, at the same time and place: everyone is already where the first shot below has them, mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it without a cut: the camera and the people keep the speed and direction of movement they have in it, nothing pauses or starts over.' : ''}`
+        : `The scene continues directly from the previous clip, at the same time and place: everyone is already where the first shot below has them, mid-action from the very first frame.${framePicture ? ` The video begins on ${framePicture} and goes on from it in one continuous take: the camera and the people keep the speed and direction of movement they have in it, every movement carrying straight on.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take: the camera and the people keep the speed and direction of movement they have in it, every movement carrying straight on.' : ''}`
     const talking = speakers.length ? ` The characters speak the dialogue themselves, in the shots below.` : ''
 
     const prompt = [
@@ -249,12 +249,12 @@ function buildClip(clip: FilmClip, {screenplay, cast, characterDescriptions, loc
         // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
         // where the shots put them - not "inside" the place for everyone: someone a shot has beyond an open door or outside a
         // window was pulled into the room by it (last-rehearsal clip-001)
-        ...(locationSubject && castSubjects.length ? [`No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in ${locationSubject.label} at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.`] : []),
+        ...(locationSubject && castSubjects.length ? [`The whole picture is ${locationSubject.label}: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.`] : []),
         ...(stagingText ? [`Staging of the scene, true in every shot unless the action below changes it: ${withLabels(stagingText)}`] : []),
         ...shotTexts,
         '',
         'overall_soundscape:',
-        `${withoutSentencesNaming(soundscapes[clip.sceneId] ?? '', unpictured) || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'Apart from the dialogue given in the shots, no words are spoken: voices and whispers described above are indistinct and wordless.' : 'Apart from the dialogue given in the shots, there is no speech, murmuring or voices.') : (voicesInScene ? 'No words are spoken: voices and whispers described above are indistinct and wordless.' : 'There is no speech, murmuring or voices.')}`,
+        `${withoutSentencesNaming(soundscapes[clip.sceneId] ?? '', unpictured) || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'The dialogue given in the shots is the only speech; voices and whispers described above are indistinct and wordless.' : 'The dialogue given in the shots is the only speech.') : (voicesInScene ? 'Voices and whispers described above are indistinct and wordless.' : 'The only sounds are the ambience and the on-screen action.')}`,
         '',
         'non_diegetic_music:',
         'N/A',

@@ -15202,6 +15202,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
     },
     {
       "aspect": "9:16",
+      "contextFrames": 22,
       "fingerprint": "33821467e030b92",
       "frameStart": 372,
       "frames": 48,
@@ -20435,6 +20436,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
       "workflow": "h3-ref2video",
     },
     {
+      "contextFrames": 22,
       "fingerprint": "d40bfb8487b97b02",
       "frameStart": 372,
       "frames": 48,
@@ -25770,11 +25772,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> and <Subject 3> walk side by side. Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> and <Subject 3> walk side by side. Everyone in this shot is silent, lips together and still; the only sounds are the place and the action.
 
 overall_soundscape:
-footsteps There is no speech, murmuring or voices.
+footsteps The only sounds are the ambience and the on-screen action.
 
 non_diegetic_music:
 N/A"
@@ -25815,11 +25817,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
 [Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; locked off. The camera is from beside <Subject 2>. In frame: <Subject 2>, Bo, centre, three-quarter view, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to Ann. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d>
 
 overall_soundscape:
-footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
+footsteps The dialogue given in the shots is the only speech.
 
 non_diegetic_music:
 N/A"
@@ -25862,11 +25864,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
-[Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+[Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their lips together and still, silent, the face showing what they feel through the eyes and brows.
 
 overall_soundscape:
-footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
+footsteps The dialogue given in the shots is the only speech.
 
 non_diegetic_music:
 N/A"
@@ -25915,11 +25917,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> and <Subject 3> walk side by side. Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> and <Subject 3> walk side by side. Everyone in this shot is silent, lips together and still; the only sounds are the place and the action.
 
 overall_soundscape:
-footsteps There is no speech, murmuring or voices.
+footsteps The only sounds are the ambience and the on-screen action.
 
 non_diegetic_music:
 N/A"
@@ -25960,11 +25962,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
 [Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; locked off. The camera is from beside <Subject 2>. In frame: <Subject 2>, Bo, centre, three-quarter view, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to Ann. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d>
 
 overall_soundscape:
-footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
+footsteps The dialogue given in the shots is the only speech.
 
 non_diegetic_music:
 N/A"
@@ -26007,11 +26009,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
-[Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+[Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their lips together and still, silent, the face showing what they feel through the eyes and brows.
 
 overall_soundscape:
-footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
+footsteps The dialogue given in the shots is the only speech.
 
 non_diegetic_music:
 N/A"
@@ -26060,11 +26062,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
-[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> and <Subject 3> walk side by side. Nobody speaks in this shot: mouths stay closed, and no voices, murmuring or speech are heard.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+[Shot 1] A medium shot of <Subject 1>, the THE CORRIDOR; the camera tracks backward ahead of them. The camera is from ahead of them, looking back down the corridor. In frame: <Subject 2>, Ann, left of centre, looking toward the right of the frame; <Subject 3>, Bo, right of centre, looking toward the left of the frame. At the start of the shot: <Subject 2> walks; <Subject 3> walks. <Subject 2> and <Subject 3> walk side by side. Everyone in this shot is silent, lips together and still; the only sounds are the place and the action.
 
 overall_soundscape:
-footsteps There is no speech, murmuring or voices.
+footsteps The only sounds are the ambience and the on-screen action.
 
 non_diegetic_music:
 N/A"
@@ -26105,11 +26107,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
 [Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; locked off. The camera is from beside <Subject 2>. In frame: <Subject 2>, Bo, centre, three-quarter view, looking toward the left of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> speaks to Ann. <Subject 2> (S1) says in the voice of a man, raspy, <d>[English] You were so nervous that night.</d>
 
 overall_soundscape:
-footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
+footsteps The dialogue given in the shots is the only speech.
 
 non_diegetic_music:
 N/A"
@@ -26152,11 +26154,11 @@ retention_analysis:
 detailed_description:
 a realistic film look
 The place stays as it is in <Subject 1>: its features and props keep their place and shape, unless the action below changes them.
-No grey studio backdrop and no lineup of the reference figures ever appears: every figure stands in <Subject 1> at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
-[Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their mouth closed, no lip movement and no sound, the face still showing what they feel through the eyes and brows.
+The whole picture is <Subject 1>: every figure stands in it at the position the shots below give - where a shot puts someone beyond it (outside a door, behind a window), they stay there.
+[Shot 1] A close-up of <Subject 1>, the THE CORRIDOR; a slow push in. The camera is from beside <Subject 2>. In frame: <Subject 2>, Ann, centre, looking toward the right of the frame; <Subject 3>, Bo, left edge, a soft shoulder, looking toward the right of the frame. At the start of the shot: <Subject 2> walks. <Subject 2> answers. <Subject 2> (S1) says in the voice of a woman, low, <d>[English] I still am.</d> <Subject 3>, Bo, keeps their lips together and still, silent, the face showing what they feel through the eyes and brows.
 
 overall_soundscape:
-footsteps Apart from the dialogue given in the shots, there is no speech, murmuring or voices.
+footsteps The dialogue given in the shots is the only speech.
 
 non_diegetic_music:
 N/A"
