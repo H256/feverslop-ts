@@ -610,7 +610,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 Characters are always portrait, locations landscape - whichever way round the size is written. Videos are landscape
 unless `videoAspect` says otherwise, and always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
 
-The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips` and `vocalGap` change
+The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`, `vocalGap` and `sequenceSheets` (which redoes the view choice when `locationView` is `auto`) change
 the plan (see the table of inputs under [Usage](#usage)); all others only change how it is rendered.
 
 ### Workflows

@@ -17,6 +17,16 @@ import {sequenceSheetDir, sheetViews} from "../sequenceSheet.ts";
 
 const VIEWS = 5
 
+/** Next unused view number, even when earlier views were deleted or metadata is absent. */
+export function nextViewNumber(projectDir: string, locationId: string): number {
+    const folder = join(projectDir, sheetViews(sequenceSheetDir('location', locationId)))
+    const numbers = existsSync(folder) ? readdirSync(folder).flatMap(file => {
+        const match = /^view-(\d+)\.(?:png|mp4)(?:\.json)?$/.exec(file)
+        return match ? [Number(match[1])] : []
+    }) : []
+    return Math.max(VIEWS, ...numbers) + 1
+}
+
 /** The further views of a place, rendered one by one (bun run add-view): after the five of its sheet, with the file each one is in. */
 export function extraViews(projectDir: string, locationId: string): { name: string, shows: string, file: string }[] {
     const folder = sheetViews(sequenceSheetDir('location', locationId))

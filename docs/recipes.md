@@ -21,7 +21,8 @@ it in full. `<id>` is the project id, the folder name in `projects/`.
 ```bash
 bun run init                                  # or: bun run example
 bun index.ts <id> --review                    # plan; stop after story, cast, look and beats to check them
-bun index.ts <id> --render=images --gallery   # the reference pictures, then look at gallery.html
+bun index.ts <id> --render=images             # render the reference pictures
+bun index.ts <id> --gallery                   # then look at gallery.html
 bun index.ts <id> --render=videos --only=slot-001,slot-002 --dry-run   # what one try costs
 bun index.ts <id> --render=videos --only=slot-001,slot-002
 bun index.ts <id> --render=all                # the rest, and <id>.mp4
@@ -81,7 +82,7 @@ ComfyUI job per clip. The model file must be on every server that renders.
 1. Render the band once in one project, then put each member into the library:
    `bun run export-asset <id> kael` (and so on).
 2. In the next project, after the first run, map the roles to the library in `casting.json`:
-   `"guitarist": "library:kael"`.
+   `{"characters": {"guitarist": "library:kael"}}`.
 3. Run again - the library pictures and descriptions are copied in and never rendered again.
 
 Best done right after a `--review` run, before the shots are planned. See [casting.json](../README.md#castingjson---who-plays-each-role)

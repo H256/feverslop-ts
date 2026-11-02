@@ -130,3 +130,9 @@ describe('castFromLibrary - the casting step of the music video and of a film', 
         expect(existsSync(join(dir, 'assets'))).toBe(false)
     })
 })
+
+test('unknown casting wrappers name the misplaced key', () => {
+    const dir = folder({'casting.json': '{"character":{"kael":"library:kael-red"}}'})
+    const result = resolveCasting(readCastingFile(dir), cast, has)
+    expect(result.warnings.some(w => w.includes('"character"') && w.includes('characters/locations'))).toBe(true)
+})

@@ -11,8 +11,9 @@ import {loadFilmConfig} from "../lib/film/config.ts";
 import {filmRenderConfig} from "../lib/film/pictures.ts";
 import {FilmRenderer} from "../lib/film/render.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
-import {extraViews} from "../lib/film/views.ts";
+import {nextViewNumber} from "../lib/film/views.ts";
 import {sequenceSheetDir, sheetAnchor} from "../lib/sequenceSheet.ts";
+import {libraryIdPattern} from '../lib/library.ts';
 cli('add-view')
 
 const usage = 'usage: bun run add-view <film-id> <location-id> --name=<where the camera is> --shows=<what is seen from there> [--comfy=URL]'
@@ -22,6 +23,7 @@ const [id, locationId] = args.filter(a => !a.startsWith('--'))
 const name = flag('name')
 const shows = flag('shows')
 if (!id || !locationId || !name || !shows) log.usageError('Which film, which place, and what the view shows?', usage)
+if (!libraryIdPattern.test(locationId!)) log.usageError(`Invalid location id "${locationId}" - use lowercase letters, digits and dashes`, usage)
 if (!filmExists(id!)) log.usageError(`No film "${id}" in films/`, usage)
 const dir = filmDir(id!)
 const anchor = sheetAnchor(sequenceSheetDir('location', locationId!))
@@ -30,7 +32,7 @@ lockProject(dir, `film ${id}`)
 const config = await loadFilmConfig(dir)
 const settings = await loadSettings({projectModel: config.llm.model, comfy: flag('comfy')})
 using renderer = new FilmRenderer(`film-${id}`, dir, filmRenderConfig(config), settings.comfy)
-const n = 6 + extraViews(dir, locationId!).length
+const n = nextViewNumber(dir, locationId!)
 const file = await renderer.renderExtraView(locationId!, n, name!, shows!)
 log.output(join(dir, file))
 log.info(`View ${n} of ${locationId} is ${file} - a clip takes it through its choice of view`)

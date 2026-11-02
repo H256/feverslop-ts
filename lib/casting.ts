@@ -57,6 +57,9 @@ export function resolveCasting(file: CastingFile, cast: Cast, libraryHas: (kind:
     const entries: CastEntry[] = []
     const errors: string[] = []
     const warnings: string[] = []
+    for (const key of Object.keys(file)) {
+        if (key !== 'characters' && key !== 'locations') warnings.push(`${CASTING_FILE}: unknown top-level key "${key}" - entries belong under characters/locations`)
+    }
     const sections: [AssetKind, Record<string, string> | undefined, { id: string, name: string, isGroup?: boolean }[]][] = [
         ['character', file.characters, cast.characters],
         ['location', file.locations, cast.locations],

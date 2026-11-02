@@ -18,7 +18,7 @@ import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
 import {runProgress} from "./progress.ts";
-import {type RunAction, RunControl} from "./runs.ts";
+import {CLIP_ID, type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
 import {clipRequestFile} from "../previous-output.ts";
@@ -260,7 +260,6 @@ export function editorHandler(runs = new RunControl()) {
                     if (!waveforms.has(key)) waveforms.set(key, readWaveform(file).catch(() => undefined))
                     return json({peaks: await waveforms.get(key) ?? null})
                 }
-                if (what === 'run') return json({run: runs.current(target) ?? null})
                 if (what === 'progress') {
                     const current = runs.current(target)
                     if (!current?.running) return json({progress: null})
@@ -329,7 +328,7 @@ export function editorHandler(runs = new RunControl()) {
                 if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))
                 const override = await body<EditorOverride | null>()
                 const file = overrideFile(target.dir, id)
-                if (!existsSync(clipRequestFile(target.dir, id))) return refused(new Error(`no clip ${id}`))
+                if (!CLIP_ID.test(id) || !existsSync(clipRequestFile(target.dir, id))) return refused(new Error(`no clip ${id}`))
                 await withProjectLock(target.dir, target.id, () => {
                     if (!override || (override.placeView === undefined && !override.order?.length && !override.without?.length)) rmSync(file, {force: true})
                     else {
@@ -383,8 +382,8 @@ export function editorHandler(runs = new RunControl()) {
         const post = request.method === 'POST'
         if (!post && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Not allowed', {status: 405})
         if (post && !fromThisPage(request)) return new Response('Forbidden', {status: 403})
-        const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
         try {
+            const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
             if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page()
             if (parts[0] === 'api') {
                 if (parts[1] === 'projects' && !post) return json({projects: allTargets().flatMap(target => {

@@ -544,3 +544,31 @@ describe('a choice per clip of a film', () => {
         expect((await post('clip-999', {placeView: 3})).status).toBe(409)
     })
 })
+
+ test('malformed URL paths return a JSON error', async () => {
+    const response = await editorHandler()(new Request('http://localhost/%zz'))
+    expect(response.status).toBe(503)
+    expect(((await response.json()) as {error: string}).error).toBeTruthy()
+ })
+ test('traversal overrides cannot replace or delete project.json', async () => {
+    const film = target('safe-override', 'film')
+    write(join(film.dir, 'input/idea.txt'))
+    const file = join(film.dir, 'project.json')
+    const original = '{"screenplay":{}}'
+    write(file, original)
+    for (const body of [{placeView: 3}, null]) {
+        const response = await editorHandler()(new Request('http://localhost/p/film/safe-override/api/override/..%2F..%2Fproject', {method: 'POST', body: JSON.stringify(body)}))
+        expect(response.status).toBe(409)
+        expect(readFileSync(file, 'utf8')).toBe(original)
+    }
+ })
+ test('film listings include prop pictures', () => {
+    const film = target('props-count', 'film')
+    write(join(film.dir, 'input/idea.txt'))
+    write(join(film.dir, 'assets/props/umbrella.png'))
+    expect(readListing(film).pictures).toBe(1)
+ })
+ test('unused GET run route is absent', async () => {
+    write(join(target('no-run').dir, 'input/idea.txt'))
+    expect((await editorHandler()(new Request('http://localhost/p/music/no-run/api/run'))).status).toBe(404)
+ })

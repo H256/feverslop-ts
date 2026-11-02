@@ -61,7 +61,7 @@ The wizard asks, in order:
 12. **Start it now?** - *Only generate the song now* (a generated song only, preselected - listen to it before the long
     render), *Start the whole run now*, or *Not now*. The command is printed in any case
 
-For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (an empty line ends it) or *read from a
+For any multi-line text (lyrics, story, idea) the wizard asks: *type it now* (two empty lines end it) or *read from a
 file*.
 
 ## 2. Check the result

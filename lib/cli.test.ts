@@ -85,3 +85,9 @@ test('nonterminal init failure remains actionable under quiet', () => {
         expect(result.stderr.toString()).toContain('No terminal')
     }
 })
+
+test('add-view refuses a traversal location before accessing a film', () => {
+    const result = run('tools/add-view.ts', 'missing-film', '../escape', '--name=reverse', '--shows=door')
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr.toString()).toContain('Invalid location id')
+})

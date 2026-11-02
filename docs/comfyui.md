@@ -143,7 +143,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 
 Changing `singerVoice` after pictures were rendered: existing pictures are kept (a picture that exists is not rendered again), so delete the old character pictures to get the new cast.
 
-The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`, `vocalGap`) change the plan, the others only the render. The
+The planning fields (`singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`, `vocalGap`, and `sequenceSheets` (which redoes the view choice when `locationView` is `auto`)) change the plan, the others only the render. The
 config is read and checked at every run - a wrong value stops with a message naming the field, an unknown field
 (a typo like `"singer"`) gets a warning.
 
