@@ -12156,7 +12156,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
   "jobs": [
     {
       "meta": {
-        "seed": 42,
+        "seed": 227425747888170,
         "size": {
           "height": 192,
           "width": 320,
@@ -12463,7 +12463,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 227425747888170,
           },
         },
         "25": {
@@ -12659,7 +12659,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
     },
     {
       "meta": {
-        "seed": 42,
+        "seed": 197233375551328,
         "size": {
           "height": 192,
           "width": 320,
@@ -13004,7 +13004,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 197233375551328,
           },
         },
         "27": {
@@ -13429,7 +13429,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
       "renderedFrames": 73,
       "request": "output/clips/slot-007.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 227425747888170,
       "size": "320x192",
       "workflow": "h3-ref2video",
     },
@@ -13440,7 +13440,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
       "renderedFrames": 56,
       "request": "output/clips/slot-008.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 197233375551328,
       "size": "320x192",
       "startsFrom": "slot-007",
       "workflow": "h3-ref2video",
@@ -13611,7 +13611,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
   "jobs": [
     {
       "meta": {
-        "seed": 42,
+        "seed": 227425747888170,
         "size": {
           "height": 320,
           "width": 192,
@@ -13833,7 +13833,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 227425747888170,
           },
         },
         "2": {
@@ -14030,7 +14030,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 43,
+            "noise_seed": 227425747888171,
           },
         },
         "31": {
@@ -14252,7 +14252,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
     },
     {
       "meta": {
-        "seed": 42,
+        "seed": 197233375551328,
         "size": {
           "height": 320,
           "width": 192,
@@ -14506,7 +14506,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 197233375551328,
           },
         },
         "21": {
@@ -14719,7 +14719,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 43,
+            "noise_seed": 197233375551329,
           },
         },
         "33": {
@@ -15196,7 +15196,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
       "renderedFrames": 73,
       "request": "output/clips/slot-007.json",
       "resolution": "192x320",
-      "seed": 42,
+      "seed": 227425747888170,
       "size": "192x320",
       "workflow": "h3-ref2video-2pass",
     },
@@ -15208,7 +15208,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
       "renderedFrames": 48,
       "request": "output/clips/slot-008.json",
       "resolution": "192x320",
-      "seed": 42,
+      "seed": 197233375551328,
       "size": "192x320",
       "startsFrom": "slot-007",
       "workflow": "h3-ref2video-2pass",
@@ -15276,7 +15276,7 @@ exports[`rendering and joining, with ffmpeg film: a clip and one that goes on fr
   "jobs": [
     {
       "meta": {
-        "seed": 42,
+        "seed": 213380996552175,
       },
       "size": {
         "height": 192,
@@ -15431,7 +15431,7 @@ exports[`rendering and joining, with ffmpeg film: a clip and one that goes on fr
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 213380996552175,
           },
         },
         "17": {
@@ -15647,7 +15647,7 @@ exports[`rendering and joining, with ffmpeg film: a clip and one that goes on fr
     },
     {
       "meta": {
-        "seed": 42,
+        "seed": 214267231883297,
       },
       "size": {
         "height": 192,
@@ -15840,7 +15840,7 @@ exports[`rendering and joining, with ffmpeg film: a clip and one that goes on fr
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 214267231883297,
           },
         },
         "19": {
@@ -16064,7 +16064,7 @@ exports[`rendering and joining, with ffmpeg film: a clip and one that goes on fr
       "renderedFrames": 124,
       "request": "output/clips/clip-003.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 213380996552175,
       "size": "320x192",
       "workflow": "h3-ref2video-film",
     },
@@ -16076,7 +16076,7 @@ exports[`rendering and joining, with ffmpeg film: a clip and one that goes on fr
       "renderedFrames": 56,
       "request": "output/clips/clip-004.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 214267231883297,
       "size": "320x192",
       "startsFrom": "clip-003",
       "workflow": "h3-ref2video-film",
@@ -19147,7 +19147,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
   "jobs": [
     {
       "meta": {
-        "seed": 42,
+        "seed": 227425747888170,
         "size": {
           "height": 192,
           "width": 320,
@@ -19454,7 +19454,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 227425747888170,
           },
         },
         "25": {
@@ -19650,7 +19650,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
     },
     {
       "meta": {
-        "seed": 42,
+        "seed": 197233375551328,
         "size": {
           "height": 192,
           "width": 320,
@@ -20005,7 +20005,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 197233375551328,
           },
         },
         "27": {
@@ -20430,7 +20430,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
       "renderedFrames": 73,
       "request": "output/clips/slot-007.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 227425747888170,
       "size": "320x192",
       "workflow": "h3-ref2video",
     },
@@ -20441,7 +20441,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
       "renderedFrames": 48,
       "request": "output/clips/slot-008.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 197233375551328,
       "size": "320x192",
       "startsFrom": "slot-007",
       "workflow": "h3-ref2video",
@@ -21845,7 +21845,7 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
   "jobs": [
     {
       "meta": {
-        "seed": 42,
+        "seed": 213380996552175,
       },
       "size": {
         "height": 192,
@@ -22000,7 +22000,7 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 213380996552175,
           },
         },
         "17": {
@@ -22216,7 +22216,7 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
     },
     {
       "meta": {
-        "seed": 42,
+        "seed": 214267231883297,
       },
       "size": {
         "height": 192,
@@ -22419,7 +22419,7 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
           },
           "class_type": "RandomNoise",
           "inputs": {
-            "noise_seed": 42,
+            "noise_seed": 214267231883297,
           },
         },
         "19": {
@@ -22643,7 +22643,7 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
       "renderedFrames": 124,
       "request": "output/clips/clip-003.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 213380996552175,
       "size": "320x192",
       "workflow": "h3-ref2video-film",
     },
@@ -22656,7 +22656,7 @@ exports[`rendering and joining, with ffmpeg film: context frames - the end of a 
       "renderedFrames": 48,
       "request": "output/clips/clip-004.json",
       "resolution": "320x192",
-      "seed": 42,
+      "seed": 214267231883297,
       "size": "320x192",
       "startsFrom": "clip-003",
       "workflow": "h3-ref2video-film",
