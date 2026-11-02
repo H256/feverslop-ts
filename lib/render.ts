@@ -823,12 +823,8 @@ export class Renderer implements Disposable {
         rmSync(rendered, {force: true})
         const frames = await probeVideo(video)
         log.step('Saved', `${file} ${styles.muted(`frames ${plan.first}-${plan.end} are new, the old clip is in ${keep}`)}`)
-        await this.saveFramesAfterRetake(clip, video, frames.frames)
-    }
-
-    /** The first and last frame of a clip after a part of it changed: made again from the file. */
-    protected async saveFramesAfterRetake(clip: { id: string, frames: number }, video: string, fileFrames: number) {
-        await this.saveBoundaryFrames(clip as ClipRequest, video, fileFrames)
+        // the first and last frame of a clip after a part of it changed: made again from the file
+        await this.saveBoundaryFrames(clip, video, frames.frames)
     }
 
     /**
@@ -1056,16 +1052,23 @@ export class Renderer implements Disposable {
      * not the file's last frame, the frames after it are only padding for the model's lengths (see assembleFinal).
      */
     // renderedFrames: set for a clip just rendered - its frames are always rewritten; without, only missing ones are made
-    protected async saveBoundaryFrames(clip: ClipRequest, video: string, renderedFrames?: number) {
-        const first = boundaryFrameAsset(clip.id, 'ff')
-        const last = boundaryFrameAsset(clip.id, 'lf')
+    protected async saveBoundaryFrames(clip: { id: string, frames: number }, video: string, renderedFrames?: number) {
+        const [first, last] = this.boundaryFrameFiles(clip.id)
         if (renderedFrames === undefined && existsSync(join(this.projectDir, first)) && existsSync(join(this.projectDir, last))) return
         mkdirSync(join(this.projectDir, dirname(first)), {recursive: true})
-        // a clip rendered too short (warned about above) ends on its own last frame
-        const frames = Math.min(clip.frames, renderedFrames ?? (await probeVideo(video)).frames)
+        const frames = this.framesUsed(clip, renderedFrames ?? (await probeVideo(video)).frames)
         await extractFrame(video, 0, join(this.projectDir, first))
         await extractFrame(video, frames - 1, join(this.projectDir, last))
         log.step('Saved', `${first}, ${last} ${styles.muted(`frames 0 and ${frames - 1}`)}`)
+    }
+
+    protected boundaryFrameFiles(clipId: string): [string, string] {
+        return [boundaryFrameAsset(clipId, 'ff'), boundaryFrameAsset(clipId, 'lf')]
+    }
+
+    /** How many frames of the file the video uses. A clip rendered too short (warned about above) ends on its own last frame. */
+    protected framesUsed(clip: { frames: number }, available: number) {
+        return Math.min(clip.frames, available)
     }
 
     /**

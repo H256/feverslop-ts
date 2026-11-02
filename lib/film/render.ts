@@ -146,10 +146,6 @@ export class FilmRenderer extends Renderer {
         }, module), frames => module.renderFrames?.(frames) ?? frames)
     }
 
-    protected override async saveFramesAfterRetake(clip: { id: string, frames: number }, video: string, fileFrames: number) {
-        await this.saveFrames(clip as FilmClipRequest, video, fileFrames)
-    }
-
     // previous: the clip this one goes on from (clip.startsFrom) - for context frames
     async renderFilmClip(clip: FilmClipRequest, previous?: FilmClipRequest) {
         const file = `videos/${clip.id}.mp4`
@@ -167,7 +163,7 @@ export class FilmRenderer extends Renderer {
                 log.warn(`${file} starts on an older version of ${clip.startsFrom}'s last frame - delete it to render it again`)
             }
             // clips rendered before the boundary frames existed get them now
-            return this.saveFrames(clip, target)
+            return this.saveBoundaryFrames(clip, target)
         }
 
         const missing = clip.assets.pictures.filter(p => !existsSync(join(this.projectDir, p.file)))
@@ -228,23 +224,16 @@ export class FilmRenderer extends Renderer {
             request: `output/clips/${clip.id}.json`,
         }, null, 2))
         log.step('Saved', `${file} ${styles.muted(`${rendered.frames} frames, ${clip.frames} used${rendered.hasAudio ? ', with audio' : ''}`)}`)
-        await this.saveFrames(clip, target, rendered.frames)
+        await this.saveBoundaryFrames(clip, target, rendered.frames)
     }
 
-    // The first and last frame the clip contributes to the film: frame 0 and frame `clip.frames - 1` - not the file's last
-    // frame, the ones after it are only padding for the model's lengths. renderedFrames: set for a clip just rendered -
-    // its frames are always rewritten; without, only missing ones are made
-    private async saveFrames(clip: FilmClipRequest, video: string, renderedFrames?: number) {
-        const first = firstFrame(clip.id)
-        const last = filmBoundaryFrame(clip.id)
-        if (renderedFrames === undefined && existsSync(join(this.projectDir, first)) && existsSync(join(this.projectDir, last))) return
-        mkdirSync(join(this.projectDir, dirname(first)), {recursive: true})
-        // the last frame of the film's part of the clip: a clip with dialogue is used with every frame the model rendered (assembleFilm useRendered)
-        const available = renderedFrames ?? (await probeVideo(video)).frames
-        const frames = clip.dialogue.length ? available : Math.min(clip.frames, available)
-        await extractFrame(video, 0, join(this.projectDir, first))
-        await extractFrame(video, frames - 1, join(this.projectDir, last))
-        log.step('Saved', `${first}, ${last} ${styles.muted(`frames 0 and ${frames - 1}`)}`)
+    protected override boundaryFrameFiles(clipId: string): [string, string] {
+        return [firstFrame(clipId), filmBoundaryFrame(clipId)]
+    }
+
+    // a clip with dialogue is used with every frame the model rendered (assembleFilm useRendered)
+    protected override framesUsed(clip: { frames: number }, available: number) {
+        return (clip as FilmClipRequest).dialogue.length ? available : super.framesUsed(clip, available)
     }
 }
 
