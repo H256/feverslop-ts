@@ -10,6 +10,7 @@ import {mentions, withoutSentencesNaming} from "./names.ts";
 import {filmPictureAsset, locationViewAsset, statePictureId} from "./pictures.ts";
 import {characterOf, locationOf} from "./screenplay.ts";
 import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from "./types.ts";
+import {joinAnd, positions} from "../compose.ts";
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) => facing === 'left' ? ', looking toward the left of the frame'
@@ -71,11 +72,6 @@ export function clipOverrides(dir: string): Record<string, ClipOverride> {
 
 // one distinct label per character sharing a shot, front-to-back then left-to-right - a repeated one would read as "the
 // same person" to the video model
-const positions = [
-    'in the front on the left', 'in the front, center', 'in the front on the right',
-    'a step behind them on the left', 'a step behind them, center', 'a step behind them on the right',
-    'further back on the left', 'further back on the right',
-]
 
 export function buildFilmClipRequests(input: FilmInput): FilmClipRequest[] {
     return input.clips.map(clip => buildClip(clip, input))
@@ -303,4 +299,3 @@ function normalizeLine(line: string) {
 // described there into whichever place it is shown (the crystal trees of one location showed up in another)
 const styleOpening = (lookBrief: string) => lookBrief.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean).slice(0, 1).join(' ')
 
-const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')

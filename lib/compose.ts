@@ -146,7 +146,7 @@ const cameraMoves = {
 // cycle here used to repeat the same label (e.g. "on the right") for two different subjects in a crowded
 // shot, which reads as "these two are the same/interchangeable" and lets the model conflate them - e.g. a
 // named combatant and an unrelated background character rendered as if fighting each other.
-const positions = [
+export const positions = [
     'in the front on the left', 'in the front, center', 'in the front on the right',
     'a step behind them on the left', 'a step behind them, center', 'a step behind them on the right',
     'further back on the left', 'further back on the right',
@@ -1006,4 +1006,4 @@ function normalizeLyric(line: string) {
     return /[.?!]$/.test(clean) ? clean : `${clean}.`
 }
 
-const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
+export const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
