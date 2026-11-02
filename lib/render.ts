@@ -657,6 +657,8 @@ export class Renderer implements Disposable {
             resolution: this.config.videoResolution,
             ...(this.config.videoAspect !== '16:9' ? {aspect: this.config.videoAspect} : {}),
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
+            // started on the last frames of the clip before, its head cut off - as the film's sidecar says it (lib/film/render.ts)
+            ...(context ? {contextFrames: context.frames} : {}),
             frameStart: clip.frameStart,
             frames: clip.frames,            // used in the final video
             fingerprint: request,           // what it was made from (lib/provenance.ts) - another one now makes it stale
