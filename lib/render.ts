@@ -122,8 +122,13 @@ function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig)
 export function putAwayPicture(picture: PictureJob, projectDir: string, config: Pick<RenderConfig, 'sequenceSheets'>, newAnchor: boolean) {
     const sheet = config.sequenceSheets && picture.kind !== 'prop' ? sequenceSheetDir(picture.kind, picture.id) : undefined
     const keepAnchor = !newAnchor && !picture.look
-    const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && sheet && (file === sheetAnchor(sheet) || file === `${sheetAnchor(sheet)}.json`)))
-    return archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, files)
+    const anchorFiles = sheet ? [sheetAnchor(sheet), `${sheetAnchor(sheet)}.json`] : []
+    const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && anchorFiles.includes(file)))
+    const keep = archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, files)
+    // the anchor stays where it is - and a copy goes with the version: its sheet was made from it, and putting the version back
+    // (the workspace's Make current) needs it, whatever anchor is there by then
+    if (keepAnchor) for (const file of anchorFiles) if (existsSync(join(projectDir, file))) copyFileSync(join(projectDir, file), join(keep, basename(file)))
+    return keep
 }
 
 /** A picture rendered from a prompt the user edited: kept as it is (lib/provenance.ts), whatever the plan's own prompt says - the edited prompt is in its sidecar. */
