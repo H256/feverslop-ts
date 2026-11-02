@@ -114,7 +114,7 @@ Every project can have a `projects/<project-id>/config.json`. All fields are opt
 | Field             | Default          | Values                                                                                  |
 |-------------------|------------------|-----------------------------------------------------------------------------------------|
 | `llm`             | `{}`             | `{"model": "…"}` = another model of the LLM server for this project - the server and key come from the [settings](../README.md#setup) |
-| `seed`            | `-1`             | `-1` = a new random seed for every render, `0` or more = fixed                          |
+| `seed`            | `-1`             | `-1` = a new random seed for every render, `0` or more = fixed: each clip gets its own seed derived from it and the clip id, the same on every run |
 | `imageResolution` | `-1`             | see [Resolution](#resolution)                                                           |
 | `videoResolution` | `-1`             | see [Resolution](#resolution)                                                           |
 | `imageWorkflow`   | `"kroma-image"`  | a file name in `comfy/workflows/`, without `.ts` - `"krea2-image"` for the previous one |

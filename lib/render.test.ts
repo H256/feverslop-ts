@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {aboveRecommended, MAX_REF_AUDIOS, pixelSize} from "../comfy/helpers.ts";
+import {aboveRecommended, clipSeed, MAX_REF_AUDIOS, pixelSize} from "../comfy/helpers.ts";
 import {twoPassSizes} from "../comfy/h3-two-pass.ts";
 import {boardStatus, contextLength, dispatchOrder, pickServer, renderedFrames, resumesJob} from "./render.ts";
 
@@ -195,4 +195,12 @@ describe('the frames a clip renders - what the estimate counts', () => {
         expect(await renderedFrames({frames: 172}, config)).toBe(175)
         expect(await renderedFrames({frames: 172, startsFrom: 'slot-032'}, {...config, contextFrames: 0})).toBe(175)
     })
+})
+
+test('a fixed seed gives every clip a seed of its own, the same on every run - -1 a new one (#481)', () => {
+    expect(clipSeed(42, 'slot-001')).toBe(clipSeed(42, 'slot-001'))
+    expect(clipSeed(42, 'slot-001')).not.toBe(clipSeed(42, 'slot-002'))
+    expect(clipSeed(42, 'slot-001')).not.toBe(clipSeed(43, 'slot-001'))
+    expect(clipSeed(42, 'clip-007')).toBeLessThan(2 ** 48)
+    expect(clipSeed(-1, 'slot-001')).not.toBe(-1)
 })

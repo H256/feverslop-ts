@@ -1,6 +1,6 @@
 import {existsSync, mkdirSync, readFileSync, statSync} from "node:fs";
 import {dirname, join} from "node:path";
-import {type RecommendedResolution, type RenderFrames, resolveSeed} from "../../comfy/helpers.ts";
+import {clipSeed, type RecommendedResolution, type RenderFrames} from "../../comfy/helpers.ts";
 import type {FilmVideoWorkflowOptions} from "../../comfy/workflows/h3-ref2video-film.ts";
 import {probeVideo} from "../assemble.ts";
 import {secondsAt} from "../frames.ts";
@@ -131,7 +131,7 @@ export class FilmRenderer extends Renderer {
             this.noteResolution(module.recommendedResolution)
             const remote = start && `${this.remoteDir}/${start}`
             return this.filmJob(clip, {
-                prompt: clip.prompt, frames: module.renderFrames?.(clip.frames) ?? clip.frames, seed: resolveSeed(this.config.seed), preview, filenamePrefix: `${this.remoteDir}/previews/${clip.id}`,
+                prompt: clip.prompt, frames: module.renderFrames?.(clip.frames) ?? clip.frames, seed: clipSeed(this.config.seed, clip.id), preview, filenamePrefix: `${this.remoteDir}/previews/${clip.id}`,
                 ...(start ? {startFrame: remote, extraUploads: [{from: join(this.projectDir, start), to: remote!}]} : {}),
             }, module)
         })
@@ -185,7 +185,7 @@ export class FilmRenderer extends Renderer {
         const context = clip.startsFrom && this.config.contextFrames > 0 ? await this.contextOf(clip.startsFrom, this.config.contextFrames, shown) : undefined
         const prepare = async () => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
-            const seed = resolveSeed(this.config.seed)
+            const seed = clipSeed(this.config.seed, clip.id)
             const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames, recommendedResolution?: RecommendedResolution }
             this.noteResolution(module.recommendedResolution)
 

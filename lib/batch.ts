@@ -41,7 +41,7 @@ export function onlyClips<T extends { id: string }>(clips: T[], only: Set<string
 
 /** A clip that is rendered again with a fixed seed comes out the same (--again). */
 export function warnFixedSeed(seed: number) {
-    if (seed !== -1) log.warn(`"seed" is ${seed} in config.json - the same seed gives the same clip again; -1 gives a new one every time`)
+    if (seed !== -1) log.warn(`"seed" is ${seed} in config.json - each clip gets its own seed from it, and the same one again: the same clip comes out; -1 gives a new one every time`)
 }
 
 /** The clips not among the selected ones that go on, directly or through others, from the last frame of a selected one. */

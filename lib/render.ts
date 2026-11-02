@@ -5,7 +5,7 @@ import {basename, dirname, extname, join, posix, relative} from "node:path";
 import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
-import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type PixelSize, type RecommendedResolution, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
+import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type PixelSize, type RecommendedResolution, clipSeed, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
 import {type RenderConfig, workflowDir} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
@@ -605,7 +605,7 @@ export class Renderer implements Disposable {
                 ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${this.remoteDir}/stems/${a.stem}.wav`})),
                 {from: stemFiles.song!, to: songRemote},
             ]
-            const seed = resolveSeed(this.config.seed)
+            const seed = clipSeed(this.config.seed, clip.id)
             const {default: videoWorkflow, renderFrames, recommendedResolution} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
             this.noteResolution(recommendedResolution)
 
@@ -720,7 +720,7 @@ export class Renderer implements Disposable {
             const frames = workflow.renderFrames?.(clip.frames) ?? clip.frames
             const remote = start && `${this.remoteDir}/${start}`
             return this.clipJob(clip, stemFiles, {
-                prompt: clip.prompt, songStart: secondsAt(clip.frameStart), frames, seed: resolveSeed(this.config.seed), preview, workflow,
+                prompt: clip.prompt, songStart: secondsAt(clip.frameStart), frames, seed: clipSeed(this.config.seed, clip.id), preview, workflow,
                 filenamePrefix: `${this.remoteDir}/previews/${clip.id}`,
                 ...(start ? {startFrame: remote, extraUploads: [{from: join(this.projectDir, start), to: remote!}]} : {}),
             })
@@ -792,7 +792,7 @@ export class Renderer implements Disposable {
         log.step('Part', `${clip.id} ${styles.muted(`frames ${plan.first}-${plan.end} of ${fileFrames}, ${plan.lead ? `${plan.lead} frames before it` : plan.singleStart ? 'the frame before it' : 'from its start'}${plan.endAt !== undefined ? ', the frame after it' : ''} as guides - ${plan.render} frames rendered`)}`)
         const prompt = retakePrompt(clip.prompt, shotsIn(plan, cuts))
         const rendered = join(this.projectDir, `${work}.mp4`)
-        const seed = resolveSeed(this.config.seed)
+        const seed = clipSeed(this.config.seed, clip.id)
         const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['retake', plan.first, plan.end, prompt, this.config.videoWorkflow, fileFingerprint(video)]}
         await this.render<{ seed: number }>({label: `part of ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, rendered, '.mp4',
             () => job(plan, {...guides, prompt, uploads, seed, filenamePrefix: `${this.remoteDir}/videos/${clip.id}-retake`}))
@@ -859,7 +859,7 @@ export class Renderer implements Disposable {
         const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['refine', fileFingerprint(source), clip.prompt, size, denoise]}
         const songRemote = song ? `${this.remoteDir}/stems/song${extname(song.song!)}` : undefined
         const {seed} = await this.render({label: `refine ${clip.id}`, spec, kind: 'clip', workflow: 'h3-refine', resolution: `${size.width}x${size.height}`}, rendered, '.mp4', async () => {
-            const seed = resolveSeed(this.config.seed)
+            const seed = clipSeed(this.config.seed, clip.id)
             const pictures = clip.assets.pictures.filter(p => p.kind !== 'frame')
             const result = refine({
                 prompt: clip.prompt,

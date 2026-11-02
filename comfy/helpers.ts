@@ -203,6 +203,16 @@ export function resolveSeed(seed: number) {
     return seed === -1 ? Math.floor(Math.random() * 2 ** 48) : seed
 }
 
+/**
+ * The seed of one clip: -1 a new random one, a fixed seed one of its own per clip, derived from the seed and the clip's id (#481).
+ * The same fixed seed gives the same clip again, as it is meant to - but never the same noise under every clip of a project:
+ * one noise laid over different prompts made faces and voices drift from clip to clip.
+ */
+export function clipSeed(seed: number, clipId: string) {
+    if (seed === -1) return resolveSeed(seed)
+    return Number(BigInt(Bun.hash(`${seed}:${clipId}`)) % 2n ** 48n)
+}
+
 // Python's round(): half to even - the same sizes as ComfyUI's ResolutionSelector, which pixelSize replaces
 const roundHalfEven = (x: number) => Math.abs(x % 1) === 0.5 ? 2 * Math.round(x / 2) : Math.round(x)
 
