@@ -4,14 +4,16 @@ import {cli} from '../lib/cli.ts';
 // at every join next to the change at an ordinary cut - the cuts are the yardstick of how much clips differ anyway.
 // Reads the raw clips in videos/ with ffmpeg only - no ComfyUI, no LLM, nothing is written.
 // usage: bun run texture-chains <project-id> [--film] [--json]
-import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
+import {existsSync, readdirSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {probeVideo} from "../lib/assemble.ts";
 import {clipChains} from "../lib/batch.ts";
 import {jsonOutput, log, styles} from "../lib/log.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import {readClipRequests} from "../lib/render-state.ts";
-import {clipTexture, median, perLink, type Texture} from "../lib/texture.ts";
+import {median} from "../lib/predict.ts";
+import {recordedContextFrames} from "../lib/provenance.ts";
+import {clipTexture, perLink, type Texture} from "../lib/texture.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
 cli('texture-chains')
 
@@ -33,12 +35,8 @@ const tails = existsSync(clipsAssets) ? readdirSync(clipsAssets).filter(f => /_t
 const joinOf = (clip: Clip): 'context' | 'last frame' | 'cut' => {
     if (!clip.startsFrom) return 'cut'
     const video = join(dir, 'videos', `${clip.id}.mp4`)
-    try {
-        const sidecar = JSON.parse(readFileSync(`${video}.json`, 'utf8')) as { contextFrames?: number }
-        if (Number.isInteger(sidecar.contextFrames)) return 'context'
-    } catch {
-        // no sidecar: judged by the tail alone
-    }
+    if (recordedContextFrames(video) !== undefined) return 'context'
+    // no sidecar that says so: judged by the tail alone
     const tail = tails.find(f => f.startsWith(`${clip.startsFrom}_tail`))
     return tail && statSync(join(clipsAssets, tail)).mtimeMs <= statSync(video).mtimeMs ? 'context' : 'last frame'
 }

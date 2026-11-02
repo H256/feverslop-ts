@@ -9,6 +9,8 @@ const job = {kind: 'clip' as const, name: 'wan', workflowHash: 'h1', frames: 22,
 
 test('median and p90', () => {
     expect(median([1, 2, 3, 4])).toBe(2.5)
+    expect(median([4, 1, 2, 3])).toBe(2.5)
+    expect(median([3, 1, 2])).toBe(2)
     expect(median([])).toBe(0)
     expect(percentile([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0.9)).toBeCloseTo(9.1)
 })

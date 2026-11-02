@@ -31,6 +31,12 @@ export const recordedPrompt = (file: string) => {
     return typeof value === 'string' ? value : undefined
 }
 
+/** How many frames of the clip before a rendered clip started on (contextFrames), if its sidecar records it. */
+export const recordedContextFrames = (file: string) => {
+    const value = readSidecar(file)?.contextFrames
+    return Number.isInteger(value) ? value as number : undefined
+}
+
 /** The fingerprint a rendered file's sidecar records, if it has one. */
 export const recordedFingerprint = (file: string) => {
     const value = readSidecar(file)?.fingerprint
