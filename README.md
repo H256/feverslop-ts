@@ -879,6 +879,23 @@ The same in the terminal: `--render=images --only=<picture> --again [--new-ancho
 
 A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json`. It applies from the next plan run on, and the clip then counts as stale. Where the sheet has no view that fits, `bun run add-view <film-id> <location-id> --name=… --shows=…` renders one more from the place's anchor.
 
+### Making an older project over
+
+`bun run refinish <id> [--film]` gives a finished project what newer ones have, from the clips it has: **no plan run, no new prompts**. On an old project a plan run would generate new steps and change prompts. Nothing it has is overwritten: `videos/` and `<id>.mp4` stay as they are, every variant has its own folder `videos/refined/<variant>/`, its final videos are `<id>--<variant>[-48fps][-finished].mp4`. The workspace can compare them with the original. The same on the page: *Refinish* under the timeline.
+
+| Option | |
+|---|---|
+| `--preset=` | `grade`, `smooth` (48 fps, finish), `fullhd` (refine, 48 fps, finish) |
+| `--upscale=refine` | the second pass of a two-pass render on the finished clip: encoded, upscaled in latent space, sampled at a low denoise with its prompt, pictures and song. New detail; the clip keeps its sound and its length. The text encoder runs on the CPU, so a 32 GB card holds the frames. Slow: about 6 s per frame on a Radeon R9700 (209 frames: 21 minutes). Fine detail and mouths can change a little: compare a clip or two first (`--only`) |
+| `--upscale=latent` | the latent upscaler of a two-pass render alone: encoded, upscaled, decoded. Nothing is sampled. Faster (209 frames: 4 minutes on the R9700), but on the one clip compared it looked worse than refine and than the original: over-sharpened skin, coloured fringes, frayed edges in motion |
+| `--upscale=model` | an upscale model on ComfyUI, frame by frame (`--model=RealESRGAN_x2plus.pth`). The server has to have it |
+| `--size=` | `fullhd`, `2x` or `WIDTHxHEIGHT` |
+| `--denoise=0.2` | with refine |
+| `--fps=48` | the frame interpolation of `finalFps` |
+| `--finish` | the `finish` of `config.json`, else the mild one |
+| `--only=slot-001` | these clips, no final video |
+| `--again` | make the clips of the variant again, the old ones go to `old/attempts/` |
+
 ### The asset library
 
 Finished characters and places that every project can take - the same band in every song, the same stage - live in

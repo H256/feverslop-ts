@@ -56,6 +56,7 @@ export type EditorClip = {
     views?: EditorViews,
     override?: EditorOverride,
     preview?: { file: string, v: number, approximate?: boolean },
+    refined: { variant: string, file: string, v: number, size?: string, seed?: number, denoise?: number }[],     // larger versions of it (bun run refinish)
 }
 export type EditorGroup = { id: string, label: string, start: number, end: number }
 export type EditorProject = {
@@ -71,6 +72,7 @@ export type EditorProject = {
     pictures: { id: string, kind: string, name: string, file: string, exists: boolean, v?: number }[],
     final: { state: FinalState, file?: string, v?: number },
     previewVideo?: { file: string, v: number },
+    refinedVariants: string[],
     finals: EditorFinal[],      // every finished video there is of it: the final one, finished, at another frame rate
     lastRun?: { state: RunState, command: string, startedAt: string, failures: string[], explained: Explained[] },
     command: string,            // how this project is run, for the commands the page shows
@@ -134,12 +136,14 @@ const probedVideo = (file: string, v: number) => {
 /** <id>.mp4, <id>-48fps.mp4, <id>-finished.mp4, <id>-48fps-finished.mp4, <id>-preview.mp4: what name a video has says what it is. Partial try-outs do not lie on the timeline. */
 export function finalLabel(id: string, name: string): { label: string, preview: boolean, order: number } | undefined {
     if (!name.startsWith(id) || !name.endsWith('.mp4')) return undefined
-    const match = /^(-preview)?(?:-(\d+)fps)?(-finished)?$/.exec(name.slice(id.length, -'.mp4'.length))
+    // <id>--<variant>[-48fps][-finished].mp4: bun run refinish
+    const match = /^(?:--([a-z0-9.-]+?))?(-preview)?(?:-(\d+)fps)?(-finished)?$/.exec(name.slice(id.length, -'.mp4'.length))
     if (!match) return undefined
-    const preview = !!match[1]
-    const fps = match[2] ? Number(match[2]) : 0
-    const label = preview ? 'Preview video' : ['Final', fps ? `${fps} fps` : '', match[3] ? 'finished' : ''].filter(Boolean).join(' ')
-    return {label, preview, order: (preview ? 10000 : 0) + fps * 2 + (match[3] ? 1 : 0)}
+    const variant = match[1]
+    const preview = !!match[2]
+    const fps = match[3] ? Number(match[3]) : 0
+    const label = preview ? 'Preview video' : [variant ? (variant === 'original' ? 'Refinish' : `Refinish ${variant}`) : 'Final', fps ? `${fps} fps` : '', match[4] ? 'finished' : ''].filter(Boolean).join(' ')
+    return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 2 + (match[4] ? 1 : 0)}
 }
 
 async function finalsOf(dir: string, id: string, clips: { id: string }[]): Promise<EditorFinal[]> {
@@ -220,6 +224,23 @@ const previewOf = (dir: string, clipId: string): EditorClip['preview'] => {
     }
 }
 
+const refinedVariantsOf = (dir: string) => {
+    const folder = join(dir, 'videos', 'refined')
+    return existsSync(folder) ? readdirSync(folder).filter(name => statSync(join(folder, name)).isDirectory()).sort() : []
+}
+const refinedOf = (dir: string, clipId: string, variants: string[]): EditorClip['refined'] => variants.flatMap(variant => {
+    const found = media(dir, `videos/refined/${variant}/${clipId}.mp4`)
+    if (!found) return []
+    const record = (() => {
+        try {
+            return readJson<{ size?: string, seed?: number, denoise?: number }>(join(dir, `${found.file}.json`)) ?? {}
+        } catch {
+            return {}
+        }
+    })()
+    return [{variant, ...found, size: record.size, seed: record.seed, denoise: record.denoise}]
+})
+
 const withNext = (clips: EditorClip[]) => clips.map(clip => {
     const next = clips.find(c => c.startsFrom === clip.id)?.id
     return next ? {...clip, next} : clip
@@ -244,6 +265,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const shotsDone = new Map<string, number>()
     const run = lastRunOf(dir)
     const scan = readScan(dir)
+    const variants = refinedVariantsOf(dir)
     const clips = requests.map((clip): EditorClip => {
         const beat = data.beats?.find(b => b.id === clip.beatId)
         const plan = data.shotMoments?.[clip.beatId] && asBeatShots(data.shotMoments[clip.beatId]!)
@@ -277,6 +299,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
             lastFrame: media(dir, boundaryFrameAsset(clip.id, 'lf')),
             marks: marksOf(dir, clip, run, scan),
             preview: previewOf(dir, clip.id),
+            refined: refinedOf(dir, clip.id, variants),
         }
     })
     const end = clips.at(-1)?.end ?? 0
@@ -291,6 +314,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'output', 'assets.json'))),
         final: finalOf(dir, id, requests),
         previewVideo: previewVideoOf(dir, id),
+        refinedVariants: variants,
         finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun index.ts ${id}`,
@@ -310,6 +334,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const shotsDone = new Map<string, number>()
     const run = lastRunOf(dir)
     const scan = readScan(dir)
+    const variants = refinedVariantsOf(dir)
     const viewsOf = (clip: FilmClipRequest): EditorViews | undefined => {
         const location = clip.assets.pictures.find(p => p.kind === 'location')
         if (!location) return undefined
@@ -360,6 +385,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
             views: viewsOf(clip),
             override: overrideOf(dir, clip.id),
             preview: previewOf(dir, clip.id),
+            refined: refinedOf(dir, clip.id, variants),
         }
     })
     return {
@@ -370,6 +396,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'assets.json'))),
         final: finalOf(dir, id, requests),
         previewVideo: previewVideoOf(dir, id),
+        refinedVariants: variants,
         finals: existsSync(dir) ? await finalsOf(dir, id, requests) : [],
         lastRun: run,
         command: `bun film.ts ${id}`,
