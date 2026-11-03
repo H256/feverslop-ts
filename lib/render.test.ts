@@ -168,8 +168,9 @@ describe('the two-pass workflow of the film', () => {
 })
 
 describe('context frames in the clip workflows', () => {
-    test('a start clip is loaded as a frame batch and locked to frame 0, in both passes of the two-pass workflow', async () => {
-        for (const [name, guides] of [['h3-ref2video', 1], ['h3-ref2video-2pass', 2]] as const) {
+    // pass 1 only in the two-pass workflow: encoded again at the full size for pass 2 it ran out of memory on the 32 GB Radeon (#530)
+    test('a start clip is loaded as a frame batch and locked to frame 0 - in the two-pass workflow in its first pass only', async () => {
+        for (const [name, guides] of [['h3-ref2video', 1], ['h3-ref2video-2pass', 1]] as const) {
             const module = await import(`../comfy/workflows/${name}.ts`)
             const {workflow, output} = module.default({prompt: 'p', pictures: ['a.png'], audios: ['d.wav'], song: 's.wav', startClip: 'tail.mp4', songStart: 0, frames: 39, duration: 2, seed: 1, resolution: 1.2, filenamePrefix: 'x'})
             const nodes = workflow.build({outputs: {result: output}}).workflow as Record<string, { class_type: string, inputs: Record<string, unknown> }>
