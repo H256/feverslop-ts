@@ -58,6 +58,14 @@ describe('applyTiming - words moved by hand', () => {
         expect(Object.keys(data.shotMoments!)).toEqual(['b1', 'b2'])
     })
 
+    test('times of the alignment finer than a millisecond, given back as they were (bun run timing --set): no change, not by hand', () => {
+        const data = project()
+        const fine = data.lyricsTiming!.lines[1]!.words.map(w => ({...w, start: w.start + 0.00012, end: w.end + 0.00012}))
+        data.lyricsTiming!.lines[1]!.words = fine
+        expect(applyTiming(data, {lines: [{line: 1, words: fine.map(w => ({start: w.start, end: w.end}))}]}, requests).changed).toEqual([])
+        expect(data.lyricsTiming!.lines[1]!.byHand).toBeUndefined()
+    })
+
     test('refuses what cannot be', () => {
         const apply = (words: { start: number, end: number }[], line = 1) => () => applyTiming(project(), {lines: [{line, words}]}, requests)
         expect(apply(at(2), 9)).toThrow('no sung line 9')
