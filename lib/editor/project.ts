@@ -26,64 +26,9 @@ import {clipRequestFile, clipRequestsDir} from "../previous-output.ts";
 // reference picture, so that comes separately (/api/freshness) and fills in once the page is up.
 
 export type EditorKind = 'music' | 'film'
-export type EditorPerson = { name: string, text: string }
-export type EditorShot = { label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[] }
 // a sung or spoken line: seconds from the clip's start
-export type EditorLine = { at: number, end?: number, text: string, who: string, line?: number }
-export type EditorPicture = { id: string, label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number }
-export type EditorMark = { kind: 'failed' | 'backdrop' | 'backdrop-attempt' | 'older-start' | 'dropped', text: string }
 // a film: the views of its place the clip can be given, and the one it has
-export type EditorViews = { locationId: string, chosen?: number, options: { n: number, name: string, shows: string, file: string, v?: number }[] }
-export type EditorOverride = { placeView?: number, order?: string[], without?: string[] }
-export type EditorClip = {
-    id: string,
-    frameStart: number,
-    frames: number,
-    start: number,              // seconds on the whole video's timeline
-    end: number,
-    group: string,              // the section of a song, the scene of a film
-    context: { label: string, text?: string, staging?: string },    // the beat or scene it comes from
-    startsFrom?: string,
-    next?: string,              // the clip that goes on from this one
-    prompt: string,
-    shots: EditorShot[],
-    lines: EditorLine[],
-    pictures: EditorPicture[],
-    audio: { label: string, stem?: string, songStart: number, songEnd: number }[],
-    dropped: string[],
-    video?: { file: string, v: number, workflow?: string, size?: string, seed?: number, renderedFrames?: number },
-    firstFrame?: { file: string, v: number },
-    lastFrame?: { file: string, v: number },
-    marks: EditorMark[],
-    views?: EditorViews,
-    override?: EditorOverride,
-    preview?: { file: string, v: number, approximate?: boolean },
-    refined: { variant: string, file: string, v: number, size?: string, seed?: number, denoise?: number }[],     // larger versions of it (bun run refinish)
-}
-export type EditorGroup = { id: string, label: string, start: number, end: number }
-export type EditorProject = {
-    id: string,
-    kind: EditorKind,
-    title: string,
-    fps: number,
-    seconds: number,
-    bpm?: number,
-    song?: { file: string, v: number },     // what plays under the whole video: only when the final video has it too
-    groups: EditorGroup[],
-    clips: EditorClip[],
-    pictures: { id: string, kind: string, name: string, file: string, exists: boolean, v?: number }[],
-    final: { state: FinalState, file?: string, v?: number },
-    previewVideo?: { file: string, v: number },
-    refinedVariants: string[],
-    finals: EditorFinal[],      // every finished video there is of it: the final one, finished, at another frame rate
-    lastRun?: { state: RunState, command: string, startedAt: string, failures: string[], explained: Explained[] },
-    command: string,            // how this project is run, for the commands the page shows
-    sings?: boolean,            // someone sings: who sings which line can be changed (the Singers page)
-    plan: { stage?: PlanStage, next?: PlanStage },  // how far the plan is: the last stage it has, the one a plan run makes next (lib/stages.ts)
-    timed?: boolean,            // the lyrics are aligned: when they are sung can be changed (the Timing page)
-}
 
-export type EditorFinal = { file: string, v: number, label: string, state: FinalState, preview: boolean, width?: number, height?: number, fps?: number }
 
 export type EditorTarget = { id: string, dir: string, kind: EditorKind }
 
@@ -414,7 +359,6 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
 
 export const readEditorProject = (target: EditorTarget) => target.kind === 'film' ? filmProject(target) : musicProject(target)
 
-export type EditorFreshness = { clips: Record<string, Freshness>, pictures: Record<string, Freshness> }
 
 /** Which rendered clips and pictures were made from another request than the plan has now. Hashes every reference picture a clip has, once. */
 export async function readEditorFreshness({dir, kind}: EditorTarget): Promise<EditorFreshness> {
@@ -456,6 +400,8 @@ export function projectGroup(id: string): string {
 
 export type {ProjectListing as EditorListing} from '../../shared/workspace.ts';
 import type {ProjectListing as EditorListing} from '../../shared/workspace.ts';
+import type {EditorPerson, EditorShot, EditorLine, EditorPicture, EditorMark, EditorViews, EditorOverride, EditorClip, EditorGroup, EditorProject, EditorFinal, EditorFreshness} from '../../shared/workspace.ts';
+export type {EditorPerson, EditorShot, EditorLine, EditorPicture, EditorMark, EditorViews, EditorOverride, EditorClip, EditorGroup, EditorProject, EditorFinal, EditorFreshness} from '../../shared/workspace.ts';
 
 const countOf = (folder: string, pattern: RegExp) => existsSync(folder) ? readdirSync(folder).filter(f => pattern.test(f)).length : 0
 

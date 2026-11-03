@@ -6,6 +6,8 @@ import type {EditorKind, EditorTarget} from "./project.ts";
 import {STEP_NAMES} from "../project.ts";
 import {UNTIL_STAGES} from "../stages.ts";
 import {FILM_STEP_NAMES} from "../film/store.ts";
+import type {RunInfo, RunRequest} from '../../shared/workspace.ts';
+export type {RunInfo} from '../../shared/workspace.ts';
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
 // terminal, so the two exclude each other, and it is asked for by what it should do - never as a command line from the page.
@@ -15,25 +17,11 @@ const LINES_KEPT = 4000
 export const CLIP_ID = /^[a-z]+-\d+$/
 const PICTURE_ID = /^[a-z0-9][a-z0-9-]*$/
 
+// what the page may ask for is the shared contract; a picture rendered again gets its edited prompt and its stage from the server only
 export type RunAction =
-    | { type: 'clips', ids: string[], again?: boolean, preview?: boolean }
+    | RunRequest
     // look: a music video planned up to the look - its pictures are rendered without planning the shots first (#540)
     | { type: 'pictures', ids: string[], again?: boolean, newAnchor?: boolean, promptFile?: string, look?: boolean }
-    // the pictures of the cast and the places of a music video planned up to the look - the casting photos
-    | { type: 'look-pictures' }
-    // a music video's story told anew for its cast as it is now: a proposal for the Story page (#542)
-    | { type: 'adapt-story' }
-    | { type: 'final', preview?: boolean }
-    // until: plan up to this stage and stop (lib/stages.ts); redo: steps planned again first - what a changed casting.json or cast asks for
-    | { type: 'plan', until?: string, redo?: string[] }
-    | { type: 'refresh', what: ('pictures' | 'clips')[] }
-    | { type: 'retake', clip: string, range: string }
-    | { type: 'repeat', command: string }
-    | { type: 'next', command: string }
-    | { type: 'leak-scan' }
-    | { type: 'export-asset', asset: string, as?: string }
-    | { type: 'add-view', location: string, name: string, shows: string }
-    | { type: 'refinish', preset?: string, upscale?: string, size?: string, denoise?: number, fps?: number, finish?: boolean, only?: string[] }
 
 const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
 
@@ -121,14 +109,6 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
     }
 }
 
-export type RunInfo = {
-    source: 'here' | 'terminal',
-    command: string,
-    pid: number,
-    startedAt: string,
-    running: boolean,
-    code?: number,
-}
 
 type Own = {
     info: RunInfo,

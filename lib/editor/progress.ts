@@ -1,13 +1,13 @@
 import {existsSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {clipFolder, readOptions, variantOf} from "../refinish.ts";
+import type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts';
+export type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts';
 
 // How far a run has come, clip by clip, from what it leaves in the project folder and nothing else: a job on a server has its
 // <file>.pending.json (lib/render.ts), and a clip that is done has a file newer than the start of the run. So it also holds for a
 // run started in the terminal, and the CLI prints what it always printed.
 
-export type ClipProgress = 'waiting' | 'rendering' | 'done'
-export type RunProgress = { clips: Record<string, ClipProgress>, done: number, total: number }
 
 /** A value of an option of a command line. */
 const optionOf = (tokens: string[], name: string) => tokens.find(token => token.startsWith(`--${name}=`))?.slice(name.length + 3)
@@ -57,7 +57,6 @@ function summed(clips: Record<string, ClipProgress>): RunProgress {
     return {clips, done: states.filter(state => state === 'done').length, total: states.length}
 }
 
-export type Explained = { text: string, action: string }
 
 /**
  * What a failure of a run means, in plain words, for the failures that can be told surely - by the messages of ComfyUI and of this

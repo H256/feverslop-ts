@@ -6,6 +6,8 @@ import {MIN_WORD_SEC, slotVocals} from "../lyrics.ts";
 import type {Project, TimedLine} from "../project.ts";
 import {readClipRequests} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
+import type {TimingWord, TimingLine, TimingView, TimingChange, TimingResult} from '../../shared/workspace.ts';
+export type {TimingWord, TimingLine, TimingView, TimingChange, TimingResult} from '../../shared/workspace.ts';
 
 // When the lyrics are sung, as the workspace shows and changes it: lyricsTiming in project.json, from the alignment with the
 // transcript (step 2c). A line it barely found has times spread over the line only - a guess that can be seconds off. Moving
@@ -16,32 +18,6 @@ import type {EditorTarget} from "./project.ts";
 /** Below this share of its words found in the transcript a line's times are a guess (lib/lyrics.ts lowConfidence). */
 const ESTIMATED_BELOW = 0.5
 
-export type TimingWord = { text: string, start: number, end: number }
-export type TimingLine = {
-    line: number,
-    section: string,
-    text: string,
-    words: TimingWord[],
-    estimated: boolean,         // the times are a guess: barely found in the transcript
-    byHand: boolean,            // placed on this page
-    beats: string[],            // the beats of the clips it is sung in
-}
-export type TimingView = {
-    duration: number,
-    lines: TimingLine[],
-    cuts: { id: string, start: number, end: number, beat?: string }[],   // the clips of the song as step 10 cut it
-    beats: { id: string, planned: boolean, clips: string[] }[],
-    unplanned: string[],
-    audio?: { file: string, v: number },    // the vocals stem, else the song
-}
-export type TimingChange = { lines: { line: number, words: { start: number, end: number }[] }[] }
-export type TimingResult = {
-    changed: number[],          // the lines that moved
-    slots: string[],            // the clips of the cut whose vocals changed
-    replanned: string[],        // the beats that lost their shot plan
-    staleClips: string[],
-    crossing: { line: number, word: string, cut: number }[],    // words a cut falls into now: cutting the song again helps
-}
 
 const readJson = <T>(file: string): T | undefined => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as T : undefined
 const round = (t: number) => Math.round(t * 1000) / 1000

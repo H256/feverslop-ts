@@ -13,6 +13,8 @@ import {screenplayToText} from "../film/fountain.ts";
 import {FILM_STEP_NAMES, filmBuiltOn, filmRedoAfter, type FilmStepName} from "../film/store.ts";
 import type {FilmCharacter, FilmLocation, FilmProject} from "../film/types.ts";
 import type {EditorKind, EditorTarget} from "./project.ts";
+import type {CastingRedo, CastMember, CastView, CastChange, CastResult, BookView, LookElement, LookView, LookChange, LookResult} from '../../shared/workspace.ts';
+export type {CastingRedo, CastMember, CastView, CastChange, CastResult, BookView, LookElement, LookView, LookChange, LookResult} from '../../shared/workspace.ts';
 
 // The preproduction in the workspace (issue #526): the book, the cast and the look are looked at and changed before the shots
 // are planned and long before anything is rendered. What is changed here is put into project.json as the pipeline would have
@@ -50,10 +52,6 @@ export const stageOf = (target: EditorTarget): PlanStage | undefined => planStat
 const MUSIC_LIBRARY_STEPS: StepName[] = ['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions', 'locationAnchors', 'locationLayouts']
 const FILM_LIBRARY_STEPS: FilmStepName[] = ['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions']
 
-export type CastingRedo = {
-    changes: string[],          // what casting.json says now that the project does not have yet, in words
-    redo: string[],             // the --redo that makes what was planned from the old texts again; none: nothing was planned from them
-}
 
 /**
  * What a plan run would take over from casting.json that the project does not have yet - a role the library plays now (or in
@@ -104,28 +102,8 @@ export function castingRedoOf(kind: EditorKind, data: Data, entries: CastEntry[]
 
 // what the page shows and changes of a member of the cast: the fields that are the same for a music video and a film are named
 // alike; the others are there only for the kind that has them
-export type CastMember = {
-    id: string, name: string,
-    role?: string,              // characters: who they are in the story
-    prop?: string,              // music video characters: the thing they carry or play
-    appearance?: string,        // film characters: what they look like, as the script says it
-    voice?: string,             // film characters: how they sound
-    voiceOnly?: boolean,        // film characters: never on screen
-    description?: string,       // film places
-    group?: boolean,            // music video: a group character - shown, its members are not changed here
-}
-export type CastView = {
-    characters: CastMember[],
-    locations: CastMember[],
-    canAdd: boolean,            // a music video's cast comes from its story and can grow; a film's is the script's
-    builtOn: string[],          // the steps that go when the cast is changed: planned again by the next plan run
-    remakes: string[],          // the steps written again only for whoever is new or changed (a music video's looks): the others keep theirs
-    stage?: PlanStage,
-}
-export type CastChange = { characters: (Partial<CastMember> & { name: string })[], locations: (Partial<CastMember> & { name: string })[] }
 // dropped: steps gone as a whole; remade: steps made again for some of their elements, "step: id, id"
 // renamed: who kept their id and got another name - the story still says the old one (#542)
-export type CastResult = { changed: boolean, dropped: string[], remade: string[], added: string[], removed: string[], renamed: { from: string, to: string }[] }
 
 /** The same text but for its spaces and line breaks. */
 const sameText = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim()
@@ -356,15 +334,6 @@ export async function writeCast(target: EditorTarget, change: CastChange): Promi
 
 ////////// THE BOOK - the story of a music video, the screenplay of a film
 
-export type BookView = {
-    text?: string,              // the story; a film: its screenplay as a script reads
-    editable: boolean,          // a music video's story is one text; a film's screenplay is changed in its script or in project.json
-    builtOn: string[],          // the steps that go when it is changed
-    stage?: PlanStage,
-    next?: PlanStage,
-    proposal?: string,          // the story written anew for the cast as it is now, waiting to be taken or dropped (#542)
-    keptByCast: string[],       // what goes when it is told anew for the same cast: the summary and the plan from the beats on
-}
 
 export function bookView(kind: EditorKind, data: Data): BookView {
     const state = planStateOf(kind, data)
@@ -407,29 +376,7 @@ export async function writeStory(target: EditorTarget, text: unknown): Promise<{
 
 ////////// THE LOOK - the film look, and how everyone and every place looks: read, changed by hand, written anew one by one (#541)
 
-export type LookElement = {
-    kind: ElementKind, id: string, name: string,
-    library?: string,           // played by a library asset: its texts are the library's, changed there
-    look?: string,              // the prompt of its reference picture
-    description?: string,       // the look without the picture's pose, background and light - what the clip prompts say of it
-    anchors?: string,           // music video places: the fixed features kept behind the people of every shot
-    layout?: string,            // music video places: the floor plan every beat there is staged in
-}
-export type LookView = {
-    lookBrief?: string,
-    characters: LookElement[],
-    locations: LookElement[],
-    briefBuiltOn: string[],     // what goes when the look of the whole is changed
-    builtOn: string[],          // what goes as a whole when the look of one character or place changes
-    stage?: PlanStage,
-}
 type LookField = 'look' | 'description' | 'anchors' | 'layout'
-export type LookChange = {
-    lookBrief?: string,
-    elements?: ({ kind: ElementKind, id: string } & Partial<Record<LookField, string>>)[],
-    again?: { kind: ElementKind, id: string }[],      // written anew by the language model, with everything written from it
-}
-export type LookResult = { changed: boolean, dropped: string[], remade: string[] }
 
 const LOOK_FIELDS: Record<EditorKind, Record<ElementKind, Partial<Record<LookField, string>>>> = {
     music: {

@@ -6,23 +6,13 @@ import type {PictureJob} from "../render.ts";
 import {readClipRequests, readPictureJobs} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
 import {sequenceSheetDir, sheetAnchor, sheetFrames, sheetVideo} from "../sequenceSheet.ts";
+import type {EditorReference} from '../../shared/workspace.ts';
+export type {EditorReference} from '../../shared/workspace.ts';
 
 // Every reference picture of a project: its prompt, its files, its older versions and the clips that use it.
 
 const versioned = (dir: string, file: string) => existsSync(join(dir, file)) ? {file, v: Math.round(statSync(join(dir, file)).mtimeMs)} : undefined
 
-export type EditorReference = {
-    id: string, kind: PictureJob['kind'], name: string, prompt: string, description: string,
-    file: string, picture?: { file: string, v: number }, anchor?: { file: string, v: number }, video?: { file: string, v: number },
-    frames: { file: string, v: number }[],
-    hasSheet: boolean,
-    look?: { base: string, change: string },
-    looks: string[],            // its other looks: drawn from its anchor, so a new anchor makes them stale
-    library?: string,           // played by this asset of the library (casting.json): it is not rendered here
-    clips: string[],
-    versions: { id: string, picture: { file: string, v: number }, anchor?: { file: string, v: number }, video?: { file: string, v: number }, source: string, made: number, seed?: number, prompt?: string, fingerprint?: string }[],
-    readsViews: boolean,        // a film's place without designed views: a new sheet is read again by the vision model
-}
 
 export const picturesFile = ({dir, kind}: EditorTarget) => kind === 'film' ? join(dir, 'assets.json') : join(dir, 'output', 'assets.json')
 export const sheetOf = (picture: { kind: string, id: string }) => picture.kind === 'prop' ? undefined : sequenceSheetDir(picture.kind, picture.id)
