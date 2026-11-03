@@ -2,6 +2,34 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.6.1 – the workspace builds from a fresh checkout, and keeps what you change
+
+_2026-11-03_
+
+v0.6.0 could not be built from a fresh checkout: the project overview of the Vue client was never committed. This release adds it, and fixes what two reviews of the client found - answers that come late, changes lost while saving, runs followed in the wrong place. 4 pull requests since v0.6.0 (#566–#571).
+
+### Build
+
+- The project overview (`client/src/features/projects/`) is in the repository: `.gitignore` left out every folder named `projects` or `films`, not only the ones at the top (#566).
+- `bun run editor` installs the client packages as `client/bun.lock` says before every build, so a pull that changed them is not built with the old ones (#569, fixes #568).
+
+### Workspace
+
+- An older answer of the project that comes last no longer puts back what is no longer so; the inspector shows only the versions of the clip picked, never a late answer about the clip before (#567).
+- Story, Look, Casting, Singers and Timing cannot be changed while a change is saved, and what was sent is reset only once it has been read again; a failed reading is said, also when the page has its data (#567, #571).
+- Who sings: a line another hand changed is no longer counted as a change made here (#567).
+- References: picking another picture with an edited prompt, or leaving the page, asks first (#567).
+- A run is followed only in the project or library it was asked in: a late answer starts nothing in what is open by then (#567, #571).
+- The run log no longer repeats lines when the browser reconnects (SSE ids, `Last-Event-ID`) (#567).
+- Questions with a form check their fields; a refusal of the server is said in the open question, with the form as it was filled in (new asset, refinish, another view, into the library) (#567).
+- Timing: a moved word or line stays inside the song with a valid length. The playback speed holds in gaps too. A cancelled scrub leaves playing stopped (#567, #571).
+- An answer that is not JSON is a failure, not empty data (#567).
+
+### Code and tests
+
+- Smaller contracts: the timeline's parts get a named, read-only context; form models of timeline, library and casting in `forms.ts` modules; `ProjectStatus` typed at the server; a type-level test keeps the words shared with the pipeline equal (#567, #571).
+- Tests: 22 unit and 16 browser tests for the client, among them the late answers, saving and the run scope (#567, #571).
+
 ## v0.6.0 – planned in stages, sung and timed by hand, and a workspace in Vue
 
 _2026-11-03_
