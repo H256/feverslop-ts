@@ -1,5 +1,8 @@
 import {test, expect} from '@playwright/test'
+import {readFileSync} from 'node:fs'
 import {startEditor} from './editor'
+
+const {version} = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {version: string}
 
 let editor: Awaited<ReturnType<typeof startEditor>>
 let base: string
@@ -15,6 +18,8 @@ test('production Vue assets boot through Bun, with navigation and direct project
   await page.goto(base)
   await expect(page.getByRole('heading', {name: 'Projects', exact: true})).toBeVisible()
   await expect(page.getByRole('heading', {name: 'All projects', exact: true})).toBeVisible()
+  // the release the build belongs to, from the repository's package.json
+  await expect(page.locator('.top .release')).toHaveText('v' + version)
   await page.getByRole('navigation', {name: 'Workspace'}).getByRole('link', {name: 'Library', exact: true}).click()
   await expect(page).toHaveURL(`${base}/library`)
   await expect(page.getByRole('heading', {name: 'Library', exact: true})).toBeVisible()

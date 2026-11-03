@@ -2,6 +2,64 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.6.0 – planned in stages, sung and timed by hand, and a workspace in Vue
+
+_2026-11-03_
+
+A video is now made as a film is: the story, then the cast, then the look, each looked at and changed before the shots are planned on it, and the pictures of cast and places rendered before the first beat. Who sings which line, down to a word, and when each word is sung, are pages of their own. Everything the workspace changes is a command first. The workspace itself is rebuilt as a Vue client, page for page; it is opt-in until it has been checked by hand on real projects. 26 pull requests since v0.5.0 (#463–#562).
+
+### Highlights
+
+- **Planning in stages**: `--until=story|cast|look` plans up to a stage and stops, the next run goes on from it; the workspace shows the stages and plans the next one (#535).
+- **Story, cast and look by hand**: a Story page, Edit the cast, and a Look page for the look of the whole and of every character and place. What was planned from a changed text goes, only that one element is written again (#535, #545).
+- **Casting photos**: characters and places rendered once the look is planned, before beats and shots (#543).
+- **Singers and Timing**: who sings which line, with a change of singer inside a line (#521, #536); the words on the vocals' waveform, dragged or moved by key (#539).
+- **CLI first**: `story`, `cast`, `look`, `casting`, `singers`, `timing`, `versions` and `override` as commands on the same code as the pages, guarded by a test (#550–#552).
+- **The workspace in Vue** (opt-in, `FEVERSLOP_EDITOR_UI=vue`): every page of the workspace as a Vue client, with the version it belongs to in the top bar (#561, #562).
+
+### Workspace
+
+- Stage bar on Story, Casting and the timeline of a project without clips; the stage on the start page card (#535).
+- Story page: a music video's story changed by hand or written again, a film's screenplay to read; the story told anew for a changed cast, to take or drop (#535, #545).
+- Casting: Plan takes the casting over with the `--redo` it needs, after saying which steps that is; Edit the cast changes names, roles and props without the library (#535).
+- Look page: looks, descriptions, backgrounds and floor plans by hand or written anew; whoever stays in the cast keeps their look (#545).
+- Render the pictures from the stage bar at the look stage, and on References without planning the shots first (#543).
+- Singers page: a click between two words starts a part with its own singers; the clip's vocals, prompt and shot plan follow it (#521, #536).
+- Timing page: a word, its edges or the whole line dragged on the vocals at 100 values a second, a neighbour giving way; cuts that fall into a word named; saving keeps the cut of the song (#539).
+
+### The Vue client
+
+- A client of its own in `client/` (Vue 3, TypeScript, Vite), built with `bun run client:build` into the editor and served by Bun; without `FEVERSLOP_EDITOR_UI=vue` the workspace stays as it was (#561).
+- One set of wire contracts in `shared/workspace.ts` for server and client: a drift is a type error on either side (#562).
+- Every page ported: overview, library, timeline with player, inspector and review, story, casting, look, references, singers and timing. Unsaved changes ask before leaving; a clip in the address is gone to (#562).
+- Tests: unit tests for the logic without a browser (`bun run client:test`), Playwright against the real editor (`bun run client:e2e`) (#561, #562).
+- Still to do before it becomes the default (#560): playback, waveform dragging, runs and making an asset checked by hand on real projects, then the old page removed.
+
+### CLI
+
+- `bun run story`, `cast`, `look`, `casting`: print a stage, set it from a file or by option, and name what a change drops and the run that makes it again (#550).
+- `bun run singers`, `timing`, `versions` (`--pick` makes an older version current again), `override` for a film clip's view, order and references (#551).
+- A test fails on any change the workspace makes that no command makes (#552).
+- `bun run status` says where the preproduction stands, with the next command (#553).
+
+### Rendering and prompts
+
+- A fixed seed gives every clip a seed of its own: the same clip comes out again, but clips no longer share one noise. Projects with a fixed seed render other noise from now on, for clips rendered again (#504).
+- Clip prompts say what is there instead of what is absent: at cfg 1 a "no" brings in what it names (#506).
+- A singer never walks away from the camera, nobody steps back even half a step (#544, #534).
+- Music clips record their context frames; `texture-chains` measures whether continuing clips get grittier (#503, #505).
+
+### Film
+
+- `bun run film:check-joins`: the cuts within a scene checked by a vision model against the staging and looks; reports only, with the command to render again (#476).
+- Tests for the look of a film (#547).
+
+### Code, tests and docs
+
+- Housekeeping, passes two to five plus 13 verified issues: one owner each for config rules, picture paths, boundary frames, prompt helpers, the sheet layout, film lists and tool duplicates; `--only` checked the same everywhere; unused names removed (#463, #474, #492, #502, #520).
+- GPU test of the workspace: retake of one shot, a sheet version keeps its anchor (#533). Startup tested without machine settings or project data (#538).
+- Guide: the story proposal next to the story, and the commands next to the workspace buttons (#545, #550).
+
 ## v0.5.0 – the workspace, and older projects made over without a new render
 
 _2026-11-02_

@@ -44,6 +44,7 @@ h1, h2, h3, p { margin: 0; }
 .mark { width: 18px; height: 18px; flex: none; border-radius: 5px; background: var(--accent); display: grid; place-items: center; color: var(--accent-text); }
 .top h1 { flex: none; max-width: 28vw; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nav { display: flex; gap: 2px; flex: none; }
+.release { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .nav a { padding: 3px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
 .nav a:hover { color: var(--text); background: var(--raised); }
 .nav a[aria-current=page] { color: var(--text); background: var(--raised); font-weight: 500; }

@@ -7,6 +7,7 @@ import ThemeSwitch from './ThemeSwitch.vue'
 
 /** The bar on top of every page. A project puts its own pages and chips into #top-nav and #top-chips. */
 const {title, themeChanged} = ChromeService.use()
+const version = __APP_VERSION__
 </script>
 
 <template>
@@ -22,5 +23,6 @@ const {title, themeChanged} = ChromeService.use()
       <RouterLink to="/library" :aria-current="$route.path === '/library' ? 'page' : undefined">Library</RouterLink>
     </nav>
     <ThemeSwitch @changed="themeChanged" />
+    <span class="release" title="The release of this workspace">v{{ version }}</span>
   </header>
 </template>
