@@ -104,7 +104,8 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
             if (w.start < 0 || w.end > duration + 1e-9) throw new Error(`${name}: "${w.text}" is outside the song`)
             if (n > 0 && w.start < words[n - 1]!.end - 1e-9) throw new Error(`${name}: "${w.text}" starts before "${words[n - 1]!.text}" ends`)
         })
-        const same = words.every((w, n) => w.start === line.words[n]!.start && w.end === line.words[n]!.end)
+        // given back as it was (bun run timing --set has every line): times are kept to the millisecond, so they are compared so
+        const same = words.every((w, n) => w.start === round(line.words[n]!.start) && w.end === round(line.words[n]!.end))
         if (same) continue
         line.words = words
         line.start = words[0]!.start
