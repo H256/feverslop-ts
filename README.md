@@ -38,7 +38,10 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command - `--film` for a film |
 | `bun run inspect <id> <clip>` | one clip on one screen: its beat and staged shots, pictures and audio, render state and prompt - `--film` for a film |
 | `bun run editor [id]`   | the workspace in the browser - see [The workspace](#the-workspace). `--film` for a film, `--port=4173` for another port |
-| `bun run adapt-story <id>` | tell a music video's story anew for its cast as the Casting page has it now - a proposal, taken or dropped on the workspace's Story page |
+| `bun run story <id> [--film]` | print the story (a film: its screenplay), `--out`/`--set` a text of your own, `--adapt` have it told anew for the cast (a proposal, `--take`/`--drop`; alias `bun run adapt-story`), `--rename="Old=New"` - see [Planning in stages from the terminal](#planning-in-stages-from-the-terminal) |
+| `bun run cast <id> [--film]` | print the cast; `--json` / `--set=cast.json` change names, roles, props and who is in it |
+| `bun run look <id> [--film]` | print the look of the whole and of every character and place; `--json` / `--set=look.json` change texts, `--again=<id>` have one written anew |
+| `bun run casting <id> [--film]` | casting.json, what the next plan run takes over and the `--redo` it needs; `--set=character:<id>=library:<asset>` |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
@@ -865,12 +868,36 @@ bun run import-asset <project-id> kael --from=tides-of-eternal-flame-261016:kael
   the tool warns when the description does not name the prop, or gives another gender than the story. Group members
   are not imported one by one; use `replace-character` for them.
 
+### Planning in stages from the terminal
+
+Everything the workspace does to a plan before rendering is a command (CLI first - the pages start the same code). A plan run stops at a stage with `--until=story|cast|look`; in between, each stage is looked at and changed. Every change drops what was planned from it, says what that is, and names the plan run that makes it again - the language model only, nothing is rendered.
+
+```powershell
+bun index.ts <id> --until=story                 # the story, then stop
+bun run story <id> --out=story.txt              # change it in story.txt, then:
+bun run story <id> --set=story.txt              # what was planned from the old story goes
+bun index.ts <id> --until=cast                  # who is in it and where, who sings
+bun run cast <id> --json > cast.json            # change names, roles, props; add one without an id, leave one out to remove it
+bun run cast <id> --set=cast.json               # the looks of whoever stays are kept; it names the commands for the story:
+bun run story <id> --rename="Soren Hale=Soren Vale"   # new names into the story, whole words
+bun run story <id> --adapt                      # or told anew for the new cast: a proposal ...
+bun run story <id> --take                       # ... taken (cast, singers and looks stay) - or --drop
+bun run casting <id> --set=location:hall=library:starship-bridge   # a role from the library; prints the --redo for it
+bun index.ts <id> --until=look                  # the look of the whole and of everyone and every place
+bun run look <id>                               # read it; --json > look.json and --set=look.json to change texts
+bun run look <id> --again=leo,location:hall     # have single ones written anew, everyone else keeps theirs
+bun index.ts <id> --until=look --render=images  # the casting photos, before the shots are planned
+bun index.ts <id>                               # the shots; then --render=videos,final as always
+```
+
+A film takes the same commands with `--film` (and `bun film.ts`); its screenplay is printed, not changed here - the script says who is in a film, so `cast --set` changes names and texts, nobody comes or goes.
+
 ### The workspace
 
 `bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`. Step by step, with screenshots: [docs/workspace-guide.md](docs/workspace-guide.md) (in German).
 
 - **Planning in stages**: as a film is made - the story (a film: the screenplay), then the cast, then the look, then the shots, and only then the rendering. A bar on the Story and Casting pages, and on the timeline of a project without clips, says how far the plan is and plans the next stage (`--until=story|cast|look`), or everything up to the shots. Every stage is the language model only. Once the look is planned, *Render the pictures* renders the casting photos - every character and place, before the shots are planned (`--until=look --render=images`); on *References* a picture is rendered again or from an edited prompt without planning the shots either.
-- **Story**: the story of a music video, to read, change by hand or have written again; a film's screenplay to read. A changed story drops everything planned from it, the next plan run makes that again. *Tell it anew for the cast* has the language model tell the same story with the cast as it is now (`bun run adapt-story`): a proposal shown next to the story, to take or drop - taken, the cast, the singers and the looks stay, only the summary and the plan from the beats on go.
+- **Story**: the story of a music video, to read, change by hand or have written again; a film's screenplay to read. A changed story drops everything planned from it, the next plan run makes that again. *Tell it anew for the cast* has the language model tell the same story with the cast as it is now (`bun run story <id> --adapt`): a proposal shown next to the story, to take or drop - taken, the cast, the singers and the looks stay, only the summary and the plan from the beats on go.
 - **Look**: the look of the whole, and the look, description, background and floor plan of every character and place - to change by hand, or to have one written anew. A changed text is kept as written; what is written from it is written again for that one character or place only, everyone else keeps theirs (their answers are kept by hand in `partials` of project.json, the run takes them as they are). The floor plans of the beats and the shots go.
 - **Projects**: how far each one is, what its last run did, and what comes next. Pages, a search over all of them and filters by kind and state; the takes of one thing fold into one card. All of it is in the address, so *Back* from a project lands in the same place.
 - **Render servers**: on every page, how busy each one is. Before a render you choose which ones it may use; it is the same as `--comfy=`.

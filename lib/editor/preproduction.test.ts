@@ -340,3 +340,18 @@ describe('the look of a film', () => {
         expect(() => applyLook('film', film(), {elements: [{kind: 'location', id: 'hall', anchors: 'x'}]})).toThrow('Hall has no anchors to change')
     })
 })
+
+describe('the look given back whole (bun run look --set)', () => {
+    test('texts with line breaks given back as they were change nothing; a changed one is kept with its paragraphs', () => {
+        const data: Project = {...lookStage(), lookBrief: 'grainy 16 mm.\n\nCold light.', locationLayouts: {deck: {layout: 'a long deck\nwith a rail', views: []}, tower: {layout: 'l', views: []}}}
+        const whole = {lookBrief: 'grainy 16 mm.\r\n\r\nCold light.', elements: [{kind: 'location' as const, id: 'deck', layout: 'a long deck\r\nwith a rail', look: 'd'}]}
+        expect(applyLook('music', data, whole)).toEqual({changed: false, dropped: [], remade: []})
+        expect(applyLook('music', data, {lookBrief: 'grainy 16 mm.\n\nWarm light.'}).changed).toBe(true)
+        expect(data.lookBrief).toBe('grainy 16 mm.\n\nWarm light.')
+    })
+
+    test('a role played by the library given back unchanged is no change', () => {
+        const data = {...lookStage(), castingCopies: {'character:ben': {library: 'ben-v2', fingerprint: 'f'}}}
+        expect(applyLook('music', data, {elements: [{kind: 'character', id: 'ben', look: 'b', description: 'b'}]}).changed).toBe(false)
+    })
+})

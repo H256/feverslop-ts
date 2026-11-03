@@ -94,7 +94,7 @@ export function storyPrompt(lyrics: string, storyIdea: string, singerVoice: Sing
 }
 
 /**
- * The story told anew for a cast changed by hand (tools/adapt-story.ts): the plot, the places, the order and the length stay -
+ * The story told anew for a cast changed by hand (bun run story --adapt, tools/story.ts): the plot, the places, the order and the length stay -
  * only what the people changed is changed. The cast is given as it is now; the model reads in the story who is no longer in it.
  */
 export function adaptStoryPrompt(story: string, cast: { characters: { name: string, role: string, prop?: string }[], locations: { name: string }[] }): AskOptions {

@@ -64,7 +64,7 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []), ...(action.look && kind === 'music' ? ['--until=look'] : []))
         case 'adapt-story':
             if (kind !== 'music') throw new Error('the screenplay of a film is changed in its script')
-            return {script: 'tools/adapt-story.ts', args: [id]}
+            return {script: 'tools/story.ts', args: [id, '--adapt']}
         case 'look-pictures':
             if (kind !== 'music') throw new Error('a film has its pictures from the look on: render them on the References page')
             return run('--until=look', '--render=images')

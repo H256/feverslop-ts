@@ -7,6 +7,8 @@ import {withProjectLock} from "../lock.ts";
 import {dropPartials, KEPT_BY_HAND} from "../partials.ts";
 import {builtOn, type Character, type Location, type Project, redoAfter, STEP_NAMES, type StepName} from "../project.ts";
 import {filmStage, musicStage, type PlanStage, nextStage} from "../stages.ts";
+import {projectDir, projectExists, validProjectId} from "../project-setup.ts";
+import {filmDir, filmExists} from "../film/setup.ts";
 import {screenplayToText} from "../film/fountain.ts";
 import {FILM_STEP_NAMES, filmBuiltOn, filmRedoAfter, type FilmStepName} from "../film/store.ts";
 import type {FilmCharacter, FilmLocation, FilmProject} from "../film/types.ts";
@@ -125,6 +127,8 @@ export type CastChange = { characters: (Partial<CastMember> & { name: string })[
 // renamed: who kept their id and got another name - the story still says the old one (#542)
 export type CastResult = { changed: boolean, dropped: string[], remade: string[], added: string[], removed: string[], renamed: { from: string, to: string }[] }
 
+/** The same text but for its spaces and line breaks. */
+const sameText = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim()
 const cleanText = (value: unknown, what: string, max = 2000): string => {
     if (typeof value !== 'string') throw new Error(`${what} is missing`)
     const text = value.replace(/\s+/g, ' ').trim()
@@ -488,8 +492,10 @@ export function applyLook(kind: EditorKind, data: Data, change: LookChange): Loo
     if (data.lookBrief === undefined) throw new Error('no look yet - plan up to the look first')
     const record = data as Record<string, unknown>
     if (change.lookBrief !== undefined) {
-        const brief = cleanText(change.lookBrief, 'the look', 8000)
-        if (brief !== data.lookBrief.trim()) {
+        cleanText(change.lookBrief, 'the look', 8000)
+        // its paragraphs stay: the look of the whole is a text of several
+        const brief = String(change.lookBrief).replace(/\r\n/g, '\n').trim()
+        if (!sameText(brief, data.lookBrief)) {
             data.lookBrief = brief
             const dropped = builtOnOf(kind, ['lookBrief'], data)
             drop(data, dropped)
@@ -509,9 +515,10 @@ export function applyLook(kind: EditorKind, data: Data, change: LookChange): Loo
             const step = LOOK_FIELDS[kind][wanted.kind][field]
             const values = step ? record[step] as Record<string, unknown> | undefined : undefined
             if (!step || !values || element[field] === undefined) throw new Error(`${element.name} has no ${field} to change`)
-            if (element.library) throw new Error(`${element.name} is played by library:${element.library} - its texts are the library's`)
             const value = cleanText(wanted[field], `the ${field} of ${element.name}`, 8000)
-            if (value === element[field]!.trim()) continue
+            // a whole look given back (bun run look --set) has every text: only a changed one counts
+            if (sameText(value, element[field]!)) continue
+            if (element.library) throw new Error(`${element.name} is played by library:${element.library} - its texts are the library's`)
             values[wanted.id] = field === 'layout' ? {...values[wanted.id] as object, layout: value} : value
             add(edited, step, wanted.id)
         }
@@ -553,7 +560,7 @@ export async function writeLook(target: EditorTarget, change: LookChange): Promi
 
 ////////// THE STORY AFTER THE CAST - a music video's story told with the cast as it is now (#542)
 
-// a story written anew for the cast by the language model (tools/adapt-story.ts) waits here until it is taken or dropped
+// a story written anew for the cast by the language model (bun run story --adapt, tools/story.ts) waits here until it is taken or dropped
 export const STORY_PROPOSAL = join('output', 'story-proposal.json')
 export type StoryProposal = { story: string, for: string }      // for: the story it was written from - another one now: it is gone
 export const storyFingerprint = (story: string) => Bun.hash(story.trim()).toString(16)
@@ -608,3 +615,23 @@ export async function writeStoryForCast(target: EditorTarget, how: { proposal?: 
 }
 
 export const dropStoryProposal = (target: EditorTarget) => rmSync(join(target.dir, STORY_PROPOSAL), {force: true})
+
+////////// FROM THE TERMINAL - the same as the pages, as commands (tools/story.ts, cast.ts, look.ts, casting.ts - CLI first, #548)
+
+/** The project or film a command is about, or why there is none. */
+export function commandTarget(id: string | undefined, film: boolean): EditorTarget | string {
+    if (!id || !validProjectId(id)) return id ? `"${id}" is no project id` : 'No project id given'
+    if (film) return filmExists(id) ? {id, kind: 'film', dir: filmDir(id)} : `No film "${id}" in films/`
+    return projectExists(id) ? {id, kind: 'music', dir: projectDir(id)} : `No project "${id}" in projects/`
+}
+
+/**
+ * The command that plans what a change left to plan: up to the stage the project is at, and at least up to the stage of the change
+ * (a look written anew is written by --until=look, even where the cast went too) - a planned project all of it. `redo`: steps first.
+ */
+export function planCommand(target: EditorTarget, change: PlanStage, redo: string[] = []): string {
+    const at = stageOf(target)
+    const stages: PlanStage[] = ['story', 'cast', 'look', 'plan']
+    const until = stages[Math.max(stages.indexOf(change), at ? stages.indexOf(at) : -1)]!
+    return `bun ${target.kind === 'film' ? 'film.ts' : 'index.ts'} ${target.id}${redo.length ? ` --redo=${redo.join(',')}` : ''}${until !== 'plan' ? ` --until=${until}` : ''}`
+}

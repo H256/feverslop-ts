@@ -64,6 +64,40 @@ Oben auf **Story** und **Casting**, und auf der Timeline eines Projekts ohne Cli
 
 **Den Cast ändern:** Siehe [Besetzung und Bibliothek](#besetzung-und-bibliothek). Am besten direkt nach **Plan the cast**: Dann baut noch nichts auf ihm auf.
 
+### Dasselbe im Terminal
+
+Alles aus diesem Abschnitt geht auch ohne Workspace. Die Seiten rufen dieselben Befehle auf. Jeder Befehl gibt ohne Option aus, was da ist. Mit Option ändert er es, nennt, was dabei wegfällt, und schlägt den Planlauf vor, der es neu macht.
+
+| Im Workspace | Im Terminal |
+|---|---|
+| Stufen-Leiste: **Plan the cast** usw. | `bun index.ts <id> --until=story` (auch `cast`, `look`); Film: `bun film.ts <id> --until=…` |
+| **Story** lesen, ändern | `bun run story <id> --out=story.txt`, ändern, dann `bun run story <id> --set=story.txt` |
+| **Tell it anew for the cast**, **Take the new story**, **Drop it** | `bun run story <id> --adapt`, dann `--take` oder `--drop` |
+| neue Namen in die Story | `bun run story <id> --rename="Soren Hale=Soren Vale"` |
+| **Edit the cast** | `bun run cast <id> --json > cast.json`, ändern, dann `bun run cast <id> --set=cast.json`. Eine neue Figur steht ohne `id` drin, eine entfernte fehlt einfach. |
+| Rolle aus der Bibliothek, **Plan now** | `bun run casting <id> --set=character:mara=library:mara-v2`, der Befehl nennt das passende `--redo` |
+| **Look** lesen, ändern | `bun run look <id>`; `--json > look.json`, ändern, `--set=look.json` |
+| **Write anew** | `bun run look <id> --again=leo,location:hall` |
+| **Render the pictures** | `bun index.ts <id> --until=look --render=images` |
+
+Beim Film kommt überall `--film` dazu. Das Drehbuch wird dort nur ausgegeben, und `cast --set` ändert nur Namen und Texte.
+
+Ein Beispiel von vorne bis zu den Casting-Fotos:
+
+```powershell
+bun index.ts mein-video --until=cast
+bun run cast mein-video --json > cast.json
+# cast.json bearbeiten: einen Namen ändern, eine Figur ohne "id" ergänzen
+bun run cast mein-video --set=cast.json
+bun run story mein-video --adapt
+bun run story mein-video --take
+bun index.ts mein-video --until=look
+bun run look mein-video
+bun run look mein-video --again=soren-hale
+bun index.ts mein-video --until=look --render=images
+bun index.ts mein-video
+```
+
 ## Ein Video ansehen
 
 ![Timeline mit Monitor und Clip-Details](images/workspace/timeline.jpg)
