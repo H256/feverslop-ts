@@ -34,10 +34,8 @@ if (args.set !== undefined) {
     } catch (e) {
         log.usageError(`${args.set} is no JSON: ${(e as Error).message} - bun run timing ${t.id} --json gives the form`, usage)
     }
-    // a line given back as it was is no change: only the ones whose words moved are passed on
-    const before = new Map(timing.lines.map(l => [l.line, JSON.stringify(l.words.map(w => [w.start, w.end]))]))
-    const moved = {lines: (change!.lines ?? []).filter(l => before.get(l.line) !== JSON.stringify((l.words ?? []).map(w => [w.start, w.end])))}
-    const result = await writeTiming(t, moved)
+    // a line given back as it was is no change - writeTiming tells, as it does for the workspace's Timing page
+    const result = await writeTiming(t, change!)
     if (!result.changed.length) log.success('the timing is the same - nothing changed')
     else {
         log.step('Moved', `${result.changed.length} line(s)`)
