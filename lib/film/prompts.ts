@@ -395,3 +395,39 @@ Answer only with JSON: {"views": [one number from 1 to ${views.length} per shot,
         schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: shots.length, maxItems: shots.length, items: {type: 'integer', minimum: 1, maximum: views.length}}}},
     }
 }
+
+/**
+ * The shots of one clip fitted to what the user chose for it alone (clip-overrides/): people left out of its picture, and the view of
+ * the place its camera has. The shots stay the shots - only where the camera is and what the picture shows follow the choice.
+ */
+export function clipFitPrompt(shots: { framing: string, camera: string, view?: string, action: string, people: { id: string, name: string, state?: string, motion?: string }[] }[], change: { without: string[], view?: { name: string, shows: string } }, staging: string, problems: string[] = []): AskOptions {
+    const asked = [
+        change.without.length && `${change.without.join(' and ')} ${change.without.length > 1 ? 'are' : 'is'} not in the picture of this clip at all. Take them out of every shot: out of the camera's view, the action, where everyone is and what moves. What the others do stays, in the same order - done alone, or toward someone who is not seen.`,
+        change.view && `The camera of every shot is where this view of the place is, looking the same way: ${change.view.name} - ${change.view.shows}. Write each shot's "view" (where the camera stands and what it looks toward) and "camera" (how it moves) from there; the framing stays.`,
+    ].filter(Boolean)
+    return {
+        input: `A clip of a film was planned as the shots below. For this clip alone the director changed:
+${asked.map(a => `- ${a}`).join('\n')}
+
+Rewrite the shots so that they fit. Everything else stays as planned: the same shots in the same order, the same framing, the same action of everyone who is in the picture. Write what is there, by the names given.
+The place: ${staging}
+shots:
+${JSON.stringify(shots.map((s, n) => ({shot: n + 1, framing: s.framing, camera: s.camera, view: s.view ?? '', action: s.action, people: s.people.map(p => ({id: p.id, name: p.name, state: p.state ?? '', motion: p.motion ?? ''}))})))}
+${problems.length ? `\nThe answer before had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}
+Answer only with JSON: {"shots": [per shot, in order: {"view": "...", "camera": "...", "action": "...", "people": [{"id": "...", "state": "...", "motion": "..."} for each person who is still in the shot]}]} - exactly ${shots.length} shots.`,
+        instructions: 'You are a film director who adapts the shots of one clip to a change. Answer only with JSON.',
+        reasoning: 'low',
+        schema: {
+            type: 'object', additionalProperties: false, required: ['shots'], properties: {
+                shots: {
+                    type: 'array', minItems: shots.length, maxItems: shots.length, items: {
+                        type: 'object', additionalProperties: false, required: ['view', 'camera', 'action', 'people'], properties: {
+                            view: {type: 'string'}, camera: {type: 'string'}, action: {type: 'string'},
+                            people: {type: 'array', items: {type: 'object', additionalProperties: false, required: ['id', 'state', 'motion'], properties: {id: {type: 'string'}, state: {type: 'string'}, motion: {type: 'string'}}}},
+                        },
+                    },
+                },
+            },
+        },
+    }
+}

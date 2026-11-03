@@ -146,4 +146,6 @@ export type FilmProject = {
     // with the fingerprint of what it was chosen from. Not steps: made again when their sheet or their shots change (lib/film/views.ts)
     sheetViews?: Record<string, { fingerprint: string, views: LocationView[] }>,
     shotViews?: Record<string, { fingerprint: string, views: number[] }>,
+    // the shots of a clip fitted to what the user chose for it (clip-overrides/, lib/film/fit.ts), per clip id - not a step
+    clipFits?: Record<string, { fingerprint: string, shots: { view: string, camera: string, action: string, people: Record<string, { state?: string, motion?: string }> }[] }>,
 }
