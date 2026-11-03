@@ -1,9 +1,10 @@
 import {type ComfyServer, loadSettings} from "../settings.ts";
+import type {EditorServer} from '../../shared/workspace.ts';
+export type {EditorServer} from '../../shared/workspace.ts';
 
 // How busy the ComfyUI servers of the settings are, for the page: asked with a short timeout, a server that is down must not hold it up.
 // The page knows servers by name. A URL never comes from it: a run goes to the ones of the settings the names say.
 
-export type EditorServer = { name: string, reachable: boolean, running: number, pending: number, device?: string, freeGb?: number, totalGb?: number }
 
 const ASK_MS = 2500
 const KEPT_MS = 3000

@@ -27,6 +27,7 @@
     "client:install": "bun install --cwd client --frozen-lockfile",
     "client:check": "bun run --cwd client check",
     "client:build": "bun tools/build-client.ts",
+    "client:test": "bun run --cwd client test",
     "client:e2e": "bun run client:build && bun run --cwd client test:e2e",
     "comfy:types": "bun comfy/gen-types.ts",
     "comfy:convert": "bun comfy/json-to-ts.ts",

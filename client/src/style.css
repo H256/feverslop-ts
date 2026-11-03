@@ -1,7 +1,0 @@
-:root { font-family: system-ui, sans-serif; color-scheme: light dark; background: light-dark(#f3f3f1, #0d0e10); color: light-dark(#191a1c, #eceef1); }
-body { margin: 0; }
-header { display: flex; align-items: center; gap: 3rem; padding: 1rem 2rem; border-bottom: 1px solid light-dark(#dddcd7, #292d32); }
-nav { display: flex; gap: 1.5rem; }
-a { color: inherit; }
-a.router-link-exact-active { color: light-dark(#cf3d1b, #ff6f4d); }
-main { max-width: 65rem; margin: 3rem auto; padding: 0 2rem; }

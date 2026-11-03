@@ -7,44 +7,15 @@ import type {Project, Singing} from "../project.ts";
 import {normalizeParts, singersOfParts, type SingingPart} from "../singing-parts.ts";
 import {readClipRequests} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
+import type {SingingLine, SingingCharacter, SingingView, SingingChange, SingingResult} from '../../shared/workspace.ts';
+export type {SingingLine, SingingCharacter, SingingView, SingingChange, SingingResult} from '../../shared/workspace.ts';
 
 // Who sings which line, as the workspace shows and changes it. The pipeline asks the language model once (step `singing`);
 // what is set here by hand replaces that answer in project.json, and the beats it touches lose their shot plan - the next
 // plan run plans just those again, on the floor plans they have (index.ts: "Planning again"). Nothing else is redone: the
 // story beats and the other beats' shots stay as they are.
 
-export type SingingLine = {
-    line: number,
-    text: string,
-    section?: string,
-    start?: number,             // seconds in the song
-    end?: number,
-    singers: string[],
-    parts?: SingingPart[],      // the singer changes within the line: from word n on (lib/singing-parts.ts)
-    words: { text: string, start: number, end: number }[],  // the line's words with their song times - where a part can start
-    estimated: boolean,         // the times are barely found in the transcript, only spread over the line: a split can be off
-    beats: string[],            // the beats of the clips it is sung in
-    clips: string[],
-}
-export type SingingCharacter = { id: string, name: string, role?: string, picture?: { file: string, v: number }, beats: string[], clips: string[] }
-export type SingingView = {
-    singers: string[],          // the singers of the song, the lead first
-    lines: SingingLine[],
-    characters: SingingCharacter[],
-    beats: { id: string, characterIds: string[], planned: boolean, clips: string[] }[],
-    unplanned: string[],        // beats without a shot plan: the next plan run plans them
-    audio?: { file: string, v: number },    // what to listen to a line in: the vocals stem, else the song
-}
 // a line is sung by `singers` as a whole, or with `parts` by each part's singers from its word on (singers is then ignored)
-export type SingingChange = { lines: { line: number, singers: string[], parts?: SingingPart[] }[] }
-export type SingingResult = {
-    changed: number[],          // the lines that changed
-    replanned: string[],        // the beats that lost their shot plan
-    added: { beat: string, character: string }[],   // singers who were not in the beat and are now
-    newSingers: string[],       // sing now and did not before: every clip they are in changes
-    formerSingers: string[],    // sang before and no longer do: the same
-    staleClips: string[],
-}
 
 type Request = Pick<ClipRequest, 'id' | 'beatId' | 'vocals'> & { assets?: { pictures: { kind: string, id: string }[] } }
 /** The clips a character is in: becoming a singer, or no longer being one, changes what all of them say (silent singers keep their mouth closed). */

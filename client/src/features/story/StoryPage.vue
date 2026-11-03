@@ -1,0 +1,94 @@
+<script setup lang="ts">
+import {computed} from 'vue'
+import PageBar from '../../components/PageBar.vue'
+import ResourceState from '../../components/ResourceState.vue'
+import {useDraft} from '../../composables/useDraft'
+import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
+import {listSteps} from '../../lib/format'
+import {useAsk} from '../../services/ask'
+import {useToasts} from '../../services/toasts'
+import StageBar from '../plan/StageBar.vue'
+import {usePageData} from '../project/usePageData'
+import {useProject} from '../project/session'
+import StoryProposal from './StoryProposal.vue'
+
+/** The book: a music video's story, changed here; a film's screenplay, read here. */
+const {project, api, start, busy} = useProject()
+const ask = useAsk()
+const toasts = useToasts()
+const {data: book, loading, error, reload, refresh} = usePageData(signal => api.book(signal))
+const film = computed(() => project.value.kind === 'film')
+const name = computed(() => film.value ? 'Screenplay' : 'Story')
+const draft = useDraft(() => book.value?.text)
+useUnsavedChanges(() => draft.dirty.value, 'changes to the story')
+const builtOn = computed(() => book.value?.builtOn ?? [])
+
+const save = toasts.guard(async () => {
+  const yes = await ask({
+    title: 'Save the story?',
+    lines: ['The story in project.json is replaced by this text.', builtOn.value.length && 'The next plan run makes what goes again, from this story: the language model only, nothing is rendered.'],
+    warnings: builtOn.value.length ? [`What is built on the story goes: ${listSteps(builtOn.value)}.`, project.value.clips.some(c => c.video) && 'Pictures and clips made before stay, and are stale once the plan has new prompts for them.'] : [],
+    confirm: 'Save it',
+  })
+  if (!yes) return
+  const result = await api.saveStory(draft.text.value)
+  toasts.show(result.changed ? 'The story is saved' : 'Nothing changed')
+  await refresh()
+})
+const writeAgain = toasts.guard(async () => {
+  const yes = await ask({
+    title: 'Write the story again?',
+    lines: ['The language model writes a new story from the lyrics and the story idea, and the run stops after it.'],
+    warnings: [`The story there is now goes${builtOn.value.length ? `, and with it ${listSteps(builtOn.value)}` : ''}. A story changed by hand goes too.`],
+    confirm: 'Write it again',
+  })
+  if (yes) await start({type: 'plan', redo: ['story'], until: 'story'})
+})
+const adapt = toasts.guard(async () => {
+  const yes = await ask({
+    title: 'Tell the story anew for the cast?',
+    lines: ['The language model tells the same story with the characters and places as the Casting page has them now: the plot, the places and the length stay. Nothing changes until you take it - it is shown here next to the story there is.'],
+    confirm: 'Have it written',
+  })
+  if (yes) await start({type: 'adapt-story'})
+})
+const take = toasts.guard(async () => {
+  const kept = book.value?.keptByCast ?? []
+  const yes = await ask({
+    title: 'Take the new story?',
+    lines: ['The cast, who sings and the looks stay as they are: the story was told for them.'],
+    warnings: kept.length ? [`What is planned from the story goes: ${listSteps(kept)}. The next plan run makes it again - the language model only.`] : [],
+    confirm: 'Take it',
+  })
+  if (!yes) return
+  await api.storyForCast({proposal: true})
+  toasts.show('The new story is taken')
+  await refresh()
+})
+const drop = toasts.guard(async () => {
+  await api.dropStoryProposal()
+  await refresh()
+})
+</script>
+
+<template>
+  <div class="scrollpage view">
+    <StageBar />
+    <PageBar :title="name" />
+    <ResourceState :loading="loading" :error="error" :loaded="!!book" @retry="reload" />
+    <template v-if="book">
+      <StoryProposal v-if="book.proposal" :now="book.text ?? ''" :proposal="book.proposal" @take="take" @drop="drop" />
+      <div v-if="book.text === undefined" class="empty">No {{ name.toLowerCase() }} yet - plan it with the button above.</div>
+      <template v-else>
+        <div v-if="film" class="note">The screenplay is read here. It is changed in the script in input/, or in project.json (screenplay), and then planned again with --redo.</div>
+        <div class="section"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
+        <div v-if="book.editable" class="section btn-row">
+          <button class="btn primary" :disabled="!draft.dirty.value" @click="save">Save the story</button>
+          <button class="btn" :disabled="busy" @click="writeAgain">Write it again</button>
+          <button class="btn" :disabled="busy" title="The same story with the cast as the Casting page has it now - a proposal next to this one" @click="adapt">Tell it anew for the cast</button>
+        </div>
+        <p v-if="book.editable && builtOn.length" class="muted">Saving a changed story drops what is built on it: {{ listSteps(builtOn) }}. The next plan run makes those again.</p>
+      </template>
+    </template>
+  </div>
+</template>
