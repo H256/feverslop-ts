@@ -431,3 +431,28 @@ Answer only with JSON: {"shots": [per shot, in order: {"view": "...", "camera": 
         },
     }
 }
+
+/**
+ * How far the camera turns from one view of a place to another (add-view, #532). One move from a picture reaches a view up to about a
+ * quarter turn from it; the reverse side is invented anew - then a view in between is written, about a quarter turn from both.
+ */
+export function viewTurnPrompt(place: string, from: { name: string, shows: string }, to: { name: string, shows: string }): AskOptions {
+    return {
+        input: `The camera of a film moves through one place in a single move, from the first view to the second. Judge how far it turns.
+The place: ${place}
+first view: ${from.name} - ${from.shows}
+second view: ${to.name} - ${to.shows}
+
+"same": it looks the same way, nearer or from a little aside. "side": it turns up to about a quarter turn, looking across the place. "reverse": it looks back the other way, toward what is behind the first view's camera.
+For "reverse" also write a view in between: where a camera stands that looks across the place, about a quarter turn from both, and what it shows - by the features of the place named above.
+Answer only with JSON: {"turn": "same" | "side" | "reverse", "between": {"name": "where the camera stands and what it looks toward", "shows": "what is seen from there"}} - "between" only for "reverse".`,
+        instructions: 'You are a film director who knows how a camera moves through a place. Answer only with JSON.',
+        reasoning: 'low',
+        schema: {
+            type: 'object', additionalProperties: false, required: ['turn'], properties: {
+                turn: {type: 'string', enum: ['same', 'side', 'reverse']},
+                between: {type: 'object', additionalProperties: false, required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}},
+            },
+        },
+    }
+}

@@ -1,11 +1,11 @@
 import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {visionUrls} from "../describe-picture.ts";
-import {picturesReadable} from "../llm.ts";
+import {picturesReadable, type AskOptions} from "../llm.ts";
 import {log, styles} from "../log.ts";
 import {askFilmJson as askJson} from "./json.ts";
 import {placeViewFrame} from "./pictures.ts";
-import {sheetViewsPrompt, shotViewsPrompt} from "./prompts.ts";
+import {sheetViewsPrompt, shotViewsPrompt, viewTurnPrompt} from "./prompts.ts";
 import type {FilmStore} from "./store.ts";
 import type {FilmCast, LocationView, SceneCoverage} from "./types.ts";
 import {sequenceSheetDir, sheetViews} from "../sequenceSheet.ts";
@@ -128,3 +128,25 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
  */
 export const withShotViews = (coverage: SceneCoverage[], shotViews: Record<string, number[]>): SceneCoverage[] =>
     coverage.map(scene => shotViews[scene.sceneId] ? {...scene, shots: scene.shots.map((s, n) => ({...s, placeView: shotViews[scene.sceneId]![n]}))} : scene)
+
+/** Every view of a place with the picture it starts from: the sheet's (designed or read from it), then those made one by one (add-view). */
+export function placeViews(projectDir: string, data: { locationViews?: Record<string, LocationView[]>, sheetViews?: Record<string, { views: LocationView[] }> }, locationId: string): { name: string, shows: string, file: string }[] {
+    const sheet = (data.locationViews?.[locationId] ?? data.sheetViews?.[locationId]?.views ?? []).map((v, n) => ({name: v.name, shows: v.shows, file: placeViewFrame(locationId, n + 1)}))
+    return [...sheet, ...extraViews(projectDir, locationId)]
+}
+
+export type ViewStep = { name: string, shows: string }
+/**
+ * The views to render to reach a new one from where the move starts: the view itself, or - when it looks back the other way, which one
+ * move does not reach (the place is invented anew) - first a view in between, then the view from there. Judged by the language model;
+ * when it cannot say, the view is rendered directly, as before.
+ */
+export async function viewRoute(place: string, from: ViewStep, to: ViewStep, ask: (options: AskOptions) => Promise<{ turn?: unknown, between?: { name?: unknown, shows?: unknown } }> = askJson): Promise<{ steps: ViewStep[], turn: string }> {
+    const answer = await ask(viewTurnPrompt(place, from, to)).catch(() => undefined)
+    const turn = typeof answer?.turn === 'string' ? answer.turn : 'unknown'
+    const between = answer?.between
+    if (turn === 'reverse' && typeof between?.name === 'string' && typeof between.shows === 'string' && between.name.trim() && between.shows.trim()) {
+        return {steps: [{name: between.name.trim(), shows: between.shows.trim()}, to], turn}
+    }
+    return {steps: [to], turn}
+}
