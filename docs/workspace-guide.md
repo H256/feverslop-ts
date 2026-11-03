@@ -216,6 +216,18 @@ Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich 
 
 **Im Terminal:** `bun run timing <id>` listet jede Zeile mit Anfang und Ende. `--json > timing.json` schreibt die Wortzeiten in eine Datei. Du verschiebst `start` und `end` und gibst sie mit `--set=timing.json` zurück. Unverändert zurückgegebene Zeilen zählen nicht als geändert. Fällt danach ein Schnitt in ein Wort, sagt der Befehl das und nennt `--redo=timeline`.
 
+## Changing the settings of a project
+
+The **Settings** page holds the render settings of the project, that is, what is otherwise in its `config.json`: the **Video workflow** (for example `h3-ref2video-prism-2pass` instead of `h3-ref2video-2pass`), the image and sheet workflows, the size of video and pictures, the aspect ratio, the context frames, the seed, the retries and the frame rate of the final video. Each setting says what it does and what its default is; **Use the default** goes back to the default, **Undo** to what the project had.
+
+1. **Change** what you need. A changed setting has a coloured bar on its left.
+2. Click **Save**. The question says what changes and **how many rendered clips and pictures that makes stale**. The workflow, the size and the aspect ratio are part of what a clip is made from: when one of them changes, the clip counts as *stale*. Other settings, such as the retries or the frame rate of the final video, make nothing stale.
+3. **Nothing is rendered** by saving. The timeline then shows which clips are stale, and you render them when you want to.
+
+A wrong value is refused, in the same words as when a run starts. A very high value is only noted, never capped. While a run is going on nothing is written: wait until it is done.
+
+**In the terminal:** `bun run config <id>` shows the settings, `--set=videoWorkflow=h3-ref2video-prism-2pass` changes one (repeatable), `--unset=seed` takes one out of the file. For a film add `--film`. Other keys of `config.json`, such as the singers, are changed on the page they belong to, or by hand.
+
 ## Ein älteres Projekt aufwerten
 
 ![Refinish-Dialog](images/workspace/refinish.jpg)

@@ -13,6 +13,7 @@
     "story": "bun tools/story.ts",
     "cast": "bun tools/cast.ts",
     "look": "bun tools/look.ts",
+    "config": "bun tools/config.ts",
     "casting": "bun tools/casting.ts",
     "singers": "bun tools/singers.ts",
     "timing": "bun tools/timing.ts",

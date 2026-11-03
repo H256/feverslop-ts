@@ -20,6 +20,7 @@ import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
 import {pickVersion, writeOverride} from "./choices.ts";
 import {type CastChange, castingRedo, dropStoryProposal, type LookChange, readBook, readCast, readLook, stageOf, writeCast, writeLook, writeStory, writeStoryForCast} from "./preproduction.ts";
 import {readTiming, type TimingChange, writeTiming} from "./timing.ts";
+import {type ConfigChange, previewConfig, readConfig, writeConfig} from "./projectconfig.ts";
 import {runProgress} from "./progress.ts";
 import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
@@ -317,6 +318,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (what === 'cast') return json({cast: readCast(target) ?? null})
                 if (what === 'book') return json(readBook(target))
                 if (what === 'look') return json(readLook(target))
+                if (what === 'config') return json(await readConfig(target))
             } catch (e) {
                 return failure(e)
             }
@@ -367,6 +369,12 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             }
             if (what === 'book') return json(await writeStory(target, (await body<{ text?: unknown }>()).text))
             if (what === 'look') return json(await writeLook(target, await body<LookChange>()))
+            // what a change would do, asked before it is made - or the change itself
+            if (what === 'config') {
+                const {change, dryRun} = await body<{ change?: ConfigChange, dryRun?: boolean }>()
+                if (!change || typeof change !== 'object' || Array.isArray(change)) return refused(new Error('change must be an object like {"seed": 7}'))
+                return json(dryRun ? await previewConfig(target, change) : await writeConfig(target, change))
+            }
             if (what === 'timing') return json(await writeTiming(target, await body<TimingChange>()))
             if (what === 'override' && id) {
                 await writeOverride(target, id, await body<EditorOverride | null>())
@@ -449,7 +457,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references'].includes(area))) return notFound()
+                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references', 'settings'].includes(area))) return notFound()
                 return post ? notFound() : page(request)
             }
         } catch (e) {

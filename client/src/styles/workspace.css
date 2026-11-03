@@ -408,3 +408,11 @@ body { overflow: auto; }
 .page > .view { height: 100%; min-height: 0; }
 .timeline-view { display: grid; grid-template-rows: minmax(0, 1fr) auto auto; height: 100%; min-height: 0; }
 .detail .sheet-picture { width: 100%; display: block; background: #000; border-radius: 6px; margin-bottom: 10px; cursor: zoom-in; }
+
+/* the settings of a project */
+.setting { padding: 8px 0 8px 10px; border-left: 2px solid transparent; max-width: 760px; }
+.setting.changed { border-left-color: var(--accent); }
+.setting .field select, .setting .field input { max-width: 360px; }
+.setting-note { font-size: 12px; margin-top: 2px; }
+.setting-default { white-space: nowrap; margin-left: 6px; }
+.btn.link { background: none; border: 0; padding: 0 4px; color: var(--accent); cursor: pointer; font-size: 12px; }

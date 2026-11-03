@@ -226,3 +226,34 @@ test('library: an asset asked for in the library starts nothing in the project o
   expect(reconnects).toEqual([])
   await expect(page.getByText('bun tools/create-asset.ts kael')).toHaveCount(0)
 })
+
+test('settings: a workflow chosen, the question says what it makes stale, and only the change is sent', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/settings`)
+  await expect(page.getByRole('navigation', {name: 'Project'}).getByRole('link', {name: 'Settings'})).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByLabel('Video workflow')).toHaveValue('h3-ref2video-2pass')
+  await expect(page.getByRole('button', {name: 'Save', exact: true})).toBeDisabled()
+  await page.getByLabel('Video workflow').selectOption('h3-ref2video-prism-2pass')
+  await expect(page.getByRole('button', {name: 'Save', exact: true})).toBeEnabled()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect(dialog(page)).toContainText('Video workflow: h3-ref2video-2pass → h3-ref2video-prism-2pass')
+  await expect(dialog(page)).toContainText('1 of 1 rendered clip would be made from something else then')
+  await dialog(page).getByRole('button', {name: 'Save it'}).click()
+  await expect.poll(() => posted.filter(p => p.path === 'config').map(p => p.body)).toEqual([
+    {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}, dryRun: true},
+    {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}},
+  ])
+})
+
+test('settings: a setting back to its default takes the key out of config.json; leaving with a change asks first', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/settings`)
+  await page.getByLabel('Video size').fill('-1')
+  await expect(page.getByLabel('Video size')).toHaveValue('-1')
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await dialog(page).getByRole('button', {name: 'Save it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'config' && !(p.body as {dryRun?: boolean}).dryRun)?.body).toEqual({change: {videoResolution: null}})
+  // saved and read again: only then is the form free, and a change of it is a new one
+  await expect(page.getByText('The settings are saved')).toBeVisible()
+  await page.getByLabel('Black or frozen retries').fill('2')
+  await page.getByRole('navigation', {name: 'Project'}).getByRole('link', {name: 'Timeline'}).click()
+  await expect(dialog(page)).toContainText('changes to the settings')
+})
