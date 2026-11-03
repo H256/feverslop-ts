@@ -33,7 +33,7 @@ if (args.film) {
     log.usageError(`${id ? `No project "${id}" in projects/` : 'Which project?'} - the projects here are: ${listProjects().join(', ')}`, usage)
 }
 
-const {dir, changed, notes, steps, render, next, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)
+const {dir, changed, notes, steps, render, next, preproduction, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)
 const {pictures, missingPictures, stalePictures, clips, missingClips, staleClips, finalVideo, finalState} = render
 const finalLabel = args.film ? 'Film' : 'Final video'
 const run = lastRun(dir)
@@ -48,6 +48,7 @@ if (args.json) {
         clips: {total: clips.length, missing: missingClips.map(c => c.id), stale: staleClips.map(c => c.id)},
         finalVideo: finalState === 'missing' ? 'missing' : finalState === 'current' ? 'current' : 'older than the clips',
         next,
+        preproduction,
     })
     process.exit(0)
 }

@@ -11,6 +11,7 @@ import {filmInputs, filmMode, filmStepUsed} from "./film/inputs.ts";
 import {filmRenderConfig} from "./film/pictures.ts";
 import {filmRenderState} from "./film/render.ts";
 import {FILM_STEP_NAMES, FilmStore} from "./film/store.ts";
+import {type Preproduction, preproductionOf} from "./editor/preproduction.ts";
 
 // Where a project stands - for bun run status and the workspace. Read-only: no lock, no LLM, no ComfyUI; the render estimate comes
 // from the measured timings.
@@ -26,7 +27,22 @@ export type Status = {
     steps: { step: string, state: StepState }[],
     render: RenderState<{ id: string }>,
     next: Next,
+    preproduction: Preproduction,   // the stage the plan is at, a casting not taken over yet, a story proposal waiting
     json: Record<string, unknown>,  // the parts of --json that differ between the two
+}
+
+/**
+ * What the preproduction adds to the next command and the notes: a casting.json the project does not have yet comes first - its
+ * plan run takes it over and plans again what was planned from the old texts (the run itself names that only once).
+ */
+export function withPreproduction(next: Next, pre: Preproduction, kind: 'music' | 'film', id: string): { next: Next, notes: [string, string][] } {
+    const notes: [string, string][] = []
+    const stageNames = {story: kind === 'film' ? 'the screenplay' : 'the story', cast: 'the cast', look: 'the look', plan: 'the shot plan'}
+    if (pre.stage !== 'plan') notes.push(['Stage', pre.stage ? `planned up to ${stageNames[pre.stage]}${pre.next ? styles.muted(` - next: ${stageNames[pre.next]} (${kind === 'film' ? 'bun film.ts' : 'bun index.ts'} ${id}${pre.next !== 'plan' ? ` --until=${pre.next}` : ''})`) : ''}` : styles.muted('nothing planned yet')])
+    for (const change of pre.casting.changes) notes.push(['Casting', `${change} ${styles.muted('- casting.json, not taken over yet')}`])
+    if (pre.storyProposal) notes.push(['Story', `${styles.muted('a story told anew for the cast waits:')} bun run story ${id} --take ${styles.muted('or --drop')}`])
+    if (!pre.nextCommand) return {next, notes}
+    return {notes, next: {command: pre.nextCommand, why: `casting.json changed: ${pre.casting.changes.join(', ')}${pre.casting.redo.length ? ` - planned again: ${pre.casting.redo.join(', ')}` : ''}`}}
 }
 
 /** The next command, with what it costs where that is known: plan, pictures, clips, final video - the first that is not done. */
@@ -75,9 +91,12 @@ export async function projectStatus(id: string): Promise<Status> {
         pictures: count => pictureEstimate(count, config, servers),
         clips: clips => clipEstimate(clips, config, servers),
     }, 'final video')
+    const preproduction = await preproductionOf({id: project.id, kind: 'music', dir: project.dir})
+    const withPre = withPreproduction(next, preproduction, 'music', project.id)
     return {
-        id: project.id, dir: project.dir, changed, steps, render, next,
+        id: project.id, dir: project.dir, changed, steps, render, next: withPre.next, preproduction,
         notes: [
+            ...withPre.notes,
             ...lostStems.map(step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`] as [string, string]),
             ...(unplanned.length ? [['Unplanned', `${unplanned.map(styles.name).join(', ')} ${styles.muted('- no shot plan, the next run plans just these')}`] as [string, string]] : []),
         ],
@@ -108,5 +127,7 @@ export async function filmStatus(id: string): Promise<Status> {
         pictures: count => pictureEstimate(count, renderConfig, servers),
         clips: clips => clipEstimate(clips, renderConfig, servers),
     }, 'film')
-    return {id: film.id, dir: film.dir, changed, steps, render, next, notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')]], json: {film: film.id}}
+    const preproduction = await preproductionOf({id: film.id, kind: 'film', dir: film.dir})
+    const withPre = withPreproduction(next, preproduction, 'film', film.id)
+    return {id: film.id, dir: film.dir, changed, steps, render, next: withPre.next, preproduction, notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')], ...withPre.notes], json: {film: film.id}}
 }
