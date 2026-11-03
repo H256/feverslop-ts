@@ -34,6 +34,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     refinish: {args: '<id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001] [--again] [--comfy=URL]', description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.'},
     'add-view': {args: '<film-id> <location-id> --name=<where the camera is> --shows=<what is seen> [--comfy=URL]', description: 'Render one more view of a place of a film, from its anchor.'},
     editor: {args: '[project-id] [--film] [--port=4173]', description: 'Open the workspace in the browser: all projects, the whole video on one timeline, renders, library and casting.'},
+    'client:build': {args: '', description: 'Build the Vue workspace client and install its static files. Stop the preview editor before updating its build.'},
     typecheck: {args: '', description: 'Check project TypeScript types.'},
     'styles:doc': {args: '', description: 'Regenerate the style reference document.'},
     'comfy:types': {args: '[--comfy=URL]', description: 'Regenerate typed ComfyUI nodes from the configured server.'},

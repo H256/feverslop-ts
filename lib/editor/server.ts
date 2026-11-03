@@ -24,6 +24,7 @@ import {runProgress} from "./progress.ts";
 import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
+import {clientStatic, editorUI, requireClientBuild, type EditorUIOptions} from './static.ts';
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -228,12 +229,14 @@ function runEvents(runs: RunControl, target: EditorTarget, request: Request, fro
     return new Response(stream, {headers: {'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store'}})
 }
 
-export function editorHandler(runs = new RunControl()) {
+export function editorHandler(runs = new RunControl(), options: EditorUIOptions = {}) {
     const waveforms = new Map<string, Promise<number[] | undefined>>()
     const thumbnails = new Map<string, Promise<Uint8Array | undefined>>()
     const oneByOne = limiter(THUMBNAILS_AT_ONCE)
 
-    const page = () => new Response(Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
+    const ui = options.ui ?? editorUI()
+    const serveClient = clientStatic(options.publicDir)
+    const page = (request: Request) => ui === 'vue' ? serveClient(request, 'index.html') : new Response(request.method === 'HEAD' ? null : Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
 
     const thumbnail = async (file: string | undefined, url: URL, request: Request) => {
         const width = Number(url.searchParams.get('w') ?? THUMBNAIL_WIDTHS[0])
@@ -405,7 +408,8 @@ export function editorHandler(runs = new RunControl()) {
         if (post && !fromThisPage(request)) return new Response('Forbidden', {status: 403})
         try {
             const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
-            if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page()
+            if (parts[0] === 'workspace-assets') return post ? notFound() : serveClient(request, parts.slice(1).join('/'))
+            if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page(request)
             if (parts[0] === 'api') {
                 if (parts[1] === 'projects' && !post) return json({projects: allTargets().flatMap(target => {
                     try {
@@ -435,7 +439,8 @@ export function editorHandler(runs = new RunControl()) {
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                return post ? notFound() : page()
+                if (ui === 'vue' && (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references'].includes(area)))) return notFound()
+                return post ? notFound() : page(request)
             }
         } catch (e) {
             return failure(e)
@@ -446,6 +451,7 @@ export function editorHandler(runs = new RunControl()) {
 
 /** Serves on the first free port from `port` on, on this machine only. */
 export function startEditor(port: number) {
+    if (editorUI() === 'vue') requireClientBuild()
     const fetch = editorHandler()
     for (let attempt = 0; ; attempt++) {
         try {
