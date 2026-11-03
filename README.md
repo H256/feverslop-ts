@@ -19,6 +19,7 @@ Two modes:
   and, for singing characters, the stem separation and transcription (`tools/vocals.py`, installs PyTorch with CUDA
   13.0, demucs and Whisper on first use - runs on the CPU without an NVIDIA GPU, just much slower)
 - [ffmpeg](https://ffmpeg.org) – cuts the song into one audio file per clip
+- [Node.js](https://nodejs.org) 20.19 or 22.12+ – only to build the workspace page (`bun run editor` does that by itself); the pipeline does not need it
 - An OpenAI-compatible LLM server with the Responses API (llama.cpp, vLLM, LM Studio, …) – see [Setup](#setup)
 - Optional, for rendering: one or more [ComfyUI](https://github.com/comfyanonymous/ComfyUI) servers with the models
   and nodes of the workflows – see [docs/comfyui.md](docs/comfyui.md#setup)
@@ -900,7 +901,7 @@ A film takes the same commands with `--film` (and `bun film.ts`); its screenplay
 
 ### The workspace
 
-`bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`. Step by step, with screenshots: [docs/workspace-guide.md](docs/workspace-guide.md) (in German).
+`bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`. The page is a build of `client/` (Vue): on the first start, and after a pull that changed it, `bun run editor` builds it first, which takes a few seconds. Step by step, with screenshots: [docs/workspace-guide.md](docs/workspace-guide.md) (in German).
 
 - **Planning in stages**: as a film is made - the story (a film: the screenplay), then the cast, then the look, then the shots, and only then the rendering. A bar on the Story and Casting pages, and on the timeline of a project without clips, says how far the plan is and plans the next stage (`--until=story|cast|look`), or everything up to the shots. Every stage is the language model only. Once the look is planned, *Render the pictures* renders the casting photos - every character and place, before the shots are planned (`--until=look --render=images`); on *References* a picture is rendered again or from an edited prompt without planning the shots either.
 - **Story**: the story of a music video, to read, change by hand or have written again; a film's screenplay to read. A changed story drops everything planned from it, the next plan run makes that again. *Tell it anew for the cast* has the language model tell the same story with the cast as it is now (`bun run story <id> --adapt`): a proposal shown next to the story, to take or drop - taken, the cast, the singers and the looks stay, only the summary and the plan from the beats on go.

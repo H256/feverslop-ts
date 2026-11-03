@@ -8,7 +8,7 @@ Der Workspace zeigt alle Projekte und Filme im Browser. Du siehst ein Video als 
 bun run editor
 ```
 
-Dann http://127.0.0.1:4173/ öffnen. Mit `bun run editor <id>` startest du direkt in einem Projekt, `--film` nimmt einen Film, `--port=4174` einen anderen Port. Die Seite ist nur auf diesem Rechner erreichbar.
+Dann http://127.0.0.1:4173/ öffnen. Mit `bun run editor <id>` startest du direkt in einem Projekt, `--film` nimmt einen Film, `--port=4174` einen anderen Port. Die Seite ist nur auf diesem Rechner erreichbar. Beim ersten Start, und nach einem Pull, der die Seite geändert hat, baut `bun run editor` sie vorher neu (ein paar Sekunden, dafür braucht es Node.js).
 
 Alles, was rendert, ist die normale CLI: Die Seite startet sie nur. Solange ein Lauf an einem Projekt arbeitet, ist es gesperrt, egal ob du ihn hier oder im Terminal gestartet hast. Einen Lauf aus dem Terminal kannst du hier verfolgen und stoppen.
 

@@ -2,14 +2,7 @@ import {existsSync, realpathSync, statSync} from 'node:fs';
 import {extname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 
 export const CLIENT_PUBLIC = join(import.meta.dir, 'public')
-export type EditorUI = 'legacy' | 'vue'
-export type EditorUIOptions = {ui?: EditorUI, publicDir?: string}
-
-export function editorUI(value = process.env.FEVERSLOP_EDITOR_UI): EditorUI {
-    if (!value || value === 'vue') return 'vue'
-    if (value === 'legacy') return 'legacy'
-    throw new Error('FEVERSLOP_EDITOR_UI must be legacy or vue')
-}
+export type EditorOptions = {publicDir?: string}
 
 const MIME: Record<string, string> = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',

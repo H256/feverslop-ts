@@ -38,20 +38,18 @@ test('missing files, private metadata, traversal and linked directories are not 
     }
 }))
 
-test('Vue is opt-in and cannot swallow API errors or bypass host/origin checks', () => fixture(async dir => {
-    const handler = editorHandler(undefined, {ui: 'vue', publicDir: dir})
+test('the built page cannot swallow API errors or bypass host/origin checks', () => fixture(async dir => {
+    const handler = editorHandler(undefined, {publicDir: dir})
     expect(await (await handler(new Request('http://localhost/library'))).text()).toContain('Vue fixture')
     expect((await handler(new Request('http://localhost/api/nothing'))).status).toBe(404)
     expect((await handler(new Request('http://localhost/workspace-assets/missing.js'))).status).toBe(404)
     expect((await handler(new Request('http://evil.example/workspace-assets/assets/app-12345678.js'))).status).toBe(403)
     expect((await handler(new Request('http://localhost/api/run', {method: 'POST', headers: {origin: 'http://evil.example'}}))).status).toBe(403)
     expect((await handler(new Request('http://localhost/workspace-assets/assets/app-12345678.js', {method: 'POST'}))).status).toBe(404)
-    const legacy = editorHandler(undefined, {ui: 'legacy', publicDir: dir})
-    expect(await (await legacy(new Request('http://localhost/'))).text()).toContain('<title>Workspace</title>')
 }))
 
 test('missing build gives actionable 503 for UI but leaves API routing intact', () => fixture(async (dir, root) => {
-    const handler = editorHandler(undefined, {ui: 'vue', publicDir: join(root, 'missing')})
+    const handler = editorHandler(undefined, {publicDir: join(root, 'missing')})
     const response = await handler(new Request('http://localhost/'))
     expect(response.status).toBe(503)
     expect(await response.text()).toContain('bun run client:build')

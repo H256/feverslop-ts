@@ -24,12 +24,11 @@ import {runProgress} from "./progress.ts";
 import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
-import {clientStatic, editorUI, requireClientBuild, type EditorUIOptions} from './static.ts';
+import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts';
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
 
-const PAGE = join(import.meta.dir, 'page.html')
 // only what the page plays and shows - not project.json, the logs or the settings, whatever a path says
 const MEDIA_TYPES: Record<string, string> = {
     '.mp4': 'video/mp4', '.webm': 'video/webm', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
@@ -229,14 +228,14 @@ function runEvents(runs: RunControl, target: EditorTarget, request: Request, fro
     return new Response(stream, {headers: {'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store'}})
 }
 
-export function editorHandler(runs = new RunControl(), options: EditorUIOptions = {}) {
+export function editorHandler(runs = new RunControl(), options: EditorOptions = {}) {
     const waveforms = new Map<string, Promise<number[] | undefined>>()
     const thumbnails = new Map<string, Promise<Uint8Array | undefined>>()
     const oneByOne = limiter(THUMBNAILS_AT_ONCE)
 
-    const ui = options.ui ?? editorUI()
+    // every page is the built client: its router shows the page of the address
     const serveClient = clientStatic(options.publicDir)
-    const page = (request: Request) => ui === 'vue' ? serveClient(request, 'index.html') : new Response(request.method === 'HEAD' ? null : Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
+    const page = (request: Request) => serveClient(request, 'index.html')
 
     const thumbnail = async (file: string | undefined, url: URL, request: Request) => {
         const width = Number(url.searchParams.get('w') ?? THUMBNAIL_WIDTHS[0])
@@ -439,7 +438,7 @@ export function editorHandler(runs = new RunControl(), options: EditorUIOptions 
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                if (ui === 'vue' && (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references'].includes(area)))) return notFound()
+                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references'].includes(area))) return notFound()
                 return post ? notFound() : page(request)
             }
         } catch (e) {
@@ -451,7 +450,7 @@ export function editorHandler(runs = new RunControl(), options: EditorUIOptions 
 
 /** Serves on the first free port from `port` on, on this machine only. */
 export function startEditor(port: number) {
-    if (editorUI() === 'vue') requireClientBuild()
+    requireClientBuild()
     const fetch = editorHandler()
     for (let attempt = 0; ; attempt++) {
         try {
