@@ -13,6 +13,7 @@ import {extractFrame, framesOnGrid, probeVideo, trimHead} from "./assemble.ts";
 import {paddedClip, withOriginalSound} from "./refinish.ts";
 import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
+import {bestTake, checkClip, describe as describeFindings, type Finding} from "./clip-qa.ts";
 import {freshness, isUserFile, recordedFingerprint, recordedPrompt} from "./provenance.ts";
 import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
@@ -594,7 +595,8 @@ export class Renderer implements Disposable {
         if (missingStems.length) return log.warn(`${clip.id} skipped - missing stem file(s) for: ${missingStems.map(a => a.stem).join(', ')}`)
         if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id} skipped - missing the full song (needed for MiniMaxH3AddGuide)`)
 
-        const prepare = async () => {
+        // a seed given: a take again with a derived one (checkTakes), else the clip's own
+        const prepare = async (forced?: number) => {
             const pictureUploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
             // Upload the whole separated stem per track (not a per-clip cut) and let the workflow trim it to
             // this clip's span itself (TrimAudioDuration) - a pre-cut file can't account for the video model
@@ -610,7 +612,7 @@ export class Renderer implements Disposable {
                 ...clip.assets.audio.map(a => ({from: stemFiles[a.stem!]!, to: `${this.remoteDir}/stems/${a.stem}.wav`})),
                 {from: stemFiles.song!, to: songRemote},
             ]
-            const seed = clipSeed(this.config.seed, clip.id)
+            const seed = forced ?? clipSeed(this.config.seed, clip.id)
             const {default: videoWorkflow, renderFrames, recommendedResolution} = await loadWorkflow<VideoWorkflowModule>(this.config.videoWorkflow)
             this.noteResolution(recommendedResolution)
 
@@ -647,6 +649,11 @@ export class Renderer implements Disposable {
         let {seed, size: expected} = await this.render(what, target, '.mp4', prepare)
         seed = await this.retryLeaks(what, clip.id, file, seed, prepare, `bun run leak-scan ${this.projectId} lists it again`)
         if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
+        seed = await this.checkTakes(clip.id, file, seed, clip, async derived => {
+            const taken = (await this.render(what, target, '.mp4', () => prepare(derived))).seed
+            if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
+            return taken
+        })
         const rendered = await probeVideo(target)
         // every server has to deliver the size asked for - a clip of another size is scaled in the final video. The sizes
         // are computed by the workflow file, not by the server (comfy/helpers.ts, pixelSize); what still comes out at
@@ -1001,6 +1008,40 @@ export class Renderer implements Disposable {
             log.warn(`${file} has a grey studio backdrop (${where}) - rendered again with another seed (${tries + 1} of ${this.config.leakRetries}); the first one is in ${styles.muted(`old/leaks/${basename(put)}`)}`)
             seed = (await this.render(what, target, '.mp4', prepare)).seed
         }
+        return seed
+    }
+
+    /**
+     * What else a clip came out with (lib/clip-qa.ts): black frames, a picture that stands still, a jump its plan has no cut for - in
+     * the frames the video shows. Measured on every clip and kept next to it (videos/<id>.checks.json). A jump is only said: our clips
+     * jump at their planned cuts a little early or late, and a retry for it would cost a render for little. With config.qaRetries a
+     * clip with black or standing frames is rendered again with a derived seed (seed + 7919·k, not a new random one), and the better
+     * take kept - the other is put away in old/qa/. `again`: the clip rendered (and its head cut) with that seed. Returns the seed
+     * of the take kept.
+     */
+    protected async checkTakes(id: string, file: string, seed: number, clip: { frames: number, shots: { at: number }[] }, again: (seed: number) => Promise<number>): Promise<number> {
+        const target = join(this.projectDir, file)
+        const cuts = clip.shots.map(s => s.at).filter(at => at > 0)
+        const hard = (findings: Finding[]) => findings.filter(f => f.kind !== 'cut')
+        const shown = (folder: string) => relative(this.projectDir, folder).replace(/\\/g, '/')
+        const best = await bestTake({
+            target, seed, retries: this.config.qaRetries,
+            check: () => checkClip(target, cuts, clip.frames),
+            again: async derived => {
+                recordTiming({kind: 'clip', name: this.config.videoWorkflow, seconds: 0, outcome: 'retry', reason: 'qa'})
+                return again(derived)
+            },
+            putAway: takeSeed => join(this.projectDir, 'old', 'qa', `${id}-seed-${takeSeed}`),
+            said: event => event.kind === 'again'
+                ? log.warn(`${file} has ${describeFindings(event.findings)} - rendered again with seed ${event.seed} (${event.attempt} of ${this.config.qaRetries}); this take is in ${styles.muted(shown(event.put))}`)
+                : log.step('Kept', `${file} ${styles.muted(`the take with seed ${event.seed} - the one with seed ${event.worse} has ${describeFindings(event.findings) || 'more found'}, it is in ${shown(event.put)}`)}`),
+        })
+        seed = best.seed
+        const findings = best.findings
+        if (hard(findings).length) log.warn(`${file} has ${describeFindings(hard(findings))}${this.config.qaRetries ? ' - kept as the best take' : ' - "qaRetries": 1 in config.json renders such a clip again with another seed'}`)
+        const jumps = findings.filter(f => f.kind === 'cut')
+        if (jumps.length) log.line(styles.muted(`        · ${id}: ${describeFindings(jumps)} where the plan has no cut - look at it if it matters`))
+        writeFileSync(target.replace(/\.mp4$/, '.checks.json'), JSON.stringify({version: 1, seed, findings}, null, 2))
         return seed
     }
 

@@ -579,6 +579,7 @@ Settings per project, all optional - read at every run and checked field by fiel
   "fightClips": false,
   "vocalGap": 1.5,
   "leakRetries": 0,
+  "qaRetries": 0,
   "seed": -1,
   "imageResolution": -1,
   "videoResolution": -1,

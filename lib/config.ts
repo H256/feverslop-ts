@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Aspect, Resolution} from "../comfy/helpers.ts";
-import {warnUnknownKeys} from "./log.ts";
+import {log, warnUnknownKeys} from "./log.ts";
 import {FPS} from "./frames.ts";
 import {multiplierFor} from "./interpolate.ts";
 import {type Finish, finishOf, finishProblem, MILD_FINISH} from "./finish.ts";
@@ -37,6 +37,9 @@ export type RenderConfig = {
     // a clip that came out as the reference pictures lined up on their grey backdrop (see lib/leak.ts) is rendered again,
     // with another seed, up to this many times. 0 = off: the check costs a little, a render again costs a whole clip
     leakRetries: number,
+    // a rendered clip with black frames or a picture that stands still for seconds (lib/clip-qa.ts) is rendered again with
+    // another, derived seed, and the better take kept - up to this many times. 0 = off: every retry costs a whole clip
+    qaRetries: number,
     // the frame rate of a second final video, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by
     // frame interpolation (lib/interpolate.ts, a ComfyUI job per clip). 24 (default) = off
     finalFps: number,
@@ -94,6 +97,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     fightClips: false,
     vocalGap: 1.5,
     leakRetries: 0,
+    qaRetries: 0,
     finalFps: 24,
     interpolationModel: 'rife_v4.26_heavy.safetensors',
     finish: false,
@@ -129,6 +133,11 @@ export const contextFramesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 && (value === 0 || (value as number) % 17 === 5) ? undefined : `contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(value)}`
 export const leakRetriesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 ? undefined : `leakRetries must be a whole number, 0 or more, got ${JSON.stringify(value)}`
+export const qaRetriesProblem = (value: unknown): string | undefined =>
+    Number.isInteger(value) && (value as number) >= 0 ? undefined : `qaRetries must be a whole number, 0 or more, got ${JSON.stringify(value)}`
+/** Not capped - only said: each retry is a whole render of the clip. */
+export const qaRetriesNote = (value: number): string | undefined =>
+    value > 2 ? `qaRetries ${value}: a clip can be rendered up to ${value + 1} times - 1 or 2 is usually enough, as a black or standing take is rare` : undefined
 export const finalFpsProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= FPS && (value === FPS || multiplierFor(value as number)) ? undefined
         : `finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(value)}`
@@ -189,6 +198,10 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     for (const problem of [finalFpsProblem(config.finalFps), finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)]) if (problem) fail(problem)
     const leakWrong = leakRetriesProblem(config.leakRetries)
     if (leakWrong) fail(leakWrong)
+    const qaWrong = qaRetriesProblem(config.qaRetries)
+    if (qaWrong) fail(qaWrong)
+    const qaNote = qaRetriesNote(config.qaRetries)
+    if (qaNote) log.warn(`${file}: ${qaNote}`)
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     for (const key of ['imageWorkflow', 'videoWorkflow', 'songWorkflow', 'sequenceWorkflow'] as const) {
         const wrong = workflowProblem(key, config[key])
