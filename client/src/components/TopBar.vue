@@ -6,7 +6,7 @@ import ServerStatus from './ServerStatus.vue'
 import ThemeSwitch from './ThemeSwitch.vue'
 
 /** The bar on top of every page. A project puts its own pages and chips into #top-nav and #top-chips. */
-const {title} = ChromeService.use()
+const {title, themeChanged} = ChromeService.use()
 </script>
 
 <template>
@@ -21,6 +21,6 @@ const {title} = ChromeService.use()
       <RouterLink to="/" active-class="" exact-active-class="" :aria-current="$route.path === '/' ? 'page' : undefined">Projects</RouterLink>
       <RouterLink to="/library" :aria-current="$route.path === '/library' ? 'page' : undefined">Library</RouterLink>
     </nav>
-    <ThemeSwitch />
+    <ThemeSwitch @changed="themeChanged" />
   </header>
 </template>

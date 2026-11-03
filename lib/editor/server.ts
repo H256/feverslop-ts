@@ -236,7 +236,7 @@ export function editorHandler(runs = new RunControl(), options: EditorUIOptions 
 
     const ui = options.ui ?? editorUI()
     const serveClient = clientStatic(options.publicDir)
-    const page = (request: Request, legacy = false) => ui === 'vue' && !legacy ? serveClient(request, 'index.html') : new Response(request.method === 'HEAD' ? null : Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
+    const page = (request: Request) => ui === 'vue' ? serveClient(request, 'index.html') : new Response(request.method === 'HEAD' ? null : Bun.file(PAGE), {headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'}})
 
     const thumbnail = async (file: string | undefined, url: URL, request: Request) => {
         const width = Number(url.searchParams.get('w') ?? THUMBNAIL_WIDTHS[0])
@@ -409,7 +409,7 @@ export function editorHandler(runs = new RunControl(), options: EditorUIOptions 
         try {
             const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
             if (parts[0] === 'workspace-assets') return post ? notFound() : serveClient(request, parts.slice(1).join('/'))
-            if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page(request, url.searchParams.get('legacy') === '1')
+            if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page(request)
             if (parts[0] === 'api') {
                 if (parts[1] === 'projects' && !post) return json({projects: allTargets().flatMap(target => {
                     try {
@@ -440,8 +440,7 @@ export function editorHandler(runs = new RunControl(), options: EditorUIOptions 
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
                 if (ui === 'vue' && (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references'].includes(area)))) return notFound()
-                // Project tools stay functional while their individual Vue migrations are pending.
-                return post ? notFound() : page(request, true)
+                return post ? notFound() : page(request)
             }
         } catch (e) {
             return failure(e)

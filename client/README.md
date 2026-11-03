@@ -1,8 +1,8 @@
 # Workspace client
 
-Vue 3 + TypeScript + Vue Router, built with Vite. This is an **opt-in infrastructure preview**;
-project editing and pipeline controls still live in the default legacy workspace.
-Follow [MIGRATION.md](MIGRATION.md) for the remaining feature work.
+Vue 3 + TypeScript + Vue Router, built with Vite: every page of the workspace, opt-in until
+it has been checked by hand with real projects. Follow [MIGRATION.md](MIGRATION.md) for the
+structure, the tests and what is left before it becomes the default.
 
 ## Build and run
 
@@ -42,6 +42,7 @@ There is no CDN, Vite dev-server dependency, API proxy or second production serv
 
 ```sh
 bun run client:check
+bun run client:test
 bun test ./lib/editor
 bun run typecheck
 # Once per developer/CI browser environment:
@@ -51,7 +52,8 @@ bun run client:e2e
 
 The browser check builds and installs the production artifact, starts the real Bun editor
 with a temporary empty project directory, and verifies navigation, direct URLs, local-only
-assets, console errors and missing routes. It does not call external generation services.
+assets, console errors and missing routes; every project page runs against a synthetic
+project whose API is stubbed in the browser. It does not call external generation services.
 Run backend tests with `bun run test`; Playwright tests have their own runner.
 
 ## Boundaries
