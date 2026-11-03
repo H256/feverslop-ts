@@ -284,3 +284,59 @@ describe('the story after the cast', () => {
         expect(bookView('music', data).keptByCast).toEqual([])
     })
 })
+
+describe('the look of a film', () => {
+    // two characters, one with another look (wounded); a place with its designed views; the shots of the scenes after them
+    const film = (): FilmProject => ({
+        cast: {
+            characters: [
+                {id: 'ana', name: 'Ana', aliases: ['ANA'], role: 'r', appearance: 'a', voice: 'v', states: [{id: 'wounded', name: 'wounded', change: 'a bandaged arm'}]},
+                {id: 'bo', name: 'Bo', aliases: ['BO'], role: 'r', appearance: 'b', voice: 'v'},
+                {id: 'narrator', name: 'Narrator', aliases: [], role: 'r', appearance: '', voice: 'v', voiceOnly: true},
+            ],
+            locations: [{id: 'hall', name: 'Hall', aliases: ['HALL'], description: 'd'}, {id: 'yard', name: 'Yard', aliases: [], description: 'y'}],
+        },
+        summary: 's', lookBrief: 'grainy',
+        characterLooks: {'ana': 'ana look', 'ana--wounded': 'ana wounded look', 'bo': 'bo look'},
+        characterDescriptions: {'ana': 'ana desc', 'ana--wounded': 'ana wounded desc', 'bo': 'bo desc'},
+        locationLooks: {hall: 'hall look', yard: 'yard look'}, locationDescriptions: {hall: 'hall desc', yard: 'yard desc'},
+        locationViews: {hall: [{name: 'front', shows: 'the door'}], yard: [{name: 'front', shows: 'the gate'}]},
+        props: [], coverage: [],
+    })
+
+    test('what the page shows: every look of a character, never a voice, the places without background or floor plan', () => {
+        const view = lookView('film', film())
+        expect(view.characters.map(c => [c.id, c.name, c.look, c.description])).toEqual([
+            ['ana', 'Ana', 'ana look', 'ana desc'], ['ana--wounded', 'Ana (wounded)', 'ana wounded look', 'ana wounded desc'], ['bo', 'Bo', 'bo look', 'bo desc'],
+        ])
+        expect(view.locations[0]).toEqual({kind: 'location', id: 'hall', name: 'Hall', library: undefined, look: 'hall look', description: 'hall desc', anchors: undefined, layout: undefined})
+        expect(view.builtOn).toEqual(['coverage'])
+    })
+
+    test('a character written anew: its looks and their descriptions, its other looks too - everyone else is kept', () => {
+        const data = film()
+        const result = applyLook('film', data, {again: [{kind: 'character', id: 'ana'}]})
+        // a film's shots are planned from the cast and the views of the places, not from the looks: they stay
+        expect(result).toEqual({changed: true, remade: ['characterLooks: ana', 'characterDescriptions: ana'], dropped: []})
+        expect(data.coverage).toBeDefined()
+        expect(data.partials!.characterLooks).toEqual({bo: {fingerprint: KEPT_BY_HAND, value: 'bo look'}})
+        expect(data.partials!.characterDescriptions).toEqual({bo: {fingerprint: KEPT_BY_HAND, value: 'bo desc'}})
+        expect(data.locationViews).toBeDefined()
+    })
+
+    test('another look of a character changed by hand: its description written again, the character\'s own look kept', () => {
+        const data = film()
+        const result = applyLook('film', data, {elements: [{kind: 'character', id: 'ana--wounded', look: 'a bandaged arm and a torn sleeve'}]})
+        expect(result.remade).toEqual(['characterDescriptions: ana--wounded'])
+        expect(data.characterLooks!['ana--wounded']).toBe('a bandaged arm and a torn sleeve')
+        expect(Object.keys(data.partials!.characterDescriptions!)).toEqual(['ana', 'bo'])
+    })
+
+    test('a place\'s look changed: its description and its views written again, the other place keeps both', () => {
+        const data = film()
+        const result = applyLook('film', data, {elements: [{kind: 'location', id: 'hall', look: 'a hall in candle light'}]})
+        expect(result.remade).toEqual(['locationDescriptions: hall', 'locationViews: hall'])
+        expect(data.partials!.locationViews).toEqual({yard: {fingerprint: KEPT_BY_HAND, value: [{name: 'front', shows: 'the gate'}]}})
+        expect(() => applyLook('film', film(), {elements: [{kind: 'location', id: 'hall', anchors: 'x'}]})).toThrow('Hall has no anchors to change')
+    })
+})
