@@ -27903,37 +27903,12 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
     },
     "34": {
       "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "frame_idx": 0,
-        "image": [
-          "19",
-          0,
-        ],
-        "latent": [
-          "31",
-          0,
-        ],
-        "positive": [
-          "33",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "35": {
-      "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "34",
+          "33",
           0,
         ],
         "model": [
@@ -27942,7 +27917,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         ],
       },
     },
-    "36": {
+    "35": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -27951,7 +27926,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         "sampler_name": "euler",
       },
     },
-    "37": {
+    "36": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -27966,14 +27941,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         "steps": 2,
       },
     },
-    "38": {
+    "37": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "35",
+          "34",
           0,
         ],
         "latent_image": [
@@ -27985,27 +27960,43 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
           0,
         ],
         "sampler": [
-          "36",
+          "35",
           0,
         ],
         "sigmas": [
-          "37",
+          "36",
           0,
         ],
       },
     },
-    "39": {
+    "38": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "38",
+          "37",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
+      },
+    },
+    "39": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "38",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
       },
     },
     "4": {
@@ -28021,22 +28012,6 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
     },
     "40": {
       "_meta": {
-        "title": "VAEDecode",
-      },
-      "class_type": "VAEDecode",
-      "inputs": {
-        "samples": [
-          "39",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "41": {
-      "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
@@ -28050,7 +28025,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "40",
+          "39",
           0,
         ],
         "loop_count": 0,
@@ -31353,37 +31328,12 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
     },
     "25": {
       "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "frame_idx": 0,
-        "image": [
-          "12",
-          0,
-        ],
-        "latent": [
-          "23",
-          0,
-        ],
-        "positive": [
-          "9",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "26": {
-      "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "25",
+          "9",
           0,
         ],
         "model": [
@@ -31392,7 +31342,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         ],
       },
     },
-    "27": {
+    "26": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -31401,7 +31351,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         "sampler_name": "euler",
       },
     },
-    "28": {
+    "27": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -31416,14 +31366,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         "steps": 2,
       },
     },
-    "29": {
+    "28": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "26",
+          "25",
           0,
         ],
         "latent_image": [
@@ -31435,13 +31385,27 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
           0,
         ],
         "sampler": [
-          "27",
+          "26",
           0,
         ],
         "sigmas": [
+          "27",
+          0,
+        ],
+      },
+    },
+    "29": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
           "28",
           0,
         ],
+        "offload_cache": false,
+        "offload_model": true,
       },
     },
     "3": {
@@ -31456,26 +31420,12 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
     },
     "30": {
       "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "29",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "31": {
-      "_meta": {
         "title": "VAEDecode",
       },
       "class_type": "VAEDecode",
       "inputs": {
         "samples": [
-          "30",
+          "29",
           0,
         ],
         "vae": [
@@ -31484,14 +31434,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         ],
       },
     },
-    "32": {
+    "31": {
       "_meta": {
         "title": "VAEDecodeAudio",
       },
       "class_type": "VAEDecodeAudio",
       "inputs": {
         "samples": [
-          "30",
+          "29",
           0,
         ],
         "vae": [
@@ -31500,14 +31450,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         ],
       },
     },
-    "33": {
+    "32": {
       "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
       "inputs": {
         "audio": [
-          "32",
+          "31",
           0,
         ],
         "crf": 19,
@@ -31515,7 +31465,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "31",
+          "30",
           0,
         ],
         "loop_count": 0,
