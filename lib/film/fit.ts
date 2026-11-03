@@ -2,10 +2,11 @@
 // shots as planned, and a chosen view of the place changes only the background picture while the shot's own words keep the camera
 // where it was planned (#531). The plan run has the language model fit the shots of such a clip to the choice; the code only checks
 // that no left-out name is still in them. Kept per clip with a fingerprint of the question: the same choice is not asked again.
-import {askJson, type AskOptions} from "../llm.ts";
+import type {AskOptions} from "../llm.ts";
 import {log, styles} from "../log.ts";
 import type {ClipOverride} from "./compose.ts";
 import type {FilmClip} from "./coverage.ts";
+import {askFilmJson as askJson} from "./json.ts";
 import {mentions} from "./names.ts";
 import {clipFitPrompt} from "./prompts.ts";
 import type {FilmStore} from "./store.ts";
