@@ -300,6 +300,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         return {locationId: location.id, chosen: options.find(o => o.file === location.file)?.n, options}
     }
     // on the timeline a clip is where the film has it: the final video and the clips have to agree
+    const fitted = (clipId: string) => overrideOf(dir, clipId) ? data.clipFits?.[clipId]?.shots : undefined
     const spans = filmClipSpans(dir, requests)
     const clips = requests.map((clip, n): EditorClip => {
         const coverage = data.coverage?.find(c => c.sceneId === clip.sceneId)
@@ -320,10 +321,13 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
             prompt: clip.prompt,
             shots: clip.shots.map((shot, n) => {
                 const planned = coverage?.shots[offset + n]
+                // a clip fitted to the user's choice (lib/film/fit.ts) shows the shots it is rendered from, while the choice is there
+                const fit = fitted(clip.id)?.[n]
+                const people = fit ? Object.entries(planned?.people ?? {}).filter(([person]) => person in fit.people).map(([person, p]) => [person, {...p, ...fit.people[person]}] as const) : Object.entries(planned?.people ?? {})
                 return {
-                    label: shot.label, at: shot.at, framing: planned?.framing ?? shot.framing, camera: planned?.camera ?? shot.camera, subjects: shot.subjects,
-                    action: planned?.action,
-                    people: Object.entries(planned?.people ?? {}).map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
+                    label: shot.label, at: shot.at, framing: planned?.framing ?? shot.framing, camera: fit?.camera ?? planned?.camera ?? shot.camera, subjects: shot.subjects,
+                    action: fit?.action ?? planned?.action,
+                    people: people.map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
                 }
             }),
             // a line only knows the start of its shot: it lasts until the next one, or to the end of the clip
