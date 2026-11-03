@@ -635,3 +635,24 @@ export function planCommand(target: EditorTarget, change: PlanStage, redo: strin
     const until = stages[Math.max(stages.indexOf(change), at ? stages.indexOf(at) : -1)]!
     return `bun ${target.kind === 'film' ? 'film.ts' : 'index.ts'} ${target.id}${redo.length ? ` --redo=${redo.join(',')}` : ''}${until !== 'plan' ? ` --until=${until}` : ''}`
 }
+
+////////// WHERE THE PREPRODUCTION STANDS - for bun run status and the workspace alike
+
+export type Preproduction = {
+    stage?: PlanStage,          // the last stage the plan has
+    next?: PlanStage,           // the one a plan run makes next
+    casting: CastingRedo,       // what casting.json says that the project does not have yet, and the --redo for it
+    storyProposal: boolean,     // a story told anew for the cast waits to be taken or dropped
+    nextCommand?: string,       // the plan run that takes the casting over - only when there is something to take over
+}
+
+export async function preproductionOf(target: EditorTarget): Promise<Preproduction> {
+    const data = dataOf(target)
+    const casting = await castingRedo(target)
+    return {
+        ...planStateOf(target.kind, data),
+        casting,
+        storyProposal: target.kind === 'music' && storyProposal(target.dir, (data as Project).story) !== undefined,
+        ...(casting.changes.length ? {nextCommand: planCommand(target, 'cast', casting.redo)} : {}),
+    }
+}
