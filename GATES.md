@@ -29,5 +29,5 @@ Scope: Begin migration with an opt-in Vue client, validated artifact installatio
   EXPECT: 1 passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=c6797efbe0a0882f133481c70c19039002d11daa3017e31a3c880ab82bcb82ad; exit=0; EXPECT=matched; output-sha256=c25ddd7366aa6f0208717bc4704b7b6a3945a790b783f0c17f9b0c3c2665fd46; output-bytes=1055; shell=C:\WINDOWS\system32\cmd.exe; cwd=C:\Users\kleme\orca\workspaces\storymaker\remora; path=0ee508887804/57 entries
 
-- [ ] G6: Migration issues and plan cover all current views; review and scoped PR document the remaining migration.
-  EVIDENCE: pending
+- [x] G6: Migration issues and plan cover all current views; review and scoped PR document the remaining migration.
+  EVIDENCE: Tracker #554 and implementation issues #555–#560 created; plan and client/MIGRATION.md map the remaining views. Independent reviewer /root/review_startup reported no material findings. PR https://forgejo.elysium.lan/H256/feverslop-ts/pulls/561 scopes this change to #555. Full backend suite: 749 pass, 1 expected skip, 0 fail. One build failure during the gate run was not reproducible in the direct and repeated gate run; recorded in PR limitations.
