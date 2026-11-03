@@ -1146,6 +1146,23 @@ async function planStage(project, until) {
     if (yes) await startRun({type: 'plan', ...(until && until !== 'plan' ? {until} : {})})
 }
 
+/** The casting photos of a music video planned up to the look: its characters and places rendered before the shots are planned (#540). */
+async function renderLookPictures(project) {
+    const missing = project.pictures.filter(p => !p.exists).length
+    const asked = missing ? await api('estimate', {pictures: missing}).catch(() => ({})) : {}
+    const yes = await ask({
+        title: 'Render the pictures of the cast and the places?',
+        lines: [
+            'Every character and place as the look describes it, before the shots are planned - look at them on References, change a prompt there, render one again.',
+            missing ? `${plural(missing, 'picture')} to render${asked.estimate ? `: ${asked.estimate}` : ''}. Pictures already there stay.` : 'Every picture is there already: nothing is rendered.',
+            'The members of a group come with the shot plan: how many there are is read from the beats.',
+        ],
+        confirm: 'Render them',
+        render: true,
+    })
+    if (yes) await startRun({type: 'look-pictures'})
+}
+
 /** The stages of the plan, what is done and what comes next, with the button that plans it. */
 function stageBar(project) {
     const {stage, next} = project.plan
@@ -1160,6 +1177,7 @@ function stageBar(project) {
         el('span', {class: `stage${project.clips.some(c => c.video) ? ' done' : ''}`, title: 'Rendering: the pictures, the clips and the final video - GPU time, asked for on the timeline'}, 'Rendering'),
         el('div', {class: 'spacer'}),
         next ? el('button', {class: 'btn primary', disabled: busy, title: stageDoes(next, project.kind), onclick: () => planStage(project, next).catch(showError)}, `Plan the ${stageName(next, project.kind).toLowerCase()}`) : '',
+        project.kind === 'music' && stage === 'look' ? el('button', {class: 'btn', disabled: busy, title: 'The casting photos: the pictures of the cast and the places, before the shots are planned', onclick: () => renderLookPictures(project).catch(showError)}, 'Render the pictures') : '',
         next && next !== 'plan' ? el('button', {class: 'btn', disabled: busy, title: 'Every stage up to the shots in one run, without stopping', onclick: () => planStage(project, undefined).catch(showError)}, 'Plan everything') : '',
     )
 }

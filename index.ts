@@ -5,7 +5,7 @@ import {parseArgs} from "node:util";
 import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from "./lib/llm.ts";
-import {mkdirSync, rmSync} from "node:fs";
+import {mkdirSync, readdirSync, rmSync} from "node:fs";
 import {join} from "node:path";
 import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
 import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
@@ -140,7 +140,9 @@ const until = (() => {
         return log.usageError((e as Error).message, usage)
     }
 })()
-if (until && (render.size || args.retake || args.gallery || args.export || args['dry-run'])) log.usageError('--until plans up to a stage and stops - it goes with no --render, --retake, --gallery, --export or --dry-run', usage)
+if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run'])) log.usageError('--until plans up to a stage and stops - it goes with no --render (but --render=images with --until=look), --retake, --gallery, --export or --dry-run', usage)
+// the pictures of the cast and the places are there once the look is: rendered before the shots are planned (#540)
+if (until && render.has('images') && until !== 'look') log.usageError('--until with --render=images is --until=look: the pictures are made from the look', usage)
 const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
@@ -617,6 +619,69 @@ if (castChanged.size) {
 }
 for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
 
+/**
+ * The pictures the requests expect, with the Krea 2 prompt to generate each one - a group character (memberCounts[c.id] > 1)
+ * gets one job per member instead of one shared job, see groupMemberId. Before the beats nobody counts as a group of several.
+ */
+function pictureJobs(memberCounts: Record<string, number>, lookVariants: Record<string, string[]>, descriptionVariants: Record<string, string[]>): PictureJob[] {
+    return [
+        ...cast.locations.map(l => ({
+            kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name,
+            prompt: locationLooks[l.id] ?? '', description: locationDescriptions[l.id] ?? '',
+        })),
+        ...cast.characters.flatMap(c => {
+            const count = memberCounts[c.id] ?? 1
+            const looks = lookVariants[c.id] ?? [characterLooks[c.id] ?? '']
+            const descriptions = descriptionVariants[c.id] ?? [characterDescriptions[c.id] ?? '']
+            return Array.from({length: count}, (_, i) => {
+                const id = count > 1 ? groupMemberId(c.id, i) : c.id
+                return {
+                    kind: 'character' as const, id, file: pictureAsset('character', id), name: c.name,
+                    prompt: looks[i] ?? looks[0] ?? '', description: descriptions[i] ?? descriptions[0] ?? '',
+                }
+            })
+        }),
+    ]
+}
+
+/** --render=images: the pictures named in --only (all without it), again with --again, from an edited prompt with --picture-prompt. */
+async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
+    const only = new Set(args.only.split(',').filter(Boolean))
+    log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
+    const named = namedPictures(pictures, only, args.again && !render.has('videos'))
+    // an edited prompt: this one picture, from these words, kept as it is from then on
+    const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
+    if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
+    const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
+    if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
+        warnFixedSeed(config.seed)
+        for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, args['new-anchor'] || edited !== undefined)}`)}`)
+    }
+    const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
+    log.step('Estimate', styles.muted(await pictureEstimate(todoPictures.length, config, settings.comfy.map(server => server.name))))
+    await renderAll(chosen, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+    if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
+}
+
+if (until === 'look') {
+    // the casting photos: every character and place as the look describes them, before the beats - a group's members come out
+    // of the beats (how many are seen at once), so a group has its pictures with the shot plan
+    const lookPictures = pictureJobs({}, {}, {}).filter(p => p.kind === 'location' || !cast.characters.find(c => c.id === p.id)?.isGroup)
+    const groups = cast.characters.filter(c => c.isGroup)
+    // a plan with clips has its own list, with the group members: it stays until the shots are planned again
+    if (!existsSync(clipRequestsDir(project.dir)) || !readdirSync(clipRequestsDir(project.dir)).some(f => f.endsWith('.json'))) {
+        mkdirSync(join(project.dir, 'output'), {recursive: true})
+        await Bun.write(join(project.dir, 'output', 'assets.json'), JSON.stringify(lookPictures, null, 2))
+    }
+    if (groups.length) log.step('Groups', styles.muted(`${groups.map(g => g.name).join(', ')}: the pictures of their members come with the shot plan`))
+    if (render.has('images')) {
+        using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
+        renderer.refresh = refreshKinds
+        log.section('8e · RENDERING THE CAST AND THE PLACES')
+        log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
+        await renderPictures(renderer, lookPictures)
+    } else log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
+}
 stopAfter(until, 'look', project.file, `bun index.ts ${projectId}`)
 
 ////////// BREAKING THE STORY INTO BEATS
@@ -1088,26 +1153,7 @@ for (const clip of clips) {
     }
 }
 
-// the pictures the requests expect, with the Krea 2 prompt to generate each one - a group character
-// (memberCounts[c.id] > 1) gets one job per member instead of one shared job, see groupMemberId
-const pictures: PictureJob[] = [
-    ...cast.locations.map(l => ({
-        kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name,
-        prompt: locationLooks[l.id] ?? '', description: locationDescriptions[l.id] ?? '',
-    })),
-    ...cast.characters.flatMap(c => {
-        const count = memberCounts[c.id] ?? 1
-        const looks = characterLookVariants[c.id] ?? [characterLooks[c.id] ?? '']
-        const descriptions = characterDescriptionVariants[c.id] ?? [characterDescriptions[c.id] ?? '']
-        return Array.from({length: count}, (_, i) => {
-            const id = count > 1 ? groupMemberId(c.id, i) : c.id
-            return {
-                kind: 'character' as const, id, file: pictureAsset('character', id), name: c.name,
-                prompt: looks[i] ?? looks[0] ?? '', description: descriptions[i] ?? descriptions[0] ?? '',
-            }
-        })
-    }),
-]
+const pictures = pictureJobs(memberCounts, characterLookVariants, characterDescriptionVariants)
 await Bun.write(join(outputDir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
 await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
@@ -1167,22 +1213,7 @@ if (render.has('images') || render.has('videos') || retake) {
     }
 
     // everything at once - the renderer runs one job per server and queues the rest
-    if (render.has('images')) {
-        log.step('Pictures', `${pictures.length}${config.sequenceSheets ? styles.muted(' (multi-angle reference sheets)') : ''}`)
-        const named = namedPictures(pictures, only, args.again && !render.has('videos'))
-        // an edited prompt: this one picture, from these words, kept as it is from then on
-        const edited = args['picture-prompt'] ? await Bun.file(args['picture-prompt']).text() : undefined
-        if (edited !== undefined && named.length !== 1) throw new Error('--picture-prompt goes with one picture in --only')
-        const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
-        if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
-            warnFixedSeed(config.seed)
-            for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, args['new-anchor'] || edited !== undefined)}`)}`)
-        }
-        const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
-        log.step('Estimate', styles.muted(await pictureEstimate(todoPictures.length, config, settings.comfy.map(server => server.name))))
-        await renderAll(chosen, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
-        if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
-    }
+    if (render.has('images')) await renderPictures(renderer, pictures)
     // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
     if (render.has('videos')) {
         if (render.has('images')) await renderer.freeMemory()
