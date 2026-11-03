@@ -5,11 +5,11 @@ has how it came from the former single page, its structure and its tests.
 
 ## Build and run
 
-`bun run editor` builds the page by itself when it is missing or stale, installing the client
-packages first if they are not there, and then serves it. What counts is a stamp the build
-leaves in `lib/editor/public/.build-stamp`: a hash over `client/` (sources, `public/`, settings,
-lockfile - not the tests), `shared/` and the repository's `package.json`. A build handed over
-without `client/` is served as it is.
+`bun run editor` builds the page by itself when it is missing or stale, and then serves it.
+Before each build it installs the client packages as `client/bun.lock` says - a pull may have
+changed them. What counts is a stamp the build leaves in `lib/editor/public/.build-stamp`:
+a hash over `client/` (sources, `public/`, settings, lockfile - not the tests), `shared/` and
+the repository's `package.json`. A build handed over without `client/` is served as it is.
 
 To build by hand, from the repository root (Bun and Node ^20.19 or >=22.12 on PATH):
 

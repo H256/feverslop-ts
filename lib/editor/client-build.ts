@@ -107,15 +107,19 @@ export function clientBuildState(root: string, publicDir: string): 'current' | '
     return installedStamp(publicDir) === clientSourceStamp(root) ? 'current' : 'stale'
 }
 
-/** Install the client's packages when they are not there, build it, install the build and stamp it. Output goes to this terminal. */
-export function buildClient(root: string, publicDir: string) {
+/**
+ * Install the client's packages as its lockfile says, build it, install the build and stamp it. Output goes to this terminal. The
+ * packages are installed before every build, not only when node_modules is missing: a pull that changed the lockfile would otherwise
+ * be built with the packages there were before. With nothing to change the install takes a moment.
+ */
+export function buildClient(root: string, publicDir: string, spawn: typeof Bun.spawnSync = Bun.spawnSync) {
     const client = join(root, 'client')
     const run = (args: string[], what: string, script: string) => {
-        const result = Bun.spawnSync([process.execPath, ...args], {cwd: client, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit'})
+        const result = spawn([process.execPath, ...args], {cwd: client, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit'})
         if (result.exitCode !== 0) throw new Error(`${what} failed. Run it on its own to see why: bun run ${script}`)
     }
     const stamp = clientSourceStamp(root)
-    if (!existsSync(join(client, 'node_modules'))) run(['install', '--frozen-lockfile'], 'Installing the client packages', 'client:install')
+    run(['install', '--frozen-lockfile'], 'Installing the client packages', 'client:install')
     run(['run', 'build'], 'Building the client', 'client:build')
     installClientBuild(join(client, 'dist'), publicDir)
     writeFileSync(join(publicDir, STAMP), stamp)
