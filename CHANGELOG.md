@@ -6,7 +6,7 @@ One section per release. The section of a tag becomes its GitHub release (`.gith
 
 _2026-11-03_
 
-A video is now made as a film is: the story, then the cast, then the look, each looked at and changed before the shots are planned on it, and the pictures of cast and places rendered before the first beat. Who sings which line, down to a word, and when each word is sung, are pages of their own. Everything the workspace changes is a command first. The workspace itself is rebuilt as a Vue client, page for page; it is opt-in until it has been checked by hand on real projects. 26 pull requests since v0.5.0 (#463–#562).
+A video is now made as a film is: the story, then the cast, then the look, each looked at and changed before the shots are planned on it, and the pictures of cast and places rendered before the first beat. Who sings which line, down to a word, and when each word is sung, are pages of their own. Everything the workspace changes is a command first. The workspace itself is rebuilt as a Vue client, page for page, checked by hand on real projects, and replaces the former single page; `bun run editor` builds it by itself. 28 pull requests since v0.5.0 (#463–#564).
 
 ### Highlights
 
@@ -15,7 +15,7 @@ A video is now made as a film is: the story, then the cast, then the look, each 
 - **Casting photos**: characters and places rendered once the look is planned, before beats and shots (#543).
 - **Singers and Timing**: who sings which line, with a change of singer inside a line (#521, #536); the words on the vocals' waveform, dragged or moved by key (#539).
 - **CLI first**: `story`, `cast`, `look`, `casting`, `singers`, `timing`, `versions` and `override` as commands on the same code as the pages, guarded by a test (#550–#552).
-- **The workspace in Vue** (opt-in, `FEVERSLOP_EDITOR_UI=vue`): every page of the workspace as a Vue client, with the version it belongs to in the top bar (#561, #562).
+- **The workspace in Vue**: every page of the workspace as a Vue client, with the FeverSlop logo and the version it belongs to in the top bar; built on the first start and after a pull that changed it (#561, #562, #564).
 
 ### Workspace
 
@@ -29,12 +29,13 @@ A video is now made as a film is: the story, then the cast, then the look, each 
 
 ### The Vue client
 
-- A client of its own in `client/` (Vue 3, TypeScript, Vite), built with `bun run client:build` into the editor and served by Bun; without `FEVERSLOP_EDITOR_UI=vue` the workspace stays as it was (#561).
+- A client of its own in `client/` (Vue 3, TypeScript, Vite), built into the editor and served by Bun (#561).
+- `bun run editor` builds the page when it is missing or its sources changed since (a stamp over `client/`, `shared/` and the release number), installing the client packages first if needed. Node.js is needed for that build only; the pipeline commands need no client tooling (#564).
+- The former single page (`lib/editor/page.html`) and the `FEVERSLOP_EDITOR_UI` switch are gone (#564).
 - One set of wire contracts in `shared/workspace.ts` for server and client: a drift is a type error on either side (#562).
 - Every page ported: overview, library, timeline with player, inspector and review, story, casting, look, references, singers and timing. Unsaved changes ask before leaving; a clip in the address is gone to (#562).
 - The FeverSlop logo: the brain as the mark in the top bar and as the icon of the tab, the whole logo on top of the README.
-- Tests: unit tests for the logic without a browser (`bun run client:test`), Playwright against the real editor (`bun run client:e2e`) (#561, #562).
-- Still to do before it becomes the default (#560): playback, waveform dragging, runs and making an asset checked by hand on real projects, then the old page removed.
+- Tests: unit tests for the logic without a browser (`bun run client:test`), Playwright against the real editor (`bun run client:e2e`), and the real editor with its built page (`bun run test:workspace`) (#561, #562, #564).
 
 ### CLI
 
