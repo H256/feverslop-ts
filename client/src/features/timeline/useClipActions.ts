@@ -3,9 +3,10 @@ import type {EditorClip, EditorOverride, LastRun, ProjectStatus, RunInfo, RunReq
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
-import AddViewForm, {type NewView} from './AddViewForm.vue'
+import AddViewForm from './AddViewForm.vue'
 import {chain} from './clips'
-import RefinishForm, {type Refinish} from './RefinishForm.vue'
+import {newRefinish, refinishRequest, type NewView} from './forms'
+import RefinishForm from './RefinishForm.vue'
 import type {Timeline} from './useTimeline'
 
 /** What can be asked for on the timeline, each asked first - what it costs, what goes stale - and then run. */
@@ -68,24 +69,20 @@ export function useClipActions(timeline: Timeline) {
     if (yes) await start({type: 'retake', clip: clip.id, range})
   }
   async function refinish() {
-    const form = reactive<Refinish>({preset: 'grade', upscale: 'none', size: 'fullhd', denoise: 0.2, fps: '24', finish: true})
+    const form = reactive(newRefinish())
     const picked = markedClips.value
-    const yes = await ask({
+    await ask({
       title: 'Make this project over',
       lines: [
         'From the clips it has: no plan run, no new prompts. videos/ and the final video stay as they are; the clips of a variant get a folder of their own, its final videos a name of their own.',
         picked.length ? `Only the ${plural(picked.length, 'marked clip')}: larger clips, no final video.` : 'All clips, and the final videos.',
       ],
       warnings: ['Refine is slow, about 6 s per frame on the Radeon, and can change mouths a little: try a marked clip first, and compare.'],
-      body: () => h(RefinishForm, {modelValue: form}),
+      body: () => h(RefinishForm, {draft: form}),
       confirm: 'Start',
       render: true,
+      submit: () => start(refinishRequest(form, picked.map(c => c.id))),
     })
-    if (!yes) return
-    const only = picked.length ? {only: picked.map(c => c.id)} : {}
-    await start(form.preset === 'custom'
-      ? {type: 'refinish', upscale: form.upscale, size: form.size, denoise: Number(form.denoise), fps: Number(form.fps), finish: form.finish, ...only}
-      : {type: 'refinish', preset: form.preset, ...only})
   }
   async function pickVersion(clip: EditorClip, version: {id: string, fromThisPlan?: boolean, source?: string}) {
     const later = chain(project.value, clip)
@@ -117,14 +114,15 @@ export function useClipActions(timeline: Timeline) {
   async function addView(clip: EditorClip) {
     if (!clip.views) return
     const view = reactive<NewView>({name: '', shows: ''})
-    const yes = await ask({
+    const location = clip.views.locationId
+    await ask({
       title: 'One more view of this place',
       lines: ['For where the sheet has no view that fits. Rendered from the anchor of the place, so the look stays the same. It appears here to choose from.'],
-      body: () => h(AddViewForm, {modelValue: view}),
+      body: () => h(AddViewForm, {draft: view}),
       confirm: 'Render it',
       render: true,
+      submit: () => start({type: 'add-view', location, name: view.name, shows: view.shows}),
     })
-    if (yes) await start({type: 'add-view', location: clip.views.locationId, name: view.name, shows: view.shows})
   }
   async function repeatLast(last: LastRun) {
     const yes = await ask({title: 'Run this again?', lines: [last.command], confirm: 'Run it', render: true})

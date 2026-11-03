@@ -4,7 +4,7 @@ import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 import {fingerprint} from "../provenance.ts";
 import {type EditorClip, groupsOf, readEditorFreshness, readEditorProject} from "./project.ts";
-import {byteRange, editorHandler, mediaFile, peaks} from "./server.ts";
+import {byteRange, editorHandler, eventCursor, mediaFile, peaks} from "./server.ts";
 
 let root: string
 const write = (file: string, content: unknown) => {
@@ -204,4 +204,11 @@ describe('peaks', () => {
         expect(peaks(new Int16Array(0), 3)).toEqual([0, 0, 0])
         expect(peaks(new Int16Array([1000]), 2)).toEqual([1, 0])
     })
+})
+
+test('a run log the browser follows again by itself goes on after the last lines it got, not from the start', () => {
+    const asked = (headers: Record<string, string> = {}) => eventCursor(new Request('http://localhost/api/run-events?after=0', {headers}), 0)
+    expect(asked()).toBe(0)
+    expect(asked({'last-event-id': '42'})).toBe(42)
+    expect(asked({'last-event-id': 'nonsense'})).toBe(0)
 })

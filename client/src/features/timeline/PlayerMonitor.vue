@@ -8,7 +8,7 @@ import {useTimeline} from './context'
 import ReviewBar from './ReviewBar.vue'
 
 /** The monitor and its transport: it stays dark in both themes - a picture is judged against black. */
-const {playback, project, pickSource, helpOpen} = useTimeline()
+const {playback, project, pickSource, showHelp} = useTimeline()
 const {fail} = useToasts()
 const stage = ref<HTMLElement>()
 const a = ref<HTMLVideoElement>()
@@ -26,7 +26,6 @@ const toggleFullscreen = () => {
   if (document.fullscreenElement) void document.exitFullscreen()
   else stage.value?.requestFullscreen().catch(fail)
 }
-const openHelp = () => { helpOpen.value = true }
 defineExpose({toggleFullscreen})
 </script>
 
@@ -49,12 +48,12 @@ defineExpose({toggleFullscreen})
       <span class="now muted">{{ now }}</span>
       <div class="spacer" />
       <span v-if="playback.speed.value !== 1" class="chip num">{{ playback.speed.value }}×</span>
-      <button v-if="playback.loop.value" class="chip" title="Stop the loop (O)" @click="playback.loop.value = undefined">Loop {{ playback.loop.value.label }} ×</button>
+      <button v-if="playback.loop.value" class="chip" title="Stop the loop (O)" @click="playback.toggleLoop(false)">Loop {{ playback.loop.value.label }} ×</button>
       <span v-if="playback.info.value?.text" class="chip num" :title="playback.info.value.title">{{ playback.info.value.text }}</span>
       <select class="source" title="What the monitor plays" aria-label="What the monitor plays" :value="playback.source.value" @change="pickSource(($event.target as HTMLSelectElement).value)">
         <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
       </select>
-      <button class="tbtn" title="Keys and words (?)" aria-label="Keys and words" @click="openHelp">?</button>
+      <button class="tbtn" title="Keys and words (?)" aria-label="Keys and words" @click="showHelp">?</button>
       <button class="tbtn" title="Sound on or off (M)" aria-label="Sound on or off" @click="playback.toggleMute()"><AppIcon :name="playback.muted.value ? 'muted' : 'sound'" /></button>
     </div>
   </section>

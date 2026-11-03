@@ -1,4 +1,4 @@
-import {computed, reactive, ref, type Ref} from 'vue'
+import {computed, reactive, ref, shallowRef, type Ref} from 'vue'
 import type {SingingLine, SingingView} from '../../../../shared/workspace'
 import {clamp} from '../../lib/format'
 import {hueAt} from '../../lib/terms'
@@ -6,14 +6,17 @@ import {changeOf, changesOf, partsOfView, singersOf, splitAt, type Part} from '.
 
 /**
  * Who sings which line, as changed on the page and not saved yet. The singers of the song come first, in their order: their colours
- * and number keys stay put while lines are changed.
+ * and number keys stay put while lines are changed. What is changed is measured against the reading the draft started from, not
+ * against the newest one: lines another hand changed meanwhile are not changes made here.
  */
 export function useSingingDraft(view: Ref<SingingView>) {
   const pool = ref<string[]>([])
   const assigned = reactive(new Map<number, Part[]>())
   // the part of a line the number keys go to
   const active = reactive(new Map<number, number>())
+  const base = shallowRef(view.value)
   const reset = () => {
+    base.value = view.value
     pool.value = [...view.value.singers]
     assigned.clear()
     for (const line of view.value.lines) assigned.set(line.line, partsOfView(line))
@@ -23,8 +26,8 @@ export function useSingingDraft(view: Ref<SingingView>) {
   const partsOf = (line: SingingLine) => assigned.get(line.line) ?? partsOfView(line)
   const hueOf = (id: string) => hueAt(Math.max(0, pool.value.indexOf(id)))
   const nameOf = (id: string) => view.value.characters.find(c => c.id === id)?.name ?? id
-  const changes = computed(() => changesOf(view.value, partsOf))
-  const isChanged = (line: SingingLine) => changes.value.lines.includes(line)
+  const changes = computed(() => changesOf(base.value, partsOf))
+  const isChanged = (line: SingingLine) => changes.value.lines.some(l => l.line === line.line)
   const activeOf = (line: SingingLine) => active.get(line.line) ?? 0
 
   const toggle = (line: SingingLine, id: string, k = activeOf(line)) => {

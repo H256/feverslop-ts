@@ -5,6 +5,7 @@ import type {EditorReference, Freshness} from '../../../../shared/workspace'
 import SheetMedia from '../../components/SheetMedia.vue'
 import VersionCard from '../../components/VersionCard.vue'
 import {useDraft} from '../../composables/useDraft'
+import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {plural} from '../../lib/format'
 import {FRESH_LABEL, TERMS} from '../../lib/terms'
 import {useToasts} from '../../services/toasts'
@@ -19,6 +20,8 @@ const {root, roots} = useProject()
 const {guard} = useToasts()
 const viewer = useViewer()
 const prompt = useDraft(() => props.reference.prompt)
+// the prompt belongs to this picture: picking another one (the hash) or leaving the page asks first
+useUnsavedChanges(() => prompt.dirty.value, 'changes to the prompt', {hash: true})
 const actions = useReferenceActions(toRef(props, 'reference'), toRef(props, 'fresh'), async () => emit('changed'))
 const exportable = () => props.reference.kind !== 'prop' && !!props.reference.picture
 </script>

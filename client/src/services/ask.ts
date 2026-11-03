@@ -13,6 +13,11 @@ export type AskOptions = {
   render?: boolean,
   /** A form of the question's own, made with h(); it reads into a reactive object of the caller. */
   body?: () => VNodeChild,
+  /**
+   * What the answer does, done while the question is still open: it closes once this is done, and a failure is said in it, with the
+   * form as it was filled in. The question then answers true only when this succeeded.
+   */
+  submit?: () => Promise<unknown>,
 }
 export type AskRequest = AskOptions & {id: number, answer: (yes: boolean) => void}
 

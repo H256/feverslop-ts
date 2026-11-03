@@ -53,13 +53,13 @@ export function useReferenceActions(reference: Ref<EditorReference>, fresh: Ref<
   async function putIntoLibrary() {
     const r = reference.value
     const as = ref(r.id)
-    const yes = await ask({
+    await ask({
       title: `Put ${r.name} into the library?`,
       lines: ['Its picture, its whole sheet and its texts are copied. An asset the library already has is never overwritten.'],
-      body: () => h(FormField, {label: 'Library id'}, () => h('input', {type: 'text', value: as.value, onInput: (event: Event) => { as.value = (event.target as HTMLInputElement).value }})),
+      body: () => h(FormField, {label: 'Library id'}, () => h('input', {type: 'text', required: true, value: as.value, onInput: (event: Event) => { as.value = (event.target as HTMLInputElement).value }})),
       confirm: 'Put it in',
+      submit: () => start({type: 'export-asset', asset: r.id, as: as.value.trim()}),
     })
-    if (yes) await start({type: 'export-asset', asset: r.id, as: as.value.trim()})
   }
   return {blocked, rerender, pick, putIntoLibrary}
 }

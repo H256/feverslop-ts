@@ -149,7 +149,7 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
     if (final()) at = video().ended ? p.seconds : video().currentTime
     else if (usesSong()) at = song.ended ? p.seconds : song.currentTime
     else if (current && fileOf(current, source.value) && !video().hidden) at = video().ended ? current.end : current.start + video().currentTime
-    else at = t.value + elapsed
+    else at = t.value + elapsed * speed.value
 
     if (loop.value && at >= loop.value.to) {
       seek(loop.value.from)

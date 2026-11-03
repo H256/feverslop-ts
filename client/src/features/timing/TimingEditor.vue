@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, onMounted, onScopeDispose, ref, watchEffect} from 'vue'
 import type {TimingLine, TimingView} from '../../../../shared/workspace'
+import {usePointerDrag} from '../../composables/usePointerDrag'
 import {cssColor, cssVar, prepareCanvas} from '../../lib/canvas'
 import {clock} from '../../lib/format'
 import {ChromeService} from '../../services/chrome'
@@ -73,6 +74,7 @@ const crossed = (line: TimingLine, n: number) => {
 }
 const headShown = computed(() => props.head !== undefined && props.head >= span.value.from && props.head <= span.value.to)
 
+const follow = usePointerDrag()
 /** Dragging in seconds: one undo step per drag, on the window - the boxes are drawn anew while dragging. */
 function drag(event: PointerEvent, move: (by: number) => void, pick?: () => void) {
   if (event.button !== 0) return
@@ -82,19 +84,12 @@ function drag(event: PointerEvent, move: (by: number) => void, pick?: () => void
   props.draft.remember()
   let last = event.clientX
   const pps = width.value / (span.value.to - span.value.from)
-  const onMove = (e: PointerEvent) => {
+  follow(e => {
     const by = (e.clientX - last) / pps
     if (!by) return
     last = e.clientX
     move(by)
-  }
-  const onUp = () => {
-    removeEventListener('pointermove', onMove)
-    removeEventListener('pointerup', onUp)
-    props.draft.settle()
-  }
-  addEventListener('pointermove', onMove)
-  addEventListener('pointerup', onUp)
+  }, () => props.draft.settle())
 }
 const dragLine = (event: PointerEvent, line: TimingLine) => drag(event, by => props.draft.moveLine(line, by))
 const dragWord = (event: PointerEvent, line: TimingLine, n: number, edge?: 'start' | 'end') => drag(event, by => props.draft.moveWord(line, n, by, edge), () => { props.draft.word.value = n })

@@ -117,11 +117,17 @@ export function createTimeline() {
     const next = direction > 0 ? clips.find(c => c.start > t + 0.01) ?? clips[0]! : clips.findLast(c => c.start < t - 0.01) ?? clips.at(-1)!
     playback.seek(next.start)
   }
-  /** The versions of the clip picked, asked for once per clip and snapshot. */
+  /**
+   * The versions of the clip picked, asked for once per clip and snapshot. Only the answer to the newest question is kept, and only
+   * while its clip is still the one picked in the same snapshot: a slow answer about the clip before never shows as this one's.
+   */
+  let versionsAsked = 0
   async function loadVersions(clip: EditorClip) {
     if (versions.value?.clip === clip.id) return versions.value.list
+    const asked = ++versionsAsked
+    const snapshot = project.value
     const {versions: list} = await api.versions(clip.id)
-    versions.value = {clip: clip.id, list}
+    if (asked === versionsAsked && project.value === snapshot && playback.clip.value?.id === clip.id) versions.value = {clip: clip.id, list}
     return list
   }
 

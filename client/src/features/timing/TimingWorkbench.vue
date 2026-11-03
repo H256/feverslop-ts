@@ -5,6 +5,7 @@ import type {TimingView} from '../../../../shared/workspace'
 import {mediaUrl} from '../../api/urls'
 import PageBar from '../../components/PageBar.vue'
 import SegmentedControl from '../../components/SegmentedControl.vue'
+import {usePending} from '../../composables/usePending'
 import {useSnippetPlayer} from '../../composables/useSnippetPlayer'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {clock, plural} from '../../lib/format'
@@ -21,7 +22,7 @@ import {useTimingDraft} from './useTimingDraft'
  * When the lyrics are sung. A line the alignment barely found has guessed times; here its words are moved on the waveform of the vocals.
  * The cut of the song stays: the clips' vocals are worked out again, and the beats whose clips sing something else lose their shot plan.
  */
-const props = defineProps<{view: TimingView, peaks?: number[], refresh: () => Promise<void>}>()
+const props = defineProps<{view: TimingView, peaks?: number[], refresh: () => Promise<boolean>}>()
 const {api, roots, start} = useProject()
 const ask = useAsk()
 const toasts = useToasts()
@@ -42,9 +43,14 @@ const choose = (n: number) => {
   editor.value?.focus()
 }
 
-const save = toasts.guard(async (then: 'none' | 'plan' | 'cut') => {
+// while saving the page is not to be changed: the moved lines are let go - only once what was saved has been read again
+const saving = usePending()
+const save = toasts.guard((then: 'none' | 'plan' | 'cut') => saving.during(async () => {
   const result = await api.saveTiming(draft.request())
-  await props.refresh()
+  if (!await props.refresh()) {
+    saved.value = 'Saved - but the page could not read it again: what you see is what was sent.'
+    return
+  }
   draft.discard()
   saved.value = [
     `Saved: ${plural(result.slots.length, 'clip')} sing${result.slots.length === 1 ? 's' : ''} something else now.`,
@@ -52,7 +58,7 @@ const save = toasts.guard(async (then: 'none' | 'plan' | 'cut') => {
   ].filter(Boolean).join(' ')
   if (then === 'plan' && props.view.unplanned.length) await start({type: 'plan'})
   if (then === 'cut') await start({type: 'plan', redo: ['timeline']})
-})
+}))
 const cutAgain = toasts.guard(async () => {
   const yes = await ask({
     title: 'Cut the song again?',
@@ -60,7 +66,7 @@ const cutAgain = toasts.guard(async () => {
     warnings: ['On a whole song that takes a while: the blocking and the shots of every beat.'],
     confirm: 'Save and cut again',
   })
-  if (yes) save('cut')
+  if (yes) await save('cut')
 })
 
 // a link to a line opens it
@@ -72,7 +78,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="split view">
+  <div class="split view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
     <div class="scrollpage">
       <PageBar title="When the lyrics are sung"><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /></PageBar>
       <div class="tedit-wrap">

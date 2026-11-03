@@ -15,7 +15,8 @@ import {useServers} from '../../services/servers'
 import {useToasts} from '../../services/toasts'
 import AssetCard from './AssetCard.vue'
 import AssetDetail from './AssetDetail.vue'
-import NewAssetForm, {type NewAsset} from './NewAssetForm.vue'
+import {assetForm, newAsset} from './forms'
+import NewAssetForm from './NewAssetForm.vue'
 
 usePageTitle('Asset library', 'Library · Workspace')
 const {data, loading, error, reload} = useResource(signal => workspace.library(signal))
@@ -37,26 +38,17 @@ const shown = computed(() => assets.value.filter(asset => (kind.value === 'all' 
 const selected = computed(() => assets.value.find(asset => keyOf(asset) === selectedKey.value))
 
 /** A new asset from a picture: the picture becomes the anchor, ComfyUI renders the sheet from it. */
-const newAsset = toasts.guard(async () => {
-  const asset = reactive<NewAsset>({kind: 'character', id: '', name: '', role: '', description: ''})
-  const yes = await ask({
+const createAsset = toasts.guard(async () => {
+  const asset = reactive(newAsset())
+  // sent from the open question: a refusal (an id the library has) is said there, with the form still filled in
+  await ask({
     title: 'New asset from a picture',
     lines: ['The picture becomes the anchor, ComfyUI renders the reference sheet from it. An asset already in the library is never overwritten.'],
-    body: () => h(NewAssetForm, {modelValue: asset}),
+    body: () => h(NewAssetForm, {draft: asset}),
     confirm: 'Render it',
     render: true,
+    submit: async () => { run.started((await workspace.createAsset(assetForm(asset, servers.take()))).run) },
   })
-  if (!yes) return
-  const form = new FormData()
-  form.set('anchor', asset.file ?? '')
-  form.set('kind', asset.kind)
-  form.set('id', asset.id.trim())
-  form.set('name', asset.name)
-  form.set('role', asset.role)
-  form.set('description', asset.description)
-  const chosen = servers.take()
-  if (chosen) form.set('servers', JSON.stringify(chosen))
-  run.started((await workspace.createAsset(form)).run)
 })
 </script>
 
@@ -68,7 +60,7 @@ const newAsset = toasts.guard(async () => {
         <input v-model="text" type="search" placeholder="Find an asset" aria-label="Find an asset">
         <span v-if="data" class="muted" :title="data.dir">{{ plural(shown.length, 'asset') }}</span>
         <div class="spacer" />
-        <button class="btn primary" @click="newAsset">New asset from a picture</button>
+        <button class="btn primary" @click="createAsset">New asset from a picture</button>
       </PageBar>
       <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
       <div v-if="data" class="cards">

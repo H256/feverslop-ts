@@ -95,7 +95,7 @@ export type ProjectStatus = {
   steps: unknown, changed: unknown,
   pictures: {total: number, missing: number, stale: number},
   clips: {total: number, missing: number, stale: number},
-  final: unknown,
+  final: FinalState,
   next: {command?: string, why: string, estimate?: string},
 }
 /** The overview only reads these fields of a status. */

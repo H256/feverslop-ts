@@ -18,8 +18,8 @@ export function createToasts() {
   }
   /** What went wrong, said - a request that was not wanted any more is not. */
   const fail = (cause: unknown) => { if (!isAbort(cause)) show(errorText(cause), true) }
-  /** For a click handler: its failure is said, never thrown into the void. */
-  const guard = <A extends unknown[]>(action: (...args: A) => Promise<unknown>) => (...args: A) => { action(...args).catch(fail) }
+  /** For a click handler: its failure is said, never thrown into the void. The promise is kept, so a caller can wait for the end. */
+  const guard = <A extends unknown[]>(action: (...args: A) => Promise<unknown>) => (...args: A): Promise<void> => action(...args).then(() => {}, fail)
   const dispose = () => clearTimeout(timer)
   return {current, show, fail, guard, dispose}
 }

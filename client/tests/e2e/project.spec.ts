@@ -125,3 +125,61 @@ test('timing: a line moved by key, undone, moved again and saved', async ({page}
   await page.getByRole('button', {name: 'Save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.5, end: 2.5}, {start: 2.5, end: 3.5}]}]})
 })
+
+// what the review found: answers that come late, changes made while saving, a refusal in a question, a draft of another pick
+test('versions: a slow answer about the clip before never shows as the versions of this one', async ({page}) => {
+  await page.route('**/api/versions/clip-1', async route => {
+    await new Promise(resolve => setTimeout(resolve, 600))
+    await route.fulfill({json: {versions: [{id: 'old/clip-1', video: 'old/clip-1.mp4', source: 'again', made: 1, v: 1}]}})
+  })
+  await page.goto(`${base}/p/music/demo/#clip-1`)
+  await page.getByRole('tab', {name: 'Versions'}).click()
+  await expect(page.getByText('Looking…')).toBeVisible()
+  await page.locator('body').press('ArrowRight')
+  await expect(page.locator('.ihead h2')).toContainText('clip-2')
+  await expect(page.getByText('No older versions')).toBeVisible()
+  await page.waitForTimeout(800)
+  await expect(page.getByRole('button', {name: 'Make current'})).toHaveCount(0)
+})
+
+test('singers: while a change is saved the page cannot be changed, and what was saved is reset only once read again', async ({page}) => {
+  let release: () => void = () => {}
+  await page.route('**/api/singing', async route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    await new Promise<void>(resolve => { release = resolve })
+    await route.fallback()
+  })
+  await page.goto(`${base}/p/music/demo/singers#line-0`)
+  await page.getByLabel('Add a singer').selectOption('ben')
+  await page.locator('#line-0').press('2')
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect(page.locator('.split.view')).toHaveAttribute('inert', '')
+  release()
+  await expect(page.locator('.split.view')).not.toHaveAttribute('inert', '')
+  await expect(page.getByText('Saved.', {exact: false})).toBeVisible()
+})
+
+test('library: a question whose work the server refuses stays open, with what was filled in and why', async ({page}) => {
+  await page.route('**/api/library/assets', route => route.fulfill({json: {dir: 'library', assets: []}}))
+  await page.route('**/api/library/create', route => route.fulfill({status: 409, json: {error: 'library:kael already exists'}}))
+  await page.goto(`${base}/library`)
+  await page.getByRole('button', {name: 'New asset from a picture'}).click()
+  // the picture is required: the form says so instead of closing
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect(dialog(page)).toBeVisible()
+  await dialog(page).getByLabel('Picture').setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
+  await dialog(page).getByLabel('Library id').fill('kael')
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect(dialog(page).getByRole('alert')).toHaveText('library:kael already exists')
+  await expect(dialog(page).getByLabel('Library id')).toHaveValue('kael')
+})
+
+test('references: an edited prompt is not lost by picking another picture', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/references#ann`)
+  await page.getByRole('textbox', {name: 'Prompt'}).fill('Ann in blue')
+  await page.getByRole('button', {name: /^Bar/}).click()
+  await expect(dialog(page)).toContainText('changes to the prompt')
+  await dialog(page).getByRole('button', {name: 'Cancel'}).click()
+  await expect(page).toHaveURL(/#ann$/)
+  await expect(page.getByRole('textbox', {name: 'Prompt'})).toHaveValue('Ann in blue')
+})

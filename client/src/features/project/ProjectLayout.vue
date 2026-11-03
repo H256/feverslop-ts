@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, onScopeDispose} from 'vue'
 import {RouterLink, RouterView, useRoute} from 'vue-router'
 import type {ProjectKind} from '../../../../shared/workspace'
 import ResourceState from '../../components/ResourceState.vue'
@@ -13,6 +13,7 @@ import {createProjectSession, ProjectService} from './session'
 const route = useRoute()
 const run = useRunDock()
 const session = ProjectService.provide(createProjectSession(route.params.kind as ProjectKind, String(route.params.id), {run, servers: useServers()}))
+onScopeDispose(session.close)
 const {reload, error, loading} = useResource(signal => session.reload(signal))
 run.follow({events: session.api.events, stop: session.api.stop})
 // what a run changed is read again: every page shows the folder as it is now

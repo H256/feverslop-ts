@@ -248,6 +248,7 @@ background: light-dark(oklch(.92 .05 var(--h)), oklch(.31 .06 var(--h))); color:
 .server.busy i { background: var(--stale); }
 .server.down i { background: var(--danger); }
 .pick { border: 0; padding: 0; margin: 8px 0 0; }
+fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pick legend { padding: 0; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
 .pick label { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
 .pick label.down { color: var(--muted); }

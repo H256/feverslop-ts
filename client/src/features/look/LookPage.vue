@@ -2,6 +2,7 @@
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useDraft} from '../../composables/useDraft'
+import {usePending} from '../../composables/usePending'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {listSteps} from '../../lib/format'
 import {useAsk} from '../../services/ask'
@@ -20,6 +21,8 @@ const {data: look, loading, error, reload, refresh} = usePageData(signal => api.
 const brief = useDraft(() => look.value?.lookBrief)
 const edits = useLookEdits()
 useUnsavedChanges(() => brief.dirty.value || edits.dirty.value, 'looks')
+// while saving the page is not to be changed: the edits sent are let go after it, and with them whatever was typed meanwhile
+const saving = usePending()
 
 const saveBrief = toasts.guard(async () => {
   const goes = look.value?.briefBuiltOn ?? []
@@ -30,10 +33,14 @@ const saveBrief = toasts.guard(async () => {
     confirm: 'Save it',
   })
   if (!yes) return
-  const result = await api.saveLook({lookBrief: brief.text.value})
+  const result = await saving.during(async () => {
+    const result = await api.saveLook({lookBrief: brief.text.value})
+    // a new look of the whole has every look written again: the texts changed here go with it
+    edits.clear()
+    await refresh()
+    return result
+  })
   toasts.show(result.changed ? 'The look is saved' : 'Nothing changed')
-  edits.clear()
-  await refresh()
 })
 const saveLooks = toasts.guard(async () => {
   const goes = look.value?.builtOn ?? []
@@ -50,9 +57,11 @@ const saveLooks = toasts.guard(async () => {
     confirm: 'Save it',
   })
   if (!yes) return
-  const result = await api.saveLook(edits.change())
-  edits.clear()
-  await refresh()
+  const result = await saving.during(async () => {
+    const result = await api.saveLook(edits.change())
+    if (await refresh()) edits.clear()
+    return result
+  })
   if (!result.changed) return toasts.show('Nothing changed')
   // the texts to write are written by the next plan run - right away, if wanted, stopping after the look
   const now = result.remade.length > 0 && await ask({
@@ -65,7 +74,7 @@ const saveLooks = toasts.guard(async () => {
 </script>
 
 <template>
-  <div class="scrollpage view">
+  <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
     <StageBar />
     <ResourceState :loading="loading" :error="error" :loaded="!!look" @retry="reload" />
     <template v-if="look">
