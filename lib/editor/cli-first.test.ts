@@ -30,7 +30,7 @@ describe('CLI first', () => {
         const commands = [...readdirSync(join(root, 'tools')).filter(f => f.endsWith('.ts')).map(f => read(`tools/${f}`)), read('index.ts'), read('film.ts')].join('\n')
         const calls = postCalls()
         // the reading of the routes still finds them
-        for (const name of ['writeCast', 'writeLook', 'writeStory', 'writeSinging', 'writeTiming', 'pickVersion', 'writeOverride', 'writeCastingEntry']) expect(calls).toContain(name)
+        for (const name of ['writeCast', 'writeLook', 'writeStory', 'writeSinging', 'writeTiming', 'pickVersion', 'writeOverride', 'writeCastingEntry', 'writeConfig']) expect(calls).toContain(name)
         const pageOnly = calls.filter(name => !new RegExp(`\\b${name}\\(`).test(commands))
         expect(pageOnly).toEqual([])
     })

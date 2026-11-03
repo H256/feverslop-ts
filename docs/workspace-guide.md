@@ -216,6 +216,18 @@ Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich 
 
 **Im Terminal:** `bun run timing <id>` listet jede Zeile mit Anfang und Ende. `--json > timing.json` schreibt die Wortzeiten in eine Datei. Du verschiebst `start` und `end` und gibst sie mit `--set=timing.json` zurück. Unverändert zurückgegebene Zeilen zählen nicht als geändert. Fällt danach ein Schnitt in ein Wort, sagt der Befehl das und nennt `--redo=timeline`.
 
+## Einstellungen eines Projekts ändern
+
+Auf der Seite **Settings** stehen die Render-Einstellungen des Projekts, also was sonst in der `config.json` steht: der **Video workflow** (zum Beispiel `h3-ref2video-prism-2pass` statt `h3-ref2video-2pass`), der Bild- und der Sheet-Workflow, die Größe von Video und Bildern, das Seitenverhältnis, die Context frames, der Seed, die Wiederholungen und die Bildrate des fertigen Videos. Bei jeder Einstellung steht, was sie tut und was der Standard ist; mit **Use the default** gehst du zurück, mit **Undo** zu dem, was das Projekt hatte.
+
+1. **Ändern**, was du brauchst. Geänderte Einstellungen haben links einen farbigen Strich.
+2. **Save** klicken. Die Rückfrage nennt, was sich ändert, und **wie viele fertig gerenderte Clips und Bilder dadurch veraltet sind**. Der Workflow, die Größe und das Seitenverhältnis gehören zu dem, woraus ein Clip gemacht ist: Ändert sich eins davon, gilt der Clip als *stale*. Etwas anderes, etwa die Wiederholungen oder die Bildrate des fertigen Videos, macht nichts stale.
+3. Gerendert wird dadurch **nichts**. Die Timeline zeigt dir danach, welche Clips veraltet sind, und du rendest sie, wenn du willst.
+
+Ein falscher Wert wird abgelehnt, mit denselben Worten wie beim Start eines Laufs. Ein sehr hoher Wert wird nur angemerkt, nie gekürzt. Läuft gerade ein Lauf, wird nichts geschrieben: Warte, bis er fertig ist.
+
+**Im Terminal:** `bun run config <id>` zeigt die Einstellungen, `--set=videoWorkflow=h3-ref2video-prism-2pass` ändert eine (mehrfach möglich), `--unset=seed` nimmt sie aus der Datei. Beim Film kommt `--film` dazu. Andere Schlüssel der `config.json`, etwa die Sänger, ändert man auf der Seite, zu der sie gehören, oder von Hand.
+
 ## Ein älteres Projekt aufwerten
 
 ![Refinish-Dialog](images/workspace/refinish.jpg)

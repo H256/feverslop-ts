@@ -2,7 +2,7 @@ import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {isAbsolute, join, relative} from "node:path";
 import {probeVideo} from "../assemble.ts";
 import {boundaryFrameAsset, type ClipRequest} from "../compose.ts";
-import {loadProjectConfig} from "../config.ts";
+import {loadProjectConfig, type ProjectConfig} from "../config.ts";
 import {FPS, secondsAt} from "../frames.ts";
 import type {Project} from "../project.ts";
 import {type Freshness, freshness} from "../provenance.ts";
@@ -13,7 +13,7 @@ import {lastRun, type RunState, runState} from "../run-record.ts";
 import {explainFailure, type Explained} from "./progress.ts";
 import {asBeatShots} from "../shot-plan.ts";
 import type {FilmClipRequest} from "../film/compose.ts";
-import {loadFilmConfig} from "../film/config.ts";
+import {loadFilmConfig, type LoadedFilmConfig} from "../film/config.ts";
 import {filmRenderConfig, placeViewFrame} from "../film/pictures.ts";
 import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
@@ -365,10 +365,11 @@ export const readEditorProject = (target: EditorTarget) => target.kind === 'film
 
 
 /** Which rendered clips and pictures were made from another request than the plan has now. Hashes every reference picture a clip has, once. */
-export async function readEditorFreshness({dir, kind}: EditorTarget): Promise<EditorFreshness> {
+/** What is stale now - or under `settings` instead of the project's own (what a change of config.json would make stale). */
+export async function readEditorFreshness({dir, kind}: EditorTarget, settings?: ProjectConfig | LoadedFilmConfig): Promise<EditorFreshness> {
     const rendered = (file: string) => existsSync(join(dir, file))
     if (kind === 'film') {
-        const config = filmRenderConfig(await loadFilmConfig(dir))
+        const config = filmRenderConfig(settings as LoadedFilmConfig ?? await loadFilmConfig(dir))
         const clips = await readClipRequests<FilmClipRequest>(dir)
         const pictures = await readPictureJobs(join(dir, 'assets.json'))
         return {
@@ -376,7 +377,7 @@ export async function readEditorFreshness({dir, kind}: EditorTarget): Promise<Ed
             pictures: Object.fromEntries(pictures.filter(p => rendered(p.file)).map(p => [p.id, freshness(join(dir, p.file), pictureFingerprint(p, dir, config))])),
         }
     }
-    const config = await loadProjectConfig(dir)
+    const config = settings as ProjectConfig ?? await loadProjectConfig(dir)
     const clips = await readClipRequests<ClipRequest>(dir)
     const pictures = await readPictureJobs(join(dir, 'output', 'assets.json'))
     return {
