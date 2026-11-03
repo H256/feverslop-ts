@@ -131,6 +131,29 @@ describe('versions of a picture', () => {
     })
 })
 
+describe('a picture put away by an older version, its sheet in a folder of its own', () => {
+    const dir = () => target('nested-sheet').dir
+    const picture = {id: 'elias', file: 'assets/characters/elias.png'}
+    const sheet = 'assets/sequence/characters/elias'
+    test('it is listed with its anchor and video, and goes back whole', () => {
+        write(join(dir(), picture.file), 'now')
+        write(join(dir(), `${sheet}/anchor.png`), 'now-anchor')
+        const old = join(dir(), 'old/attempts/elias-20261027-080644')
+        write(join(old, 'elias.png'), 'then')
+        write(join(old, 'elias/anchor.png'), 'then-anchor')
+        write(join(old, 'elias/sequence.mp4'), 'then-video')
+        write(join(old, 'elias/frames/frame_00.png'), 'then-frame')
+        expect(pictureVersions(dir(), picture)[0]).toMatchObject({anchor: 'old/attempts/elias-20261027-080644/elias/anchor.png', video: 'old/attempts/elias-20261027-080644/elias/sequence.mp4'})
+        restorePictureVersion(dir(), picture, 'old/attempts/elias-20261027-080644', sheet)
+        const read = (file: string) => readFileSync(join(dir(), file), 'utf8')
+        expect(read(picture.file)).toBe('then')
+        expect(read(`${sheet}/anchor.png`)).toBe('then-anchor')
+        expect(read(`${sheet}/sequence.mp4`)).toBe('then-video')
+        expect(read(`${sheet}/frames/frame_00.png`)).toBe('then-frame')
+        expect(existsSync(old)).toBe(false)
+    })
+})
+
 describe('a sheet made again on the same anchor', () => {
     const dir = () => target('same-anchor').dir
     const picture = {kind: 'location' as const, id: 'yard', file: 'assets/locations/yard.png', name: 'Yard', prompt: '', description: ''}

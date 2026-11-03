@@ -1,11 +1,10 @@
-import {existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync} from "node:fs";
+import {existsSync, mkdtempSync, statSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, extname, isAbsolute, join, relative, resolve, sep} from "node:path";
-import {clipVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
+import {extname, isAbsolute, join, relative, resolve, sep} from "node:path";
+import {clipVersions} from "../archive.ts";
 import type {ClipRequest} from "../compose.ts";
 import {loadProjectConfig} from "../config.ts";
 import {libraryDir, libraryIdPattern} from "../library.ts";
-import {withProjectLock} from "../lock.ts";
 import {listProjects, projectDir, projectExists, validProjectId} from "../project-setup.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate, readClipRequests} from "../render-state.ts";
 import {loadSettings} from "../settings.ts";
@@ -15,16 +14,16 @@ import {loadFilmConfig} from "../film/config.ts";
 import {filmRenderConfig} from "../film/pictures.ts";
 import {filmDir, filmExists, filmIds} from "../film/setup.ts";
 import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
-import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
-import {picturesFile, readReferences, sheetOf} from "./references.ts";
+import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
+import {picturesFile, readReferences} from "./references.ts";
 import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
+import {pickVersion, writeOverride} from "./choices.ts";
 import {type CastChange, castingRedo, dropStoryProposal, type LookChange, readBook, readCast, readLook, stageOf, writeCast, writeLook, writeStory, writeStoryForCast} from "./preproduction.ts";
 import {readTiming, type TimingChange, writeTiming} from "./timing.ts";
 import {runProgress} from "./progress.ts";
-import {CLIP_ID, type RunAction, RunControl} from "./runs.ts";
+import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
-import {clipRequestFile} from "../previous-output.ts";
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -328,11 +327,7 @@ export function editorHandler(runs = new RunControl()) {
                 const asked = await body<{ clips?: string[], pictures?: number }>()
                 return json(asked.clips ? await estimateClips(target, asked.clips) : await estimatePictures(target, asked.pictures ?? 1))
             }
-            if (what === 'versions' && id && action === 'pick') {
-                const {version} = await body<{ version: string }>()
-                const result = await withProjectLock(target.dir, target.id, () => restoreClipVersion(target.dir, id, version))
-                return json({picked: version, putAway: relative(target.dir, result.putAway).replace(/\\/g, '/')})
-            }
+            if (what === 'versions' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{ version: string }>()).version))
             if (what === 'references' && id && action === 'rerender') {
                 const {newAnchor, prompt, servers} = await body<{ newAnchor?: boolean, prompt?: string, servers?: string[] }>()
                 const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
@@ -344,13 +339,7 @@ export function editorHandler(runs = new RunControl()) {
                 }
                 return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile, look: atLook(target)}, await urlsOfChoice(servers)))
             }
-            if (what === 'references' && id && action === 'pick') {
-                const {version} = await body<{ version: string }>()
-                const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
-                if (!job) return refused(new Error(`no picture ${id}`))
-                await withProjectLock(target.dir, target.id, () => restorePictureVersion(target.dir, job, version, sheetOf(job)))
-                return json({picked: version})
-            }
+            if (what === 'references' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{ version: string }>()).version))
             if (what === 'casting') {
                 const {kind, id: role, value} = await body<{ kind: 'character' | 'location', id: string, value: string }>()
                 await writeCastingEntry(target, kind, role, value)
@@ -367,17 +356,7 @@ export function editorHandler(runs = new RunControl()) {
             if (what === 'look') return json(await writeLook(target, await body<LookChange>()))
             if (what === 'timing') return json(await writeTiming(target, await body<TimingChange>()))
             if (what === 'override' && id) {
-                if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))
-                const override = await body<EditorOverride | null>()
-                const file = overrideFile(target.dir, id)
-                if (!CLIP_ID.test(id) || !existsSync(clipRequestFile(target.dir, id))) return refused(new Error(`no clip ${id}`))
-                await withProjectLock(target.dir, target.id, () => {
-                    if (!override || (override.placeView === undefined && !override.order?.length && !override.without?.length)) rmSync(file, {force: true})
-                    else {
-                        mkdirSync(dirname(file), {recursive: true})
-                        writeFileSync(file, JSON.stringify(override, null, 2) + '\n')
-                    }
-                })
+                await writeOverride(target, id, await body<EditorOverride | null>())
                 return json({written: true})
             }
         } catch (e) {

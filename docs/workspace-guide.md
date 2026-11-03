@@ -122,6 +122,8 @@ Nützliche Tasten: `Leertaste` spielt und pausiert, `←` und `→` springen zum
 
 **Play both from the start** spielt beide synchron. Gefällt dir die alte besser, nimmst du **Go back to the old one**. Später geht das im Reiter **Versions** mit **Compare** (das Fenster im Bild, dort heißt der Knopf **Make the right one current**) oder direkt mit **Make current**.
 
+**Im Terminal:** `bun run versions <id> slot-007` listet die weggelegten Fassungen eines Clips, die neueste zuerst. `--pick=<Fassung>` macht eine davon wieder aktuell. Das geht genauso für Bilder (`bun run versions <id> mara`). Die aktuelle Fassung wird dabei weggelegt und bleibt auswählbar. Beim Film kommt `--film` dazu. Die eigene Wahl eines Film-Clips (Ansicht, Referenzen) setzt `bun run override <film-id> clip-007 --view=2 --without=<bild>`, `--clear` nimmt sie zurück.
+
 ### Nur einen Teil neu rendern
 
 Ist nur eine Stelle schlecht, gibst du im Reiter **Render** unter **Render a part again** die Sekunden an und klickst **Render this part**. Hat der Clip mehrere Shots, gibt es dafür je einen Knopf. Der übrige Clip bleibt erhalten, das fertige Video wird dabei nicht neu zusammengebaut.
@@ -199,6 +201,8 @@ Rechts steht, was das Speichern auslöst: Die Beats, in denen eine geänderte Ze
 
 Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich `lyrics.txt` oder `singers` in `config.json` ändern oder `--redo=singing` das Modell neu fragt.
 
+**Im Terminal:** `bun run singers <id>` listet die Zeilen, nummeriert ab 1. `bun run singers <id> --line=12:mara,ben` lässt Zeile 12 von Mara und Ben singen. Für mehr auf einmal schreibt `--json > singers.json` die Zeilen in eine Datei. Du änderst sie, auch Wechsel mitten in der Zeile als `parts`, und gibst sie mit `--set=singers.json` zurück. Danach nennt der Befehl die neu zu planenden Beats und den Planlauf.
+
 ## Wann die Lyrics gesungen werden
 
 **Timing** (bei Musikvideos mit abgeglichenen Lyrics) zeigt oben die Wellenform des Vocals-Stems um eine Zeile, darüber ihre Wörter als Kästen, darunter alle Zeilen. **Estimated** filtert die Zeilen, die der Abgleich mit dem Transkript kaum gefunden hat: Ihre Zeiten sind nur über die Zeile verteilt und können Sekunden danebenliegen.
@@ -209,6 +213,8 @@ Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich 
 - Gestrichelte Linien sind die Schnitte zwischen den Clips. Fällt ein Schnitt in ein Wort, wird das Wort rot umrandet und die Seite warnt.
 
 **Save** behält die Schnitte: Die Vocals jedes Clips werden aus den neuen Zeiten neu berechnet, nur Beats mit geänderten Clips verlieren ihren Shot-Plan. **Save and plan** plant sie gleich neu. **Save and cut the song again…** schneidet den Song um die neuen Zeiten neu (`--redo=timeline`) und plant dabei jeden Shot neu, das dauert. Verschobene Zeilen gelten als von Hand gesetzt und nicht mehr als geschätzt. Die Zeiten stehen in `project.json` (`lyricsTiming`), bis sich `lyrics.txt` ändert oder `--redo=lyricsTiming` neu abgleicht.
+
+**Im Terminal:** `bun run timing <id>` listet jede Zeile mit Anfang und Ende. `--json > timing.json` schreibt die Wortzeiten in eine Datei. Du verschiebst `start` und `end` und gibst sie mit `--set=timing.json` zurück. Unverändert zurückgegebene Zeilen zählen nicht als geändert. Fällt danach ein Schnitt in ein Wort, sagt der Befehl das und nennt `--redo=timeline`.
 
 ## Ein älteres Projekt aufwerten
 

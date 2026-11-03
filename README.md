@@ -42,6 +42,10 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run cast <id> [--film]` | print the cast; `--json` / `--set=cast.json` change names, roles, props and who is in it |
 | `bun run look <id> [--film]` | print the look of the whole and of every character and place; `--json` / `--set=look.json` change texts, `--again=<id>` have one written anew |
 | `bun run casting <id> [--film]` | casting.json, what the next plan run takes over and the `--redo` it needs; `--set=character:<id>=library:<asset>` |
+| `bun run singers <id>` | who sings which line; `--line=12:mara,ben`, or `--json` / `--set=singers.json` (a singer change within a line as `parts`) |
+| `bun run timing <id>` | when each sung line is; `--json` / `--set=timing.json` moves its words |
+| `bun run versions <id> <clip-or-picture> [--film]` | the older versions put away; `--pick=<version>` makes one the current one again |
+| `bun run override <film-id> <clip-id>` | a film clip's own view and references: `--view=2`, `--order=…`, `--without=…`, `--clear` |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
@@ -911,9 +915,9 @@ A film takes the same commands with `--film` (and `bun film.ts`); its screenplay
 
 Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
 
-The same in the terminal: `--render=images --only=<picture> --again [--new-anchor] [--picture-prompt=<file>]`, `--render=videos --only=<clip> --preview`, `--render=final --preview` (`<id>-preview.mp4`), `--retake=slot-007:3.2-5.0` or `--retake=slot-007:shot2`.
+The same in the terminal - every page starts a command, or calls the same code as one (CLI first): `--render=images --only=<picture> --again [--new-anchor] [--picture-prompt=<file>]`, `--render=videos --only=<clip> --preview`, `--render=final --preview` (`<id>-preview.mp4`), `--retake=slot-007:3.2-5.0` or `--retake=slot-007:shot2`; *Versions* and *Make current*: `bun run versions <id> <clip-or-picture> [--pick=<version>]`; *Singers*: `bun run singers <id>`; *Timing*: `bun run timing <id>`; story, cast, look and casting: see [Planning in stages from the terminal](#planning-in-stages-from-the-terminal).
 
-A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json`. It applies from the next plan run on, and the clip then counts as stale. Where the sheet has no view that fits, `bun run add-view <film-id> <location-id> --name=… --shows=…` renders one more from the place's anchor.
+A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json` (`bun run override <film-id> <clip> --view=2 --without=<picture>`, or the file by hand). It applies from the next plan run on, and the clip then counts as stale. Where the sheet has no view that fits, `bun run add-view <film-id> <location-id> --name=… --shows=…` renders one more from the place's anchor.
 
 ### Making an older project over
 

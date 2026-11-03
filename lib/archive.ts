@@ -1,4 +1,4 @@
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, utimesSync, writeFileSync} from "node:fs";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
 import {basename, dirname, join} from "node:path";
 import {boundaryFrameAsset} from "./compose.ts";
 import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from "./sequenceSheet.ts";
@@ -142,8 +142,10 @@ export function pictureVersions(projectDir: string, picture: { id: string, file:
         if (!source || !existsSync(join(attempts, folder, name))) continue
         const record = readRecord(join(attempts, folder, `${name}.json`))
         const inFolder = (file: string) => existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined
+        // the sheet flat beside the picture, or - put away by an older version of the pipeline - in a folder by the picture's id
+        const ofSheet = (file: string) => inFolder(file) ?? inFolder(`${picture.id}/${file}`)
         versions.push({
-            id: attempt(folder), picture: `${attempt(folder)}/${name}`, anchor: inFolder(SHEET_ANCHOR), video: inFolder(SHEET_VIDEO), source,
+            id: attempt(folder), picture: `${attempt(folder)}/${name}`, anchor: ofSheet(SHEET_ANCHOR), video: ofSheet(SHEET_VIDEO), source,
             made: statSync(join(attempts, folder, name)).mtimeMs,
             seed: typeof record.seed === 'number' ? record.seed : undefined,
             prompt: typeof record.prompt === 'string' ? record.prompt : undefined,
@@ -179,6 +181,15 @@ export function restorePictureVersion(projectDir: string, picture: { id: string,
         if (!statSync(from).isFile()) continue
         if (file === name || file === `${name}.json`) putBack(from, join(projectDir, dirname(picture.file), file), now)
         else if (sheet) putBack(from, join(projectDir, sheet, /^(sequence\.mp4|anchor\.png)(\.json)?$/.test(file) ? file : `frames/${file}`), now)
+    }
+    // put away by an older version of the pipeline: the sheet as a folder of its own, by the picture's id (<id>/anchor.png,
+    // sequence.mp4, frames/) - it goes back as it lies
+    const nested = sheet ? join(folder, picture.id) : undefined
+    if (nested && existsSync(nested) && statSync(nested).isDirectory()) {
+        for (const file of readdirSync(nested, {recursive: true}) as string[]) {
+            if (statSync(join(nested, file)).isFile()) putBack(join(nested, file), join(projectDir, sheet!, file), now)
+        }
+        rmSync(nested, {recursive: true, force: true})
     }
     if (!readdirSync(folder).length) rmdirSync(folder)
     // a version put away before versions kept their anchor (a sheet made again on the same anchor) has none: the anchor that was
