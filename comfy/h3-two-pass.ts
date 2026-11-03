@@ -4,7 +4,7 @@
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the base model again, euler/beta, 4 steps, denoise 0.2, with a
 // noise of its own, at the final size (#343).
 import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, refAudios, endGuide, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder} from "./helpers.ts";
+import {afterCleanup, refAudios, endGuide, FPS, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "./helpers.ts";
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
@@ -27,10 +27,31 @@ export type TwoPassOptions = Omit<VideoWorkflowOptions, SoundInputs> & Partial<P
 // song: the sound of the video - the trimmed song, or the model's own sound when no song went in
 export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO">, size: PixelSize }
 
-export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: string): TwoPassResult {
+/**
+ * What the two passes are made with: the model, and the sampling of each pass. The recipe of #288/#343 is the base model with
+ * 20 steps res_multistep/simple, then 4 steps euler/beta at denoise 0.2; a distilled model takes fewer steps (PRISM_TWO_PASS).
+ */
+export type TwoPassRecipe = {
+    unet: string,
+    first: { sampler: string, scheduler: string, steps: number },
+    second: { sampler: string, scheduler: string, steps: number, denoise: number },
+}
+export const BASE_TWO_PASS: TwoPassRecipe = {
+    unet: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors',
+    first: {sampler: 'res_multistep', scheduler: 'simple', steps: 20},
+    second: {sampler: 'euler', scheduler: 'beta', steps: 4, denoise: 0.2},
+}
+// PRISM DMAD/PDMD, a distilled H3 checkpoint: 8 steps euler/beta57 (a scheduler of RES4LYF), then 2 steps of refine at denoise 0.2
+export const PRISM_TWO_PASS: TwoPassRecipe = {
+    unet: 'PRISM_DMAD_PDMD_int8.safetensors',
+    first: {sampler: 'euler', scheduler: 'beta57', steps: 8},
+    second: {sampler: 'euler', scheduler: 'beta57', steps: 2, denoise: 0.2},
+}
+
+export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: string, recipe: TwoPassRecipe = BASE_TWO_PASS): TwoPassResult {
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
-    const unet = wf.UNETLoader({unet_name: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors', weight_dtype: 'default'})
+    const unet = wf.UNETLoader({unet_name: recipe.unet, weight_dtype: 'default'})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     // the audio tracks, the song guide and the pinned first frame as in h3-ref2video - see the comments there
@@ -88,8 +109,8 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const first = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,
         guider: wf.BasicGuider({model: base.model, conditioning: guide(references.LATENT)}).GUIDER,
-        sampler: wf.KSamplerSelect({sampler_name: 'res_multistep'}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: 'simple', steps: 20, denoise: 1, model: unet.MODEL}).SIGMAS,
+        sampler: wf.KSamplerSelect({sampler_name: dyn(recipe.first.sampler)}).SAMPLER,
+        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.first.scheduler), steps: recipe.first.steps, denoise: 1, model: unet.MODEL}).SIGMAS,
         latent_image: references.LATENT,
     })
 
@@ -124,8 +145,8 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const second = wf.SamplerCustomAdvanced({
         noise: wf.RandomNoise({noise_seed: opts.seed + 1}).NOISE,
         guider: wf.BasicGuider({model: base.model, conditioning: guide(large, true)}).GUIDER,
-        sampler: wf.KSamplerSelect({sampler_name: 'euler'}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: 'beta', steps: 4, denoise: 0.2, model: unet.MODEL}).SIGMAS,
+        sampler: wf.KSamplerSelect({sampler_name: dyn(recipe.second.sampler)}).SAMPLER,
+        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.second.scheduler), steps: recipe.second.steps, denoise: recipe.second.denoise, model: unet.MODEL}).SIGMAS,
         latent_image: large,
     })
 
@@ -133,4 +154,23 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const images = wf.VAEDecode({samples: result, vae: videoVae.VAE}).IMAGE
     // no song went in: the sound is the model's own - the audio half of the latent went through the upscale as it was and was refined in pass 2
     return {images, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: result, vae: audioVae.VAE}).AUDIO, size: sizes.final}
+}
+
+/** A two-pass workflow as the pipeline takes it: the passes of a recipe, saved as an h264 mp4 with the sound of the clip. */
+export function twoPassWorkflow(opts: TwoPassOptions, name: string, recipe: TwoPassRecipe = BASE_TWO_PASS): WorkflowResult {
+    const wf = new WorkflowBuilder()
+    const {images, song, size} = h3TwoPass(wf, opts, name, recipe)
+    const video = wf.VHS_VideoCombine({
+        images,
+        audio: song,
+        frame_rate: FPS,
+        loop_count: 0,
+        filename_prefix: opts.filenamePrefix,
+        format: 'video/h264-mp4',
+        pingpong: false,
+        save_output: true,
+    })
+    // widgets VHS only adds for the h264 format
+    withInputs(wf, video, {pix_fmt: 'yuv420p', crf: 19, save_metadata: true, trim_to_audio: false})
+    return {workflow: wf, output: video.__id, size}
 }

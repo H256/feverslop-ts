@@ -643,11 +643,12 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `h3-ref2video`  | video | `r2v_audio_fullmix_guide_1-pass_turbo.json`        |
 | `h3-ref2video-full` | video | `h3-ref2video` without the turbo LoRA, as the non-turbo branch of ComfyUI's template `video_minimax_h3_r2v`: res_multistep, simple, 20 steps, no shift - about 2.5× the sampling time, more detail for people far from the camera: `"videoWorkflow": "h3-ref2video-full"` |
 | `h3-ref2video-2pass` | video | two passes: the base model for 20 steps at a quarter of the final pixels, the video latent x2 with `MinimaxH3LatentUpscaler3D` (`minimax_h3_latent_upscaler_3d_bf16`), then the base model again for 4 steps (euler/beta, denoise 0.2, noise seed + 1, no turbo LoRA - it left a crosshatch on skin) at the final size, song and first frame anchored again on the large latent. `videoResolution` is the final size (`-1` = 2 MP, pass 1 at 0.5 MP): `"videoWorkflow": "h3-ref2video-2pass"` |
+| `h3-ref2video-prism-2pass` | video | the two passes of `h3-ref2video-2pass` with the distilled `PRISM_DMAD_PDMD_int8` checkpoint (in `diffusion_models/`): 8 steps euler/beta57, then 2 steps at denoise 0.2. `beta57` comes with the RES4LYF nodes. Untested yet against the base model: `"videoWorkflow": "h3-ref2video-prism-2pass"` |
 | `h3-ref2video-cpu-clip` | video | `h3-ref2video` with the text encoder on the CPU - for a GPU whose VRAM doesn't hold the encoder next to the model |
 | `h3-sequence-to-sheet` | sequence | the turnaround video of a reference sheet (`sequenceWorkflow`, default) |
 | `frame-interpolate` | interpolation | RIFE/FILM frame interpolation per shot, for `finalFps` (not set in `config.json`, always this one) |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
-| `h3-ref2video-film`, `h3-ref2video-film-beta`, `h3-ref2video-film-2pass` | video | the short-film pipeline's clips, without audio input (`-2pass`: the two passes of `h3-ref2video-2pass`) - see [docs/film.md](docs/film.md) |
+| `h3-ref2video-film`, `h3-ref2video-film-beta`, `h3-ref2video-film-2pass`, `h3-ref2video-film-prism-2pass` | video | the short-film pipeline's clips, without audio input (`-2pass`: the two passes of `h3-ref2video-2pass`, `-prism-2pass` those of `h3-ref2video-prism-2pass`) - see [docs/film.md](docs/film.md) |
 
 ¹ The export JSON is only a one-time input to `bun run comfy:convert` (see below); it isn't kept in the repo, only
 the generated `.ts` file under `comfy/workflows/` is.
