@@ -21,7 +21,7 @@ export async function startEditor() {
   if (!address || typeof address === 'string') throw new Error('No test port')
   await new Promise<void>((accept, reject) => reservation.close(error => error ? reject(error) : accept()))
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(FEVERSLOP_|COMFY$|NODE_OPTIONS$|BUN_OPTIONS$)/i.test(key)))
-  Object.assign(env, {FEVERSLOP_EDITOR_UI: 'vue', FEVERSLOP_SETTINGS: join(cwd, 'missing.json'), NO_COLOR: '1'})
+  Object.assign(env, {FEVERSLOP_SETTINGS: join(cwd, 'missing.json'), NO_COLOR: '1'})
   const child: ChildProcess = spawn('bun', [resolve(root, 'editor.ts'), `--port=${address.port}`], {cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true})
   const exited = new Promise<void>(accept => child.once('close', () => accept()))
   let output = ''

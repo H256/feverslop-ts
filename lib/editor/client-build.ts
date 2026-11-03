@@ -1,6 +1,6 @@
-import {cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync} from 'node:fs';
+import {cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import {basename, dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 
 function inside(root: string, file: string) {
     const path = relative(root, file)
@@ -76,4 +76,47 @@ export function installClientBuild(source: string, destination: string, move: ty
         rmSync(staging, {recursive: true, force: true})
         // If restoration failed, leave the backup for recovery instead of deleting it.
     }
+}
+
+// What a build is made from: the client's sources and settings, the contracts it shares with the server, and the release
+// number it shows. The installed build keeps the stamp of what it was made from; another stamp means another client.
+const CLIENT_SOURCES = ['index.html', 'package.json', 'bun.lock', 'vite.config.ts', 'tsconfig.json', 'src', 'public']
+const STAMP = '.build-stamp'
+
+function filesIn(path: string): string[] {
+    if (!existsSync(path)) return []
+    if (!lstatSync(path).isDirectory()) return [path]
+    return readdirSync(path).sort().flatMap(entry => filesIn(join(path, entry)))
+}
+
+/** One hash over the client's sources, `shared/` and the repository's package.json. Tests and build output do not count. */
+export function clientSourceStamp(root: string) {
+    const hash = createHash('sha256')
+    const files = [...CLIENT_SOURCES.map(name => join(root, 'client', name)), join(root, 'shared'), join(root, 'package.json')].flatMap(filesIn)
+    for (const file of files) hash.update(`${relative(root, file).replaceAll(sep, '/')}\n`).update(readFileSync(file)).update('\n')
+    return hash.digest('hex')
+}
+
+export const installedStamp = (publicDir: string) => existsSync(join(publicDir, STAMP)) ? readFileSync(join(publicDir, STAMP), 'utf8').trim() : undefined
+
+/** current: the installed build is made from these sources. stale or missing: build it. prebuilt: a build without its sources, used as it is. */
+export function clientBuildState(root: string, publicDir: string): 'current' | 'stale' | 'missing' | 'prebuilt' {
+    const built = existsSync(join(publicDir, 'index.html'))
+    if (!existsSync(join(root, 'client', 'src'))) return built ? 'prebuilt' : 'missing'
+    if (!built) return 'missing'
+    return installedStamp(publicDir) === clientSourceStamp(root) ? 'current' : 'stale'
+}
+
+/** Install the client's packages when they are not there, build it, install the build and stamp it. Output goes to this terminal. */
+export function buildClient(root: string, publicDir: string) {
+    const client = join(root, 'client')
+    const run = (args: string[], what: string, script: string) => {
+        const result = Bun.spawnSync([process.execPath, ...args], {cwd: client, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit'})
+        if (result.exitCode !== 0) throw new Error(`${what} failed. Run it on its own to see why: bun run ${script}`)
+    }
+    const stamp = clientSourceStamp(root)
+    if (!existsSync(join(client, 'node_modules'))) run(['install', '--frozen-lockfile'], 'Installing the client packages', 'client:install')
+    run(['run', 'build'], 'Building the client', 'client:build')
+    installClientBuild(join(client, 'dist'), publicDir)
+    writeFileSync(join(publicDir, STAMP), stamp)
 }
