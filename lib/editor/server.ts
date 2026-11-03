@@ -18,7 +18,7 @@ import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
 import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, overrideFile, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
 import {picturesFile, readReferences, sheetOf} from "./references.ts";
 import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
-import {type CastChange, castingRedo, readBook, readCast, stageOf, writeCast, writeStory} from "./preproduction.ts";
+import {type CastChange, castingRedo, dropStoryProposal, type LookChange, readBook, readCast, readLook, stageOf, writeCast, writeLook, writeStory, writeStoryForCast} from "./preproduction.ts";
 import {readTiming, type TimingChange, writeTiming} from "./timing.ts";
 import {runProgress} from "./progress.ts";
 import {CLIP_ID, type RunAction, RunControl} from "./runs.ts";
@@ -167,7 +167,7 @@ const allTargets = (): EditorTarget[] => [
     ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
 ]
 
-const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'add-view', 'refinish', 'look-pictures'])
+const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'add-view', 'refinish', 'look-pictures', 'adapt-story'])
 /** A music video planned up to the look: a picture is rendered there and then, the shots are not planned for it (#540). */
 const atLook = (target: EditorTarget) => target.kind === 'music' && stageOf(target) === 'look'
 
@@ -304,6 +304,7 @@ export function editorHandler(runs = new RunControl()) {
                 if (what === 'casting-redo') return json(await castingRedo(target))
                 if (what === 'cast') return json({cast: readCast(target) ?? null})
                 if (what === 'book') return json(readBook(target))
+                if (what === 'look') return json(readLook(target))
             } catch (e) {
                 return failure(e)
             }
@@ -357,7 +358,13 @@ export function editorHandler(runs = new RunControl()) {
             }
             if (what === 'singing') return json(await writeSinging(target, await body<SingingChange>()))
             if (what === 'cast') return json(await writeCast(target, await body<CastChange>()))
+            if (what === 'book' && id === 'for-cast') return json(await writeStoryForCast(target, await body<{ proposal?: boolean, renamed?: { from: string, to: string }[] }>()))
+            if (what === 'book' && id === 'drop-proposal') {
+                dropStoryProposal(target)
+                return json({dropped: true})
+            }
             if (what === 'book') return json(await writeStory(target, (await body<{ text?: unknown }>()).text))
+            if (what === 'look') return json(await writeLook(target, await body<LookChange>()))
             if (what === 'timing') return json(await writeTiming(target, await body<TimingChange>()))
             if (what === 'override' && id) {
                 if (target.kind !== 'film') return refused(new Error('a choice per clip is for films so far'))

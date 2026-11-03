@@ -2,7 +2,8 @@ import {describe, expect, test} from "bun:test";
 import type {Project} from "../project.ts";
 import type {FilmProject} from "../film/types.ts";
 import {filmStage, musicStage, nextStage, parseUntil} from "../stages.ts";
-import {applyCast, applyStory, bookView, castingRedoOf, castView} from "./preproduction.ts";
+import {applyCast, applyLook, applyStory, applyStoryKeepingCast, bookView, castingRedoOf, castView, lookView, renameInStory} from "./preproduction.ts";
+import {KEPT_BY_HAND, keepEach} from "../partials.ts";
 import {runCommand} from "./runs.ts";
 
 const music = {id: 'demo', kind: 'music' as const}
@@ -105,16 +106,24 @@ describe('casting.json changed after the plan - what Plan now plans again', () =
 })
 
 describe('the cast by hand', () => {
-    test('a renamed role keeps its id and what else it had; what is built on the cast goes, the separated instruments stay', () => {
+    test('a renamed role keeps its id and what else it had; only its looks are written again, the separated instruments stay', () => {
         const data = lookStage()
         const wanted = change(data)
         wanted.characters[0] = {...wanted.characters[0]!, name: 'Lena', role: 'the keeper\'s daughter'}
         const result = applyCast('music', data, wanted)
-        expect(result).toEqual({changed: true, dropped: ['singing', 'characterLooks', 'locationLooks', 'characterDescriptions', 'locationDescriptions', 'locationAnchors', 'locationLayouts'], added: [], removed: []})
+        expect(result).toEqual({
+            changed: true, dropped: ['singing'], added: [], removed: [], renamed: [{from: 'Mara', to: 'Lena'}],
+            remade: ['characterLooks: mara', 'characterDescriptions: mara'],
+        })
         expect(data.cast!.characters[0]).toEqual({id: 'mara', name: 'Lena', role: 'the keeper\'s daughter', prop: 'a lantern'})
         expect(data.cast!.characters[1]!.propStem).toBe('drums')
+        // Ben keeps his look and description - the run takes them as they are and asks only for Mara's
         expect(data.characterLooks).toBeUndefined()
-        expect(data.partials).toBeUndefined()
+        expect(data.partials!.characterLooks).toEqual({ben: {fingerprint: KEPT_BY_HAND, value: 'b'}})
+        expect(data.partials!.characterDescriptions).toEqual({ben: {fingerprint: KEPT_BY_HAND, value: 'b'}})
+        // no place changed: the places keep their texts as they are
+        expect(data.locationLooks).toEqual({deck: 'd', tower: 't'})
+        expect(data.locationLayouts).toBeDefined()
         expect(data.lookBrief).toBe('grainy 16 mm')
         expect(data.instrumentStems).toBeDefined()
         expect(data.story).toBe('Mara rows out to the lighthouse.')
@@ -144,7 +153,7 @@ describe('the cast by hand', () => {
 
     test('the same cast changes nothing; a cast without a place, a name or a role is refused', () => {
         const data = lookStage()
-        expect(applyCast('music', data, change(data))).toEqual({changed: false, dropped: [], added: [], removed: []})
+        expect(applyCast('music', data, change(data))).toEqual({changed: false, dropped: [], remade: [], added: [], removed: [], renamed: []})
         expect(data.characterLooks).toBeDefined()
         expect(() => applyCast('music', data, {...change(data), locations: []})).toThrow('at least one place')
         expect(() => applyCast('music', data, {...change(data), characters: [{name: ' ', role: 'x'}]})).toThrow('the name of character 1 is empty')
@@ -195,5 +204,83 @@ describe('the story by hand', () => {
         expect(view.editable).toBe(false)
         expect(view.text).toContain('Ana waits.')
         expect(bookView('music', {}).editable).toBe(false)
+    })
+})
+
+describe('an answer kept by hand', () => {
+    test('the run takes it whatever it would ask now, and asks for the others', async () => {
+        const data = {partials: {characterLooks: {ben: {fingerprint: KEPT_BY_HAND, value: 'kept look'}}}}
+        const asked: string[] = []
+        const ask = (key: string) => keepEach(data, async () => {}, 'characterLooks', key, {prompt: 'anything'}, async () => { asked.push(key); return `new ${key}` })
+        expect(await ask('ben')).toBe('kept look')
+        expect(await ask('mara')).toBe('new mara')
+        expect(asked).toEqual(['mara'])
+    })
+})
+
+describe('the look by hand', () => {
+    // planned up to the shots: a floor plan per beat and the shots are built on the looks
+    const planned = (): Project => ({...lookStage(), beats: [], blocking: {}, shotMoments: {}})
+
+    test('what the page shows: the texts of everyone and every place, what goes with them', () => {
+        const view = lookView('music', planned())
+        expect(view.lookBrief).toBe('grainy 16 mm')
+        expect(view.characters.map(c => [c.id, c.look, c.description])).toEqual([['mara', 'a', 'a'], ['ben', 'b', 'b']])
+        expect(view.locations[0]).toMatchObject({id: 'deck', look: 'd', description: 'd', anchors: 'd', layout: 'l'})
+        expect(view.builtOn).toEqual(['blocking', 'shotMoments'])
+        expect(view.briefBuiltOn).toContain('characterLooks')
+    })
+
+    test('a changed look: its description is written again for that one only, the others keep theirs, the shot plan goes', () => {
+        const data = planned()
+        const result = applyLook('music', data, {elements: [{kind: 'character', id: 'mara', look: 'a red coat'}]})
+        expect(result).toEqual({changed: true, remade: ['characterDescriptions: mara'], dropped: ['blocking', 'shotMoments']})
+        expect(data.characterLooks).toEqual({mara: 'a red coat', ben: 'b'})
+        expect(data.characterDescriptions).toBeUndefined()
+        expect(data.partials!.characterDescriptions).toEqual({ben: {fingerprint: KEPT_BY_HAND, value: 'b'}})
+        expect(data.locationDescriptions).toBeDefined()
+    })
+
+    test('a look and its description changed together: both kept as written, nothing written again', () => {
+        const data = planned()
+        const result = applyLook('music', data, {elements: [{kind: 'character', id: 'mara', look: 'a red coat', description: 'in a red coat'}]})
+        expect(result.remade).toEqual([])
+        expect(data.characterDescriptions).toEqual({mara: 'in a red coat', ben: 'b'})
+    })
+
+    test('a place written anew: its look and everything written from it, for that place only; a floor plan changed by hand keeps its views', () => {
+        const data = planned()
+        const result = applyLook('music', data, {again: [{kind: 'location', id: 'tower'}], elements: [{kind: 'location', id: 'deck', layout: 'a long deck'}]})
+        expect(result.remade).toEqual(['locationLooks: tower', 'locationDescriptions: tower', 'locationAnchors: tower', 'locationLayouts: tower'])
+        expect(data.partials!.locationLayouts!.deck).toEqual({fingerprint: KEPT_BY_HAND, value: {layout: 'a long deck', views: []}})
+        expect(data.partials!.locationLooks).toEqual({deck: {fingerprint: KEPT_BY_HAND, value: 'd'}})
+    })
+
+    test('the look of the whole changed: every look goes; a role played by the library is not changed here', () => {
+        const data = planned()
+        expect(applyLook('music', data, {lookBrief: 'grainy 16 mm '}).changed).toBe(false)
+        const result = applyLook('music', data, {lookBrief: 'clean digital, cold light'})
+        expect(result.dropped).toContain('characterLooks')
+        expect(data.characterLooks).toBeUndefined()
+        const library = {...planned(), castingCopies: {'character:ben': {library: 'ben-v2', fingerprint: 'f'}}}
+        expect(() => applyLook('music', library, {elements: [{kind: 'character', id: 'ben', look: 'x'}]})).toThrow('played by library:ben-v2')
+        expect(() => applyLook('music', library, {elements: [{kind: 'character', id: 'nobody', look: 'x'}]})).toThrow('no character nobody')
+    })
+})
+
+describe('the story after the cast', () => {
+    test('the new names put in as whole words: the full name and each word of it that changed', () => {
+        const story = 'Mara Vey rows out. Vey is tired; Maram waits. Mara waves.'
+        expect(renameInStory(story, [{from: 'Mara Vey', to: 'Lena Rook'}])).toBe('Lena Rook rows out. Rook is tired; Maram waits. Lena waves.')
+    })
+
+    test('a story told anew for the same cast: the summary and the plan from the beats on go, cast and looks stay', () => {
+        const data: Project = {...lookStage(), beats: [], timeline: {} as Project['timeline'], mapping: [], shotMoments: {}}
+        const result = applyStoryKeepingCast(data, 'Lena rows out.')
+        expect(result.dropped).toEqual(['summary', 'beats', 'mapping', 'shotMoments'])
+        expect(data.cast).toBeDefined()
+        expect(data.characterLooks).toBeDefined()
+        expect(data.timeline).toBeDefined()
+        expect(bookView('music', data).keptByCast).toEqual([])
     })
 })

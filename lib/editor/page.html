@@ -284,8 +284,12 @@ select.source { padding: 1px 6px; font-size: 12px; color: var(--muted); }
 .stages .arrow { color: var(--muted); font-size: 11px; }
 .member { padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
 .member .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.member textarea { font: 13px/1.5 var(--sans); }
+.member textarea, textarea.prose { font: 13px/1.5 var(--sans); }
+textarea.prose { width: 100%; }
 textarea.book { width: 100%; min-height: 50vh; font: 14px/1.6 var(--sans); }
+.twocol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.twocol h3 { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.twocol .text { white-space: pre-wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 60vh; overflow-y: auto; }
 /* the singers: who sings which line - one colour per singer, the same in the list and on the side */
 .sung-section { margin-bottom: 18px; }
 .sung-head { display: flex; align-items: center; gap: 10px; padding: 4px 10px 6px; position: sticky; top: -16px; background: var(--bg); z-index: 1; }
@@ -996,7 +1000,7 @@ function projectChrome(title, project) {
     $('title').textContent = title
     document.title = `${title} · Workspace`
     // in the order a film is made: the book, who plays, who sings, how it looks - the timeline is where it all comes together
-    const pages = [['timeline', 'Timeline', ''], ['story', project?.kind === 'film' ? 'Screenplay' : 'Story', 'story'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : []), ...(project?.timed ? [['timing', 'Timing', 'timing']] : []), ['references', 'References', 'references']]
+    const pages = [['timeline', 'Timeline', ''], ['story', project?.kind === 'film' ? 'Screenplay' : 'Story', 'story'], ['casting', 'Casting', 'casting'], ...(project?.sings ? [['singers', 'Singers', 'singers']] : []), ...(project?.timed ? [['timing', 'Timing', 'timing']] : []), ['look', 'Look', 'look'], ['references', 'References', 'references']]
     $('nav').replaceChildren(...pages.map(([page, label, path]) =>
         el('a', {href: `${base}/${path}`, 'aria-current': route.page === page ? 'page' : false}, label)))
 }
@@ -1121,7 +1125,7 @@ async function referencesPage() {
 // and looked at before what is built on it, and all of it before anything is rendered (issue #526). Every stage is the language model
 const STAGES = ['story', 'cast', 'look', 'plan']
 const stageName = (stage, kind) => ({story: kind === 'film' ? 'Screenplay' : 'Story', cast: 'Cast', look: 'Look', plan: 'Shot plan'})[stage]
-const STAGE_PAGE = {story: 'story', cast: 'casting', look: 'references', plan: ''}
+const STAGE_PAGE = {story: 'story', cast: 'casting', look: 'look', plan: ''}
 const stageDoes = (stage, kind) => ({
     story: kind === 'film' ? 'The screenplay, from the idea or from the script.' : 'The story, from the lyrics and the story idea.',
     cast: kind === 'film' ? 'Who is in it and where it is, from the screenplay.' : 'Who is in it and where it is, from the story - and who sings which line.',
@@ -1216,15 +1220,145 @@ async function storyPage() {
         })
         if (yes) await startRun({type: 'plan', redo: ['story'], until: 'story'})
     }
+    async function adapt() {
+        const yes = await ask({
+            title: 'Tell the story anew for the cast?',
+            lines: ['The language model tells the same story with the characters and places as the Casting page has them now: the plot, the places and the length stay. Nothing changes until you take it - it is shown here next to the story there is.'],
+            confirm: 'Have it written',
+        })
+        if (yes) await startRun({type: 'adapt-story'})
+    }
+    async function takeProposal() {
+        const yes = await ask({
+            title: 'Take the new story?',
+            lines: ['The cast, who sings and the looks stay as they are: the story was told for them.'],
+            warnings: book.keptByCast.length ? [`What is planned from the story goes: ${listSteps(book.keptByCast)}. The next plan run makes it again - the language model only.`] : [],
+            confirm: 'Take it',
+        })
+        if (!yes) return
+        await api('book/for-cast', {proposal: true})
+        toast('The new story is taken')
+        location.reload()
+    }
+    async function dropProposal() {
+        await api('book/drop-proposal', {})
+        location.reload()
+    }
     $('view-list').replaceChildren(...nodes(
         stageBar(project),
         el('div', {class: 'pagebar'}, el('h2', {}, film ? 'Screenplay' : 'Story')),
+        book.proposal ? el('div', {class: 'section'},
+            el('div', {class: 'note'}, 'A story told anew for the cast as it is now. Take it, or drop it and keep the story there is.'),
+            el('div', {class: 'twocol'},
+                el('div', {}, el('h3', {}, 'Now'), el('div', {class: 'text'}, book.text ?? '')),
+                el('div', {}, el('h3', {}, 'Told anew for the cast'), el('div', {class: 'text'}, book.proposal))),
+            el('div', {class: 'btn-row', style: {'margin-top': '8px'}},
+                el('button', {class: 'btn primary', onclick: () => takeProposal().catch(showError)}, 'Take the new story'),
+                el('button', {class: 'btn', onclick: () => dropProposal().catch(showError)}, 'Drop it'))) : '',
         book.text === undefined ? el('div', {class: 'empty'}, `No ${film ? 'screenplay' : 'story'} yet - plan it with the button above.`) : [
             film ? el('div', {class: 'note'}, 'The screenplay is read here. It is changed in the script in input/, or in project.json (screenplay), and then planned again with --redo.') : '',
             el('div', {class: 'section'}, text),
             book.editable ? el('div', {class: 'section btn-row'}, save,
-                el('button', {class: 'btn', disabled: !!run.current?.running, onclick: () => writeAgain().catch(showError)}, 'Write it again')) : '',
+                el('button', {class: 'btn', disabled: !!run.current?.running, onclick: () => writeAgain().catch(showError)}, 'Write it again'),
+                el('button', {class: 'btn', disabled: !!run.current?.running, title: 'The same story with the cast as the Casting page has it now - a proposal next to this one', onclick: () => adapt().catch(showError)}, 'Tell it anew for the cast')) : '',
             book.editable && book.builtOn.length ? el('p', {class: 'muted'}, `Saving a changed story drops what is built on it: ${listSteps(book.builtOn)}. The next plan run makes those again.`) : '',
+        ],
+    ))
+    run.onEnd = () => location.reload()
+    followRun(base)
+}
+
+////////// THE LOOK - the look of the whole, and how every character and place looks: read, changed by hand, written anew one by
+// one (#541). A changed text keeps every other character's and place's texts; what is written from it is written again for that one
+async function lookPage() {
+    show('view-list')
+    const [look, project] = await Promise.all([api('look'), api('project')])
+    projectChrome(project.title, project)
+    const edits = new Map()         // "kind:id" -> {kind, id, look?, description?, anchors?, layout?}
+    const again = new Set()         // "kind:id" written anew by the language model
+    const keyOf = e => `${e.kind}:${e.id}`
+    const brief = el('textarea', {class: 'prose', rows: 6, value: look.lookBrief ?? '', 'aria-label': 'The look of the whole'})
+    const saveBrief = el('button', {class: 'btn', disabled: true, onclick: () => saveTheBrief().catch(showError)}, 'Save the look of the whole')
+    brief.addEventListener('input', () => { saveBrief.disabled = brief.value.trim() === (look.lookBrief ?? '').trim() })
+    const save = el('button', {class: 'btn primary', disabled: true, onclick: () => saveLooks().catch(showError)}, 'Save')
+    const pending = el('span', {class: 'muted'})
+    const refresh = () => {
+        const changed = [...edits.values()].filter(e => Object.keys(e).length > 2).length
+        save.disabled = !changed && !again.size
+        pending.textContent = [changed ? `${plural(changed, 'text')} changed` : '', again.size ? `${again.size} to write anew` : ''].filter(Boolean).join(' · ')
+    }
+    const card = element => {
+        const key = keyOf(element)
+        const set = (field, value) => {
+            const entry = edits.get(key) ?? {kind: element.kind, id: element.id}
+            if (value.trim() === (element[field] ?? '').trim()) delete entry[field]
+            else entry[field] = value
+            edits.set(key, entry)
+            refresh()
+        }
+        const area = (field, label, rows) => element[field] === undefined ? '' : el('label', {class: 'field'}, el('span', {}, label),
+            el('textarea', {rows, value: element[field], readOnly: !!element.library, oninput: event => set(field, event.target.value)}))
+        return el('article', {class: 'member'},
+            el('div', {class: 'head'},
+                el('b', {}, element.name), el('span', {class: 'muted'}, element.id),
+                element.library ? el('span', {class: 'chip', title: 'Its texts are the library\'s: changed in the library, or by choosing "Rendered in this project" on Casting'}, `library:${element.library}`) : '',
+                el('div', {class: 'spacer'}),
+                element.library || element.look === undefined ? '' : el('label', {title: 'The language model writes its look again, and what is written from it - for this one only'},
+                    el('input', {type: 'checkbox', checked: again.has(key), onchange: event => { event.target.checked ? again.add(key) : again.delete(key); refresh() }}), ' Write anew')),
+            element.look === undefined ? el('p', {class: 'muted'}, 'Not written yet - plan the look.') : '',
+            area('look', 'Look - what its picture is made from', 4),
+            area('description', 'Description - what the clip prompts say of it', 3),
+            area('anchors', 'Background - kept behind the people of every shot here', 2),
+            area('layout', 'Floor plan - every beat here is staged in it', 3))
+    }
+    async function saveTheBrief() {
+        const yes = await ask({
+            title: 'Save the look of the whole?',
+            lines: ['Every look is written from it: the next plan run writes them all again, and what is built on them. The language model only, nothing is rendered.'],
+            warnings: look.briefBuiltOn.length ? [`What goes: ${listSteps(look.briefBuiltOn)}.`, 'Texts changed by hand on this page go too.'] : [],
+            confirm: 'Save it',
+        })
+        if (!yes) return
+        const result = await api('look', {lookBrief: brief.value})
+        toast(result.changed ? 'The look is saved' : 'Nothing changed')
+        location.reload()
+    }
+    async function saveLooks() {
+        const elements = [...edits.values()].filter(e => Object.keys(e).length > 2)
+        const yes = await ask({
+            title: 'Save the looks?',
+            lines: [
+                pending.textContent + '.',
+                'What is written from a changed text is written again for that character or place only - a changed look: its description; a place\'s look: its description, background and floor plan. Everyone else keeps their texts. The next plan run does it: the language model only.',
+            ],
+            warnings: [
+                ...(look.builtOn.length ? [`What is planned from the looks goes: ${listSteps(look.builtOn)}.`] : []),
+                ...(project.pictures.some(p => p.exists) ? ['A picture made from an old look stays, and is stale: render it again on References.'] : []),
+            ],
+            confirm: 'Save it',
+        })
+        if (!yes) return
+        const result = await api('look', {elements, again: [...again].map(key => ({kind: key.slice(0, key.indexOf(':')), id: key.slice(key.indexOf(':') + 1)}))})
+        if (!result.changed) { toast('Nothing changed'); return location.reload() }
+        // the texts to write are written by the next plan run - right away, if wanted, stopping after the look
+        const now = result.remade.length && await ask({
+            title: 'Write them now?',
+            lines: [...result.remade, 'A plan run writes these and stops after the look. The language model only.'],
+            confirm: 'Write them now',
+        })
+        if (now) await startRun({type: 'plan', until: 'look'})
+        else location.reload()
+    }
+    $('view-list').replaceChildren(...nodes(
+        stageBar(project),
+        look.lookBrief === undefined ? el('div', {class: 'empty'}, 'No look yet - plan it with the button above.') : [
+            el('div', {class: 'section'}, el('div', {class: 'pagebar'}, el('h2', {}, 'The look of the whole')),
+                el('p', {class: 'muted'}, 'Format, style, palette and camera language - every look below is written from it.'),
+                brief, el('div', {class: 'btn-row', style: {'margin-top': '6px'}}, saveBrief)),
+            el('div', {class: 'section btn-row'}, save, pending,
+                el('span', {class: 'muted'}, 'Change a text by hand, or tick "Write anew" for the language model to write it again.')),
+            look.characters.length ? el('div', {class: 'section'}, el('div', {class: 'pagebar'}, el('h2', {}, 'Characters')), look.characters.map(card)) : '',
+            look.locations.length ? el('div', {class: 'section'}, el('div', {class: 'pagebar'}, el('h2', {}, 'Places')), look.locations.map(card)) : '',
         ],
     ))
     run.onEnd = () => location.reload()
@@ -1328,7 +1462,8 @@ async function castingPage() {
             lines: [
                 'The cast in project.json is changed. Ids stay: a renamed role keeps its pictures and its entry in casting.json.',
                 cast.builtOn.length ? 'The next plan run makes what goes again, from this cast: the language model only, nothing is rendered.' : 'Nothing is planned from the cast yet: the next stage is planned from this one.',
-            ],
+                cast.remakes.length ? 'The looks of whoever is new or changed are written again; everyone else keeps theirs.' : '',
+            ].filter(Boolean),
             warnings: [
                 ...(cast.builtOn.length ? [`What is built on the cast goes: ${listSteps(cast.builtOn)}.`] : []),
                 ...(cast.builtOn.includes('singing') ? ['Who sings which line is asked again - a choice made on the Singers page goes too.'] : []),
@@ -1339,7 +1474,22 @@ async function castingPage() {
         })
         if (!yes) return
         const result = await api('cast', draft)
-        toast(result.changed ? `The cast is saved${result.dropped.length ? ` - ${plural(result.dropped.length, 'step')} to plan again` : ''}` : 'Nothing changed')
+        toast(result.changed ? 'The cast is saved' : 'Nothing changed')
+        // the story still tells of the cast before: the new names put in, or the story told anew for whoever came or went (#542)
+        if (!film && result.renamed.length && await ask({
+            title: 'The new names in the story too?',
+            lines: [...result.renamed.map(r => `${r.from} → ${r.to}`), 'Replaced as whole words: the full name, and each of its words that changed. The cast and the looks stay.'],
+            confirm: 'Put them in',
+        })) await api('book/for-cast', {renamed: result.renamed})
+        if (!film && (result.added.length || result.removed.length) && await ask({
+            title: 'Tell the story anew for this cast?',
+            lines: [[result.added.length ? `new: ${result.added.join(', ')}` : '', result.removed.length ? `gone: ${result.removed.join(', ')}` : ''].filter(Boolean).join(' · '), 'The language model tells the same story with them. It waits on the Story page next to the story there is, to be taken or dropped.'],
+            confirm: 'Have it written',
+        })) {
+            await startRun({type: 'adapt-story'})
+            run.onEnd = () => { location.href = `${base}/story` }
+            return
+        }
         location.reload()
     }
 
@@ -3400,7 +3550,7 @@ async function timelinePage() {
 loadServers()
 setInterval(() => { if (!document.hidden) loadServers() }, 10000)
 
-const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'story' ? storyPage() : route.page === 'singers' ? singersPage() : route.page === 'timing' ? timingPage() : timelinePage()}
+const pages = {home: homePage, library: libraryPage, project: () => route.page === 'references' ? referencesPage() : route.page === 'casting' ? castingPage() : route.page === 'story' ? storyPage() : route.page === 'look' ? lookPage() : route.page === 'singers' ? singersPage() : route.page === 'timing' ? timingPage() : timelinePage()}
 pages[route.view]().catch(error => {
     show('none')
     $('boot').hidden = false

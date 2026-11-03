@@ -21,6 +21,8 @@ export type RunAction =
     | { type: 'pictures', ids: string[], again?: boolean, newAnchor?: boolean, promptFile?: string, look?: boolean }
     // the pictures of the cast and the places of a music video planned up to the look - the casting photos
     | { type: 'look-pictures' }
+    // a music video's story told anew for its cast as it is now: a proposal for the Story page (#542)
+    | { type: 'adapt-story' }
     | { type: 'final', preview?: boolean }
     // until: plan up to this stage and stop (lib/stages.ts); redo: steps planned again first - what a changed casting.json or cast asks for
     | { type: 'plan', until?: string, redo?: string[] }
@@ -60,6 +62,9 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return run('--render=videos', `--only=${checked(action.ids, CLIP_ID, 'clips')}`, ...(action.again ? ['--again'] : []), ...(action.preview ? ['--preview'] : []))
         case 'pictures':
             return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []), ...(action.look && kind === 'music' ? ['--until=look'] : []))
+        case 'adapt-story':
+            if (kind !== 'music') throw new Error('the screenplay of a film is changed in its script')
+            return {script: 'tools/adapt-story.ts', args: [id]}
         case 'look-pictures':
             if (kind !== 'music') throw new Error('a film has its pictures from the look on: render them on the References page')
             return run('--until=look', '--render=images')

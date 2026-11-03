@@ -9,6 +9,7 @@
     "init": "bun tools/init.ts",
     "example": "bun tools/example.ts",
     "replace-character": "bun tools/replace-character.ts",
+    "adapt-story": "bun tools/adapt-story.ts",
     "import-asset": "bun tools/import-asset.ts",
     "export-asset": "bun tools/export-asset.ts",
     "create-asset": "bun tools/create-asset.ts",
