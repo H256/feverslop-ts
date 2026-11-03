@@ -462,7 +462,11 @@ describe('the start page', () => {
     })
     test('all projects and films, and the page at every address', async () => {
         write(join(target('listed').dir, 'input/idea.txt'))
-        const handler = editorHandler()
+        // the page is the built client: a stand-in, so bun run test needs no client build
+        const publicDir = join(root, 'public')
+        mkdirSync(publicDir, {recursive: true})
+        writeFileSync(join(publicDir, 'index.html'), '<title>Workspace</title>')
+        const handler = editorHandler(undefined, {publicDir})
         const {projects} = await (await handler(new Request('http://localhost/api/projects'))).json() as { projects: { id: string, kind: string }[] }
         expect(projects.some(p => p.id === 'listed' && p.kind === 'music')).toBe(true)
         expect(projects.some(p => p.id === 'titled' && p.kind === 'film')).toBe(true)
