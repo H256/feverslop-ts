@@ -45,3 +45,12 @@ library
 comfy/nodes.ts
 
 films
+
+# Vue client: source and lockfile are tracked; installed artifacts are not.
+client/dist/
+client/.vite/
+client/test-results/
+client/playwright-report/
+lib/editor/public/
+lib/editor/.public-staging-*/
+lib/editor/.public-backup-*/
