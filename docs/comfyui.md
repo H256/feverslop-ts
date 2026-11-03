@@ -187,7 +187,7 @@ being scaled in the final video.
 scaled up 2× to 1088×1920 (characters; 1920×1088 for locations), and `imageResolution` sets the size of the first
 pass - `"1088x1920"` gives a 2176×3840 picture.
 
-`h3-ref2video-2pass` is the other way round: `videoResolution` is the **final** size, and the first pass renders half
+`h3-ref2video-2pass` (and `h3-ref2video-prism-2pass`, its passes with the distilled PRISM checkpoint - the recipes are in `comfy/h3-two-pass.ts`) is the other way round: `videoResolution` is the **final** size, and the first pass renders half
 its width and half its height - a quarter of the pixels; the latent upscaler brings it to the final size. To pick the
 first pass, give four times its megapixels:
 

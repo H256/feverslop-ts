@@ -68,12 +68,12 @@ const filmVariants: Record<string, object> = {
 }
 
 describe('the ComfyUI workflows, node by node', () => {
-    for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass', 'h3-ref2video-cpu-clip']) {
+    for (const name of ['h3-ref2video', 'h3-ref2video-full', 'h3-ref2video-2pass', 'h3-ref2video-prism-2pass', 'h3-ref2video-cpu-clip']) {
         for (const [variant, opts] of Object.entries(musicVariants)) {
             test(`${name}: ${variant}`, async () => expect(await workflow(name, opts)).toMatchSnapshot())
         }
     }
-    for (const name of ['h3-ref2video-film', 'h3-ref2video-film-beta', 'h3-ref2video-film-2pass']) {
+    for (const name of ['h3-ref2video-film', 'h3-ref2video-film-beta', 'h3-ref2video-film-2pass', 'h3-ref2video-film-prism-2pass']) {
         for (const [variant, opts] of Object.entries(filmVariants)) {
             test(`${name}: ${variant}`, async () => expect(await workflow(name, opts)).toMatchSnapshot())
         }
