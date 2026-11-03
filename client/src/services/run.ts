@@ -94,6 +94,14 @@ export function createRunDock(toasts: Toasts) {
     closed.value = false
     connect()
   }
+  /**
+   * Taken before a run is asked for, called with the server's answer: the run is followed only when the scope it was asked in is
+   * still the one followed. An answer that comes after the page went (back to a project, on to the library) starts nothing there.
+   */
+  const starter = () => {
+    const asked = scope.value
+    return (run: RunInfo, request?: RunRequest) => { if (asked && scope.value === asked) started(run, request) }
+  }
   /** Called when a run of this scope ends, while the caller lives. */
   const onEnd = (end: RunEnd) => {
     ends.add(end)
@@ -101,7 +109,7 @@ export function createRunDock(toasts: Toasts) {
   }
   const running = () => !!current.value?.running
   const dispose = () => { source?.close(); ends.clear() }
-  return {current, log, logOpen, closed, detail, scope, follow, started, onEnd, running, dispose}
+  return {current, log, logOpen, closed, detail, scope, follow, starter, onEnd, running, dispose}
 }
 export type RunDock = ReturnType<typeof createRunDock>
 export const RunService = defineService<RunDock>('run')

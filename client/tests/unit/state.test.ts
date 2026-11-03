@@ -1,8 +1,11 @@
 import {describe, expect, test} from 'bun:test'
-import {nextTick, ref} from 'vue'
+import {effectScope, nextTick, ref} from 'vue'
 import type {SingingView, TimingLine} from '../../../shared/workspace'
 import {getJson} from '../../src/api/http'
 import {createProjectSession} from '../../src/features/project/session'
+import {usePointerDrag} from '../../src/composables/usePointerDrag'
+import {createRunDock} from '../../src/services/run'
+import type {Toasts} from '../../src/services/toasts'
 import {useSingingDraft} from '../../src/features/singers/useSingingDraft'
 import {fixWords, MIN_WORD, shifted} from '../../src/features/timing/words'
 import type {RunDock} from '../../src/services/run'
@@ -27,19 +30,6 @@ describe('the project of a page', () => {
     expect(await older).toBe(true)
     expect(await newer).toBe(true)
     expect(session.project.value?.title).toBe('new')
-  })
-  test('a run started for a project that is closed by the time the server answers starts nothing', async () => {
-    const answers = heldFetch()
-    let started = 0
-    const session = createProjectSession('music', 'demo', {
-      run: {running: () => false, started: () => { started++ }} as unknown as RunDock,
-      servers: {take: () => undefined} as unknown as Servers,
-    })
-    const starting = session.start({type: 'plan'})
-    session.close()
-    answers[0]!(JSON.stringify({run: {running: true}}))
-    await starting
-    expect(started).toBe(0)
   })
 })
 
@@ -81,4 +71,43 @@ test('a refinish: a preset as it is, or every step said; only the clips given', 
   const {newRefinish, refinishRequest} = await import('../../src/features/timeline/forms')
   expect(refinishRequest(newRefinish(), [])).toEqual({type: 'refinish', preset: 'grade'})
   expect(refinishRequest({...newRefinish(), preset: 'custom', fps: '48'}, ['clip-1'])).toEqual({type: 'refinish', upscale: 'none', size: 'fullhd', denoise: 0.2, fps: 48, finish: true, only: ['clip-1']})
+})
+
+describe('runs and the scope they were asked in', () => {
+  test('a run asked for in one scope is not followed when the answer comes after another scope is followed', () => {
+    const opened: string[] = []
+    globalThis.EventSource = class { constructor(url: string) { opened.push(url) } addEventListener() {} close() {} } as unknown as typeof EventSource
+    const dock = createRunDock({show: () => {}} as unknown as Toasts)
+    const library = effectScope()
+    library.run(() => dock.follow({events: '/api/library/run-events'}))
+    const started = dock.starter()
+    // back to a project before the server answered
+    library.stop()
+    effectScope().run(() => dock.follow({events: '/p/music/demo/api/run-events'}))
+    opened.length = 0
+    started({source: 'here', command: 'bun tools/create-asset.ts', pid: 1, startedAt: '', running: true})
+    expect(dock.current.value).toBe(null)
+    expect(opened).toEqual([])
+    // asked and answered in the same scope: followed from the start
+    dock.starter()({source: 'here', command: 'bun index.ts demo', pid: 2, startedAt: '', running: true})
+    expect(opened).toEqual(['/p/music/demo/api/run-events?after=0'])
+  })
+})
+
+describe('a drag', () => {
+  test('let go: it ends as released; the page gone mid-drag: it ends as not released, and nothing listens any more', () => {
+    const ends: boolean[] = []
+    let moves = 0
+    const page = effectScope()
+    const drag = page.run(() => usePointerDrag())!
+    drag(() => { moves++ }, released => ends.push(released))
+    dispatchEvent(new Event('pointermove'))
+    dispatchEvent(new Event('pointerup'))
+    drag(() => { moves++ }, released => ends.push(released))
+    page.stop()
+    dispatchEvent(new Event('pointermove'))
+    dispatchEvent(new Event('pointerup'))
+    expect(ends).toEqual([true, false])
+    expect(moves).toBe(1)
+  })
 })

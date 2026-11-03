@@ -86,7 +86,8 @@ function scrub(event: PointerEvent) {
   const wasPlaying = playback.playing.value
   if (wasPlaying) playback.setPlaying(false)
   playback.seek(timeAt(event))
-  drag(e => playback.seek(timeAt(e)), () => { if (wasPlaying) playback.setPlaying(true) })
+  // playing goes on when the button is let go - not when the drag is cancelled or the page goes with it
+  drag(e => playback.seek(timeAt(e)), released => { if (released && wasPlaying) playback.setPlaying(true) })
 }
 
 const hues = computed(() => {

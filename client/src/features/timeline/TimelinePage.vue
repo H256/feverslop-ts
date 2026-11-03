@@ -20,8 +20,9 @@ import {createTimeline} from './useTimeline'
 const timeline = createTimeline()
 const actions = useClipActions(timeline)
 const review = useReview(timeline, actions)
-const context = TimelineService.provide(timelineContext(timeline, actions, review))
-const {project, playback, session} = context
+TimelineService.provide(timelineContext(timeline, actions, review))
+// the page keeps the whole timeline; its parts get the narrower context
+const {project, playback, session} = timeline
 const run = useRunDock()
 const toasts = useToasts()
 const route = useRoute(), router = useRouter()
