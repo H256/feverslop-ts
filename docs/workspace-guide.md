@@ -43,12 +43,20 @@ Ein neues Projekt planst du am besten so, wie ein Film entsteht: erst das Buch, 
 |---|---|---|
 | **Story** (beim Film: **Screenplay**) | die Geschichte aus Songtext und Story-Idee, beim Film das Drehbuch | **Story** |
 | **Cast** | Figuren und Orte, beim Musikvideo auch, wer welche Zeile singt | **Casting**, **Singers** |
-| **Look** | der Look des Videos, das Aussehen jeder Figur und jedes Orts, auf Wunsch die Bilder dazu | **References** |
+| **Look** | der Look des Videos, das Aussehen jeder Figur und jedes Orts, auf Wunsch die Bilder dazu | **Look**, **References** |
 | **Shot plan** | die Beats auf dem Song und die Einstellungen jedes Clips | **Timeline** |
 
 Oben auf **Story** und **Casting**, und auf der Timeline eines Projekts ohne Clips, steht eine Leiste mit den Stufen. Erledigte Stufen sind abgehakt. Der Knopf rechts plant die nächste Stufe und hält dann an, zum Beispiel **Plan the cast**. **Plan everything** plant ohne Halt bis zu den Einstellungen. Das alles macht nur das Sprachmodell, gerendert wird nichts. Im Terminal geht dasselbe mit `--until=story`, `--until=cast` oder `--until=look`.
 
 **Die Story ändern:** Auf **Story** steht der Text zum Bearbeiten. **Save the story** speichert ihn. Alles, was aus der alten Story geplant war, fällt dabei weg, und der nächste Planlauf macht es neu. **Write it again** lässt das Sprachmodell eine neue Story schreiben. Ein Drehbuch steht hier nur zum Lesen: Es wird im Skript unter `input/` geändert.
+
+**Die Story an den Cast anpassen:** **Tell it anew for the cast** lässt das Sprachmodell dieselbe Story mit der Besetzung erzählen, die **Casting** jetzt hat: gleiche Handlung, gleiche Orte, etwa gleiche Länge. Der Vorschlag erscheint neben der jetzigen Story. **Take the new story** übernimmt ihn, **Drop it** verwirft ihn. Beim Übernehmen bleiben Cast, Sängerwahl und Looks, nur die Zusammenfassung und alles ab den Beats wird neu geplant.
+
+![Story-Seite mit der Stufen-Leiste](images/workspace/story.jpg)
+
+**Den Look ändern:** Auf **Look** steht oben der Look des ganzen Videos, darunter je Figur und Ort der Look (daraus wird das Bild gemacht) und die Beschreibung für die Clip-Prompts, bei Orten auch Hintergrund und Grundriss. Du änderst einen Text von Hand oder setzt den Haken **Write anew**, dann schreibt das Sprachmodell ihn neu. Was aus einem geänderten Text folgt, wird nur für diese eine Figur oder diesen einen Ort neu geschrieben: aus einem neuen Look die Beschreibung, aus einem neuen Ort-Look Beschreibung, Hintergrund und Grundriss. Alle anderen behalten ihre Texte. Nach **Save** fragt die Seite, ob das gleich geschehen soll. Ein geänderter Look des ganzen Videos schreibt dagegen alle Looks neu.
+
+![Look-Seite mit dem Look des Videos und je Figur Look und Beschreibung](images/workspace/look.jpg)
 
 **Casting-Fotos:** Steht der Look, rendert **Render the pictures** die Bilder aller Figuren und Orte, bevor die Einstellungen geplant werden. Auf **References** siehst du sie an, änderst einen Prompt oder renderst ein Bild neu, ohne dass dabei schon die Einstellungen geplant werden. Nur die Mitglieder einer Gruppe kommen erst mit den Einstellungen, denn wie viele es sind, steht erst in den Beats. Im Terminal: `--until=look --render=images`.
 
@@ -137,7 +145,9 @@ Bei einem gepinnten Bild sind die Render-Knöpfe gesperrt. Clips, die das Bild b
 
 **Edit the cast** ändert den Cast selbst, ganz ohne Bibliothek: Name, Rolle in der Story und Requisite jeder Figur, die Namen der Orte. Beim Musikvideo kannst du Figuren und Orte auch hinzufügen (**Add a character**, **Add a place**) und entfernen (**Remove**). Beim Film legt das Drehbuch fest, wer vorkommt: Dort änderst du Name, Rolle, Aussehen und Stimme. Die Ids bleiben, eine umbenannte Figur behält also ihre Bilder und ihren Eintrag in `casting.json`.
 
-**Save the cast** nennt vorher, was aus dem alten Cast geplant war und wegfällt: die Looks, beim Musikvideo auch die Sängerwahl, später die Beats und Einstellungen. Der nächste Planlauf macht es neu, nur mit dem Sprachmodell. Wird aus einer Figur eine ganz andere, änderst du sie am besten auch in der Story: Die erzählt sonst noch von der alten.
+**Save the cast** nennt vorher, was aus dem alten Cast geplant war und wegfällt: die Looks, beim Musikvideo auch die Sängerwahl, später die Beats und Einstellungen. Der nächste Planlauf macht es neu, nur mit dem Sprachmodell. Beim Musikvideo werden dabei nur die Looks der neuen oder geänderten Figuren und Orte neu geschrieben, alle anderen behalten ihre. Nach dem Speichern fragt die Seite nach: Bei einer umbenannten Figur setzt **Put them in** den neuen Namen in die Story (als ganzes Wort, auch Vor- oder Nachname allein). Kam jemand dazu oder fiel weg, bietet sie an, die Story für die neue Besetzung erzählen zu lassen (siehe oben).
+
+![Edit the cast: je Figur Name, Rolle und Requisite](images/workspace/cast-edit.jpg)
 
 **Library** (oben rechts) zeigt alle Assets und wo sie benutzt werden. **New asset from a picture** legt eines aus einem Bild an. Aus einem Projekt heraus geht es unter **References** mit **Put into the library**. Ein vorhandenes Asset wird dabei nie überschrieben.
 

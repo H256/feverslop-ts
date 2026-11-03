@@ -11,6 +11,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     example: {args: '[--no-render]', description: 'Create an example project and optionally generate its song.'},
     'replace-character': {args: '<project-id>', description: 'Replace a character interactively.'},
     'film:replace-character': {args: '[film-id]', description: 'Replace a film character interactively.'},
+    'adapt-story': {args: '<project-id>', description: 'Tell the story of a music video anew for its cast as it is now: a proposal, taken or dropped on the Story page.'},
     'import-asset': {args: '<project-id> [asset-id] [--from=project[:id]|library:id]', description: 'Import a character or location into a project.'},
     'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character or location to the shared library.'},
     'create-asset': {args: '<character|location> <library-id> --anchor=picture [--name=name] [--role=role] [--description=text] [--like=project]', description: 'Create a library asset from a reference picture.'},

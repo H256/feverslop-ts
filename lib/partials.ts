@@ -8,6 +8,12 @@ import {log, styles} from "./log.ts";
 
 export type Partials = Record<string, Record<string, { fingerprint: string, value: unknown }>>
 
+// An answer kept by hand: the workspace makes a step again for some of its elements (a look changed or asked for anew) and puts
+// the answers of the others here with this mark - the run takes them as they are, whatever it would ask now, and asks only for
+// the elements without one (lib/editor/preproduction.ts)
+export const KEPT_BY_HAND = 'kept by hand'
+const fits = (kept: { fingerprint: string } | undefined, wanted: string) => !!kept && (kept.fingerprint === wanted || kept.fingerprint === KEPT_BY_HAND)
+
 export async function keepEach<T>(
     data: { partials?: Partials },
     save: () => Promise<void>,
@@ -15,9 +21,9 @@ export async function keepEach<T>(
 ): Promise<T> {
     const wanted = fingerprint(input)
     const kept = data.partials?.[step]?.[key]
-    if (kept && kept.fingerprint === wanted) {
+    if (fits(kept, wanted)) {
         log.step('Kept', styles.muted(`${step} · ${key} - answered in an earlier run`))
-        return kept.value as T
+        return kept!.value as T
     }
     const value = await run()
     const partials = data.partials ??= {}
@@ -37,9 +43,9 @@ export async function keepFound<T>(
 ): Promise<T | undefined> {
     const wanted = fingerprint(input)
     const kept = data.partials?.[step]?.[key]
-    if (kept && kept.fingerprint === wanted) {
+    if (fits(kept, wanted)) {
         log.step('Kept', styles.muted(`${step} · ${key} - planned in an earlier run`))
-        return kept.value as T
+        return kept!.value as T
     }
     const value = await run()
     if (value === undefined) return undefined

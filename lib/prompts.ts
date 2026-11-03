@@ -93,6 +93,32 @@ export function storyPrompt(lyrics: string, storyIdea: string, singerVoice: Sing
     }
 }
 
+/**
+ * The story told anew for a cast changed by hand (tools/adapt-story.ts): the plot, the places, the order and the length stay -
+ * only what the people changed is changed. The cast is given as it is now; the model reads in the story who is no longer in it.
+ */
+export function adaptStoryPrompt(story: string, cast: { characters: { name: string, role: string, prop?: string }[], locations: { name: string }[] }): AskOptions {
+    const people = cast.characters.map(c => `- ${c.name}: ${c.role}${c.prop ? ` (carries or plays: ${c.prop})` : ''}`).join('\n')
+    const places = cast.locations.map(l => `- ${l.name}`).join('\n')
+    return {
+        input: `
+The story:
+${story}
+
+The characters as they are now:
+${people || '(nobody)'}
+
+The places:
+${places || '(none)'}
+`,
+        instructions: `You are a movie story writer. The cast of this story was changed: names, who someone is, what they carry, someone new, someone gone. Tell the same story with the characters as they are now.
+- Keep the plot, the order of events, the places, the tone and about the length.
+- Change only what the cast asks: a renamed character gets the new name everywhere, a character with another role does what that role does, a new character gets a fitting part in the events, a character who is no longer in the list leaves the story and what they did is done by someone who is.
+- Name every character exactly as the list does.
+- Answer with the story only, no title and no comments.`,
+    }
+}
+
 export function summaryPrompt(storyBase: string): AskOptions {
     return {
         maxTokens: 4096,
