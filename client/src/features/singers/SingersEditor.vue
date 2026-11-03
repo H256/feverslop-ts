@@ -5,6 +5,7 @@ import type {SingingLine, SingingView} from '../../../../shared/workspace'
 import {mediaUrl} from '../../api/urls'
 import PageBar from '../../components/PageBar.vue'
 import SegmentedControl from '../../components/SegmentedControl.vue'
+import {usePending} from '../../composables/usePending'
 import {useSnippetPlayer} from '../../composables/useSnippetPlayer'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {clock} from '../../lib/format'
@@ -18,7 +19,7 @@ import SungLine from './SungLine.vue'
 import {useSingingDraft} from './useSingingDraft'
 
 /** The lines of the song with who sings them, changed here; saved, the page reads them again. */
-const props = defineProps<{view: SingingView, refresh: () => Promise<void>}>()
+const props = defineProps<{view: SingingView, refresh: () => Promise<boolean>}>()
 const {api, roots, start} = useProject()
 const toasts = useToasts()
 const {planNow} = usePlanning()
@@ -49,13 +50,18 @@ const move = (from: SingingLine, by: number) => {
   rows[rows.findIndex(row => row.dataset.line === String(from.line)) + by]?.focus()
 }
 
-const save = toasts.guard(async (plan: boolean) => {
+// while saving the page is not to be changed: the draft is reset to what was saved - only once that has been read again
+const saving = usePending()
+const save = toasts.guard((plan: boolean) => saving.during(async () => {
   const result = await api.saveSinging(draft.request())
-  await props.refresh()
+  if (!await props.refresh()) {
+    saved.value = 'Saved - but the page could not read it again: what you see is what was sent.'
+    return
+  }
   draft.reset()
   saved.value = result.replanned.length ? `Saved. ${result.replanned.join(', ')} ${plan ? 'are planned now' : 'are planned with the next plan run'}.` : 'Saved.'
   if (plan && props.view.unplanned.length) await start({type: 'plan'})
-})
+}))
 // a new change makes the note of the last save old
 watch(() => draft.changes.value.lines.length, count => { if (count) saved.value = undefined })
 
@@ -74,7 +80,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="split view">
+  <div class="split view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
     <div ref="list" class="scrollpage">
       <PageBar title="Who sings which line">
         <SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" />

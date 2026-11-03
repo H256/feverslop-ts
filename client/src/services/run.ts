@@ -42,7 +42,7 @@ export function createRunDock(toasts: Toasts) {
     source = events
     events.addEventListener('lines', event => {
       const {lines, next} = JSON.parse((event as MessageEvent<string>).data) as RunLines
-      // a reconnect starts from the cursor: nothing comes twice
+      // our own reconnect starts from this cursor, the browser's own sends the id of the last event: nothing comes twice
       after = next
       const text = log.value + lines.join('\n') + '\n'
       log.value = text.length > LOG_MOST ? text.slice(-LOG_KEPT) : text
@@ -72,6 +72,8 @@ export function createRunDock(toasts: Toasts) {
     log.value = ''
     current.value = null
     wasRunning = false
+    // what was asked in another scope is not what ends here
+    action = undefined
     connect()
     onScopeDispose(() => {
       if (scope.value !== next) return
@@ -79,6 +81,7 @@ export function createRunDock(toasts: Toasts) {
       source = undefined
       scope.value = undefined
       current.value = null
+      action = undefined
     })
   }
   /** A run this page just started: its log from the start. */

@@ -12,7 +12,7 @@ import RetakeSection from './RetakeSection.vue'
 
 /** Rendering the clip again, a part of it or a preview; its files, the clips it goes on from and into, its frames, the command. */
 const props = defineProps<{clip: EditorClip}>()
-const {project, fresh, playback, session, actions, compared} = useTimeline()
+const {project, fresh, playback, session, actions, compare} = useTimeline()
 const viewer = useViewer()
 const c = computed(() => props.clip)
 const files = computed((): Fact[] => [
@@ -28,7 +28,7 @@ const links = computed((): Fact[] => [{name: 'From', value: c.value.startsFrom},
 const frames = computed(() => ([['First frame', c.value.firstFrame], ['Last frame', c.value.lastFrame]] as const).filter(([, frame]) => frame))
 const command = computed(() => `${project.value.command} --render=videos --only=${c.value.id}${c.value.video ? ' --again' : ''}`)
 const jump = (id: string) => { const target = project.value.clips.find(x => x.id === id); if (target) playback.seek(target.start) }
-const compareRefined = (version: EditorClip['refined'][number]) => { compared.value = {clip: c.value, version: {video: version.file, made: version.v, seed: version.seed}, refined: version.variant} }
+const compareRefined = (version: EditorClip['refined'][number]) => compare({clip: c.value, version: {video: version.file, made: version.v, seed: version.seed}, refined: version.variant})
 </script>
 
 <template>

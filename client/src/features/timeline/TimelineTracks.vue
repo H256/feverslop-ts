@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed, onMounted, onScopeDispose, ref, watch, watchEffect} from 'vue'
 import type {EditorClip} from '../../../../shared/workspace'
+import {usePointerDrag} from '../../composables/usePointerDrag'
 import {clamp} from '../../lib/format'
 import {hueAt} from '../../lib/terms'
 import {ChromeService} from '../../services/chrome'
@@ -78,20 +79,14 @@ watchEffect(() => {
   drawWave(wave.value, view, peaks.value)
 })
 
+const drag = usePointerDrag()
 /** Pressing and dragging on a lane without clips moves the playhead. */
 function scrub(event: PointerEvent) {
   const timeAt = (e: PointerEvent) => (e.clientX - scroller.value!.getBoundingClientRect().left + scroller.value!.scrollLeft) / pps.value
   const wasPlaying = playback.playing.value
   if (wasPlaying) playback.setPlaying(false)
   playback.seek(timeAt(event))
-  const move = (e: PointerEvent) => playback.seek(timeAt(e))
-  const up = () => {
-    removeEventListener('pointermove', move)
-    removeEventListener('pointerup', up)
-    if (wasPlaying) playback.setPlaying(true)
-  }
-  addEventListener('pointermove', move)
-  addEventListener('pointerup', up)
+  drag(e => playback.seek(timeAt(e)), () => { if (wasPlaying) playback.setPlaying(true) })
 }
 
 const hues = computed(() => {

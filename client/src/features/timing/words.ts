@@ -5,14 +5,22 @@ import {clamp} from '../../lib/format'
 export const MIN_WORD = 0.05
 export type Span = {start: number, end: number}
 
-/** Words as changed: kept in order, at least MIN_WORD long, inside the song. Undefined when they are the line's own again. */
+/** Words as changed: 0 ≤ start, start + MIN_WORD ≤ end ≤ duration. Undefined when they are the line's own again. */
 export function fixWords(line: TimingLine, words: Span[], duration: number): TimingWord[] | undefined {
-  const fixed = words.map(w => ({start: Math.max(0, Math.min(w.start, duration - MIN_WORD)), end: Math.min(duration, Math.max(w.end, w.start + MIN_WORD))}))
+  const fixed = words.map(w => {
+    const start = clamp(w.start, 0, duration - MIN_WORD)
+    return {start, end: clamp(w.end, start + MIN_WORD, duration)}
+  })
   const same = fixed.every((w, n) => Math.abs(w.start - line.words[n]!.start) < 0.0005 && Math.abs(w.end - line.words[n]!.end) < 0.0005)
   return same ? undefined : fixed.map((w, n) => ({...w, text: line.words[n]!.text}))
 }
 
-export const shifted = (words: Span[], by: number) => words.map(w => ({start: w.start + by, end: w.end + by}))
+/** A whole line moved, as far as the song goes: it keeps its length at either end. */
+export function shifted(words: Span[], by: number, duration = Infinity) {
+  const first = words[0]?.start ?? 0, last = words.at(-1)?.end ?? 0
+  const step = clamp(by, -first, Math.max(-first, duration - last))
+  return words.map(w => ({start: w.start + step, end: w.end + step}))
+}
 
 /**
  * A word moved, or one of its edges: a neighbour it runs into gives way, down to MIN_WORD - an estimated line has its words spread

@@ -44,7 +44,7 @@ const started = {run: {source: 'here', command: 'bun index.ts demo', pid: 1, sta
 
 const GETS: Record<string, unknown> = {
   project, freshness: fresh, status, waveform: {peaks: null}, progress: {progress: null}, 'versions/clip-1': {versions: []}, 'versions/clip-2': {versions: []},
-  references: {references: [reference]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: null},
+  references: {references: [reference, {...reference, id: 'bar', kind: 'location', name: 'Bar', prompt: 'A bar at night', description: 'A bar', file: 'output/assets/bar.png', picture: {file: 'output/assets/bar.png', v: 1}}]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: null},
   casting, 'casting-redo': castingRedo, cast: {cast}, book, look,
 }
 const POSTS: Record<string, unknown> = {

@@ -5,7 +5,7 @@ import {TOP_CHIPS} from '../../services/chrome'
 import {useRunDock} from '../../services/run'
 import {useToasts} from '../../services/toasts'
 import CompareDialog from './CompareDialog.vue'
-import {TimelineService} from './context'
+import {TimelineService, timelineContext} from './context'
 import FailBar from './FailBar.vue'
 import HelpDialog from './HelpDialog.vue'
 import ClipInspector from './inspector/ClipInspector.vue'
@@ -20,7 +20,7 @@ import {createTimeline} from './useTimeline'
 const timeline = createTimeline()
 const actions = useClipActions(timeline)
 const review = useReview(timeline, actions)
-const context = TimelineService.provide({...timeline, actions, review})
+const context = TimelineService.provide(timelineContext(timeline, actions, review))
 const {project, playback, session} = context
 const run = useRunDock()
 const toasts = useToasts()

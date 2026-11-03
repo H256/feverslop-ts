@@ -25,6 +25,7 @@ import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
 import {readPictureJobs} from "../render-state.ts";
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts';
+import type {ProjectStatus} from '../../shared/workspace.ts';
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -190,19 +191,29 @@ async function estimatePictures(target: EditorTarget, count: number) {
     return {estimate: stripColors(await pictureEstimate(count, projectConfig, settings.comfy.map(s => s.name))), fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined}
 }
 
+/**
+ * Where the lines of a run go on from: the cursor the page asked for, or - when the browser reconnects by itself - the id of the last
+ * lines event it got (the cursor after it), so that no line comes twice.
+ */
+export function eventCursor(request: Request, after: number) {
+    const last = Number(request.headers.get('last-event-id') ?? NaN)
+    return Number.isInteger(last) && last >= 0 ? last : after
+}
+
 /** The lines of a run as they come, as server-sent events: a page can come and go, and follow a run it did not start. */
 function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number) {
-    let after = from
+    let after = eventCursor(request, from)
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream({
         start(controller) {
-            const send = (event: string, data: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+            const send = (event: string, data: unknown, id?: number) =>
+                controller.enqueue(new TextEncoder().encode(`${id === undefined ? '' : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
             let wasRunning: boolean | undefined
             const tick = () => {
                 try {
                     const {lines, next} = runs.lines(target, after)
                     after = next
-                    if (lines.length) send('lines', {lines: lines.map(stripColors), next})
+                    if (lines.length) send('lines', {lines: lines.map(stripColors), next}, next)
                     const current = runs.current(target)
                     if ((current?.running ?? false) !== wasRunning) {
                         wasRunning = current?.running ?? false
@@ -266,7 +277,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                         clips: {total: render.clips.length, missing: render.missingClips.length, stale: render.staleClips.length},
                         final: render.finalState,
                         next: {...next, why: stripColors(next.why), estimate: next.estimate && stripColors(next.estimate)},
-                    })
+                    } satisfies ProjectStatus)
                 }
                 if (what === 'waveform') {
                     const source = waveformSource(await readEditorProject(target))

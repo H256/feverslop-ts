@@ -41,7 +41,7 @@ export function useTimingDraft(view: Ref<TimingView>) {
     fixed ? next.set(l.line, fixed) : next.delete(l.line)
     edits.value = next
   }
-  const moveLine = (l: TimingLine, by: number) => setWords(l, shifted(wordsOf(l), by))
+  const moveLine = (l: TimingLine, by: number) => setWords(l, shifted(wordsOf(l), by, view.value.duration))
   const moveWord = (l: TimingLine, n: number, by: number, edge?: 'start' | 'end') => setWords(l, movedWord(wordsOf(l), n, by, edge, view.value.duration))
   const resetLine = (l: TimingLine) => { remember(); setWords(l, l.words) }
   const discard = () => { edits.value = new Map(); history.splice(0) }
