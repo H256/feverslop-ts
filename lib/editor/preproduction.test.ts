@@ -62,6 +62,14 @@ describe('a plan run from the page', () => {
         expect(runCommand(film, {type: 'plan', redo: ['locationViews'], until: 'look'})).toEqual({script: 'film.ts', args: ['demo', '--redo=locationViews', '--until=look']})
     })
 
+    test('the casting photos: the pictures of a music video planned up to the look, without planning the shots', () => {
+        expect(runCommand(music, {type: 'look-pictures'})).toEqual({script: 'index.ts', args: ['demo', '--until=look', '--render=images']})
+        expect(runCommand(music, {type: 'pictures', ids: ['mara'], again: true, look: true})).toEqual({script: 'index.ts', args: ['demo', '--render=images', '--only=mara', '--again', '--until=look']})
+        // a film has its pictures from the look on anyway
+        expect(runCommand(film, {type: 'pictures', ids: ['hall'], look: true}).args).toEqual(['demo', '--render=images', '--only=hall'])
+        expect(() => runCommand(film, {type: 'look-pictures'})).toThrow('a film has its pictures')
+    })
+
     test('only steps of that pipeline and known stages', () => {
         expect(() => runCommand(music, {type: 'plan', redo: ['locationViews']})).toThrow('no such steps')
         expect(() => runCommand(music, {type: 'plan', redo: ['story --render=all']})).toThrow('no such steps')
