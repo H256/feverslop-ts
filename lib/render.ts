@@ -825,12 +825,14 @@ export class Renderer implements Disposable {
     }
 
     /**
-     * One more view of a place: a short shot that starts on the place's anchor and moves to what is asked for, and the last frame of it. From
-     * the anchor, so the look stays the same. Kept next to the sheet (views/view-<n>.png), with its name and what it shows beside it.
+     * One more view of a place: a short shot that starts on the place's anchor - or on another of its views (`from`, a picture in the
+     * project), for a view one move from the anchor does not reach - and moves to what is asked for, and the last frame of it. From a
+     * picture of the place, so the look stays the same. Kept next to the sheet (views/view-<n>.png), with its name, what it shows and
+     * what it started from beside it.
      */
-    async renderExtraView(locationId: string, n: number, name: string, shows: string): Promise<string> {
+    async renderExtraView(locationId: string, n: number, name: string, shows: string, from?: string): Promise<string> {
         const sheet = sequenceSheetDir('location', locationId)
-        const anchor = sheetAnchor(sheet)
+        const anchor = from ?? sheetAnchor(sheet)
         const video = `${sheetViews(sheet)}/view-${n}.mp4`
         const picture = `${sheetViews(sheet)}/view-${n}.png`
         const prompt = `The camera moves through this same place in one slow, unbroken move and comes to rest ${name}, where it shows ${shows}. The same place, the same light, the same fixtures throughout: nothing is added or doubled. Nobody is in the picture.`
@@ -844,7 +846,7 @@ export class Renderer implements Disposable {
         })
         const rendered = await probeVideo(join(this.projectDir, video))
         await extractFrame(join(this.projectDir, video), rendered.frames - 1, join(this.projectDir, picture))
-        await Bun.write(join(this.projectDir, `${picture}.json`), JSON.stringify({name, shows, seed, prompt, workflow: this.config.sequenceWorkflow}, null, 2))
+        await Bun.write(join(this.projectDir, `${picture}.json`), JSON.stringify({name, shows, seed, prompt, workflow: this.config.sequenceWorkflow, from: anchor}, null, 2))
         log.step('Saved', `${picture} ${styles.muted(this.took(join(this.projectDir, video)))}`)
         return picture
     }

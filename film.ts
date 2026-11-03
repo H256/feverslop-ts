@@ -12,6 +12,7 @@ import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
 import {FPS, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
 import {addSubtitles, subtitleCues, subtitlePrompt, subtitleTexts, toSrt} from "./lib/film/subtitles.ts";
 import {buildFilmClipRequests, clipOverrides} from "./lib/film/compose.ts";
+import {fitOverrides} from "./lib/film/fit.ts";
 import {loadFilmConfig} from "./lib/film/config.ts";
 import {CoverageProblem, packClips,type RawCoverage, toCoverage} from "./lib/film/coverage.ts";
 import {screenplayToFountain} from "./lib/film/fountain.ts";
@@ -532,14 +533,20 @@ let requests: ReturnType<typeof buildFilmClipRequests> = []
 async function planClips() {
     const sheetViews = config.sequenceSheets && !config.locationViews ? await readSheetViews(film, cast, locationDescriptions) : {}
     const shotViews = await chooseShotViews(film, coverage, sceneId => locationOf(cast, screenplay.scenes.find(s => s.id === sceneId)!.location)?.id, sheetViews)
-    clips = packClips(screenplay, withShotViews(coverage, shotViews), config.continuity, maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity))
+    const overrides = clipOverrides(film.dir)
+    const allViews = withExtraViews(film.dir, {...sheetViews, ...locationViews})
+    // a clip the user chose another view or fewer people for gets shots that say so, not only other pictures (#531)
+    clips = await fitOverrides(film, packClips(screenplay, withShotViews(coverage, shotViews), config.continuity, maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity)), overrides, cast.characters, clip => {
+        const location = locationOf(cast, screenplay.scenes.find(s => s.id === clip.sceneId)!.location)
+        return {views: location ? allViews[location.id] : undefined, staging: coverage.find(c => c.sceneId === clip.sceneId)?.staging ?? ''}
+    })
     requests = buildFilmClipRequests({
         screenplay, cast, clips,
-        overrides: clipOverrides(film.dir),
+        overrides,
         soundscapes: Object.fromEntries(coverage.map(c => [c.sceneId, c.soundscape])),
         stagings: Object.fromEntries(coverage.map(c => [c.sceneId, c.staging ?? ''])),
         voices: Object.fromEntries(coverage.map(c => [c.sceneId, c.voices === true])),
-        characterDescriptions, locationDescriptions, locationViews: withExtraViews(film.dir, {...sheetViews, ...locationViews}), lookBrief, props,
+        characterDescriptions, locationDescriptions, locationViews: allViews, lookBrief, props,
         pinStartFrame: filmRenderConfig(config).pinStartFrame,   // the film renders with the defaults of the render config
     })
     const outputDir = join(film.dir, 'output')
