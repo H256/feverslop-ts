@@ -24,12 +24,8 @@ function castingOf(dir: string): CastingFile {
     }
 }
 
-export type LibraryEntry = {
-    kind: AssetKind, id: string, name: string, description: string, anchors?: string, source?: string, created?: string,
-    picture?: { file: string, v: number }, anchor?: { file: string, v: number }, video?: { file: string, v: number },
-    frames: { file: string, v: number }[],
-    usedBy: { kind: 'music' | 'film', id: string, role: string }[],
-}
+export type {LibraryEntry} from '../../shared/workspace.ts';
+import type {LibraryEntry} from '../../shared/workspace.ts';
 
 /** Everything in the library, with who uses it: the library does not know that itself, every project's casting.json does. */
 export async function readLibrary(): Promise<{ dir: string, assets: LibraryEntry[] }> {

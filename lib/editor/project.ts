@@ -454,12 +454,8 @@ export function projectGroup(id: string): string {
     return id.replace(/-(?:\d{1,2}|[a-z]|v\d+)$/, '') || id
 }
 
-export type EditorListing = {
-    group: string,
-    id: string, kind: EditorKind, title: string, clips: number, rendered: number, pictures: number,
-    final: FinalState, lastRun?: EditorProject['lastRun'], changed: number, thumb?: { file: string, v: number },
-    stage?: PlanStage,          // a project without clips yet: how far its plan is
-}
+export type {ProjectListing as EditorListing} from '../../shared/workspace.ts';
+import type {ProjectListing as EditorListing} from '../../shared/workspace.ts';
 
 const countOf = (folder: string, pattern: RegExp) => existsSync(folder) ? readdirSync(folder).filter(f => pattern.test(f)).length : 0
 

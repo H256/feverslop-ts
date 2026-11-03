@@ -5,13 +5,14 @@ Baseline: `main` at `97bb1f4` (2026-11-03). Tracker: [#554](https://forgejo.elys
 | Issue | Scope | Status |
 | --- | --- | --- |
 | [#555](https://forgejo.elysium.lan/H256/feverslop-ts/issues/555) | Separate client, build/install, static serving, opt-in preview | Implemented in this change |
-| [#556](https://forgejo.elysium.lan/H256/feverslop-ts/issues/556) | API contracts, application shell, jobs, overview, library | Pending |
+| [#556](https://forgejo.elysium.lan/H256/feverslop-ts/issues/556) | API contracts, application shell, jobs, overview, library | Partly: shared contracts (`shared/workspace.ts`), shell, project overview and library browser done; jobs/run log pending |
 | [#557](https://forgejo.elysium.lan/H256/feverslop-ts/issues/557) | Story, casting, look and references | Pending |
 | [#558](https://forgejo.elysium.lan/H256/feverslop-ts/issues/558) | Singers and timing | Pending |
 | [#559](https://forgejo.elysium.lan/H256/feverslop-ts/issues/559) | Timeline, player, inspector, review | Pending |
 | [#560](https://forgejo.elysium.lan/H256/feverslop-ts/issues/560) | Feature parity, distribution, default switch, legacy removal | Pending |
 
-The preview currently contains route placeholders, not migrated project tools. Do not switch
+The preview shows the project overview and the library browser. Project pages (`/p/...`) and
+asset creation (`/library?legacy=1`) are still served by the existing page until their issues land. Do not switch
 the default until the feature matrix and cutover criteria in the
 [plan](../docs/superpowers/plans/2026-11-03-vue-workspace-client.md) pass.
 
