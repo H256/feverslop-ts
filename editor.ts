@@ -8,6 +8,8 @@ import {listProjects, projectExists} from "./lib/project-setup.ts";
 import {log, styles} from "./lib/log.ts";
 import {filmExists, filmIds} from "./lib/film/setup.ts";
 import {FILMS_DIR} from "./lib/film/store.ts";
+import {buildClient, clientBuildState} from "./lib/editor/client-build.ts";
+import {CLIENT_PUBLIC} from "./lib/editor/static.ts";
 cli('editor')
 
 const usage = 'usage: bun editor.ts [project-id] [--film] [--port=4173]'
@@ -24,6 +26,18 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) log.usageError(`--port 
 
 if (id && args.film && !filmExists(id)) log.usageError(`No film "${id}" in ${FILMS_DIR}/ - the films here are: ${filmIds().join(', ')}`, usage)
 if (id && !args.film && !projectExists(id)) log.usageError(`No project "${id}" in projects/ - the projects here are: ${listProjects().slice(0, 12).join(', ')}`, usage)
+
+// the page is a build of client/: made again when its sources changed since, so a pull never shows an older page
+const client = clientBuildState(import.meta.dir, CLIENT_PUBLIC)
+if (client === 'missing' || client === 'stale') {
+    log.step('Build', client === 'missing' ? 'the workspace page is not built yet' : 'the workspace page changed since its last build')
+    try {
+        buildClient(import.meta.dir, CLIENT_PUBLIC)
+    } catch (e) {
+        log.error(e instanceof Error ? e.message : String(e))
+        process.exit(1)
+    }
+}
 
 const server = startEditor(port)
 const path = id ? `p/${args.film ? 'film' : 'music'}/${id}/` : ''

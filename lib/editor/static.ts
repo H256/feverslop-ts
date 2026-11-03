@@ -6,8 +6,8 @@ export type EditorUI = 'legacy' | 'vue'
 export type EditorUIOptions = {ui?: EditorUI, publicDir?: string}
 
 export function editorUI(value = process.env.FEVERSLOP_EDITOR_UI): EditorUI {
-    if (!value || value === 'legacy') return 'legacy'
-    if (value === 'vue') return 'vue'
+    if (!value || value === 'vue') return 'vue'
+    if (value === 'legacy') return 'legacy'
     throw new Error('FEVERSLOP_EDITOR_UI must be legacy or vue')
 }
 

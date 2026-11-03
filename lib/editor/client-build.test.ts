@@ -2,7 +2,7 @@ import {expect, test} from 'bun:test';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {installClientBuild} from './client-build.ts';
+import {clientBuildState, clientSourceStamp, installClientBuild} from './client-build.ts';
 
 function fixture(check: (dist: string, target: string, root: string) => void) {
     const root = mkdtempSync(join(tmpdir(), 'client-build-'))
@@ -66,3 +66,32 @@ test('restores the previous build when the final directory move fails', () => fi
     expect(readFileSync(join(target, 'old.js'), 'utf8')).toBe('previous chunk')
     expect(readdirSync(root).sort()).toEqual(['dist', 'public'])
 }))
+
+test('the page is built again when its sources, the shared contracts or the release change - not for its tests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'client-stamp-'))
+    const publicDir = join(root, 'lib/editor/public')
+    const write = (file: string, text: string) => { mkdirSync(join(root, file, '..'), {recursive: true}); writeFileSync(join(root, file), text) }
+    try {
+        write('client/src/main.ts', 'one')
+        write('client/tests/unit/a.test.ts', 'test')
+        write('shared/workspace.ts', 'contract')
+        write('package.json', '{"version": "0.6.0"}')
+        expect(clientBuildState(root, publicDir)).toBe('missing')
+        write('lib/editor/public/index.html', 'built')
+        expect(clientBuildState(root, publicDir)).toBe('stale')
+        write('lib/editor/public/.build-stamp', clientSourceStamp(root))
+        expect(clientBuildState(root, publicDir)).toBe('current')
+        write('client/tests/unit/a.test.ts', 'another test')
+        expect(clientBuildState(root, publicDir)).toBe('current')
+        for (const [file, text] of [['client/src/main.ts', 'two'], ['shared/workspace.ts', 'another contract'], ['package.json', '{"version": "0.7.0"}']]) {
+            write(file!, text!)
+            expect(clientBuildState(root, publicDir)).toBe('stale')
+            write('lib/editor/public/.build-stamp', clientSourceStamp(root))
+        }
+        // a build handed over without client/: taken as it is
+        rmSync(join(root, 'client'), {recursive: true})
+        expect(clientBuildState(root, publicDir)).toBe('prebuilt')
+    } finally {
+        rmSync(root, {recursive: true, force: true})
+    }
+})

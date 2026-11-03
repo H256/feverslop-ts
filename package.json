@@ -24,6 +24,7 @@
     "styles:doc": "bun tools/styles-doc.ts",
     "typecheck": "bun tools/typecheck.ts",
     "test": "bun test ./lib ./comfy",
+    "test:workspace": "bun run client:build && bun test ./tests/workspace",
     "client:install": "bun install --cwd client --frozen-lockfile",
     "client:check": "bun run --cwd client check",
     "client:build": "bun tools/build-client.ts",

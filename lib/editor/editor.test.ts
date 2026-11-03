@@ -171,10 +171,8 @@ describe('serving', () => {
         expect((await get('/api/project', {method: 'DELETE'})).status).toBe(405)
         expect((await handler(new Request('http://evil.example/api/projects'))).status).toBe(403)
     })
-    test('the page and what it asks for', async () => {
-        const page = await handler(new Request('http://localhost/'))
-        expect(page.headers.get('content-type')).toContain('text/html')
-        expect(await page.text()).toContain('prefers-color-scheme')
+    // the page itself is the built client, served as static.test.ts checks
+    test('what the page asks for', async () => {
         expect(await (await get('/api/project')).json()).toMatchObject({id: 'music', kind: 'music'})
         expect(await (await get('/api/freshness')).json()).toMatchObject({clips: {'slot-001': 'stale'}})
         expect((await get('/api/nothing')).status).toBe(404)
