@@ -2,7 +2,7 @@ import {expect, test} from 'bun:test';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {clientBuildState, clientSourceStamp, installClientBuild} from './client-build.ts';
+import {buildClient, clientBuildState, clientSourceStamp, installClientBuild} from './client-build.ts';
 
 function fixture(check: (dist: string, target: string, root: string) => void) {
     const root = mkdtempSync(join(tmpdir(), 'client-build-'))
@@ -91,6 +91,25 @@ test('the page is built again when its sources, the shared contracts or the rele
         // a build handed over without client/: taken as it is
         rmSync(join(root, 'client'), {recursive: true})
         expect(clientBuildState(root, publicDir)).toBe('prebuilt')
+    } finally {
+        rmSync(root, {recursive: true, force: true})
+    }
+})
+
+test('the client packages are installed as the lockfile says before every build, also when node_modules is there', () => {
+    const root = mkdtempSync(join(tmpdir(), 'client-install-'))
+    mkdirSync(join(root, 'client', 'node_modules'), {recursive: true})
+    const calls: string[] = []
+    const spawn = (fail: string) => ((args: string[]) => {
+        calls.push(args.slice(1).join(' '))
+        return {exitCode: args.includes(fail) ? 1 : 0}
+    }) as unknown as typeof Bun.spawnSync
+    try {
+        expect(() => buildClient(root, join(root, 'public'), spawn('build'))).toThrow('Building the client failed')
+        expect(calls).toEqual(['install --frozen-lockfile', 'run build'])
+        calls.length = 0
+        expect(() => buildClient(root, join(root, 'public'), spawn('install'))).toThrow('bun run client:install')
+        expect(calls).toEqual(['install --frozen-lockfile'])
     } finally {
         rmSync(root, {recursive: true, force: true})
     }
