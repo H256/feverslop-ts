@@ -33,17 +33,20 @@ run.onEnd((current, action) => {
   void session.reload().then(() => actions.afterRender(current, action, review.start)).catch(toasts.fail)
 })
 
+const linked = () => project.value.clips.find(c => c.id === route.hash.slice(1))
 onMounted(() => {
   timeline.chooseSource()
   playback.applySound()
   // a link to a clip opens it
-  const wanted = project.value.clips.find(c => c.id === route.hash.slice(1)) ?? project.value.clips[0]
-  if (wanted) playback.seek(wanted.start)
-  else playback.seek(0)
+  playback.seek((linked() ?? project.value.clips[0])?.start ?? 0)
   void timeline.loadAround()
 })
-// the clip at the playhead is in the address
+// the clip at the playhead is in the address, and a clip put into the address (a link, back, forward) is gone to
 watch(playback.clip, clip => { if (clip && route.hash !== `#${clip.id}`) void router.replace({hash: `#${clip.id}`}) })
+watch(() => route.hash, () => {
+  const clip = linked()
+  if (clip && clip.id !== playback.clip.value?.id) playback.seek(clip.start)
+})
 
 const KEYS: Record<string, () => void> = {
   ' ': () => playback.setPlaying(!playback.playing.value),

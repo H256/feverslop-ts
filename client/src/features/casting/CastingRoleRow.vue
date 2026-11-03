@@ -22,7 +22,7 @@ const unknown = computed(() => props.role.entry && props.role.entry !== own.valu
   <article class="role">
     <MediaThumb :media="role.picture" :roots="roots" cls="" :style="role.picture ? {cursor: 'zoom-in'} : undefined" @click="role.picture && viewer.open(role.picture, roots, role.name, role.id)" />
     <div>
-      <b>{{ role.name }}</b><span class="muted"> {{ role.id }}</span>
+      <b>{{ role.name }}</b> <span class="muted">{{ role.id }}</span>
       <div class="muted">{{ [role.kind === 'character' ? (role.role || 'Character') : 'Place', plural(role.clips.length, 'clip')].join(' · ') }}</div>
       <div v-if="role.libraryId && !role.copied" class="warn">Not copied yet: the next run takes it from the library.</div>
       <NoticeList :errors="role.errors" :warnings="role.warnings" />

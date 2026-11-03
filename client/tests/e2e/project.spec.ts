@@ -44,6 +44,9 @@ test('timeline: the clip at the playhead, its tabs, and a render asked before it
   await page.locator('body').press('ArrowRight')
   await expect(page.locator('.ihead h2')).toContainText('clip-2')
   await expect(page).toHaveURL(/#clip-2$/)
+  // a link to a clip on the open page: the playhead goes there
+  await page.evaluate(() => { location.hash = 'clip-1' })
+  await expect(page.locator('.ihead h2')).toContainText('clip-1')
 })
 
 test('story: a changed story is saved after the question, and leaving with changes asks first', async ({page}) => {
@@ -64,6 +67,7 @@ test('story: a changed story is saved after the question, and leaving with chang
 
 test('casting: a library asset for a role, asked with what goes stale', async ({page}) => {
   await page.goto(`${base}/p/music/demo/casting`)
+  await expect(page.locator('.role').first()).toContainText('Ann ann')
   await page.getByLabel('Who plays Ann').selectOption('library:kael')
   await expect(dialog(page)).toContainText('1 clip go stale: clip-1')
   await dialog(page).getByRole('button', {name: 'Change it'}).click()
