@@ -52,6 +52,8 @@ Oben auf **Story** und **Casting**, und auf der Timeline eines Projekts ohne Cli
 
 **Die Story an den Cast anpassen:** **Tell it anew for the cast** lässt das Sprachmodell dieselbe Story mit der Besetzung erzählen, die **Casting** jetzt hat: gleiche Handlung, gleiche Orte, etwa gleiche Länge. Der Vorschlag erscheint neben der jetzigen Story. **Take the new story** übernimmt ihn, **Drop it** verwirft ihn. Beim Übernehmen bleiben Cast, Sängerwahl und Looks, nur die Zusammenfassung und alles ab den Beats wird neu geplant.
 
+![Vorschlag neben der jetzigen Story](images/workspace/story-proposal.jpg)
+
 ![Story-Seite mit der Stufen-Leiste](images/workspace/story.jpg)
 
 **Den Look ändern:** Auf **Look** steht oben der Look des ganzen Videos, darunter je Figur und Ort der Look (daraus wird das Bild gemacht) und die Beschreibung für die Clip-Prompts, bei Orten auch Hintergrund und Grundriss. Du änderst einen Text von Hand oder setzt den Haken **Write anew**, dann schreibt das Sprachmodell ihn neu. Was aus einem geänderten Text folgt, wird nur für diese eine Figur oder diesen einen Ort neu geschrieben: aus einem neuen Look die Beschreibung, aus einem neuen Ort-Look Beschreibung, Hintergrund und Grundriss. Alle anderen behalten ihre Texte. Nach **Save** fragt die Seite, ob das gleich geschehen soll. Ein geänderter Look des ganzen Videos schreibt dagegen alle Looks neu.
