@@ -5,6 +5,7 @@ import type {CastingRole, CastView} from '../../../../shared/workspace'
 import NoticeList from '../../components/NoticeList.vue'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
+import {usePending} from '../../composables/usePending'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {listSteps, plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
@@ -15,7 +16,7 @@ import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import CastEditor from './CastEditor.vue'
 import CastingRoleRow from './CastingRoleRow.vue'
-import type {DraftMember} from './CastMemberForm.vue'
+import {castDraft, type CastDraft} from './forms'
 
 /** Who plays whom: a role given a library asset, or the cast changed by hand - two ways, never at once. */
 const {project, api, start, busy, root} = useProject()
@@ -73,11 +74,12 @@ let toStory = false
 run.onEnd(() => { if (toStory) void router.push(`${root}/story`); toStory = false })
 
 // the cast by hand: names, roles and what they are, without the library - and for a music video who is in it at all
-const draft = ref<{characters: DraftMember[], locations: DraftMember[]}>()
+const draft = ref<CastDraft>()
 const editing = computed(() => !!draft.value)
-const edit = (cast: CastView) => { draft.value = reactive({characters: cast.characters.map(c => ({...c})), locations: cast.locations.map(l => ({...l}))}) }
+const edit = (cast: CastView) => { draft.value = reactive(castDraft(cast)) }
 const cancel = () => { draft.value = undefined }
 useUnsavedChanges(() => editing.value, 'changes to the cast')
+const saving = usePending()
 
 const saveCast = toasts.guard(async () => {
   const cast = data.value?.cast
@@ -98,7 +100,8 @@ const saveCast = toasts.guard(async () => {
     confirm: 'Save it',
   })
   if (!yes) return
-  const result = await api.saveCast(draft.value)
+  // while saving the page is not to be changed: the draft sent is let go after it, and with it whatever was typed meanwhile
+  const result = await saving.during(() => api.saveCast(draft.value!))
   draft.value = undefined
   toasts.show(result.changed ? 'The cast is saved' : 'Nothing changed')
   // the story still tells of the cast before: the new names put in, or the story told anew for whoever came or went
@@ -121,7 +124,7 @@ const saveCast = toasts.guard(async () => {
 </script>
 
 <template>
-  <div class="scrollpage view">
+  <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
     <StageBar />
     <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
     <template v-if="data">
@@ -133,8 +136,8 @@ const saveCast = toasts.guard(async () => {
       <div v-if="!data.cast" class="empty">No cast yet - plan it with the button above.</div>
       <template v-else-if="draft">
         <div class="note">{{ film ? 'The names and texts of the screenplay\'s roles and places. Who is in it is the script\'s: that is changed there.' : 'Names, roles and props, and who is in it at all - without the library. Best right after the cast is planned: then nothing is built on it yet.' }}</div>
-        <CastEditor v-model="draft.characters" title="Characters" kind="character" :film="film" :can-add="data.cast.canAdd" />
-        <CastEditor v-model="draft.locations" title="Places" kind="location" :film="film" :can-add="data.cast.canAdd" />
+        <CastEditor :members="draft.characters" title="Characters" kind="character" :film="film" :can-add="data.cast.canAdd" />
+        <CastEditor :members="draft.locations" title="Places" kind="location" :film="film" :can-add="data.cast.canAdd" />
         <div class="section btn-row">
           <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
           <button class="btn" @click="cancel">Cancel</button>

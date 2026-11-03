@@ -1,5 +1,5 @@
 import {computed, ref, shallowRef} from 'vue'
-import type {EditorProject, ProjectKind, RunInfo, RunRequest} from '../../../../shared/workspace'
+import type {EditorProject, ProjectKind, RunRequest} from '../../../../shared/workspace'
 import {projectApi} from '../../api/project'
 import {projectRoot, rootsOf} from '../../api/urls'
 import type {RunDock} from '../../services/run'
@@ -16,9 +16,6 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
   const project = shallowRef<EditorProject>()
   const error = ref('')
   let text = ''
-  // the session ends with its pages: an answer that comes later starts nothing in the project open by then
-  let closed = false
-  const close = () => { closed = true }
 
   /**
    * The folder is the model: read again, and taken over only when it changed. True when it did. Polling, the end of a run and a change
@@ -40,16 +37,18 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
     newest = reading
     return reading
   }
-  /** Starts a run for what was asked - after the question, with the servers chosen in it. */
+  /**
+   * Starts a run for what was asked - after the question, with the servers chosen in it. Followed only while this project's runs are:
+   * an answer that comes after its pages went starts nothing in what is open by then (the run dock checks that).
+   */
   const start = async (action: RunRequest) => {
     if (deps.run.running()) throw new Error('a run is going on - wait for it, or stop it')
+    const started = deps.run.starter()
     const {run} = await api.run(action, deps.servers.take())
-    if (!closed) deps.run.started(run, action)
+    started(run, action)
   }
-  /** A run started by a route of its own (a picture rendered again with its prompt). */
-  const started = (run: RunInfo) => { if (!closed) deps.run.started(run) }
   const busy = computed(() => !!deps.run.current.value?.running)
-  return {kind, id, root, api, roots: rootsOf(root), project, error, reload, start, started, busy, close, takeServers: deps.servers.take}
+  return {kind, id, root, api, roots: rootsOf(root), project, error, reload, start, starter: deps.run.starter, busy, takeServers: deps.servers.take}
 }
 export type ProjectSession = ReturnType<typeof createProjectSession>
 export const ProjectService = defineService<ProjectSession>('project')

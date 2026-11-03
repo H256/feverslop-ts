@@ -183,3 +183,46 @@ test('references: an edited prompt is not lost by picking another picture', asyn
   await expect(page).toHaveURL(/#ann$/)
   await expect(page.getByRole('textbox', {name: 'Prompt'})).toHaveValue('Ann in blue')
 })
+
+test('timeline: a scrub the browser cancels leaves playing stopped; one let go plays on', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/#clip-1`)
+  const play = page.locator('.tbtn.play')
+  const ruler = page.locator('.lane.lane-ruler')
+  const box = (await ruler.boundingBox())!
+  await play.click()
+  await expect(play).toHaveAttribute('aria-label', 'Pause')
+  await page.mouse.move(box.x + 40, box.y + box.height / 2)
+  await page.mouse.down()
+  await expect(play).toHaveAttribute('aria-label', 'Play')
+  await page.evaluate(() => dispatchEvent(new PointerEvent('pointercancel')))
+  await page.mouse.up()
+  await expect(play).toHaveAttribute('aria-label', 'Play')
+  await play.click()
+  await ruler.click({position: {x: 60, y: box.height / 2}})
+  await expect(play).toHaveAttribute('aria-label', 'Pause')
+})
+
+test('library: an asset asked for in the library starts nothing in the project opened before the answer came', async ({page}) => {
+  let answer: () => void = () => {}
+  await page.route('**/api/library/assets', route => route.fulfill({json: {dir: 'library', assets: []}}))
+  await page.route('**/api/library/create', async route => {
+    await new Promise<void>(resolve => { answer = resolve })
+    await route.fulfill({json: {run: {source: 'here', command: 'bun tools/create-asset.ts kael', pid: 9, startedAt: '2026-11-03T00:00:00Z', running: true}}})
+  })
+  await page.route('**/api/library/run-events*', route => route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: 'event: state\ndata: null\n\n'}))
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('navigation', {name: 'Workspace'}).getByRole('link', {name: 'Library'}).click()
+  await page.getByRole('button', {name: 'New asset from a picture'}).click()
+  await dialog(page).getByLabel('Picture').setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect(dialog(page).getByRole('button', {name: 'Working…'})).toBeVisible()
+  await page.goBack()
+  await expect(page.locator('.ihead h2')).toContainText('clip-1')
+  // the project follows its runs; a late answer of the library must not start that over from the start (after=0) for its run
+  const reconnects: string[] = []
+  page.on('request', request => { if (request.url().includes('/p/music/demo/api/run-events')) reconnects.push(request.url()) })
+  answer()
+  await page.waitForTimeout(500)
+  expect(reconnects).toEqual([])
+  await expect(page.getByText('bun tools/create-asset.ts kael')).toHaveCount(0)
+})

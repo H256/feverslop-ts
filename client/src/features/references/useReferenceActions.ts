@@ -12,7 +12,7 @@ export const versionAbout = (version: EditorReference['versions'][number]) => [V
 /** What can be done with one reference picture, each asked first: render it again, take an older version back, put it into the library. */
 export function useReferenceActions(reference: Ref<EditorReference>, fresh: Ref<Freshness | undefined>, done: () => Promise<unknown>) {
   const ask = useAsk()
-  const {api, start, started, takeServers} = useProject()
+  const {api, start, starter, takeServers} = useProject()
   const blocked = () => !!reference.value.library || fresh.value === 'pinned'
   const sideEffects = () => [
     reference.value.clips.length > 0 && `${plural(reference.value.clips.length, 'clip')} made from this picture will go stale. They are not rendered on their own.`,
@@ -41,6 +41,7 @@ export function useReferenceActions(reference: Ref<EditorReference>, fresh: Ref<
     })
     if (!yes) return
     const servers = takeServers()
+    const started = starter()
     const {run} = await api.rerender(r.id, {newAnchor, ...(edited ? {prompt} : {}), ...(servers ? {servers} : {})})
     started(run)
   }

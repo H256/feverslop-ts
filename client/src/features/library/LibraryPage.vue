@@ -47,7 +47,11 @@ const createAsset = toasts.guard(async () => {
     body: () => h(NewAssetForm, {draft: asset}),
     confirm: 'Render it',
     render: true,
-    submit: async () => { run.started((await workspace.createAsset(assetForm(asset, servers.take()))).run) },
+    submit: async () => {
+      // asked for in the library: a late answer starts nothing in a project opened meanwhile
+      const started = run.starter()
+      started((await workspace.createAsset(assetForm(asset, servers.take()))).run)
+    },
   })
 })
 </script>
