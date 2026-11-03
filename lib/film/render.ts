@@ -177,9 +177,10 @@ export class FilmRenderer extends Renderer {
         // every frame it has (assembleFilm useRendered)
         const shown = previous?.dialogue.length ? renderedFramesOf(this.projectDir, previous.id) : undefined
         const context = clip.startsFrom && this.config.contextFrames > 0 ? await this.contextOf(clip.startsFrom, this.config.contextFrames, shown) : undefined
-        const prepare = async () => {
+        // a seed given: a take again with a derived one (checkTakes), else the clip's own
+        const prepare = async (forced?: number) => {
             const uploads = clip.assets.pictures.map(p => ({from: join(this.projectDir, p.file), to: `${this.remoteDir}/${p.file}`}))
-            const seed = clipSeed(this.config.seed, clip.id)
+            const seed = forced ?? clipSeed(this.config.seed, clip.id)
             const module = await import(join(workflowDir, `${this.config.videoWorkflow}.ts`)) as { default: (opts: FilmVideoWorkflowOptions) => ReturnType<typeof import("../../comfy/workflows/h3-ref2video-film.ts").default>, renderFrames?: RenderFrames, recommendedResolution?: RecommendedResolution }
             this.noteResolution(module.recommendedResolution)
 
@@ -206,6 +207,11 @@ export class FilmRenderer extends Renderer {
         seed = await this.retryLeaks(what, clip.id, file, seed, prepare, `render it again with --render=videos --again --only=${clip.id}`)
         // the head - the clip before again - cut off, the colors matched to it: as in the music video
         if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
+        seed = await this.checkTakes(clip.id, file, seed, clip, async derived => {
+            const taken = (await this.render(what, target, '.mp4', () => prepare(derived))).seed
+            if (context) await this.joinContext(target, clip.id, clip.startsFrom!, context)
+            return taken
+        })
 
         const rendered = await probeVideo(target)
         if (rendered.frames < clip.frames) log.warn(`${file} has ${rendered.frames} frames, the clip needs ${clip.frames} - delete it and render again`)

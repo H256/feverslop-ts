@@ -1,7 +1,7 @@
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import type {Aspect, Resolution} from "../../comfy/helpers.ts";
-import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, invalidJsonProblem, languageName, leakRetriesProblem, llmProblem, resolutionProblem, seedProblem, workflowProblem} from "../config.ts";
+import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, invalidJsonProblem, languageName, leakRetriesProblem, llmProblem, qaRetriesNote, qaRetriesProblem, resolutionProblem, seedProblem, workflowProblem} from "../config.ts";
 import type {Finish} from "../finish.ts";
 import {log, warnUnknownKeys} from "../log.ts";
 
@@ -40,6 +40,9 @@ export type FilmConfig = {
     // a clip that came out as the reference pictures lined up on their grey backdrop (lib/leak.ts) is rendered again, with
     // another seed, up to this many times. 0 (default) = off
     leakRetries: number,
+    // a clip with black frames or a picture that stands still for seconds (lib/clip-qa.ts) is rendered again with another,
+    // derived seed, the better take kept - up to this many times. 0 (default) = off - as in the music video
+    qaRetries: number,
     // the frame rate of a second film, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by frame interpolation
     // (a ComfyUI job per clip, shot by shot), the sound is the one of the 24 fps film. 24 (default) = off - as in the music video
     finalFps: number,
@@ -76,6 +79,7 @@ export const filmDefaults: FilmConfig = {
     continuity: 'never',
     contextFrames: defaults.contextFrames,
     leakRetries: defaults.leakRetries,
+    qaRetries: defaults.qaRetries,
     finalFps: defaults.finalFps,
     interpolationModel: defaults.interpolationModel,
     finish: defaults.finish,
@@ -129,8 +133,10 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
     if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
-    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries), finalFpsProblem(config.finalFps),
+    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries), qaRetriesProblem(config.qaRetries), finalFpsProblem(config.finalFps),
         finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel), previewProblem(config.preview)]) if (problem) fail(problem)
+    const qaNote = qaRetriesNote(config.qaRetries)
+    if (qaNote) log.warn(`${file}: ${qaNote}`)
     if (config.contextFrames > 0 && config.continuity === 'never') log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
     if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
