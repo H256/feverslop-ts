@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /** The line icons of the workspace; `filled` ones are solid shapes. */
 const ICONS = {
-  mark: {d: ['M6 4v16l14-8z'], filled: true},
   play: {d: ['M7 4v16l13-8z'], filled: true},
   pause: {d: ['M7 4h3.5v16H7zM13.5 4H17v16h-3.5z'], filled: true},
   prev: {d: ['M6 5v14M19 5l-10 7 10 7z'], filled: false},

@@ -32,6 +32,7 @@ A video is now made as a film is: the story, then the cast, then the look, each 
 - A client of its own in `client/` (Vue 3, TypeScript, Vite), built with `bun run client:build` into the editor and served by Bun; without `FEVERSLOP_EDITOR_UI=vue` the workspace stays as it was (#561).
 - One set of wire contracts in `shared/workspace.ts` for server and client: a drift is a type error on either side (#562).
 - Every page ported: overview, library, timeline with player, inspector and review, story, casting, look, references, singers and timing. Unsaved changes ask before leaving; a clip in the address is gone to (#562).
+- The FeverSlop logo: the brain as the mark in the top bar and as the icon of the tab, the whole logo on top of the README.
 - Tests: unit tests for the logic without a browser (`bun run client:test`), Playwright against the real editor (`bun run client:e2e`) (#561, #562).
 - Still to do before it becomes the default (#560): playback, waveform dragging, runs and making an asset checked by hand on real projects, then the old page removed.
 

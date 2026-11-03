@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {RouterLink} from 'vue-router'
 import {ChromeService} from '../services/chrome'
-import AppIcon from './AppIcon.vue'
+import mark from '../assets/mark.png'
 import ServerStatus from './ServerStatus.vue'
 import ThemeSwitch from './ThemeSwitch.vue'
 
@@ -12,7 +12,7 @@ const version = __APP_VERSION__
 
 <template>
   <header class="top">
-    <RouterLink class="mark" to="/" title="All projects" aria-label="All projects"><AppIcon name="mark" :size="11" /></RouterLink>
+    <RouterLink class="mark" to="/" title="All projects" aria-label="All projects"><img :src="mark" alt=""></RouterLink>
     <h1>{{ title }}</h1>
     <nav id="top-nav" class="nav" aria-label="Project" />
     <div id="top-chips" class="chips" />

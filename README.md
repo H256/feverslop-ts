@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" alt="FeverSlop" width="280"></p>
+
 # FeverSlop TS
 
 Turns a song (lyrics + audio) into a beat-matched music video plan: a story, characters, locations, a film look,

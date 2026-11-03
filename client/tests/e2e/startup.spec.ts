@@ -20,6 +20,10 @@ test('production Vue assets boot through Bun, with navigation and direct project
   await expect(page.getByRole('heading', {name: 'All projects', exact: true})).toBeVisible()
   // the release the build belongs to, from the repository's package.json
   await expect(page.locator('.top .release')).toHaveText('v' + version)
+  // the logo: the mark in the top bar and the icon of the tab
+  await expect(page.locator('.top .mark img')).toHaveJSProperty('naturalWidth', 64)
+  const icon = await request.get(base + (await page.locator('link[rel=icon]').getAttribute('href'))!)
+  expect(icon.headers()['content-type']).toBe('image/png')
   await page.getByRole('navigation', {name: 'Workspace'}).getByRole('link', {name: 'Library', exact: true}).click()
   await expect(page).toHaveURL(`${base}/library`)
   await expect(page.getByRole('heading', {name: 'Library', exact: true})).toBeVisible()
