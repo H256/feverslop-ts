@@ -260,6 +260,8 @@ export type TimingView = {
   cuts: {id: string, start: number, end: number, beat?: string}[],   // the clips of the song as the plan cut it
   beats: {id: string, planned: boolean, clips: string[]}[],
   unplanned: string[],
+  /** Clips whose request - the prompt - still has other vocals than the timing now says: a line moved since the last plan run. */
+  outdated: {clip: string, lines: number[]}[],
   audio?: Media,              // the vocals stem, else the song
 }
 export type TimingChange = {lines: {line: number, words: {start: number, end: number}[]}[]}

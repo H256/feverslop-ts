@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test";
 import type {Project} from "../project.ts";
-import {applyTiming, timingView} from "./timing.ts";
+import {applyTiming, outdatedClips, timingView} from "./timing.ts";
 
 // two clips: slot-001 0-4 s (beat b1), slot-002 4-8 s (beat b2). Line 0 "we rise" in the first, line 1 "and fall" in the
 // second - but line 1 is barely found: its words are a guess at 6 s, the singer really sings it at 2.5 s, in the first clip
@@ -90,5 +90,37 @@ describe('timingView', () => {
         const data = project()
         applyTiming(data, {lines: [{line: 1, words: at(5)}]}, requests)
         expect(timingView('/nowhere', data, requests)!.lines[1]!.estimated).toBe(false)
+    })
+})
+
+describe('outdatedClips - the clips that do not know a move yet', () => {
+    // the requests of the last plan run: what each clip says is sung, and when (clip-relative, with its singers)
+    const sung = (id: string, line: number, text: string, from: number, to: number) => ({id, beatId: id === 'slot-001' ? 'b1' : 'b2', vocals: [{at: from, end: to, line, text, singers: [{id: 'a', subject: 'Ann', speaker: '(S1)'}]}]})
+    const planned = () => [sung('slot-001', 0, 'we rise', 0.5, 1.4), sung('slot-002', 1, 'and fall', 2, 2.9)]
+    const withSinging = (data: Project, singing = {singers: ['a'], lines: [{line: 0, text: 'we rise', singers: ['a']}, {line: 1, text: 'and fall', singers: ['a']}]}) => ({...data, singing})
+
+    test('what the last plan run saw is up to date', () => {
+        expect(outdatedClips(withSinging(project()), planned())).toEqual([])
+    })
+    test('a line moved since: both clips, with the line - the one it left and the one it went into', () => {
+        const data = withSinging(project())
+        applyTiming(data, {lines: [{line: 1, words: at(2.5)}]}, requests)
+        expect(outdatedClips(data, planned())).toEqual([{clip: 'slot-001', lines: [1]}, {clip: 'slot-002', lines: [1]}])
+        expect(timingView('', data, planned())!.outdated).toHaveLength(2)
+    })
+    test('a move within what a frame of rounding gives is none', () => {
+        const data = withSinging(project())
+        data.timeline!.slots[1]!.vocals![0]!.start += 0.05
+        expect(outdatedClips(data, planned())).toEqual([])
+    })
+    test('a line the singing does not have is sung by everybody, as the request has it; one nobody sings is not expected in it', () => {
+        const data = withSinging(project(), {singers: ['a'], lines: [{line: 0, text: 'we rise', singers: ['a']}]})
+        // line 1 has no entry: expected, and the request has it
+        expect(outdatedClips(data, planned())).toEqual([])
+        const nobody = withSinging(project(), {singers: ['a'], lines: [{line: 0, text: 'we rise', singers: ['a']}, {line: 1, text: 'and fall', singers: []}]})
+        expect(outdatedClips(nobody, [planned()[0]!, {id: 'slot-002', beatId: 'b2'}])).toEqual([])
+    })
+    test('without singers there is nothing in a request to be out of date', () => {
+        expect(outdatedClips(project(), [{id: 'slot-001', beatId: 'b1'}, {id: 'slot-002', beatId: 'b2'}])).toEqual([])
     })
 })

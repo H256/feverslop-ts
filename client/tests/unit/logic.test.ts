@@ -62,7 +62,7 @@ describe('who sings', () => {
 
 describe('the timing of the words', () => {
   const line: TimingLine = {line: 0, section: 'Verse', text: 'a b c', words, estimated: true, byHand: false, beats: ['b1']}
-  const view: TimingView = {duration: 10, lines: [line], cuts: [{id: 'c1', start: 0, end: 2.5, beat: 'b1'}, {id: 'c2', start: 2.5, end: 10}], beats: [{id: 'b1', planned: true, clips: ['c1']}], unplanned: []}
+  const view: TimingView = {duration: 10, lines: [line], cuts: [{id: 'c1', start: 0, end: 2.5, beat: 'b1'}, {id: 'c2', start: 2.5, end: 10}], beats: [{id: 'b1', planned: true, clips: ['c1']}], unplanned: [], outdated: []}
   test('a word that runs into a neighbour pushes it, down to the shortest word', () => {
     const moved = movedWord(words, 1, 0.8, undefined, 10)
     expect(moved[1]).toEqual({text: 'b', start: 2.8, end: 3.8})
