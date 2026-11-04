@@ -1,6 +1,7 @@
 import type {LyricSection, LyricsTiming, MusicMap, MusicSection, Slot, SlotVocal, TimedLine, TimedWord, TranscriptWord} from "./project.ts";
 
 export type ActivityRange = { start: number, end: number }
+import {EARLY_FROM, leadOf} from "../shared/timing-fit.ts";
 import {frameAt, round, secondsAt} from "./frames.ts";
 
 // Aligns the known lyrics to Whisper's transcript of the vocals stem - plain code, deterministic.
@@ -392,6 +393,27 @@ export function refineSections(music: MusicMap, lyricSections: LyricSection[], t
             energy: energies.length ? round(energies.reduce((a, b) => a + b, 0) / energies.length) : section.energy,
         }
     })
+}
+
+/**
+ * The first word of a line starts where its sound does. The alignment gives the first word after a pause the time the pause began, so its
+ * box covers silence - up to a second - and a clip shows the mouth move before anything is sung (a chorus line sung twice: once in the
+ * silence, once for real). Measured on the loudness of the vocals stem (`peaks`, shared/timing-fit.ts) and not on the transcript: a
+ * start moves only later, never past what is left of the word, and a line placed by hand stays. `moved` says what changed, by line.
+ */
+export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: LyricsTiming, moved: {line: number, by: number}[]} {
+    const moved: {line: number, by: number}[] = []
+    const lines = timing.lines.map(line => {
+        const first = line.words[0]
+        if (line.byHand || !first) return line
+        const lead = leadOf(line.words, peaks)
+        const by = Math.min(lead, first.end - first.start - MIN_WORD_SEC)
+        if (lead < EARLY_FROM || by <= 0) return line
+        moved.push({line: line.line, by: round(by)})
+        const start = round(first.start + by)
+        return {...line, start, words: [{...first, start}, ...line.words.slice(1)]}
+    })
+    return {timing: {...timing, lines}, moved}
 }
 
 /**
