@@ -1,4 +1,5 @@
-import {existsSync, renameSync} from "node:fs";
+import {existsSync} from "node:fs";
+import {partialOf, replaceWithPartial} from "./json-file.ts";
 import {join} from "node:path";
 import {log, styles} from "./log.ts";
 import {withStep} from "./timings.ts";
@@ -322,10 +323,8 @@ export class ProjectStore {
     // written next to the target first, so a crash mid-write never leaves a truncated project.json
     save() {
         this.saving = this.saving.catch(() => {}).then(async () => {
-            // the process id in the name: two runs saving at once never write into the same temporary file
-            const partial = `${this.file}.${process.pid}.partial`
-            await Bun.write(partial, JSON.stringify(this.data, null, 2))
-            renameSync(partial, this.file)
+            await Bun.write(partialOf(this.file), JSON.stringify(this.data, null, 2))
+            replaceWithPartial(this.file)
         })
         return this.saving
     }
