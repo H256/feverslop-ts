@@ -7,9 +7,12 @@ import {plural} from '../../lib/format'
 import {useViewer} from '../../services/viewer'
 import {useProject} from '../project/session'
 
-/** A role and who plays it: rendered in this project, or an asset of the library. A choice is asked for by the page. */
-const props = defineProps<{role: CastingRole, options: string[]}>()
-const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement]}>()
+/**
+ * A role and who plays it: rendered in this project, or an asset of the library. A choice is asked for by the page - and where the
+ * cast can shrink, taking the role out of it, which the page opens in the cast by hand.
+ */
+const props = defineProps<{role: CastingRole, options: string[], removable: boolean}>()
+const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement], remove: []}>()
 const {roots} = useProject()
 const viewer = useViewer()
 const own = computed(() => `project:${props.role.id}`)
@@ -27,10 +30,13 @@ const unknown = computed(() => props.role.entry && props.role.entry !== own.valu
       <div v-if="role.libraryId && !role.copied" class="warn">Not copied yet: the next run takes it from the library.</div>
       <NoticeList :errors="role.errors" :warnings="role.warnings" />
     </div>
-    <select :aria-label="`Who plays ${role.name}`" :value="value" @change="emit('choose', ($event.target as HTMLSelectElement).value, $event.target as HTMLSelectElement)">
-      <option :value="own">Rendered in this project</option>
-      <option v-for="id in options" :key="id" :value="`library:${id}`">library: {{ id }}</option>
-      <option v-if="unknown" :value="role.entry">{{ role.entry }}</option>
-    </select>
+    <div class="choice">
+      <select :aria-label="`Who plays ${role.name}`" :value="value" @change="emit('choose', ($event.target as HTMLSelectElement).value, $event.target as HTMLSelectElement)">
+        <option :value="own">Rendered in this project</option>
+        <option v-for="id in options" :key="id" :value="`library:${id}`">library: {{ id }}</option>
+        <option v-if="unknown" :value="role.entry">{{ role.entry }}</option>
+      </select>
+      <button v-if="removable" class="btn" :aria-label="`Remove ${role.name}`" :title="role.kind === 'character' ? 'Out of the cast: the beats and shots are planned without them' : 'Out of the cast: the beats are planned without it'" @click="emit('remove')">Remove</button>
+    </div>
   </article>
 </template>
