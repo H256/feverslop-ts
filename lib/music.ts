@@ -46,13 +46,15 @@ export async function analyzeSong(songFile: string, labels: string[]): Promise<M
     return JSON.parse(stdout)
 }
 
-// demucs htdemucs_ft: the song's stems as WAV files in <projectDir>/stems/, paths relative to the project.
-// Only the vocals stem is used downstream (lip-sync reference, transcription) - htdemucs_ft gives it the
-// cleanest separation of the demucs family, at the cost of not splitting out guitar/piano/other individually.
+// The song's stems as WAV files in <projectDir>/stems/, paths relative to the project. demucs htdemucs_ft gives vocals,
+// drums, bass and other - the cleanest vocals of the demucs family, for the lip-sync reference and the transcription.
+// htdemucs_6s then adds guitar and piano on top (never overwriting those four): a song is separated once, also for the
+// library (lib/song-library.ts), and a guitarist or a pianist found later in the story needs no second pass.
 export async function separateStems(songFile: string, projectDir: string): Promise<Stems> {
     await runVocalsTool(['separate', songFile, join(projectDir, 'stems')], 'Stem separation')
+    const instruments = await separateInstrumentStems(songFile, projectDir, ['guitar', 'piano'])
     const names = ['vocals', 'drums', 'bass', 'other'] as const
-    return Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as Stems
+    return {...Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as Record<typeof names[number], string>, ...instruments}
 }
 
 // htdemucs_6s: guitar/piano only, on top of the htdemucs_ft stems already on disk (never overwritten - see

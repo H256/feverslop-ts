@@ -76,6 +76,7 @@ Alles aus diesem Abschnitt geht auch ohne Workspace. Die Seiten rufen dieselben 
 | neue Namen in die Story | `bun run story <id> --rename="Soren Hale=Soren Vale"` |
 | **Change the cast**, **Add a character**, **Add a place**, **Remove** | `bun run cast <id> --json > cast.json`, ändern, dann `bun run cast <id> --set=cast.json`. Eine neue Figur steht ohne `id` drin, eine entfernte fehlt einfach. |
 | Rolle aus der Bibliothek, **Plan now** | `bun run casting <id> --set=character:mara=library:mara-v2`, der Befehl nennt das passende `--redo` |
+| Timing: **Put the song into the library…** | `bun run export-song <id> [--as=<song-id>] [--name=<name>]`; in ein Projekt: `bun run import-song <id> <song-id>` |
 | **Look** lesen, ändern | `bun run look <id>`; `--json > look.json`, ändern, `--set=look.json` |
 | **Write anew** | `bun run look <id> --again=leo,location:hall` |
 | **Render the pictures** | `bun index.ts <id> --until=look --render=images` |
@@ -215,6 +216,8 @@ Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich 
 **Save** behält die Schnitte: Die Vocals jedes Clips werden aus den neuen Zeiten neu berechnet, nur Beats mit geänderten Clips verlieren ihren Shot-Plan. **Save and plan** plant sie gleich neu. **Save and cut the song again…** schneidet den Song um die neuen Zeiten neu (`--redo=timeline`) und plant dabei jeden Shot neu, das dauert. Verschobene Zeilen gelten als von Hand gesetzt und nicht mehr als geschätzt. Die Zeiten stehen in `project.json` (`lyricsTiming`), bis sich `lyrics.txt` ändert oder `--redo=lyricsTiming` neu abgleicht.
 
 **Im Terminal:** `bun run timing <id>` listet jede Zeile mit Anfang und Ende. `--json > timing.json` schreibt die Wortzeiten in eine Datei. Du verschiebst `start` und `end` und gibst sie mit `--set=timing.json` zurück. Unverändert zurückgegebene Zeilen zählen nicht als geändert. Fällt danach ein Schnitt in ein Wort, sagt der Befehl das und nennt `--redo=timeline`.
+
+**Den Song in die Bibliothek:** **Put the song into the library…** kopiert den Song, die Lyrics, die sechs Stems, die Analyse, das Transkript und das gespeicherte Timing in die Bibliothek (`library/songs/<id>/`), mit jeder von Hand gesetzten Zeile. Erst speichern: Der Knopf ist gesperrt, solange verschobene Zeilen ungespeichert sind. Ein neues Projekt nimmt den Song mit `bun run init` (die Songs der Bibliothek stehen dort zuerst) oder `bun run import-song <id> <song>` und fängt bei der Story an: Am Song wird nichts mehr neu gemacht. Jedes Projekt bekommt eine Kopie, eine spätere Änderung am Timing ändert weder die Bibliothek noch andere Projekte. Ein Song, den die Bibliothek schon hat, wird nie überschrieben. Im Terminal: `bun run export-song <id> [--as=<song-id>] [--name=<name>]`.
 
 ## Changing the settings of a project
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import {computed, onMounted, ref, toRef, watch} from 'vue'
+import {computed, h, onMounted, ref, toRef, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {TimingView} from '../../../../shared/workspace'
 import {mediaUrl} from '../../api/urls'
+import FormField from '../../components/FormField.vue'
 import PageBar from '../../components/PageBar.vue'
 import SegmentedControl from '../../components/SegmentedControl.vue'
 import {usePending} from '../../composables/usePending'
@@ -24,7 +25,7 @@ import {useTimingDraft} from './useTimingDraft'
  * The cut of the song stays: the clips' vocals are worked out again, and the beats whose clips sing something else lose their shot plan.
  */
 const props = defineProps<{view: TimingView, peaks?: number[], refresh: () => Promise<boolean>}>()
-const {api, roots, start} = useProject()
+const {api, roots, start, id} = useProject()
 const ask = useAsk()
 const toasts = useToasts()
 const {planNow} = usePlanning()
@@ -97,6 +98,21 @@ const cutAgain = toasts.guard(async () => {
   })
   if (yes) await save('cut')
 })
+// the song with its stems and this timing into the library, as bun run export-song does it
+const putIntoLibrary = toasts.guard(async () => {
+  const songId = ref(id), name = ref(id)
+  const field = (label: string, value: typeof songId) => h(FormField, {label}, () => h('input', {type: 'text', required: true, value: value.value, onInput: (event: Event) => { value.value = (event.target as HTMLInputElement).value }}))
+  await ask({
+    title: 'Put the song into the library?',
+    lines: [
+      'The song, its lyrics, its six stems, the analysis, the transcript and this timing are copied - with every line placed by hand.',
+      'A new project takes it with bun run init or bun run import-song and starts at the story: nothing of the song is worked out again. A song the library already has is never overwritten.',
+    ],
+    body: () => h('div', [field('Song id', songId), field('Name', name)]),
+    confirm: 'Put it in',
+    submit: () => start({type: 'export-song', as: songId.value.trim(), name: name.value.trim()}),
+  })
+})
 
 // a link to a line opens it
 const route = useRoute()
@@ -138,6 +154,6 @@ onMounted(() => {
       </div>
       <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
     </div>
-    <aside class="detail"><TimingSide :view="view" :draft="draft" :saved="saved" :early="earlyLines.size" @save="save" @cut-again="cutAgain" @tighten="tightenAll" @plan="toasts.guard(planNow)()" /></aside>
+    <aside class="detail"><TimingSide :view="view" :draft="draft" :saved="saved" :early="earlyLines.size" @save="save" @cut-again="cutAgain" @library="putIntoLibrary" @tighten="tightenAll" @plan="toasts.guard(planNow)()" /></aside>
   </div>
 </template>

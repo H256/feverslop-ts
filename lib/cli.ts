@@ -23,6 +23,8 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     casting: {args: '<project-id> [--film] [--set=character:<id>=library:<asset>]...', description: 'Print casting.json and what the next plan run takes over, with the --redo it needs; change entries.'},
     'import-asset': {args: '<project-id> [asset-id] [--from=project[:id]|library:id]', description: 'Import a character or location into a project.'},
     'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character or location to the shared library.'},
+    'export-song': {args: '<project-id> [--as=song-id] [--name=name]', description: 'Put the song of a project into the library: audio, lyrics, stems and the timing of every word.'},
+    'import-song': {args: '<project-id> [song-id]', description: 'Take a song of the library into a project, or list the songs; the plan starts at the story.'},
     'create-asset': {args: '<character|location> <library-id> --anchor=picture [--name=name] [--role=role] [--description=text] [--like=project]', description: 'Create a library asset from a reference picture.'},
     'film:check-joins': {args: '<film-id> [--only=clip-004] [--again]', description: 'Check the cuts within a scene with a vision model: posture, clothes and props across the cut. Only reports.'},
     'film:gallery': {args: '', description: 'Write films/index.html with the available films.'},

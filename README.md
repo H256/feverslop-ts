@@ -54,6 +54,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
 | `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
+| `bun run export-song <id>` / `import-song <id> [song]` | a song with its stems and the timing of its lyrics into the library, or from it into a project - see [The asset library](#the-asset-library) |
 | `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
@@ -979,6 +980,31 @@ bun run create-asset location temple-stage --anchor=pictures/stage.png --like=ti
 - ComfyUI renders the reference sheet (sequence video, frames, picture) from the anchor - with the render settings of
   the project given with `--like`, else the defaults. It is made in `library/.work/` and moved into the library when it
   is done; an id the library already has is refused before anything is made.
+
+**Songs in the library** - the song with its lyrics, its six stems and the timing of every word, so a timing fixed by hand
+on the Timing page is fixed once for every video of the song:
+
+```bash
+bun run export-song epa-streikt-261104 --as=epa-streikt --name="EPA streikt"   # into the library
+bun run import-song new-video                                                  # the songs in the library
+bun run import-song new-video epa-streikt                                      # into a project: the plan starts at the story
+```
+
+- `export-song` copies the audio, `lyrics.txt`, the stems and the steps worked out from them alone: the analysis
+  (`music`), the transcript and `lyricsTiming`, with every line placed by hand. Save the Timing page first - the library
+  gets the timing as `project.json` has it. A song changed since it was analysed, or lyrics changed since they were timed,
+  are refused. A song already in the library is never overwritten - `--as=<id>` gives the new one another id. The
+  Timing page has the same as **Put the song into the library…**.
+- In the library: `library/songs/<id>/song.json` (name, where it came from, the fingerprints of audio and lyrics, the
+  language, the steps), `song.<wav|mp3|flac>`, `lyrics.txt` and `stems/`.
+- `import-song` copies them into the project and puts the steps into `project.json`, so the next run takes them as they
+  are. A song or lyrics file of the project that is not the library's goes to `old/song-<time>/`, and what was planned on it
+  goes too. Where `config.json` does not say otherwise, it sets `lyricsLanguage` to the song's and `alignLyrics` to true.
+- `bun run init` offers the songs of the library first, and for an audio file and lyrics the library already has, its timing.
+- A project gets a copy: changing its timing changes no other project and not the library - put it in again under
+  another id.
+- Every song is separated into six stems: `htdemucs_ft` gives vocals, drums, bass and other, `htdemucs_6s` adds guitar and
+  piano. A project separated before has only the four, and gets guitar or piano in a pass of its own when a character plays one.
 
 ### casting.json - who plays each role
 

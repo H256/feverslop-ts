@@ -106,6 +106,12 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         case 'export-asset':
             if (!PICTURE_ID.test(action.asset.replace('--', '-')) || (action.as && !PICTURE_ID.test(action.as))) throw new Error('no such asset')
             return {script: 'tools/export-asset.ts', args: [id, action.asset, ...(action.as ? [`--as=${action.as}`] : []), ...(kind === 'film' ? ['--film'] : [])]}
+        case 'export-song': {
+            if (kind === 'film') throw new Error('a film has no song to put into the library')
+            if (action.as && !PICTURE_ID.test(action.as)) throw new Error(`"${action.as}" is no usable song id - lowercase letters, digits and dashes`)
+            const name = action.name?.trim().replace(/\s+/g, ' ')
+            return {script: 'tools/export-song.ts', args: [id, ...(action.as ? [`--as=${action.as}`] : []), ...(name ? [`--name=${name}`] : [])]}
+        }
     }
 }
 
@@ -142,7 +148,7 @@ export class RunControl {
     /** Starts what is asked for, or throws when the project is being worked on. `servers`: the URLs it may render on - none said: those of the settings. */
     start(target: EditorTarget, action: RunAction, servers?: string[]): RunInfo {
         const {script, args} = runCommand(target, action)
-        return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'leak-scan', servers)
+        return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'export-song' && action.type !== 'leak-scan', servers)
     }
 
     /** A tool that is not about one project's files, under a name of its own - the library's create-asset. */
