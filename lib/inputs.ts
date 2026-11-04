@@ -56,7 +56,8 @@ export function stepUsed(step: StepName, dir: string, data: Project, config: Pro
         // a song from lyrics of your own has no idea.txt - its style is there once it was written
         case 'songStyle': return existsSync(join(dir, 'input', 'idea.txt')) || data.songStyle !== undefined
         case 'stems': case 'transcript': case 'lyricsTiming': return config.alignLyrics
-        case 'instrumentStems': return config.alignLyrics && (props.has('guitar') || props.has('piano'))
+        // a song separated into all six stems has guitar and piano already
+        case 'instrumentStems': return config.alignLyrics && (['guitar', 'piano'] as const).some(name => props.has(name) && !data.stems?.[name])
         case 'propActivity': return config.alignLyrics && props.size > 0
         case 'singing': return config.singers.length > 0
         case 'shotViews': return config.sequenceSheets && config.locationView === 'auto'

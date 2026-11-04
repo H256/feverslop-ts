@@ -245,6 +245,12 @@ describe('what can be started', () => {
         expect(() => runCommand(music, {type: 'add-view', location: 'hall', name: 'a', shows: 'b'})).toThrow('a place of a film')
         expect(() => runCommand(film, {type: 'add-view', location: 'hall', name: ' ', shows: 'b'})).toThrow('a place of a film')
     })
+    test('the song into the library: a music video only, the id checked, the name one argument', () => {
+        expect(runCommand(music, {type: 'export-song', as: 'epa', name: 'EPA  streikt --film'})).toEqual({script: 'tools/export-song.ts', args: ['demo', '--as=epa', '--name=EPA streikt --film']})
+        expect(runCommand(music, {type: 'export-song'})).toEqual({script: 'tools/export-song.ts', args: ['demo']})
+        expect(() => runCommand(music, {type: 'export-song', as: '--film'})).toThrow('no usable song id')
+        expect(() => runCommand(film, {type: 'export-song'})).toThrow('a film has no song')
+    })
     test('nothing but ids gets into a command', () => {
         expect(() => runCommand(music, {type: 'clips', ids: ['--comfy=http://evil']})).toThrow('no such clips')
         expect(() => runCommand(music, {type: 'clips', ids: []})).toThrow('no such clips')

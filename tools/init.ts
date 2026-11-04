@@ -13,6 +13,10 @@ import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDi
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
 import {answer, askResolution, askStyle, askText} from "../lib/wizard.ts";
+import {libraryDir} from "../lib/library.ts";
+import {ProjectStore} from "../lib/project.ts";
+import {importSong, librarySongIds, type LibrarySong, readLibrarySong, songsLike} from "../lib/song-library.ts";
+import {loadProjectConfig} from "../lib/config.ts";
 cli('init')
 
 
@@ -32,8 +36,9 @@ log.section('feverslop-ts · new project')
 // again (clack has no way back to an earlier prompt). The config is built from the answers only when it is written.
 type Answers = {
     id: string
-    songSource: 'file' | 'idea' | 'lyrics'
+    songSource: 'file' | 'idea' | 'lyrics' | 'library'
     songFile?: string
+    librarySong?: LibrarySong   // a song of the library, with its lyrics, stems and timing (lib/song-library.ts)
     idea?: string
     ownLyrics?: string      // lyrics of your own the song is generated from
     musicStyle?: string
@@ -61,9 +66,13 @@ const a = {
     preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
     continuity: defaults.continuity, contextFrames: defaults.contextFrames, finalFps: defaults.finalFps, finish: defaults.finish,
 } as unknown as Answers
-const hasSong = () => a.songSource === 'file'
+const hasSong = () => a.songSource === 'file' || a.songSource === 'library'
+// a song of the library brings its lyrics - a file of your own needs them asked for
+const asksLyrics = () => a.songSource === 'file'
 // singers lip-sync to the lyrics timing, which needs sung lines - a story idea alone can't provide them
-const canSing = () => Boolean(a.ownLyrics || a.idea || a.lyrics)
+const canSing = () => Boolean(a.ownLyrics || a.idea || a.lyrics || a.librarySong)
+const library = await libraryDir()
+const librarySongs = (await Promise.all(librarySongIds(library).map(id => readLibrarySong(library, id)))).filter((s): s is LibrarySong => !!s)
 
 // what the workflows in comfy/workflows/ are for - one that isn't listed here is still offered, without a hint
 // (declared before the steps: they are asked by a top-level await further down)
@@ -98,6 +107,7 @@ const steps: Record<string, Step> = {
     song: {
         label: () => 'Song',
         summary: () => a.songSource === 'file' ? a.songFile!
+            : a.songSource === 'library' ? `${a.librarySong!.name} from the library, with its timing`
             : `${a.songSource === 'idea' ? `from the idea "${short(a.idea)}"` : `from your lyrics "${short(a.ownLyrics)}"`}${a.musicStyle ? `, style hint "${short(a.musicStyle)}"` : ''}`,
         then: ['texts', 'singers', 'length'],
         ask: async () => {
@@ -105,12 +115,23 @@ const steps: Record<string, Step> = {
                 message: 'The song',
                 initialValue: a.songSource,
                 options: [
+                    ...(librarySongs.length ? [{value: 'library' as const, label: 'A song from the library', hint: `with its stems and the timing of its lyrics - ${librarySongs.length} there`}] : []),
                     {value: 'file' as const, label: 'I have it as an audio file', hint: 'wav, mp3 or flac'},
                     {value: 'idea' as const, label: 'Generate it from a song idea', hint: 'the LLM writes the lyrics'},
                     {value: 'lyrics' as const, label: 'Generate it from my own lyrics', hint: 'set to music as they are'},
                 ],
             }))
-            a.songFile = a.idea = a.ownLyrics = a.musicStyle = undefined
+            a.songFile = a.idea = a.ownLyrics = a.musicStyle = a.librarySong = undefined
+            if (a.songSource === 'library') {
+                const id = answer(await p.select({
+                    message: 'Which song?',
+                    options: librarySongs.map(s => ({value: s.id, label: s.name, hint: `${Math.round(s.music.durationSec)} s · ${s.lyricsTiming.lines.length} lines, ${s.lyricsTiming.lines.filter(l => l.byHand).length} placed by hand · ${s.lyricsLanguage}`})),
+                }))
+                a.librarySong = librarySongs.find(s => s.id === id)!
+                a.language = a.librarySong.lyricsLanguage
+                a.lyrics = undefined
+                return
+            }
             if (hasSong()) {
                 a.songFile = answer(await p.text({
                     message: 'Path to the audio file (wav, mp3 or flac)',
@@ -166,13 +187,13 @@ const steps: Record<string, Step> = {
     // are there (given, or written by index.ts from the idea), but a story idea on top still helps the story stay close
     // to what you want
     texts: {
-        label: () => hasSong() ? 'Lyrics / story' : 'Story idea',
+        label: () => asksLyrics() ? 'Lyrics / story' : 'Story idea',
         summary: () => [a.lyrics && `lyrics "${short(a.lyrics)}"`, a.storyIdea && `story idea "${short(a.storyIdea)}"`].filter(Boolean).join(', ') || 'none',
         then: ['singers'],
         ask: async () => {
             const choice = answer(await p.select({
-                message: hasSong() ? 'Lyrics and/or a story idea (at least one)' : `A story idea on top of the ${a.idea ? 'generated ' : ''}lyrics? (optional)`,
-                options: hasSong() ? [
+                message: asksLyrics() ? 'Lyrics and/or a story idea (at least one)' : `A story idea on top of the ${a.idea ? 'generated ' : ''}lyrics? (optional)`,
+                options: asksLyrics() ? [
                     {value: 'lyrics', label: 'Lyrics'},
                     {value: 'story', label: 'Story idea'},
                     {value: 'both', label: 'Both'},
@@ -418,9 +439,23 @@ if (a.preset === 'custom') {
     if (a.contextFrames !== defaults.contextFrames) config.contextFrames = a.contextFrames
 }
 
+// an audio file and lyrics the library already has, timed: offered, so the timing is not made (and fixed by hand) again
+if (a.songSource === 'file' && a.lyrics) {
+    const [known] = await songsLike(library, a.songFile!, a.lyrics)
+    if (known && answer(await p.confirm({message: `The library has this song with these lyrics: "${known.name}" (${known.lyricsTiming.lines.filter(l => l.byHand).length} lines placed by hand). Take its stems and timing?`, initialValue: true}))) {
+        a.librarySong = known
+    }
+}
+// the timing of a library song is what it is taken for: also used when nobody is seen singing
+if (a.librarySong) config.alignLyrics = true
+
 const id = a.id
 log.info(`Writing ${styles.muted(`projects/${id}/`)}`)
-await writeProject(id, {songFile: a.songFile, idea: a.idea, lyrics: a.ownLyrics ?? a.lyrics, storyIdea: a.storyIdea, style: a.style, musicStyle: a.musicStyle, config})
+await writeProject(id, {songFile: a.librarySong ? undefined : a.songFile, idea: a.idea, lyrics: a.librarySong ? undefined : a.ownLyrics ?? a.lyrics, storyIdea: a.storyIdea, style: a.style, musicStyle: a.musicStyle, config})
+if (a.librarySong) {
+    await importSong(library, a.librarySong, new ProjectStore(id), await loadProjectConfig(`projects/${id}`))
+    log.step('Song', `${a.librarySong.name} ${styles.muted(`from the library - the analysis, ${Object.keys(a.librarySong.stems).length} stems and the timing are taken over, the plan starts at the story`)}`)
+}
 log.output(`projects/${id}/`)
 
 // start it right away - the whole run, or only the song to listen to first (a generated song is the cheap step to judge

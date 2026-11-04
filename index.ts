@@ -328,7 +328,7 @@ log.step('Sections', styles.muted(config.alignLyrics
 
 ////////// ALIGNING THE LYRICS - only when someone sings, or with "alignLyrics": true
 const stems = config.alignLyrics ? await project.step('stems', '2a · SEPARATING THE STEMS', async () => {
-    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_ft - the first run downloads the model (~320 MB)`))
+    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_ft, then guitar and piano with htdemucs_6s - the first run downloads the models`))
     return separateStems(songFile, project.dir)
 }) : undefined
 if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
@@ -449,9 +449,9 @@ function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
 const neededInstrumentStems = neededStems.filter((s): s is 'guitar' | 'piano' => s === 'guitar' || s === 'piano')
 
-// guitar/piano aren't in the htdemucs_ft stems above (folded into "other") - a second, narrower htdemucs_6s pass
-// gets just those, on top of (never overwriting) the cleaner htdemucs_ft vocals/drums/bass/other already on disk
-const instrumentStems = stems && neededInstrumentStems.length ? await project.step('instrumentStems', '5a · SEPARATING GUITAR/PIANO', async () => {
+// guitar/piano come with the stems since every song is separated into six - a project separated before has only the four
+// htdemucs_ft ones, and a second, narrower htdemucs_6s pass gets just those two, on top of (never overwriting) the others
+const instrumentStems = stems && neededInstrumentStems.length && neededInstrumentStems.some(name => !stems[name]) ? await project.step('instrumentStems', '5a · SEPARATING GUITAR/PIANO', async () => {
     log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_6s (${neededInstrumentStems.join(', ')} only)`))
     return separateInstrumentStems(songFile, project.dir, neededInstrumentStems)
 }) : undefined
