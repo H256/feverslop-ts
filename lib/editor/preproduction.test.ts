@@ -1,8 +1,11 @@
 import {describe, expect, test} from "bun:test";
+import {mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 import type {Project} from "../project.ts";
 import type {FilmProject} from "../film/types.ts";
 import {filmStage, musicStage, nextStage, parseUntil} from "../stages.ts";
-import {applyCast, applyLook, applyStory, applyStoryKeepingCast, bookView, castingRedoOf, castView, lookView, renameInStory} from "./preproduction.ts";
+import {applyCast, applyLook, applyStory, applyStoryKeepingCast, bookView, castingRedoOf, castView, lookView, renameInStory, writeCast} from "./preproduction.ts";
 import {KEPT_BY_HAND, keepEach} from "../partials.ts";
 import {runCommand} from "./runs.ts";
 
@@ -102,6 +105,25 @@ describe('casting.json changed after the plan - what Plan now plans again', () =
     test('a film: the views of the places are planned from the place looks', () => {
         const data: FilmProject = {locationLooks: {}, locationViews: {}, coverage: []}
         expect(castingRedoOf('film', data, [{kind: 'location', id: 'hall', libraryId: 'hall'}], () => 'f').redo).toEqual(['locationViews'])
+    })
+})
+
+describe('the cast by hand, saved', () => {
+    test('casting.json follows: who left loses the entry, a new role runs as project:', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'cast-saved-'))
+        try {
+            writeFileSync(join(dir, 'project.json'), JSON.stringify(lookStage()))
+            writeFileSync(join(dir, 'casting.json'), JSON.stringify({characters: {mara: 'library:mara-v2', ben: 'project:ben'}, locations: {deck: 'project:deck', tower: 'project:tower'}}))
+            const wanted = change(lookStage())
+            wanted.characters = [wanted.characters[0]!, {name: 'Ann', role: 'the keeper'} as typeof wanted.characters[number]]
+            wanted.locations = [wanted.locations[0]!]
+            const result = await writeCast({id: 'demo', dir, kind: 'music'}, wanted)
+            expect(result.removed).toEqual(['ben', 'tower'])
+            const casting = JSON.parse(readFileSync(join(dir, 'casting.json'), 'utf8'))
+            expect(casting).toEqual({characters: {mara: 'library:mara-v2', [result.added[0]!]: `project:${result.added[0]}`}, locations: {deck: 'project:deck'}})
+        } finally {
+            rmSync(dir, {recursive: true, force: true})
+        }
     })
 })
 
