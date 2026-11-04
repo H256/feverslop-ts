@@ -13,7 +13,7 @@ import {cutsIn} from './words'
  * word, its edges, or the bar above the words (the whole line). Keys on it: see the help on the side.
  */
 const props = defineProps<{view: TimingView, draft: TimingDraft, peaks?: number[], head?: number, playing: boolean}>()
-const emit = defineEmits<{play: [from: number, to: number], stop: []}>()
+const emit = defineEmits<{play: [from: number, to: number], stop: [], next: [back: boolean]}>()
 const WAVE_RATE = 100
 const WAVE_HEIGHT = 120
 const editor = ref<HTMLElement>()
@@ -114,6 +114,7 @@ function key(event: KeyboardEvent) {
     draft.word.value === undefined ? draft.moveLine(line, by) : draft.moveWord(line, draft.word.value, by)
   }
   else if (event.key === 'Tab') draft.nextWord(event.shiftKey)
+  else if (event.key === 'n' || event.key === 'N') emit('next', event.key === 'N')
   else if (event.key === 'Escape') draft.word.value = undefined
   else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { const next = props.view.lines[at + (event.key === 'ArrowDown' ? 1 : -1)]; if (next) draft.choose(next.line) }
   else if (event.key === ' ') props.playing ? emit('stop') : draft.word.value !== undefined ? playWord(line, draft.word.value) : playLine(line)

@@ -47,6 +47,16 @@ const outdated = computed(() => {
   for (const {clip, lines} of props.view.outdated) for (const n of lines) found.set(n, [...found.get(n) ?? [], clip])
   return found
 })
+// the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time
+const problems = computed(() => props.view.lines.filter(l => draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || (l.estimated && !draft.isChanged(l))))
+const nextProblem = (back = false) => {
+  const all = problems.value
+  if (!all.length) return toasts.show('Nothing left to look at.')
+  const at = draft.line.value ? props.view.lines.indexOf(draft.line.value) : -1
+  const ordered = back ? [...all].reverse() : all
+  const found = ordered.find(l => back ? props.view.lines.indexOf(l) < at : props.view.lines.indexOf(l) > at) ?? ordered[0]!
+  choose(found.line)
+}
 const tightenAll = () => { draft.tighten(earlyLines.value) }
 
 const FILTERS = computed(() => [
@@ -113,14 +123,16 @@ onMounted(() => {
           <div class="spacer" />
           <button v-if="draft.line.value" class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
           <button v-if="draft.line.value && lead >= EARLY_FROM" class="btn" title="Move the start of the first word to where the singing begins" @click="draft.tighten(new Map([[draft.line.value.line, lead]]))">Tighten the start</button>
+          <button v-if="draft.line.value && draft.crossing(draft.line.value).length" class="btn" title="Cut the part on the shorter side off the word, so that it is sung in one clip" @click="draft.clearCuts(draft.line.value)">Clear the cut</button>
+          <button v-if="problems.length" class="btn" :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`" @click="nextProblem()">Next problem ({{ problems.length }})</button>
           <button v-if="draft.line.value && draft.isChanged(draft.line.value)" class="btn" title="Back to the saved times" @click="draft.resetLine(draft.line.value)">Reset line</button>
           <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
         </div>
-        <TimingEditor ref="editor" :view="view" :draft="draft" :peaks="peaks" :head="player.time.value" :playing="!!player.playing.value" @play="play" @stop="player.stop()" />
+        <TimingEditor ref="editor" :view="view" :draft="draft" :peaks="peaks" :head="player.time.value" :playing="!!player.playing.value" @play="play" @stop="player.stop()" @next="nextProblem" />
         <div>
-          <div v-if="draft.line.value && draft.crossing(draft.line.value).length" class="warn">A clip cut falls into {{ draft.crossing(draft.line.value).map(c => `"${c.word.text}"`).join(', ') }}: the word is then sung half in one clip, half in the next. Move it, or cut the song again on the right.</div>
+          <div v-if="draft.line.value && draft.crossing(draft.line.value).length" class="warn">A clip cut falls into {{ draft.crossing(draft.line.value).map(c => `"${c.word.text}"`).join(', ') }}: the word is then sung half in one clip, half in the next. Clear the cut above (it shortens the word), move it, or cut the song again on the right.</div>
           <div v-if="draft.overlaps.value.length" class="warn">This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.</div>
         </div>
       </div>
