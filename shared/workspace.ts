@@ -252,6 +252,7 @@ export type TimingLine = {
   words: TimingWord[],
   estimated: boolean,         // the times are a guess: barely found in the transcript
   byHand: boolean,            // placed on this page
+  unplaced?: boolean,         // found sung nowhere: its words are only laid out at its place in the lyrics, to be dragged where it is sung
   beats: string[],            // the beats of the clips it is sung in
 }
 export type TimingView = {

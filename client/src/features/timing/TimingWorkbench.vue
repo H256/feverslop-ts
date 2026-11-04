@@ -38,7 +38,7 @@ const player = useSnippetPlayer(() => props.view.audio && mediaUrl(props.view.au
 const play = (from: number, to: number) => player.play('timing', from, to)
 
 // how early the first word of each line starts against its sound - as the words are now, so a line moved is measured again
-const leads = computed(() => new Map(props.view.lines.map(l => [l.line, props.peaks ? leadOf(draft.wordsOf(l), props.peaks) : 0])))
+const leads = computed(() => new Map(props.view.lines.map(l => [l.line, props.peaks && !(l.unplaced && !draft.isChanged(l)) ? leadOf(draft.wordsOf(l), props.peaks) : 0])))
 const earlyLines = computed(() => new Map([...leads.value].filter(([, lead]) => lead >= EARLY_FROM)))
 const lead = computed(() => draft.line.value ? leads.value.get(draft.line.value.line) ?? 0 : 0)
 // the clips whose prompt still has the old times of a line: by line
