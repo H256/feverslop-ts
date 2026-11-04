@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, reactive, ref} from 'vue'
+import {computed, nextTick, reactive, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import type {CastingRole, CastView} from '../../../../shared/workspace'
 import NoticeList from '../../components/NoticeList.vue'
@@ -16,7 +16,7 @@ import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import CastEditor from './CastEditor.vue'
 import CastingRoleRow from './CastingRoleRow.vue'
-import {castDraft, type CastDraft} from './forms'
+import {castDraft, newMember, type CastDraft} from './forms'
 
 /** Who plays whom: a role given a library asset, or the cast changed by hand - two ways, never at once. */
 const {project, api, start, busy, root} = useProject()
@@ -78,6 +78,30 @@ const draft = ref<CastDraft>()
 const editing = computed(() => !!draft.value)
 const edit = (cast: CastView) => { draft.value = reactive(castDraft(cast)) }
 const cancel = () => { draft.value = undefined }
+const listOf = (kind: CastingRole['kind']) => kind === 'character' ? 'characters' : 'locations'
+// adding and removing start from the list of roles too (#588): the cast by hand opens with that change made, and is saved as any other
+const add = async (cast: CastView, kind: CastingRole['kind']) => {
+  edit(cast)
+  draft.value![listOf(kind)].push(newMember(kind))
+  await nextTick()
+  const names = document.querySelectorAll<HTMLInputElement>(`[data-cast="${kind}"] input[aria-label="Name"]`)
+  names[names.length - 1]?.focus()
+}
+const remove = (cast: CastView, role: CastingRole) => {
+  edit(cast)
+  const list = draft.value![listOf(role.kind)]
+  list.splice(list.findIndex(m => m.id === role.id), 1)
+}
+const inCast = (cast: CastView, role: CastingRole) => cast[listOf(role.kind)].some(m => m.id === role.id && !m.group)
+// who is in the cast and not in the draft: taken out on save - said, and put back with one click
+const gone = computed(() => {
+  const cast = data.value?.cast
+  if (!cast || !draft.value) return []
+  return (['character', 'location'] as const).flatMap(kind => cast[listOf(kind)]
+    .filter(m => !draft.value![listOf(kind)].some(d => d.id === m.id))
+    .map(member => ({kind, member})))
+})
+const putBack = (kind: CastingRole['kind'], member: CastView['characters'][number]) => { draft.value![listOf(kind)].push({...member}) }
 useUnsavedChanges(() => editing.value, 'changes to the cast')
 const saving = usePending()
 
@@ -136,8 +160,12 @@ const saveCast = toasts.guard(async () => {
       <div v-if="!data.cast" class="empty">No cast yet - plan it with the button above.</div>
       <template v-else-if="draft">
         <div class="note">{{ film ? 'The names and texts of the screenplay\'s roles and places. Who is in it is the script\'s: that is changed there.' : 'Names, roles and props, and who is in it at all - without the library. Best right after the cast is planned: then nothing is built on it yet.' }}</div>
-        <CastEditor :members="draft.characters" title="Characters" kind="character" :film="film" :can-add="data.cast.canAdd" />
-        <CastEditor :members="draft.locations" title="Places" kind="location" :film="film" :can-add="data.cast.canAdd" />
+        <div v-if="gone.length" class="note btn-row">
+          <span>Out of the cast when saved:</span>
+          <button v-for="{kind, member} in gone" :key="member.id" class="btn" :title="`Keep ${member.name} in the cast`" @click="putBack(kind, member)">Put back {{ member.name }}</button>
+        </div>
+        <CastEditor :members="draft.characters" title="Characters" kind="character" :film="film" :can-add="data.cast.canAdd" data-cast="character" />
+        <CastEditor :members="draft.locations" title="Places" kind="location" :film="film" :can-add="data.cast.canAdd" data-cast="location" />
         <div class="section btn-row">
           <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
           <button class="btn" @click="cancel">Cancel</button>
@@ -146,12 +174,15 @@ const saveCast = toasts.guard(async () => {
       </template>
       <template v-else>
         <div class="section btn-row">
-          <button class="btn" :disabled="busy" title="Change names, roles and what they are by hand - no library needed" @click="edit(data.cast)">{{ film ? 'Edit the roles and places' : 'Edit the cast' }}</button>
+          <button class="btn" :disabled="busy" :title="film ? 'Change names and what they are by hand' : 'Change names, roles and what they are by hand, add or remove someone - no library needed'" @click="edit(data.cast)">{{ film ? 'Edit the roles and places' : 'Change the cast' }}</button>
           <span class="muted">Or give a role a library asset with the choice next to it.</span>
         </div>
-        <div v-for="[kind, title] in ([['character', 'Characters'], ['location', 'Places']] as const)" v-show="rolesOf(kind).length" :key="kind" class="section">
-          <PageBar :title="title" />
-          <CastingRoleRow v-for="role in rolesOf(kind)" :key="role.id" :role="role" :options="data.casting.options[kind]" @choose="(value, select) => chooseGuarded(role, value, select)" />
+        <div v-for="[kind, title] in ([['character', 'Characters'], ['location', 'Places']] as const)" v-show="rolesOf(kind).length || data.cast.canAdd" :key="kind" class="section">
+          <PageBar :title="title">
+            <button v-if="data.cast.canAdd" class="btn" :disabled="busy" @click="add(data.cast, kind)">{{ kind === 'character' ? 'Add a character' : 'Add a place' }}</button>
+          </PageBar>
+          <CastingRoleRow v-for="role in rolesOf(kind)" :key="role.id" :role="role" :options="data.casting.options[kind]" :removable="data.cast.canAdd && !busy && inCast(data.cast, role)"
+            @choose="(value, select) => chooseGuarded(role, value, select)" @remove="remove(data.cast, role)" />
         </div>
       </template>
       <p class="muted">For a finished project, replacing a character in what is planned is the other way: bun run {{ film ? 'film:replace-character' : 'replace-character' }} {{ project.id }}</p>

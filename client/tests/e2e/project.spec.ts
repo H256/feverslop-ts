@@ -72,12 +72,25 @@ test('casting: a library asset for a role, asked with what goes stale', async ({
   await expect(dialog(page)).toContainText('1 clip go stale: clip-1')
   await dialog(page).getByRole('button', {name: 'Change it'}).click()
   await expect.poll(() => posted.find(p => p.path === 'casting')?.body).toEqual({kind: 'character', id: 'ann', value: 'library:kael'})
-  await page.getByRole('button', {name: 'Edit the cast'}).click()
+  // adding starts from the list of roles: the cast by hand opens with the new place, its name to type
   await page.getByRole('button', {name: 'Add a place'}).click()
-  await page.getByRole('textbox', {name: 'Name'}).last().fill('Roof')
+  await expect(page.getByRole('textbox', {name: 'Name'}).last()).toBeFocused()
+  await page.keyboard.type('Roof')
   await page.getByRole('button', {name: 'Save the cast'}).click()
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
   await expect.poll(() => posted.find(p => p.path === 'cast')?.body).toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: [{id: 'bar', name: 'Bar'}, {name: 'Roof'}]})
+})
+
+test('casting: a role removed from the list of roles, and put back before saving', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/casting`)
+  await page.getByRole('button', {name: 'Remove Ann'}).click()
+  await expect(page.getByText('Out of the cast when saved:')).toBeVisible()
+  await page.getByRole('button', {name: 'Put back Ann'}).click()
+  await expect(page.getByText('Out of the cast when saved:')).toBeHidden()
+  await page.getByRole('button', {name: 'Remove'}).last().click()
+  await page.getByRole('button', {name: 'Save the cast'}).click()
+  await dialog(page).getByRole('button', {name: 'Save it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'cast')?.body).toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: []})
 })
 
 test('look: one text changed and one written anew, saved together', async ({page}) => {
