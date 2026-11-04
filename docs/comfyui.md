@@ -300,7 +300,8 @@ wizard). Walks through:
 
 `imageWorkflow`, `videoWorkflow` and `sequenceWorkflow` pick the workflow file used for rendering. The included ones
 are `kroma-image` (default) and `krea2-image` for pictures; `h3-ref2video` (default), `h3-ref2video-full`,
-`h3-ref2video-2pass` and `h3-ref2video-cpu-clip` for clips; `h3-sequence-to-sheet` for the reference sheets and
+`h3-ref2video-2pass`, `h3-ref2video-prism-2pass` and `h3-ref2video-cpu-clip` for clips; `h3-sequence-to-sheet` (default) and
+`h3-sequence-to-sheet-prism` (4 steps with the PRISM checkpoint, the recipes are in `comfy/h3-sequence-sheet.ts`) for the reference sheets and
 `yue2-song` for the song (see the table in the [README](../README.md#workflows)). `frame-interpolate` is used for
 `finalFps` and is not chosen in `config.json`. Any file in `comfy/workflows/` that follows the
 workflow contract can be used - see [custom-workflows.md](custom-workflows.md). Different projects can use different
