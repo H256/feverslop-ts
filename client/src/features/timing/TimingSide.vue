@@ -61,9 +61,14 @@ const effects = computed(() => {
       <template #more>
         <div class="btn-row" style="margin-top: 8px">
           <button class="btn" :disabled="busy" title="Save, then cut the song into clips again around the new times (--redo=timeline): every shot is planned again" @click="$emit('cutAgain')">Save and cut the song again…</button>
-          <button class="btn" :disabled="busy || c.lines.length > 0" :title="c.lines.length ? 'Save the moved lines first - the library gets the timing as it is saved' : 'Copy the song, its lyrics, its stems and this timing into the library: another video of the song starts at the story (bun run export-song)'" @click="$emit('library')">Put the song into the library…</button>
         </div>
       </template>
     </PlanChanges>
+    <!-- apart from the changes: the saved timing goes into the library, so it is there with nothing moved -->
+    <h3 style="margin-top: 16px">The song in the library</h3>
+    <p class="muted" style="margin-bottom: 8px">The song, its lyrics, its stems and the saved timing - with what was placed by hand - for another video of the song, which then starts at the story. A song the library has is never overwritten: a later state goes in under another id.</p>
+    <div class="btn-row">
+      <button class="btn" :disabled="busy || c.lines.length > 0" :title="c.lines.length ? 'Save the moved lines first - the library gets the timing as it is saved' : 'bun run export-song'" @click="$emit('library')">Put the song into the library…</button>
+    </div>
   </div>
 </template>
