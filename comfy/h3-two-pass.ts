@@ -30,9 +30,11 @@ export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO">, 
 /**
  * What the two passes are made with: the model, and the sampling of each pass. The recipe of #288/#343 is the base model with
  * 20 steps res_multistep/simple, then 4 steps euler/beta at denoise 0.2; a distilled model takes fewer steps (PRISM_TWO_PASS).
+ * shift: the sigma shift of a distilled model (MiniMaxH3SigmaShift), for both passes; the base model runs without one.
  */
 export type TwoPassRecipe = {
     unet: string,
+    shift?: { video: number, audio: number },
     first: { sampler: string, scheduler: string, steps: number },
     second: { sampler: string, scheduler: string, steps: number, denoise: number },
 }
@@ -41,9 +43,12 @@ export const BASE_TWO_PASS: TwoPassRecipe = {
     first: {sampler: 'res_multistep', scheduler: 'simple', steps: 20},
     second: {sampler: 'euler', scheduler: 'beta', steps: 4, denoise: 0.2},
 }
-// PRISM DMAD/PDMD, a distilled H3 checkpoint: 4 steps euler/beta57 (a scheduler of RES4LYF), then 2 steps of refine at denoise 0.2 - 4 steps avoid plastic skin
+// PRISM DMAD/PDMD, a distilled H3 checkpoint: 4 steps euler/beta57 (a scheduler of RES4LYF), then 2 steps of refine at denoise 0.2.
+// The shift 12/3 (video/audio) its author recommends, as the turbo LoRA of h3-ref2video-film takes it: without it the skin came out plastic
+// at 8 steps and at 4 + 2 alike.
 export const PRISM_TWO_PASS: TwoPassRecipe = {
     unet: 'PRISM_DMAD_PDMD_int8.safetensors',
+    shift: {video: 12, audio: 3},
     first: {sampler: 'euler', scheduler: 'beta57', steps: 4},
     second: {sampler: 'euler', scheduler: 'beta57', steps: 2, denoise: 0.2},
 }
@@ -51,7 +56,8 @@ export const PRISM_TWO_PASS: TwoPassRecipe = {
 export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: string, recipe: TwoPassRecipe = BASE_TWO_PASS): TwoPassResult {
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
-    const unet = wf.UNETLoader({unet_name: dyn(recipe.unet), weight_dtype: 'default'})
+    const loaded = wf.UNETLoader({unet_name: dyn(recipe.unet), weight_dtype: 'default'}).MODEL
+    const model = recipe.shift ? wf.MiniMaxH3SigmaShift({model: loaded, shift_video: recipe.shift.video, shift_audio: recipe.shift.audio}).MODEL : loaded
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     // the audio tracks, the song guide and the pinned first frame as in h3-ref2video - see the comments there
@@ -108,12 +114,12 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const noise = wf.RandomNoise({noise_seed: opts.seed})
 
     // pass 1: the base model, as h3-ref2video-full
-    const base = wf.ModelAttentionBackend({model: unet.MODEL, attention: 'comfy kitchen attention'})
+    const base = wf.ModelAttentionBackend({model, attention: 'comfy kitchen attention'})
     const first = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,
         guider: wf.BasicGuider({model: base.model, conditioning: guide(references.LATENT)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: dyn(recipe.first.sampler)}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.first.scheduler), steps: recipe.first.steps, denoise: 1, model: unet.MODEL}).SIGMAS,
+        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.first.scheduler), steps: recipe.first.steps, denoise: 1, model}).SIGMAS,
         latent_image: references.LATENT,
     })
 
@@ -141,7 +147,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     withInputs(wf, upscaled, {'mode.width': sizes.final.width, 'mode.height': sizes.final.height})
     const large = wf.LTXVConcatAVLatent({video_latent: upscaled.latent as NodeRef<"LATENT">, audio_latent: split.audio_latent}).latent
 
-    // pass 2: a short refine of the upscaled latent with the base model - no turbo LoRA, no sigma shift. With the turbo
+    // pass 2: a short refine of the upscaled latent with the base model - no turbo LoRA, the recipe's shift only. With the turbo
     // LoRA (2 steps, simple) large faces kept a crosshatch on the skin; the base model at euler/beta over 4 steps weakened
     // it and kept the detail, better than an upscale in pixels (Lanczos or an AI model), which went soft (#343). Its own
     // noise, seed + 1: the noise of pass 1 again on the large latent repeats its pattern.
@@ -149,7 +155,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         noise: wf.RandomNoise({noise_seed: opts.seed + 1}).NOISE,
         guider: wf.BasicGuider({model: base.model, conditioning: guide(large, true)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: dyn(recipe.second.sampler)}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.second.scheduler), steps: recipe.second.steps, denoise: recipe.second.denoise, model: unet.MODEL}).SIGMAS,
+        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.second.scheduler), steps: recipe.second.steps, denoise: recipe.second.denoise, model}).SIGMAS,
         latent_image: large,
     })
 

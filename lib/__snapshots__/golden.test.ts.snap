@@ -26289,11 +26289,11 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
     },
     "10": {
       "_meta": {
-        "title": "PrimitiveInt",
+        "title": "PrimitiveStringMultiline",
       },
-      "class_type": "PrimitiveInt",
+      "class_type": "PrimitiveStringMultiline",
       "inputs": {
-        "value": 73,
+        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
     "11": {
@@ -26302,7 +26302,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 960,
+        "value": 73,
       },
     },
     "12": {
@@ -26311,10 +26311,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 544,
+        "value": 960,
       },
     },
     "13": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 544,
+      },
+    },
+    "14": {
       "_meta": {
         "title": "MiniMaxH3ReferenceToVideo",
       },
@@ -26325,40 +26334,40 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
           0,
         ],
         "clip": [
-          "4",
+          "5",
           0,
         ],
         "height": [
-          "12",
+          "13",
           0,
         ],
         "length": [
-          "10",
+          "11",
           0,
         ],
         "prompt": [
-          "9",
+          "10",
           0,
         ],
         "ref_audios.ref_audio_0": [
-          "6",
+          "7",
           0,
         ],
         "ref_audios.ref_audio_1": [
-          "8",
+          "9",
           0,
         ],
         "ref_image_size": "match",
         "ref_images.ref_image_0": [
-          "14",
-          0,
-        ],
-        "ref_images.ref_image_1": [
           "15",
           0,
         ],
-        "ref_images.ref_image_2": [
+        "ref_images.ref_image_1": [
           "16",
+          0,
+        ],
+        "ref_images.ref_image_2": [
+          "17",
           0,
         ],
         "vae": [
@@ -26366,18 +26375,9 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
           0,
         ],
         "width": [
-          "11",
+          "12",
           0,
         ],
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "15": {
@@ -26386,7 +26386,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/ann.png",
+        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "16": {
@@ -26395,10 +26395,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/bo.png",
+        "image": "fs/p/assets/characters/ann.png",
       },
     },
     "17": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/characters/bo.png",
+      },
+    },
+    "18": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -26407,27 +26416,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "audio": "fs/p/stems/song.wav",
       },
     },
-    "18": {
+    "19": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "17",
+          "18",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 42,
       },
     },
     "2": {
@@ -26441,25 +26441,34 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
     },
     "20": {
       "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "21": {
+      "_meta": {
         "title": "ModelAttentionBackend",
       },
       "class_type": "ModelAttentionBackend",
       "inputs": {
         "attention": "comfy kitchen attention",
         "model": [
-          "3",
+          "4",
           0,
         ],
       },
     },
-    "21": {
+    "22": {
       "_meta": {
         "title": "MiniMaxH3AddGuide",
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "audio_vae": [
@@ -26468,32 +26477,32 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         ],
         "frame_idx": 0,
         "latent": [
-          "13",
+          "14",
           1,
         ],
         "positive": [
-          "13",
+          "14",
           0,
         ],
       },
     },
-    "22": {
+    "23": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "21",
+          "22",
           0,
         ],
         "model": [
-          "20",
+          "21",
           0,
         ],
       },
     },
-    "23": {
+    "24": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -26502,7 +26511,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "sampler_name": "euler",
       },
     },
-    "24": {
+    "25": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -26510,68 +26519,68 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
       "inputs": {
         "denoise": 1,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
-    "25": {
+    "26": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "22",
-          0,
-        ],
-        "latent_image": [
-          "13",
-          1,
-        ],
-        "noise": [
-          "19",
-          0,
-        ],
-        "sampler": [
           "23",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "14",
+          1,
+        ],
+        "noise": [
+          "20",
+          0,
+        ],
+        "sampler": [
           "24",
+          0,
+        ],
+        "sigmas": [
+          "25",
           0,
         ],
       },
     },
-    "26": {
+    "27": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "25",
+          "26",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "27": {
+    "28": {
       "_meta": {
         "title": "LTXVSeparateAVLatent",
       },
       "class_type": "LTXVSeparateAVLatent",
       "inputs": {
         "av_latent": [
-          "26",
+          "27",
           0,
         ],
       },
     },
-    "28": {
+    "29": {
       "_meta": {
         "title": "MinimaxH3LatentUpscaler3D",
       },
@@ -26582,7 +26591,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "enable_temporal_chunking": true,
         "force_unload": true,
         "latent": [
-          "27",
+          "28",
           0,
         ],
         "mode": "target dimensions",
@@ -26590,22 +26599,6 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "mode.width": 1920,
         "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
         "precision": "bf16",
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "LTXVConcatAVLatent",
-      },
-      "class_type": "LTXVConcatAVLatent",
-      "inputs": {
-        "audio_latent": [
-          "27",
-          1,
-        ],
-        "video_latent": [
-          "28",
-          0,
-        ],
       },
     },
     "3": {
@@ -26620,6 +26613,22 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
     },
     "30": {
       "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "28",
+          1,
+        ],
+        "video_latent": [
+          "29",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
         "title": "RandomNoise",
       },
       "class_type": "RandomNoise",
@@ -26627,14 +26636,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "noise_seed": 43,
       },
     },
-    "31": {
+    "32": {
       "_meta": {
         "title": "MiniMaxH3AddGuide",
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "audio_vae": [
@@ -26643,32 +26652,32 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         ],
         "frame_idx": 0,
         "latent": [
-          "29",
+          "30",
           0,
         ],
         "positive": [
-          "13",
+          "14",
           0,
         ],
       },
     },
-    "32": {
+    "33": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "31",
+          "32",
           0,
         ],
         "model": [
-          "20",
+          "21",
           0,
         ],
       },
     },
-    "33": {
+    "34": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -26677,7 +26686,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "sampler_name": "euler",
       },
     },
-    "34": {
+    "35": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -26685,63 +26694,63 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
       "inputs": {
         "denoise": 0.2,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
         "steps": 2,
       },
     },
-    "35": {
+    "36": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "32",
-          0,
-        ],
-        "latent_image": [
-          "29",
-          0,
-        ],
-        "noise": [
-          "30",
-          0,
-        ],
-        "sampler": [
           "33",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "30",
+          0,
+        ],
+        "noise": [
+          "31",
+          0,
+        ],
+        "sampler": [
           "34",
+          0,
+        ],
+        "sigmas": [
+          "35",
           0,
         ],
       },
     },
-    "36": {
+    "37": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "35",
+          "36",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "37": {
+    "38": {
       "_meta": {
         "title": "VAEDecode",
       },
       "class_type": "VAEDecode",
       "inputs": {
         "samples": [
-          "36",
+          "37",
           0,
         ],
         "vae": [
@@ -26750,14 +26759,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         ],
       },
     },
-    "38": {
+    "39": {
       "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "crf": 19,
@@ -26765,7 +26774,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "37",
+          "38",
           0,
         ],
         "loop_count": 0,
@@ -26778,6 +26787,20 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
     },
     "4": {
       "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
         "title": "CLIPLoader",
       },
       "class_type": "CLIPLoader",
@@ -26787,7 +26810,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "type": "minimax",
       },
     },
-    "5": {
+    "6": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -26796,21 +26819,21 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "audio": "fs/p/stems/vocals.wav",
       },
     },
-    "6": {
+    "7": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "5",
+          "6",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
       },
     },
-    "7": {
+    "8": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -26819,27 +26842,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
         "audio": "fs/p/stems/bass.wav",
       },
     },
-    "8": {
+    "9": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "7",
+          "8",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
   },
@@ -26864,11 +26878,11 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
     },
     "10": {
       "_meta": {
-        "title": "PrimitiveInt",
+        "title": "PrimitiveStringMultiline",
       },
-      "class_type": "PrimitiveInt",
+      "class_type": "PrimitiveStringMultiline",
       "inputs": {
-        "value": 73,
+        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
     "11": {
@@ -26877,7 +26891,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 960,
+        "value": 73,
       },
     },
     "12": {
@@ -26886,10 +26900,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 544,
+        "value": 960,
       },
     },
     "13": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 544,
+      },
+    },
+    "14": {
       "_meta": {
         "title": "MiniMaxH3ReferenceToVideo",
       },
@@ -26900,40 +26923,40 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
           0,
         ],
         "clip": [
-          "4",
+          "5",
           0,
         ],
         "height": [
-          "12",
+          "13",
           0,
         ],
         "length": [
-          "10",
+          "11",
           0,
         ],
         "prompt": [
-          "9",
+          "10",
           0,
         ],
         "ref_audios.ref_audio_0": [
-          "6",
+          "7",
           0,
         ],
         "ref_audios.ref_audio_1": [
-          "8",
+          "9",
           0,
         ],
         "ref_image_size": "match",
         "ref_images.ref_image_0": [
-          "14",
-          0,
-        ],
-        "ref_images.ref_image_1": [
           "15",
           0,
         ],
-        "ref_images.ref_image_2": [
+        "ref_images.ref_image_1": [
           "16",
+          0,
+        ],
+        "ref_images.ref_image_2": [
+          "17",
           0,
         ],
         "vae": [
@@ -26941,18 +26964,9 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
           0,
         ],
         "width": [
-          "11",
+          "12",
           0,
         ],
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "15": {
@@ -26961,7 +26975,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/ann.png",
+        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "16": {
@@ -26970,10 +26984,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/bo.png",
+        "image": "fs/p/assets/characters/ann.png",
       },
     },
     "17": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/characters/bo.png",
+      },
+    },
+    "18": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -26982,27 +27005,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         "audio": "fs/p/stems/song.wav",
       },
     },
-    "18": {
+    "19": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "17",
+          "18",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/clips/slot-006_lf.png",
       },
     },
     "2": {
@@ -27016,6 +27030,15 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
     },
     "20": {
       "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/clips/slot-006_lf.png",
+      },
+    },
+    "21": {
+      "_meta": {
         "title": "RandomNoise",
       },
       "class_type": "RandomNoise",
@@ -27023,7 +27046,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         "noise_seed": 42,
       },
     },
-    "21": {
+    "22": {
       "_meta": {
         "title": "ModelAttentionBackend",
       },
@@ -27031,32 +27054,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       "inputs": {
         "attention": "comfy kitchen attention",
         "model": [
-          "3",
-          0,
-        ],
-      },
-    },
-    "22": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "audio": [
-          "18",
-          0,
-        ],
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "frame_idx": 0,
-        "latent": [
-          "13",
-          1,
-        ],
-        "positive": [
-          "13",
+          "4",
           0,
         ],
       },
@@ -27067,17 +27065,42 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
-        "frame_idx": 0,
-        "image": [
+        "audio": [
           "19",
           0,
         ],
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "frame_idx": 0,
         "latent": [
-          "13",
+          "14",
           1,
         ],
         "positive": [
-          "22",
+          "14",
+          0,
+        ],
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "20",
+          0,
+        ],
+        "latent": [
+          "14",
+          1,
+        ],
+        "positive": [
+          "23",
           0,
         ],
         "vae": [
@@ -27086,23 +27109,23 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         ],
       },
     },
-    "24": {
+    "25": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "23",
+          "24",
           0,
         ],
         "model": [
-          "21",
+          "22",
           0,
         ],
       },
     },
-    "25": {
+    "26": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -27111,7 +27134,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         "sampler_name": "euler",
       },
     },
-    "26": {
+    "27": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -27119,65 +27142,53 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       "inputs": {
         "denoise": 1,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
-    "27": {
+    "28": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "24",
-          0,
-        ],
-        "latent_image": [
-          "13",
-          1,
-        ],
-        "noise": [
-          "20",
-          0,
-        ],
-        "sampler": [
           "25",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "14",
+          1,
+        ],
+        "noise": [
+          "21",
+          0,
+        ],
+        "sampler": [
           "26",
+          0,
+        ],
+        "sigmas": [
+          "27",
           0,
         ],
       },
     },
-    "28": {
+    "29": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "27",
+          "28",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "LTXVSeparateAVLatent",
-      },
-      "class_type": "LTXVSeparateAVLatent",
-      "inputs": {
-        "av_latent": [
-          "28",
-          0,
-        ],
       },
     },
     "3": {
@@ -27192,6 +27203,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
     },
     "30": {
       "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "29",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
         "title": "MinimaxH3LatentUpscaler3D",
       },
       "class_type": "MinimaxH3LatentUpscaler3D",
@@ -27201,7 +27224,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         "enable_temporal_chunking": true,
         "force_unload": true,
         "latent": [
-          "29",
+          "30",
           0,
         ],
         "mode": "target dimensions",
@@ -27211,23 +27234,23 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         "precision": "bf16",
       },
     },
-    "31": {
+    "32": {
       "_meta": {
         "title": "LTXVConcatAVLatent",
       },
       "class_type": "LTXVConcatAVLatent",
       "inputs": {
         "audio_latent": [
-          "29",
+          "30",
           1,
         ],
         "video_latent": [
-          "30",
+          "31",
           0,
         ],
       },
     },
-    "32": {
+    "33": {
       "_meta": {
         "title": "RandomNoise",
       },
@@ -27236,14 +27259,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         "noise_seed": 43,
       },
     },
-    "33": {
+    "34": {
       "_meta": {
         "title": "MiniMaxH3AddGuide",
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "audio_vae": [
@@ -27252,13 +27275,642 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
         ],
         "frame_idx": 0,
         "latent": [
-          "31",
+          "32",
           0,
         ],
         "positive": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "35": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "20",
+          0,
+        ],
+        "latent": [
+          "32",
+          0,
+        ],
+        "positive": [
+          "34",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "36": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "35",
+          0,
+        ],
+        "model": [
+          "22",
+          0,
+        ],
+      },
+    },
+    "37": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "38": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 0.2,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 2,
+      },
+    },
+    "39": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "36",
+          0,
+        ],
+        "latent_image": [
+          "32",
+          0,
+        ],
+        "noise": [
+          "33",
+          0,
+        ],
+        "sampler": [
+          "37",
+          0,
+        ],
+        "sigmas": [
+          "38",
+          0,
+        ],
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "40": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "39",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "41": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "40",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "42": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "19",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/p/videos/slot-007",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "41",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "LoadAudio",
+      },
+      "class_type": "LoadAudio",
+      "inputs": {
+        "audio": "fs/p/stems/vocals.wav",
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "TrimAudioDuration",
+      },
+      "class_type": "TrimAudioDuration",
+      "inputs": {
+        "audio": [
+          "6",
+          0,
+        ],
+        "duration": 3.0416666666666665,
+        "start_index": 12.5,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "LoadAudio",
+      },
+      "class_type": "LoadAudio",
+      "inputs": {
+        "audio": "fs/p/stems/bass.wav",
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "TrimAudioDuration",
+      },
+      "class_type": "TrimAudioDuration",
+      "inputs": {
+        "audio": [
+          "8",
+          0,
+        ],
+        "duration": 3.0416666666666665,
+        "start_index": 12.5,
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context frames 1`] = `
+{
+  "size": {
+    "height": 1088,
+    "width": 1920,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 107,
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 960,
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 544,
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "5",
+          0,
+        ],
+        "height": [
           "13",
           0,
         ],
+        "length": [
+          "11",
+          0,
+        ],
+        "prompt": [
+          "10",
+          0,
+        ],
+        "ref_audios.ref_audio_0": [
+          "7",
+          0,
+        ],
+        "ref_audios.ref_audio_1": [
+          "9",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "15",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "16",
+          0,
+        ],
+        "ref_images.ref_image_2": [
+          "17",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "12",
+          0,
+        ],
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/locations/hall.png",
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/characters/ann.png",
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/characters/bo.png",
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "LoadAudio",
+      },
+      "class_type": "LoadAudio",
+      "inputs": {
+        "audio": "fs/p/stems/song.wav",
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "TrimAudioDuration",
+      },
+      "class_type": "TrimAudioDuration",
+      "inputs": {
+        "audio": [
+          "18",
+          0,
+        ],
+        "duration": 4.458333333333333,
+        "start_index": 12.5,
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "VHS_LoadVideo",
+      },
+      "class_type": "VHS_LoadVideo",
+      "inputs": {
+        "custom_height": 0,
+        "custom_width": 0,
+        "force_rate": 0,
+        "frame_load_cap": 0,
+        "select_every_nth": 1,
+        "skip_first_frames": 0,
+        "video": "fs/p/assets/clips/slot-006_tail22.mp4",
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "4",
+          0,
+        ],
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "audio": [
+          "19",
+          0,
+        ],
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "frame_idx": 0,
+        "latent": [
+          "14",
+          1,
+        ],
+        "positive": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "20",
+          0,
+        ],
+        "latent": [
+          "14",
+          1,
+        ],
+        "positive": [
+          "23",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "25": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "24",
+          0,
+        ],
+        "model": [
+          "22",
+          0,
+        ],
+      },
+    },
+    "26": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "27": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 4,
+      },
+    },
+    "28": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "25",
+          0,
+        ],
+        "latent_image": [
+          "14",
+          1,
+        ],
+        "noise": [
+          "21",
+          0,
+        ],
+        "sampler": [
+          "26",
+          0,
+        ],
+        "sigmas": [
+          "27",
+          0,
+        ],
+      },
+    },
+    "29": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "28",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "30": {
+      "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "29",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
+        "title": "MinimaxH3LatentUpscaler3D",
+      },
+      "class_type": "MinimaxH3LatentUpscaler3D",
+      "inputs": {
+        "align": 32,
+        "device": "cuda",
+        "enable_temporal_chunking": true,
+        "force_unload": true,
+        "latent": [
+          "30",
+          0,
+        ],
+        "mode": "target dimensions",
+        "mode.height": 1088,
+        "mode.width": 1920,
+        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
+        "precision": "bf16",
+      },
+    },
+    "32": {
+      "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "30",
+          1,
+        ],
+        "video_latent": [
+          "31",
+          0,
+        ],
+      },
+    },
+    "33": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 43,
       },
     },
     "34": {
@@ -27267,21 +27919,21 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
-        "frame_idx": 0,
-        "image": [
+        "audio": [
           "19",
           0,
         ],
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "frame_idx": 0,
         "latent": [
-          "31",
+          "32",
           0,
         ],
         "positive": [
-          "33",
-          0,
-        ],
-        "vae": [
-          "1",
+          "14",
           0,
         ],
       },
@@ -27297,7 +27949,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
           0,
         ],
         "model": [
-          "21",
+          "22",
           0,
         ],
       },
@@ -27319,7 +27971,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       "inputs": {
         "denoise": 0.2,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
@@ -27337,11 +27989,11 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
           0,
         ],
         "latent_image": [
-          "31",
+          "32",
           0,
         ],
         "noise": [
-          "32",
+          "33",
           0,
         ],
         "sampler": [
@@ -27370,13 +28022,16 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
     },
     "4": {
       "_meta": {
-        "title": "CLIPLoader",
+        "title": "MiniMaxH3SigmaShift",
       },
-      "class_type": "CLIPLoader",
+      "class_type": "MiniMaxH3SigmaShift",
       "inputs": {
-        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-        "device": "default",
-        "type": "minimax",
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
       },
     },
     "40": {
@@ -27402,7 +28057,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
       "class_type": "VHS_VideoCombine",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "crf": 19,
@@ -27423,584 +28078,6 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
     },
     "5": {
       "_meta": {
-        "title": "LoadAudio",
-      },
-      "class_type": "LoadAudio",
-      "inputs": {
-        "audio": "fs/p/stems/vocals.wav",
-      },
-    },
-    "6": {
-      "_meta": {
-        "title": "TrimAudioDuration",
-      },
-      "class_type": "TrimAudioDuration",
-      "inputs": {
-        "audio": [
-          "5",
-          0,
-        ],
-        "duration": 3.0416666666666665,
-        "start_index": 12.5,
-      },
-    },
-    "7": {
-      "_meta": {
-        "title": "LoadAudio",
-      },
-      "class_type": "LoadAudio",
-      "inputs": {
-        "audio": "fs/p/stems/bass.wav",
-      },
-    },
-    "8": {
-      "_meta": {
-        "title": "TrimAudioDuration",
-      },
-      "class_type": "TrimAudioDuration",
-      "inputs": {
-        "audio": [
-          "7",
-          0,
-        ],
-        "duration": 3.0416666666666665,
-        "start_index": 12.5,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
-      },
-    },
-  },
-}
-`;
-
-exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context frames 1`] = `
-{
-  "size": {
-    "height": 1088,
-    "width": 1920,
-  },
-  "workflow": {
-    "1": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
-      },
-    },
-    "10": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 107,
-      },
-    },
-    "11": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 960,
-      },
-    },
-    "12": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 544,
-      },
-    },
-    "13": {
-      "_meta": {
-        "title": "MiniMaxH3ReferenceToVideo",
-      },
-      "class_type": "MiniMaxH3ReferenceToVideo",
-      "inputs": {
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "clip": [
-          "4",
-          0,
-        ],
-        "height": [
-          "12",
-          0,
-        ],
-        "length": [
-          "10",
-          0,
-        ],
-        "prompt": [
-          "9",
-          0,
-        ],
-        "ref_audios.ref_audio_0": [
-          "6",
-          0,
-        ],
-        "ref_audios.ref_audio_1": [
-          "8",
-          0,
-        ],
-        "ref_image_size": "match",
-        "ref_images.ref_image_0": [
-          "14",
-          0,
-        ],
-        "ref_images.ref_image_1": [
-          "15",
-          0,
-        ],
-        "ref_images.ref_image_2": [
-          "16",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-        "width": [
-          "11",
-          0,
-        ],
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/locations/hall.png",
-      },
-    },
-    "15": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/characters/ann.png",
-      },
-    },
-    "16": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/characters/bo.png",
-      },
-    },
-    "17": {
-      "_meta": {
-        "title": "LoadAudio",
-      },
-      "class_type": "LoadAudio",
-      "inputs": {
-        "audio": "fs/p/stems/song.wav",
-      },
-    },
-    "18": {
-      "_meta": {
-        "title": "TrimAudioDuration",
-      },
-      "class_type": "TrimAudioDuration",
-      "inputs": {
-        "audio": [
-          "17",
-          0,
-        ],
-        "duration": 4.458333333333333,
-        "start_index": 12.5,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "VHS_LoadVideo",
-      },
-      "class_type": "VHS_LoadVideo",
-      "inputs": {
-        "custom_height": 0,
-        "custom_width": 0,
-        "force_rate": 0,
-        "frame_load_cap": 0,
-        "select_every_nth": 1,
-        "skip_first_frames": 0,
-        "video": "fs/p/assets/clips/slot-006_tail22.mp4",
-      },
-    },
-    "2": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
-      },
-    },
-    "20": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 42,
-      },
-    },
-    "21": {
-      "_meta": {
-        "title": "ModelAttentionBackend",
-      },
-      "class_type": "ModelAttentionBackend",
-      "inputs": {
-        "attention": "comfy kitchen attention",
-        "model": [
-          "3",
-          0,
-        ],
-      },
-    },
-    "22": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "audio": [
-          "18",
-          0,
-        ],
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "frame_idx": 0,
-        "latent": [
-          "13",
-          1,
-        ],
-        "positive": [
-          "13",
-          0,
-        ],
-      },
-    },
-    "23": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "frame_idx": 0,
-        "image": [
-          "19",
-          0,
-        ],
-        "latent": [
-          "13",
-          1,
-        ],
-        "positive": [
-          "22",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "24": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "23",
-          0,
-        ],
-        "model": [
-          "21",
-          0,
-        ],
-      },
-    },
-    "25": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "26": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 1,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 8,
-      },
-    },
-    "27": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "24",
-          0,
-        ],
-        "latent_image": [
-          "13",
-          1,
-        ],
-        "noise": [
-          "20",
-          0,
-        ],
-        "sampler": [
-          "25",
-          0,
-        ],
-        "sigmas": [
-          "26",
-          0,
-        ],
-      },
-    },
-    "28": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "27",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "LTXVSeparateAVLatent",
-      },
-      "class_type": "LTXVSeparateAVLatent",
-      "inputs": {
-        "av_latent": [
-          "28",
-          0,
-        ],
-      },
-    },
-    "3": {
-      "_meta": {
-        "title": "UNETLoader",
-      },
-      "class_type": "UNETLoader",
-      "inputs": {
-        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
-        "weight_dtype": "default",
-      },
-    },
-    "30": {
-      "_meta": {
-        "title": "MinimaxH3LatentUpscaler3D",
-      },
-      "class_type": "MinimaxH3LatentUpscaler3D",
-      "inputs": {
-        "align": 32,
-        "device": "cuda",
-        "enable_temporal_chunking": true,
-        "force_unload": true,
-        "latent": [
-          "29",
-          0,
-        ],
-        "mode": "target dimensions",
-        "mode.height": 1088,
-        "mode.width": 1920,
-        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
-        "precision": "bf16",
-      },
-    },
-    "31": {
-      "_meta": {
-        "title": "LTXVConcatAVLatent",
-      },
-      "class_type": "LTXVConcatAVLatent",
-      "inputs": {
-        "audio_latent": [
-          "29",
-          1,
-        ],
-        "video_latent": [
-          "30",
-          0,
-        ],
-      },
-    },
-    "32": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 43,
-      },
-    },
-    "33": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "audio": [
-          "18",
-          0,
-        ],
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "frame_idx": 0,
-        "latent": [
-          "31",
-          0,
-        ],
-        "positive": [
-          "13",
-          0,
-        ],
-      },
-    },
-    "34": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "33",
-          0,
-        ],
-        "model": [
-          "21",
-          0,
-        ],
-      },
-    },
-    "35": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "36": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 0.2,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 2,
-      },
-    },
-    "37": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "34",
-          0,
-        ],
-        "latent_image": [
-          "31",
-          0,
-        ],
-        "noise": [
-          "32",
-          0,
-        ],
-        "sampler": [
-          "35",
-          0,
-        ],
-        "sigmas": [
-          "36",
-          0,
-        ],
-      },
-    },
-    "38": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "37",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "39": {
-      "_meta": {
-        "title": "VAEDecode",
-      },
-      "class_type": "VAEDecode",
-      "inputs": {
-        "samples": [
-          "38",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "4": {
-      "_meta": {
         "title": "CLIPLoader",
       },
       "class_type": "CLIPLoader",
@@ -28010,33 +28087,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         "type": "minimax",
       },
     },
-    "40": {
-      "_meta": {
-        "title": "VHS_VideoCombine",
-      },
-      "class_type": "VHS_VideoCombine",
-      "inputs": {
-        "audio": [
-          "18",
-          0,
-        ],
-        "crf": 19,
-        "filename_prefix": "fs/p/videos/slot-007",
-        "format": "video/h264-mp4",
-        "frame_rate": 24,
-        "images": [
-          "39",
-          0,
-        ],
-        "loop_count": 0,
-        "pingpong": false,
-        "pix_fmt": "yuv420p",
-        "save_metadata": true,
-        "save_output": true,
-        "trim_to_audio": false,
-      },
-    },
-    "5": {
+    "6": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -28045,21 +28096,21 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         "audio": "fs/p/stems/vocals.wav",
       },
     },
-    "6": {
+    "7": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "5",
+          "6",
           0,
         ],
         "duration": 4.458333333333333,
         "start_index": 12.5,
       },
     },
-    "7": {
+    "8": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -28068,27 +28119,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
         "audio": "fs/p/stems/bass.wav",
       },
     },
-    "8": {
+    "9": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "7",
+          "8",
           0,
         ],
         "duration": 4.458333333333333,
         "start_index": 12.5,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
   },
@@ -28113,11 +28155,11 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
     },
     "10": {
       "_meta": {
-        "title": "PrimitiveInt",
+        "title": "PrimitiveStringMultiline",
       },
-      "class_type": "PrimitiveInt",
+      "class_type": "PrimitiveStringMultiline",
       "inputs": {
-        "value": 73,
+        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
     "11": {
@@ -28126,7 +28168,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 416,
+        "value": 73,
       },
     },
     "12": {
@@ -28135,10 +28177,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 768,
+        "value": 416,
       },
     },
     "13": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 768,
+      },
+    },
+    "14": {
       "_meta": {
         "title": "MiniMaxH3ReferenceToVideo",
       },
@@ -28149,40 +28200,40 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
           0,
         ],
         "clip": [
-          "4",
+          "5",
           0,
         ],
         "height": [
-          "12",
+          "13",
           0,
         ],
         "length": [
-          "10",
+          "11",
           0,
         ],
         "prompt": [
-          "9",
+          "10",
           0,
         ],
         "ref_audios.ref_audio_0": [
-          "6",
+          "7",
           0,
         ],
         "ref_audios.ref_audio_1": [
-          "8",
+          "9",
           0,
         ],
         "ref_image_size": "match",
         "ref_images.ref_image_0": [
-          "14",
-          0,
-        ],
-        "ref_images.ref_image_1": [
           "15",
           0,
         ],
-        "ref_images.ref_image_2": [
+        "ref_images.ref_image_1": [
           "16",
+          0,
+        ],
+        "ref_images.ref_image_2": [
+          "17",
           0,
         ],
         "vae": [
@@ -28190,18 +28241,9 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
           0,
         ],
         "width": [
-          "11",
+          "12",
           0,
         ],
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "15": {
@@ -28210,7 +28252,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/ann.png",
+        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "16": {
@@ -28219,10 +28261,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/bo.png",
+        "image": "fs/p/assets/characters/ann.png",
       },
     },
     "17": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/characters/bo.png",
+      },
+    },
+    "18": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -28231,27 +28282,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "audio": "fs/p/stems/song.wav",
       },
     },
-    "18": {
+    "19": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "17",
+          "18",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 42,
       },
     },
     "2": {
@@ -28265,25 +28307,34 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
     },
     "20": {
       "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "21": {
+      "_meta": {
         "title": "ModelAttentionBackend",
       },
       "class_type": "ModelAttentionBackend",
       "inputs": {
         "attention": "comfy kitchen attention",
         "model": [
-          "3",
+          "4",
           0,
         ],
       },
     },
-    "21": {
+    "22": {
       "_meta": {
         "title": "MiniMaxH3AddGuide",
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "audio_vae": [
@@ -28292,32 +28343,32 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         ],
         "frame_idx": 0,
         "latent": [
-          "13",
+          "14",
           1,
         ],
         "positive": [
-          "13",
+          "14",
           0,
         ],
       },
     },
-    "22": {
+    "23": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "21",
+          "22",
           0,
         ],
         "model": [
-          "20",
+          "21",
           0,
         ],
       },
     },
-    "23": {
+    "24": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -28326,7 +28377,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "sampler_name": "euler",
       },
     },
-    "24": {
+    "25": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -28334,68 +28385,68 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
       "inputs": {
         "denoise": 1,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
-    "25": {
+    "26": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "22",
-          0,
-        ],
-        "latent_image": [
-          "13",
-          1,
-        ],
-        "noise": [
-          "19",
-          0,
-        ],
-        "sampler": [
           "23",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "14",
+          1,
+        ],
+        "noise": [
+          "20",
+          0,
+        ],
+        "sampler": [
           "24",
+          0,
+        ],
+        "sigmas": [
+          "25",
           0,
         ],
       },
     },
-    "26": {
+    "27": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "25",
+          "26",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "27": {
+    "28": {
       "_meta": {
         "title": "LTXVSeparateAVLatent",
       },
       "class_type": "LTXVSeparateAVLatent",
       "inputs": {
         "av_latent": [
-          "26",
+          "27",
           0,
         ],
       },
     },
-    "28": {
+    "29": {
       "_meta": {
         "title": "MinimaxH3LatentUpscaler3D",
       },
@@ -28406,7 +28457,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "enable_temporal_chunking": true,
         "force_unload": true,
         "latent": [
-          "27",
+          "28",
           0,
         ],
         "mode": "target dimensions",
@@ -28414,22 +28465,6 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "mode.width": 832,
         "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
         "precision": "bf16",
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "LTXVConcatAVLatent",
-      },
-      "class_type": "LTXVConcatAVLatent",
-      "inputs": {
-        "audio_latent": [
-          "27",
-          1,
-        ],
-        "video_latent": [
-          "28",
-          0,
-        ],
       },
     },
     "3": {
@@ -28444,6 +28479,22 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
     },
     "30": {
       "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "28",
+          1,
+        ],
+        "video_latent": [
+          "29",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
         "title": "RandomNoise",
       },
       "class_type": "RandomNoise",
@@ -28451,14 +28502,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "noise_seed": 43,
       },
     },
-    "31": {
+    "32": {
       "_meta": {
         "title": "MiniMaxH3AddGuide",
       },
       "class_type": "MiniMaxH3AddGuide",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "audio_vae": [
@@ -28467,32 +28518,32 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         ],
         "frame_idx": 0,
         "latent": [
-          "29",
+          "30",
           0,
         ],
         "positive": [
-          "13",
+          "14",
           0,
         ],
       },
     },
-    "32": {
+    "33": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "31",
+          "32",
           0,
         ],
         "model": [
-          "20",
+          "21",
           0,
         ],
       },
     },
-    "33": {
+    "34": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -28501,7 +28552,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "sampler_name": "euler",
       },
     },
-    "34": {
+    "35": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -28509,63 +28560,63 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
       "inputs": {
         "denoise": 0.2,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
         "steps": 2,
       },
     },
-    "35": {
+    "36": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "32",
-          0,
-        ],
-        "latent_image": [
-          "29",
-          0,
-        ],
-        "noise": [
-          "30",
-          0,
-        ],
-        "sampler": [
           "33",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "30",
+          0,
+        ],
+        "noise": [
+          "31",
+          0,
+        ],
+        "sampler": [
           "34",
+          0,
+        ],
+        "sigmas": [
+          "35",
           0,
         ],
       },
     },
-    "36": {
+    "37": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "35",
+          "36",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "37": {
+    "38": {
       "_meta": {
         "title": "VAEDecode",
       },
       "class_type": "VAEDecode",
       "inputs": {
         "samples": [
-          "36",
+          "37",
           0,
         ],
         "vae": [
@@ -28574,14 +28625,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         ],
       },
     },
-    "38": {
+    "39": {
       "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
       "inputs": {
         "audio": [
-          "18",
+          "19",
           0,
         ],
         "crf": 19,
@@ -28589,7 +28640,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "37",
+          "38",
           0,
         ],
         "loop_count": 0,
@@ -28602,6 +28653,20 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
     },
     "4": {
       "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
         "title": "CLIPLoader",
       },
       "class_type": "CLIPLoader",
@@ -28611,7 +28676,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "type": "minimax",
       },
     },
-    "5": {
+    "6": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -28620,21 +28685,21 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "audio": "fs/p/stems/vocals.wav",
       },
     },
-    "6": {
+    "7": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "5",
+          "6",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
       },
     },
-    "7": {
+    "8": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -28643,27 +28708,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
         "audio": "fs/p/stems/bass.wav",
       },
     },
-    "8": {
+    "9": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "7",
+          "8",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
   },
@@ -28692,10 +28748,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 352,
+        "value": 640,
       },
     },
     "11": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 352,
+      },
+    },
+    "12": {
       "_meta": {
         "title": "MiniMaxH3ReferenceToVideo",
       },
@@ -28706,36 +28771,36 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
           0,
         ],
         "clip": [
-          "4",
+          "5",
           0,
         ],
         "height": [
-          "10",
+          "11",
           0,
         ],
         "length": [
-          "8",
+          "9",
           0,
         ],
         "prompt": [
-          "7",
+          "8",
           0,
         ],
         "ref_audios.ref_audio_0": [
-          "6",
+          "7",
           0,
         ],
         "ref_image_size": "match",
         "ref_images.ref_image_0": [
-          "12",
-          0,
-        ],
-        "ref_images.ref_image_1": [
           "13",
           0,
         ],
-        "ref_images.ref_image_2": [
+        "ref_images.ref_image_1": [
           "14",
+          0,
+        ],
+        "ref_images.ref_image_2": [
+          "15",
           0,
         ],
         "vae": [
@@ -28743,18 +28808,9 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
           0,
         ],
         "width": [
-          "9",
+          "10",
           0,
         ],
-      },
-    },
-    "12": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "13": {
@@ -28763,7 +28819,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/ann.png",
+        "image": "fs/p/assets/locations/hall.png",
       },
     },
     "14": {
@@ -28772,10 +28828,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/p/assets/characters/bo.png",
+        "image": "fs/p/assets/characters/ann.png",
       },
     },
     "15": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/characters/bo.png",
+      },
+    },
+    "16": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -28784,21 +28849,21 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "audio": "fs/p/stems/song.wav",
       },
     },
-    "16": {
+    "17": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "15",
+          "16",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
       },
     },
-    "17": {
+    "18": {
       "_meta": {
         "title": "RandomNoise",
       },
@@ -28807,7 +28872,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "noise_seed": 42,
       },
     },
-    "18": {
+    "19": {
       "_meta": {
         "title": "ModelAttentionBackend",
       },
@@ -28815,32 +28880,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
       "inputs": {
         "attention": "comfy kitchen attention",
         "model": [
-          "3",
-          0,
-        ],
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "audio": [
-          "16",
-          0,
-        ],
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "frame_idx": 0,
-        "latent": [
-          "11",
-          1,
-        ],
-        "positive": [
-          "11",
+          "4",
           0,
         ],
       },
@@ -28856,21 +28896,46 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
     },
     "20": {
       "_meta": {
-        "title": "BasicGuider",
+        "title": "MiniMaxH3AddGuide",
       },
-      "class_type": "BasicGuider",
+      "class_type": "MiniMaxH3AddGuide",
       "inputs": {
-        "conditioning": [
-          "19",
+        "audio": [
+          "17",
           0,
         ],
-        "model": [
-          "18",
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "frame_idx": 0,
+        "latent": [
+          "12",
+          1,
+        ],
+        "positive": [
+          "12",
           0,
         ],
       },
     },
     "21": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "20",
+          0,
+        ],
+        "model": [
+          "19",
+          0,
+        ],
+      },
+    },
+    "22": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -28879,7 +28944,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "sampler_name": "euler",
       },
     },
-    "22": {
+    "23": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -28887,68 +28952,68 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
       "inputs": {
         "denoise": 1,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
-    "23": {
+    "24": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "20",
-          0,
-        ],
-        "latent_image": [
-          "11",
-          1,
-        ],
-        "noise": [
-          "17",
-          0,
-        ],
-        "sampler": [
           "21",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "12",
+          1,
+        ],
+        "noise": [
+          "18",
+          0,
+        ],
+        "sampler": [
           "22",
+          0,
+        ],
+        "sigmas": [
+          "23",
           0,
         ],
       },
     },
-    "24": {
+    "25": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "23",
+          "24",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "25": {
+    "26": {
       "_meta": {
         "title": "LTXVSeparateAVLatent",
       },
       "class_type": "LTXVSeparateAVLatent",
       "inputs": {
         "av_latent": [
-          "24",
+          "25",
           0,
         ],
       },
     },
-    "26": {
+    "27": {
       "_meta": {
         "title": "MinimaxH3LatentUpscaler3D",
       },
@@ -28959,7 +29024,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "enable_temporal_chunking": true,
         "force_unload": true,
         "latent": [
-          "25",
+          "26",
           0,
         ],
         "mode": "target dimensions",
@@ -28969,54 +29034,29 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "precision": "bf16",
       },
     },
-    "27": {
+    "28": {
       "_meta": {
         "title": "LTXVConcatAVLatent",
       },
       "class_type": "LTXVConcatAVLatent",
       "inputs": {
         "audio_latent": [
-          "25",
+          "26",
           1,
         ],
         "video_latent": [
-          "26",
+          "27",
           0,
         ],
       },
     },
-    "28": {
+    "29": {
       "_meta": {
         "title": "RandomNoise",
       },
       "class_type": "RandomNoise",
       "inputs": {
         "noise_seed": 43,
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "audio": [
-          "16",
-          0,
-        ],
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "frame_idx": 0,
-        "latent": [
-          "27",
-          0,
-        ],
-        "positive": [
-          "11",
-          0,
-        ],
       },
     },
     "3": {
@@ -29031,21 +29071,46 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
     },
     "30": {
       "_meta": {
-        "title": "BasicGuider",
+        "title": "MiniMaxH3AddGuide",
       },
-      "class_type": "BasicGuider",
+      "class_type": "MiniMaxH3AddGuide",
       "inputs": {
-        "conditioning": [
-          "29",
+        "audio": [
+          "17",
           0,
         ],
-        "model": [
-          "18",
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "frame_idx": 0,
+        "latent": [
+          "28",
+          0,
+        ],
+        "positive": [
+          "12",
           0,
         ],
       },
     },
     "31": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "30",
+          0,
+        ],
+        "model": [
+          "19",
+          0,
+        ],
+      },
+    },
+    "32": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -29054,7 +29119,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "sampler_name": "euler",
       },
     },
-    "32": {
+    "33": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -29062,63 +29127,63 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
       "inputs": {
         "denoise": 0.2,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
         "steps": 2,
       },
     },
-    "33": {
+    "34": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "30",
-          0,
-        ],
-        "latent_image": [
-          "27",
-          0,
-        ],
-        "noise": [
-          "28",
-          0,
-        ],
-        "sampler": [
           "31",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "28",
+          0,
+        ],
+        "noise": [
+          "29",
+          0,
+        ],
+        "sampler": [
           "32",
+          0,
+        ],
+        "sigmas": [
+          "33",
           0,
         ],
       },
     },
-    "34": {
+    "35": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "33",
+          "34",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "35": {
+    "36": {
       "_meta": {
         "title": "VAEDecode",
       },
       "class_type": "VAEDecode",
       "inputs": {
         "samples": [
-          "34",
+          "35",
           0,
         ],
         "vae": [
@@ -29127,14 +29192,14 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         ],
       },
     },
-    "36": {
+    "37": {
       "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
       "inputs": {
         "audio": [
-          "16",
+          "17",
           0,
         ],
         "crf": 19,
@@ -29142,7 +29207,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "35",
+          "36",
           0,
         ],
         "loop_count": 0,
@@ -29155,6 +29220,20 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
     },
     "4": {
       "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
         "title": "CLIPLoader",
       },
       "class_type": "CLIPLoader",
@@ -29164,7 +29243,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "type": "minimax",
       },
     },
-    "5": {
+    "6": {
       "_meta": {
         "title": "LoadAudio",
       },
@@ -29173,21 +29252,21 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "audio": "fs/p/stems/drums.wav",
       },
     },
-    "6": {
+    "7": {
       "_meta": {
         "title": "TrimAudioDuration",
       },
       "class_type": "TrimAudioDuration",
       "inputs": {
         "audio": [
-          "5",
+          "6",
           0,
         ],
         "duration": 3.0416666666666665,
         "start_index": 12.5,
       },
     },
-    "7": {
+    "8": {
       "_meta": {
         "title": "PrimitiveStringMultiline",
       },
@@ -29196,22 +29275,13 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
         "value": "<Subject 1> is the hall. <Subject 2> sings into the microphone, <Subject 3> plays the bass.",
       },
     },
-    "8": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 73,
-      },
-    },
     "9": {
       "_meta": {
         "title": "PrimitiveInt",
       },
       "class_type": "PrimitiveInt",
       "inputs": {
-        "value": 640,
+        "value": 73,
       },
     },
   },
@@ -29236,11 +29306,47 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
     },
     "10": {
       "_meta": {
-        "title": "LoadImage",
+        "title": "MiniMaxH3ReferenceToVideo",
       },
-      "class_type": "LoadImage",
+      "class_type": "MiniMaxH3ReferenceToVideo",
       "inputs": {
-        "image": "fs/film-x/assets/locations/trench.png",
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "5",
+          0,
+        ],
+        "height": [
+          "9",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": [
+          "6",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "11",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "12",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "8",
+          0,
+        ],
       },
     },
     "11": {
@@ -29249,10 +29355,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/film-x/assets/characters/karl.png",
+        "image": "fs/film-x/assets/locations/trench.png",
       },
     },
     "12": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "13": {
       "_meta": {
         "title": "RandomNoise",
       },
@@ -29261,7 +29376,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "noise_seed": 42,
       },
     },
-    "13": {
+    "14": {
       "_meta": {
         "title": "ModelAttentionBackend",
       },
@@ -29269,28 +29384,28 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
       "inputs": {
         "attention": "comfy kitchen attention",
         "model": [
-          "3",
+          "4",
           0,
         ],
       },
     },
-    "14": {
+    "15": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "9",
+          "10",
           0,
         ],
         "model": [
-          "13",
+          "14",
           0,
         ],
       },
     },
-    "15": {
+    "16": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -29299,7 +29414,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "sampler_name": "euler",
       },
     },
-    "16": {
+    "17": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -29307,65 +29422,53 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
       "inputs": {
         "denoise": 1,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
-    "17": {
+    "18": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "14",
-          0,
-        ],
-        "latent_image": [
-          "9",
-          1,
-        ],
-        "noise": [
-          "12",
-          0,
-        ],
-        "sampler": [
           "15",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "10",
+          1,
+        ],
+        "noise": [
+          "13",
+          0,
+        ],
+        "sampler": [
           "16",
+          0,
+        ],
+        "sigmas": [
+          "17",
           0,
         ],
       },
     },
-    "18": {
+    "19": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "17",
+          "18",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "LTXVSeparateAVLatent",
-      },
-      "class_type": "LTXVSeparateAVLatent",
-      "inputs": {
-        "av_latent": [
-          "18",
-          0,
-        ],
       },
     },
     "2": {
@@ -29379,6 +29482,18 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
     },
     "20": {
       "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "19",
+          0,
+        ],
+      },
+    },
+    "21": {
+      "_meta": {
         "title": "MinimaxH3LatentUpscaler3D",
       },
       "class_type": "MinimaxH3LatentUpscaler3D",
@@ -29388,7 +29503,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "enable_temporal_chunking": true,
         "force_unload": true,
         "latent": [
-          "19",
+          "20",
           0,
         ],
         "mode": "target dimensions",
@@ -29398,23 +29513,23 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "precision": "bf16",
       },
     },
-    "21": {
+    "22": {
       "_meta": {
         "title": "LTXVConcatAVLatent",
       },
       "class_type": "LTXVConcatAVLatent",
       "inputs": {
         "audio_latent": [
-          "19",
+          "20",
           1,
         ],
         "video_latent": [
-          "20",
+          "21",
           0,
         ],
       },
     },
-    "22": {
+    "23": {
       "_meta": {
         "title": "RandomNoise",
       },
@@ -29423,23 +29538,23 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "noise_seed": 43,
       },
     },
-    "23": {
+    "24": {
       "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "9",
+          "10",
           0,
         ],
         "model": [
-          "13",
+          "14",
           0,
         ],
       },
     },
-    "24": {
+    "25": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -29448,7 +29563,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "sampler_name": "euler",
       },
     },
-    "25": {
+    "26": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -29456,83 +29571,67 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
       "inputs": {
         "denoise": 0.2,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
         "steps": 2,
       },
     },
-    "26": {
+    "27": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "23",
-          0,
-        ],
-        "latent_image": [
-          "21",
-          0,
-        ],
-        "noise": [
-          "22",
-          0,
-        ],
-        "sampler": [
           "24",
           0,
         ],
-        "sigmas": [
+        "latent_image": [
+          "22",
+          0,
+        ],
+        "noise": [
+          "23",
+          0,
+        ],
+        "sampler": [
           "25",
+          0,
+        ],
+        "sigmas": [
+          "26",
           0,
         ],
       },
     },
-    "27": {
+    "28": {
       "_meta": {
         "title": "VRAMCleanup",
       },
       "class_type": "VRAMCleanup",
       "inputs": {
         "anything": [
-          "26",
+          "27",
           0,
         ],
         "offload_cache": false,
         "offload_model": true,
       },
     },
-    "28": {
+    "29": {
       "_meta": {
         "title": "VAEDecode",
       },
       "class_type": "VAEDecode",
       "inputs": {
         "samples": [
-          "27",
+          "28",
           0,
         ],
         "vae": [
           "1",
-          0,
-        ],
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "VAEDecodeAudio",
-      },
-      "class_type": "VAEDecodeAudio",
-      "inputs": {
-        "samples": [
-          "27",
-          0,
-        ],
-        "vae": [
-          "2",
           0,
         ],
       },
@@ -29549,12 +29648,28 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
     },
     "30": {
       "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "28",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
         "title": "VHS_VideoCombine",
       },
       "class_type": "VHS_VideoCombine",
       "inputs": {
         "audio": [
-          "29",
+          "30",
           0,
         ],
         "crf": 19,
@@ -29562,7 +29677,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "format": "video/h264-mp4",
         "frame_rate": 24,
         "images": [
-          "28",
+          "29",
           0,
         ],
         "loop_count": 0,
@@ -29575,6 +29690,20 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
     },
     "4": {
       "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
         "title": "CLIPLoader",
       },
       "class_type": "CLIPLoader",
@@ -29584,7 +29713,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "type": "minimax",
       },
     },
-    "5": {
+    "6": {
       "_meta": {
         "title": "PrimitiveStringMultiline",
       },
@@ -29593,7 +29722,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
       },
     },
-    "6": {
+    "7": {
       "_meta": {
         "title": "PrimitiveInt",
       },
@@ -29602,7 +29731,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "value": 107,
       },
     },
-    "7": {
+    "8": {
       "_meta": {
         "title": "PrimitiveInt",
       },
@@ -29611,58 +29740,13 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
         "value": 960,
       },
     },
-    "8": {
+    "9": {
       "_meta": {
         "title": "PrimitiveInt",
       },
       "class_type": "PrimitiveInt",
       "inputs": {
         "value": 544,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "MiniMaxH3ReferenceToVideo",
-      },
-      "class_type": "MiniMaxH3ReferenceToVideo",
-      "inputs": {
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "clip": [
-          "4",
-          0,
-        ],
-        "height": [
-          "8",
-          0,
-        ],
-        "length": [
-          "6",
-          0,
-        ],
-        "prompt": [
-          "5",
-          0,
-        ],
-        "ref_image_size": "match",
-        "ref_images.ref_image_0": [
-          "10",
-          0,
-        ],
-        "ref_images.ref_image_1": [
-          "11",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-        "width": [
-          "7",
-          0,
-        ],
       },
     },
   },
@@ -29687,11 +29771,47 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
     },
     "10": {
       "_meta": {
-        "title": "LoadImage",
+        "title": "MiniMaxH3ReferenceToVideo",
       },
-      "class_type": "LoadImage",
+      "class_type": "MiniMaxH3ReferenceToVideo",
       "inputs": {
-        "image": "fs/film-x/assets/locations/trench.png",
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "5",
+          0,
+        ],
+        "height": [
+          "9",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": [
+          "6",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "11",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "12",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "8",
+          0,
+        ],
       },
     },
     "11": {
@@ -29700,7 +29820,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
       },
       "class_type": "LoadImage",
       "inputs": {
-        "image": "fs/film-x/assets/characters/karl.png",
+        "image": "fs/film-x/assets/locations/trench.png",
       },
     },
     "12": {
@@ -29709,7 +29829,531 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
       },
       "class_type": "LoadImage",
       "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
         "image": "fs/film-x/assets/clips/clip-002_lf.png",
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "4",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "13",
+          0,
+        ],
+        "latent": [
+          "10",
+          1,
+        ],
+        "positive": [
+          "10",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "16",
+          0,
+        ],
+        "model": [
+          "15",
+          0,
+        ],
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 4,
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "17",
+          0,
+        ],
+        "latent_image": [
+          "10",
+          1,
+        ],
+        "noise": [
+          "14",
+          0,
+        ],
+        "sampler": [
+          "18",
+          0,
+        ],
+        "sigmas": [
+          "19",
+          0,
+        ],
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "20",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "21",
+          0,
+        ],
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "MinimaxH3LatentUpscaler3D",
+      },
+      "class_type": "MinimaxH3LatentUpscaler3D",
+      "inputs": {
+        "align": 32,
+        "device": "cuda",
+        "enable_temporal_chunking": true,
+        "force_unload": true,
+        "latent": [
+          "22",
+          0,
+        ],
+        "mode": "target dimensions",
+        "mode.height": 1088,
+        "mode.width": 1920,
+        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
+        "precision": "bf16",
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "22",
+          1,
+        ],
+        "video_latent": [
+          "23",
+          0,
+        ],
+      },
+    },
+    "25": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 43,
+      },
+    },
+    "26": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "13",
+          0,
+        ],
+        "latent": [
+          "24",
+          0,
+        ],
+        "positive": [
+          "10",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "27": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "26",
+          0,
+        ],
+        "model": [
+          "15",
+          0,
+        ],
+      },
+    },
+    "28": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "29": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 0.2,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 2,
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "30": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "27",
+          0,
+        ],
+        "latent_image": [
+          "24",
+          0,
+        ],
+        "noise": [
+          "25",
+          0,
+        ],
+        "sampler": [
+          "28",
+          0,
+        ],
+        "sigmas": [
+          "29",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "30",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "32": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "31",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "33": {
+      "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "31",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "34": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "33",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/film-x/videos/clip-003",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "32",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 107,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 960,
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 544,
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: fixed size 1`] = `
+{
+  "size": {
+    "height": 720,
+    "width": 1280,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "5",
+          0,
+        ],
+        "height": [
+          "9",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": [
+          "6",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "11",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "12",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "8",
+          0,
+        ],
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/locations/trench.png",
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
       },
     },
     "13": {
@@ -29729,44 +30373,19 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
       "inputs": {
         "attention": "comfy kitchen attention",
         "model": [
-          "3",
+          "4",
           0,
         ],
       },
     },
     "15": {
       "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "frame_idx": 0,
-        "image": [
-          "12",
-          0,
-        ],
-        "latent": [
-          "9",
-          1,
-        ],
-        "positive": [
-          "9",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "16": {
-      "_meta": {
         "title": "BasicGuider",
       },
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "15",
+          "10",
           0,
         ],
         "model": [
@@ -29775,7 +30394,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
         ],
       },
     },
-    "17": {
+    "16": {
       "_meta": {
         "title": "KSamplerSelect",
       },
@@ -29784,7 +30403,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
         "sampler_name": "euler",
       },
     },
-    "18": {
+    "17": {
       "_meta": {
         "title": "BasicScheduler",
       },
@@ -29792,25 +30411,25 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
       "inputs": {
         "denoise": 1,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
-    "19": {
+    "18": {
       "_meta": {
         "title": "SamplerCustomAdvanced",
       },
       "class_type": "SamplerCustomAdvanced",
       "inputs": {
         "guider": [
-          "16",
+          "15",
           0,
         ],
         "latent_image": [
-          "9",
+          "10",
           1,
         ],
         "noise": [
@@ -29818,13 +30437,27 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
           0,
         ],
         "sampler": [
-          "17",
+          "16",
           0,
         ],
         "sigmas": [
+          "17",
+          0,
+        ],
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
           "18",
           0,
         ],
+        "offload_cache": false,
+        "offload_model": true,
       },
     },
     "2": {
@@ -29838,31 +30471,17 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
     },
     "20": {
       "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "19",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "21": {
-      "_meta": {
         "title": "LTXVSeparateAVLatent",
       },
       "class_type": "LTXVSeparateAVLatent",
       "inputs": {
         "av_latent": [
-          "20",
+          "19",
           0,
         ],
       },
     },
-    "22": {
+    "21": {
       "_meta": {
         "title": "MinimaxH3LatentUpscaler3D",
       },
@@ -29873,7 +30492,977 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
         "enable_temporal_chunking": true,
         "force_unload": true,
         "latent": [
+          "20",
+          0,
+        ],
+        "mode": "target dimensions",
+        "mode.height": 720,
+        "mode.width": 1280,
+        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
+        "precision": "bf16",
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "20",
+          1,
+        ],
+        "video_latent": [
           "21",
+          0,
+        ],
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 43,
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "10",
+          0,
+        ],
+        "model": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "25": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "26": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 0.2,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 2,
+      },
+    },
+    "27": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "24",
+          0,
+        ],
+        "latent_image": [
+          "22",
+          0,
+        ],
+        "noise": [
+          "23",
+          0,
+        ],
+        "sampler": [
+          "25",
+          0,
+        ],
+        "sigmas": [
+          "26",
+          0,
+        ],
+      },
+    },
+    "28": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "27",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "29": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "28",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "30": {
+      "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "28",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "30",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/film-x/videos/clip-003",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "29",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 107,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 640,
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 352,
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: portrait 1`] = `
+{
+  "size": {
+    "height": 1920,
+    "width": 1088,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "5",
+          0,
+        ],
+        "height": [
+          "9",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": [
+          "6",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "11",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "12",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "8",
+          0,
+        ],
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/locations/trench.png",
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "4",
+          0,
+        ],
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "10",
+          0,
+        ],
+        "model": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 4,
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "15",
+          0,
+        ],
+        "latent_image": [
+          "10",
+          1,
+        ],
+        "noise": [
+          "13",
+          0,
+        ],
+        "sampler": [
+          "16",
+          0,
+        ],
+        "sigmas": [
+          "17",
+          0,
+        ],
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "18",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "19",
+          0,
+        ],
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "MinimaxH3LatentUpscaler3D",
+      },
+      "class_type": "MinimaxH3LatentUpscaler3D",
+      "inputs": {
+        "align": 32,
+        "device": "cuda",
+        "enable_temporal_chunking": true,
+        "force_unload": true,
+        "latent": [
+          "20",
+          0,
+        ],
+        "mode": "target dimensions",
+        "mode.height": 1920,
+        "mode.width": 1088,
+        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
+        "precision": "bf16",
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "LTXVConcatAVLatent",
+      },
+      "class_type": "LTXVConcatAVLatent",
+      "inputs": {
+        "audio_latent": [
+          "20",
+          1,
+        ],
+        "video_latent": [
+          "21",
+          0,
+        ],
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 43,
+      },
+    },
+    "24": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "10",
+          0,
+        ],
+        "model": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "25": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "26": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 0.2,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 2,
+      },
+    },
+    "27": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "24",
+          0,
+        ],
+        "latent_image": [
+          "22",
+          0,
+        ],
+        "noise": [
+          "23",
+          0,
+        ],
+        "sampler": [
+          "25",
+          0,
+        ],
+        "sigmas": [
+          "26",
+          0,
+        ],
+      },
+    },
+    "28": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "27",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "29": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "28",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "30": {
+      "_meta": {
+        "title": "VAEDecodeAudio",
+      },
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "28",
+          0,
+        ],
+        "vae": [
+          "2",
+          0,
+        ],
+      },
+    },
+    "31": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "audio": [
+          "30",
+          0,
+        ],
+        "crf": 19,
+        "filename_prefix": "fs/film-x/videos/clip-003",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "29",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveStringMultiline",
+      },
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 107,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 544,
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 960,
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: context frames 1`] = `
+{
+  "size": {
+    "height": 1088,
+    "width": 1920,
+  },
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "MiniMaxH3ReferenceToVideo",
+      },
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "audio_vae": [
+          "2",
+          0,
+        ],
+        "clip": [
+          "5",
+          0,
+        ],
+        "height": [
+          "9",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": [
+          "6",
+          0,
+        ],
+        "ref_image_size": "match",
+        "ref_images.ref_image_0": [
+          "11",
+          0,
+        ],
+        "ref_images.ref_image_1": [
+          "12",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "8",
+          0,
+        ],
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/locations/trench.png",
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/film-x/assets/characters/karl.png",
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "VHS_LoadVideo",
+      },
+      "class_type": "VHS_LoadVideo",
+      "inputs": {
+        "custom_height": 0,
+        "custom_width": 0,
+        "force_rate": 0,
+        "frame_load_cap": 0,
+        "select_every_nth": 1,
+        "skip_first_frames": 0,
+        "video": "fs/film-x/assets/clips/clip-002_tail22.mp4",
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "4",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "MiniMaxH3AddGuide",
+      },
+      "class_type": "MiniMaxH3AddGuide",
+      "inputs": {
+        "frame_idx": 0,
+        "image": [
+          "13",
+          0,
+        ],
+        "latent": [
+          "10",
+          1,
+        ],
+        "positive": [
+          "10",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "16",
+          0,
+        ],
+        "model": [
+          "15",
+          0,
+        ],
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "19": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "4",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 4,
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
+      },
+    },
+    "20": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "17",
+          0,
+        ],
+        "latent_image": [
+          "10",
+          1,
+        ],
+        "noise": [
+          "14",
+          0,
+        ],
+        "sampler": [
+          "18",
+          0,
+        ],
+        "sigmas": [
+          "19",
+          0,
+        ],
+      },
+    },
+    "21": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "20",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "22": {
+      "_meta": {
+        "title": "LTXVSeparateAVLatent",
+      },
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "21",
+          0,
+        ],
+      },
+    },
+    "23": {
+      "_meta": {
+        "title": "MinimaxH3LatentUpscaler3D",
+      },
+      "class_type": "MinimaxH3LatentUpscaler3D",
+      "inputs": {
+        "align": 32,
+        "device": "cuda",
+        "enable_temporal_chunking": true,
+        "force_unload": true,
+        "latent": [
+          "22",
           0,
         ],
         "mode": "target dimensions",
@@ -29883,54 +31472,29 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
         "precision": "bf16",
       },
     },
-    "23": {
+    "24": {
       "_meta": {
         "title": "LTXVConcatAVLatent",
       },
       "class_type": "LTXVConcatAVLatent",
       "inputs": {
         "audio_latent": [
-          "21",
+          "22",
           1,
         ],
         "video_latent": [
-          "22",
+          "23",
           0,
         ],
       },
     },
-    "24": {
+    "25": {
       "_meta": {
         "title": "RandomNoise",
       },
       "class_type": "RandomNoise",
       "inputs": {
         "noise_seed": 43,
-      },
-    },
-    "25": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "frame_idx": 0,
-        "image": [
-          "12",
-          0,
-        ],
-        "latent": [
-          "23",
-          0,
-        ],
-        "positive": [
-          "9",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
       },
     },
     "26": {
@@ -29940,11 +31504,11 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
       "class_type": "BasicGuider",
       "inputs": {
         "conditioning": [
-          "25",
+          "10",
           0,
         ],
         "model": [
-          "14",
+          "15",
           0,
         ],
       },
@@ -29966,7 +31530,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
       "inputs": {
         "denoise": 0.2,
         "model": [
-          "3",
+          "4",
           0,
         ],
         "scheduler": "beta57",
@@ -29984,11 +31548,11 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
           0,
         ],
         "latent_image": [
-          "23",
+          "24",
           0,
         ],
         "noise": [
-          "24",
+          "25",
           0,
         ],
         "sampler": [
@@ -30085,6 +31649,20 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
     },
     "4": {
       "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "5": {
+      "_meta": {
         "title": "CLIPLoader",
       },
       "class_type": "CLIPLoader",
@@ -30094,1409 +31672,16 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
         "type": "minimax",
       },
     },
-    "5": {
+    "6": {
       "_meta": {
         "title": "PrimitiveStringMultiline",
       },
       "class_type": "PrimitiveStringMultiline",
       "inputs": {
         "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
-      },
-    },
-    "6": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 107,
       },
     },
     "7": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 960,
-      },
-    },
-    "8": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 544,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "MiniMaxH3ReferenceToVideo",
-      },
-      "class_type": "MiniMaxH3ReferenceToVideo",
-      "inputs": {
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "clip": [
-          "4",
-          0,
-        ],
-        "height": [
-          "8",
-          0,
-        ],
-        "length": [
-          "6",
-          0,
-        ],
-        "prompt": [
-          "5",
-          0,
-        ],
-        "ref_image_size": "match",
-        "ref_images.ref_image_0": [
-          "10",
-          0,
-        ],
-        "ref_images.ref_image_1": [
-          "11",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-        "width": [
-          "7",
-          0,
-        ],
-      },
-    },
-  },
-}
-`;
-
-exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: fixed size 1`] = `
-{
-  "size": {
-    "height": 720,
-    "width": 1280,
-  },
-  "workflow": {
-    "1": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
-      },
-    },
-    "10": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/film-x/assets/locations/trench.png",
-      },
-    },
-    "11": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/film-x/assets/characters/karl.png",
-      },
-    },
-    "12": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 42,
-      },
-    },
-    "13": {
-      "_meta": {
-        "title": "ModelAttentionBackend",
-      },
-      "class_type": "ModelAttentionBackend",
-      "inputs": {
-        "attention": "comfy kitchen attention",
-        "model": [
-          "3",
-          0,
-        ],
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "9",
-          0,
-        ],
-        "model": [
-          "13",
-          0,
-        ],
-      },
-    },
-    "15": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "16": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 1,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 8,
-      },
-    },
-    "17": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "14",
-          0,
-        ],
-        "latent_image": [
-          "9",
-          1,
-        ],
-        "noise": [
-          "12",
-          0,
-        ],
-        "sampler": [
-          "15",
-          0,
-        ],
-        "sigmas": [
-          "16",
-          0,
-        ],
-      },
-    },
-    "18": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "17",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "LTXVSeparateAVLatent",
-      },
-      "class_type": "LTXVSeparateAVLatent",
-      "inputs": {
-        "av_latent": [
-          "18",
-          0,
-        ],
-      },
-    },
-    "2": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
-      },
-    },
-    "20": {
-      "_meta": {
-        "title": "MinimaxH3LatentUpscaler3D",
-      },
-      "class_type": "MinimaxH3LatentUpscaler3D",
-      "inputs": {
-        "align": 32,
-        "device": "cuda",
-        "enable_temporal_chunking": true,
-        "force_unload": true,
-        "latent": [
-          "19",
-          0,
-        ],
-        "mode": "target dimensions",
-        "mode.height": 720,
-        "mode.width": 1280,
-        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
-        "precision": "bf16",
-      },
-    },
-    "21": {
-      "_meta": {
-        "title": "LTXVConcatAVLatent",
-      },
-      "class_type": "LTXVConcatAVLatent",
-      "inputs": {
-        "audio_latent": [
-          "19",
-          1,
-        ],
-        "video_latent": [
-          "20",
-          0,
-        ],
-      },
-    },
-    "22": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 43,
-      },
-    },
-    "23": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "9",
-          0,
-        ],
-        "model": [
-          "13",
-          0,
-        ],
-      },
-    },
-    "24": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "25": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 0.2,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 2,
-      },
-    },
-    "26": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "23",
-          0,
-        ],
-        "latent_image": [
-          "21",
-          0,
-        ],
-        "noise": [
-          "22",
-          0,
-        ],
-        "sampler": [
-          "24",
-          0,
-        ],
-        "sigmas": [
-          "25",
-          0,
-        ],
-      },
-    },
-    "27": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "26",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "28": {
-      "_meta": {
-        "title": "VAEDecode",
-      },
-      "class_type": "VAEDecode",
-      "inputs": {
-        "samples": [
-          "27",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "VAEDecodeAudio",
-      },
-      "class_type": "VAEDecodeAudio",
-      "inputs": {
-        "samples": [
-          "27",
-          0,
-        ],
-        "vae": [
-          "2",
-          0,
-        ],
-      },
-    },
-    "3": {
-      "_meta": {
-        "title": "UNETLoader",
-      },
-      "class_type": "UNETLoader",
-      "inputs": {
-        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
-        "weight_dtype": "default",
-      },
-    },
-    "30": {
-      "_meta": {
-        "title": "VHS_VideoCombine",
-      },
-      "class_type": "VHS_VideoCombine",
-      "inputs": {
-        "audio": [
-          "29",
-          0,
-        ],
-        "crf": 19,
-        "filename_prefix": "fs/film-x/videos/clip-003",
-        "format": "video/h264-mp4",
-        "frame_rate": 24,
-        "images": [
-          "28",
-          0,
-        ],
-        "loop_count": 0,
-        "pingpong": false,
-        "pix_fmt": "yuv420p",
-        "save_metadata": true,
-        "save_output": true,
-        "trim_to_audio": false,
-      },
-    },
-    "4": {
-      "_meta": {
-        "title": "CLIPLoader",
-      },
-      "class_type": "CLIPLoader",
-      "inputs": {
-        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-        "device": "default",
-        "type": "minimax",
-      },
-    },
-    "5": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
-      },
-    },
-    "6": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 107,
-      },
-    },
-    "7": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 640,
-      },
-    },
-    "8": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 352,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "MiniMaxH3ReferenceToVideo",
-      },
-      "class_type": "MiniMaxH3ReferenceToVideo",
-      "inputs": {
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "clip": [
-          "4",
-          0,
-        ],
-        "height": [
-          "8",
-          0,
-        ],
-        "length": [
-          "6",
-          0,
-        ],
-        "prompt": [
-          "5",
-          0,
-        ],
-        "ref_image_size": "match",
-        "ref_images.ref_image_0": [
-          "10",
-          0,
-        ],
-        "ref_images.ref_image_1": [
-          "11",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-        "width": [
-          "7",
-          0,
-        ],
-      },
-    },
-  },
-}
-`;
-
-exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: portrait 1`] = `
-{
-  "size": {
-    "height": 1920,
-    "width": 1088,
-  },
-  "workflow": {
-    "1": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
-      },
-    },
-    "10": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/film-x/assets/locations/trench.png",
-      },
-    },
-    "11": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/film-x/assets/characters/karl.png",
-      },
-    },
-    "12": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 42,
-      },
-    },
-    "13": {
-      "_meta": {
-        "title": "ModelAttentionBackend",
-      },
-      "class_type": "ModelAttentionBackend",
-      "inputs": {
-        "attention": "comfy kitchen attention",
-        "model": [
-          "3",
-          0,
-        ],
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "9",
-          0,
-        ],
-        "model": [
-          "13",
-          0,
-        ],
-      },
-    },
-    "15": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "16": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 1,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 8,
-      },
-    },
-    "17": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "14",
-          0,
-        ],
-        "latent_image": [
-          "9",
-          1,
-        ],
-        "noise": [
-          "12",
-          0,
-        ],
-        "sampler": [
-          "15",
-          0,
-        ],
-        "sigmas": [
-          "16",
-          0,
-        ],
-      },
-    },
-    "18": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "17",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "LTXVSeparateAVLatent",
-      },
-      "class_type": "LTXVSeparateAVLatent",
-      "inputs": {
-        "av_latent": [
-          "18",
-          0,
-        ],
-      },
-    },
-    "2": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
-      },
-    },
-    "20": {
-      "_meta": {
-        "title": "MinimaxH3LatentUpscaler3D",
-      },
-      "class_type": "MinimaxH3LatentUpscaler3D",
-      "inputs": {
-        "align": 32,
-        "device": "cuda",
-        "enable_temporal_chunking": true,
-        "force_unload": true,
-        "latent": [
-          "19",
-          0,
-        ],
-        "mode": "target dimensions",
-        "mode.height": 1920,
-        "mode.width": 1088,
-        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
-        "precision": "bf16",
-      },
-    },
-    "21": {
-      "_meta": {
-        "title": "LTXVConcatAVLatent",
-      },
-      "class_type": "LTXVConcatAVLatent",
-      "inputs": {
-        "audio_latent": [
-          "19",
-          1,
-        ],
-        "video_latent": [
-          "20",
-          0,
-        ],
-      },
-    },
-    "22": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 43,
-      },
-    },
-    "23": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "9",
-          0,
-        ],
-        "model": [
-          "13",
-          0,
-        ],
-      },
-    },
-    "24": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "25": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 0.2,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 2,
-      },
-    },
-    "26": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "23",
-          0,
-        ],
-        "latent_image": [
-          "21",
-          0,
-        ],
-        "noise": [
-          "22",
-          0,
-        ],
-        "sampler": [
-          "24",
-          0,
-        ],
-        "sigmas": [
-          "25",
-          0,
-        ],
-      },
-    },
-    "27": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "26",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "28": {
-      "_meta": {
-        "title": "VAEDecode",
-      },
-      "class_type": "VAEDecode",
-      "inputs": {
-        "samples": [
-          "27",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "VAEDecodeAudio",
-      },
-      "class_type": "VAEDecodeAudio",
-      "inputs": {
-        "samples": [
-          "27",
-          0,
-        ],
-        "vae": [
-          "2",
-          0,
-        ],
-      },
-    },
-    "3": {
-      "_meta": {
-        "title": "UNETLoader",
-      },
-      "class_type": "UNETLoader",
-      "inputs": {
-        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
-        "weight_dtype": "default",
-      },
-    },
-    "30": {
-      "_meta": {
-        "title": "VHS_VideoCombine",
-      },
-      "class_type": "VHS_VideoCombine",
-      "inputs": {
-        "audio": [
-          "29",
-          0,
-        ],
-        "crf": 19,
-        "filename_prefix": "fs/film-x/videos/clip-003",
-        "format": "video/h264-mp4",
-        "frame_rate": 24,
-        "images": [
-          "28",
-          0,
-        ],
-        "loop_count": 0,
-        "pingpong": false,
-        "pix_fmt": "yuv420p",
-        "save_metadata": true,
-        "save_output": true,
-        "trim_to_audio": false,
-      },
-    },
-    "4": {
-      "_meta": {
-        "title": "CLIPLoader",
-      },
-      "class_type": "CLIPLoader",
-      "inputs": {
-        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-        "device": "default",
-        "type": "minimax",
-      },
-    },
-    "5": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
-      },
-    },
-    "6": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 107,
-      },
-    },
-    "7": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 544,
-      },
-    },
-    "8": {
-      "_meta": {
-        "title": "PrimitiveInt",
-      },
-      "class_type": "PrimitiveInt",
-      "inputs": {
-        "value": 960,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "MiniMaxH3ReferenceToVideo",
-      },
-      "class_type": "MiniMaxH3ReferenceToVideo",
-      "inputs": {
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "clip": [
-          "4",
-          0,
-        ],
-        "height": [
-          "8",
-          0,
-        ],
-        "length": [
-          "6",
-          0,
-        ],
-        "prompt": [
-          "5",
-          0,
-        ],
-        "ref_image_size": "match",
-        "ref_images.ref_image_0": [
-          "10",
-          0,
-        ],
-        "ref_images.ref_image_1": [
-          "11",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-        "width": [
-          "7",
-          0,
-        ],
-      },
-    },
-  },
-}
-`;
-
-exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: context frames 1`] = `
-{
-  "size": {
-    "height": 1088,
-    "width": 1920,
-  },
-  "workflow": {
-    "1": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
-      },
-    },
-    "10": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/film-x/assets/locations/trench.png",
-      },
-    },
-    "11": {
-      "_meta": {
-        "title": "LoadImage",
-      },
-      "class_type": "LoadImage",
-      "inputs": {
-        "image": "fs/film-x/assets/characters/karl.png",
-      },
-    },
-    "12": {
-      "_meta": {
-        "title": "VHS_LoadVideo",
-      },
-      "class_type": "VHS_LoadVideo",
-      "inputs": {
-        "custom_height": 0,
-        "custom_width": 0,
-        "force_rate": 0,
-        "frame_load_cap": 0,
-        "select_every_nth": 1,
-        "skip_first_frames": 0,
-        "video": "fs/film-x/assets/clips/clip-002_tail22.mp4",
-      },
-    },
-    "13": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 42,
-      },
-    },
-    "14": {
-      "_meta": {
-        "title": "ModelAttentionBackend",
-      },
-      "class_type": "ModelAttentionBackend",
-      "inputs": {
-        "attention": "comfy kitchen attention",
-        "model": [
-          "3",
-          0,
-        ],
-      },
-    },
-    "15": {
-      "_meta": {
-        "title": "MiniMaxH3AddGuide",
-      },
-      "class_type": "MiniMaxH3AddGuide",
-      "inputs": {
-        "frame_idx": 0,
-        "image": [
-          "12",
-          0,
-        ],
-        "latent": [
-          "9",
-          1,
-        ],
-        "positive": [
-          "9",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "16": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "15",
-          0,
-        ],
-        "model": [
-          "14",
-          0,
-        ],
-      },
-    },
-    "17": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "18": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 1,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 8,
-      },
-    },
-    "19": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "16",
-          0,
-        ],
-        "latent_image": [
-          "9",
-          1,
-        ],
-        "noise": [
-          "13",
-          0,
-        ],
-        "sampler": [
-          "17",
-          0,
-        ],
-        "sigmas": [
-          "18",
-          0,
-        ],
-      },
-    },
-    "2": {
-      "_meta": {
-        "title": "VAELoader",
-      },
-      "class_type": "VAELoader",
-      "inputs": {
-        "vae_name": "minimax_h3_audio_vae_fp32.safetensors",
-      },
-    },
-    "20": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "19",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "21": {
-      "_meta": {
-        "title": "LTXVSeparateAVLatent",
-      },
-      "class_type": "LTXVSeparateAVLatent",
-      "inputs": {
-        "av_latent": [
-          "20",
-          0,
-        ],
-      },
-    },
-    "22": {
-      "_meta": {
-        "title": "MinimaxH3LatentUpscaler3D",
-      },
-      "class_type": "MinimaxH3LatentUpscaler3D",
-      "inputs": {
-        "align": 32,
-        "device": "cuda",
-        "enable_temporal_chunking": true,
-        "force_unload": true,
-        "latent": [
-          "21",
-          0,
-        ],
-        "mode": "target dimensions",
-        "mode.height": 1088,
-        "mode.width": 1920,
-        "model_name": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
-        "precision": "bf16",
-      },
-    },
-    "23": {
-      "_meta": {
-        "title": "LTXVConcatAVLatent",
-      },
-      "class_type": "LTXVConcatAVLatent",
-      "inputs": {
-        "audio_latent": [
-          "21",
-          1,
-        ],
-        "video_latent": [
-          "22",
-          0,
-        ],
-      },
-    },
-    "24": {
-      "_meta": {
-        "title": "RandomNoise",
-      },
-      "class_type": "RandomNoise",
-      "inputs": {
-        "noise_seed": 43,
-      },
-    },
-    "25": {
-      "_meta": {
-        "title": "BasicGuider",
-      },
-      "class_type": "BasicGuider",
-      "inputs": {
-        "conditioning": [
-          "9",
-          0,
-        ],
-        "model": [
-          "14",
-          0,
-        ],
-      },
-    },
-    "26": {
-      "_meta": {
-        "title": "KSamplerSelect",
-      },
-      "class_type": "KSamplerSelect",
-      "inputs": {
-        "sampler_name": "euler",
-      },
-    },
-    "27": {
-      "_meta": {
-        "title": "BasicScheduler",
-      },
-      "class_type": "BasicScheduler",
-      "inputs": {
-        "denoise": 0.2,
-        "model": [
-          "3",
-          0,
-        ],
-        "scheduler": "beta57",
-        "steps": 2,
-      },
-    },
-    "28": {
-      "_meta": {
-        "title": "SamplerCustomAdvanced",
-      },
-      "class_type": "SamplerCustomAdvanced",
-      "inputs": {
-        "guider": [
-          "25",
-          0,
-        ],
-        "latent_image": [
-          "23",
-          0,
-        ],
-        "noise": [
-          "24",
-          0,
-        ],
-        "sampler": [
-          "26",
-          0,
-        ],
-        "sigmas": [
-          "27",
-          0,
-        ],
-      },
-    },
-    "29": {
-      "_meta": {
-        "title": "VRAMCleanup",
-      },
-      "class_type": "VRAMCleanup",
-      "inputs": {
-        "anything": [
-          "28",
-          0,
-        ],
-        "offload_cache": false,
-        "offload_model": true,
-      },
-    },
-    "3": {
-      "_meta": {
-        "title": "UNETLoader",
-      },
-      "class_type": "UNETLoader",
-      "inputs": {
-        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
-        "weight_dtype": "default",
-      },
-    },
-    "30": {
-      "_meta": {
-        "title": "VAEDecode",
-      },
-      "class_type": "VAEDecode",
-      "inputs": {
-        "samples": [
-          "29",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-      },
-    },
-    "31": {
-      "_meta": {
-        "title": "VAEDecodeAudio",
-      },
-      "class_type": "VAEDecodeAudio",
-      "inputs": {
-        "samples": [
-          "29",
-          0,
-        ],
-        "vae": [
-          "2",
-          0,
-        ],
-      },
-    },
-    "32": {
-      "_meta": {
-        "title": "VHS_VideoCombine",
-      },
-      "class_type": "VHS_VideoCombine",
-      "inputs": {
-        "audio": [
-          "31",
-          0,
-        ],
-        "crf": 19,
-        "filename_prefix": "fs/film-x/videos/clip-003",
-        "format": "video/h264-mp4",
-        "frame_rate": 24,
-        "images": [
-          "30",
-          0,
-        ],
-        "loop_count": 0,
-        "pingpong": false,
-        "pix_fmt": "yuv420p",
-        "save_metadata": true,
-        "save_output": true,
-        "trim_to_audio": false,
-      },
-    },
-    "4": {
-      "_meta": {
-        "title": "CLIPLoader",
-      },
-      "class_type": "CLIPLoader",
-      "inputs": {
-        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-        "device": "default",
-        "type": "minimax",
-      },
-    },
-    "5": {
-      "_meta": {
-        "title": "PrimitiveStringMultiline",
-      },
-      "class_type": "PrimitiveStringMultiline",
-      "inputs": {
-        "value": "<Subject 1> is the trench. <Subject 2> (S1) says in a low voice, <d>[German] Bleib unten.</d>",
-      },
-    },
-    "6": {
       "_meta": {
         "title": "PrimitiveInt",
       },
@@ -31505,7 +31690,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         "value": 141,
       },
     },
-    "7": {
+    "8": {
       "_meta": {
         "title": "PrimitiveInt",
       },
@@ -31514,58 +31699,13 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
         "value": 960,
       },
     },
-    "8": {
+    "9": {
       "_meta": {
         "title": "PrimitiveInt",
       },
       "class_type": "PrimitiveInt",
       "inputs": {
         "value": 544,
-      },
-    },
-    "9": {
-      "_meta": {
-        "title": "MiniMaxH3ReferenceToVideo",
-      },
-      "class_type": "MiniMaxH3ReferenceToVideo",
-      "inputs": {
-        "audio_vae": [
-          "2",
-          0,
-        ],
-        "clip": [
-          "4",
-          0,
-        ],
-        "height": [
-          "8",
-          0,
-        ],
-        "length": [
-          "6",
-          0,
-        ],
-        "prompt": [
-          "5",
-          0,
-        ],
-        "ref_image_size": "match",
-        "ref_images.ref_image_0": [
-          "10",
-          0,
-        ],
-        "ref_images.ref_image_1": [
-          "11",
-          0,
-        ],
-        "vae": [
-          "1",
-          0,
-        ],
-        "width": [
-          "7",
-          0,
-        ],
       },
     },
   },
