@@ -95,16 +95,26 @@ export function warnUnknownKeys(obj: object, allowed: string[], where: string, p
     if (unknown.length) log.warn(`${where}: unknown field(s) ${prefix}${unknown.join(`, ${prefix}`)} - ignored`)
 }
 
-/** The "FEVERSLOP" ASCII logo, printed once at the start of the interactive CLIs - silent when not in a terminal. */
-export function printBanner() {
+/**
+ * The "FEVERSLOP" ASCII logo, printed once at the start of the interactive CLIs and the editor - silent when not in a
+ * terminal. `title` names the tool under the logo ("EDITOR"); the letters glow from yellow down to magenta, like a fever.
+ */
+export function printBanner(title?: string) {
     if (!process.stdout.isTTY || quiet || json || bannerPrinted) return
     bannerPrinted = true
-    print(bannerLines(process.stdout.columns || 100).map(line => styles.name(line)).join('\n'), true)
+    const lines = bannerLines(process.stdout.columns || 100, title)
+    const heat = [style(['bold', 'yellowBright']), style(['bold', 'yellow']), style(['bold', 'redBright']), style(['bold', 'red']), style(['bold', 'magentaBright']), style(['bold', 'magenta'])]
+    let row = 0
+    const logo = lines.slice(0, -1).map(line => line ? heat[row++ % heat.length]!(line) : (row = 0, line))
+    print(['', ...logo, styles.name(lines.at(-1)!), ''].join('\n'), true)
 }
 let bannerPrinted = false
 
-/** A six-line ASCII wordmark, with a stacked version for ordinary terminals. */
-export function bannerLines(width: number): string[] {
+/**
+ * A six-line ASCII wordmark, with a stacked version for ordinary terminals, and one line under it: the tool's `title`
+ * framed, or the tagline. With a title the wordmark says "FEVERSLOP TS" where it fits.
+ */
+export function bannerLines(width: number, title?: string): string[] {
     const letters: Record<string, string[]> = {
         F: [' ______', '|  ____|', '| |__  ', '|  __| ', '| |    ', '|_|    '],
         E: [' ______', '|  ____|', '| |__  ', '|  __| ', '| |____', '|______|'],
@@ -113,17 +123,27 @@ export function bannerLines(width: number): string[] {
         S: ['  _____', ' / ____|', '| (___ ', ' \\___ \\', ' ____) |', '|_____/'],
         L: [' _     ', '| |    ', '| |    ', '| |    ', '| |____', '|______|'],
         O: ['  ____ ', ' / __ \\', '| |  | |', '| |  | |', '| |__| |', ' \\____/'],
-        P: [' _____ ', '|  __ \\', '| |__) |', '|  ___/', '| |    ', '|_|    '],
+        P: [' _____ ', '|  __ \\','| |__) |', '|  ___/', '| |    ', '|_|    '],
+        T: [' _______ ', '|__   __|', '   | |   ', '   | |   ', '   | |   ', '   |_|   '],
+        ' ': ['  ', '  ', '  ', '  ', '  ', '  '],
     }
     const word = (text: string) => Array.from({length: 6}, (_, row) => [...text].map(c => {
         const glyph = letters[c]!
         return glyph[row]!.padEnd(Math.max(...glyph.map(line => line.length)))
     }).join(' ').trimEnd())
-    const wide = word('FEVERSLOP')
-    const stacked = [...word('FEVER'), '', ...word('SLOP')]
-    const lines = Math.max(...wide.map(l => l.length)) <= width ? wide
-        : Math.max(...stacked.map(l => l.length)) <= width ? stacked : ['FEVERSLOP']
-    return [...lines, 'STORIES INTO MOTION / TS VIDEO CLI'].map(line => fitLine(line, width))
+    const widest = (lines: string[]) => Math.max(...lines.map(l => l.length))
+    const choices = [
+        ...(title ? [word('FEVERSLOP TS'), [...word('FEVER'), '', ...word('SLOP TS')]] : []),
+        word('FEVERSLOP'), [...word('FEVER'), '', ...word('SLOP')],
+    ]
+    const lines = choices.find(lines => widest(lines) <= width) ?? [title ? 'FEVERSLOP TS' : 'FEVERSLOP']
+    // the title spaced out and framed to the width of the wordmark: ━━━━  E D I T O R  ━━━━
+    const framed = (text: string) => {
+        const label = `  ${[...text.toUpperCase()].join(' ')}  `
+        const side = Math.max(2, Math.floor((widest(lines) - label.length) / 2))
+        return `${'━'.repeat(side)}${label}${'━'.repeat(side)}`
+    }
+    return [...lines, title ? framed(title) : 'STORIES INTO MOTION / TS VIDEO CLI'].map(line => fitLine(line, width))
 }
 
 /** Clip by terminal cells, not UTF-16 offsets (emoji and CJK can use two cells). */

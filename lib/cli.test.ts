@@ -58,6 +58,15 @@ test('banner and truncation fit narrow, wide and Unicode terminals', () => {
     expect(bannerLines(20)[0]).toBe('FEVERSLOP')
 })
 
+test('a banner with a title says FEVERSLOP TS where it fits, and frames the title under it', () => {
+    for (const width of [1, 20, 40, 60, 80, 120]) expect(bannerLines(width, 'Editor').every(line => Bun.stringWidth(line) <= width)).toBe(true)
+    const wide = bannerLines(120, 'Editor')
+    expect(wide.length).toBe(7)
+    expect(wide.at(-1)).toContain('E D I T O R')
+    expect(wide[1]!.length).toBeGreaterThan(bannerLines(120)[1]!.length)
+    expect(bannerLines(20, 'Editor')[0]).toBe('FEVERSLOP TS')
+})
+
 test('quiet keeps prompt instructions and diagnostics; cancellation has no success footer', () => {
     for (const quiet of [false, true]) {
     const child = Bun.spawnSync(['bun', '-e', `

@@ -2,7 +2,8 @@ import {helpDetails} from "./cli-help.ts";
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts';
 
 // Shared options are consumed before each tool's own parser. Never inspect values after `--`.
-const commands: Record<string, {args: string, description: string, json?: boolean, banner?: boolean}> = {
+// banner: the logo at the start - true for the plain one, a string for one with the tool's name under it
+const commands: Record<string, {args: string, description: string, json?: boolean, banner?: boolean | string}> = {
     plan: {args: '[project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001] [--again] [--preview] [--retake=slot-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--refresh=pictures,clips] [--strict] [--review] [--until=story|cast|look] [--dry-run] [--show=story,cast,clips] [--export=mlt,openshot|all] [--gallery] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--llm-parallel=N] [--comfy=URL] [--legacy-moments] [--debug-audio]', description: 'Plan and render a music video; existing steps are reused.'},
     film: {args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]', description: 'Plan and render a film.'},
     setup: {args: '[llm|llm-model|vision|comfy|show]', description: 'Configure servers, or show the effective settings.', banner: true},
@@ -34,7 +35,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     stats: {args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]', description: 'Compare measured render and LLM performance.', json: true},
     refinish: {args: '<id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001] [--again] [--comfy=URL]', description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.'},
     'add-view': {args: '<film-id> <location-id> --name=<where the camera is> --shows=<what is seen> [--from=<view>] [--comfy=URL]', description: 'Render one more view of a place of a film, from its anchor or another view; one that looks back the other way in two moves.'},
-    editor: {args: '[project-id] [--film] [--port=4173]', description: 'Open the workspace in the browser: all projects, the whole video on one timeline, renders, library and casting.'},
+    editor: {args: '[project-id] [--film] [--port=4173]', description: 'Open the workspace in the browser: all projects, the whole video on one timeline, renders, library and casting.', banner: 'Editor'},
     'client:build': {args: '', description: 'Build the Vue workspace client and install its static files. Stop the preview editor before updating its build.'},
     typecheck: {args: '', description: 'Check project TypeScript types.'},
     'styles:doc': {args: '', description: 'Regenerate the style reference document.'},
@@ -68,7 +69,7 @@ export function cli(command: string) {
     setOutput({verbose: process.env.FEVERSLOP_VERBOSE === '1'})
     process.on('unhandledRejection', failRun)
     process.on('uncaughtException', failRun)
-    if (spec.banner || options.includes('--banner')) printBanner()
+    if (spec.banner || options.includes('--banner')) printBanner(typeof spec.banner === 'string' ? spec.banner : undefined)
     const context = filtered[0] && !filtered[0].startsWith('-') ? filtered[0] : ''
     const mode = filtered.find(a => /^--(render|dry-run|gallery|apply)(=|$)/.test(a))
     log.info(`${styles.name(command.toUpperCase())}${context ? ` · ${context}` : ''}${mode ? ` · ${mode.slice(2)}` : ''}`)
