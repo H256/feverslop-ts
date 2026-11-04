@@ -294,4 +294,21 @@ test('timeline: every clip can be rendered again in one go, asked first', async 
   await expect(page.getByText('2 marked')).toBeVisible()
   await dialog(page).getByRole('button', {name: 'Render them'}).click()
   await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-1', 'clip-2'], again: true}, servers: ['gpu']})
+
+test('timing: a clip cut inside a word is cleared with one click, and the next problem key goes to the line that wants a look', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.locator('.tline-row').first().click()
+  // moved by 3.5 s: the cut at 5 s falls into the second word
+  for (let n = 0; n < 7; n++) await page.keyboard.press('Shift+ArrowRight')
+  await expect(page.locator('.warn').first()).toContainText('A clip cut falls into "')
+  await page.getByRole('button', {name: 'Clear the cut'}).click()
+  await expect(page.locator('.warn', {hasText: 'A clip cut falls'})).toHaveCount(0)
+  // one undo brings the cut back
+  await page.getByRole('button', {name: 'Undo'}).click()
+  await expect(page.locator('.warn', {hasText: 'A clip cut falls'}).first()).toBeVisible()
+  // the key N picks the next line that wants a look; the button says how many there are
+  await expect(page.getByRole('button', {name: /Next problem \(\d+\)/})).toBeVisible()
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('n')
+  await expect(page.locator('.tedit-head b')).toBeVisible()
 })

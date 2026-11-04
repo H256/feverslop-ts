@@ -3,7 +3,7 @@ import type {EditorClip, EditorProject, ProjectListing, SingingLine, SingingView
 import {bestSource, chain, fileOf, reviewList, sourceOptions, stateOf} from '../../src/features/timeline/clips'
 import {filterOf, groupProjects, matchesState, queryOf} from '../../src/features/projects/listing'
 import {changeOf, changesOf, kept, partsOfView, sectionsOf, spanOf, splitAt, type Part} from '../../src/features/singers/parts'
-import {crossingOf, fixWords, movedWord, timingChanges, MIN_WORD} from '../../src/features/timing/words'
+import {clearedCut, crossingOf, fixWords, movedWord, timingChanges, MIN_WORD} from '../../src/features/timing/words'
 import {stagesBetween} from '../../src/features/plan/stages'
 import {clock} from '../../src/lib/format'
 
@@ -79,6 +79,24 @@ describe('the timing of the words', () => {
     const changes = timingChanges(view, [line], () => words.map(w => ({...w, start: w.start + 0.1, end: w.end + 0.1})))
     expect(changes.replanned).toEqual(['b1'])
     expect(changes.clips).toEqual(['c1'])
+  })
+})
+
+describe('a clip cut inside a word', () => {
+  const sung = (...spans: [number, number][]) => spans.map(([start, end], n) => ({text: 'w' + n, start, end}))
+  const view = {duration: 10, cuts: [{id: 'c1', start: 0, end: 5}, {id: 'c2', start: 5, end: 10}]} as TimingView
+  test('the shorter side is cut off the word, so that the cut is gone', () => {
+    const early = clearedCut(sung([1, 2], [4.5, 6]), 1, 5, 10)
+    expect(early[1]).toEqual({text: 'w1', start: 5, end: 6})
+    const late = clearedCut(sung([1, 2], [3, 5.2]), 1, 5, 10)
+    expect(late[1]).toEqual({text: 'w1', start: 3, end: 5})
+    expect(crossingOf(view, early)).toEqual([])
+    expect(crossingOf(view, late)).toEqual([])
+  })
+  test('a sliver of a word is not what stays: the word is moved over the cut as it is', () => {
+    const moved = clearedCut(sung([4.97, 5.47]), 0, 5, 10)
+    expect(moved[0]!.end - moved[0]!.start).toBeCloseTo(0.5)
+    expect(crossingOf(view, moved)).toEqual([])
   })
 })
 
