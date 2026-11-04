@@ -26514,7 +26514,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: plain 1`]
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "25": {
@@ -27123,7 +27123,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: pinned st
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "27": {
@@ -27763,7 +27763,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: context f
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "27": {
@@ -28338,7 +28338,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: portrait,
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "25": {
@@ -28891,7 +28891,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-prism-2pass: fixed siz
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "23": {
@@ -29311,7 +29311,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: plai
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "17": {
@@ -29796,7 +29796,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: pinn
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "19": {
@@ -30272,7 +30272,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: fixe
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "17": {
@@ -30723,7 +30723,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: port
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "17": {
@@ -31214,7 +31214,7 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
           0,
         ],
         "scheduler": "beta57",
-        "steps": 8,
+        "steps": 4,
       },
     },
     "19": {
