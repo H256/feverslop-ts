@@ -77,6 +77,29 @@ describe('applyTiming - words moved by hand', () => {
     })
 })
 
+describe('applyTiming - a line left out', () => {
+    test('left out, no clip sings it and its beat is planned again; sung again, it is back where it was', () => {
+        const data = project()
+        const result = applyTiming(data, {lines: [{line: 1, off: true}]}, requests)
+        expect(result).toEqual({changed: [1], slots: ['slot-002'], replanned: ['b2'], staleClips: ['slot-002'], crossing: []})
+        expect(data.lyricsTiming!.lines[1]!.off).toBe(true)
+        expect(data.lyricsTiming!.lines[1]!.words.map(w => w.start)).toEqual([6, 6.5])
+        expect(data.timeline!.slots[1]!.vocals).toEqual([])
+        expect(timingView('/nowhere', data, requests)!.lines[1]!.off).toBe(true)
+
+        const back = applyTiming(data, {lines: [{line: 1, off: false}]}, requests)
+        expect(back.changed).toEqual([1])
+        expect(data.lyricsTiming!.lines[1]!.off).toBeUndefined()
+        expect(data.timeline!.slots[1]!.vocals!.map(v => v.line)).toEqual([1])
+    })
+
+    test('left out as it is, or neither words nor off: nothing changes, or it is refused', () => {
+        const data = project()
+        expect(applyTiming(data, {lines: [{line: 1, off: false}]}, requests).changed).toEqual([])
+        expect(() => applyTiming(data, {lines: [{line: 1}]}, requests)).toThrow('neither words nor "off"')
+    })
+})
+
 describe('timingView', () => {
     test('per line its words, whether it is a guess and the beats it is sung in; the cuts with their beats', () => {
         const view = timingView('/nowhere', project(), requests)!

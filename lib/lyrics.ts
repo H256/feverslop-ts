@@ -420,13 +420,16 @@ export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: L
  * The words sung inside a clip, grouped per line. A word belongs to the clip whose frames contain its start
  * (lib/frames.ts), times are relative to the clip's first frame.
  */
+/** The timing without the lines left out on the Timing page (`off`): what is sung. */
+export const sungOnly = (timing: LyricsTiming): LyricsTiming => timing.lines.some(l => l.off) ? {...timing, lines: timing.lines.filter(l => !l.off)} : timing
+
 export function slotVocals(slot: Pick<Slot, 'start' | 'end'>, timing: LyricsTiming): SlotVocal[] {
     const first = frameAt(slot.start)
     const last = frameAt(slot.end)
     const origin = secondsAt(first)
     const relative = (w: TimedWord) => ({text: w.text, start: round(w.start - origin), end: round(w.end - origin)})
 
-    return timing.lines.flatMap(line => {
+    return sungOnly(timing).lines.flatMap(line => {
         const words = line.words.filter(w => w.end - w.start >= MIN_WORD_SEC && frameAt(w.start) >= first && frameAt(w.start) < last).map(relative)
         return words.length
             ? [{line: line.line, text: words.map(w => w.text).join(' '), start: words[0]!.start, end: words.at(-1)!.end, words}]

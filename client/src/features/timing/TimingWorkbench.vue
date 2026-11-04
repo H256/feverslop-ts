@@ -39,7 +39,7 @@ const player = useSnippetPlayer(() => props.view.audio && mediaUrl(props.view.au
 const play = (from: number, to: number) => player.play('timing', from, to)
 
 // how early the first word of each line starts against its sound - as the words are now, so a line moved is measured again
-const leads = computed(() => new Map(props.view.lines.map(l => [l.line, props.peaks && !(l.unplaced && !draft.isChanged(l)) ? leadOf(draft.wordsOf(l), props.peaks) : 0])))
+const leads = computed(() => new Map(props.view.lines.map(l => [l.line, props.peaks && !l.off && !(l.unplaced && !draft.isChanged(l)) ? leadOf(draft.wordsOf(l), props.peaks) : 0])))
 const earlyLines = computed(() => new Map([...leads.value].filter(([, lead]) => lead >= EARLY_FROM)))
 const lead = computed(() => draft.line.value ? leads.value.get(draft.line.value.line) ?? 0 : 0)
 // the clips whose prompt still has the old times of a line: by line
@@ -49,7 +49,7 @@ const outdated = computed(() => {
   return found
 })
 // the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time
-const problems = computed(() => props.view.lines.filter(l => draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || (l.estimated && !draft.isChanged(l))))
+const problems = computed(() => props.view.lines.filter(l => !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || (l.estimated && !draft.isChanged(l)))))
 const nextProblem = (back = false) => {
   const all = problems.value
   if (!all.length) return toasts.show('Nothing left to look at.')
@@ -59,6 +59,16 @@ const nextProblem = (back = false) => {
   choose(found.line)
 }
 const tightenAll = () => { draft.tighten(earlyLines.value) }
+// a line left out (heard, but not sung) or sung again - saved at once, as bun run timing --off / --on does it
+const setOff = toasts.guard((line: TimingView['lines'][number], off: boolean) => saving.during(async () => {
+  const result = await api.saveTiming({lines: [{line: line.line, off}]})
+  await props.refresh()
+  saved.value = [
+    `"${line.text}" ${off ? 'is left out: no clip sings it' : 'is sung again'}.`,
+    result.slots.length && `${plural(result.slots.length, 'clip')} sing${result.slots.length === 1 ? 's' : ''} something else now.`,
+    result.replanned.length && `${result.replanned.join(', ')} ${result.replanned.length > 1 ? 'are' : 'is'} planned with the next plan run.`,
+  ].filter(Boolean).join(' ')
+}))
 
 const FILTERS = computed(() => [
   {value: 'all', label: 'All lines'},
@@ -133,6 +143,7 @@ onMounted(() => {
             <span class="muted num">{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span>
             <span v-if="draft.line.value.estimated && !draft.isChanged(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess">estimated</span>
             <span v-if="draft.isChanged(draft.line.value)" class="chip" style="color: var(--accent)">moved</span>
+            <span v-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
             <span v-if="lead >= EARLY_FROM" class="chip stale" title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it.">starts {{ lead.toFixed(1) }} s early</span>
             <span v-if="outdated.has(draft.line.value.line)" class="chip stale" :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`">prompt old</span>
           </template>
@@ -141,6 +152,7 @@ onMounted(() => {
           <button v-if="draft.line.value && lead >= EARLY_FROM" class="btn" title="Move the start of the first word to where the singing begins" @click="draft.tighten(new Map([[draft.line.value.line, lead]]))">Tighten the start</button>
           <button v-if="draft.line.value && draft.crossing(draft.line.value).length" class="btn" title="Cut the part on the shorter side off the word, so that it is sung in one clip" @click="draft.clearCuts(draft.line.value)">Clear the cut</button>
           <button v-if="problems.length" class="btn" :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`" @click="nextProblem()">Next problem ({{ problems.length }})</button>
+          <button v-if="draft.line.value" class="btn" :disabled="draft.edits.value.size > 0" :title="draft.edits.value.size ? 'Save the moved lines first' : draft.line.value.off ? 'The line is sung again: the clips it falls into sing it' : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'" @click="setOff(draft.line.value, !draft.line.value.off)">{{ draft.line.value.off ? 'Sing it again' : 'Leave the line out' }}</button>
           <button v-if="draft.line.value && draft.isChanged(draft.line.value)" class="btn" title="Back to the saved times" @click="draft.resetLine(draft.line.value)">Reset line</button>
           <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>

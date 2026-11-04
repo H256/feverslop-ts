@@ -134,14 +134,14 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
       <template v-for="line in seen" :key="line.line">
         <div v-if="own(line)" :class="['tline', {changed: draft.isChanged(line)}]" :style="box(draft.startOf(line), draft.endOf(line), 4)" title="Drag: move the whole line · ← → with the line chosen" @pointerdown="dragLine($event, line)">{{ line.text }}</div>
         <template v-for="(w, n) in draft.wordsOf(line)" :key="n">
-          <div v-if="own(line)" :class="['tword', {chosen: draft.word.value === n, crossed: crossed(line, n)}]" :style="box(w.start, w.end, 3)"
+          <div v-if="own(line)" :class="['tword', {chosen: draft.word.value === n, crossed: crossed(line, n), off: line.off}]" :style="box(w.start, w.end, 3)"
             :title="`${w.text} · ${clock(w.start)}–${clock(w.end)}${crossed(line, n) ? ' · a clip cut falls into this word' : ''}`"
             @pointerdown="dragWord($event, line, n)" @dblclick="playWord(line, n)">
             <span>{{ w.text }}</span>
             <i class="grip l" @pointerdown="dragWord($event, line, n, 'start')" />
             <i class="grip r" @pointerdown="dragWord($event, line, n, 'end')" />
           </div>
-          <div v-else class="tword other" :style="box(w.start, w.end, 3)" :title="`${w.text} · ${clock(w.start)}–${clock(w.end)}`" @click="draft.choose(line.line)"><span>{{ w.text }}</span></div>
+          <div v-else :class="['tword', 'other', {off: line.off}]" :style="box(w.start, w.end, 3)" :title="`${w.text} · ${clock(w.start)}–${clock(w.end)}`" @click="draft.choose(line.line)"><span>{{ w.text }}</span></div>
         </template>
       </template>
     </div>
