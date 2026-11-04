@@ -8,8 +8,8 @@ import {useProject} from '../project/session'
 import type {TimingDraft} from './useTimingDraft'
 
 /** How the editor is used, and what saving the moved lines does. */
-const props = defineProps<{view: TimingView, draft: TimingDraft, saved?: string}>()
-defineEmits<{save: [then: 'none' | 'plan'], cutAgain: [], plan: []}>()
+const props = defineProps<{view: TimingView, draft: TimingDraft, saved?: string, early: number}>()
+defineEmits<{save: [then: 'none' | 'plan'], cutAgain: [], plan: [], tighten: []}>()
 const {busy} = useProject()
 const c = computed(() => props.draft.changes.value)
 const KEYS = [
@@ -17,8 +17,16 @@ const KEYS = [
   {name: '← →', value: 'the line by 0.05 s, with Shift by 0.5 s - Tab picks a word, Esc the line again'},
   {name: 'Space', value: 'listen to the line or the word; a click on the waveform plays from there'},
   {name: '↑ ↓', value: 'the line before or after'},
+  {name: 'N', value: 'the next line that wants a look - a cut in a word, an early start, an old prompt, a guessed time; Shift+N goes back'},
   {name: 'Ctrl+Z', value: 'undo'},
 ]
+// the clips that do not know a move yet, with the line they are out of date for
+const outdated = computed(() => props.view.outdated.map(({clip, lines}) => {
+  const text = props.view.lines.find(l => l.line === lines[0])?.text ?? ''
+  return `${clip} (${text.length > 28 ? `${text.slice(0, 27)}…` : text}${lines.length > 1 ? ` and ${lines.length - 1} more` : ''})`
+}))
+// what a plan run does: the beats without a shot plan are planned again, so their clips get new shots, not only new times
+const replanned = computed(() => props.view.beats.filter(b => !b.planned).flatMap(b => b.clips))
 const effects = computed(() => {
   const {replanned, clips} = c.value
   return [
@@ -34,6 +42,14 @@ const effects = computed(() => {
     <h2>Timing of the lyrics</h2>
     <p class="muted" style="margin-bottom: 10px">Where the words are sung, from the alignment with the transcript. A line it barely found is only spread over the line: estimated.</p>
     <FactList :facts="KEYS" style="margin-bottom: 12px" />
+    <div v-if="early" class="note" style="margin-bottom: 10px">
+      {{ plural(early, 'line') }} start{{ early === 1 ? 's' : '' }} before the singing does: the box of the first word covers silence.
+      <div class="btn-row" style="margin-top: 6px"><button class="btn" @click="$emit('tighten')">{{ early === 1 ? 'Tighten the start' : `Tighten the ${early} starts` }}</button></div>
+    </div>
+    <div v-if="outdated.length" class="warn" style="margin-bottom: 10px">
+      {{ plural(outdated.length, 'clip') }} still {{ outdated.length === 1 ? 'has' : 'have' }} the old times of a moved line in {{ outdated.length === 1 ? 'its' : 'their' }} prompt: {{ outdated.join(', ') }}.
+      A plan run writes {{ outdated.length === 1 ? 'it' : 'them' }} again{{ replanned.length ? `, and with it the shots of ${plural(replanned.length, 'clip')} in ${plural(view.unplanned.length, 'beat')} (the language model, no GPU) - their prompts change beyond the times` : '' }}. Rendered videos stay as they are and count as stale after it.
+    </div>
     <PlanChanges
       :count="c.lines.length ? `${plural(c.lines.length, 'line')} moved` : ''" :effects="effects" :blocked="busy ? 'A run is going on' : ''" :saved="saved"
       :unplanned="view.unplanned" :busy="busy" idle="Move a line, and the clips it is sung in get its new times. The cut of the song stays."

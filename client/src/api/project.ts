@@ -1,5 +1,5 @@
 import type {
-  BookView, CastChange, CastingRedo, CastingView, CastResult, CastView, ClipVersionView, EditorFreshness, EditorOverride, EditorProject,
+  BookView, CastChange, ConfigChange, ConfigImpact, ConfigResult, ConfigView, CastingRedo, CastingView, CastResult, CastView, ClipVersionView, EditorFreshness, EditorOverride, EditorProject,
   EditorReference, Estimate, LookChange, LookResult, LookView, ProjectStatus, RunInfo, RunProgress, RunRequest, SingingChange,
   SingingResult, SingingView, StoryForCast, StoryResult, TimingChange, TimingResult, TimingView,
 } from '../../../shared/workspace'
@@ -39,6 +39,7 @@ export function projectApi(root: string) {
     cast: (signal?: AbortSignal) => get<{cast: CastView | null}>('cast', signal),
     book: (signal?: AbortSignal) => get<BookView>('book', signal),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),
+    config: (signal?: AbortSignal) => get<ConfigView>('config', signal),
 
     run: (action: RunRequest, servers?: string[]) => post<{run: RunInfo}>('run', {action, ...(servers ? {servers} : {})}),
     stop: () => post<{stopped: boolean}>('stop', {}),
@@ -54,6 +55,8 @@ export function projectApi(root: string) {
     dropStoryProposal: () => post<{dropped: true}>('book/drop-proposal', {}),
     saveStory: (text: string) => post<StoryResult>('book', {text}),
     saveLook: (change: LookChange) => post<LookResult>('look', change),
+    previewConfig: (change: ConfigChange) => post<ConfigImpact>('config', {change, dryRun: true}),
+    saveConfig: (change: ConfigChange) => post<ConfigResult>('config', {change}),
     saveTiming: (change: TimingChange) => post<TimingResult>('timing', change),
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
   }

@@ -260,6 +260,8 @@ export type TimingView = {
   cuts: {id: string, start: number, end: number, beat?: string}[],   // the clips of the song as the plan cut it
   beats: {id: string, planned: boolean, clips: string[]}[],
   unplanned: string[],
+  /** Clips whose request - the prompt - still has other vocals than the timing now says: a line moved since the last plan run. */
+  outdated: {clip: string, lines: number[]}[],
   audio?: Media,              // the vocals stem, else the song
 }
 export type TimingChange = {lines: {line: number, words: {start: number, end: number}[]}[]}
@@ -297,3 +299,30 @@ export type RunInfo = {
 }
 /** The server-sent events of a run: its log lines from a cursor on, and its state when it changes. */
 export type RunLines = {lines: string[], next: number}
+
+////////// THE SETTINGS OF A PROJECT (config.json)
+/** One setting of a project as the page edits it: what it is called, how it is chosen, and what it says. */
+export type SettingView = {
+    key: string, label: string, group: 'Workflows' | 'Size' | 'Continuing clips' | 'Seed and retries' | 'Final video',
+    /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a whole number */
+    control: 'select' | 'text' | 'number',
+    choices?: {value: unknown, label: string}[],
+    note: string,
+    value: unknown,       // what the project has now: its own, else the default
+    default: unknown,
+    own: boolean,         // written in config.json
+}
+export type ConfigView = {settings: SettingView[]}
+/** What to change: key to value; `null` takes a key back out of config.json, to its default. */
+export type ConfigChange = Record<string, unknown>
+export type ConfigImpact = {
+    /** What is wrong with the change, in the words of the loader: nothing is written then. */
+    problems: string[],
+    changed: string[],
+    /** Clips and pictures that are rendered now and would be made from another plan, so stale */
+    stale: {clips: string[], pictures: string[]},
+    rendered: {clips: number, pictures: number},
+    /** What the loader would warn about */
+    notes: string[],
+}
+export type ConfigResult = ConfigImpact & {written: boolean}

@@ -16,6 +16,7 @@ export const router = createRouter({
         {path: 'story', name: 'story', component: () => import('./features/story/StoryPage.vue')},
         {path: 'casting', name: 'casting', component: () => import('./features/casting/CastingPage.vue')},
         {path: 'look', name: 'look', component: () => import('./features/look/LookPage.vue')},
+        {path: 'settings', name: 'settings', component: () => import('./features/settings/SettingsPage.vue')},
         {path: 'references', name: 'references', component: () => import('./features/references/ReferencesPage.vue')},
         {path: 'singers', name: 'singers', component: () => import('./features/singers/SingersPage.vue')},
         {path: 'timing', name: 'timing', component: () => import('./features/timing/TimingPage.vue')},

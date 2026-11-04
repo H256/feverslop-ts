@@ -4,7 +4,7 @@ import {usePolling} from '../../composables/usePolling'
 import {plural} from '../../lib/format'
 import {useRunDock} from '../../services/run'
 import {useProject} from '../project/session'
-import {bestSource, flagged, sourceOptions, type Source} from './clips'
+import {bestSource, flagged, sourceOptions, stateOf, type Source} from './clips'
 import {usePlayback} from './usePlayback'
 
 export type Tab = 'prompt' | 'shots' | 'refs' | 'render' | 'versions'
@@ -110,6 +110,11 @@ export function createTimeline() {
   const markedClips = computed(() => project.value.clips.filter(c => marked.has(c.id)))
   const isFlagged = (clip: EditorClip) => flagged(clip, fresh.value)
   const markFlagged = () => { for (const c of project.value.clips.filter(isFlagged)) marked.add(c.id) }
+  /** Exactly the clips in this state marked: the ones that are marked already are let go. */
+  const markState = (state: 'stale' | 'missing' | 'all') => {
+    marked.clear()
+    for (const c of project.value.clips) if (state === 'all' || stateOf(c, fresh.value) === state) marked.add(c.id)
+  }
   function stepFlagged(direction: number) {
     const clips = project.value.clips.filter(isFlagged)
     if (!clips.length) return
@@ -134,7 +139,7 @@ export function createTimeline() {
   const dispose = () => { clearInterval(progressTimer); run.detail.value = '' }
   return {
     session, project, fresh, status, peaks, progress, playback, tab, marked, markedClips, onlyFlagged, versions, compared, helpOpen, peek,
-    loadAround, chooseSource, pickSource, forgetSource, holdSource, clickClip, isFlagged, markFlagged, stepFlagged, loadVersions, dispose,
+    loadAround, chooseSource, pickSource, forgetSource, holdSource, clickClip, isFlagged, markFlagged, markState, stepFlagged, loadVersions, dispose,
   }
 }
 export type Timeline = ReturnType<typeof createTimeline>

@@ -36,7 +36,7 @@ export function timelineContext(timeline: Timeline, actions: ClipActions, review
     // the page's own view
     tab: timeline.tab, marked: timeline.marked, onlyFlagged: timeline.onlyFlagged, peek: timeline.peek,
     // what can be asked for
-    clickClip: timeline.clickClip, isFlagged: timeline.isFlagged, markFlagged: timeline.markFlagged, stepFlagged: timeline.stepFlagged,
+    clickClip: timeline.clickClip, isFlagged: timeline.isFlagged, markFlagged: timeline.markFlagged, markState: timeline.markState, stepFlagged: timeline.stepFlagged,
     loadVersions: timeline.loadVersions, pickSource: timeline.pickSource,
     /** Old and new side by side. */
     compare: (what: Compared) => { timeline.compared.value = what },

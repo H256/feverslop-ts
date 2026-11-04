@@ -226,3 +226,90 @@ test('library: an asset asked for in the library starts nothing in the project o
   expect(reconnects).toEqual([])
   await expect(page.getByText('bun tools/create-asset.ts kael')).toHaveCount(0)
 })
+
+test('settings: a workflow chosen, the question says what it makes stale, and only the change is sent', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/settings`)
+  await expect(page.getByRole('navigation', {name: 'Project'}).getByRole('link', {name: 'Settings'})).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByLabel('Video workflow')).toHaveValue('h3-ref2video-2pass')
+  await expect(page.getByRole('button', {name: 'Save', exact: true})).toBeDisabled()
+  await page.getByLabel('Video workflow').selectOption('h3-ref2video-prism-2pass')
+  await expect(page.getByRole('button', {name: 'Save', exact: true})).toBeEnabled()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect(dialog(page)).toContainText('Video workflow: h3-ref2video-2pass → h3-ref2video-prism-2pass')
+  await expect(dialog(page)).toContainText('1 of 1 rendered clip would be made from something else then')
+  await dialog(page).getByRole('button', {name: 'Save it'}).click()
+  await expect.poll(() => posted.filter(p => p.path === 'config').map(p => p.body)).toEqual([
+    {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}, dryRun: true},
+    {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}},
+  ])
+})
+
+test('settings: a setting back to its default takes the key out of config.json; leaving with a change asks first', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/settings`)
+  await page.getByLabel('Video size').fill('-1')
+  await expect(page.getByLabel('Video size')).toHaveValue('-1')
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await dialog(page).getByRole('button', {name: 'Save it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'config' && !(p.body as {dryRun?: boolean}).dryRun)?.body).toEqual({change: {videoResolution: null}})
+  // saved and read again: only then is the form free, and a change of it is a new one
+  await expect(page.getByText('The settings are saved')).toBeVisible()
+  await page.getByLabel('Black or frozen retries').fill('2')
+  await page.getByRole('navigation', {name: 'Project'}).getByRole('link', {name: 'Timeline'}).click()
+  await expect(dialog(page)).toContainText('changes to the settings')
+})
+
+test('timing: a first word that starts before its singing is said, tightened with one click, and a clip that does not know the move is named', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  // the first word starts at 1 s, the singing at 1.4 s
+  await expect(page.getByText('starts 0.4 s early')).toBeVisible()
+  await expect(page.locator('.tline-row').first().getByText('early 0.4 s')).toBeVisible()
+  // the clip whose prompt has the old times of the line, with the line, and what a plan run does
+  await expect(page.locator('.detail')).toContainText('1 clip still has the old times of a moved line in its prompt: clip-1 (Hello night)')
+  await expect(page.locator('.tline-row').first().getByText('prompt old')).toBeVisible()
+  // the filters hold what is early, and what is old
+  await page.getByRole('button', {name: 'Early starts (1)'}).click()
+  await expect(page.locator('.tline-row')).toHaveCount(1)
+  await page.getByRole('button', {name: 'Prompt old (1)'}).click()
+  await expect(page.locator('.tline-row')).toHaveCount(1)
+  // tightened: the start is where the singing begins, the line is a moved one, and nothing is early any more
+  await page.getByRole('button', {name: 'Tighten the start', exact: true}).first().click()
+  await expect(page.getByText('starts 0.4 s early')).toHaveCount(0)
+  await expect(page.getByText('1 line moved')).toBeVisible()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.4, end: 2}, {start: 2, end: 3}]}]})
+})
+
+test('timeline: the clips that are not rendered are marked and rendered with one button, asked first', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Render missing (1)'}).click()
+  await expect(page.getByText('1 marked')).toBeVisible()
+  await expect(dialog(page)).toContainText('clip-2')
+  await dialog(page).getByRole('button', {name: 'Render them'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-2'], again: false}, servers: ['gpu']})
+})
+
+test('timeline: every clip can be rendered again in one go, asked first', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Render all (2)'}).click()
+  await expect(page.getByText('2 marked')).toBeVisible()
+  await dialog(page).getByRole('button', {name: 'Render them'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-1', 'clip-2'], again: true}, servers: ['gpu']})
+})
+
+test('timing: a clip cut inside a word is cleared with one click, and the next problem key goes to the line that wants a look', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.locator('.tline-row').first().click()
+  // moved by 3.5 s: the cut at 5 s falls into the second word
+  for (let n = 0; n < 7; n++) await page.keyboard.press('Shift+ArrowRight')
+  await expect(page.locator('.warn').first()).toContainText('A clip cut falls into "')
+  await page.getByRole('button', {name: 'Clear the cut'}).click()
+  await expect(page.locator('.warn', {hasText: 'A clip cut falls'})).toHaveCount(0)
+  // one undo brings the cut back
+  await page.getByRole('button', {name: 'Undo'}).click()
+  await expect(page.locator('.warn', {hasText: 'A clip cut falls'}).first()).toBeVisible()
+  // the key N picks the next line that wants a look; the button says how many there are
+  await expect(page.getByRole('button', {name: /Next problem \(\d+\)/})).toBeVisible()
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('n')
+  await expect(page.locator('.tedit-head b')).toBeVisible()
+})

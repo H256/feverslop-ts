@@ -48,6 +48,19 @@ export const cutsIn = (view: TimingView, from: number, to: number) => view.cuts.
 /** The words a cut falls into: sung half in one clip, half in the next. */
 export const crossingOf = (view: TimingView, words: TimingWord[]) => words.flatMap(w => cutsIn(view, w.start + 0.02, w.end - 0.02).map(cut => ({word: w, cut})))
 
+/**
+ * The smallest change that takes a clip cut out of a word: the side of the cut that is shorter is cut off the word, so it is sung
+ * wholly in one clip. A word that would be left with nothing but a sliver is moved over the cut instead, as it is.
+ */
+export function clearedCut(words: TimingWord[], n: number, cut: number, duration: number): TimingWord[] {
+  const w = words[n]!
+  const before = cut - w.start, after = w.end - cut
+  if (Math.min(before, after) >= MIN_WORD) {
+    return before <= after ? movedWord(words, n, before, 'start', duration) : movedWord(words, n, -after, 'end', duration)
+  }
+  return movedWord(words, n, before <= after ? before : -after, undefined, duration)
+}
+
 /** What saving does: the clips whose vocals change, the beats planned again - worked out as the server does it, roughly. */
 export function timingChanges(view: TimingView, moved: TimingLine[], wordsOf: (line: TimingLine) => TimingWord[]) {
   const touched = new Set<string>()
