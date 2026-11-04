@@ -253,6 +253,7 @@ export type TimingLine = {
   estimated: boolean,         // the times are a guess: barely found in the transcript
   byHand: boolean,            // placed on this page
   unplaced?: boolean,         // found sung nowhere: its words are only laid out at its place in the lyrics, to be dragged where it is sung
+  off?: boolean,              // left out: heard, but not sung - no clip sings it
   beats: string[],            // the beats of the clips it is sung in
 }
 export type TimingView = {
@@ -265,7 +266,8 @@ export type TimingView = {
   outdated: {clip: string, lines: number[]}[],
   audio?: Media,              // the vocals stem, else the song
 }
-export type TimingChange = {lines: {line: number, words: {start: number, end: number}[]}[]}
+// words: the line's words moved; off: the line left out (true) or sung again (false) - one of the two, or both
+export type TimingChange = {lines: {line: number, words?: {start: number, end: number}[], off?: boolean}[]}
 export type TimingResult = {
   changed: number[],          // the lines that moved
   slots: string[],            // the clips of the cut whose vocals changed

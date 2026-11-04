@@ -23,7 +23,7 @@ import {boundaryFrameAsset, buildClipRequests, computeMemberCounts, countShotsPe
 import {parseRetake} from "./lib/retake.ts";
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
-import {alignLyrics, lowConfidence, sungLines, tightenStarts} from "./lib/lyrics.ts";
+import {alignLyrics, lowConfidence, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
 import {readFineWaveform} from "./lib/waveform.ts";
 import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
@@ -342,7 +342,7 @@ if (transcript) {
     if (transcript.activity) log.step('Vocal activity', styles.muted(`${transcript.activity.length} range(s) from RMS energy, independent of whisper`))
 }
 
-const lyricsTiming = transcript ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => {
+const alignedTiming = transcript ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => {
     const aligned = alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity, music.bpm)
     // the first word of a line starts where the singing does: its sound is measured on the vocals stem, not read from the transcript
     const loudness = await readFineWaveform(join(project.dir, stems!.vocals), 100).catch(() => undefined)
@@ -351,6 +351,8 @@ const lyricsTiming = transcript ? await project.step('lyricsTiming', '2c · ALIG
     if (moved.length) log.step('Starts', styles.muted(`${moved.length} line(s) began in silence and start where the singing does (longest: ${Math.max(...moved.map(m => m.by)).toFixed(1)} s)`))
     return timing
 }) : undefined
+// a line left out on the Timing page (heard, but not sung - or not sung there) is not sung anywhere from here on
+const lyricsTiming = alignedTiming && sungOnly(alignedTiming)
 if (lyricsTiming) {
     for (const line of lyricsTiming.lines) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))

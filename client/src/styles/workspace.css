@@ -349,6 +349,8 @@ textarea.book { width: 100%; min-height: 50vh; font: 14px/1.6 var(--sans); }
 .tword.chosen { background: light-dark(#cf3d1b44, #ff6f4d4d); box-shadow: 0 0 0 1px var(--accent); }
 .tword.crossed { border-color: var(--danger); }
 .tword.other { border-color: var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.tword.off { border-style: dashed; opacity: .45; }
+.tword.off span { text-decoration: line-through; }
 .tword .grip { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
 .tword .grip.l { left: -3px; }
 .tword .grip.r { right: -3px; }

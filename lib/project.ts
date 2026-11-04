@@ -142,6 +142,7 @@ export type TimedLine = {
     confidence: number,             // 0-1, the share of the line's words found in the transcript
     adlib?: boolean,                // not in lyrics.txt - sung words whisper heard on top of it (confidence: whisper's own)
     byHand?: boolean,               // its words placed by hand on the workspace's Timing page (confidence 1 then)
+    off?: boolean,                  // left out on the Timing page: heard, but not sung (a misheard ad-lib) - no clip sings it
 }
 export type LyricsTiming = { lines: TimedLine[] }
 

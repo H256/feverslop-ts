@@ -25,7 +25,8 @@ export function useTimingDraft(view: Ref<TimingView>) {
   const startOf = (l: TimingLine) => wordsOf(l)[0]?.start ?? 0
   const endOf = (l: TimingLine) => wordsOf(l).at(-1)?.end ?? 0
   const isChanged = (l: TimingLine) => edits.value.has(l.line)
-  const crossing = (l: TimingLine) => crossingOf(view.value, wordsOf(l))
+  // a line left out is not sung: no cut falls into it
+  const crossing = (l: TimingLine) => l.off ? [] : crossingOf(view.value, wordsOf(l))
 
   /** Before a change: what there was, for Ctrl+Z. */
   const remember = () => {
@@ -87,9 +88,10 @@ export function useTimingDraft(view: Ref<TimingView>) {
   /** Lines of one singer come one after the other: one running into the next is mostly a line moved too far. */
   const overlaps = computed(() => {
     const l = line.value
-    if (!l) return []
+    if (!l || l.off) return []
+    // the lines sung around it: one left out overlaps nothing
     const at = view.value.lines.indexOf(l)
-    const before = view.value.lines[at - 1], after = view.value.lines[at + 1]
+    const before = view.value.lines.slice(0, at).reverse().find(x => !x.off), after = view.value.lines.slice(at + 1).find(x => !x.off)
     return [before && endOf(before) > startOf(l) + 0.02 ? before : undefined, after && startOf(after) < endOf(l) - 0.02 ? after : undefined].filter((x): x is TimingLine => !!x)
   })
   return {

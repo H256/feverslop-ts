@@ -102,6 +102,7 @@ export function timingView(dir: string, data: Project, requests: Request[]): Tim
             estimated: !l.byHand && l.confidence < ESTIMATED_BELOW,
             byHand: !!l.byHand,
             ...(l.words.length ? {} : {unplaced: true}),
+            ...(l.off ? {off: true} : {}),
             beats: [...new Set(slots.filter(s => s.vocals?.some(v => v.line === l.line)).map(s => beatOfSlot.get(s.id)).filter(b => b !== undefined))],
         })),
         cuts: slots.map(s => ({id: s.id, start: s.start, end: s.end, beat: beatOfSlot.get(s.id)})),
@@ -129,6 +130,16 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         const line = lines.find(l => l.line === entry.line)
         if (!line) throw new Error(`no sung line ${entry.line}`)
         const name = `line ${entry.line + 1} ("${line.text}")`
+        // left out, or sung again: the line keeps its words either way
+        if (entry.off !== undefined && entry.off !== !!line.off) {
+            if (entry.off) line.off = true
+            else delete line.off
+            result.changed.push(line.line)
+        }
+        if (entry.words === undefined) {
+            if (entry.off === undefined) throw new Error(`${name}: neither words nor "off" given`)
+            continue
+        }
         const placed = wordsToPlace(line, data.music?.durationSec ?? Math.max(0, ...timing.lines.map(l => l.end)))
         if (!Array.isArray(entry.words) || entry.words.length !== placed.length) throw new Error(`${name} has ${placed.length} words, not ${entry.words?.length}`)
         const words = entry.words.map((w, n) => ({text: placed[n]!.text, start: round(Number(w.start)), end: round(Number(w.end))}))
@@ -146,7 +157,7 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         line.end = words.at(-1)!.end
         line.confidence = 1
         line.byHand = true
-        result.changed.push(line.line)
+        if (!result.changed.includes(line.line)) result.changed.push(line.line)
     }
     if (!result.changed.length) return result
     data.lyricsTiming = {...timing, lines}
@@ -170,7 +181,7 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
     result.staleClips = requests.filter(c => beats.has(c.beatId)).map(c => c.id)
     // a cut inside a moved word: the word is sung half in one clip, half in the next
     const cutTimes = slots.slice(1).map(s => s.start)
-    for (const line of lines.filter(l => result.changed.includes(l.line))) for (const w of line.words) {
+    for (const line of lines.filter(l => result.changed.includes(l.line) && !l.off)) for (const w of line.words) {
         const cut = cutTimes.find(t => t > w.start + 0.02 && t < w.end - 0.02)
         if (cut !== undefined) result.crossing.push({line: line.line, word: w.text, cut})
     }
