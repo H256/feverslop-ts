@@ -31711,3 +31711,529 @@ exports[`the ComfyUI workflows, node by node h3-ref2video-film-prism-2pass: cont
   },
 }
 `;
+
+exports[`the ComfyUI workflows, node by node h3-sequence-to-sheet: a character 1`] = `
+{
+  "size": undefined,
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "3",
+          0,
+        ],
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "9",
+          0,
+        ],
+        "model": [
+          "10",
+          0,
+        ],
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "res_multistep",
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "3",
+          0,
+        ],
+        "scheduler": "simple",
+        "steps": 8,
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "11",
+          0,
+        ],
+        "latent_image": [
+          "9",
+          1,
+        ],
+        "noise": [
+          "12",
+          0,
+        ],
+        "sampler": [
+          "13",
+          0,
+        ],
+        "sigmas": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "15",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "16",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "crf": 19,
+        "filename_prefix": "fs/p/assets/sequence/characters/ann/sequence",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "17",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "LoraLoaderModelOnly",
+      },
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "model": [
+          "2",
+          0,
+        ],
+        "strength_model": 1,
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 704,
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 1248,
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 124,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/sequence/characters/ann/anchor.png",
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "MiniMaxH3ImageToVideo",
+      },
+      "class_type": "MiniMaxH3ImageToVideo",
+      "inputs": {
+        "clip": [
+          "4",
+          0,
+        ],
+        "first_frame": [
+          "8",
+          0,
+        ],
+        "height": [
+          "6",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": "Five hard-cut views of the same woman in a red coat.",
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "5",
+          0,
+        ],
+      },
+    },
+  },
+}
+`;
+
+exports[`the ComfyUI workflows, node by node h3-sequence-to-sheet-prism: a character 1`] = `
+{
+  "size": undefined,
+  "workflow": {
+    "1": {
+      "_meta": {
+        "title": "VAELoader",
+      },
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors",
+      },
+    },
+    "10": {
+      "_meta": {
+        "title": "ModelAttentionBackend",
+      },
+      "class_type": "ModelAttentionBackend",
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "3",
+          0,
+        ],
+      },
+    },
+    "11": {
+      "_meta": {
+        "title": "BasicGuider",
+      },
+      "class_type": "BasicGuider",
+      "inputs": {
+        "conditioning": [
+          "9",
+          0,
+        ],
+        "model": [
+          "10",
+          0,
+        ],
+      },
+    },
+    "12": {
+      "_meta": {
+        "title": "RandomNoise",
+      },
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 42,
+      },
+    },
+    "13": {
+      "_meta": {
+        "title": "KSamplerSelect",
+      },
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler",
+      },
+    },
+    "14": {
+      "_meta": {
+        "title": "BasicScheduler",
+      },
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "denoise": 1,
+        "model": [
+          "3",
+          0,
+        ],
+        "scheduler": "beta57",
+        "steps": 4,
+      },
+    },
+    "15": {
+      "_meta": {
+        "title": "SamplerCustomAdvanced",
+      },
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "guider": [
+          "11",
+          0,
+        ],
+        "latent_image": [
+          "9",
+          1,
+        ],
+        "noise": [
+          "12",
+          0,
+        ],
+        "sampler": [
+          "13",
+          0,
+        ],
+        "sigmas": [
+          "14",
+          0,
+        ],
+      },
+    },
+    "16": {
+      "_meta": {
+        "title": "VRAMCleanup",
+      },
+      "class_type": "VRAMCleanup",
+      "inputs": {
+        "anything": [
+          "15",
+          0,
+        ],
+        "offload_cache": false,
+        "offload_model": true,
+      },
+    },
+    "17": {
+      "_meta": {
+        "title": "VAEDecode",
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "16",
+          0,
+        ],
+        "vae": [
+          "1",
+          0,
+        ],
+      },
+    },
+    "18": {
+      "_meta": {
+        "title": "VHS_VideoCombine",
+      },
+      "class_type": "VHS_VideoCombine",
+      "inputs": {
+        "crf": 19,
+        "filename_prefix": "fs/p/assets/sequence/characters/ann/sequence",
+        "format": "video/h264-mp4",
+        "frame_rate": 24,
+        "images": [
+          "17",
+          0,
+        ],
+        "loop_count": 0,
+        "pingpong": false,
+        "pix_fmt": "yuv420p",
+        "save_metadata": true,
+        "save_output": true,
+        "trim_to_audio": false,
+      },
+    },
+    "2": {
+      "_meta": {
+        "title": "UNETLoader",
+      },
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "PRISM_DMAD_PDMD_int8.safetensors",
+        "weight_dtype": "default",
+      },
+    },
+    "3": {
+      "_meta": {
+        "title": "MiniMaxH3SigmaShift",
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "2",
+          0,
+        ],
+        "shift_audio": 3,
+        "shift_video": 12,
+      },
+    },
+    "4": {
+      "_meta": {
+        "title": "CLIPLoader",
+      },
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "device": "default",
+        "type": "minimax",
+      },
+    },
+    "5": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 704,
+      },
+    },
+    "6": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 1248,
+      },
+    },
+    "7": {
+      "_meta": {
+        "title": "PrimitiveInt",
+      },
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 124,
+      },
+    },
+    "8": {
+      "_meta": {
+        "title": "LoadImage",
+      },
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "fs/p/assets/sequence/characters/ann/anchor.png",
+      },
+    },
+    "9": {
+      "_meta": {
+        "title": "MiniMaxH3ImageToVideo",
+      },
+      "class_type": "MiniMaxH3ImageToVideo",
+      "inputs": {
+        "clip": [
+          "4",
+          0,
+        ],
+        "first_frame": [
+          "8",
+          0,
+        ],
+        "height": [
+          "6",
+          0,
+        ],
+        "length": [
+          "7",
+          0,
+        ],
+        "prompt": "Five hard-cut views of the same woman in a red coat.",
+        "vae": [
+          "1",
+          0,
+        ],
+        "width": [
+          "5",
+          0,
+        ],
+      },
+    },
+  },
+}
+`;

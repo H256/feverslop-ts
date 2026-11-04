@@ -78,6 +78,13 @@ describe('the ComfyUI workflows, node by node', () => {
             test(`${name}: ${variant}`, async () => expect(await workflow(name, opts)).toMatchSnapshot())
         }
     }
+    // the reference sheets' turnaround: the turbo-LoRA one and the 4-step PRISM one, from the same anchor
+    for (const name of ['h3-sequence-to-sheet', 'h3-sequence-to-sheet-prism']) {
+        test(`${name}: a character`, async () => expect(await workflow(name, {
+            prompt: 'Five hard-cut views of the same woman in a red coat.', startFrame: 'fs/p/assets/sequence/characters/ann/anchor.png',
+            frames: 124, orientation: 'portrait', resolution: -1, seed: 42, filenamePrefix: 'fs/p/assets/sequence/characters/ann/sequence',
+        })).toMatchSnapshot())
+    }
     test('frame-interpolate', async () => {
         expect(await workflow('frame-interpolate', {video: 'fs/p/videos/slot-007.mp4', pieces: [{start: 0, frames: 30}, {start: 30, frames: 43}], model: 'rife_v4.26_heavy.safetensors', multiplier: 2, filenamePrefix: 'fs/p/interpolated/slot-007'})).toMatchSnapshot()
     })
