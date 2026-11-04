@@ -38,8 +38,10 @@ const singing: SingingView = {
 }
 const timing: TimingView = {
   duration: 10, lines: [{line: 0, section: 'Verse', text: 'Hello night', words, estimated: true, byHand: false, beats: ['beat-1']}],
-  cuts: [{id: 'clip-1', start: 0, end: 5, beat: 'beat-1'}, {id: 'clip-2', start: 5, end: 10}], beats: [{id: 'beat-1', planned: true, clips: ['clip-1']}], unplanned: [],
+  cuts: [{id: 'clip-1', start: 0, end: 5, beat: 'beat-1'}, {id: 'clip-2', start: 5, end: 10}], beats: [{id: 'beat-1', planned: true, clips: ['clip-1']}], unplanned: [], outdated: [{clip: 'clip-1', lines: [0]}],
 }
+// the vocals at 100 values a second: Hello starts at 1 s, the singing at 1.4 s - the first word starts 0.4 s early
+const timingWave = Array.from({length: 1000}, (_, i) => i >= 140 && i < 300 ? 0.6 : 0.004)
 // the settings of the project: one workflow of its own, the rest as the defaults
 const config: ConfigView = {settings: [
   {key: 'videoWorkflow', label: 'Video workflow', group: 'Workflows', control: 'select', note: 'Renders the clips.', value: 'h3-ref2video-2pass', default: 'h3-ref2video', own: true,
@@ -53,7 +55,7 @@ const started = {run: {source: 'here', command: 'bun index.ts demo', pid: 1, sta
 
 const GETS: Record<string, unknown> = {
   project, freshness: fresh, status, waveform: {peaks: null}, progress: {progress: null}, 'versions/clip-1': {versions: []}, 'versions/clip-2': {versions: []},
-  references: {references: [reference, {...reference, id: 'bar', kind: 'location', name: 'Bar', prompt: 'A bar at night', description: 'A bar', file: 'output/assets/bar.png', picture: {file: 'output/assets/bar.png', v: 1}}]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: null},
+  references: {references: [reference, {...reference, id: 'bar', kind: 'location', name: 'Bar', prompt: 'A bar at night', description: 'A bar', file: 'output/assets/bar.png', picture: {file: 'output/assets/bar.png', v: 1}}]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: timingWave},
   casting, 'casting-redo': castingRedo, cast: {cast}, book, look, config,
 }
 const POSTS: Record<string, unknown> = {
