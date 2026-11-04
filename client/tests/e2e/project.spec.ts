@@ -278,3 +278,21 @@ test('timing: a first word that starts before its singing is said, tightened wit
   await page.getByRole('button', {name: 'Save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.4, end: 2}, {start: 2, end: 3}]}]})
 })
+
+test('timing: a clip cut inside a word is cleared with one click, and the next problem key goes to the line that wants a look', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.locator('.tline-row').first().click()
+  // moved by 3.5 s: the cut at 5 s falls into the second word
+  for (let n = 0; n < 7; n++) await page.keyboard.press('Shift+ArrowRight')
+  await expect(page.locator('.warn').first()).toContainText('A clip cut falls into "')
+  await page.getByRole('button', {name: 'Clear the cut'}).click()
+  await expect(page.locator('.warn', {hasText: 'A clip cut falls'})).toHaveCount(0)
+  // one undo brings the cut back
+  await page.getByRole('button', {name: 'Undo'}).click()
+  await expect(page.locator('.warn', {hasText: 'A clip cut falls'}).first()).toBeVisible()
+  // the key N picks the next line that wants a look; the button says how many there are
+  await expect(page.getByRole('button', {name: /Next problem \(\d+\)/})).toBeVisible()
+  await page.locator('.tedit').focus()
+  await page.keyboard.press('n')
+  await expect(page.locator('.tedit-head b')).toBeVisible()
+})

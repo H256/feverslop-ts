@@ -1,7 +1,7 @@
 import {computed, reactive, ref, shallowRef, type Ref} from 'vue'
 import type {TimingChange, TimingLine, TimingView, TimingWord} from '../../../../shared/workspace'
 import {clamp} from '../../lib/format'
-import {crossingOf, fixWords, movedWord, shifted, timingChanges, type Span} from './words'
+import {clearedCut, crossingOf, fixWords, movedWord, shifted, timingChanges, type Span} from './words'
 
 const UNDO_STEPS = 200
 type Edits = Map<number, TimingWord[]>
@@ -53,6 +53,16 @@ export function useTimingDraft(view: Ref<TimingView>) {
     }
     settle()
   }
+  /** The clip cuts inside the words of a line taken out, each by the smallest change (words.clearedCut). One undo step. */
+  const clearCuts = (l: TimingLine) => {
+    remember()
+    for (let guard = 0; guard < l.words.length * 2; guard++) {
+      const found = crossing(l)[0]
+      if (!found) break
+      setWords(l, clearedCut(wordsOf(l), wordsOf(l).indexOf(found.word), found.cut.start, view.value.duration))
+    }
+    settle()
+  }
   const discard = () => { edits.value = new Map(); history.splice(0) }
 
   /** The part of the song seen in the editor: the chosen line with some seconds around it, at least four seconds. */
@@ -85,7 +95,7 @@ export function useTimingDraft(view: Ref<TimingView>) {
   return {
     edits, history, selected, word, pad, line, window, changes, overlaps,
     lineOf, wordsOf, startOf, endOf, isChanged, crossing,
-    remember, settle, undo, moveLine, moveWord, resetLine, tighten, discard, zoom, choose, nextWord, request,
+    remember, settle, undo, moveLine, moveWord, resetLine, tighten, clearCuts, discard, zoom, choose, nextWord, request,
   }
 }
 export type TimingDraft = ReturnType<typeof useTimingDraft>
