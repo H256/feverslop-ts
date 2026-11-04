@@ -3,7 +3,7 @@ import {writeJsonFile} from "../json-file.ts";
 import {isAbsolute, join, relative, resolve} from "node:path";
 import type {ClipRequest} from "../compose.ts";
 import {withProjectLock} from "../lock.ts";
-import {MIN_WORD_SEC, slotVocals} from "../lyrics.ts";
+import {MIN_WORD_SEC, normalizeWord, slotVocals} from "../lyrics.ts";
 import type {Project, TimedLine} from "../project.ts";
 import {readClipRequests} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
@@ -22,6 +22,21 @@ const ESTIMATED_BELOW = 0.5
 
 const readJson = <T>(file: string): T | undefined => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as T : undefined
 const round = (t: number) => Math.round(t * 1000) / 1000
+
+/** How long each word of a line without words is laid out, to be dragged where it is sung. */
+const UNPLACED_WORD_SEC = 0.4
+
+/**
+ * The words of a line as the page moves them. A line the alignment found sung nowhere keeps no words (lib/lyrics.ts) and has
+ * no length - nothing to see or drag: its words are laid out one after the other from where it would start. Given back
+ * unmoved they are not saved, so the line stays as it was.
+ */
+export function wordsToPlace(line: TimedLine, duration: number): TimedLine['words'] {
+    if (line.words.length) return line.words
+    const texts = line.text.split(' ').filter(w => normalizeWord(w))
+    const start = Math.max(0, Math.min(line.start, duration - texts.length * UNPLACED_WORD_SEC))
+    return texts.map((text, n) => ({text, start: round(start + n * UNPLACED_WORD_SEC), end: round(start + (n + 1) * UNPLACED_WORD_SEC)}))
+}
 
 /** A sound file of the project, relative to it - only one inside it: the page is served nothing else. */
 export function insideProject(dir: string, file: string | undefined) {
@@ -78,13 +93,15 @@ export function timingView(dir: string, data: Project, requests: Request[]): Tim
     const slots = data.timeline?.slots ?? []
     const beats = data.beats ?? []
     const planned = (id: string) => data.shotMoments?.[id] !== undefined
+    const duration = data.music?.durationSec ?? Math.max(0, ...timing.lines.map(l => l.end))
     return {
-        duration: data.music?.durationSec ?? Math.max(0, ...timing.lines.map(l => l.end)),
+        duration,
         lines: timing.lines.map(l => ({
             line: l.line, section: l.section, text: l.text,
-            words: l.words.map(w => ({text: w.text, start: w.start, end: w.end})),
+            words: wordsToPlace(l, duration).map(w => ({text: w.text, start: w.start, end: w.end})),
             estimated: !l.byHand && l.confidence < ESTIMATED_BELOW,
             byHand: !!l.byHand,
+            ...(l.words.length ? {} : {unplaced: true}),
             beats: [...new Set(slots.filter(s => s.vocals?.some(v => v.line === l.line)).map(s => beatOfSlot.get(s.id)).filter(b => b !== undefined))],
         })),
         cuts: slots.map(s => ({id: s.id, start: s.start, end: s.end, beat: beatOfSlot.get(s.id)})),
@@ -112,8 +129,9 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         const line = lines.find(l => l.line === entry.line)
         if (!line) throw new Error(`no sung line ${entry.line}`)
         const name = `line ${entry.line + 1} ("${line.text}")`
-        if (!Array.isArray(entry.words) || entry.words.length !== line.words.length) throw new Error(`${name} has ${line.words.length} words, not ${entry.words?.length}`)
-        const words = entry.words.map((w, n) => ({text: line.words[n]!.text, start: round(Number(w.start)), end: round(Number(w.end))}))
+        const placed = wordsToPlace(line, data.music?.durationSec ?? Math.max(0, ...timing.lines.map(l => l.end)))
+        if (!Array.isArray(entry.words) || entry.words.length !== placed.length) throw new Error(`${name} has ${placed.length} words, not ${entry.words?.length}`)
+        const words = entry.words.map((w, n) => ({text: placed[n]!.text, start: round(Number(w.start)), end: round(Number(w.end))}))
         words.forEach((w, n) => {
             if (!Number.isFinite(w.start) || !Number.isFinite(w.end)) throw new Error(`${name}: "${w.text}" has no time`)
             if (w.end - w.start < MIN_WORD_SEC - 1e-9) throw new Error(`${name}: "${w.text}" is shorter than ${MIN_WORD_SEC} s`)
@@ -121,7 +139,7 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
             if (n > 0 && w.start < words[n - 1]!.end - 1e-9) throw new Error(`${name}: "${w.text}" starts before "${words[n - 1]!.text}" ends`)
         })
         // given back as it was (bun run timing --set has every line): times are kept to the millisecond, so they are compared so
-        const same = words.every((w, n) => w.start === round(line.words[n]!.start) && w.end === round(line.words[n]!.end))
+        const same = words.every((w, n) => w.start === round(placed[n]!.start) && w.end === round(placed[n]!.end))
         if (same) continue
         line.words = words
         line.start = words[0]!.start

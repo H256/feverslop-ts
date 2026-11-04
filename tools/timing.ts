@@ -37,7 +37,7 @@ let change: TimingChange | undefined
 if (args.tighten) {
     const loudness = timing.audio ? await readFineWaveform(join(t.dir, timing.audio.file), 100).catch(() => undefined) : undefined
     if (!loudness) log.usageError(`the vocals of ${t.id} cannot be read - they come with the stems: bun index.ts ${t.id} --until=story`, usage)
-    let early = timing.lines.flatMap(l => { const lead = l.words[0] ? leadOf(l.words, loudness!) : 0; return lead >= EARLY_FROM && !l.byHand ? [{line: l.line, text: l.text, lead}] : [] })
+    let early = timing.lines.flatMap(l => { const lead = l.words[0] && !l.unplaced ? leadOf(l.words, loudness!) : 0; return lead >= EARLY_FROM && !l.byHand ? [{line: l.line, text: l.text, lead}] : [] })
     // a line with a word of no length cannot be saved as it is (an alignment that failed): it is left to the Timing page
     const broken = (n: number) => timing.lines.find(x => x.line === n)!.words.some(w => w.end - w.start < MIN_WORD_SEC)
     for (const e of early.filter(e => broken(e.line))) log.warn(`line ${e.line + 1} (${e.text}) has a word without length - set it on the Timing page`)
@@ -72,7 +72,7 @@ if (change) {
     for (const l of timing.lines) {
         if (l.section !== section) log.info(styles.muted(`\n[${section = l.section}]`))
         const start = l.words[0]?.start ?? 0, end = l.words.at(-1)?.end ?? start
-        log.info(`${String(l.line + 1).padStart(4)}  ${formatTime(start, true)} – ${formatTime(end, true)}  ${l.text}${l.estimated ? styles.muted('  (a guess: barely heard)') : ''}${l.byHand ? styles.muted('  (by hand)') : ''}`)
+        log.info(`${String(l.line + 1).padStart(4)}  ${formatTime(start, true)} – ${formatTime(end, true)}  ${l.text}${l.unplaced ? styles.muted('  (not found: laid out here, move it where it is sung)') : l.estimated ? styles.muted('  (a guess: barely heard)') : ''}${l.byHand ? styles.muted('  (by hand)') : ''}`)
     }
     log.next(`bun run timing ${t.id} --json > timing.json   (move the words' start and end, then --set=timing.json)`)
 }

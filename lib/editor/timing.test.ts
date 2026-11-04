@@ -86,6 +86,20 @@ describe('timingView', () => {
         expect(view.duration).toBe(8)
     })
 
+    test('a line found sung nowhere gets its words laid out from its place, to be dragged; unmoved they are not saved', () => {
+        const data = project()
+        Object.assign(data.lyricsTiming!.lines[1]!, {start: 6, end: 6, words: [], confidence: 0})
+        const line = timingView('/nowhere', data, requests)!.lines[1]!
+        expect(line.unplaced).toBe(true)
+        expect(line.words).toEqual([{text: 'and', start: 6, end: 6.4}, {text: 'fall', start: 6.4, end: 6.8}])
+        expect(applyTiming(data, {lines: [{line: 1, words: line.words}]}, requests).changed).toEqual([])
+        expect(data.lyricsTiming!.lines[1]!.words).toEqual([])
+        // dragged where it is sung: it has its words from then on
+        expect(applyTiming(data, {lines: [{line: 1, words: at(2.5)}]}, requests).changed).toEqual([1])
+        expect(data.lyricsTiming!.lines[1]!.words.map(w => w.text)).toEqual(['and', 'fall'])
+        expect(timingView('/nowhere', data, requests)!.lines[1]!.unplaced).toBeUndefined()
+    })
+
     test('a line placed by hand is no longer a guess', () => {
         const data = project()
         applyTiming(data, {lines: [{line: 1, words: at(5)}]}, requests)
