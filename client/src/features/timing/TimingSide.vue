@@ -9,7 +9,7 @@ import type {TimingDraft} from './useTimingDraft'
 
 /** How the editor is used, and what saving the moved lines does. */
 const props = defineProps<{view: TimingView, draft: TimingDraft, saved?: string, early: number}>()
-defineEmits<{save: [then: 'none' | 'plan'], cutAgain: [], plan: [], tighten: []}>()
+defineEmits<{save: [then: 'none' | 'plan'], cutAgain: [], plan: [], tighten: [], library: []}>()
 const {busy} = useProject()
 const c = computed(() => props.draft.changes.value)
 const KEYS = [
@@ -61,6 +61,7 @@ const effects = computed(() => {
       <template #more>
         <div class="btn-row" style="margin-top: 8px">
           <button class="btn" :disabled="busy" title="Save, then cut the song into clips again around the new times (--redo=timeline): every shot is planned again" @click="$emit('cutAgain')">Save and cut the song again…</button>
+          <button class="btn" :disabled="busy || c.lines.length > 0" :title="c.lines.length ? 'Save the moved lines first - the library gets the timing as it is saved' : 'Copy the song, its lyrics, its stems and this timing into the library: another video of the song starts at the story (bun run export-song)'" @click="$emit('library')">Put the song into the library…</button>
         </div>
       </template>
     </PlanChanges>

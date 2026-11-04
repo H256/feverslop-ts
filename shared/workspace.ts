@@ -290,6 +290,7 @@ export type RunRequest =
   | {type: 'next', command: string}
   | {type: 'leak-scan'}
   | {type: 'export-asset', asset: string, as?: string}
+  | {type: 'export-song', as?: string, name?: string}
   | {type: 'add-view', location: string, name: string, shows: string}
   | {type: 'refinish', preset?: string, upscale?: string, size?: string, denoise?: number, fps?: number, finish?: boolean, only?: string[]}
 export type RunInfo = {

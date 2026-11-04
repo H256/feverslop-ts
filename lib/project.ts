@@ -115,9 +115,10 @@ export type Timeline = {
 }
 
 // Stems of the song, paths relative to the project folder
-export type Stems = Record<'vocals' | 'drums' | 'bass' | 'other', string>
-// The htdemucs_6s guitar/piano stems - separated on top of Stems above, only for propStems that actually need them
+// The htdemucs_6s guitar/piano stems - separated on top of the four htdemucs_ft stems. Since every song is separated into
+// all six at once they are part of Stems; a project separated before has them (if at all) in its own step, instrumentStems.
 export type InstrumentStems = Partial<Record<'guitar' | 'piano', string>>
+export type Stems = Record<'vocals' | 'drums' | 'bass' | 'other', string> & InstrumentStems
 
 // RMS-energy activity ranges per stem (same method as Transcript.activity, generalized to any stem) - only the
 // stems actually claimed by a character's propStem are analyzed
@@ -290,7 +291,8 @@ export function builtOnIn<S extends string>(graph: Record<S, S[]>, changed: S[],
 }
 export const builtOn = (changed: StepName[], data: Partial<Record<StepName, unknown>>): StepName[] => builtOnIn(dependsOn, changed, data)
 
-const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
+/** The fingerprint project.json keeps of an input (inputs) - the same one lib/song-library.ts keeps of a song. */
+export const fingerprintOf = (value: string | Uint8Array) => Bun.hash(value).toString(16)
 
 export class ProjectStore {
     readonly dir: string
