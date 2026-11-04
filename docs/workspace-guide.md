@@ -74,7 +74,7 @@ Alles aus diesem Abschnitt geht auch ohne Workspace. Die Seiten rufen dieselben 
 | **Story** lesen, ändern | `bun run story <id> --out=story.txt`, ändern, dann `bun run story <id> --set=story.txt` |
 | **Tell it anew for the cast**, **Take the new story**, **Drop it** | `bun run story <id> --adapt`, dann `--take` oder `--drop` |
 | neue Namen in die Story | `bun run story <id> --rename="Soren Hale=Soren Vale"` |
-| **Edit the cast** | `bun run cast <id> --json > cast.json`, ändern, dann `bun run cast <id> --set=cast.json`. Eine neue Figur steht ohne `id` drin, eine entfernte fehlt einfach. |
+| **Change the cast**, **Add a character**, **Add a place**, **Remove** | `bun run cast <id> --json > cast.json`, ändern, dann `bun run cast <id> --set=cast.json`. Eine neue Figur steht ohne `id` drin, eine entfernte fehlt einfach. |
 | Rolle aus der Bibliothek, **Plan now** | `bun run casting <id> --set=character:mara=library:mara-v2`, der Befehl nennt das passende `--redo` |
 | **Look** lesen, ändern | `bun run look <id>`; `--json > look.json`, ändern, `--set=look.json` |
 | **Write anew** | `bun run look <id> --again=leo,location:hall` |
@@ -181,11 +181,11 @@ Bei einem gepinnten Bild sind die Render-Knöpfe gesperrt. Clips, die das Bild b
 
 **Casting** zeigt jede Rolle und jeden Ort mit einer Auswahl: **Rendered in this project** oder ein Asset aus der Bibliothek. Eine Änderung schreibt nur einen Eintrag in `casting.json`. Wirksam wird sie mit dem nächsten Planlauf (**Plan now**). Der Dialog davor nennt, welche Schritte aus den alten Texten der Rolle geplant waren und jetzt neu geplant werden. Die betroffenen Clips werden dann stale, gerendert wird nichts von selbst.
 
-**Edit the cast** ändert den Cast selbst, ganz ohne Bibliothek: Name, Rolle in der Story und Requisite jeder Figur, die Namen der Orte. Beim Musikvideo kannst du Figuren und Orte auch hinzufügen (**Add a character**, **Add a place**) und entfernen (**Remove**). Beim Film legt das Drehbuch fest, wer vorkommt: Dort änderst du Name, Rolle, Aussehen und Stimme. Die Ids bleiben, eine umbenannte Figur behält also ihre Bilder und ihren Eintrag in `casting.json`.
+**Change the cast** ändert den Cast selbst, ganz ohne Bibliothek: Name, Rolle in der Story und Requisite jeder Figur, die Namen der Orte. Beim Musikvideo kannst du Figuren und Orte auch hinzufügen und entfernen: **Add a character** und **Add a place** stehen über den Listen, **Remove** neben jeder Rolle. Beides öffnet den Cast zum Bearbeiten, mit der Änderung schon drin, und gespeichert wird wie bei jeder anderen Änderung. Wer beim Speichern wegfällt, steht über dem Knopf, und **Put back** holt ihn zurück. Beim Film legt das Drehbuch fest, wer vorkommt (#589): Dort änderst du mit **Edit the roles and places** Name, Rolle, Aussehen und Stimme. Die Ids bleiben, eine umbenannte Figur behält also ihre Bilder und ihren Eintrag in `casting.json`.
 
 **Save the cast** nennt vorher, was aus dem alten Cast geplant war und wegfällt: die Looks, beim Musikvideo auch die Sängerwahl, später die Beats und Einstellungen. Der nächste Planlauf macht es neu, nur mit dem Sprachmodell. Beim Musikvideo werden dabei nur die Looks der neuen oder geänderten Figuren und Orte neu geschrieben, alle anderen behalten ihre. Nach dem Speichern fragt die Seite nach: Bei einer umbenannten Figur setzt **Put them in** den neuen Namen in die Story (als ganzes Wort, auch Vor- oder Nachname allein). Kam jemand dazu oder fiel weg, bietet sie an, die Story für die neue Besetzung erzählen zu lassen (siehe oben).
 
-![Edit the cast: je Figur Name, Rolle und Requisite](images/workspace/cast-edit.jpg)
+![Change the cast: je Figur Name, Rolle und Requisite, darüber wer beim Speichern wegfällt](images/workspace/cast-edit.jpg)
 
 **Library** (oben rechts) zeigt alle Assets und wo sie benutzt werden. **New asset from a picture** legt eines aus einem Bild an. Aus einem Projekt heraus geht es unter **References** mit **Put into the library**. Ein vorhandenes Asset wird dabei nie überschrieben.
 
