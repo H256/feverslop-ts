@@ -19,7 +19,9 @@ const keyOf = (member: DraftMember) => keys.get(member) ?? keys.set(member, next
 <template>
   <div class="section">
     <PageBar :title="title"><button v-if="canAdd" class="btn" @click="add">{{ kind === 'character' ? 'Add a character' : 'Add a place' }}</button></PageBar>
-    <CastMemberForm v-for="(member, n) in members" :key="keyOf(member)" :draft="member" :kind="kind" :film="film" :removable="canAdd" @remove="remove(n)" />
+    <div class="member-grid">
+      <CastMemberForm v-for="(member, n) in members" :key="keyOf(member)" :draft="member" :kind="kind" :film="film" :removable="canAdd" @remove="remove(n)" />
+    </div>
     <p v-if="!members.length" class="muted">{{ kind === 'character' ? 'Nobody yet.' : 'No place yet - a music video needs one.' }}</p>
   </div>
 </template>

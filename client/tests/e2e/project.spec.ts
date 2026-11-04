@@ -81,14 +81,19 @@ test('casting: a library asset for a role, asked with what goes stale', async ({
   await expect.poll(() => posted.find(p => p.path === 'cast')?.body).toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: [{id: 'bar', name: 'Bar'}, {name: 'Roof'}]})
 })
 
-test('casting: a role removed from the list of roles, and put back before saving', async ({page}) => {
+test('casting: roles removed on their cards, put back, and saved together from the bar', async ({page}) => {
   await page.goto(`${base}/p/music/demo/casting`)
   await page.getByRole('button', {name: 'Remove Ann'}).click()
-  await expect(page.getByText('Out of the cast when saved:')).toBeVisible()
+  // the page stays the list of roles: the card is marked, the bar below counts what goes
+  await expect(page.locator('.role.out')).toContainText('Out of the cast when saved.')
+  await expect(page.locator('.castbar')).toContainText('Out of the cast when saved: 1 character')
+  await expect(page.getByRole('textbox', {name: 'Name'})).toHaveCount(0)
   await page.getByRole('button', {name: 'Put back Ann'}).click()
-  await expect(page.getByText('Out of the cast when saved:')).toBeHidden()
-  await page.getByRole('button', {name: 'Remove'}).last().click()
+  await expect(page.locator('.castbar')).toBeHidden()
+  await page.getByRole('button', {name: 'Remove Bar'}).click()
+  await expect(page.locator('.castbar')).toContainText('1 place')
   await page.getByRole('button', {name: 'Save the cast'}).click()
+  await expect(dialog(page)).toContainText('Out of the cast: Bar.')
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
   await expect.poll(() => posted.find(p => p.path === 'cast')?.body).toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: []})
 })

@@ -26,7 +26,10 @@ const status: ProjectStatus = {steps: [], changed: [], pictures: {total: 1, miss
 const book: BookView = {text: 'Once upon a time', editable: true, builtOn: ['summary'], keptByCast: [], stage: 'plan'}
 const look: LookView = {lookBrief: 'Neon night', characters: [{kind: 'character', id: 'ann', name: 'Ann', look: 'red coat', description: 'a woman'}], locations: [], briefBuiltOn: [], builtOn: ['beats']}
 const cast: CastView = {characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: [{id: 'bar', name: 'Bar'}], canAdd: true, builtOn: [], remakes: []}
-const casting: CastingView = {roles: [{kind: 'character', id: 'ann', name: 'Ann', copied: false, clips: ['clip-1'], errors: [], warnings: []}], errors: [], warnings: [], options: {character: ['kael'], location: []}}
+const casting: CastingView = {roles: [
+  {kind: 'character', id: 'ann', name: 'Ann', copied: false, clips: ['clip-1'], errors: [], warnings: []},
+  {kind: 'location', id: 'bar', name: 'Bar', copied: false, clips: ['clip-1'], errors: [], warnings: []},
+], errors: [], warnings: [], options: {character: ['kael'], location: []}}
 const castingRedo: CastingRedo = {changes: [], redo: []}
 const reference: EditorReference = {id: 'ann', kind: 'character', name: 'Ann', prompt: 'Ann in red', description: 'Ann', file: 'output/assets/ann.png', picture: {file: 'output/assets/ann.png', v: 1}, frames: [], hasSheet: false, looks: [], clips: ['clip-1'], versions: [], readsViews: false}
 const words = [{text: 'Hello', start: 1, end: 2}, {text: 'night', start: 2, end: 3}]

@@ -76,9 +76,20 @@ run.onEnd(() => { if (toStory) void router.push(`${root}/story`); toStory = fals
 // the cast by hand: names, roles and what they are, without the library - and for a music video who is in it at all
 const draft = ref<CastDraft>()
 const editing = computed(() => !!draft.value)
-const edit = (cast: CastView) => { draft.value = reactive(castDraft(cast)) }
-const cancel = () => { draft.value = undefined }
 const listOf = (kind: CastingRole['kind']) => kind === 'character' ? 'characters' : 'locations'
+// roles taken out on the list of roles, not saved yet: marked on their cards, saved together with the bar below them (#588)
+const out = reactive(new Set<string>())
+const outKey = (kind: CastingRole['kind'], id: string) => `${kind}:${id}`
+const outCount = (kind: CastingRole['kind']) => [...out].filter(key => key.startsWith(`${kind}:`)).length
+/** The cast as a draft, without the roles taken out on the list. */
+const draftOf = (cast: CastView): CastDraft => {
+  const d = castDraft(cast)
+  for (const kind of ['character', 'location'] as const) d[listOf(kind)] = d[listOf(kind)].filter(m => !m.id || !out.has(outKey(kind, m.id)))
+  return d
+}
+// the form takes over what was taken out on the list: it is then shown there, put back with one click
+const edit = (cast: CastView) => { draft.value = reactive(draftOf(cast)); out.clear() }
+const cancel = () => { draft.value = undefined }
 // adding and removing start from the list of roles too (#588): the cast by hand opens with that change made, and is saved as any other
 const add = async (cast: CastView, kind: CastingRole['kind']) => {
   edit(cast)
@@ -87,11 +98,8 @@ const add = async (cast: CastView, kind: CastingRole['kind']) => {
   const names = document.querySelectorAll<HTMLInputElement>(`[data-cast="${kind}"] input[aria-label="Name"]`)
   names[names.length - 1]?.focus()
 }
-const remove = (cast: CastView, role: CastingRole) => {
-  edit(cast)
-  const list = draft.value![listOf(role.kind)]
-  list.splice(list.findIndex(m => m.id === role.id), 1)
-}
+const remove = (role: CastingRole) => { out.add(outKey(role.kind, role.id)) }
+const keep = (role: CastingRole) => { out.delete(outKey(role.kind, role.id)) }
 const inCast = (cast: CastView, role: CastingRole) => cast[listOf(role.kind)].some(m => m.id === role.id && !m.group)
 // who is in the cast and not in the draft: taken out on save - said, and put back with one click
 const gone = computed(() => {
@@ -102,15 +110,19 @@ const gone = computed(() => {
     .map(member => ({kind, member})))
 })
 const putBack = (kind: CastingRole['kind'], member: CastView['characters'][number]) => { draft.value![listOf(kind)].push({...member}) }
-useUnsavedChanges(() => editing.value, 'changes to the cast')
+useUnsavedChanges(() => editing.value || out.size > 0, 'changes to the cast')
 const saving = usePending()
 
+/** The cast saved: the form, or - from the list of roles - the cast without the roles taken out there. */
 const saveCast = toasts.guard(async () => {
   const cast = data.value?.cast
-  if (!cast || !draft.value) return
+  if (!cast || (!draft.value && !out.size)) return
+  // from the list the page stays the list while it asks: the draft is made only to be sent
+  const sending = draft.value ?? draftOf(cast)
   const yes = await ask({
     title: 'Save the cast?',
     lines: [
+      !draft.value && `Out of the cast: ${data.value!.casting.roles.filter(r => out.has(outKey(r.kind, r.id))).map(r => r.name).join(', ')}.`,
       'The cast in project.json is changed. Ids stay: a renamed role keeps its pictures and its entry in casting.json.',
       cast.builtOn.length ? 'The next plan run makes what goes again, from this cast: the language model only, nothing is rendered.' : 'Nothing is planned from the cast yet: the next stage is planned from this one.',
       cast.remakes.length > 0 && 'The looks of whoever is new or changed are written again; everyone else keeps theirs.',
@@ -125,8 +137,9 @@ const saveCast = toasts.guard(async () => {
   })
   if (!yes) return
   // while saving the page is not to be changed: the draft sent is let go after it, and with it whatever was typed meanwhile
-  const result = await saving.during(() => api.saveCast(draft.value!))
+  const result = await saving.during(() => api.saveCast(sending))
   draft.value = undefined
+  out.clear()
   toasts.show(result.changed ? 'The cast is saved' : 'Nothing changed')
   // the story still tells of the cast before: the new names put in, or the story told anew for whoever came or went
   if (!film.value && result.renamed.length && await ask({
@@ -181,8 +194,16 @@ const saveCast = toasts.guard(async () => {
           <PageBar :title="title">
             <button v-if="data.cast.canAdd" class="btn" :disabled="busy" @click="add(data.cast, kind)">{{ kind === 'character' ? 'Add a character' : 'Add a place' }}</button>
           </PageBar>
-          <CastingRoleRow v-for="role in rolesOf(kind)" :key="role.id" :role="role" :options="data.casting.options[kind]" :removable="data.cast.canAdd && !busy && inCast(data.cast, role)"
-            @choose="(value, select) => chooseGuarded(role, value, select)" @remove="remove(data.cast, role)" />
+          <div class="role-grid">
+            <CastingRoleRow v-for="role in rolesOf(kind)" :key="role.id" :role="role" :options="data.casting.options[kind]" :removable="data.cast.canAdd && !busy && inCast(data.cast, role)"
+              :out="out.has(outKey(role.kind, role.id))" @choose="(value, select) => chooseGuarded(role, value, select)" @remove="remove(role)" @put-back="keep(role)" />
+          </div>
+        </div>
+        <div v-if="out.size" class="castbar note btn-row">
+          <span>Out of the cast when saved: {{ [outCount('character') && plural(outCount('character'), 'character'), outCount('location') && plural(outCount('location'), 'place')].filter(Boolean).join(', ') }}</span>
+          <div class="spacer" />
+          <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
+          <button class="btn" @click="out.clear()">Discard</button>
         </div>
       </template>
       <p class="muted">For a finished project, replacing a character in what is planned is the other way: bun run {{ film ? 'film:replace-character' : 'replace-character' }} {{ project.id }}</p>
