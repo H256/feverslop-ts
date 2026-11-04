@@ -13,6 +13,7 @@ import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import {usePlanning} from '../plan/usePlanning'
 import {useProject} from '../project/session'
+import {EARLY_FROM, leadOf} from './fit'
 import TimingEditor from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
 import TimingSide from './TimingSide.vue'
@@ -36,7 +37,25 @@ watch(() => draft.edits.value.size, count => { if (count) saved.value = undefine
 const player = useSnippetPlayer(() => props.view.audio && mediaUrl(props.view.audio, roots), toasts.fail)
 const play = (from: number, to: number) => player.play('timing', from, to)
 
-const FILTERS = computed(() => [{value: 'all', label: 'All lines'}, {value: 'estimated', label: `Estimated (${props.view.lines.filter(l => l.estimated).length})`}, {value: 'changed', label: 'Moved'}] as const)
+// how early the first word of each line starts against its sound - as the words are now, so a line moved is measured again
+const leads = computed(() => new Map(props.view.lines.map(l => [l.line, props.peaks ? leadOf(draft.wordsOf(l), props.peaks) : 0])))
+const earlyLines = computed(() => new Map([...leads.value].filter(([, lead]) => lead >= EARLY_FROM)))
+const lead = computed(() => draft.line.value ? leads.value.get(draft.line.value.line) ?? 0 : 0)
+// the clips whose prompt still has the old times of a line: by line
+const outdated = computed(() => {
+  const found = new Map<number, string[]>()
+  for (const {clip, lines} of props.view.outdated) for (const n of lines) found.set(n, [...found.get(n) ?? [], clip])
+  return found
+})
+const tightenAll = () => { draft.tighten(earlyLines.value) }
+
+const FILTERS = computed(() => [
+  {value: 'all', label: 'All lines'},
+  {value: 'estimated', label: `Estimated (${props.view.lines.filter(l => l.estimated).length})`},
+  {value: 'changed', label: 'Moved'},
+  ...(earlyLines.value.size ? [{value: 'early', label: `Early starts (${earlyLines.value.size})`}] : []),
+  ...(outdated.value.size ? [{value: 'old', label: `Prompt old (${outdated.value.size})`}] : []),
+] as const)
 const filter = ref<LineFilter>('all')
 const choose = (n: number) => {
   draft.choose(n)
@@ -88,9 +107,12 @@ onMounted(() => {
             <span class="muted num">{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span>
             <span v-if="draft.line.value.estimated && !draft.isChanged(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess">estimated</span>
             <span v-if="draft.isChanged(draft.line.value)" class="chip" style="color: var(--accent)">moved</span>
+            <span v-if="lead >= EARLY_FROM" class="chip stale" title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it.">starts {{ lead.toFixed(1) }} s early</span>
+            <span v-if="outdated.has(draft.line.value.line)" class="chip stale" :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`">prompt old</span>
           </template>
           <div class="spacer" />
           <button v-if="draft.line.value" class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
+          <button v-if="draft.line.value && lead >= EARLY_FROM" class="btn" title="Move the start of the first word to where the singing begins" @click="draft.tighten(new Map([[draft.line.value.line, lead]]))">Tighten the start</button>
           <button v-if="draft.line.value && draft.isChanged(draft.line.value)" class="btn" title="Back to the saved times" @click="draft.resetLine(draft.line.value)">Reset line</button>
           <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
@@ -102,8 +124,8 @@ onMounted(() => {
           <div v-if="draft.overlaps.value.length" class="warn">This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.</div>
         </div>
       </div>
-      <TimingLineList :view="view" :draft="draft" :filter="filter" @choose="choose" />
+      <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
     </div>
-    <aside class="detail"><TimingSide :view="view" :draft="draft" :saved="saved" @save="save" @cut-again="cutAgain" @plan="toasts.guard(planNow)()" /></aside>
+    <aside class="detail"><TimingSide :view="view" :draft="draft" :saved="saved" :early="earlyLines.size" @save="save" @cut-again="cutAgain" @tighten="tightenAll" @plan="toasts.guard(planNow)()" /></aside>
   </div>
 </template>

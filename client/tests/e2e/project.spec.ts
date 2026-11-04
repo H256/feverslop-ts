@@ -257,3 +257,24 @@ test('settings: a setting back to its default takes the key out of config.json; 
   await page.getByRole('navigation', {name: 'Project'}).getByRole('link', {name: 'Timeline'}).click()
   await expect(dialog(page)).toContainText('changes to the settings')
 })
+
+test('timing: a first word that starts before its singing is said, tightened with one click, and a clip that does not know the move is named', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  // the first word starts at 1 s, the singing at 1.4 s
+  await expect(page.getByText('starts 0.4 s early')).toBeVisible()
+  await expect(page.locator('.tline-row').first().getByText('early 0.4 s')).toBeVisible()
+  // the clip whose prompt has the old times of the line, with the line, and what a plan run does
+  await expect(page.locator('.detail')).toContainText('1 clip still has the old times of a moved line in its prompt: clip-1 (Hello night)')
+  await expect(page.locator('.tline-row').first().getByText('prompt old')).toBeVisible()
+  // the filters hold what is early, and what is old
+  await page.getByRole('button', {name: 'Early starts (1)'}).click()
+  await expect(page.locator('.tline-row')).toHaveCount(1)
+  await page.getByRole('button', {name: 'Prompt old (1)'}).click()
+  await expect(page.locator('.tline-row')).toHaveCount(1)
+  // tightened: the start is where the singing begins, the line is a moved one, and nothing is early any more
+  await page.getByRole('button', {name: 'Tighten the start', exact: true}).first().click()
+  await expect(page.getByText('starts 0.4 s early')).toHaveCount(0)
+  await expect(page.getByText('1 line moved')).toBeVisible()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.4, end: 2}, {start: 2, end: 3}]}]})
+})

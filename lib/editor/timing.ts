@@ -30,7 +30,45 @@ export function insideProject(dir: string, file: string | undefined) {
     return {file: path, v: Math.round(statSync(join(dir, path)).mtimeMs)}
 }
 
-type Request = Pick<ClipRequest, 'id' | 'beatId'>
+type Request = Pick<ClipRequest, 'id' | 'beatId'> & Partial<Pick<ClipRequest, 'vocals'>>
+
+/** A clip's request is made from the vocals of its slot; times differ by a frame or so from how they were rounded. */
+const SAME_TIME = 0.12
+
+/**
+ * The clips whose request still has other vocals than the timing says now - which lines. A move on the Timing page changes the vocals
+ * of the slots at once, but the requests (what the prompt says is sung, and when) only with the next plan run. The request leaves out
+ * a line nobody sings, so only lines with a singer are expected there: the singers of its entry in `singing`, and for a line without
+ * an entry (the lyrics have more lines than the singing: a repeated chorus) all of them, as the request does it. Without singers there
+ * are no vocals in a request, and nothing is said.
+ */
+export function outdatedClips(data: Project, requests: Request[]): {clip: string, lines: number[]}[] {
+    if (!data.singing || !data.timeline) return []
+    const singing = data.singing
+    const sung = (line: number) => (singing.lines.find(l => l.line === line)?.singers ?? singing.singers).length > 0
+    // per line: where it starts and ends in the clip
+    const spans = (entries: {line: number, start: number, end: number}[]) => {
+        const found = new Map<number, [number, number]>()
+        for (const e of entries) {
+            const was = found.get(e.line)
+            found.set(e.line, was ? [Math.min(was[0], e.start), Math.max(was[1], e.end)] : [e.start, e.end])
+        }
+        return found
+    }
+    const outdated: {clip: string, lines: number[]}[] = []
+    for (const slot of data.timeline.slots ?? []) {
+        const request = requests.find(r => r.id === slot.id)
+        if (!request) continue
+        const expected = spans((slot.vocals ?? []).filter(v => sung(v.line)))
+        const carried = spans((request.vocals ?? []).map(v => ({line: v.line, start: v.at, end: v.end})))
+        const lines = [...new Set([...expected.keys(), ...carried.keys()])].filter(line => {
+            const a = expected.get(line), b = carried.get(line)
+            return !a || !b || Math.abs(a[0] - b[0]) > SAME_TIME || Math.abs(a[1] - b[1]) > SAME_TIME
+        }).sort((a, b) => a - b)
+        if (lines.length) outdated.push({clip: slot.id, lines})
+    }
+    return outdated
+}
 
 export function timingView(dir: string, data: Project, requests: Request[]): TimingView | undefined {
     const timing = data.lyricsTiming
@@ -51,6 +89,7 @@ export function timingView(dir: string, data: Project, requests: Request[]): Tim
         cuts: slots.map(s => ({id: s.id, start: s.start, end: s.end, beat: beatOfSlot.get(s.id)})),
         beats: beats.map(b => ({id: b.id, planned: planned(b.id), clips: requests.filter(c => c.beatId === b.id).map(c => c.id)})),
         unplanned: data.shotMoments ? beats.filter(b => !planned(b.id)).map(b => b.id) : [],
+        outdated: outdatedClips(data, requests),
         audio: insideProject(dir, data.stems?.vocals) ?? insideProject(dir, readJson<{ song?: string }>(join(dir, 'output', 'timeline.json'))?.song),
     }
 }
