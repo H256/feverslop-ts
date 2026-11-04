@@ -41,17 +41,17 @@ export const BASE_TWO_PASS: TwoPassRecipe = {
     first: {sampler: 'res_multistep', scheduler: 'simple', steps: 20},
     second: {sampler: 'euler', scheduler: 'beta', steps: 4, denoise: 0.2},
 }
-// PRISM DMAD/PDMD, a distilled H3 checkpoint: 8 steps euler/beta57 (a scheduler of RES4LYF), then 2 steps of refine at denoise 0.2
+// PRISM DMAD/PDMD, a distilled H3 checkpoint: 4 steps euler/beta57 (a scheduler of RES4LYF), then 2 steps of refine at denoise 0.2 - 4 steps avoid plastic skin
 export const PRISM_TWO_PASS: TwoPassRecipe = {
     unet: 'PRISM_DMAD_PDMD_int8.safetensors',
-    first: {sampler: 'euler', scheduler: 'beta57', steps: 8},
+    first: {sampler: 'euler', scheduler: 'beta57', steps: 4},
     second: {sampler: 'euler', scheduler: 'beta57', steps: 2, denoise: 0.2},
 }
 
 export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: string, recipe: TwoPassRecipe = BASE_TWO_PASS): TwoPassResult {
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
     const audioVae = wf.VAELoader({vae_name: 'minimax_h3_audio_vae_fp32.safetensors'})
-    const unet = wf.UNETLoader({unet_name: recipe.unet, weight_dtype: 'default'})
+    const unet = wf.UNETLoader({unet_name: dyn(recipe.unet), weight_dtype: 'default'})
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     // the audio tracks, the song guide and the pinned first frame as in h3-ref2video - see the comments there
