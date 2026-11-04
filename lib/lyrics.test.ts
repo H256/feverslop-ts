@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {alignLyrics, keepTogether, refineSections} from "./lyrics.ts";
+import {alignLyrics, keepTogether, refineSections, tightenStarts} from "./lyrics.ts";
 import type {LyricSection, LyricsTiming, MusicMap} from "./project.ts";
 
 // 120 bpm: a bar every 2 s
@@ -82,5 +82,30 @@ describe('alignLyrics - a word matched bars away from its line', () => {
     })
     test('without a bpm the timing stays as it was', () => {
         expect(alignLyrics(sections, words).lines[1]!.start).toBe(103)
+    })
+})
+
+describe('tightenStarts', () => {
+    const line = (n: number, words: [number, number][], more: Partial<LyricsTiming['lines'][number]> = {}) => ({
+        line: n, sectionIndex: 0, section: 'Chorus', text: 'a b', start: words[0]![0], end: words.at(-1)![1], confidence: 1,
+        words: words.map(([start, end], i) => ({text: 'w' + i, start, end})), ...more,
+    })
+    // 100 values a second: silence until 1.4 s, then singing to 3 s, silence again, then singing from 5 s
+    const peaks = Array.from({length: 800}, (_, i) => (i >= 140 && i < 300) || i >= 500 ? 0.6 : 0.004)
+
+    test('a first word that starts in silence starts where the singing does; the rest of the line stays', () => {
+        const {timing, moved} = tightenStarts({lines: [line(0, [[1, 2], [2, 3]])]}, peaks)
+        expect(moved).toEqual([{line: 0, by: 0.4}])
+        expect(timing.lines[0]!.words.map(w => [w.start, w.end])).toEqual([[1.4, 2], [2, 3]])
+        expect(timing.lines[0]!.start).toBe(1.4)
+    })
+    test('a line that starts on its sound, or was placed by hand, is left alone', () => {
+        const {timing, moved} = tightenStarts({lines: [line(0, [[1.4, 2], [2, 3]]), line(1, [[4, 5], [5, 6]], {byHand: true})]}, peaks)
+        expect(moved).toEqual([])
+        expect(timing.lines[1]!.words[0]!.start).toBe(4)
+    })
+    test('a start never moves past what is left of its word', () => {
+        const {timing} = tightenStarts({lines: [line(0, [[1, 1.5], [1.5, 3]])]}, peaks)
+        expect(timing.lines[0]!.words[0]!.end - timing.lines[0]!.words[0]!.start).toBeGreaterThanOrEqual(0.05)
     })
 })

@@ -2,19 +2,25 @@ import {cli} from '../lib/cli.ts';
 // When each sung line and word of a music video is, as the workspace's Timing page moves them on the vocals - CLI first (#549).
 // Without an option every line is printed with its start and end; --json gives the words in the form --set takes back. A moved
 // line changes the clips it is sung in; their beats lose their shot plan, the next plan run plans just those again.
-// usage: bun run timing <project-id> [--json | --set=timing.json]
+// usage: bun run timing <project-id> [--json | --set=timing.json | --tighten]
+// --tighten: the first word of each line that starts in silence starts where the singing does (the lines placed by hand stay) - a project
+// aligned before that was part of the alignment gets it here, and a run of --redo=lyricsTiming has it by itself.
 import {existsSync, readFileSync} from "node:fs";
+import {join} from "node:path";
 import {parseArgs} from "node:util";
 import {formatTime} from "../lib/frames.ts";
+import {MIN_WORD_SEC} from "../lib/lyrics.ts";
+import {readFineWaveform} from "../lib/waveform.ts";
+import {EARLY_FROM, leadOf} from "../shared/timing-fit.ts";
 import {log, styles} from "../lib/log.ts";
 import {commandTarget} from "../lib/editor/preproduction.ts";
 import {readTiming, type TimingChange, writeTiming} from "../lib/editor/timing.ts";
 cli('timing')
 
-const usage = 'usage: bun run timing <project-id> [--json | --set=timing.json]'
+const usage = 'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten]'
 const {values: args, positionals} = (() => {
     try {
-        return parseArgs({args: Bun.argv.slice(2), allowPositionals: true, options: {json: {type: 'boolean', default: false}, set: {type: 'string'}}})
+        return parseArgs({args: Bun.argv.slice(2), allowPositionals: true, options: {json: {type: 'boolean', default: false}, set: {type: 'string'}, tighten: {type: 'boolean', default: false}}})
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
@@ -26,16 +32,30 @@ const view = await readTiming(t)
 if (!view) log.usageError(`${t.id} has no timed lyrics - they come with "alignLyrics" (or singers) and the stems: bun index.ts ${t.id} --until=story`, usage)
 const timing = view!
 
-if (args.set !== undefined) {
+if (args.tighten && args.set !== undefined) log.usageError('--tighten and --set do not go together', usage)
+let change: TimingChange | undefined
+if (args.tighten) {
+    const loudness = timing.audio ? await readFineWaveform(join(t.dir, timing.audio.file), 100).catch(() => undefined) : undefined
+    if (!loudness) log.usageError(`the vocals of ${t.id} cannot be read - they come with the stems: bun index.ts ${t.id} --until=story`, usage)
+    let early = timing.lines.flatMap(l => { const lead = l.words[0] ? leadOf(l.words, loudness!) : 0; return lead >= EARLY_FROM && !l.byHand ? [{line: l.line, text: l.text, lead}] : [] })
+    // a line with a word of no length cannot be saved as it is (an alignment that failed): it is left to the Timing page
+    const broken = (n: number) => timing.lines.find(x => x.line === n)!.words.some(w => w.end - w.start < MIN_WORD_SEC)
+    for (const e of early.filter(e => broken(e.line))) log.warn(`line ${e.line + 1} (${e.text}) has a word without length - set it on the Timing page`)
+    early = early.filter(e => !broken(e.line))
+    for (const e of early) log.info(`${String(e.line + 1).padStart(4)}  starts ${e.lead.toFixed(2)} s early  ${e.text}`)
+    if (!early.length) log.success('no line starts in silence - nothing to tighten')
+    else change = {lines: early.map(e => { const l = timing.lines.find(x => x.line === e.line)!; const by = Math.min(e.lead, l.words[0]!.end - l.words[0]!.start - MIN_WORD_SEC); return {line: e.line, words: l.words.map((w, n) => ({start: n === 0 ? w.start + by : w.start, end: w.end}))} })}
+} else if (args.set !== undefined) {
     if (!existsSync(args.set)) log.usageError(`no file ${args.set}`, usage)
-    let change: TimingChange
     try {
         change = JSON.parse(readFileSync(args.set, 'utf8'))
     } catch (e) {
         log.usageError(`${args.set} is no JSON: ${(e as Error).message} - bun run timing ${t.id} --json gives the form`, usage)
     }
+}
+if (change) {
     // a line given back as it was is no change - writeTiming tells, as it does for the workspace's Timing page
-    const result = await writeTiming(t, change!)
+    const result = await writeTiming(t, change)
     if (!result.changed.length) log.success('the timing is the same - nothing changed')
     else {
         log.step('Moved', `${result.changed.length} line(s)`)
