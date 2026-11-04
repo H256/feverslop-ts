@@ -2,6 +2,45 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.7.0 – songs in the library, the timing fixed once, and the settings as a page
+
+_2026-11-04_
+
+A song now goes into the library with its stems and the timing of every word, placed by hand on the Timing page; another video of the same song starts at the story. The Timing page finds what wants a look and fixes it with a click: early starts, cuts in a word, lines not found, lines heard but not sung. The render settings of a project are a page of their own, a distilled checkpoint gets its own two-pass workflow, and a rendered clip is checked for black and frozen frames. 25 pull requests since v0.6.1 (#573–#601).
+
+### Highlights
+
+- **Songs in the library**: `bun run export-song` puts the audio, the lyrics, the stems, the analysis, the transcript and the timing with every line placed by hand into `library/songs/<id>/`. `bun run import-song` and `bun run init` take it into a project, whose plan then starts at the story; the Timing page has **Put the song into the library…**. A project gets a copy, a song in the library is never overwritten (#598, #600).
+- **Six stems for every song**: `htdemucs_6s` adds guitar and piano to the four `htdemucs_ft` stems, so a guitarist found later needs no second pass (#598).
+- **Settings page and `bun run config`**: the render settings of a project (`config.json`) by hand, checked as the loader checks them, with what a change makes stale (#577).
+- **PRISM two-pass**: `h3-ref2video-prism-2pass` and its film twin run the distilled PRISM checkpoint, 4 steps euler/beta57 at the sigma shift 12/3, then 2 steps of refine (#575, #590, #592, #594).
+- **Clip QA**: every rendered clip is checked for black frames, frozen frames and unplanned jumps; `qaRetries` renders a black or frozen one again with another seed and keeps the better take (#574).
+
+### Timing
+
+- The first word of a line starts where the singing does, measured on the vocals stem; `bun run timing <id> --tighten` for a project aligned before (#587).
+- Early starts and the clips whose prompt still has the old times of a moved line are named on the page (#579).
+- A clip cut inside a word is cleared with one click; **N** goes to the next line that wants a look (#582).
+- A line found sung nowhere gets its words laid out where it stands, to be dragged where it is sung ("not found") (#596).
+- A line heard but not sung (a misheard ad-lib) can be left out: no clip sings it, it stays to be sung again. `bun run timing <id> --off=61` / `--on=61` (#599).
+
+### Workspace
+
+- Casting: roles as cards side by side; **Remove** marks a role on its card, and a bar below saves everything taken out at once. **Add a character** and **Add a place** sit over the lists (#591, #601).
+- Timeline: render the stale, the missing or all clips with one button, asked first (#584).
+- `bun run editor` starts with the FEVERSLOP TS logo, glowing from yellow to magenta (#593).
+
+### Film
+
+- The choice made for a clip (a person left out, another view) adapts that clip's shots: who is named, where the camera stands (#573).
+- `add-view` reaches the opposite side of a place in two steps, through a view in between (#573).
+
+### Fixes
+
+- Two-pass: the context frames of a continuing clip guide its first pass only (#580).
+- `project.json` is saved again while another program holds it open for a moment (the virus scanner, the search indexer) - it stopped a run with EPERM on Windows (#595).
+- The e2e spec after a merge, and the PRISM goldens after the change of steps (#585, #592).
+
 ## v0.6.1 – the workspace builds from a fresh checkout, and keeps what you change
 
 _2026-11-03_
