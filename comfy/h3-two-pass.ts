@@ -91,13 +91,16 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // The guides are keyframes on the latent's own grid (comfy/ldm/minimax/model.py): a pinned frame encoded for pass 1
     // does not fit the upscaled latent, so each pass anchors the song and the first frame on its own latent. The
     // text and the reference pictures stay those of pass 1 - pass 2 only refines what pass 1 laid out.
-    // A part of a clip (opts.endFrame): the pictures around it guide pass 1 only. Pass 2 changes little, and encoding them at the full size ran out of memory on 32 GB.
+    // A part of a clip (opts.endFrame), and the context frames of a clip that goes on from the one before (opts.startClip, 22 frames
+    // or more): they guide pass 1 only. Pass 2 changes little (denoise 0.2) and starts from what pass 1 made of them; encoding them
+    // again at the full size ran out of memory on the 32 GB Radeon (7 GiB in MiniMaxH3AddGuide, #157, #530). The head that holds the
+    // context frames is cut off after the render anyway. A single pinned first frame still guides both passes: it costs little.
     const guide = (latent: NodeRef<"LATENT">, refine = false) => {
         const guided = song
             ? wf.MiniMaxH3AddGuide({positive: references.positive, latent, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO}).positive
             : references.positive
         if (refine && opts.endFrame) return guided
-        const started = startFrame
+        const started = startFrame && !(refine && opts.startClip)
             ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
             : guided
         return endGuide(wf, started, latent, videoVae.VAE, opts.endFrame)
