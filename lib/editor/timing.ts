@@ -1,4 +1,5 @@
-import {existsSync, readFileSync, renameSync, statSync, writeFileSync} from "node:fs";
+import {existsSync, readFileSync, statSync} from "node:fs";
+import {writeJsonFile} from "../json-file.ts";
 import {isAbsolute, join, relative, resolve} from "node:path";
 import type {ClipRequest} from "../compose.ts";
 import {withProjectLock} from "../lock.ts";
@@ -173,9 +174,7 @@ export async function writeTiming(target: EditorTarget, change: TimingChange): P
         const result = applyTiming(data, change, requests)
         if (!result.changed.length) return result
         // next to it first, as the pipeline writes it: a crash mid-write never leaves half a project.json
-        const partial = `${file}.${process.pid}.partial`
-        writeFileSync(partial, JSON.stringify(data, null, 2))
-        renameSync(partial, file)
+        writeJsonFile(file, data)
         return result
     })
 }

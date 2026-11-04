@@ -1,4 +1,5 @@
-import {existsSync, readFileSync, renameSync, rmSync, writeFileSync} from "node:fs";
+import {existsSync, readFileSync, rmSync} from "node:fs";
+import {writeJsonFile} from "../json-file.ts";
 import {join} from "node:path";
 import slugify from "slugify";
 import {type CastEntry, copyKey, droppedCopies, libraryFingerprint, readCastingFile, resolveCasting} from "../casting.ts";
@@ -28,10 +29,7 @@ const dataOf = (target: EditorTarget): Data => readJson<Data>(join(target.dir, '
 
 /** project.json written as the pipeline writes it: next to it first, so a crash mid-write never leaves half of it. */
 function save(target: EditorTarget, data: Data) {
-    const file = join(target.dir, 'project.json')
-    const partial = `${file}.${process.pid}.partial`
-    writeFileSync(partial, JSON.stringify(data, null, 2))
-    renameSync(partial, file)
+    writeJsonFile(join(target.dir, 'project.json'), data)
 }
 
 /** The steps of this kind of project, in the order of the pipeline - what a --redo from the page may name. */
