@@ -279,6 +279,22 @@ test('timing: a first word that starts before its singing is said, tightened wit
   await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.4, end: 2}, {start: 2, end: 3}]}]})
 })
 
+test('timeline: the clips that are not rendered are marked and rendered with one button, asked first', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Render missing (1)'}).click()
+  await expect(page.getByText('1 marked')).toBeVisible()
+  await expect(dialog(page)).toContainText('clip-2')
+  await dialog(page).getByRole('button', {name: 'Render them'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-2'], again: false}, servers: ['gpu']})
+})
+
+test('timeline: every clip can be rendered again in one go, asked first', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Render all (2)'}).click()
+  await expect(page.getByText('2 marked')).toBeVisible()
+  await dialog(page).getByRole('button', {name: 'Render them'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-1', 'clip-2'], again: true}, servers: ['gpu']})
+
 test('timing: a clip cut inside a word is cleared with one click, and the next problem key goes to the line that wants a look', async ({page}) => {
   await page.goto(`${base}/p/music/demo/timing`)
   await page.locator('.tline-row').first().click()
