@@ -47,9 +47,9 @@ describe('intro - a clip in front of a finished video (#608)', () => {
         expect(() => introFile('gone.mp4', dir)).toThrow('no file gone.mp4')
     })
     test('the workspace: the command for the page, and the video under the one it was made from', () => {
-        expect(runCommand({id: 'demo', kind: 'music', dir: '/x'}, {type: 'intro', from: 'demo-labeled.mp4', file: '', fade: 0.5, saveDefault: true}))
+        expect(runCommand({id: 'demo', kind: 'music'}, {type: 'intro', from: 'demo-labeled.mp4', file: '', fade: 0.5, saveDefault: true}))
             .toEqual({script: 'tools/intro.ts', args: ['demo', '--from=demo-labeled.mp4', '--file=', '--fade=0.5', '--save-default']})
-        expect(() => runCommand({id: 'demo', kind: 'music', dir: '/x'}, {type: 'intro', fade: -1})).toThrow('no such fade')
+        expect(() => runCommand({id: 'demo', kind: 'music'}, {type: 'intro', fade: -1})).toThrow('no such fade')
         expect(finalLabel('demo', 'demo-finished-labeled-intro.mp4')).toMatchObject({label: 'Final finished + AI label + intro'})
     })
 })
