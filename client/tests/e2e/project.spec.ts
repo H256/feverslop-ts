@@ -406,7 +406,7 @@ test('timeline: an intro is put in front of a finished video - input/intro.mp4 o
 
 test('timeline: a title card and credits are added to a finished video, with the lines of the project and its artist', async ({page}) => {
   await page.unrouteAll()
-  posted = await stubProject(page, {
+  posted = await stubProject(page, 'music', {
     final: {state: 'current', file: 'demo.mp4', v: 1},
     finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}],
   })
