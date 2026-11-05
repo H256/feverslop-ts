@@ -1,6 +1,7 @@
 // casting.json: who plays each role and which picture each place has - the project's own (made as always) or one of the
 // asset library (lib/library.ts), copied into the project. The pipeline writes the file once after the cast step, every
-// entry "project:<id>", and never again: from then on it is the user's, and only read.
+// entry "project:<id>", and never again: from then on it is the user's, and only read. Only a cast changed by hand
+// (castingAfterCastChange) takes the entries of who left out and gives who came "project:<id>".
 //   {"characters": {"kael": "library:kael-red"}, "locations": {"stage": "project:stage"}}
 // A library asset is copied once (pinned, renamed to the role's id); project.json remembers which version, so the next
 // runs do nothing while entry and files match. A "library:" entry the library does not have stops the run before
@@ -36,6 +37,24 @@ export function writeCastingOnce(projectDir: string, cast: Cast): boolean {
     if (existsSync(file)) return false
     writeFileSync(file, JSON.stringify(defaultCasting(cast), null, 2) + '\n')
     return true
+}
+
+/**
+ * casting.json after the cast was changed by hand (the workspace's Casting page, bun run cast --set): the entries of whoever
+ * left the cast go - also a "library:" one, the role is gone - and whoever came gets "project:<id>". Every other entry stays as
+ * the user wrote it. Undefined when nothing changes.
+ */
+export function castingAfterCastChange(file: CastingFile, before: Cast, after: Cast): CastingFile | undefined {
+    const next: CastingFile = {...file}
+    let changed = false
+    for (const [section, kind] of [['characters', 'characters'], ['locations', 'locations']] as const) {
+        const entries = {...file[section]}
+        const now = new Set(after[kind].map(m => m.id))
+        for (const m of before[kind]) if (!now.has(m.id) && m.id in entries) { delete entries[m.id]; changed = true }
+        for (const m of after[kind]) if (!(m.id in entries) && !before[kind].some(b => b.id === m.id)) { entries[m.id] = `project:${m.id}`; changed = true }
+        next[section] = entries
+    }
+    return changed ? next : undefined
 }
 
 export function readCastingFile(projectDir: string): CastingFile {
