@@ -5,7 +5,8 @@ import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import AddViewForm from './AddViewForm.vue'
 import {chain} from './clips'
-import {newRefinish, refinishRequest, type NewView} from './forms'
+import {defaultSource, labelRequest, newLabel, newRefinish, refinishRequest, type NewView} from './forms'
+import LabelForm from './LabelForm.vue'
 import RefinishForm from './RefinishForm.vue'
 import type {Timeline} from './useTimeline'
 
@@ -84,6 +85,26 @@ export function useClipActions(timeline: Timeline) {
       submit: () => start(refinishRequest(form, picked.map(c => c.id))),
     })
   }
+  /** The finished videos a post-work step can start from: every final one but the low-resolution preview. */
+  const sources = () => project.value.finals.filter(f => !f.preview)
+  /** The AI marker over a finished video (bun run label): a new video next to it, nothing else changes. */
+  async function label() {
+    const from = defaultSource(project.value.id, project.value.finals)
+    if (!from) throw new Error('There is no final video yet: render it first.')
+    const {postwork} = project.value
+    const form = reactive(newLabel(postwork.label, from))
+    await ask({
+      title: 'Put the AI marker on a video',
+      lines: [
+        'A marker in a corner of a finished video, written next to it as <name>-labeled.mp4. The video it is made from stays as it is; the sound is copied.',
+        'Article 50(4) of the AI Act asks for it on a deep fake: real faces or voices made by AI. For an evidently artistic or fictional work, a marker at the start is enough.',
+      ],
+      warnings: [postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`],
+      body: () => h(LabelForm, {draft: form, finals: sources(), markers: postwork.markers}),
+      confirm: 'Put it on',
+      submit: () => start(labelRequest(form)),
+    })
+  }
   async function pickVersion(clip: EditorClip, version: {id: string, fromThisPlan?: boolean, source?: string}) {
     const later = chain(project.value, clip)
     const yes = await ask({
@@ -148,7 +169,7 @@ export function useClipActions(timeline: Timeline) {
   const guarded = <A extends unknown[]>(action: (...args: A) => Promise<unknown>) => toasts.guard(action)
   return {
     renderAgain: guarded(renderAgain), renderMarked: guarded(renderMarked), preview: guarded(preview), retake: guarded(retake),
-    refinish: guarded(refinish), pickVersion: guarded(pickVersion), saveOverride: guarded(saveOverride), addView: guarded(addView),
+    refinish: guarded(refinish), label: guarded(label), pickVersion: guarded(pickVersion), saveOverride: guarded(saveOverride), addView: guarded(addView),
     repeatLast: guarded(repeatLast), runNext: guarded(runNext), plain: guarded(plain), plan: guarded(plan),
     renderMarkedNow: renderMarked, afterRender,
   }

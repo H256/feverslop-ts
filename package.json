@@ -49,7 +49,8 @@
     "inspect": "bun tools/inspect.ts",
     "editor": "bun editor.ts",
     "add-view": "bun tools/add-view.ts",
-    "refinish": "bun tools/refinish.ts"
+    "refinish": "bun tools/refinish.ts",
+    "label": "bun tools/label.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

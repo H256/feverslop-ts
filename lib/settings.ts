@@ -3,6 +3,7 @@ import {homedir} from "node:os";
 import {dirname, join} from "node:path";
 import type {BasicCredentials, BearerTokenCredentials, SystemStatsResponse} from "@saintno/comfyui-sdk";
 import {warnUnknownKeys} from "./log.ts";
+import {postworkProblem} from "./postwork/config.ts";
 
 // The machine-specific connections: the LLM server and the ComfyUI servers. Stored outside the repo in a global
 // settings file (written by `bun run setup`), overridable per project (llm.model), by env vars and by CLI flags.
@@ -21,6 +22,8 @@ export type SettingsFile = {
     prices?: Record<string, { inputPerMillion: number, outputPerMillion: number, currency?: string }>,
     /** The asset library (lib/library.ts) - default: library/ in the working directory. */
     library?: string,
+    /** The post-work steps the same for every project (lib/postwork/config.ts): a marker, a name. A project's config.json beats them. */
+    postwork?: Record<string, Record<string, unknown>>,
 }
 
 // a missing url is the text server (with its key), a missing model the server's only model
@@ -71,7 +74,11 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object')
 
-    warnUnknownKeys(raw, ['llm', 'comfy', 'prices', 'library'], file)
+    warnUnknownKeys(raw, ['llm', 'comfy', 'prices', 'library', 'postwork'], file)
+    if (raw.postwork !== undefined) {
+        const wrong = postworkProblem(raw.postwork)
+        if (wrong) fail(wrong)
+    }
     if (raw.library !== undefined && (typeof raw.library !== 'string' || !raw.library.trim())) fail(`library must be a folder path, got ${JSON.stringify(raw.library)}`)
 
     if (raw.llm !== undefined) {

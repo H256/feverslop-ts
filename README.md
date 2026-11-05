@@ -155,6 +155,7 @@ cached project runs without either.
   troubleshooting
 - [docs/custom-workflows.md](docs/custom-workflows.md) – adding your own ComfyUI workflows as code
 - [docs/film.md](docs/film.md) – the experimental short-film pipeline (`bun run film:init`, `bun film.ts`): idea or screenplay → film
+- [docs/postwork.md](docs/postwork.md) – optional steps on the finished video for publishing: the AI marker the EU AI Act asks for on a deep fake
 - [docs/recipes.md](docs/recipes.md) – short answers to common tasks: fix one clip, portrait video, 60 fps, cheap iteration, the same band in every song
 - [docs/style-examples.md](docs/style-examples.md) – every built-in style, to copy into `style.txt`
 - [docs/minimax-h3-video-prompt-writing-guide.md](docs/minimax-h3-video-prompt-writing-guide.md) – the prompt format the clip requests follow
@@ -922,6 +923,7 @@ A film takes the same commands with `--film` (and `bun film.ts`); its screenplay
 - **Settings**: the render settings of the project - workflows (the video workflow from `comfy/workflows/`, the image and sheet workflows), video and picture size, aspect ratio, context frames, seed, the retries, the final frame rate and the finish. A change is checked as the loader checks it and the question before it says which rendered clips and pictures it makes stale (the workflow, the size and the aspect are part of what a clip is made from); nothing is rendered or planned by it. It is `bun run config <id>` in the terminal; other keys of `config.json` (singers, languages) are changed where they belong, or by hand. Not changed while a run is going on.
 - **Library**: the asset library, who uses what, a new asset from a picture.
 - **Refinish**: an older project larger, at 48 fps and finished, from the clips it has: see [Making an older project over](#making-an-older-project-over).
+- **AI marker**: the EU icon for AI-generated content (or a PNG of your own) over a finished video, as a new video next to it: see [Before publishing](#before-publishing).
 
 Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
 
@@ -945,6 +947,18 @@ A film clip can have a choice of its own: another view of its place, references 
 | `--finish` | the `finish` of `config.json`, else the mild one |
 | `--only=slot-001` | these clips, no final video |
 | `--again` | make the clips of the variant again, the old ones go to `old/attempts/` |
+
+### Before publishing
+
+Optional steps on a finished video, each a command that writes a new video next to the one it starts from - nothing is
+rendered again ([docs/postwork.md](docs/postwork.md)):
+
+- `bun run label <id> [--film]`: the AI marker in a corner - an EU icon from `assets/eu-ai-icons/` or a PNG of your own -
+  at the start, at an interval or the whole time: `<name>-labeled.mp4`. From 2 August 2026 the EU AI Act asks for such a
+  disclosure on a deep fake, e.g. a clip with a real face. On the page: *AI marker* under the timeline.
+
+Its settings can be kept in `"postwork"` of the settings file (every project) and of `config.json` (this project);
+`--save` keeps the options given.
 
 ### The asset library
 

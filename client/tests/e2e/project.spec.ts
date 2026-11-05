@@ -331,3 +331,27 @@ test('timing: a clip cut inside a word is cleared with one click, and the next p
   await page.keyboard.press('n')
   await expect(page.locator('.tedit-head b')).toBeVisible()
 })
+
+test('timeline: the AI marker is put on a finished video, from the settings of the project, changed in the question', async ({page}) => {
+  // its own stub: a project with a final video and its finished copy
+  await page.unrouteAll()
+  posted = await stubProject(page, {
+    final: {state: 'current', file: 'demo.mp4', v: 1},
+    finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}, {file: 'demo-finished.mp4', v: 1, label: 'Final finished', state: 'current', preview: false}],
+  })
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'AI marker'}).click()
+  // the finished video by default, and what the project has set
+  await expect(dialog(page).getByLabel('From')).toHaveValue('demo-finished.mp4')
+  await expect(dialog(page).getByLabel('Marker')).toHaveValue('generated-white50')
+  // no render servers: it runs on this machine
+  await expect(dialog(page).getByRole('checkbox', {name: /gpu/})).toHaveCount(0)
+  await dialog(page).getByLabel('When').selectOption('interval')
+  await dialog(page).getByLabel('Every (seconds)').fill('30')
+  await dialog(page).getByLabel('Marker').selectOption('basic-black')
+  await dialog(page).getByRole('checkbox', {name: /Keep these settings/}).check()
+  await dialog(page).getByRole('button', {name: 'Put it on'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {
+    type: 'label', from: 'demo-finished.mp4', marker: 'basic-black', mode: 'interval', seconds: 5, interval: 30, corner: 'top-right', size: 6, margin: 3, save: true,
+  }})
+})

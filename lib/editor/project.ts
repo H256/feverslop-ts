@@ -20,6 +20,9 @@ import type {FilmProject} from "../film/types.ts";
 import {withExtraViews} from "../film/views.ts";
 import {filmStage, musicStage, nextStage, type PlanStage} from "../stages.ts";
 import {clipRequestFile, clipRequestsDir} from "../previous-output.ts";
+import {MARKER_PRESETS, POSTWORK_DEFAULTS} from "../postwork/config.ts";
+import {loadPostwork} from "../postwork/store.ts";
+import {POSTWORK_ENDING_NAMES, POSTWORK_ENDINGS, type PostworkEnding} from "../postwork/video.ts";
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
 // nothing kept. The fast part (/api/project) only looks at which files are there; whether they are stale means hashing every
@@ -83,17 +86,34 @@ const probedVideo = (file: string, v: number) => {
     return probed.get(key)!
 }
 
-/** <id>.mp4, <id>-48fps.mp4, <id>-finished.mp4, <id>-48fps-finished.mp4, <id>-preview.mp4: what name a video has says what it is. Partial try-outs do not lie on the timeline. */
+const FINAL_NAME = new RegExp(`^(?:--([a-z0-9.-]+?))?(-preview)?(?:-(\\d+)fps)?(-finished)?((?:-(?:${POSTWORK_ENDING_NAMES.join('|')}))*)$`)
+
+/**
+ * <id>.mp4, <id>-48fps.mp4, <id>-finished.mp4, <id>-48fps-finished.mp4, <id>-preview.mp4, <id>-finished-labeled.mp4: what name a
+ * video has says what it is. Partial try-outs do not lie on the timeline.
+ */
 export function finalLabel(id: string, name: string): { label: string, preview: boolean, order: number } | undefined {
     if (!name.startsWith(id) || !name.endsWith('.mp4')) return undefined
-    // <id>--<variant>[-48fps][-finished].mp4: bun run refinish
-    const match = /^(?:--([a-z0-9.-]+?))?(-preview)?(?:-(\d+)fps)?(-finished)?$/.exec(name.slice(id.length, -'.mp4'.length))
+    // <id>--<variant>[-48fps][-finished].mp4: bun run refinish; then the endings of the post-work steps, in the order they ran
+    const match = FINAL_NAME.exec(name.slice(id.length, -'.mp4'.length))
     if (!match) return undefined
     const variant = match[1]
     const preview = !!match[2]
     const fps = match[3] ? Number(match[3]) : 0
-    const label = preview ? 'Preview video' : [variant ? (variant === 'original' ? 'Refinish' : `Refinish ${variant}`) : 'Final', fps ? `${fps} fps` : '', match[4] ? 'finished' : ''].filter(Boolean).join(' ')
-    return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 2 + (match[4] ? 1 : 0)}
+    const endings = (match[5] ?? '').split('-').filter(Boolean) as PostworkEnding[]
+    const base = preview ? 'Preview video' : [variant ? (variant === 'original' ? 'Refinish' : `Refinish ${variant}`) : 'Final', fps ? `${fps} fps` : '', match[4] ? 'finished' : ''].filter(Boolean).join(' ')
+    const label = endings.length ? `${base} + ${endings.map(ending => POSTWORK_ENDINGS[ending]).join(' + ')}` : base
+    // a step's video right after the one it was made from
+    return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 20 + (match[4] ? 10 : 0) + endings.length}
+}
+
+/** The settings of the post-work steps for their forms. Settings that cannot be read are said, and the defaults offered. */
+async function postworkOf(dir: string): Promise<PostworkView> {
+    try {
+        return {...await loadPostwork(dir), markers: MARKER_PRESETS}
+    } catch (e) {
+        return {...POSTWORK_DEFAULTS, markers: MARKER_PRESETS, problem: (e as Error).message}
+    }
 }
 
 async function finalsOf(dir: string, id: string, clips: { id: string }[]): Promise<EditorFinal[]> {
@@ -270,6 +290,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         command: `bun index.ts ${id}`,
         plan: {stage: musicStage(data), next: nextStage(musicStage(data))},
         sings: !!data.singing,
+        postwork: await postworkOf(dir),
         timed: !!data.lyricsTiming,
     }
 }
@@ -358,6 +379,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
         lastRun: run,
         command: `bun film.ts ${id}`,
         plan: {stage: filmStage(data), next: nextStage(filmStage(data))},
+        postwork: await postworkOf(dir),
     }
 }
 
@@ -405,7 +427,7 @@ export function projectGroup(id: string): string {
 
 export type {ProjectListing as EditorListing} from '../../shared/workspace.ts';
 import type {ProjectListing as EditorListing} from '../../shared/workspace.ts';
-import type {EditorPerson, EditorShot, EditorLine, EditorPicture, EditorMark, EditorViews, EditorOverride, EditorClip, EditorGroup, EditorProject, EditorFinal, EditorFreshness} from '../../shared/workspace.ts';
+import type {EditorPerson, EditorShot, EditorLine, EditorPicture, EditorMark, EditorViews, EditorOverride, EditorClip, EditorGroup, EditorProject, EditorFinal, EditorFreshness, PostworkView} from '../../shared/workspace.ts';
 export type {EditorPerson, EditorShot, EditorLine, EditorPicture, EditorMark, EditorViews, EditorOverride, EditorClip, EditorGroup, EditorProject, EditorFinal, EditorFreshness} from '../../shared/workspace.ts';
 
 const countOf = (folder: string, pattern: RegExp) => existsSync(folder) ? readdirSync(folder).filter(f => pattern.test(f)).length : 0
