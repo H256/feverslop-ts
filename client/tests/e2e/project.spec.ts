@@ -387,7 +387,7 @@ test('timeline: the AI marker is put on a finished video, from the settings of t
 
 test('timeline: an intro is put in front of a finished video - input/intro.mp4 of the project, or a path - and kept for every project', async ({page}) => {
   await page.unrouteAll()
-  posted = await stubProject(page, {
+  posted = await stubProject(page, 'music', {
     final: {state: 'current', file: 'demo.mp4', v: 1},
     finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}, {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false}],
   })
