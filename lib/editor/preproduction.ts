@@ -2,7 +2,7 @@ import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:f
 import {writeJsonFile} from "../json-file.ts";
 import {dirname, join} from "node:path";
 import slugify from "slugify";
-import {type CastEntry, copyKey, droppedCopies, libraryFingerprint, readCastingFile, resolveCasting} from "../casting.ts";
+import {CASTING_FILE, castingAfterCastChange, type CastEntry, copyKey, droppedCopies, libraryFingerprint, readCastingFile, resolveCasting} from "../casting.ts";
 import {libraryDir, libraryIds} from "../library.ts";
 import {withProjectLock} from "../lock.ts";
 import {dropPartials, KEPT_BY_HAND} from "../partials.ts";
@@ -329,8 +329,16 @@ export async function writeCast(target: EditorTarget, change: CastChange): Promi
     return withProjectLock(target.dir, target.id, () => {
         const data = readJson<Data>(join(target.dir, 'project.json'))
         if (!data) throw new Error('no project.json yet - plan up to the cast first')
+        const before = structuredClone(data.cast)
         const result = applyCast(target.kind, data, change)
-        if (result.changed) save(target, data)
+        if (!result.changed) return result
+        save(target, data)
+        // casting.json follows who is in the cast: the roles that left lose their entry, new ones run as "project:" (a file
+        // that is not there yet is written by the next run, from this cast)
+        if (before && data.cast && existsSync(join(target.dir, CASTING_FILE))) {
+            const casting = castingAfterCastChange(readCastingFile(target.dir), before, data.cast)
+            if (casting) writeJsonFile(join(target.dir, CASTING_FILE), casting)
+        }
         return result
     })
 }

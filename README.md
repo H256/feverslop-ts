@@ -1027,7 +1027,7 @@ story has, each played by the project itself:
 }
 ```
 
-The pipeline never writes it again: from then on it is yours, and only read. Change an entry to a library asset and
+The pipeline never writes it again: from then on it is yours, and only read - except when the cast itself is changed by hand (Casting page, `bun run cast --set`): a role that leaves the cast loses its entry, a new one gets `project:<id>`, every other entry stays as you wrote it. Change an entry to a library asset and
 the next run uses it:
 
 ```json
