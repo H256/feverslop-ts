@@ -632,6 +632,8 @@ export function applyScreenplayProposal(data: FilmProject, proposal: ScreenplayP
     data.screenplay = proposal.screenplay
     data.cast = cast
     if (data.outline) data.outline = outlineWith(data.outline, removedCharacters, proposal.added)
+    // the idea still tells of the cast before: the script notes read the script against it knowing what changed
+    data.roleChanges = [...data.roleChanges ?? [], {added: proposal.added.map(({name, role}) => ({name, role})), removed: removedCharacters.map(c => c.name)}]
     drop(data, dropped)
     // the looks: everyone who stays keeps theirs (kept by hand), who went is out, who came is asked for by the next run
     const looks = (['characterLooks', 'characterDescriptions'] as const).filter(step => data[step] !== undefined)

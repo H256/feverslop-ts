@@ -1,7 +1,7 @@
 // Prompts of the short-film pipeline. Everything is written in English; only dialogue stays in its own language.
 // These are separate from lib/prompts.ts on purpose - the music-video prompts are tuned for songs and stay as they are.
 import type {AskOptions} from "../llm.ts";
-import type {Brief, FilmCast, FilmCharacter, FilmLocation, FilmProp, Outline, Scene, Screenplay} from "./types.ts";
+import type {Brief, FilmCast, FilmCharacter, FilmLocation, FilmProject, FilmProp, Outline, Scene, Screenplay} from "./types.ts";
 import {screenplayToText} from "./fountain.ts";
 
 // What the video model can actually show - the constraints of the generation, not taste. A clip is at most ~10 seconds
@@ -182,12 +182,17 @@ Locations: the "description" is the place as the film first shows it - what stan
 }
 
 /** A read-through of the script for what contradicts itself - the planning and the video model can only follow a script that does. */
-export function scriptNotesPrompt(screenplay: Screenplay, idea?: string): AskOptions {
+export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleChanges: NonNullable<FilmProject['roleChanges']> = []): AskOptions {
+    // a role added or taken out after the idea was written: the script differs from the idea in who is in it, on purpose
+    const changed = idea && roleChanges.length ? `\n\nThe cast was changed on purpose since the idea was written - a difference from the idea in who is in the film, and what follows from it, is no fault:\n${roleChanges.map(change => [
+        ...change.removed.map(name => `- ${name} left the film`),
+        ...change.added.map(role => `- ${role.name} came in: ${role.role}`),
+    ].join('\n')).join('\n')}` : ''
     return {
         // thinking and answer share the limit: a long script made the model think through all of it and never answer
         maxTokens: 12288,
         reasoning: 'low',
-        input: `${idea ? `Story idea the script was written from:\n${idea}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n')}`,
+        input: `${idea ? `Story idea the script was written from:\n${idea}${changed}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n')}`,
         instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.${idea ? ' Also: a step the story idea names that the script does not show, or shows in another order or with another ending.' : ''}
 Answer only with JSON: {"notes": ["s5-s7: <what contradicts what, in one sentence>"]}. Name the scenes. At most 8 notes, the ones that matter most for the picture; [] if the script is consistent.`,
     }

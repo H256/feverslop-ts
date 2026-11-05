@@ -204,6 +204,12 @@ if (mode === 'idea') {
         log.step('Scenes', styles.muted(`(${value.scenes.length}) ${value.scenes.map(s => s.heading).join(' · ')}`))
         log.step('Planned', styles.muted(`${value.scenes.reduce((sum, s) => sum + (Number(s.seconds) || 0), 0)}s`))
     })
+    // an outline written from the idea again has the cast of the idea: the roles added or taken out since (bun run story --adapt) are gone with it
+    if (film.generated.has('outline') && film.data.roleChanges) {
+        log.warn(`the outline is written from the idea again - the roles changed since (${film.data.roleChanges.flatMap(c => [...c.added.map(r => `+${r.name}`), ...c.removed.map(n => `-${n}`)]).join(', ')}) are as the idea has them; bun run story ${filmId} --film --adapt changes them again`)
+        delete film.data.roleChanges
+        await film.save()
+    }
 }
 
 /////////// 3 · SCREENPLAY
@@ -266,7 +272,7 @@ if (mode === 'screenplay' && seconds > 240) log.warn(`~${seconds}s is a long fil
 /////////// 3b · SCRIPT NOTES - what the script contradicts itself in. The pipeline's own script (an idea) is repaired; a handed-in screenplay is only reported
 // - it is the writer's - unless --fix-script asks for the repair
 const readScript = async () => {
-    const answer = await askJson<{ notes?: unknown }>(scriptNotesPrompt(screenplay, mode === 'idea' ? idea : undefined))
+    const answer = await askJson<{ notes?: unknown }>(scriptNotesPrompt(screenplay, mode === 'idea' ? idea : undefined, film.data.roleChanges))
     return Array.isArray(answer.notes) ? answer.notes.filter((n): n is string => typeof n === 'string' && !!n.trim()).map(n => n.trim()) : []
 }
 let scriptNotes: string[] = film.data.scriptNotes ?? []

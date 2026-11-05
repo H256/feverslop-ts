@@ -6,6 +6,7 @@ import type {FilmProject, Screenplay} from "./types.ts";
 import {adaptProblems, adaptRefusal, castWith, checkRoleChange, droppedByProposal, parseAddedRole, readAdaptAnswer, type ScreenplayProposal, screenplayFingerprint} from "./adapt.ts";
 import {applyScreenplayProposal, bookView, castView, readBook, SCREENPLAY_PROPOSAL, writeScreenplayProposal} from "../editor/preproduction.ts";
 import {KEPT_BY_HAND} from "../partials.ts";
+import {scriptNotesPrompt} from "./prompts.ts";
 import {runCommand} from "../editor/runs.ts";
 import {writeJsonFile} from "../json-file.ts";
 
@@ -109,6 +110,12 @@ describe('a film\'s role added or taken out (#589)', () => {
         expect(data.outline!.characters.map(c => c.name)).toEqual(['Ana', 'Kai'])
         expect(data.outline!.scenes[0]!.characters).toEqual(['Ana'])
         expect(data.castingCopies).toBeUndefined()
+        // the idea still tells of Bo: reading the script against it, the change is said, so that it is not taken for a fault
+        expect(data.roleChanges).toEqual([{added: [kai], removed: ['Bo']}])
+        const notes = scriptNotesPrompt(data.screenplay!, 'Ana and Bo wait in the hall.', data.roleChanges)
+        expect(notes.input).toContain('The cast was changed on purpose since the idea was written')
+        expect(notes.input).toContain('- Bo left the film\n- Kai came in: the night porter')
+        expect(scriptNotesPrompt(data.screenplay!, undefined, data.roleChanges).input).not.toContain('changed on purpose')
         expect(droppedByProposal(data)).toEqual([])
     })
 
