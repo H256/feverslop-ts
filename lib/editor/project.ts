@@ -20,7 +20,7 @@ import type {FilmProject} from "../film/types.ts";
 import {withExtraViews} from "../film/views.ts";
 import {filmStage, musicStage, nextStage, type PlanStage} from "../stages.ts";
 import {clipRequestFile, clipRequestsDir} from "../previous-output.ts";
-import {MARKER_PRESETS, POSTWORK_DEFAULTS} from "../postwork/config.ts";
+import {INTRO_EXTENSIONS, MARKER_PRESETS, POSTWORK_DEFAULTS} from "../postwork/config.ts";
 import {loadPostwork} from "../postwork/store.ts";
 import {POSTWORK_ENDING_NAMES, POSTWORK_ENDINGS, type PostworkEnding} from "../postwork/video.ts";
 
@@ -107,12 +107,18 @@ export function finalLabel(id: string, name: string): { label: string, preview: 
     return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 20 + (match[4] ? 10 : 0) + endings.length}
 }
 
+/** input/intro.<ext> of the project, as the intro takes it when no file is set. */
+const introFoundIn = (dir: string): { introFound?: string } => {
+    const found = INTRO_EXTENSIONS.map(ext => `input/intro.${ext}`).find(name => existsSync(join(dir, name)))
+    return found ? {introFound: found} : {}
+}
+
 /** The settings of the post-work steps for their forms. Settings that cannot be read are said, and the defaults offered. */
 async function postworkOf(dir: string): Promise<PostworkView> {
     try {
-        return {...await loadPostwork(dir), markers: MARKER_PRESETS}
+        return {...await loadPostwork(dir), markers: MARKER_PRESETS, ...introFoundIn(dir)}
     } catch (e) {
-        return {...POSTWORK_DEFAULTS, markers: MARKER_PRESETS, problem: (e as Error).message}
+        return {...POSTWORK_DEFAULTS, markers: MARKER_PRESETS, ...introFoundIn(dir), problem: (e as Error).message}
     }
 }
 

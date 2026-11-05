@@ -923,7 +923,7 @@ A film takes the same commands with `--film` (and `bun film.ts`); its screenplay
 - **Settings**: the render settings of the project - workflows (the video workflow from `comfy/workflows/`, the image and sheet workflows), video and picture size, aspect ratio, context frames, seed, the retries, the final frame rate and the finish. A change is checked as the loader checks it and the question before it says which rendered clips and pictures it makes stale (the workflow, the size and the aspect are part of what a clip is made from); nothing is rendered or planned by it. It is `bun run config <id>` in the terminal; other keys of `config.json` (singers, languages) are changed where they belong, or by hand. Not changed while a run is going on.
 - **Library**: the asset library, who uses what, a new asset from a picture.
 - **Refinish**: an older project larger, at 48 fps and finished, from the clips it has: see [Making an older project over](#making-an-older-project-over).
-- **AI marker**: the EU icon for AI-generated content (or a PNG of your own) over a finished video, as a new video next to it: see [Before publishing](#before-publishing).
+- **AI marker** and **Intro**: the EU icon for AI-generated content (or a PNG of your own) over a finished video, or a clip of your own in front of it, as a new video next to it: see [Before publishing](#before-publishing).
 
 Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
 
@@ -956,6 +956,8 @@ rendered again ([docs/postwork.md](docs/postwork.md)):
 - `bun run label <id> [--film]`: the AI marker in a corner - an EU icon from `assets/eu-ai-icons/` or a PNG of your own -
   at the start, at an interval or the whole time: `<name>-labeled.mp4`. From 2 August 2026 the EU AI Act asks for such a
   disclosure on a deep fake, e.g. a clip with a real face. On the page: *AI marker* under the timeline.
+- `bun run intro <id> [--film]`: a clip of your own in front of it - `input/intro.mp4` of the project or any path, a hard
+  cut or a fade, in the size of the video: `<name>-intro.mp4`. On the page: *Intro*.
 
 Its settings can be kept in `"postwork"` of the settings file (every project) and of `config.json` (this project);
 `--save` keeps the options given.

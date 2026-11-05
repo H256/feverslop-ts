@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import FormField from '../../components/FormField.vue'
+import KeepSettings from './KeepSettings.vue'
 import {CORNERS, LABEL_MODES, type LabelDraft} from './forms'
 
 /** The fields of the AI marker, filled into the caller's reactive draft - the question reads it when it is answered. */
@@ -47,6 +48,6 @@ const presetLabel = (marker: string) => {
       <FormField label="Height (% of the video)"><input v-model.number="draft.size" type="number" min="1" max="50" step="0.5" required></FormField>
       <FormField label="Margin (% of the height)"><input v-model.number="draft.margin" type="number" min="0" max="30" step="0.5" required></FormField>
     </div>
-    <label class="field" style="display: flex; gap: 8px"><input v-model="draft.save" type="checkbox"><span style="margin: 0">Keep these settings for this project (config.json)</span></label>
+    <KeepSettings :draft="draft" />
   </div>
 </template>

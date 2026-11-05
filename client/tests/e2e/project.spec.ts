@@ -355,3 +355,22 @@ test('timeline: the AI marker is put on a finished video, from the settings of t
     type: 'label', from: 'demo-finished.mp4', marker: 'basic-black', mode: 'interval', seconds: 5, interval: 30, corner: 'top-right', size: 6, margin: 3, save: true,
   }})
 })
+
+test('timeline: an intro is put in front of a finished video - input/intro.mp4 of the project, or a path - and kept for every project', async ({page}) => {
+  await page.unrouteAll()
+  posted = await stubProject(page, {
+    final: {state: 'current', file: 'demo.mp4', v: 1},
+    finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}, {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false}],
+  })
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Intro', exact: true}).click()
+  await expect(dialog(page).getByLabel('From')).toHaveValue('demo.mp4')
+  // the intro of the project is offered without a path
+  await expect(dialog(page).getByLabel(/Intro \(path/)).toHaveAttribute('placeholder', 'input/intro.mp4 of this project')
+  await dialog(page).getByLabel('From').selectOption('demo-labeled.mp4')
+  await dialog(page).getByLabel(/Intro \(path/).fill('D:/videos/channel.mp4')
+  await dialog(page).getByLabel(/Fade/).fill('0.5')
+  await dialog(page).getByRole('checkbox', {name: /every project/}).check()
+  await dialog(page).getByRole('button', {name: 'Put it in front'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'intro', from: 'demo-labeled.mp4', file: 'D:/videos/channel.mp4', fade: 0.5, saveDefault: true}})
+})

@@ -50,7 +50,8 @@
     "editor": "bun editor.ts",
     "add-view": "bun tools/add-view.ts",
     "refinish": "bun tools/refinish.ts",
-    "label": "bun tools/label.ts"
+    "label": "bun tools/label.ts",
+    "intro": "bun tools/intro.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
