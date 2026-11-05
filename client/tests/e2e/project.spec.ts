@@ -374,3 +374,24 @@ test('timeline: an intro is put in front of a finished video - input/intro.mp4 o
   await dialog(page).getByRole('button', {name: 'Put it in front'}).click()
   await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'intro', from: 'demo-labeled.mp4', file: 'D:/videos/channel.mp4', fade: 0.5, saveDefault: true}})
 })
+
+test('timeline: a title card and credits are added to a finished video, with the lines of the project and its artist', async ({page}) => {
+  await page.unrouteAll()
+  posted = await stubProject(page, {
+    final: {state: 'current', file: 'demo.mp4', v: 1},
+    finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}],
+  })
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Credits', exact: true}).click()
+  await expect(dialog(page).getByLabel('Artist (by …)')).toHaveValue('Klemens')
+  await expect(dialog(page).getByLabel(/Lines of your own/)).toHaveValue('Thanks to the band')
+  await dialog(page).getByLabel('Title (empty: the project\'s)').fill('Demo Song')
+  await dialog(page).getByLabel(/Lines of your own/).fill('Thanks to the band\n\nfeverslop.example')
+  await dialog(page).getByLabel('Marker on the title card').selectOption('generated-white')
+  await dialog(page).getByRole('checkbox', {name: /this project/}).check()
+  await dialog(page).getByRole('button', {name: 'Add them'}).click()
+  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {
+    type: 'credits', from: 'demo.mp4', opening: true, end: true, openingSeconds: 4, endSeconds: 0, title: 'Demo Song', artist: 'Klemens',
+    disclosure: 'Contains AI-generated content', marker: 'generated-white', extra: ['Thanks to the band', 'feverslop.example'], hardware: '', facts: true, sound: '', save: true,
+  }})
+})

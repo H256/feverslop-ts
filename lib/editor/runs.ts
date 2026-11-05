@@ -137,6 +137,39 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (action.saveDefault) args.push('--save-default')
             return {script: 'tools/intro.ts', args}
         }
+        case 'credits': {
+            const args = [id, ...(kind === 'film' ? ['--film'] : [])]
+            if (action.from !== undefined && action.from !== '') {
+                if (!VIDEO_NAME.test(action.from)) throw new Error(`no such from: ${action.from}`)
+                args.push(`--from=${action.from}`)
+            }
+            // one line of text each - the command checks the rest, as it does in the terminal
+            const text = (name: string, value: string | undefined) => {
+                if (value === undefined) return
+                if (/[\n\r\0]/.test(value)) throw new Error(`${name}: one line of text`)
+                args.push(`--${name}=${value}`)
+            }
+            text('title', action.title)
+            text(kind === 'film' ? 'director' : 'artist', kind === 'film' ? action.director : action.artist)
+            text('disclosure', action.disclosure)
+            text('marker', action.marker)
+            text('hardware', action.hardware)
+            text('sound', action.sound)
+            if (action.extra !== undefined) {
+                if (!Array.isArray(action.extra)) throw new Error('extra: a list of lines')
+                if (!action.extra.length) args.push('--no-lines')
+                for (const line of action.extra) text('line', line)
+            }
+            for (const [name, on] of [['opening', action.opening], ['end', action.end], ['facts', action.facts]] as const) if (on !== undefined) args.push(on ? `--${name}` : `--no-${name}`)
+            for (const [name, value] of [['opening-seconds', action.openingSeconds], ['end-seconds', action.endSeconds]] as const) {
+                if (value === undefined) continue
+                if (!/^\d+(\.\d+)?$/.test(String(value))) throw new Error(`no such ${name}: ${value}`)
+                args.push(`--${name}=${value}`)
+            }
+            if (action.save) args.push('--save')
+            if (action.saveDefault) args.push('--save-default')
+            return {script: 'tools/credits.ts', args}
+        }
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim()) throw new Error('a further view is for a place of a film, with a name and what it shows')
             return {script: 'tools/add-view.ts', args: [id, action.location, `--name=${action.name.trim()}`, `--shows=${action.shows.trim()}`]}

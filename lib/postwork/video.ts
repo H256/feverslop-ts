@@ -7,7 +7,7 @@ import {startSpinner, styles} from "../log.ts";
 // ending - so the steps chain in any order (<id>-labeled.mp4, then <id>-labeled-credits.mp4) and nothing is overwritten.
 
 /** The ending of each step's video, and what the workspace calls it (lib/editor/project.ts finalLabel). */
-export const POSTWORK_ENDINGS = {labeled: 'AI label', intro: 'intro'} as const
+export const POSTWORK_ENDINGS = {labeled: 'AI label', credits: 'credits', intro: 'intro'} as const
 export type PostworkEnding = keyof typeof POSTWORK_ENDINGS
 export const POSTWORK_ENDING_NAMES = Object.keys(POSTWORK_ENDINGS) as PostworkEnding[]
 

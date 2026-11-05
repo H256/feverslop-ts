@@ -20,7 +20,7 @@ export const project: EditorProject = {
   clips: [clip('clip-1', 0, true), clip('clip-2', 5, false)],
   pictures: [{id: 'ann', kind: 'character', name: 'Ann', file: 'output/assets/ann.png', exists: true, v: 1}],
   final: {state: 'missing'}, refinedVariants: [], finals: [], command: 'bun index.ts demo', sings: true, timed: true, plan: {stage: 'plan'},
-  postwork: {label: {marker: 'generated-white50', mode: 'credits', seconds: 5, interval: 60, corner: 'top-right', size: 6, margin: 3}, intro: {file: '', fade: 0}, introFound: 'input/intro.mp4', markers: ['generated-white', 'generated-white50', 'basic-black']},
+  postwork: {label: {marker: 'generated-white50', mode: 'credits', seconds: 5, interval: 60, corner: 'top-right', size: 6, margin: 3}, intro: {file: '', fade: 0}, credits: {opening: true, end: true, openingSeconds: 4, endSeconds: 0, title: '', artist: 'Klemens', director: '', artistLabel: 'by', directorLabel: 'Directed by', disclosure: 'Contains AI-generated content', marker: '', extra: ['Thanks to the band'], hardware: '', facts: true, sound: '', font: ''}, introFound: 'input/intro.mp4', markers: ['generated-white', 'generated-white50', 'basic-black']},
 }
 const fresh: EditorFreshness = {clips: {'clip-1': 'current'}, pictures: {ann: 'current'}}
 const status: ProjectStatus = {steps: [], changed: [], pictures: {total: 1, missing: 0, stale: 0}, clips: {total: 2, missing: 1, stale: 0}, final: 'missing', next: {command: 'bun index.ts demo --render=videos', why: 'Render 1 clip'}}

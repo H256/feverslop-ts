@@ -90,6 +90,14 @@ bun run label <id> --seconds=8 --save    # longer, and kept for this project
 The video it starts from stays as it is. See [docs/postwork.md](postwork.md) for the other markers, an interval, a PNG of
 your own, and why.
 
+The whole package for publishing - marker, title card and credits, the channel intro in front:
+
+```bash
+bun run label <id>
+bun run credits <id> --from=<id>-finished-labeled.mp4 --artist="Your Name"
+bun run intro <id> --from=<id>-finished-labeled-credits.mp4 --file=D:/videos/channel-intro.mp4
+```
+
 ## The same band in every song
 
 1. Render the band once in one project, then put each member into the library:

@@ -266,6 +266,18 @@ It runs on this machine, no GPU, in about the time the video plays. The new vide
 
 **In the terminal:** `bun run label <id>` with the same choices as options (`--marker=`, `--mode=`, `--corner=`, …).
 
+## Before publishing: a title card and credits
+
+**Credits** under the timeline puts a title card before a finished video and credits that scroll up after it: `<name>-credits.mp4`.
+
+- **Title card**: the title (empty: the project's), the artist - for a film who directed it -, the disclosure (*Contains AI-generated content*), and if you like the AI marker under it.
+- **Credits**: the title again, your own lines (one per line: thanks, links, your channel), and what it was made with: the language model, the models, the graphics cards. These are taken from what this project really ran, nothing is made up; your own words on the hardware come after them.
+- A sound under the credits (a path), else silence. The lengths: 0 for the credits is about 1.5 s per line.
+
+Keep your name and your lines for every project, and the next video needs a click. The run shows the credits line by line before it draws them.
+
+**In the terminal:** `bun run credits <id> [--artist=…] [--line=…] [--dry-run]`.
+
 ## Before publishing: an intro
 
 **Intro** under the timeline puts a clip of your own - a logo, a channel ident - in front of a finished video: `<name>-intro.mp4`.
