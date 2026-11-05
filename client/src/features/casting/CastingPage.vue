@@ -16,6 +16,7 @@ import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import CastEditor from './CastEditor.vue'
 import CastingRoleRow from './CastingRoleRow.vue'
+import NewFilmRoles from './NewFilmRoles.vue'
 import {castDraft, newMember, type CastDraft} from './forms'
 
 /** Who plays whom: a role given a library asset, or the cast changed by hand - two ways, never at once. */
@@ -84,7 +85,8 @@ const outCount = (kind: CastingRole['kind']) => [...out].filter(key => key.start
 /** The cast as a draft, without the roles taken out on the list. */
 const draftOf = (cast: CastView): CastDraft => {
   const d = castDraft(cast)
-  for (const kind of ['character', 'location'] as const) d[listOf(kind)] = d[listOf(kind)].filter(m => !m.id || !out.has(outKey(kind, m.id)))
+  // a film's roles taken out on the list go with the screenplay told anew, never with the cast by hand
+  if (!film.value) for (const kind of ['character', 'location'] as const) d[listOf(kind)] = d[listOf(kind)].filter(m => !m.id || !out.has(outKey(kind, m.id)))
   return d
 }
 // the form takes over what was taken out on the list: it is then shown there, put back with one click
@@ -110,7 +112,40 @@ const gone = computed(() => {
     .map(member => ({kind, member})))
 })
 const putBack = (kind: CastingRole['kind'], member: CastView['characters'][number]) => { draft.value![listOf(kind)].push({...member}) }
-useUnsavedChanges(() => editing.value || out.size > 0, 'changes to the cast')
+// a film: a role comes or goes with its screenplay told anew (#589) - added below the characters, taken out on the list, written by
+// the language model as a proposal on the Story page. Refused where the script is the user's
+const adapt = computed(() => film.value ? data.value?.cast?.adapt : undefined)
+const canAdapt = computed(() => !!adapt.value && !adapt.value.refused)
+const newRoles = reactive<{name: string, role: string}[]>([])
+const addRole = async () => {
+  newRoles.push({name: '', role: ''})
+  await nextTick()
+  const names = document.querySelectorAll<HTMLInputElement>('[data-cast="new-film-role"] input[aria-label="Name"]')
+  names[names.length - 1]?.focus()
+}
+const removable = (cast: CastView, role: CastingRole) => (cast.canAdd || (canAdapt.value && role.kind === 'character')) && !busy.value && inCast(cast, role)
+const discard = () => { out.clear(); newRoles.splice(0) }
+const tellAnew = toasts.guard(async () => {
+  const add = newRoles.map(r => ({name: r.name.trim().replace(/\s+/g, ' '), role: r.role.trim().replace(/\s+/g, ' ')}))
+  if (add.some(r => !r.name || !r.role)) throw new Error('every new role needs a name and who they are in the story')
+  if (add.some(r => r.name.includes(':'))) throw new Error('a name without a colon, please')
+  const gone = data.value!.casting.roles.filter(r => r.kind === 'character' && out.has(outKey(r.kind, r.id)))
+  const dropped = adapt.value?.dropped ?? []
+  const yes = await ask({
+    title: 'Tell the screenplay anew for this cast?',
+    lines: [
+      [add.length && `new: ${add.map(r => r.name).join(', ')}`, gone.length && `gone: ${gone.map(r => r.name).join(', ')}`].filter(Boolean).join(' · '),
+      'The language model writes the same scenes again with them: a part for whoever is new, nothing left of whoever goes. Nothing changes until you take it - it waits on the Story page next to the screenplay there is.',
+    ],
+    warnings: dropped.length ? [`Taking it drops what is read from the script: ${listSteps(dropped)}. Who stays keeps their looks, the look of the film and the places stay.`] : [],
+    confirm: 'Have it written',
+  })
+  if (!yes) return
+  await start({type: 'adapt-story', add, remove: gone.map(r => r.id)})
+  discard()
+  toStory = true
+})
+useUnsavedChanges(() => editing.value || out.size > 0 || newRoles.length > 0, 'changes to the cast')
 const saving = usePending()
 
 /** The cast saved: the form, or - from the list of roles - the cast without the roles taken out there. */
@@ -172,7 +207,7 @@ const saveCast = toasts.guard(async () => {
       <NoticeList :errors="data.casting.errors" :warnings="data.casting.warnings" />
       <div v-if="!data.cast" class="empty">No cast yet - plan it with the button above.</div>
       <template v-else-if="draft">
-        <div class="note">{{ film ? 'The names and texts of the screenplay\'s roles and places. Who is in it is the script\'s: that is changed there.' : 'Names, roles and props, and who is in it at all - without the library. Best right after the cast is planned: then nothing is built on it yet.' }}</div>
+        <div class="note">{{ film ? 'The names and texts of the screenplay\'s roles and places. Who is in it is the script\'s: a character added or taken out on the list of roles has the screenplay told anew.' : 'Names, roles and props, and who is in it at all - without the library. Best right after the cast is planned: then nothing is built on it yet.' }}</div>
         <div v-if="gone.length" class="note btn-row">
           <span>Out of the cast when saved:</span>
           <button v-for="{kind, member} in gone" :key="member.id" class="btn" :title="`Keep ${member.name} in the cast`" @click="putBack(kind, member)">Put back {{ member.name }}</button>
@@ -190,16 +225,25 @@ const saveCast = toasts.guard(async () => {
           <button class="btn" :disabled="busy" :title="film ? 'Change names and what they are by hand' : 'Change names, roles and what they are by hand, add or remove someone - no library needed'" @click="edit(data.cast)">{{ film ? 'Edit the roles and places' : 'Change the cast' }}</button>
           <span class="muted">Or give a role a library asset with the choice next to it.</span>
         </div>
+        <div v-if="adapt?.refused" class="note">A role is added or taken out in the script: {{ adapt.refused }}.</div>
         <div v-for="[kind, title] in ([['character', 'Characters'], ['location', 'Places']] as const)" v-show="rolesOf(kind).length || data.cast.canAdd" :key="kind" class="section">
           <PageBar :title="title">
             <button v-if="data.cast.canAdd" class="btn" :disabled="busy" @click="add(data.cast, kind)">{{ kind === 'character' ? 'Add a character' : 'Add a place' }}</button>
+            <button v-else-if="canAdapt && kind === 'character'" class="btn" :disabled="busy" title="A new role: the screenplay is told anew with them, as a proposal" @click="addRole">Add a character</button>
           </PageBar>
           <div class="role-grid">
-            <CastingRoleRow v-for="role in rolesOf(kind)" :key="role.id" :role="role" :options="data.casting.options[kind]" :removable="data.cast.canAdd && !busy && inCast(data.cast, role)"
+            <CastingRoleRow v-for="role in rolesOf(kind)" :key="role.id" :role="role" :options="data.casting.options[kind]" :removable="removable(data.cast, role)"
               :out="out.has(outKey(role.kind, role.id))" @choose="(value, select) => chooseGuarded(role, value, select)" @remove="remove(role)" @put-back="keep(role)" />
           </div>
+          <NewFilmRoles v-if="film && kind === 'character'" :roles="newRoles" />
         </div>
-        <div v-if="out.size" class="castbar note btn-row">
+        <div v-if="film && (out.size || newRoles.length)" class="castbar note btn-row">
+          <span>{{ [newRoles.length && `New: ${plural(newRoles.length, 'character')}`, out.size && `out: ${plural(out.size, 'character')}`].filter(Boolean).join(', ') }} - the screenplay is told anew for them, as a proposal</span>
+          <div class="spacer" />
+          <button class="btn primary" :disabled="busy" @click="tellAnew">Tell the screenplay anew</button>
+          <button class="btn" @click="discard">Discard</button>
+        </div>
+        <div v-else-if="out.size" class="castbar note btn-row">
           <span>Out of the cast when saved: {{ [outCount('character') && plural(outCount('character'), 'character'), outCount('location') && plural(outCount('location'), 'place')].filter(Boolean).join(', ') }}</span>
           <div class="spacer" />
           <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>

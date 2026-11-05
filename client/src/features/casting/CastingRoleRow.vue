@@ -13,7 +13,7 @@ import {useProject} from '../project/session'
  */
 const props = defineProps<{role: CastingRole, options: string[], removable: boolean, out?: boolean}>()
 const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement], remove: [], putBack: []}>()
-const {roots} = useProject()
+const {roots, project} = useProject()
 const viewer = useViewer()
 const own = computed(() => `project:${props.role.id}`)
 const value = computed(() => props.role.entry ?? own.value)
@@ -29,7 +29,7 @@ const about = computed(() => props.role.kind === 'character' ? (props.role.role 
       <div><b>{{ role.name }}</b> <span class="muted">{{ role.id }}</span></div>
       <div class="muted about" :title="about">{{ about }}</div>
       <div class="muted">{{ plural(role.clips.length, 'clip') }}</div>
-      <div v-if="out" class="warn">Out of the cast when saved.</div>
+      <div v-if="out" class="warn">{{ project.kind === 'film' ? 'Out of the screenplay told anew.' : 'Out of the cast when saved.' }}</div>
       <div v-else-if="role.libraryId && !role.copied" class="warn">Not copied yet: the next run takes it from the library.</div>
       <NoticeList v-if="!out" :errors="role.errors" :warnings="role.warnings" />
     </div>
@@ -43,7 +43,7 @@ const about = computed(() => props.role.kind === 'character' ? (props.role.role 
           <option v-for="id in options" :key="id" :value="`library:${id}`">library: {{ id }}</option>
           <option v-if="unknown" :value="role.entry">{{ role.entry }}</option>
         </select>
-        <button v-if="removable" class="btn" :aria-label="`Remove ${role.name}`" :title="role.kind === 'character' ? 'Out of the cast: the beats and shots are planned without them. Saved with the bar below' : 'Out of the cast: the beats are planned without it. Saved with the bar below'" @click="emit('remove')">Remove</button>
+        <button v-if="removable" class="btn" :aria-label="`Remove ${role.name}`" :title="project.kind === 'film' ? 'Out of the film: the screenplay is told anew without them, as a proposal. Asked for with the bar below' : role.kind === 'character' ? 'Out of the cast: the beats and shots are planned without them. Saved with the bar below' : 'Out of the cast: the beats are planned without it. Saved with the bar below'" @click="emit('remove')">Remove</button>
       </template>
     </div>
   </article>

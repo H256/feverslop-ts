@@ -456,3 +456,39 @@ Answer only with JSON: {"turn": "same" | "side" | "reverse", "between": {"name":
         },
     }
 }
+
+/**
+ * A screenplay of the pipeline's own (idea mode) told anew for a changed cast (#589): someone new gets a part, someone gone leaves
+ * it. The scenes, their places and their order stay, and the dialogue of everyone else as far as it can - code checks the answer
+ * (lib/film/adapt.ts). The new characters come back with what the cast has of them, the ones who stay keep theirs.
+ */
+export function adaptScreenplayPrompt(screenplay: Screenplay, brief: Brief, cast: { staying: FilmCharacter[], added: { name: string, role: string }[], removed: FilmCharacter[] }, problems: string[] = []): AskOptions {
+    const scenes = screenplay.scenes.map(({setting, location, time, shot, elements}) => ({setting, location, time, ...(shot ? {shot} : {}), elements}))
+    const person = (c: { name: string, role: string, aliases?: string[] }) => `- ${c.name}${c.aliases?.length ? ` (cues: ${c.aliases.join(', ')})` : ''}: ${c.role}`
+    return {
+        maxTokens: 16384,
+        reasoning: 'medium',
+        input: `Title: ${brief.title}
+Logline: ${brief.logline}
+Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
+Dialogue language: ${brief.language}
+
+The characters who stay:
+${cast.staying.map(person).join('\n') || '(nobody)'}
+${cast.added.length ? `\nNew characters - each gets a part in the story:\n${cast.added.map(person).join('\n')}\n` : ''}${cast.removed.length ? `\nCharacters who leave the film - they are in no scene any more, nobody speaks as them:\n${cast.removed.map(person).join('\n')}\n` : ''}
+The screenplay:
+${JSON.stringify({scenes})}${problems.length ? `\n\nThe answer before had these faults - avoid them:\n${problems.map(p => `- ${p}`).join('\n')}` : ''}`,
+        instructions: `You are a screenwriter. The cast of this short film was changed. Write the same screenplay again for the cast as it is now.
+
+${filmableRules}
+- Keep every scene, in the same order, with the same setting, location and time. Keep the plot, the tone and about the length.
+- The characters who stay keep their names, their cues and as much of their dialogue as the story allows, word for word.
+- A new character gets a fitting part in the events: they are in at least one scene, by their name as given, and their cue is that name.
+- A character who leaves is in no scene any more - no line, no action. What they did is done by someone who is still in the film, or is left out.
+- All dialogue is written in the dialogue language (${brief.language}) - natural, spoken. Action lines and deliveries are English.
+- Answer with "characters" for the new characters only: what they look like ("appearance": concrete and visible - age, build, face, hair, clothing; no personality) and how they sound ("voice": gender, age, pitch, timbre, pace, accent) - fitting the film's setting. [] when nobody is new.
+
+Answer only with JSON in this format:
+{"characters": [{"name": "", "role": "", "appearance": "", "voice": ""}], ${screenplayJson.slice(1).trimStart()}`,
+    }
+}
