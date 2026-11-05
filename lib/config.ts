@@ -12,6 +12,10 @@ export type RenderConfig = {
     imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
     videoResolution: Resolution,
     videoAspect: Aspect,            // the clips' aspect ratio, "16:9" (default), "9:16", "2:1", "2:3", ...
+    // sampling steps of a clip: -1 = the workflow's own (8 with the turbo LoRA, 20 of the base model, 4 + 2 of the PRISM two-pass).
+    // videoSteps is the one pass of a single-pass workflow or pass 1 of a two-pass one, videoRefineSteps pass 2 of a two-pass one
+    videoSteps: number,
+    videoRefineSteps: number,
     imageWorkflow: string,          // file name in comfy/workflows/, without .ts
     videoWorkflow: string,
     songAudio: boolean,             // final video: the original song replaces the clips' own audio
@@ -85,6 +89,8 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     imageResolution: -1,
     videoResolution: -1,
     videoAspect: '16:9',
+    videoSteps: -1,
+    videoRefineSteps: -1,
     imageWorkflow: 'kroma-image',
     videoWorkflow: 'h3-ref2video',
     songAudio: true,
@@ -129,6 +135,8 @@ export function llmProblem(llm: unknown): string | undefined {
 }
 export const aspectProblem = (value: unknown): string | undefined =>
     /^[1-9]\d*:[1-9]\d*$/.test(String(value)) ? undefined : `videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(value)}`
+export const stepsProblem = (key: string, value: unknown): string | undefined =>
+    value === -1 || (Number.isInteger(value) && (value as number) >= 1) ? undefined : `${key} must be -1 (the workflow's own) or a whole number of steps from 1, got ${JSON.stringify(value)}`
 export const contextFramesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 && (value === 0 || (value as number) % 17 === 5) ? undefined : `contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(value)}`
 export const leakRetriesProblem = (value: unknown): string | undefined =>
@@ -189,6 +197,10 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     }
     const aspectWrong = aspectProblem(config.videoAspect)
     if (aspectWrong) fail(aspectWrong)
+    for (const key of ['videoSteps', 'videoRefineSteps'] as const) {
+        const wrong = stepsProblem(key, config[key])
+        if (wrong) fail(wrong)
+    }
     if (typeof config.songAudio !== 'boolean') fail(`songAudio must be true or false, got ${JSON.stringify(config.songAudio)}`)
     const contextWrong = contextFramesProblem(config.contextFrames)
     if (contextWrong) fail(contextWrong)
