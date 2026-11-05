@@ -16,6 +16,8 @@ type Endpoint = {
     label: string,
     client?: OpenAI,
     modelId?: Promise<string>,
+    // what the server says the model is, beyond its id - the reasoning adapters match on it (see modelNames)
+    modelName?: string,
     // whether the server takes a JSON schema on Chat Completions (see openChat)
     chatSchema?: boolean,
     // false once the server answered the Responses API with 404 - it only has Chat Completions (see fetchAndDisplayResponse)
@@ -64,10 +66,24 @@ function getModelId(endpoint: Endpoint = text) {
     return endpoint.modelId
 }
 
+/**
+ * The names a server gives a model, its id first. The id can be an alias - Strata serves "Qwen3.8-Flash-Next IQ3_S" as
+ * "iq3_s" - and the model itself is then in meta.label (Strata), checkpoint (Lemonade) or root (vLLM). Only to know the
+ * model by: the calls name it by its id.
+ */
+export function modelNames(model: {id: string} & Record<string, unknown>): string {
+    const meta = model.meta as {label?: unknown} | undefined
+    return [model.id, meta?.label, model.checkpoint, model.root].filter((n): n is string => typeof n === 'string' && n !== '').join(' ')
+}
+
 async function resolveModelId(endpoint: Endpoint) {
     const client = getClient(endpoint)
     const ids: string[] = []
-    for await (const model of client.models.list()) ids.push(model.id)
+    const names = new Map<string, string>()
+    for await (const model of client.models.list()) {
+        ids.push(model.id)
+        names.set(model.id, modelNames(model as unknown as {id: string} & Record<string, unknown>))
+    }
     const list = ids.join(', ') || 'none'
     const setup = endpoint === text ? 'bun run setup llm-model' : 'bun run setup vision'
     let id: string
@@ -82,6 +98,7 @@ async function resolveModelId(endpoint: Endpoint) {
         throw new Error(`Several models on ${endpoint.url} (${list}) - pick one with: ${setup}`)
     }
     const parallel = endpoint === text && (settings.parallel ?? 1) > 1 ? `, up to ${settings.parallel} calls at once` : ''
+    endpoint.modelName = names.get(id)
     log.step(endpoint.label, `${styles.name(id)} ${styles.muted(`on ${endpoint.url}${parallel}`)}`)
     return id
 }
@@ -193,8 +210,9 @@ const reasoningAdapters: {
     },
 ]
 
-export function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningStrength) {
-    const adapter = reasoningAdapters.find(a => a.match.test(prompt.model ?? ''))
+// name: what the model is known by (modelNames) - its id, unless the server tells more
+export function applyReasoning(prompt: ResponseCreateParamsStreaming, level: ReasoningStrength, name = prompt.model ?? '') {
+    const adapter = reasoningAdapters.find(a => a.match.test(name))
     return adapter ? adapter.apply(prompt, level) : {...prompt, reasoning: {effort: level === 'none' ? 'low' as const : level}}
 }
 
@@ -211,7 +229,8 @@ export async function fetchAndDisplayResponse(prompt: ResponseCreateParamsStream
     let incomplete: string | undefined
     // a stream that ends without a terminal event was cut off by the connection or the server - what came before is not an answer
     let finished = false
-    prompt = applyReasoning({...prompt, model: prompt.model ?? await getModelId(endpoint)}, reasoning)
+    // the names the server gave belong to its own model - a prompt that names one is matched by that name alone
+    prompt = prompt.model ? applyReasoning(prompt, reasoning) : applyReasoning({...prompt, model: await getModelId(endpoint)}, reasoning, endpoint.modelName)
     const started = Date.now()
     const expected = predictLlmSeconds(readTimings(), prompt.model ?? '', currentStep())
 
