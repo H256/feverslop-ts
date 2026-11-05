@@ -122,7 +122,27 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             say('corner', action.corner, /^(top|bottom)-(left|right)$/)
             for (const name of ['seconds', 'interval', 'size', 'margin'] as const) say(name, action[name], /^\d+(\.\d+)?$/)
             if (action.save) args.push('--save')
+            if (action.saveDefault) args.push('--save-default')
             return {script: 'tools/label.ts', args}
+        }
+        case 'intro': {
+            const args = [id, ...(kind === 'film' ? ['--film'] : [])]
+            if (action.from !== undefined && action.from !== '') {
+                if (!VIDEO_NAME.test(action.from)) throw new Error(`no such from: ${action.from}`)
+                args.push(`--from=${action.from}`)
+            }
+            // a path on this machine: the page and the server are the same machine; empty = input/intro.mp4 of the project
+            if (action.file !== undefined) {
+                if (/[\n\r\0]/.test(action.file)) throw new Error('no such file')
+                args.push(`--file=${action.file}`)
+            }
+            if (action.fade !== undefined) {
+                if (!/^\d+(\.\d+)?$/.test(String(action.fade))) throw new Error(`no such fade: ${action.fade}`)
+                args.push(`--fade=${action.fade}`)
+            }
+            if (action.save) args.push('--save')
+            if (action.saveDefault) args.push('--save-default')
+            return {script: 'tools/intro.ts', args}
         }
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim()) throw new Error('a further view is for a place of a film, with a name and what it shows')

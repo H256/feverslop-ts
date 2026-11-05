@@ -8,8 +8,10 @@ before. All steps are off until you run them.
 | Step | Command | Writes | Issue |
 |---|---|---|---|
 | The AI marker | `bun run label <id>` | `<name>-labeled.mp4` | #607 |
+| An intro | `bun run intro <id>` | `<name>-intro.mp4` | #608 |
 
-The steps need nothing but ffmpeg: the marker is ffmpeg's own `overlay` filter.
+The steps need nothing but ffmpeg: the marker is ffmpeg's own `overlay` filter, the intro its `concat`, `xfade` and
+`acrossfade`.
 
 ## Why: the AI Act
 
@@ -70,6 +72,28 @@ video.
 and `basic` ("AI"), each as `-white`, `-black`, `-white50` or `-black50` (50 % transparent). A PNG of your own keeps its
 transparency. An SVG would need an ffmpeg built with librsvg, so convert it to a PNG first.
 
+## An intro: `bun run intro`
+
+A clip of your own in front of the video: a logo, a channel ident, a title card.
+
+```bash
+bun run intro my-song                                   # input/intro.mp4 of the project, a hard cut
+bun run intro my-song --file=D:/videos/channel.mp4 --fade=0.5 --save-default   # one intro for every project, faded in
+bun run intro my-song --from=my-song-finished-labeled.mp4
+```
+
+| Option | Default | |
+|---|---|---|
+| `--from=<file>` | `<id>-finished.mp4`, else `<id>.mp4` | the video to put it in front of |
+| `--file=<path>` | `input/intro.mp4` (`.mov`, `.mkv`, `.webm`) of the project | the intro, absolute or relative to the project |
+| `--fade=` | `0` | seconds the intro fades into the video, picture and sound; 0 is a hard cut |
+| `--save` / `--save-default` | | keep the options given for this project / for every project |
+
+The intro takes the size, the frame rate and the pixel shape of the video. Another aspect ratio gets black bars; it is
+never stretched or cropped. An intro without sound gets silence; the sound of an intro is cut or filled to the length of
+its picture, so the video after it stays in sync. A video without sound stays without. Subtitle tracks of the video are
+kept and moved by the length of the intro. The picture and the sound are encoded once more (the sound as AAC 320k).
+
 ## The settings
 
 Every option of a step can be kept, so the command needs none of them. The later one wins, field by field:
@@ -82,7 +106,8 @@ Every option of a step can be kept, so the command needs none of them. The later
 ```json
 {
   "postwork": {
-    "label": {"marker": "generated-white50", "mode": "credits", "seconds": 6, "corner": "top-right", "size": 6, "margin": 3}
+    "label": {"marker": "generated-white50", "mode": "credits", "seconds": 6, "corner": "top-right", "size": 6, "margin": 3},
+    "intro": {"file": "D:/videos/channel-intro.mp4", "fade": 0.5}
   }
 }
 ```
@@ -99,6 +124,10 @@ Under the timeline, next to *Refinish*, once there is a final video:
   (an EU icon, or the path of a PNG of your own), when, where and how large, and whether to keep these settings for the
   project. It then starts `bun run label` with them, as in the terminal; the new video appears among the videos of the
   timeline, as *… + AI label*.
+- **Intro** asks for the video to start from, the intro (empty: `input/intro.mp4` of the project, the field says when
+  there is one) and the fade. It starts `bun run intro`; the new video is listed as *… + intro*.
+
+Both forms can keep their settings for this project (`config.json`) or for every project (the settings file).
 
 The form opens with what the project has set (the defaults, the settings file and `config.json` together).
 
@@ -106,3 +135,7 @@ The form opens with what the project has set (the defaults, the settings file an
 
 Each step starts from the video you name with `--from` (on the page: *From*), so the steps can follow each other in any
 order. `my-song-finished-labeled.mp4` is the finished video with the marker on it.
+
+The order matters for what is where: **marker first, then the intro**, and the marker is not on the intro - it starts
+with the video. The other way round, the marker sits on the intro too, and in `interval` mode its times count from the
+start of the intro.

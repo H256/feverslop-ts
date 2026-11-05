@@ -93,6 +93,8 @@ export type EditorProject = {
 /** The settings of the post-work steps of a project - the defaults, the settings file and its config.json put together - for their forms. */
 export type PostworkView = {
   label: {marker: string, mode: string, seconds: number, interval: number, corner: string, size: number, margin: number},
+  intro: {file: string, fade: number},
+  introFound?: string,        // input/intro.<ext> of the project, when there is one: the intro without a file set
   markers: string[],          // the presets of the marker: the EU icons in assets/eu-ai-icons/
   problem?: string,           // what is wrong with the settings when they cannot be read: the steps take their defaults then, and the form says it
 }
@@ -304,7 +306,9 @@ export type RunRequest =
   | {type: 'add-view', location: string, name: string, shows: string}
   | {type: 'refinish', preset?: string, upscale?: string, size?: string, denoise?: number, fps?: number, finish?: boolean, only?: string[]}
   // the post-work steps: from = the file name of a final video of the project; save = keep the options in its config.json
-  | {type: 'label', from?: string, marker?: string, mode?: string, seconds?: number, interval?: number, corner?: string, size?: number, margin?: number, save?: boolean}
+  // saveDefault = keep them in the settings file, for every project
+  | {type: 'label', from?: string, marker?: string, mode?: string, seconds?: number, interval?: number, corner?: string, size?: number, margin?: number, save?: boolean, saveDefault?: boolean}
+  | {type: 'intro', from?: string, file?: string, fade?: number, save?: boolean, saveDefault?: boolean}
 export type RunInfo = {
   source: 'here' | 'terminal',
   command: string,

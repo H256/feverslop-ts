@@ -54,6 +54,7 @@ const reviewNow = () => review.start(reviewList(project.value, marked, fresh.val
       <button title="Go through the marked clips, else the flagged ones, else all: one by one, with keys" @click="reviewNow">Review</button>
       <button title="Larger, 48 fps, grade and sharpen, from the clips there are: nothing is overwritten" @click="actions.refinish()">Refinish</button>
       <button v-if="hasFinal" title="Optional, for publishing: the EU marker for AI-generated content (or a PNG of your own) over a finished video, as a new video next to it" @click="actions.label()">AI marker</button>
+      <button v-if="hasFinal" title="Optional, for publishing: a clip of your own (a logo, a channel ident) in front of a finished video, as a new video next to it" @click="actions.intro()">Intro</button>
       <button title="Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU" @click="actions.plain({type: 'leak-scan'})">Scan for backdrops</button>
     </template>
     <button v-if="clips.length" title="Cheap renders of all clips into previews/" @click="allClips">Preview all</button>

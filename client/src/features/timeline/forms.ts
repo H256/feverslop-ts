@@ -50,14 +50,21 @@ export const CORNERS = [['top-right', 'Top right (the code\'s example)'], ['top-
 /** The AI marker over a finished video: what the project has set, changed in the form. */
 export type LabelDraft = {
   from: string, marker: string, mode: ValueOf<typeof LABEL_MODES>, seconds: number, interval: number,
-  corner: ValueOf<typeof CORNERS>, size: number, margin: number, save: boolean,
+  corner: ValueOf<typeof CORNERS>, size: number, margin: number, save: boolean, saveDefault: boolean,
 }
 export const newLabel = (settings: PostworkView['label'], from: string): LabelDraft => ({
   from, marker: settings.marker, mode: settings.mode as LabelDraft['mode'], seconds: settings.seconds, interval: settings.interval,
-  corner: settings.corner as LabelDraft['corner'], size: settings.size, margin: settings.margin, save: false,
+  corner: settings.corner as LabelDraft['corner'], size: settings.size, margin: settings.margin, save: false, saveDefault: false,
 })
 /** The run for it: every value said, so the video is what the form shows whatever the settings say. */
 export const labelRequest = (draft: LabelDraft): RunRequest => ({
   type: 'label', from: draft.from, marker: draft.marker.trim(), mode: draft.mode, seconds: Number(draft.seconds), interval: Number(draft.interval),
-  corner: draft.corner, size: Number(draft.size), margin: Number(draft.margin), ...(draft.save ? {save: true} : {}),
+  corner: draft.corner, size: Number(draft.size), margin: Number(draft.margin), ...kept(draft),
 })
+/** Where the options are kept as well: the project's config.json, the settings file - or nowhere. */
+const kept = (draft: {save: boolean, saveDefault: boolean}) => ({...(draft.save ? {save: true} : {}), ...(draft.saveDefault ? {saveDefault: true} : {})})
+
+/** A clip in front of a finished video: its path - empty for input/intro.mp4 of the project - and the fade into the video. */
+export type IntroDraft = {from: string, file: string, fade: number, save: boolean, saveDefault: boolean}
+export const newIntro = (settings: PostworkView['intro'], from: string): IntroDraft => ({from, file: settings.file, fade: settings.fade, save: false, saveDefault: false})
+export const introRequest = (draft: IntroDraft): RunRequest => ({type: 'intro', from: draft.from, file: draft.file.trim(), fade: Number(draft.fade), ...kept(draft)})

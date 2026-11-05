@@ -263,11 +263,23 @@ Die Varianten erscheinen in der Auswahl neben der Abspielzeit als **Clips: refin
 1. **From**: which video. The finished one is chosen when there is one.
 2. **Marker**: an EU icon for AI-generated content (*AI GENERATED*, *AI MODIFIED* or *AI*, white or black, opaque or 50 % transparent), or *A PNG of my own* with its path.
 3. **When**: at the start only (enough for a music video or a film, an artistic work), at the start and again at an interval, or the whole time. Then the corner, the height and the margin.
-4. **Keep these settings for this project** writes them into `config.json`, so the next time the form opens with them.
+4. **Keep these settings for this project** writes them into `config.json`, so the next time the form opens with them. **Keep them for every project** writes them into the settings file.
 
 It runs on this machine, no GPU, in about the time the video plays. The new video appears among the videos of the timeline as *… + AI label*. Why and when such a marker is needed: [docs/postwork.md](postwork.md).
 
 **In the terminal:** `bun run label <id>` with the same choices as options (`--marker=`, `--mode=`, `--corner=`, …).
+
+## Before publishing: an intro
+
+**Intro** under the timeline puts a clip of your own - a logo, a channel ident - in front of a finished video: `<name>-intro.mp4`.
+
+- **From**: which video. For a video with the AI marker, choose the labelled one: the marker then starts after the intro.
+- **Intro**: the path of the clip. Empty takes `input/intro.mp4` of the project; the field says when there is one.
+- **Fade**: seconds the intro fades into the video. 0 is a hard cut.
+
+The intro is made like the video: the same size and frame rate, black bars for another aspect ratio, silence when it has no sound. Keep the intro for every project, and the next project needs nothing but a click.
+
+**In the terminal:** `bun run intro <id> [--file=<path>] [--fade=0.5]`.
 
 ## Tasten
 

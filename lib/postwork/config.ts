@@ -26,11 +26,18 @@ export type LabelSettings = {
     margin: number,         // its distance from the edges in % of the video's height
 }
 
-export type PostworkSettings = { label: LabelSettings }
+/** A clip in front of the video (bun run intro, #608): a logo, a channel ident, a title card. */
+export type IntroSettings = {
+    file: string,           // the path of the clip, absolute or relative to the project - '' = input/intro.<mp4|mov|mkv|webm> of the project
+    fade: number,           // seconds the intro fades into the video, picture and sound - 0 = a hard cut
+}
+
+export type PostworkSettings = { label: LabelSettings, intro: IntroSettings }
 export type PostworkStep = keyof PostworkSettings
 
 export const POSTWORK_DEFAULTS: PostworkSettings = {
     label: {marker: 'generated-white50', mode: 'credits', seconds: 5, interval: 60, corner: 'top-right', size: 6, margin: 3},
+    intro: {file: '', fade: 0},
 }
 export const POSTWORK_STEPS = Object.keys(POSTWORK_DEFAULTS) as PostworkStep[]
 
@@ -39,6 +46,20 @@ export const MARKER_PRESETS = ['generated', 'modified', 'basic'].flatMap(icon =>
 const isPreset = (marker: string) => MARKER_PRESETS.includes(marker)
 
 /** The PNG of a marker: a preset from assets/eu-ai-icons/, else a path - relative to the project. Throws when there is no such file. */
+export const INTRO_EXTENSIONS = ['mp4', 'mov', 'mkv', 'webm']
+
+/** The clip of an intro: the path given - absolute, or relative to the project - else input/intro.<ext> of the project. Throws when there is none. */
+export function introFile(file: string, projectDir: string): string {
+    if (!file.trim()) {
+        const found = INTRO_EXTENSIONS.map(ext => join(projectDir, 'input', `intro.${ext}`)).find(f => existsSync(f))
+        if (!found) throw new Error(`no intro: put one at input/intro.mp4 (.mov, .mkv, .webm) of the project, or give its path with --file=`)
+        return found
+    }
+    const path = isAbsolute(file) ? file : join(projectDir, file)
+    if (!existsSync(path)) throw new Error(`intro: no file ${file} - the path of a video, absolute or relative to the project`)
+    return path
+}
+
 export function markerFile(marker: string, projectDir: string): string {
     const file = isPreset(marker) ? join(ICONS, `${marker}.png`) : isAbsolute(marker) ? marker : join(projectDir, marker)
     if (!/\.png$/i.test(file)) throw new Error(`marker: ${marker} is no PNG - ffmpeg reads a PNG with its transparency; an SVG would need librsvg`)
@@ -61,6 +82,10 @@ const CHECKS: { [S in PostworkStep]: { [K in keyof PostworkSettings[S]]: Check }
         corner: oneOf(CORNERS),
         size: number(1, 50, 'a percentage of the video height from 1 to 50'),
         margin: number(0, 30, 'a percentage of the video height from 0 to 30'),
+    },
+    intro: {
+        file: value => typeof value === 'string' ? undefined : `must be the path of a video, or "" for input/intro.mp4 of the project, got ${JSON.stringify(value)}`,
+        fade: number(0, 10, 'a number of seconds from 0 (a hard cut) to 10'),
     },
 }
 
