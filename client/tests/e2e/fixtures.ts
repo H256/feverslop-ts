@@ -69,15 +69,35 @@ const POSTS: Record<string, unknown> = {
   timing: {changed: [0], slots: ['clip-1'], replanned: [], staleClips: [], crossing: []}, 'references/ann/rerender': started,
 }
 
+// a film of the pipeline's own (idea mode): Ana and Bo; a screenplay told anew without Bo and with Kai waits on the Story page (#589)
+const filmCast: CastView = {
+  characters: [{id: 'ana', name: 'Ana', role: 'the guest', appearance: 'tall', voice: 'low'}, {id: 'bo', name: 'Bo', role: 'the porter', appearance: 'small', voice: 'high'}],
+  locations: [{id: 'hall', name: 'Hall', description: 'a hall'}], canAdd: false, builtOn: ['summary'], remakes: [], adapt: {dropped: ['summary', 'props', 'coverage']},
+}
+const filmBook: BookView = {
+  text: 'INT. HALL - NIGHT\n\nBO\nVery.', editable: false, builtOn: [], keptByCast: ['summary', 'props', 'coverage'], stage: 'plan',
+  proposal: 'INT. HALL - NIGHT\n\nKAI\nVery.', proposalCast: {added: ['Kai'], removed: ['Bo']},
+}
+const FILM_GETS: Record<string, unknown> = {
+  project: {...project, kind: 'film', title: 'Demo film', command: 'bun film.ts demo', sings: false, timed: false},
+  cast: {cast: filmCast},
+  casting: {...casting, roles: filmCast.characters.map(c => ({kind: 'character', id: c.id, name: c.name, role: c.role, copied: false, clips: [], errors: [], warnings: []}))},
+  book: filmBook,
+}
+
 export type Posted = {path: string, body: unknown}
-/** The API of /p/music/demo answered from the fixtures; what the page posts is kept, in order. Media is not served: no pictures. */
-export async function stubProject(page: Page, changed: Partial<EditorProject> = {}) {
+/**
+ * The API of /p/music/demo (or /p/film/demo) answered from the fixtures; what the page posts is kept, in order. Media is not served: no pictures.
+ * `changed`: fields of the project that differ from the fixture, for one test.
+ */
+export async function stubProject(page: Page, kind: 'music' | 'film' = 'music', changed: Partial<EditorProject> = {}) {
   const posted: Posted[] = []
   // as the server: a run started here is the one the events tell of
   let current: unknown = null
-  await page.route(/\/p\/music\/demo\/api\//, async (route: Route) => {
+  const gets = kind === 'film' ? {...GETS, ...FILM_GETS} : GETS
+  await page.route(new RegExp(`/p/${kind}/demo/api/`), async (route: Route) => {
     const request = route.request()
-    const path = new URL(request.url()).pathname.replace(/^\/p\/music\/demo\/api\//, '')
+    const path = new URL(request.url()).pathname.replace(new RegExp(`^/p/${kind}/demo/api/`), '')
     if (path === 'run-events') return route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: `event: state\ndata: ${JSON.stringify(current)}\n\n`})
     if (request.method() === 'POST') {
       posted.push({path, body: request.postDataJSON()})
@@ -85,10 +105,10 @@ export async function stubProject(page: Page, changed: Partial<EditorProject> = 
       if (path === 'run' || path.endsWith('/rerender')) current = started.run
       return route.fulfill({json: POSTS[path] ?? {}})
     }
-    if (path === 'project') return route.fulfill({json: {...project, ...changed}})
-    return path in GETS ? route.fulfill({json: GETS[path]}) : route.fulfill({status: 404, body: 'Not found'})
+    if (path === 'project') return route.fulfill({json: {...gets.project as EditorProject, ...changed}})
+    return path in gets ? route.fulfill({json: gets[path]}) : route.fulfill({status: 404, body: 'Not found'})
   })
-  await page.route(/\/p\/music\/demo\/(media|thumb)\//, route => route.fulfill({status: 404, body: ''}))
+  await page.route(new RegExp(`/p/${kind}/demo/(media|thumb)/`), route => route.fulfill({status: 404, body: ''}))
   // one render server that can take a run, and one that is down: the question ticks only the first
   await page.route('**/api/servers', route => route.fulfill({json: {servers: [{name: 'gpu', reachable: true, running: 0, pending: 0}, {name: 'old', reachable: false, running: 0, pending: 0}]}}))
   return posted

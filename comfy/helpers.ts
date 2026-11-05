@@ -92,6 +92,10 @@ export type VideoWorkflowOptions = {
     seed: number,
     resolution: Resolution,
     aspect?: Aspect,            // config videoAspect - "16:9" (landscape) when not given
+    // config videoSteps / videoRefineSteps: the sampling steps of the one pass (single pass) or of pass 1 (two-pass), and of pass 2 of a two-pass
+    // workflow. Not given = the workflow's own. A preview (below) has its own steps
+    steps?: number,
+    refineSteps?: number,
     // a cheap render (--preview): a factor on the pixels (pass it to resolution()), and the sampling steps of a workflow with the
     // turbo LoRA. A two-pass workflow stops after its first pass. Without it a workflow renders as it always does
     preview?: PreviewOptions,

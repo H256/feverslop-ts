@@ -112,6 +112,9 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         return endGuide(wf, started, latent, videoVae.VAE, opts.endFrame)
     }
     const noise = wf.RandomNoise({noise_seed: opts.seed})
+    // opts.steps / opts.refineSteps (config videoSteps, videoRefineSteps) replace the steps of the recipe, nothing else of it
+    const firstSteps = opts.steps ?? recipe.first.steps
+    const secondSteps = opts.refineSteps ?? recipe.second.steps
 
     // pass 1: the base model, as h3-ref2video-full
     const base = wf.ModelAttentionBackend({model, attention: 'comfy kitchen attention'})
@@ -119,7 +122,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         noise: noise.NOISE,
         guider: wf.BasicGuider({model: base.model, conditioning: guide(references.LATENT)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: dyn(recipe.first.sampler)}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.first.scheduler), steps: recipe.first.steps, denoise: 1, model}).SIGMAS,
+        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.first.scheduler), steps: firstSteps, denoise: 1, model}).SIGMAS,
         latent_image: references.LATENT,
     })
 
@@ -155,7 +158,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         noise: wf.RandomNoise({noise_seed: opts.seed + 1}).NOISE,
         guider: wf.BasicGuider({model: base.model, conditioning: guide(large, true)}).GUIDER,
         sampler: wf.KSamplerSelect({sampler_name: dyn(recipe.second.sampler)}).SAMPLER,
-        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.second.scheduler), steps: recipe.second.steps, denoise: recipe.second.denoise, model}).SIGMAS,
+        sigmas: wf.BasicScheduler({scheduler: dyn(recipe.second.scheduler), steps: secondSteps, denoise: recipe.second.denoise, model}).SIGMAS,
         latent_image: large,
     })
 
