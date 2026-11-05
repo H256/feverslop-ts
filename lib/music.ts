@@ -6,6 +6,7 @@ import {refineSections, slotVocals} from "./lyrics.ts";
 import {formatTime, round} from "./frames.ts";
 import {log} from "./log.ts";
 import {lastLines, runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
+import {loadWhisperSettings, whisperOptions} from "./settings.ts";
 
 /**
  * "[Verse 1]\n[Low, gravelly vocals]\nline\nline" -> [{label: 'Verse 1', notes: ['Low, gravelly vocals'], lines: [...]}]
@@ -65,9 +66,10 @@ export async function separateInstrumentStems(songFile: string, projectDir: stri
     return Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as InstrumentStems
 }
 
-// Whisper large-v3 on the vocals stem, word timestamps, the lyrics as prompt
+// Whisper (large-v3, large-v3-turbo on a CPU - see tools/vocals.py) on the vocals stem, word timestamps, the lyrics as prompt
 export async function transcribeVocals(vocalsFile: string, language: string, lyricsFile: string): Promise<Transcript> {
-    return JSON.parse(await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile], 'Transcription'))
+    const {whisper} = await loadWhisperSettings()
+    return JSON.parse(await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile, ...whisperOptions(whisper)], 'Transcription'))
 }
 
 // Instrument activity: where a stem is actually played - grounds a character's on-screen prop use (a guitarist's playing)
