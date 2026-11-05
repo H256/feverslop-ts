@@ -80,7 +80,11 @@ export async function renderedFrames(clip: { frames: number, startsFrom?: string
 // used as the subject of the sequence-sheet video prompt (see renderSequenceSheet), which needs to say what the
 // subject looks like without the medium/style/pose/background language the image prompt carries.
 /** The id of the request a clip is rendered from (lib/render-spec.ts) - what its sidecar records and the final video compares. */
-export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect'>>) =>
+/** The steps of config.json for a workflow's options - only what is set; -1 leaves the workflow's own. */
+export const stepOptions = (config: Pick<RenderConfig, 'videoSteps' | 'videoRefineSteps'>) =>
+    ({...(config.videoSteps !== -1 ? {steps: config.videoSteps} : {}), ...(config.videoRefineSteps !== -1 ? {refineSteps: config.videoRefineSteps} : {})})
+
+export const clipFingerprint = (clip: ClipRequest, projectDir: string, config: Pick<RenderConfig, 'videoWorkflow' | 'videoResolution'> & Partial<Pick<RenderConfig, 'videoAspect' | 'videoSteps' | 'videoRefineSteps'>>) =>
     specId(clipSpec(clip, projectDir, config))
 
 // look: another look of the character `base` (a film's states) - with sequence sheets its sheet starts on base's anchor and
@@ -639,6 +643,7 @@ export class Renderer implements Disposable {
                 seed,
                 resolution: this.config.videoResolution,
                 aspect: this.config.videoAspect,
+                ...stepOptions(this.config),
                 filenamePrefix: `${this.remoteDir}/videos/${clip.id}`,
             })
             return {result, uploads, meta: {seed, ...(result.size ? {size: result.size} : {})}}
@@ -668,6 +673,8 @@ export class Renderer implements Disposable {
             seed,
             resolution: this.config.videoResolution,
             ...(this.config.videoAspect !== '16:9' ? {aspect: this.config.videoAspect} : {}),
+            ...(this.config.videoSteps !== -1 ? {steps: this.config.videoSteps} : {}),
+            ...(this.config.videoRefineSteps !== -1 ? {refineSteps: this.config.videoRefineSteps} : {}),
             ...(clip.startsFrom ? {startsFrom: clip.startsFrom} : {}),
             // started on the last frames of the clip before, its head cut off - as the film's sidecar says it (lib/film/render.ts)
             ...(context ? {contextFrames: context.frames} : {}),
@@ -706,6 +713,7 @@ export class Renderer implements Disposable {
             seed: job.seed,
             resolution: this.config.videoResolution,
             aspect: this.config.videoAspect,
+            ...stepOptions(this.config),
             filenamePrefix: job.filenamePrefix,
         })
         return {result, uploads, meta: {seed: job.seed}}
