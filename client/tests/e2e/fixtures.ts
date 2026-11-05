@@ -20,6 +20,7 @@ export const project: EditorProject = {
   clips: [clip('clip-1', 0, true), clip('clip-2', 5, false)],
   pictures: [{id: 'ann', kind: 'character', name: 'Ann', file: 'output/assets/ann.png', exists: true, v: 1}],
   final: {state: 'missing'}, refinedVariants: [], finals: [], command: 'bun index.ts demo', sings: true, timed: true, plan: {stage: 'plan'},
+  postwork: {label: {marker: 'generated-white50', mode: 'credits', seconds: 5, interval: 60, corner: 'top-right', size: 6, margin: 3}, markers: ['generated-white', 'generated-white50', 'basic-black']},
 }
 const fresh: EditorFreshness = {clips: {'clip-1': 'current'}, pictures: {ann: 'current'}}
 const status: ProjectStatus = {steps: [], changed: [], pictures: {total: 1, missing: 0, stale: 0}, clips: {total: 2, missing: 1, stale: 0}, final: 'missing', next: {command: 'bun index.ts demo --render=videos', why: 'Render 1 clip'}}
@@ -85,8 +86,11 @@ const FILM_GETS: Record<string, unknown> = {
 }
 
 export type Posted = {path: string, body: unknown}
-/** The API of /p/music/demo (or /p/film/demo) answered from the fixtures; what the page posts is kept, in order. Media is not served: no pictures. */
-export async function stubProject(page: Page, kind: 'music' | 'film' = 'music') {
+/**
+ * The API of /p/music/demo (or /p/film/demo) answered from the fixtures; what the page posts is kept, in order. Media is not served: no pictures.
+ * `changed`: fields of the project that differ from the fixture, for one test.
+ */
+export async function stubProject(page: Page, kind: 'music' | 'film' = 'music', changed: Partial<EditorProject> = {}) {
   const posted: Posted[] = []
   // as the server: a run started here is the one the events tell of
   let current: unknown = null
@@ -101,6 +105,7 @@ export async function stubProject(page: Page, kind: 'music' | 'film' = 'music') 
       if (path === 'run' || path.endsWith('/rerender')) current = started.run
       return route.fulfill({json: POSTS[path] ?? {}})
     }
+    if (path === 'project') return route.fulfill({json: {...gets.project as EditorProject, ...changed}})
     return path in gets ? route.fulfill({json: gets[path]}) : route.fulfill({status: 404, body: 'Not found'})
   })
   await page.route(new RegExp(`/p/${kind}/demo/(media|thumb)/`), route => route.fulfill({status: 404, body: ''}))

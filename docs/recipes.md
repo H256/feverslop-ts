@@ -77,6 +77,19 @@ bun run interpolate <id> --only=slot-018 --model=rife_v4.26_heavy.safetensors,fi
 `--render=final` then also writes `<id>-60fps.mp4`. Every clip is interpolated shot by shot, never across a cut - one
 ComfyUI job per clip. The model file must be on every server that renders.
 
+## Mark a video as AI-generated before publishing
+
+A clip with a real face - your own, through a LoRA - is a deep fake under the EU AI Act, and from 2 August 2026 it has to
+say so. For a music video or a film a marker at the start is enough:
+
+```bash
+bun run label <id>                       # the EU "AI GENERATED" icon, top right, the first 5 s: <id>-finished-labeled.mp4
+bun run label <id> --seconds=8 --save    # longer, and kept for this project
+```
+
+The video it starts from stays as it is. See [docs/postwork.md](postwork.md) for the other markers, an interval, a PNG of
+your own, and why.
+
 ## The same band in every song
 
 1. Render the band once in one project, then put each member into the library:

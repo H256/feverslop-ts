@@ -5,6 +5,7 @@ import {log, warnUnknownKeys} from "./log.ts";
 import {FPS} from "./frames.ts";
 import {multiplierFor} from "./interpolate.ts";
 import {type Finish, finishOf, finishProblem, MILD_FINISH} from "./finish.ts";
+import {postworkProblem} from "./postwork/config.ts";
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
@@ -185,7 +186,10 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     const config: ProjectConfig = {...merged, alignLyrics: raw.alignLyrics ?? (Array.isArray(merged.singers) && merged.singers.length > 0)}
 
     // the keys of `config` can't be the allowed ones - a typo'd key from `raw` is in there too
-    warnUnknownKeys(raw, [...Object.keys(defaults), 'alignLyrics'], file)
+    // "postwork": the steps on the finished video (lib/postwork/), read by their own commands - only checked here
+    warnUnknownKeys(raw, [...Object.keys(defaults), 'alignLyrics', 'postwork'], file)
+    const postworkWrong = (raw as { postwork?: unknown }).postwork === undefined ? undefined : postworkProblem((raw as { postwork?: unknown }).postwork)
+    if (postworkWrong) fail(postworkWrong)
 
     const seedWrong = seedProblem(config.seed)
     if (seedWrong) fail(seedWrong)

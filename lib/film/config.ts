@@ -3,6 +3,7 @@ import {join} from "node:path";
 import type {Aspect, Resolution} from "../../comfy/helpers.ts";
 import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, invalidJsonProblem, languageName, leakRetriesProblem, llmProblem, qaRetriesNote, qaRetriesProblem, resolutionProblem, seedProblem, workflowProblem} from "../config.ts";
 import type {Finish} from "../finish.ts";
+import {postworkProblem} from "../postwork/config.ts";
 import {log, warnUnknownKeys} from "../log.ts";
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
@@ -110,7 +111,10 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object like {"targetDuration": 120}')
     const config: FilmConfig = {...filmDefaults, ...raw}
-    warnUnknownKeys(raw, Object.keys(filmDefaults), file)
+    // "postwork": the steps on the finished film (lib/postwork/), read by their own commands - only checked here
+    warnUnknownKeys(raw, [...Object.keys(filmDefaults), 'postwork'], file)
+    const postworkWrong = (raw as { postwork?: unknown }).postwork === undefined ? undefined : postworkProblem((raw as { postwork?: unknown }).postwork)
+    if (postworkWrong) fail(postworkWrong)
 
     if (config.dialogueLanguage !== 'auto' && (typeof config.dialogueLanguage !== 'string' || !languageName(config.dialogueLanguage))) {
         fail(`dialogueLanguage must be "auto" or a language code like "en" or "de", got ${JSON.stringify(config.dialogueLanguage)}`)

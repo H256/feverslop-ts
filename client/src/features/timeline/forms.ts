@@ -1,4 +1,4 @@
-import type {RunRequest} from '../../../../shared/workspace'
+import type {PostworkView, RunRequest} from '../../../../shared/workspace'
 
 // The forms of the timeline's questions: what can be chosen, as the values the CLI takes, and the request made from them.
 type Choice = readonly (readonly [string, string])[]
@@ -30,3 +30,34 @@ export function refinishRequest(form: Refinish, only: string[]): RunRequest {
 
 /** One more view of a place: where the camera is, and what it shows. */
 export type NewView = {name: string, shows: string}
+
+////////// POST-WORK: optional steps on a finished video (docs/postwork.md), each a command that writes a new video next to it
+type FinalChoice = {file: string, label: string, preview: boolean}
+
+/** The video a step starts from by default: the finished final video, else the final one - as the command takes it without --from. */
+export function defaultSource(id: string, finals: FinalChoice[]): string | undefined {
+  const names = finals.filter(f => !f.preview).map(f => f.file)
+  return [`${id}-finished.mp4`, `${id}.mp4`].find(name => names.includes(name)) ?? names[0]
+}
+
+export const LABEL_MODES = [
+  ['credits', 'At the start only: enough for an artistic or fictional work'],
+  ['interval', 'At the start and again at an interval'],
+  ['always', 'The whole time'],
+] as const
+export const CORNERS = [['top-right', 'Top right (the code\'s example)'], ['top-left', 'Top left'], ['bottom-right', 'Bottom right'], ['bottom-left', 'Bottom left']] as const
+
+/** The AI marker over a finished video: what the project has set, changed in the form. */
+export type LabelDraft = {
+  from: string, marker: string, mode: ValueOf<typeof LABEL_MODES>, seconds: number, interval: number,
+  corner: ValueOf<typeof CORNERS>, size: number, margin: number, save: boolean,
+}
+export const newLabel = (settings: PostworkView['label'], from: string): LabelDraft => ({
+  from, marker: settings.marker, mode: settings.mode as LabelDraft['mode'], seconds: settings.seconds, interval: settings.interval,
+  corner: settings.corner as LabelDraft['corner'], size: settings.size, margin: settings.margin, save: false,
+})
+/** The run for it: every value said, so the video is what the form shows whatever the settings say. */
+export const labelRequest = (draft: LabelDraft): RunRequest => ({
+  type: 'label', from: draft.from, marker: draft.marker.trim(), mode: draft.mode, seconds: Number(draft.seconds), interval: Number(draft.interval),
+  corner: draft.corner, size: Number(draft.size), margin: Number(draft.margin), ...(draft.save ? {save: true} : {}),
+})

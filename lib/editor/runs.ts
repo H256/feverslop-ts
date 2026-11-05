@@ -6,6 +6,7 @@ import type {EditorKind, EditorTarget} from "./project.ts";
 import {STEP_NAMES} from "../project.ts";
 import {UNTIL_STAGES} from "../stages.ts";
 import {FILM_STEP_NAMES} from "../film/store.ts";
+import {VIDEO_NAME} from "../postwork/video.ts";
 import type {RunInfo, RunRequest} from '../../shared/workspace.ts';
 export type {RunInfo} from '../../shared/workspace.ts';
 
@@ -106,6 +107,22 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (action.finish) args.push('--finish')
             if (action.only?.length) args.push(`--only=${checked(action.only, CLIP_ID, 'clips')}`)
             return {script: 'tools/refinish.ts', args}
+        }
+        case 'label': {
+            const args = [id, ...(kind === 'film' ? ['--film'] : [])]
+            const say = (name: string, value: unknown, pattern: RegExp) => {
+                if (value === undefined || value === '') return
+                if (!pattern.test(String(value))) throw new Error(`no such ${name}: ${value}`)
+                args.push(`--${name}=${value}`)
+            }
+            say('from', action.from, VIDEO_NAME)
+            // a preset, or the path of a PNG on this machine: the page and the server are the same machine
+            say('marker', action.marker, /^[^\n\r\0]+\.png$|^[a-z]+-(white|black)(50)?$/i)
+            say('mode', action.mode, /^(credits|interval|always)$/)
+            say('corner', action.corner, /^(top|bottom)-(left|right)$/)
+            for (const name of ['seconds', 'interval', 'size', 'margin'] as const) say(name, action[name], /^\d+(\.\d+)?$/)
+            if (action.save) args.push('--save')
+            return {script: 'tools/label.ts', args}
         }
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim()) throw new Error('a further view is for a place of a film, with a name and what it shows')

@@ -256,6 +256,19 @@ So gehst du sinnvoll vor:
 
 Die Varianten erscheinen in der Auswahl neben der Abspielzeit als **Clips: refine-fullhd** und die fertigen Videos als **Refinish refine-fullhd 48 fps finished**. Die Optionen für das Terminal stehen in der [README](../README.md#making-an-older-project-over).
 
+## Before publishing: the AI marker
+
+**AI marker** under the timeline (there once a final video exists) puts a marker over a finished video, as a new video next to it: `<name>-labeled.mp4`. The video it starts from stays as it is.
+
+1. **From**: which video. The finished one is chosen when there is one.
+2. **Marker**: an EU icon for AI-generated content (*AI GENERATED*, *AI MODIFIED* or *AI*, white or black, opaque or 50 % transparent), or *A PNG of my own* with its path.
+3. **When**: at the start only (enough for a music video or a film, an artistic work), at the start and again at an interval, or the whole time. Then the corner, the height and the margin.
+4. **Keep these settings for this project** writes them into `config.json`, so the next time the form opens with them.
+
+It runs on this machine, no GPU, in about the time the video plays. The new video appears among the videos of the timeline as *… + AI label*. Why and when such a marker is needed: [docs/postwork.md](postwork.md).
+
+**In the terminal:** `bun run label <id>` with the same choices as options (`--marker=`, `--mode=`, `--corner=`, …).
+
 ## Tasten
 
 ![Fenster mit allen Tasten und Begriffen](images/workspace/keys.jpg)
