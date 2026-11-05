@@ -50,9 +50,16 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return run('--render=videos', `--only=${checked(action.ids, CLIP_ID, 'clips')}`, ...(action.again ? ['--again'] : []), ...(action.preview ? ['--preview'] : []))
         case 'pictures':
             return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []), ...(action.look && kind === 'music' ? ['--until=look'] : []))
-        case 'adapt-story':
-            if (kind !== 'music') throw new Error('the screenplay of a film is changed in its script')
-            return {script: 'tools/story.ts', args: [id, '--adapt']}
+        case 'adapt-story': {
+            if (kind === 'music') return {script: 'tools/story.ts', args: [id, '--adapt']}
+            // a film: its screenplay told anew for the roles that come and go (#589) - one argument each, never a line of shell
+            const add = action.add ?? [], remove = action.remove ?? []
+            const plain = (value: unknown, max: number) => typeof value === 'string' && !!value.trim() && value.length <= max && !/[\r\n:]/.test(value)
+            if (!Array.isArray(add) || add.some(a => !plain(a?.name, 80) || typeof a?.role !== 'string' || !a.role.trim() || a.role.length > 600 || /[\r\n]/.test(a.role))) throw new Error('a role added has a name (no colon) and who they are in the story')
+            if (!Array.isArray(remove) || remove.some(r => typeof r !== 'string' || !PICTURE_ID.test(r))) throw new Error(`no such characters: ${JSON.stringify(remove)}`)
+            if (!add.length && !remove.length) throw new Error('no role to add or take out')
+            return {script: 'tools/story.ts', args: [id, '--film', '--adapt', ...add.map(a => `--add=${a.name.trim()}: ${a.role.trim()}`), ...remove.map(r => `--remove=${r}`)]}
+        }
         case 'look-pictures':
             if (kind !== 'music') throw new Error('a film has its pictures from the look on: render them on the References page')
             return run('--until=look', '--render=images')

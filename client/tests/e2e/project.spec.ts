@@ -98,6 +98,35 @@ test('casting: roles removed on their cards, put back, and saved together from t
   await expect.poll(() => posted.find(p => p.path === 'cast')?.body).toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: []})
 })
 
+test('casting a film: a role added and one taken out start the screenplay told anew (#589)', async ({page}) => {
+  const filmPosted = await stubProject(page, 'film')
+  await page.goto(`${base}/p/film/demo/casting`)
+  await page.getByRole('button', {name: 'Add a character'}).click()
+  await expect(page.locator('[data-cast="new-film-role"] input[aria-label="Name"]')).toBeFocused()
+  await page.locator('[data-cast="new-film-role"] input[aria-label="Name"]').fill('Kai')
+  await page.locator('[data-cast="new-film-role"] textarea[aria-label="Role in the story"]').fill('the night porter')
+  await page.getByRole('button', {name: 'Remove Bo'}).click()
+  await expect(page.locator('.role.out')).toContainText('Out of the screenplay told anew.')
+  await expect(page.locator('.castbar')).toContainText('New: 1 character, out: 1 character')
+  await page.getByRole('button', {name: 'Tell the screenplay anew'}).click()
+  await expect(dialog(page)).toContainText('new: Kai · gone: Bo')
+  await expect(dialog(page)).toContainText('Taking it drops what is read from the script')
+  await dialog(page).getByRole('button', {name: 'Have it written'}).click()
+  await expect.poll(() => filmPosted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'adapt-story', add: [{name: 'Kai', role: 'the night porter'}], remove: ['bo']}})
+  await expect(page.locator('.castbar')).toBeHidden()
+})
+
+test('the story of a film: the screenplay told anew waits next to it, and is taken after the question', async ({page}) => {
+  const filmPosted = await stubProject(page, 'film')
+  await page.goto(`${base}/p/film/demo/story`)
+  await expect(page.getByText('A screenplay told anew for the cast as it is now (new: Kai · gone: Bo)')).toBeVisible()
+  await page.getByRole('button', {name: 'Take the new screenplay'}).click()
+  await expect(dialog(page)).toContainText('Who stays keeps their id and their looks')
+  await expect(dialog(page)).toContainText('What is read from the script goes')
+  await dialog(page).getByRole('button', {name: 'Take it'}).click()
+  await expect.poll(() => filmPosted.find(p => p.path === 'book/for-cast')?.body).toEqual({proposal: true})
+})
+
 test('look: one text changed and one written anew, saved together', async ({page}) => {
   await page.goto(`${base}/p/music/demo/look`)
   await page.getByLabel('Description - what the clip prompts say of it').fill('a tall woman')
