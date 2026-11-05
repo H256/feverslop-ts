@@ -148,4 +148,7 @@ export type FilmProject = {
     shotViews?: Record<string, { fingerprint: string, views: number[] }>,
     // the shots of a clip fitted to what the user chose for it (clip-overrides/, lib/film/fit.ts), per clip id - not a step
     clipFits?: Record<string, { fingerprint: string, shots: { view: string, camera: string, action: string, people: Record<string, { state?: string, motion?: string }> }[] }>,
+    // the roles added and taken out since the idea was written, by name, in order (a screenplay told anew, lib/film/adapt.ts) - the idea
+    // still tells of the cast before, and reading the script against it must not take the change for a fault. Not a step
+    roleChanges?: { added: { name: string, role: string }[], removed: string[] }[],
 }

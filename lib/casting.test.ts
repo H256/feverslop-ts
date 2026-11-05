@@ -2,7 +2,7 @@ import {afterEach, describe, expect, test} from "bun:test";
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
-import {CASTING_FILE, castFromLibrary, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
+import {CASTING_FILE, castFromLibrary, castingAfterCastChange, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
 
 const dirs: string[] = []
 const folder = (files: Record<string, string> = {}) => {
@@ -129,6 +129,15 @@ describe('castFromLibrary - the casting step of the music video and of a film', 
         await expect(castFromLibrary({dir, cast: filmCast, library: library(), copies: undefined, again: () => ''})).rejects.toThrow('the library has no character "nobody"')
         expect(existsSync(join(dir, 'assets'))).toBe(false)
     })
+})
+
+test('a changed cast: who left loses the entry, also a library one, who came runs as project:, the rest stays as written', () => {
+    const before = {characters: [{id: 'kai', name: 'Kai'}, {id: 'marcus', name: 'Marcus'}, {id: 'doc', name: 'Doc'}], locations: [{id: 'hall', name: 'Hall'}, {id: 'street', name: 'Street'}]}
+    const after = {characters: [{id: 'kai', name: 'Kai'}, {id: 'ann', name: 'Ann'}], locations: [{id: 'hall', name: 'Hall'}]}
+    const file = {characters: {kai: 'library:klemont', marcus: 'project:marcus', doc: 'library:doc-v2'}, locations: {hall: 'project:hall', street: 'project:street'}}
+    expect(castingAfterCastChange(file, before, after)).toEqual({characters: {kai: 'library:klemont', ann: 'project:ann'}, locations: {hall: 'project:hall'}})
+    // a cast only renamed changes nothing in the file
+    expect(castingAfterCastChange(file, before, {...before, characters: before.characters.map(c => ({...c, name: `${c.name}!`}))})).toBeUndefined()
 })
 
 test('unknown casting wrappers name the misplaced key', () => {

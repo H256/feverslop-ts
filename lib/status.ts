@@ -40,7 +40,7 @@ export function withPreproduction(next: Next, pre: Preproduction, kind: 'music' 
     const stageNames = {story: kind === 'film' ? 'the screenplay' : 'the story', cast: 'the cast', look: 'the look', plan: 'the shot plan'}
     if (pre.stage !== 'plan') notes.push(['Stage', pre.stage ? `planned up to ${stageNames[pre.stage]}${pre.next ? styles.muted(` - next: ${stageNames[pre.next]} (${kind === 'film' ? 'bun film.ts' : 'bun index.ts'} ${id}${pre.next !== 'plan' ? ` --until=${pre.next}` : ''})`) : ''}` : styles.muted('nothing planned yet')])
     for (const change of pre.casting.changes) notes.push(['Casting', `${change} ${styles.muted('- casting.json, not taken over yet')}`])
-    if (pre.storyProposal) notes.push(['Story', `${styles.muted('a story told anew for the cast waits:')} bun run story ${id} --take ${styles.muted('or --drop')}`])
+    if (pre.storyProposal) notes.push([kind === 'film' ? 'Screenplay' : 'Story', `${styles.muted(`a ${kind === 'film' ? 'screenplay' : 'story'} told anew for the cast waits:`)} bun run story ${id}${kind === 'film' ? ' --film' : ''} --take ${styles.muted('or --drop')}`])
     if (!pre.nextCommand) return {next, notes}
     return {notes, next: {command: pre.nextCommand, why: `casting.json changed: ${pre.casting.changes.join(', ')}${pre.casting.redo.length ? ` - planned again: ${pre.casting.redo.join(', ')}` : ''}`}}
 }

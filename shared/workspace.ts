@@ -140,8 +140,9 @@ export type BookView = {
   builtOn: string[],          // the steps that go when it is changed
   stage?: PlanStage,
   next?: PlanStage,
-  proposal?: string,          // the story written anew for the cast as it is now, waiting to be taken or dropped
-  keptByCast: string[],       // what goes when it is told anew for the same cast: the summary and the plan from the beats on
+  proposal?: string,          // the story written anew for the cast as it is now, waiting to be taken or dropped - a film: its screenplay told anew for a role added or taken out
+  proposalCast?: {added: string[], removed: string[]},   // a film: who comes and who goes with the proposal, by name
+  keptByCast: string[],       // what goes when it is told anew for the same cast: the summary and the plan from the beats on (a film: what is read from the script)
 }
 export type StoryResult = {changed: boolean, dropped: string[]}
 export type StoryForCast = {proposal?: boolean, renamed?: {from: string, to: string}[]}
@@ -163,6 +164,8 @@ export type CastView = {
   builtOn: string[],          // the steps that go when the cast is changed: planned again by the next plan run
   remakes: string[],          // the steps written again only for whoever is new or changed (a music video's looks): the others keep theirs
   stage?: PlanStage,
+  // a film: a role comes or goes with its screenplay told anew (#589) - refused where the script is the user's; dropped: what goes when it is taken
+  adapt?: {refused?: string, dropped: string[]},
 }
 export type CastChange = {characters: (Partial<CastMember> & {name: string})[], locations: (Partial<CastMember> & {name: string})[]}
 // dropped: steps gone as a whole; remade: steps made again for some of their elements, "step: id, id"
@@ -281,7 +284,7 @@ export type TimingResult = {
 export type RunRequest =
   | {type: 'clips', ids: string[], again?: boolean, preview?: boolean}
   | {type: 'look-pictures'}
-  | {type: 'adapt-story'}
+  | {type: 'adapt-story', add?: {name: string, role: string}[], remove?: string[]}   // add, remove: a film's roles (#589)
   | {type: 'final', preview?: boolean}
   | {type: 'plan', until?: string, redo?: string[]}
   | {type: 'refresh', what: ('pictures' | 'clips')[]}
