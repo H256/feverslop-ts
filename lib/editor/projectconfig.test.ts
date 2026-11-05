@@ -57,6 +57,14 @@ describe('what the project has', () => {
         expect(keys).not.toContain('sequenceWorkflow')
         expect(keys).not.toContain('pinStartFrame')
     })
+    test('continuity is set here too, with the choices of the kind', async () => {
+        const choices = async (target: EditorTarget) => (await readConfig(target)).settings.find(s => s.key === 'continuity')!.choices!.map(c => c.value)
+        expect(await choices(music())).toEqual(['never', 'auto', 'always'])
+        expect(await choices(film())).toEqual(['never', 'auto', 'scene'])
+        expect((await previewConfig(music(), {continuity: 'scene'})).problems[0]).toContain('continuity must be')
+        expect((await previewConfig(music(), {continuity: 'auto'})).notes.join(' ')).not.toContain('does nothing')
+        expect((await previewConfig(music(), {continuity: 'never'})).notes.join(' ')).toContain('does nothing')
+    })
 })
 
 describe('what a change would do', () => {
