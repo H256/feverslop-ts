@@ -32,12 +32,40 @@ export type IntroSettings = {
     fade: number,           // seconds the intro fades into the video, picture and sound - 0 = a hard cut
 }
 
-export type PostworkSettings = { label: LabelSettings, intro: IntroSettings }
+/**
+ * A title card before the video and scrolling credits after it (bun run credits, #609). The facts - the language model, the
+ * models of the workflows the project was rendered with, the graphics cards of the ComfyUI servers - are collected by
+ * code, never written by a model; what is not known is left out.
+ */
+export type CreditsSettings = {
+    opening: boolean,       // the title card before the video
+    end: boolean,           // the scrolling credits after it
+    openingSeconds: number,
+    endSeconds: number,     // 0 = from the number of lines, about 1.5 s each
+    title: string,          // '' = the project's: a film's title, a music video's id
+    artist: string,         // a music video: who sings or plays it - '' = none
+    director: string,       // a film: who made it - '' = none
+    artistLabel: string,    // the words before the artist: "by"
+    directorLabel: string,  // ... before the director: "Directed by"
+    disclosure: string,     // the line on the title card and at the end of the credits - '' = none
+    marker: string,         // a marker on the title card: a preset of the AI marker or the path of a PNG - '' = none
+    extra: string[],        // lines of your own in the credits: thanks, links, a channel
+    hardware: string,       // a note of your own on the hardware, after the cards the servers report: "LLM: Strix Halo, 128 GB"
+    facts: boolean,         // the facts collected: language model, models, graphics cards, software
+    sound: string,          // the path of a sound file under the end credits, faded out - '' = silence
+    font: string,           // the path of a .ttf or .otf - '' = Lato (assets/fonts/)
+}
+
+export type PostworkSettings = { label: LabelSettings, intro: IntroSettings, credits: CreditsSettings }
 export type PostworkStep = keyof PostworkSettings
 
 export const POSTWORK_DEFAULTS: PostworkSettings = {
     label: {marker: 'generated-white50', mode: 'credits', seconds: 5, interval: 60, corner: 'top-right', size: 6, margin: 3},
     intro: {file: '', fade: 0},
+    credits: {
+        opening: true, end: true, openingSeconds: 4, endSeconds: 0, title: '', artist: '', director: '', artistLabel: 'by', directorLabel: 'Directed by',
+        disclosure: 'Contains AI-generated content', marker: '', extra: [], hardware: '', facts: true, sound: '', font: '',
+    },
 }
 export const POSTWORK_STEPS = Object.keys(POSTWORK_DEFAULTS) as PostworkStep[]
 
@@ -73,6 +101,10 @@ const number = (min: number, max: number, what: string): Check => value =>
 const oneOf = (values: readonly string[]): Check => value =>
     typeof value === 'string' && values.includes(value) ? undefined : `must be one of ${values.join(', ')}, got ${JSON.stringify(value)}`
 
+const yesNo: Check = value => typeof value === 'boolean' ? undefined : `must be true or false, got ${JSON.stringify(value)}`
+// one line of text: no line breaks (a line of its own is a line of the list)
+const line: Check = value => typeof value === 'string' && !/[\n\r\0]/.test(value) ? undefined : `must be one line of text, got ${JSON.stringify(value)}`
+
 const CHECKS: { [S in PostworkStep]: { [K in keyof PostworkSettings[S]]: Check } } = {
     label: {
         marker: value => typeof value === 'string' && value.trim() ? undefined : `must be a preset like "generated-white" or the path of a PNG, got ${JSON.stringify(value)}`,
@@ -86,6 +118,13 @@ const CHECKS: { [S in PostworkStep]: { [K in keyof PostworkSettings[S]]: Check }
     intro: {
         file: value => typeof value === 'string' ? undefined : `must be the path of a video, or "" for input/intro.mp4 of the project, got ${JSON.stringify(value)}`,
         fade: number(0, 10, 'a number of seconds from 0 (a hard cut) to 10'),
+    },
+    credits: {
+        opening: yesNo, end: yesNo, facts: yesNo,
+        openingSeconds: number(1, 30, 'a number of seconds from 1 to 30'),
+        endSeconds: number(0, 600, 'a number of seconds up to 600, or 0 for as many as the lines need'),
+        title: line, artist: line, director: line, artistLabel: line, directorLabel: line, disclosure: line, marker: line, hardware: line, sound: line, font: line,
+        extra: value => Array.isArray(value) && value.every(v => !line(v)) ? undefined : `must be a list of lines like ["Thanks to ..."], got ${JSON.stringify(value)}`,
     },
 }
 

@@ -5,7 +5,8 @@ import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import AddViewForm from './AddViewForm.vue'
 import {chain} from './clips'
-import {defaultSource, introRequest, labelRequest, newIntro, newLabel, newRefinish, refinishRequest, type NewView} from './forms'
+import {creditsRequest, defaultSource, introRequest, labelRequest, newCredits, newIntro, newLabel, newRefinish, refinishRequest, type NewView} from './forms'
+import CreditsForm from './CreditsForm.vue'
 import IntroForm from './IntroForm.vue'
 import LabelForm from './LabelForm.vue'
 import RefinishForm from './RefinishForm.vue'
@@ -127,6 +128,26 @@ export function useClipActions(timeline: Timeline) {
       submit: () => start(introRequest(form)),
     })
   }
+  /** A title card before a finished video and the credits after it (bun run credits): a new video next to it. */
+  async function credits() {
+    const from = defaultSource(project.value.id, project.value.finals)
+    if (!from) throw new Error('There is no final video yet: render it first.')
+    const {postwork, kind} = project.value
+    const form = reactive(newCredits(postwork.credits, kind, from))
+    await ask({
+      title: 'Add a title card and credits',
+      lines: [
+        'A title card before a finished video and scrolling credits after it, written next to it as <name>-credits.mp4. The video it is made from stays as it is.',
+        'What it was made with - the language model, the models, the graphics cards - is collected from what this project ran; nothing is asked of a model. The run shows the credits line by line.',
+      ],
+      warnings: [
+        postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`,
+      ],
+      body: () => h(CreditsForm, {draft: form, finals: sources(), markers: postwork.markers, kind}),
+      confirm: 'Add them',
+      submit: () => start(creditsRequest(form, kind)),
+    })
+  }
   async function pickVersion(clip: EditorClip, version: {id: string, fromThisPlan?: boolean, source?: string}) {
     const later = chain(project.value, clip)
     const yes = await ask({
@@ -191,7 +212,7 @@ export function useClipActions(timeline: Timeline) {
   const guarded = <A extends unknown[]>(action: (...args: A) => Promise<unknown>) => toasts.guard(action)
   return {
     renderAgain: guarded(renderAgain), renderMarked: guarded(renderMarked), preview: guarded(preview), retake: guarded(retake),
-    refinish: guarded(refinish), label: guarded(label), intro: guarded(intro), pickVersion: guarded(pickVersion), saveOverride: guarded(saveOverride), addView: guarded(addView),
+    refinish: guarded(refinish), label: guarded(label), intro: guarded(intro), credits: guarded(credits), pickVersion: guarded(pickVersion), saveOverride: guarded(saveOverride), addView: guarded(addView),
     repeatLast: guarded(repeatLast), runNext: guarded(runNext), plain: guarded(plain), plan: guarded(plan),
     renderMarkedNow: renderMarked, afterRender,
   }

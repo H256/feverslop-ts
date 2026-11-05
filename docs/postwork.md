@@ -8,10 +8,11 @@ before. All steps are off until you run them.
 | Step | Command | Writes | Issue |
 |---|---|---|---|
 | The AI marker | `bun run label <id>` | `<name>-labeled.mp4` | #607 |
+| A title card and credits | `bun run credits <id>` | `<name>-credits.mp4` | #609 |
 | An intro | `bun run intro <id>` | `<name>-intro.mp4` | #608 |
 
 The steps need nothing but ffmpeg: the marker is ffmpeg's own `overlay` filter, the intro its `concat`, `xfade` and
-`acrossfade`.
+`acrossfade`, the credits its `drawtext` (with libfreetype, which the usual builds have) in a font of the repo.
 
 ## Why: the AI Act
 
@@ -72,6 +73,52 @@ video.
 and `basic` ("AI"), each as `-white`, `-black`, `-white50` or `-black50` (50 % transparent). A PNG of your own keeps its
 transparency. An SVG would need an ffmpeg built with librsvg, so convert it to a PNG first.
 
+## A title card and credits: `bun run credits`
+
+A title card before the video - the title, who made it, the disclosure, the marker if you like - and credits that scroll
+up after it: the title again, lines of your own, and **what it was made with**.
+
+```bash
+bun run credits my-song --artist="Klemens" --save-default        # your name once, for every project
+bun run credits my-song --title="Bone Saws Dirge" --line="Thanks to the band" --line="youtube.com/@me" --save
+bun run credits my-film --film --director="K. W." --marker=generated-white
+bun run credits my-song --no-opening --sound=input/outro.mp3      # only the credits, with music under them
+bun run credits my-song --dry-run                                 # the credits as text, nothing written
+```
+
+What it was made with is **collected by code, never written by a model** - a fact that is not known is left out:
+
+- **Language model**: the models the plan's calls went to, as measured (the timings file of `bun run stats`); for a
+  project from before the measurements, the model of the settings.
+- **Models**, per kind of render (video, pictures, reference sheets, song, frame interpolation, upscaling): what the
+  graphs of its renders loaded - diffusion model, checkpoint, LoRAs, text encoder, not the VAE. For a render that was not
+  measured, the workflow its file's sidecar names and the model names that workflow has in it.
+- **Hardware**: the graphics cards its renders ran on, as measured, with their memory; then your own words
+  (`--hardware="LLM: Strix Halo, 128 GB"`), e.g. for the machine the language model runs on.
+- **Made with**: FeverSlop TS and its version, ComfyUI, ffmpeg.
+
+The run prints the credits line by line before it draws them; `--dry-run` only prints them.
+
+| Option | Default | |
+|---|---|---|
+| `--from=<file>` | `<id>-finished.mp4`, else `<id>.mp4` | the video |
+| `--title=` | a film's title, a music video's id | |
+| `--artist=` / `--director=` | none | a music video: "by …", a film: "Directed by …" (the words before it: `artistLabel`, `directorLabel` in the settings) |
+| `--disclosure=` | `Contains AI-generated content` | on the title card and at the end of the credits; `--disclosure=` empty: none |
+| `--marker=` | none | an AI marker on the title card: a preset or a PNG, as `bun run label` takes it |
+| `--line=TEXT` | none | a line of your own in the credits; repeat it for more, `--no-lines` for none |
+| `--hardware=` | none | your own words after the graphics cards |
+| `--no-facts` | | leave out what it was made with |
+| `--no-opening` / `--no-end` | | only the credits / only the title card |
+| `--opening-seconds=` | `4` | |
+| `--end-seconds=` | `0` | 0: about 1.5 s per line, at least 8 |
+| `--sound=<path>` | silence | a sound file under the credits, faded out at their end |
+| `--font=<path>` | Lato (`assets/fonts/`) | a .ttf or .otf of your own |
+| `--save` / `--save-default` | | keep the options given for this project / for every project |
+
+The cards have the size and frame rate of the video, black, white text, faded in and out. The sound of the video is
+untouched; silence runs under the title card. Subtitle tracks are kept and moved by the length of the title card.
+
 ## An intro: `bun run intro`
 
 A clip of your own in front of the video: a logo, a channel ident, a title card.
@@ -107,7 +154,8 @@ Every option of a step can be kept, so the command needs none of them. The later
 {
   "postwork": {
     "label": {"marker": "generated-white50", "mode": "credits", "seconds": 6, "corner": "top-right", "size": 6, "margin": 3},
-    "intro": {"file": "D:/videos/channel-intro.mp4", "fade": 0.5}
+    "intro": {"file": "D:/videos/channel-intro.mp4", "fade": 0.5},
+    "credits": {"artist": "Klemens", "hardware": "LLM: Strix Halo, 128 GB", "extra": ["youtube.com/@me"], "marker": "generated-white"}
   }
 }
 ```
@@ -127,7 +175,12 @@ Under the timeline, next to *Refinish*, once there is a final video:
 - **Intro** asks for the video to start from, the intro (empty: `input/intro.mp4` of the project, the field says when
   there is one) and the fade. It starts `bun run intro`; the new video is listed as *… + intro*.
 
-Both forms can keep their settings for this project (`config.json`) or for every project (the settings file).
+- **Credits** asks for the video, whether a title card, credits or both, the title, the artist (a film: who directed
+  it), the disclosure, a marker on the title card, the lines of your own (one per line), whether to say what it was made
+  with, your words on the hardware, a sound under the credits and the lengths. It starts `bun run credits`; the run
+  shows the credits line by line, the new video is listed as *… + credits*.
+
+All forms can keep their settings for this project (`config.json`) or for every project (the settings file).
 
 The form opens with what the project has set (the defaults, the settings file and `config.json` together).
 
@@ -136,6 +189,7 @@ The form opens with what the project has set (the defaults, the settings file an
 Each step starts from the video you name with `--from` (on the page: *From*), so the steps can follow each other in any
 order. `my-song-finished-labeled.mp4` is the finished video with the marker on it.
 
-The order matters for what is where: **marker first, then the intro**, and the marker is not on the intro - it starts
-with the video. The other way round, the marker sits on the intro too, and in `interval` mode its times count from the
+The order matters for what is where: **marker, credits, intro** - the marker is then only on the video, the title card
+and the credits are around it, and the intro comes first of all: `my-song-finished-labeled-credits-intro.mp4`. With the
+marker first it starts with the video, not on the intro. The other way round, the marker sits on the intro too, and in `interval` mode its times count from the
 start of the intro.

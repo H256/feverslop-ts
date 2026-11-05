@@ -51,7 +51,8 @@
     "add-view": "bun tools/add-view.ts",
     "refinish": "bun tools/refinish.ts",
     "label": "bun tools/label.ts",
-    "intro": "bun tools/intro.ts"
+    "intro": "bun tools/intro.ts",
+    "credits": "bun tools/credits.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

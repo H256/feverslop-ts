@@ -94,6 +94,10 @@ export type EditorProject = {
 export type PostworkView = {
   label: {marker: string, mode: string, seconds: number, interval: number, corner: string, size: number, margin: number},
   intro: {file: string, fade: number},
+  credits: {
+    opening: boolean, end: boolean, openingSeconds: number, endSeconds: number, title: string, artist: string, director: string,
+    artistLabel: string, directorLabel: string, disclosure: string, marker: string, extra: string[], hardware: string, facts: boolean, sound: string, font: string,
+  },
   introFound?: string,        // input/intro.<ext> of the project, when there is one: the intro without a file set
   markers: string[],          // the presets of the marker: the EU icons in assets/eu-ai-icons/
   problem?: string,           // what is wrong with the settings when they cannot be read: the steps take their defaults then, and the form says it
@@ -309,6 +313,9 @@ export type RunRequest =
   // saveDefault = keep them in the settings file, for every project
   | {type: 'label', from?: string, marker?: string, mode?: string, seconds?: number, interval?: number, corner?: string, size?: number, margin?: number, save?: boolean, saveDefault?: boolean}
   | {type: 'intro', from?: string, file?: string, fade?: number, save?: boolean, saveDefault?: boolean}
+  // the text fields as the command takes them; extra = the lines of your own, [] = none
+  | {type: 'credits', from?: string, opening?: boolean, end?: boolean, openingSeconds?: number, endSeconds?: number, title?: string, artist?: string, director?: string,
+     disclosure?: string, marker?: string, extra?: string[], hardware?: string, facts?: boolean, sound?: string, save?: boolean, saveDefault?: boolean}
 export type RunInfo = {
   source: 'here' | 'terminal',
   command: string,

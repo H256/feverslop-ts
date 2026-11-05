@@ -67,4 +67,19 @@ const kept = (draft: {save: boolean, saveDefault: boolean}) => ({...(draft.save 
 /** A clip in front of a finished video: its path - empty for input/intro.mp4 of the project - and the fade into the video. */
 export type IntroDraft = {from: string, file: string, fade: number, save: boolean, saveDefault: boolean}
 export const newIntro = (settings: PostworkView['intro'], from: string): IntroDraft => ({from, file: settings.file, fade: settings.fade, save: false, saveDefault: false})
+/** The title card and the credits: the project's settings, changed in the form - the lines of your own one per line of a text box. */
+export type CreditsDraft = {
+  from: string, opening: boolean, end: boolean, openingSeconds: number, endSeconds: number, title: string, who: string,
+  disclosure: string, marker: string, extra: string, hardware: string, facts: boolean, sound: string, save: boolean, saveDefault: boolean,
+}
+export const newCredits = (settings: PostworkView['credits'], kind: 'music' | 'film', from: string): CreditsDraft => ({
+  from, opening: settings.opening, end: settings.end, openingSeconds: settings.openingSeconds, endSeconds: settings.endSeconds, title: settings.title,
+  who: kind === 'film' ? settings.director : settings.artist, disclosure: settings.disclosure, marker: settings.marker, extra: settings.extra.join('\n'),
+  hardware: settings.hardware, facts: settings.facts, sound: settings.sound, save: false, saveDefault: false,
+})
+export const creditsRequest = (draft: CreditsDraft, kind: 'music' | 'film'): RunRequest => ({
+  type: 'credits', from: draft.from, opening: draft.opening, end: draft.end, openingSeconds: Number(draft.openingSeconds), endSeconds: Number(draft.endSeconds),
+  title: draft.title.trim(), ...(kind === 'film' ? {director: draft.who.trim()} : {artist: draft.who.trim()}), disclosure: draft.disclosure.trim(), marker: draft.marker.trim(),
+  extra: draft.extra.split('\n').map(line => line.trim()).filter(Boolean), hardware: draft.hardware.trim(), facts: draft.facts, sound: draft.sound.trim(), ...kept(draft),
+})
 export const introRequest = (draft: IntroDraft): RunRequest => ({type: 'intro', from: draft.from, file: draft.file.trim(), fade: Number(draft.fade), ...kept(draft)})
