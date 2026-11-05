@@ -761,8 +761,15 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     : ''
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
                 const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, everyone keeps their distance to the camera, and the camera stays locked in place.' : ''
+                // A close-up of one person says that nobody else is in it: the model fills the empty background of a close-up with people -
+                // a stranger, or the same person again (epa-streikt-261104, slot-003). Only what the planner classed as close, never a wide shot,
+                // where the others of the scene may stand behind; a group character's companions are in the frame by design
+                const alone = shot.focus.length === 1 && !shot.focus[0]!.companions.length && (shot.plan?.size === 'close' || shot.plan?.size === 'extreme')
+                const behind = locationAnchor
+                    ? alone ? ` Behind ${shot.focus[0]!.label}, out of focus: ${locationAnchor}; no other person is in the frame.` : ` Behind them: ${locationAnchor}.`
+                    : alone ? ' No other person is in the frame.' : ''
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${locationAnchor ? ` Behind them: ${locationAnchor}.` : ''}${holdClause}`
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {

@@ -136,6 +136,38 @@ describe('the background of the place', () => {
         expect(clip.prompt).not.toContain('Behind them')
         expect(clip.prompt).not.toContain('still visible behind them')
     })
+    describe('a close-up of one person has nobody else in it', () => {
+        const shotOf = (size: 'wide' | 'medium' | 'close' | 'extreme', characters: string[], anchors?: Record<string, string>) =>
+            buildClipRequests({...input(anchors, [beat]), shotMoments: {b1: {shots: [{action: 'The Shaman drums.', characters, size}]}}})[0]!.prompt
+        const anchor = {clearing: 'the tall pines and the fire pit'}
+        test('close and extreme: the background names the one person and says nobody else is there', () => {
+            for (const size of ['close', 'extreme'] as const) {
+                const prompt = shotOf(size, ['shaman'], anchor)
+                expect(prompt).toContain('Behind <Subject 2>, out of focus: the tall pines and the fire pit; no other person is in the frame.')
+                // only the shot with the plan: the clip's second shot has none and is as it was
+                expect(prompt.match(/no other person/g)).toHaveLength(1)
+            }
+        })
+        test('without a phrase of the place the sentence stands alone', () => {
+            expect(shotOf('extreme', ['shaman'])).toContain('No other person is in the frame.')
+        })
+        test('a wide or medium shot keeps "Behind them" - the others of the scene may stand there', () => {
+            for (const size of ['wide', 'medium'] as const) {
+                const prompt = shotOf(size, ['shaman'], anchor)
+                expect(prompt).toContain('Behind them: the tall pines and the fire pit.')
+                expect(prompt).not.toContain('no other person')
+            }
+        })
+        test('two people in a close-up are not alone', () => {
+            const prompt = shotOf('close', ['shaman', 'runa'], anchor)
+            expect(prompt).toContain('Behind them: the tall pines and the fire pit.')
+            expect(prompt).not.toContain('no other person')
+        })
+        test('a shot without a size, from a plan made before it, is as it was', () => {
+            const prompt = buildClipRequests({...input(anchor, [beat]), shotMoments: {b1: {shots: [{action: 'The Shaman drums.', characters: ['shaman']}]}}})[0]!.prompt
+            expect(prompt).toContain('Behind them: the tall pines and the fire pit.')
+        })
+    })
     test('a continuing clip with one person says "is"', () => {
         const clips = buildClipRequests(input(undefined, [beat, beat]))
         expect(clips[1]!.prompt).toContain('<Subject 2> is already present')
