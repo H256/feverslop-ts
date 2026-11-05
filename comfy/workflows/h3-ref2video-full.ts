@@ -75,7 +75,7 @@ export default function h3Ref2VideoFull(opts: VideoWorkflowOptions): WorkflowRes
     const guider = wf.BasicGuider({model: attention.model, conditioning: endGuide(wf, pinned.positive, references.LATENT, videoVae.VAE, opts.endFrame)})
     const noise = wf.RandomNoise({noise_seed: opts.seed})
     const sampler = wf.KSamplerSelect({sampler_name: 'res_multistep'})
-    const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: 20, denoise: 1, model: unet.MODEL})
+    const sigmas = wf.BasicScheduler({scheduler: 'simple', steps: opts.steps ?? 20, denoise: 1, model: unet.MODEL})
     const sampled = wf.SamplerCustomAdvanced({
         noise: noise.NOISE,
         guider: guider.GUIDER,

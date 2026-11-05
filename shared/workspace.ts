@@ -310,7 +310,7 @@ export type RunLines = {lines: string[], next: number}
 ////////// THE SETTINGS OF A PROJECT (config.json)
 /** One setting of a project as the page edits it: what it is called, how it is chosen, and what it says. */
 export type SettingView = {
-    key: string, label: string, group: 'Workflows' | 'Size' | 'Continuing clips' | 'Seed and retries' | 'Final video',
+    key: string, label: string, group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Final video',
     /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a whole number */
     control: 'select' | 'text' | 'number',
     choices?: {value: unknown, label: string}[],

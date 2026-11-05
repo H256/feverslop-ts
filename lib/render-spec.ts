@@ -17,8 +17,11 @@ export const specId = (spec: RenderSpec) => spec.fixed ?? fingerprint(...spec.pa
 
 type ImageConfig = { imageWorkflow: string, imageResolution: unknown }
 // videoAspect only when it is not the default - the clips of a project from before it do not go stale
-type VideoConfig = { videoWorkflow: string, videoResolution: unknown, videoAspect?: string }
+// the steps likewise: -1 (the workflow's own) or not given is what a project from before them had
+type VideoConfig = { videoWorkflow: string, videoResolution: unknown, videoAspect?: string, videoSteps?: number, videoRefineSteps?: number }
 const aspectPart = (config: VideoConfig) => config.videoAspect && config.videoAspect !== '16:9' ? [config.videoAspect] : []
+const stepsPart = (config: VideoConfig) => config.videoSteps !== undefined && config.videoSteps !== -1 || config.videoRefineSteps !== undefined && config.videoRefineSteps !== -1
+    ? [['steps', config.videoSteps ?? -1, config.videoRefineSteps ?? -1]] : []
 
 /** A reference picture: what its prompt, workflow and size say. */
 export const pictureSpec = (picture: { id: string, prompt: string }, config: ImageConfig): RenderSpec =>
@@ -55,7 +58,7 @@ export function clipSpec(
     return {
         kind: 'clip', id: clip.id,
         parts: [
-            clip.prompt, clip.frames, config.videoWorkflow, config.videoResolution, ...aspectPart(config),
+            clip.prompt, clip.frames, config.videoWorkflow, config.videoResolution, ...aspectPart(config), ...stepsPart(config),
             clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
             clip.assets.audio.map(a => [a.stem, a.songStart, a.songEnd]),
             predecessorId(projectDir, clip.startsFrom),
