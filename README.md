@@ -121,6 +121,10 @@ The file, if you'd rather write it yourself:
   behind a proxy with authentication. `name` (default: the host) shows up in the log. Without `comfy`,
   `http://localhost:8188` is used. With several servers, pictures and clips are rendered on all of them in parallel -
   see [docs/comfyui.md](docs/comfyui.md#several-servers).
+- `whisper` is the transcription of the vocals stem (`bun run setup whisper`): `{"model": "large-v3-turbo", "beamSize":
+  2, "temperatures": [0, 0.4, 0.8]}`. Without it, `tools/vocals.py` picks by device: large-v3, 5 beams and temperatures
+  0-1 in steps of 0.2 on a GPU, the values above on a CPU, where large-v3 takes several times as long as the song. A
+  window that fails is decoded again at each temperature - fewer make hard vocals faster but recover from fewer bad decodes.
 
 Everything can be overridden, lowest first: the settings file → the project's `config.json` (only `"llm": {"model":
 …}` - a project may use another model, never another server or key) → env vars → flags (this run only, never saved):
@@ -135,6 +139,9 @@ Everything can be overridden, lowest first: the settings file → the project's 
 | `FEVERSLOP_VISION_API_KEY`             | -                 | its API key                                       |
 | `FEVERSLOP_VISION_MODEL`               | -                 | the model that describes pictures                 |
 | `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
+| `FEVERSLOP_WHISPER_MODEL`              | -                 | the whisper model: `large-v3`, `large-v3-turbo`   |
+| `FEVERSLOP_WHISPER_BEAM_SIZE`          | -                 | whisper's beams, 1 or more                        |
+| `FEVERSLOP_WHISPER_TEMPERATURES`       | -                 | whisper's temperatures, comma-separated: `0,0.4,0.8` |
 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
 (CI, scripts), `bun run setup` prints these env vars instead of asking.
@@ -751,7 +758,8 @@ singers.
 RTX 50xx/Blackwell `sm_120`, which forces slow driver-side PTX JIT compilation) and downloads the
 models: demucs ≈ 320 MB (htdemucs_ft is a bag of four models), Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separation takes under a minute, the
 transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
-Without CUDA they run on the CPU, much slower. On macOS there are no CUDA wheels - `tools/vocals.py` takes the regular
+Without CUDA they run on the CPU, much slower - there the transcription takes Whisper large-v3-turbo (≈ 1.6 GB) with
+fewer beams unless the `whisper` settings say otherwise (see [Setup](#setup)). On macOS there are no CUDA wheels - `tools/vocals.py` takes the regular
 PyPI PyTorch there, so the audio pipeline installs and runs on the CPU.
 
 ## Band members and instruments
