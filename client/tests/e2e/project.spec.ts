@@ -455,3 +455,12 @@ test('timeline: a title card and credits are added to a finished video, with the
     disclosure: 'Contains AI-generated content', marker: 'generated-white', extra: ['Thanks to the band', 'feverslop.example'], hardware: '', facts: true, sound: '', save: true,
   }})
 })
+
+test('timeline: R renders the clip at the playhead again, asked first - a key of the help works in capitals too', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/#clip-1`)
+  await expect(page.locator('.ihead h2')).toContainText('clip-1')
+  await page.keyboard.press('Shift+R')
+  await expect(dialog(page)).toContainText('Render clip-1')
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'clips', ids: ['clip-1']}})
+})
