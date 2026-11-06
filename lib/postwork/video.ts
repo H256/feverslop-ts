@@ -66,7 +66,7 @@ const OPEN_ELSEWHERE = new Set(['EPERM', 'EBUSY', 'EACCES'])
  * The finished video under its name - over the one of an earlier run. On Windows that fails while another program has the old
  * one open (a player, a virus scan): asked a few times, then said so; the new video goes, the old one stays as it was.
  */
-export async function putInPlace(partial: string, target: string, tries = 10, wait = 300, rename = renameSync): Promise<void> {
+export async function putInPlace(partial: string, target: string, tries = 10, wait = 300, rename: (from: string, to: string) => void = renameSync): Promise<void> {
     for (let attempt = 1; ; attempt++) {
         try {
             return rename(partial, target)
