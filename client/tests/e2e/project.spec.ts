@@ -221,6 +221,19 @@ test('library: a question whose work the server refuses stays open, with what wa
   await expect(dialog(page).getByLabel('Library id')).toHaveValue('kael')
 })
 
+test('references: a picture from an edited prompt shows it, and goes back to the plan\'s prompt unpinned', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/references#cem`)
+  const prompt = page.getByRole('textbox', {name: 'Prompt'})
+  await expect(prompt).toHaveValue('Cem in green')
+  await expect(page.getByText('Edited: the plan has another prompt.')).toBeVisible()
+  await page.getByRole('button', {name: 'Take the plan\'s prompt'}).click()
+  await expect(prompt).toHaveValue('Cem in grey')
+  await page.getByRole('button', {name: 'Render again'}).click()
+  await expect(dialog(page)).toContainText('the new picture is not pinned')
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'references/cem/rerender')?.body).toEqual({newAnchor: false, servers: ['gpu']})
+})
+
 test('references: an edited prompt is not lost by picking another picture', async ({page}) => {
   await page.goto(`${base}/p/music/demo/references#ann`)
   await page.getByRole('textbox', {name: 'Prompt'}).fill('Ann in blue')

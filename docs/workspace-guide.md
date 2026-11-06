@@ -172,10 +172,11 @@ Unter **References** liegen alle Personen, Orte und Requisiten. Rechts stehen Pr
 
 - **New sheet, same anchor**: dieselbe Person, andere Ansichten.
 - **New anchor**: eine andere Person oder ein anderer Ort, alles danach wird neu.
-- **Prompt ändern** und dann rendern: Das Bild bleibt danach gepinnt, der Prompt im Plan bleibt, wie er war.
+- **Prompt ändern** und dann rendern: Das Bild bleibt danach gepinnt, der Prompt im Plan bleibt, wie er war. Das Prompt-Feld zeigt danach den geänderten Prompt, und du kannst ihn weiter ändern und noch einmal rendern.
+- **Take the plan's prompt** holt den Prompt aus dem Plan zurück. Damit gerendert, ist das Bild nicht mehr gepinnt und folgt wieder dem Plan. Der Anchor aus dem geänderten Prompt geht dabei mit weg.
 - **Make current** holt eine ältere Fassung zurück.
 
-Bei einem gepinnten Bild sind die Render-Knöpfe gesperrt. Clips, die das Bild benutzen, werden danach stale, aber nicht von selbst neu gerendert: Das entscheidest du auf der Timeline.
+Auch ein gepinntes Bild lässt sich neu rendern, auch ein eigenes. Was da ist, landet unter den älteren Fassungen. Gesperrt sind die Render-Knöpfe nur, wenn ein Asset aus der Bibliothek die Rolle spielt. Clips, die das Bild benutzen, werden danach stale, aber nicht von selbst neu gerendert: Das entscheidest du auf der Timeline.
 
 ## Besetzung und Bibliothek
 
