@@ -21,6 +21,7 @@ import {resolveUnknownTokens} from "./lib/refs.ts";
 import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
 import {boundaryFrameAsset, buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
 import {parseRetake} from "./lib/retake.ts";
+import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from "./lib/own-picture.ts";
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
@@ -80,6 +81,9 @@ const {values: args, positionals} = (() => {
                 retake: {type: 'string', default: ''},
                 'new-anchor': {type: 'boolean', default: false},
                 'picture-prompt': {type: 'string', default: ''},
+                'picture-anchor': {type: 'string', default: ''},
+                'picture-description': {type: 'string', default: ''},
+                'describe-picture': {type: 'boolean', default: false},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
@@ -131,7 +135,10 @@ const retake = args.retake ? (() => {
         return log.usageError((e as Error).message, usage)
     }
 })() : undefined
-if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has('images'))) log.usageError('--new-anchor and --picture-prompt go with --render=images --only=... --again', usage)
+if ((args['new-anchor'] || args['picture-prompt'] || args['picture-anchor']) && !(args.again && render.has('images'))) log.usageError('--new-anchor, --picture-prompt and --picture-anchor go with --render=images --only=... --again', usage)
+if ((args['picture-description'] || args['describe-picture']) && !args['picture-anchor']) log.usageError('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture', usage)
+if (args['picture-description'] && args['describe-picture']) log.usageError('--picture-description or --describe-picture: the description given by hand, or read from the picture', usage)
+if (args['picture-anchor'] && args.only.split(',').filter(Boolean).length !== 1) log.usageError('--picture-anchor goes with one picture in --only', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 const until = (() => {
@@ -203,6 +210,14 @@ const settings = await loadSettings({
     comfy: args.comfy,
 })
 configureLlm(settings.llm)
+// your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
+if (args['picture-anchor'] && !args['dry-run']) {
+    if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
+    await takeOwnDescription(project.data, () => project.save(), args.only, {
+        text: args['picture-description'] ? await Bun.file(args['picture-description']).text() : undefined,
+        describeFrom: args['describe-picture'] ? args['picture-anchor'] : undefined,
+    })
+}
 // where a setting comes from: (settings), (project), (env), (flag), (default)
 const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings' : source})`)
 // the model itself is checked on the first LLM call - a fully cached project needs no server
@@ -666,8 +681,11 @@ async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
     const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
     if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
         warnFixedSeed(config.seed)
-        for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, args['new-anchor'] || edited !== undefined)}`)}`)
+        // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
+        const newAnchor = (picture: PictureJob) => args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, project.dir, config.sequenceSheets))
+        for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, newAnchor(picture))}`)}`)
     }
+    if (args['picture-anchor']) log.step('Own', `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, project.dir, config.sequenceSheets, args['picture-anchor'])}`)}`)
     const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
     log.step('Estimate', styles.muted(await pictureEstimate(todoPictures.length, config, settings.comfy.map(server => server.name))))
     await renderAll(chosen, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
