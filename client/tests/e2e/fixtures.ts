@@ -32,7 +32,7 @@ const casting: CastingView = {roles: [
   {kind: 'location', id: 'bar', name: 'Bar', copied: false, clips: ['clip-1'], errors: [], warnings: []},
 ], errors: [], warnings: [], options: {character: ['kael'], location: []}}
 const castingRedo: CastingRedo = {changes: [], redo: []}
-const reference: EditorReference = {id: 'ann', kind: 'character', name: 'Ann', prompt: 'Ann in red', description: 'Ann', file: 'output/assets/ann.png', picture: {file: 'output/assets/ann.png', v: 1}, frames: [], hasSheet: false, looks: [], clips: ['clip-1'], versions: [], readsViews: false}
+const reference: EditorReference = {id: 'ann', kind: 'character', name: 'Ann', prompt: 'Ann in red', description: 'Ann', file: 'output/assets/ann.png', picture: {file: 'output/assets/ann.png', v: 1}, frames: [], hasSheet: false, ownPicture: false, ownAnchor: false, looks: [], clips: ['clip-1'], versions: [], readsViews: false}
 const words = [{text: 'Hello', start: 1, end: 2}, {text: 'night', start: 2, end: 3}]
 const singing: SingingView = {
   singers: ['ann'],
@@ -59,14 +59,14 @@ const started = {run: {source: 'here', command: 'bun index.ts demo', pid: 1, sta
 
 const GETS: Record<string, unknown> = {
   project, freshness: fresh, status, waveform: {peaks: null}, progress: {progress: null}, 'versions/clip-1': {versions: []}, 'versions/clip-2': {versions: []},
-  references: {references: [reference, {...reference, id: 'bar', kind: 'location', name: 'Bar', prompt: 'A bar at night', description: 'A bar', file: 'output/assets/bar.png', picture: {file: 'output/assets/bar.png', v: 1}}]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: timingWave},
+  references: {references: [reference, {...reference, id: 'bar', kind: 'location', name: 'Bar', prompt: 'A bar at night', description: 'A bar', file: 'output/assets/bar.png', picture: {file: 'output/assets/bar.png', v: 1}}, {...reference, id: 'cem', name: 'Cem', prompt: 'Cem in grey', editedPrompt: 'Cem in green', description: 'Cem', file: 'output/assets/cem.png', picture: {file: 'output/assets/cem.png', v: 1}}]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: timingWave},
   casting, 'casting-redo': castingRedo, cast: {cast}, book, look, config,
 }
 const POSTS: Record<string, unknown> = {
   run: started, stop: {stopped: true}, estimate: {estimate: 'about 2 min', risks: []}, book: {changed: true, dropped: []},
   look: {changed: true, dropped: [], remade: []}, cast: {changed: true, dropped: [], remade: [], added: [], removed: [], renamed: []},
   casting: {written: true}, singing: {changed: [0], replanned: ['beat-1'], added: [], newSingers: ['ben'], formerSingers: [], staleClips: ['clip-1']},
-  timing: {changed: [0], slots: ['clip-1'], replanned: [], staleClips: [], crossing: []}, 'references/ann/rerender': started,
+  timing: {changed: [0], slots: ['clip-1'], replanned: [], staleClips: [], crossing: []}, 'references/ann/rerender': started, 'references/cem/rerender': started,
 }
 
 // a film of the pipeline's own (idea mode): Ana and Bo; a screenplay told anew without Bo and with Kai waits on the Story page (#589)

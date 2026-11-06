@@ -172,6 +172,14 @@ describe('a sheet made again on the same anchor', () => {
         expect(readFileSync(join(dir(), `${sheet}/anchor.png`), 'utf8')).toBe('the-anchor')
         expect(readFileSync(join(dir(), `${sheet}/sequence.mp4`), 'utf8')).toBe('first-video')
     })
+    test('an anchor drawn from an edited prompt goes with the version: the plan draws its own again', () => {
+        write(join(dir(), picture.file), 'edited-sheet')
+        write(join(dir(), `${sheet}/anchor.png`), 'edited-anchor')
+        write(join(dir(), `${sheet}/anchor.png.json`), JSON.stringify({prompt: 'mine', pinned: true, editedPrompt: 'mine'}))
+        const kept = putAwayPicture(picture, dir(), {sequenceSheets: true}, false)
+        expect(existsSync(join(dir(), `${sheet}/anchor.png`))).toBe(false)
+        expect(readFileSync(join(kept, 'anchor.png'), 'utf8')).toBe('edited-anchor')
+    })
     test('a version put away without its anchor (before they kept one) leaves the sheet with the anchor that was there, not none', () => {
         write(join(dir(), `${sheet}/anchor.png`), 'current-anchor')
         write(join(dir(), 'old/attempts/yard-20261101-090000/yard.png'), 'old-picture')
