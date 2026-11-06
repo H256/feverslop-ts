@@ -57,5 +57,27 @@ export async function encode(args: string[], target: string, frames: number, wha
     } finally {
         stopSpinner()
     }
-    renameSync(partial, target)
+    await putInPlace(partial, target)
+}
+
+const OPEN_ELSEWHERE = new Set(['EPERM', 'EBUSY', 'EACCES'])
+
+/**
+ * The finished video under its name - over the one of an earlier run. On Windows that fails while another program has the old
+ * one open (a player, a virus scan): asked a few times, then said so; the new video goes, the old one stays as it was.
+ */
+export async function putInPlace(partial: string, target: string, tries = 10, wait = 300, rename = renameSync): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return rename(partial, target)
+        } catch (e) {
+            const code = (e as { code?: string }).code
+            if (!code || !OPEN_ELSEWHERE.has(code)) throw e
+            if (attempt >= tries) {
+                rmSync(partial, {force: true})
+                throw new Error(`${basename(target)} is open in another program (a video player, the workspace in another tab) and cannot be replaced - close it there and run this again`)
+            }
+            await Bun.sleep(wait)
+        }
+    }
 }

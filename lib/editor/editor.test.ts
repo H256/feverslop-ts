@@ -4,7 +4,7 @@ import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 import {fingerprint} from "../provenance.ts";
 import {type EditorClip, groupsOf, readEditorFreshness, readEditorProject} from "./project.ts";
-import {byteRange, editorHandler, eventCursor, mediaFile, peaks} from "./server.ts";
+import {byteRange, editorHandler, eventCursor, MEDIA_PIECE_BYTES, mediaFile, peaks} from "./server.ts";
 
 let root: string
 const write = (file: string, content: unknown) => {
@@ -164,6 +164,15 @@ describe('serving', () => {
         expect(whole.status).toBe(200)
         expect(whole.headers.get('accept-ranges')).toBe('bytes')
         expect((await get('/media/videos/slot-001.mp4', {headers: {range: 'bytes=50-'}})).status).toBe(416)
+    })
+    test('a range to the end is answered a piece at a time: the file is let go, the browser asks for the next one', async () => {
+        write(join(music(), 'videos/long.mp4'), 'x'.repeat(MEDIA_PIECE_BYTES + 10))
+        const first = await get('/media/videos/long.mp4', {headers: {range: 'bytes=0-'}})
+        expect(first.status).toBe(206)
+        expect(first.headers.get('content-range')).toBe(`bytes 0-${MEDIA_PIECE_BYTES - 1}/${MEDIA_PIECE_BYTES + 10}`)
+        expect((await first.arrayBuffer()).byteLength).toBe(MEDIA_PIECE_BYTES)
+        const rest = await get('/media/videos/long.mp4', {headers: {range: `bytes=${MEDIA_PIECE_BYTES}-`}})
+        expect(rest.headers.get('content-range')).toBe(`bytes ${MEDIA_PIECE_BYTES}-${MEDIA_PIECE_BYTES + 9}/${MEDIA_PIECE_BYTES + 10}`)
     })
     test('nothing but the page itself can change anything', async () => {
         expect((await get('/api/stop', {method: 'POST', headers: {origin: 'http://evil.example'}, body: '{}'})).status).toBe(403)
