@@ -14,7 +14,7 @@ import {paddedClip, withOriginalSound} from "./refinish.ts";
 import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {bestTake, checkClip, describe as describeFindings, type Finding} from "./clip-qa.ts";
-import {freshness, isUserFile, recordedEditedPrompt, recordedFingerprint, recordedPrompt} from "./provenance.ts";
+import {freshness, isOwnFile, isUserFile, recordedEditedPrompt, recordedFingerprint, recordedPrompt} from "./provenance.ts";
 import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
@@ -124,11 +124,13 @@ function sheetPlan(picture: PictureJob, projectDir: string, config: SheetConfig)
  * Puts a picture away so that it is rendered again (--again): the picture, and of a reference sheet its video and frames. The anchor
  * stays - the same person or place from other views - unless `newAnchor` asks for another one. A look's anchor is a frame of its sheet.
  * An anchor drawn from an edited prompt goes too: the picture is rendered from the plan's prompt now, and kept it would be taken
- * as the user's own (isUserFile) - the plan would never draw its own anchor again.
+ * as the user's own (isUserFile) - the plan would never draw its own anchor again. The user's own anchor stays: its prompt is a note.
  */
+const editedAnchor = (file: string) => recordedEditedPrompt(file) !== undefined && !isOwnFile(file)
+
 export function putAwayPicture(picture: PictureJob, projectDir: string, config: Pick<RenderConfig, 'sequenceSheets'>, newAnchor: boolean) {
     const sheet = config.sequenceSheets && picture.kind !== 'prop' ? sequenceSheetDir(picture.kind, picture.id) : undefined
-    const keepAnchor = !newAnchor && !picture.look && !(sheet && recordedEditedPrompt(join(projectDir, sheetAnchor(sheet))) !== undefined)
+    const keepAnchor = !newAnchor && !picture.look && !(sheet && editedAnchor(join(projectDir, sheetAnchor(sheet))))
     const anchorFiles = sheet ? [sheetAnchor(sheet), `${sheetAnchor(sheet)}.json`] : []
     const files = pictureFiles(projectDir, picture, sheet).filter(file => !(keepAnchor && anchorFiles.includes(file)))
     const keep = archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, files)

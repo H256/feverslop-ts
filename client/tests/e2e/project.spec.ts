@@ -234,6 +234,24 @@ test('references: a picture from an edited prompt shows it, and goes back to the
   await expect.poll(() => posted.find(p => p.path === 'references/cem/rerender')?.body).toEqual({newAnchor: false, servers: ['gpu']})
 })
 
+test('references: your own picture goes up as the anchor, with a description written by hand', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/references#ann`)
+  await page.getByRole('button', {name: 'Use my own anchor'}).click()
+  await expect(dialog(page)).toContainText('What is there now is put away as an older version')
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082', 'hex')
+  await dialog(page).getByLabel('Picture', {exact: true}).setInputFiles({name: 'mine.png', mimeType: 'image/png', buffer: png})
+  await expect(dialog(page).getByRole('img', {name: 'The picture picked'})).toBeVisible()
+  await expect(dialog(page).getByLabel('Prompt of the picture')).toHaveValue('Ann in red')
+  await dialog(page).getByLabel('Description', {exact: true}).selectOption('text')
+  await dialog(page).getByLabel('Description text').fill('a woman in a green coat')
+  await dialog(page).getByRole('button', {name: 'Put it in'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'references/ann/own-anchor')?.body).toContain('a woman in a green coat')
+  const form = String(posted.find(p => p.path === 'references/ann/own-anchor')!.body)
+  expect(form).toContain('filename="mine.png"')
+  expect(form).toContain('name="servers"')
+  expect(form).not.toContain('name="describe"')
+})
+
 test('references: an edited prompt is not lost by picking another picture', async ({page}) => {
   await page.goto(`${base}/p/music/demo/references#ann`)
   await page.getByRole('textbox', {name: 'Prompt'}).fill('Ann in blue')

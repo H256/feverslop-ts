@@ -48,6 +48,7 @@ const exportable = () => props.reference.kind !== 'prop' && !!props.reference.pi
       <div class="section btn-row">
         <button class="btn primary" :disabled="actions.blocked()" :title="actions.blocked() ? 'Played by the library' : ''" @click="guard(actions.rerender)(false, prompt.text.value)">{{ reference.hasSheet ? 'New sheet, same anchor' : 'Render again' }}</button>
         <button v-if="reference.hasSheet && !reference.look" class="btn" :title="TERMS.Anchor" :disabled="actions.blocked()" @click="guard(actions.rerender)(true, prompt.text.value)">New anchor</button>
+        <button v-if="reference.kind !== 'prop'" class="btn" :disabled="actions.blocked()" :title="actions.blocked() ? 'Played by the library' : 'A picture of your own, made anywhere, as its anchor'" @click="guard(actions.putOwnAnchor)(prompt.text.value)">Use my own anchor</button>
         <button v-if="exportable()" class="btn" @click="guard(actions.putIntoLibrary)()">Put into the library</button>
       </div>
     </SheetMedia>

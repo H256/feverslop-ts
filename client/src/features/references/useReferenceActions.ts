@@ -1,10 +1,12 @@
-import {h, ref, type Ref} from 'vue'
+import {h, reactive, ref, type Ref} from 'vue'
 import type {EditorReference} from '../../../../shared/workspace'
 import FormField from '../../components/FormField.vue'
 import {sameText} from '../../composables/useDraft'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useProject} from '../project/session'
+import {type OwnAnchor, ownAnchorForm, ownAnchorProblem} from './ownAnchor'
+import OwnAnchorForm from './OwnAnchorForm.vue'
 
 const VERSION_SOURCE: Record<string, string> = {again: 'rendered again', stale: 'from an older plan', library: 'before the library took over'}
 export const versionAbout = (version: EditorReference['versions'][number]) => [VERSION_SOURCE[version.source], version.seed !== undefined && `seed ${version.seed}`].filter(Boolean).join(' · ')
@@ -31,7 +33,8 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     const r = reference.value
     const edited = !sameText(prompt, r.prompt)
     const back = !edited && r.editedPrompt !== undefined
-    const anchorGoes = newAnchor || edited || back
+    // the user's own anchor stays for an edited prompt: the prompt is a note, the sheet is drawn from the anchor
+    const anchorGoes = newAnchor || ((edited || back) && !r.ownAnchor)
     const asked = await api.estimatePictures(1).catch(() => undefined)
     const yes = await ask({
       title: `Render ${r.name} again?`,
@@ -58,6 +61,36 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     const {run} = await api.rerender(r.id, {newAnchor, ...(edited ? {prompt} : {}), ...(servers ? {servers} : {})})
     started(run)
   }
+  /**
+   * The user's own picture as the anchor - made in ComfyUI by hand, or anywhere: uploaded, put in by the CLI (--picture-anchor), the
+   * sheet drawn from it. What is there now is put away as an older version; the prompt is kept with it as a note.
+   */
+  async function putOwnAnchor(prompt: string) {
+    const r = reference.value
+    const readable = await api.vision().then(v => v.readable).catch(() => false)
+    const draft = reactive<OwnAnchor>({prompt, how: 'keep', description: r.description})
+    await ask({
+      title: `Your own anchor for ${r.name}`,
+      lines: [
+        'Your picture becomes the anchor: the same person or place from then on, the sheet is drawn from it. The pipeline never replaces it on its own.',
+        'What is there now is put away as an older version - Make current brings it back.',
+      ],
+      warnings: [
+        ...sideEffects(),
+        r.looks.length > 0 && `Its other looks are drawn from this anchor and go stale too: ${r.looks.join(', ')}.`,
+      ],
+      body: () => h(OwnAnchorForm, {draft, readable}),
+      confirm: 'Put it in',
+      render: true,
+      submit: async () => {
+        const problem = ownAnchorProblem(draft)
+        if (problem) throw new Error(problem)
+        const servers = takeServers()
+        const started = starter()
+        started((await api.ownAnchor(r.id, ownAnchorForm(draft, servers))).run)
+      },
+    })
+  }
   async function pick(version: EditorReference['versions'][number]) {
     const yes = await ask({title: 'Make this version the current one?', lines: ['What is there now is put away and stays selectable.'], warnings: sideEffects(), confirm: 'Make it current'})
     if (!yes) return
@@ -75,5 +108,5 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
       submit: () => start({type: 'export-asset', asset: r.id, as: as.value.trim()}),
     })
   }
-  return {blocked, rerender, pick, putIntoLibrary}
+  return {blocked, rerender, putOwnAnchor, pick, putIntoLibrary}
 }

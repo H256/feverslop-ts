@@ -60,13 +60,13 @@ const started = {run: {source: 'here', command: 'bun index.ts demo', pid: 1, sta
 const GETS: Record<string, unknown> = {
   project, freshness: fresh, status, waveform: {peaks: null}, progress: {progress: null}, 'versions/clip-1': {versions: []}, 'versions/clip-2': {versions: []},
   references: {references: [reference, {...reference, id: 'bar', kind: 'location', name: 'Bar', prompt: 'A bar at night', description: 'A bar', file: 'output/assets/bar.png', picture: {file: 'output/assets/bar.png', v: 1}}, {...reference, id: 'cem', name: 'Cem', prompt: 'Cem in grey', editedPrompt: 'Cem in green', description: 'Cem', file: 'output/assets/cem.png', picture: {file: 'output/assets/cem.png', v: 1}}]}, singing: {singing}, timing: {timing}, 'timing-wave': {peaks: timingWave},
-  casting, 'casting-redo': castingRedo, cast: {cast}, book, look, config,
+  casting, 'casting-redo': castingRedo, cast: {cast}, book, look, config, vision: {readable: true},
 }
 const POSTS: Record<string, unknown> = {
   run: started, stop: {stopped: true}, estimate: {estimate: 'about 2 min', risks: []}, book: {changed: true, dropped: []},
   look: {changed: true, dropped: [], remade: []}, cast: {changed: true, dropped: [], remade: [], added: [], removed: [], renamed: []},
   casting: {written: true}, singing: {changed: [0], replanned: ['beat-1'], added: [], newSingers: ['ben'], formerSingers: [], staleClips: ['clip-1']},
-  timing: {changed: [0], slots: ['clip-1'], replanned: [], staleClips: [], crossing: []}, 'references/ann/rerender': started, 'references/cem/rerender': started,
+  timing: {changed: [0], slots: ['clip-1'], replanned: [], staleClips: [], crossing: []}, 'references/ann/rerender': started, 'references/cem/rerender': started, 'references/ann/own-anchor': started,
 }
 
 // a film of the pipeline's own (idea mode): Ana and Bo; a screenplay told anew without Bo and with Kai waits on the Story page (#589)
@@ -100,9 +100,11 @@ export async function stubProject(page: Page, kind: 'music' | 'film' = 'music', 
     const path = new URL(request.url()).pathname.replace(new RegExp(`^/p/${kind}/demo/api/`), '')
     if (path === 'run-events') return route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: `event: state\ndata: ${JSON.stringify(current)}\n\n`})
     if (request.method() === 'POST') {
-      posted.push({path, body: request.postDataJSON()})
+      // a form (an upload) is kept as its raw text: the test looks for its fields in it
+      const form = request.headers()['content-type']?.startsWith('multipart/')
+      posted.push({path, body: form ? request.postData() : request.postDataJSON()})
       if (path === 'config') return route.fulfill({json: request.postDataJSON().dryRun ? configImpact : configResult})
-      if (path === 'run' || path.endsWith('/rerender')) current = started.run
+      if (path === 'run' || path.endsWith('/rerender') || path.endsWith('/own-anchor')) current = started.run
       return route.fulfill({json: POSTS[path] ?? {}})
     }
     if (path === 'project') return route.fulfill({json: {...gets.project as EditorProject, ...changed}})

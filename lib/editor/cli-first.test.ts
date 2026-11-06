@@ -10,7 +10,9 @@ const root = join(import.meta.dir, '..', '..')
 const read = (file: string) => readFileSync(join(root, file), 'utf8')
 
 // what a POST route may call that changes nothing of a project by itself: the request, the answer, starting a command, estimates
-const NOT_A_CHANGE = new Set(['body', 'json', 'refused', 'notFound', 'started', 'urlsOfChoice', 'estimateClips', 'estimatePictures', 'readPictureJobs', 'picturesFile', 'atLook'])
+const NOT_A_CHANGE = new Set(['body', 'json', 'refused', 'notFound', 'started', 'urlsOfChoice', 'estimateClips', 'estimatePictures', 'readPictureJobs', 'picturesFile', 'atLook',
+    // an upload checked and kept for the run that puts it in (lib/editor/upload.ts), and what is read to refuse one
+    'checkUploadSize', 'takePictureUpload', 'readReferences'])
 
 /** The functions the POST part of the project routes calls. */
 function postCalls(): string[] {

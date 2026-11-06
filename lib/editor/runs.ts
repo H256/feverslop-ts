@@ -1,4 +1,4 @@
-import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync, rmSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {lockHolder} from "../lock.ts";
 import {lastRun, runState} from "../run-record.ts";
@@ -22,7 +22,8 @@ const PICTURE_ID = /^[a-z0-9][a-z0-9-]*$/
 export type RunAction =
     | RunRequest
     // look: a music video planned up to the look - its pictures are rendered without planning the shots first (#540)
-    | { type: 'pictures', ids: string[], again?: boolean, newAnchor?: boolean, promptFile?: string, look?: boolean }
+    // anchorFile: the user's own picture as its anchor (an upload), with the description given by hand (descriptionFile) or read from it (describe)
+    | { type: 'pictures', ids: string[], again?: boolean, newAnchor?: boolean, promptFile?: string, look?: boolean, anchorFile?: string, descriptionFile?: string, describe?: boolean }
 
 const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
 
@@ -50,7 +51,7 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         case 'clips':
             return run('--render=videos', `--only=${checked(action.ids, CLIP_ID, 'clips')}`, ...(action.again ? ['--again'] : []), ...(action.preview ? ['--preview'] : []))
         case 'pictures':
-            return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []), ...(action.look && kind === 'music' ? ['--until=look'] : []))
+            return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []), ...(action.anchorFile ? [`--picture-anchor=${action.anchorFile}`] : []), ...(action.descriptionFile ? [`--picture-description=${action.descriptionFile}`] : []), ...(action.describe ? ['--describe-picture'] : []), ...(action.look && kind === 'music' ? ['--until=look'] : []))
         case 'adapt-story': {
             if (kind === 'music') return {script: 'tools/story.ts', args: [id, '--adapt']}
             // a film: its screenplay told anew for the roles that come and go (#589) - one argument each, never a line of shell
@@ -213,6 +214,10 @@ async function followLines(stream: ReadableStream<Uint8Array>, line: (text: stri
     if (rest.trim()) line(rest)
 }
 
+const dropFolders = (folders: string[]) => {
+    for (const folder of folders) rmSync(folder, {recursive: true, force: true})
+}
+
 export class RunControl {
     private own = new Map<string, Own>()
     private key = (target: Pick<EditorTarget, 'kind' | 'id'>) => `${target.kind}/${target.id}`
@@ -222,18 +227,33 @@ export class RunControl {
         this.root = root
     }
 
-    /** Starts what is asked for, or throws when the project is being worked on. `servers`: the URLs it may render on - none said: those of the settings. */
-    start(target: EditorTarget, action: RunAction, servers?: string[]): RunInfo {
-        const {script, args} = runCommand(target, action)
-        return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'export-song' && action.type !== 'leak-scan', servers)
+    /**
+     * Starts what is asked for, or throws when the project is being worked on. `servers`: the URLs it may render on - none said: those
+     * of the settings. `temporary`: folders of what the run is given (an upload, an edited prompt) - they go when it has ended, or
+     * right away when it is not started.
+     */
+    start(target: EditorTarget, action: RunAction, servers?: string[], temporary: string[] = []): RunInfo {
+        return this.dropping(temporary, () => {
+            const {script, args} = runCommand(target, action)
+            return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'export-song' && action.type !== 'leak-scan', servers, temporary)
+        })
     }
 
     /** A tool that is not about one project's files, under a name of its own - the library's create-asset. */
-    startTool(target: EditorTarget, script: string, args: string[], servers?: string[]): RunInfo {
-        return this.spawn(target, script, args, false, servers)
+    startTool(target: EditorTarget, script: string, args: string[], servers?: string[], temporary: string[] = []): RunInfo {
+        return this.dropping(temporary, () => this.spawn(target, script, args, false, servers, temporary))
     }
 
-    private spawn(target: EditorTarget, script: string, args: string[], locks: boolean, servers?: string[]): RunInfo {
+    private dropping(temporary: string[], start: () => RunInfo): RunInfo {
+        try {
+            return start()
+        } catch (e) {
+            dropFolders(temporary)
+            throw e
+        }
+    }
+
+    private spawn(target: EditorTarget, script: string, args: string[], locks: boolean, servers?: string[], temporary: string[] = []): RunInfo {
         const running = this.own.get(this.key(target))
         if (running?.info.running) throw new Error(`a run is going on here: ${running.info.command}`)
         const holder = locks ? lockHolder(target.dir) : undefined
@@ -253,7 +273,7 @@ export class RunControl {
         proc.exited.then(code => {
             own.info.running = false
             own.info.code = code
-        })
+        }).finally(() => dropFolders(temporary))
         this.own.set(this.key(target), own)
         return own.info
     }

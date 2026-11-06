@@ -18,6 +18,7 @@ import {CoverageProblem, packClips,type RawCoverage, toCoverage} from "./lib/fil
 import {screenplayToFountain} from "./lib/film/fountain.ts";
 import {chooseShotViews, readSheetViews, withExtraViews, withShotViews} from "./lib/film/views.ts";
 import {filmPictures, filmRenderConfig, pictureSeed, renderAll, statePictureId} from "./lib/film/pictures.ts";
+import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from "./lib/own-picture.ts";
 import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture} from "./lib/render.ts";
 import {FilmRenderer, filmAssemblyClips, filmClipFreshness, filmRenderState} from "./lib/film/render.ts";
 import {filmInputs, filmMode, filmStepUsed} from "./lib/film/inputs.ts";
@@ -77,6 +78,9 @@ const {values: args, positionals} = (() => {
                 retake: {type: 'string', default: ''},
                 'new-anchor': {type: 'boolean', default: false},
                 'picture-prompt': {type: 'string', default: ''},
+                'picture-anchor': {type: 'string', default: ''},
+                'picture-description': {type: 'string', default: ''},
+                'describe-picture': {type: 'boolean', default: false},
                 'fix-script': {type: 'boolean', default: false},
                 'allow-import-gaps': {type: 'boolean', default: false},
                 refresh: {type: 'string', default: ''},
@@ -114,7 +118,10 @@ const retake = args.retake ? (() => {
         return log.usageError((e as Error).message, usage)
     }
 })() : undefined
-if ((args['new-anchor'] || args['picture-prompt']) && !(args.again && render.has('images'))) log.usageError('--new-anchor and --picture-prompt go with --render=images --only=... --again', usage)
+if ((args['new-anchor'] || args['picture-prompt'] || args['picture-anchor']) && !(args.again && render.has('images'))) log.usageError('--new-anchor, --picture-prompt and --picture-anchor go with --render=images --only=... --again', usage)
+if ((args['picture-description'] || args['describe-picture']) && !args['picture-anchor']) log.usageError('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture', usage)
+if (args['picture-description'] && args['describe-picture']) log.usageError('--picture-description or --describe-picture: the description given by hand, or read from the picture', usage)
+if (args['picture-anchor'] && args.only.split(',').filter(Boolean).length !== 1) log.usageError('--picture-anchor goes with one picture in --only', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
 if (args.review && args['dry-run']) log.usageError('--review and --dry-run do not go together: a dry run generates nothing to look at', usage)
@@ -164,6 +171,14 @@ log.section(`FILM · ${film.id}`)
 const config = await loadFilmConfig(film.dir)
 const settings = await loadSettings({projectModel: config.llm.model, llmUrl: args['llm-url'], llmApiKey: args['llm-key'], llmModel: args['llm-model'], comfy: args.comfy})
 configureLlm(settings.llm)
+// your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
+if (args['picture-anchor'] && !args['dry-run']) {
+    if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
+    await takeOwnDescription(film.data, () => film.save(), args.only, {
+        text: args['picture-description'] ? await Bun.file(args['picture-description']).text() : undefined,
+        describeFrom: args['describe-picture'] ? args['picture-anchor'] : undefined,
+    })
+}
 log.step('LLM', settings.llm.url
     ? `${settings.llm.url} · ${settings.llm.model ? styles.name(settings.llm.model) : styles.muted('the only model on the server')}`
     : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
@@ -600,8 +615,11 @@ if (render.has('images') || render.has('videos') || retake) {
         const chosen = edited === undefined ? named : named.map(p => ({...p, prompt: edited}))
         if (args.again && pictures.some(p => only.has(p.id))) {
             warnFixedSeed(config.seed)
-            for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, film.dir, renderConfig, args['new-anchor'] || edited !== undefined)}`)}`)
+            // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
+            const newAnchor = (picture: PictureJob) => args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, film.dir, config.sequenceSheets))
+            for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, film.dir, renderConfig, newAnchor(picture))}`)}`)
         }
+        if (args['picture-anchor']) log.step('Own', `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, film.dir, config.sequenceSheets, args['picture-anchor'])}`)}`)
         await renderAll(chosen.filter(p => !p.baseId), renderPicture)
         // another look of a character is drawn with the seed of the normal picture - that keeps the face; it waits for it
         await renderAll(chosen.filter(p => p.baseId), p => renderPicture({...p, seed: pictureSeed(film.dir, p.baseId!)}))
