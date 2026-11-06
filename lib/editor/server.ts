@@ -60,8 +60,15 @@ export function byteRange(header: string, size: number): { first: number, last: 
     return first > last || first >= size ? undefined : {first, last}
 }
 
-// a video is only seekable in the browser when its bytes can be asked for piece by piece
-function serveMedia(file: string, request: Request, versioned: boolean) {
+// what one answer to a range gives at most: the browser asks for the next piece itself
+export const MEDIA_PIECE_BYTES = 4 * 1024 * 1024
+
+/**
+ * A video is only seekable in the browser when its bytes can be asked for piece by piece. A piece is read whole and the file let
+ * go before it is sent: a paused player keeps its request open, and on Windows an open file cannot be replaced - a label or an
+ * intro made again over the video the page shows failed with EPERM.
+ */
+async function serveMedia(file: string, request: Request, versioned: boolean) {
     const blob = Bun.file(file)
     const headers = {
         'Content-Type': MEDIA_TYPES[extname(file).toLowerCase()]!,
@@ -73,9 +80,11 @@ function serveMedia(file: string, request: Request, versioned: boolean) {
     if (!header) return new Response(blob, {headers})
     const range = byteRange(header, blob.size)
     if (!range) return new Response(null, {status: 416, headers: {'Content-Range': `bytes */${blob.size}`}})
-    return new Response(blob.slice(range.first, range.last + 1), {
+    const last = Math.min(range.last, range.first + MEDIA_PIECE_BYTES - 1)
+    const bytes = await blob.slice(range.first, last + 1).arrayBuffer()
+    return new Response(bytes, {
         status: 206,
-        headers: {...headers, 'Content-Range': `bytes ${range.first}-${range.last}/${blob.size}`, 'Content-Length': String(range.last - range.first + 1)},
+        headers: {...headers, 'Content-Range': `bytes ${range.first}-${last}/${blob.size}`, 'Content-Length': String(bytes.byteLength)},
     })
 }
 
