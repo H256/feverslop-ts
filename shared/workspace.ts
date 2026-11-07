@@ -33,7 +33,7 @@ export type EditorServer = {name: string, reachable: boolean, running: number, p
 
 ////////// A PROJECT
 export type EditorPerson = {name: string, text: string}
-export type EditorShot = {label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[]}
+export type EditorShot = {label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[], directionId?: string}
 // a sung or spoken line: seconds from the clip's start
 export type EditorLine = {at: number, end?: number, text: string, who: string, line?: number}
 export type EditorPicture = {id: string, label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number}
@@ -299,6 +299,7 @@ export type TimingResult = {
 /** What the page may ask a run for. The server adds what only it sets (a picture's edited prompt, the look stage). */
 export type RunRequest =
   | {type: 'clips', ids: string[], again?: boolean, preview?: boolean}
+  | {type: 'direction'}
   | {type: 'look-pictures'}
   | {type: 'adapt-story', add?: {name: string, role: string}[], remove?: string[]}   // add, remove: a film's roles (#589)
   | {type: 'final', preview?: boolean}

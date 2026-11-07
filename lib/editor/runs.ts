@@ -48,6 +48,8 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         return ids.join(',')
     }
     switch (action.type) {
+        case 'direction':
+            return {script: 'tools/direction.ts', args: [id, ...(kind === 'film' ? ['--film'] : []), '--preview']}
         case 'clips':
             return run('--render=videos', `--only=${checked(action.ids, CLIP_ID, 'clips')}`, ...(action.again ? ['--again'] : []), ...(action.preview ? ['--preview'] : []))
         case 'pictures':

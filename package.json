@@ -15,6 +15,7 @@
     "look": "bun tools/look.ts",
     "config": "bun tools/config.ts",
     "casting": "bun tools/casting.ts",
+    "direction": "bun tools/direction.ts",
     "singers": "bun tools/singers.ts",
     "timing": "bun tools/timing.ts",
     "versions": "bun tools/versions.ts",

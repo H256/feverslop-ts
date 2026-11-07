@@ -12,6 +12,8 @@ import {type BeatShots, type Blocking, type Character, type Fact, type Location,
 import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
+import {applyDirectionOverlay} from './lib/direction/service.ts';
+import {directionViewCache} from './lib/direction/views.ts';
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
 import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
@@ -1079,12 +1081,16 @@ const locationView = config.sequenceSheets ? config.locationView : -1
 // The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
 // the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
 // a beat without an entry (its answer failed, or it had no plan then) is asked again on the next run, the others stay
-const viewsBefore = project.data.shotViews ?? viewsKept
+const directedPlan = applyDirectionOverlay({id: project.id, dir: project.dir, kind: 'music'}, project.data)
+const directedMoments = directedPlan.shotMoments
+const viewCache = directionViewCache(shotMoments, directedMoments, project.data.shotViews ?? viewsKept, project.data.shotViewPlans)
+const viewsBefore = viewCache.kept
+if (viewCache.invalidated) delete project.data.shotViews
 if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
 const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
     // the beats don't depend on each other here - asked at once, up to llm.parallel
     const answers = await llmMap(beats, async (beat): Promise<number[] | undefined> => {
-        const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
+        const plan = directedMoments?.[beat.id] && asBeatShots(directedMoments[beat.id]!)
         if (!plan) return undefined
         const kept = viewsBefore?.[beat.id]
         if (kept?.length === plan.shots.length) return kept
@@ -1123,6 +1129,11 @@ Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length -
     return result
 }) : undefined
 
+if (shotViews) {
+    project.data.shotViewPlans = viewCache.keys
+    await project.save()
+}
+
 ////////// BUILDING THE MINIMAX H3 REQUESTS
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
 log.section('12 · BUILDING THE MINIMAX H3 REQUESTS')
@@ -1141,7 +1152,7 @@ const clips = buildClipRequests({
     language,
     singing,
     lyricsTiming,
-    shotMoments,
+    shotMoments: args['legacy-moments'] ? undefined : directedPlan.shotMoments,
     propActivity,
     stemsAvailable: Boolean(stems),
     continuity: config.continuity,

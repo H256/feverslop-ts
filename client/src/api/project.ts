@@ -4,6 +4,7 @@ import type {
   SingingResult, SingingView, StoryForCast, StoryResult, TimingChange, TimingResult, TimingView,
 } from '../../../shared/workspace'
 import {getJson, HttpError, postForm, postJson} from './http'
+import type {DirectionRule, DirectionView} from '../../../shared/direction'
 
 const id = (value: string) => encodeURIComponent(value)
 
@@ -38,6 +39,11 @@ export function projectApi(root: string) {
     castingRedo: (signal?: AbortSignal) => get<CastingRedo>('casting-redo', signal),
     cast: (signal?: AbortSignal) => get<{cast: CastView | null}>('cast', signal),
     book: (signal?: AbortSignal) => get<BookView>('book', signal),
+    direction: (signal?: AbortSignal) => get<DirectionView>('direction', signal),
+    saveDirection: (rules: DirectionRule[]) => post<DirectionView>('direction', {rules}),
+    takeDirection: () => post<DirectionView>('direction/take', {}),
+    dropDirection: () => post<DirectionView>('direction/drop', {}),
+    restoreDirection: (version: string) => post<DirectionView>('direction/restore', {version}),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),
     config: (signal?: AbortSignal) => get<ConfigView>('config', signal),
     /** Can the project's language model read a picture: a description from an uploaded picture is offered only then. */

@@ -507,7 +507,7 @@ describe('the start page', () => {
         const {projects} = await (await handler(new Request('http://localhost/api/projects'))).json() as { projects: { id: string, kind: string }[] }
         expect(projects.some(p => p.id === 'listed' && p.kind === 'music')).toBe(true)
         expect(projects.some(p => p.id === 'titled' && p.kind === 'film')).toBe(true)
-        for (const path of ['/', '/library', '/p/music/listed/', '/p/music/listed/references', '/p/film/titled/casting']) expect((await handler(new Request(`http://localhost${path}`))).headers.get('content-type')).toContain('text/html')
+        for (const path of ['/', '/library', '/p/music/listed/', '/p/music/listed/references', '/p/music/listed/direction', '/p/film/titled/direction', '/p/film/titled/casting']) expect((await handler(new Request(`http://localhost${path}`))).headers.get('content-type')).toContain('text/html')
     })
 })
 

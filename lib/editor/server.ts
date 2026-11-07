@@ -31,6 +31,8 @@ import {checkUploadSize, takePictureUpload} from "./upload.ts";
 import {readPictureJobs} from "../render-state.ts";
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts';
 import type {ProjectStatus} from '../../shared/workspace.ts';
+import type {DirectionRule} from '../../shared/direction.ts';
+import {readDirection, setDirectionRules, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts';
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -313,6 +315,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (what === 'casting-redo') return json(await castingRedo(target))
                 if (what === 'cast') return json({cast: readCast(target) ?? null})
                 if (what === 'book') return json(readBook(target))
+                if (what === 'direction') return json(readDirection(target))
                 if (what === 'look') return json(readLook(target))
                 if (what === 'config') return json(await readConfig(target))
                 if (what === 'vision') return json({readable: await picturesReadableFor(target)})
@@ -326,7 +329,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             const started = (run: unknown) => json({run})
             if (what === 'run') {
                 const {action: wanted, servers} = await body<{ action: RunAction, servers?: string[] }>()
-                if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures') return refused(new Error('no such action'))
+                if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures' && wanted.type !== 'direction') return refused(new Error('no such action'))
                 // a prompt or a picture comes in through its own route below, never as a path from the page
                 if (wanted.type === 'pictures') {
                     delete wanted.promptFile
@@ -338,6 +341,13 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 return started(runs.start(target, wanted, await urlsOfChoice(servers)))
             }
             if (what === 'stop') return json({stopped: runs.stop(target)})
+            if (what === 'direction') {
+                if (!id) return json(await setDirectionRules(target, await body<{rules: DirectionRule[]}>()))
+                if (id === 'take') return json(await takeDirection(target))
+                if (id === 'drop') return json(await dropDirection(target))
+                if (id === 'restore') return json(await restoreDirection(target, (await body<{version: string}>()).version))
+                return notFound()
+            }
             if (what === 'estimate') {
                 const asked = await body<{ clips?: string[], pictures?: number }>()
                 return json(asked.clips ? await estimateClips(target, asked.clips) : await estimatePictures(target, asked.pictures ?? 1))
@@ -495,7 +505,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'references', 'settings'].includes(area))) return notFound()
+                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'settings'].includes(area))) return notFound()
                 return post ? notFound() : page(request)
             }
         } catch (e) {

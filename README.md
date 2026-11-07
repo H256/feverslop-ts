@@ -47,6 +47,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run casting <id> [--film]` | casting.json, what the next plan run takes over and the `--redo` it needs; `--set=character:<id>=library:<asset>` |
 | `bun run singers <id>` | who sings which line; `--line=12:mara,ben`, or `--json` / `--set=singers.json` (a singer change within a line as `parts`) |
 | `bun run timing <id>` | when each sung line is; `--json` / `--set=timing.json` moves its words, `--tighten` starts the lines that begin in silence where the singing does |
+| `bun run direction <id> [--film]` | tune an existing performance: saved instructions, scoped to character/scene/shot or song time, LLM `--preview`, `--take` / `--drop`, plan versions; [direction guide](docs/direction.md) |
 | `bun run versions <id> <clip-or-picture> [--film]` | the older versions put away; `--pick=<version>` makes one the current one again |
 | `bun run config <id> [--film]` | the render settings of a project (`config.json`): printed, or changed with `--set=videoWorkflow=h3-ref2video-prism-2pass` (more than once), `--unset=seed` takes one back to its default; says which rendered clips and pictures a change makes stale |
 | `bun run override <film-id> <clip-id>` | a film clip's own view and references: `--view=2`, `--order=…`, `--without=…`, `--clear` |
@@ -922,6 +923,8 @@ bun film.ts <id>                                # plans those again and writes t
 The language model writes the same scenes again: a part for whoever is new (with their appearance and voice), nothing left of whoever goes, the dialogue of everyone else kept as far as it can. Code checks the answer - the same scenes at the same places, no line by someone gone or by nobody of the cast, everyone new in it - and asks once more with what was wrong. Taken, the look of the film, the places and their views stay, and the idea's outline gets the new cast. This is only for a screenplay the pipeline wrote (`input/idea.txt`): a screenplay of your own (`input/screenplay.txt`) is checked line for line against its source, so `--adapt` refuses there - add or take out the role in that script, and the next run plans again from it.
 
 ### The workspace
+
+**Direction** tunes an existing plan without changing its story, cast, reference looks or timing. Save an instruction, preview the LLM's structured shot edits, then take or drop them. Use **Direct this shot** on the timeline for a local correction, or scope a rule to a character, beat/scene or song time range. Conflicts and changed bindings require review; **Plan versions** restores an earlier accepted plan. **Update clip prompts** rebuilds requests before rendering. The CLI is `bun run direction <id> [--film]`; see [Direction after planning](docs/direction.md).
 
 `bun run editor` serves one page on this machine (http://127.0.0.1:4173/), over everything in `projects/` and `films/`. The page is a build of `client/` (Vue): on the first start, and after a pull that changed it, `bun run editor` builds it first, which takes a few seconds. Step by step, with screenshots: [docs/workspace-guide.md](docs/workspace-guide.md) (in German).
 
