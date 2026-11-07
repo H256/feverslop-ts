@@ -3,7 +3,7 @@ import {isAbsolute, join, relative} from "node:path";
 import {probeVideo} from "../assemble.ts";
 import {boundaryFrameAsset, type ClipRequest} from "../compose.ts";
 import {loadProjectConfig, type ProjectConfig} from "../config.ts";
-import {FPS, secondsAt} from "../frames.ts";
+import {FPS, secondsAt, round} from "../frames.ts";
 import type {Project} from "../project.ts";
 import {type Freshness, freshness} from "../provenance.ts";
 import {plainText} from "../refs.ts";
@@ -17,12 +17,14 @@ import {loadFilmConfig, type LoadedFilmConfig} from "../film/config.ts";
 import {filmRenderConfig, placeViewFrame} from "../film/pictures.ts";
 import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from "../film/render.ts";
 import type {FilmProject} from "../film/types.ts";
+import {speakingSeconds, splitLongShot} from '../film/coverage.ts';
 import {withExtraViews} from "../film/views.ts";
 import {filmStage, musicStage, nextStage, type PlanStage} from "../stages.ts";
 import {clipRequestFile, clipRequestsDir} from "../previous-output.ts";
 import {INTRO_EXTENSIONS, MARKER_PRESETS, POSTWORK_DEFAULTS} from "../postwork/config.ts";
 import {loadPostwork} from "../postwork/store.ts";
 import {POSTWORK_ENDING_NAMES, POSTWORK_ENDINGS, type PostworkEnding} from "../postwork/video.ts";
+import {applyDirectionOverlay} from '../direction/service.ts';
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
 // nothing kept. The fast part (/api/project) only looks at which files are there; whether they are stale means hashing every
@@ -231,7 +233,7 @@ function songFileOf(dir: string, song: string | undefined) {
 
 async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const requests = await readClipRequests<ClipRequest>(dir)
-    const data = readJson<Project>(join(dir, 'project.json')) ?? {}
+    const data = applyDirectionOverlay({id, dir, kind: 'music'}, readJson<Project>(join(dir, 'project.json')) ?? {}, {allowPending: true})
     const config = await loadProjectConfig(dir)
     const timeline = readJson<{ song?: string, bpm?: number, durationSec?: number }>(join(dir, 'output', 'timeline.json')) ?? {}
     const characters = data.cast?.characters ?? []
@@ -261,7 +263,8 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
             shots: clip.shots.map((shot, n) => {
                 const planned = plan?.shots[offset + n]
                 return {
-                    label: shot.label, at: shot.at, framing: planned?.framing ?? shot.framing, camera: shot.camera, subjects: shot.subjects,
+                    label: shot.label, at: shot.at, framing: planned?.framing ?? shot.framing, camera: planned?.camera ?? shot.camera, subjects: shot.subjects,
+                    ...(planned ? {directionId: `${clip.beatId}:shot${offset + n + 1}`} : {}),
                     action: planned?.action && plain(planned.action),
                     people: Object.entries(planned?.people ?? {}).map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
                 }
@@ -301,9 +304,27 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
     }
 }
 
+/** Requests have no source-shot IDs. Only offer ordinal links where packing is provably one-to-one. */
+export function filmDirectionScenes(data: FilmProject, requests: {sceneId: string, shots: unknown[]}[]): Set<string> {
+    const counts = new Map<string, number>();
+    for (const request of requests) counts.set(request.sceneId, (counts.get(request.sceneId) ?? 0) + request.shots.length);
+    return new Set((data.coverage ?? []).filter(coverage => {
+        const scene = data.screenplay?.scenes.find(s => s.id === coverage.sceneId);
+        if (!scene || counts.get(coverage.sceneId) !== coverage.shots.length) return false;
+        try {
+            return coverage.shots.every(shot => splitLongShot(scene, {
+                ...shot, seconds: round(Math.max(shot.seconds, speakingSeconds(scene, shot.lines))),
+            }).length === 1);
+        } catch {
+            return false; // An incomplete or changed screenplay cannot establish a safe source binding.
+        }
+    }).map(coverage => coverage.sceneId));
+}
+
 async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const requests = await readClipRequests<FilmClipRequest>(dir)
-    const data = readJson<FilmProject>(join(dir, 'project.json')) ?? {}
+    const data = applyDirectionOverlay({id, dir, kind: 'film'}, readJson<FilmProject>(join(dir, 'project.json')) ?? {}, {allowPending: true})
+    const directionScenes = filmDirectionScenes(data, requests)
     const characters = data.cast?.characters ?? []
     const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
     const sceneOf = (sceneId: string) => data.screenplay?.scenes.find(s => s.id === sceneId)
@@ -353,6 +374,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
                 const people = fit ? Object.entries(planned?.people ?? {}).filter(([person]) => person in fit.people).map(([person, p]) => [person, {...p, ...fit.people[person]}] as const) : Object.entries(planned?.people ?? {})
                 return {
                     label: shot.label, at: shot.at, framing: planned?.framing ?? shot.framing, camera: fit?.camera ?? planned?.camera ?? shot.camera, subjects: shot.subjects,
+                    ...(planned && directionScenes.has(clip.sceneId) ? {directionId: `${clip.sceneId}:shot${offset + n + 1}`} : {}),
                     action: fit?.action ?? planned?.action,
                     people: people.map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
                 }

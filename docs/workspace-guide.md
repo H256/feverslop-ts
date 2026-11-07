@@ -18,6 +18,20 @@ Drei Dinge gelten überall:
 - **Alte Fassungen gehen nicht verloren.** Eine ersetzte Fassung wird weggelegt und bleibt auswählbar.
 - **`?`** zeigt alle Tasten und erklärt die Begriffe.
 
+## Regie nachträglich ändern
+
+Auf **Direction** bearbeitest du Bewegung, Spiel und Bildausschnitt eines bereits geplanten Projekts. Story, Cast, Referenzbilder, Ton und Schnittzeiten bleiben bestehen. Du musst die Regie nicht beim Anlegen des Projekts festlegen.
+
+1. **Direction** öffnen oder in der Timeline unter **Shots → Direct this shot** einsteigen.
+2. Unter **Scope** Projekt, Charakter, Beat/Szene, einen Songzeitbereich oder einen Shot wählen. **Only for character** schränkt den Bereich zusätzlich ein.
+3. Unter **Instruction** beispielsweise „Kael dreht sich zu seiner linken Seite, bis sein Rücken zur Kamera zeigt“ oder „Nahaufnahme der Greifhand beim Gitarrensolo“ eingeben. **Save instruction** speichert deinen Originaltext.
+4. **Preview changes** startet den CLI-Aufruf an das Sprachmodell. **Before / After** zeigt die vorgeschlagenen Änderungen einschließlich Pose und Bewegung. Gleichrangige widersprüchliche Vorgaben oder Anschlussprobleme verhindern die Übernahme: Anweisungen korrigieren oder den Bereich erweitern und neu vorschlagen lassen.
+5. **Take changes** übernimmt den Vorschlag; **Drop proposal** verwirft ihn. Danach **Update clip prompts** ausführen und auf der Timeline die betroffenen veralteten Clips rendern. Die Regieaktionen selbst rendern nichts.
+
+Nach einer kompletten Neuplanung bleiben die Anweisungen gespeichert. Eine Szene oder ein Shot mit derselben Nummer kann aber etwas anderes zeigen: geänderte Zuordnungen werden deshalb gemeldet. Mit **Edit instruction** eine passende Auswahl treffen oder nach Prüfung mit **Review current binding** ausdrücklich neu zuordnen. Ein Zeitbereich betrifft alle sich damit überschneidenden ganzen Shots; er erzeugt keine zusätzlichen Schnitte.
+
+**Remove instruction** entfernt die Vorgabe, macht eine bereits übernommene Bewegung jedoch nicht rückgängig. Unter **Plan versions** kannst du einen kompatiblen früheren Plan einschließlich des Originalplans wiederherstellen. Bereits gerenderte Videos bleiben erhalten. CLI-Beispiele, JSON-Format und Regeln stehen im [Regie-Leitfaden](direction.md).
+
 ## Die wichtigsten Begriffe
 
 | Begriff | Bedeutung |

@@ -29,6 +29,11 @@ const servers: [string, string][] = [
 const redo = 'Generate these steps again, and every step built on them'
 
 export const commandHelp: Record<string, Help> = {
+    direction: {
+        options: [['--add=TEXT --scope=SCOPE', 'Scopes: global, character:ID, beat:ID (music), scene:ID (film), shot:ID, time:START-END (music song seconds). --character=ID intersects any scope.'], ['--edit=ID --text=TEXT', 'Edit verbatim intent; --scope=SCOPE explicitly rebinds to the current plan.'], ['--remove=ID', 'Remove future intent, leaving accepted action intact.'], ['--json | --set=FILE', 'Round-trip {rules:[{id,text,scope,characterId?,binding?}]}. Omit binding only to explicitly rebind.'], ['--preview | --take | --drop', 'Ask the LLM for a structured proposal, accept a conflict-free current proposal, or discard it.'], ['--restore=VERSION', 'Restore an accepted plan version or baseline; retains rules and existing renders.']],
+        steps: [],
+        notes: ['Specificity: shot > beat/scene/time > character > global. Equal-priority contradictions and continuity conflicts block take.', 'New source plans require review; scene/shot bindings never silently follow reused IDs.', 'Take/restore do not render. Run the pipeline to rebuild requests, then selectively render stale clips.'],
+    },
     plan: {
         options: [
             ['--redo=STEP,STEP', redo],
@@ -87,5 +92,5 @@ const list = (rows: [string, string][]) => {
 /** The part of --help between the usage line and the common options, empty for a command without one. */
 export function helpDetails(command: string) {
     const help = commandHelp[command]
-    return help ? `\n\nOptions:\n${list(help.options)}\n\nSteps for --redo:\n${list(help.steps)}\n\n${help.notes.join('\n')}` : ''
+    return help ? `\n\nOptions:\n${list(help.options)}${help.steps.length ? `\n\nSteps for --redo:\n${list(help.steps)}` : ''}\n\n${help.notes.join('\n')}` : ''
 }

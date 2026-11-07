@@ -30,6 +30,7 @@ const pages = computed(() => {
     ...(p?.sings ? [{name: 'singers', label: 'Singers', path: 'singers'}] : []),
     ...(p?.timed ? [{name: 'timing', label: 'Timing', path: 'timing'}] : []),
     {name: 'look', label: 'Look', path: 'look'},
+    {name: 'direction', label: 'Direction', path: 'direction'},
     {name: 'references', label: 'References', path: 'references'},
     {name: 'settings', label: 'Settings', path: 'settings'},
   ]

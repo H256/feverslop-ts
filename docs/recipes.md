@@ -111,6 +111,17 @@ and [The asset library](../README.md#the-asset-library). From a picture you alre
 
 ## Fix something in the plan by hand
 
+For performance and camera corrections, prefer [Direction](direction.md): it preserves the existing story, cast and cut, and proposes structured changes instead of editing cached JSON by hand.
+
+```powershell
+bun run direction <id> --add="Kael turns toward his own left, ending with his back to the camera" --scope=shot:b3:shot2
+bun run direction <id> --preview
+bun run direction <id> --take
+bun index.ts <id>                 # rebuild requests; then render affected clips
+```
+
+Use the real shot ID from `bun run direction <id>`, and `--film --scope=shot:s3:shot2` for a film. A broad rule such as “occasionally dance” selects suitable shots in the preview. A stale scene/shot binding needs explicit reassignment after replanning. Removing a rule keeps accepted action; `--restore=<version>` restores a previous plan.
+
 Everything generated is in `project.json`. Edit it and redo what is built on it:
 
 | You edited | Run |

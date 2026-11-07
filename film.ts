@@ -35,6 +35,7 @@ import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from "./lib/batc
 import type {AssetKind} from "./lib/asset-import.ts";
 import {castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
+import {applyDirectionOverlay} from './lib/direction/service.ts';
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
@@ -552,12 +553,16 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
 let clips: ReturnType<typeof packClips> = []
 let requests: ReturnType<typeof buildFilmClipRequests> = []
 async function planClips() {
+    const directedCoverage = applyDirectionOverlay({id: film.id, dir: film.dir, kind: 'film'}, film.data).coverage ?? coverage
     const sheetViews = config.sequenceSheets && !config.locationViews ? await readSheetViews(film, cast, locationDescriptions) : {}
-    const shotViews = await chooseShotViews(film, coverage, sceneId => locationOf(cast, screenplay.scenes.find(s => s.id === sceneId)!.location)?.id, sheetViews)
+    // Designed views also need re-selection when direction changes a scene's shots.
+    const viewCoverage = config.locationViews ? directedCoverage.filter(scene => JSON.stringify(scene) !== JSON.stringify(coverage.find(base => base.sceneId === scene.sceneId))) : directedCoverage
+    const shotViews = await chooseShotViews(film, viewCoverage, sceneId => locationOf(cast, screenplay.scenes.find(s => s.id === sceneId)!.location)?.id, {...sheetViews, ...locationViews})
+    if (config.locationViews && viewCoverage.some(scene => !shotViews[scene.sceneId])) throw new Error('Could not choose background views for directed shots; retry planning before rendering.')
     const overrides = clipOverrides(film.dir)
     const allViews = withExtraViews(film.dir, {...sheetViews, ...locationViews})
     // a clip the user chose another view or fewer people for gets shots that say so, not only other pictures (#531)
-    clips = await fitOverrides(film, packClips(screenplay, withShotViews(coverage, shotViews), config.continuity, maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity)), overrides, cast.characters, clip => {
+    clips = await fitOverrides(film, packClips(screenplay, withShotViews(directedCoverage, shotViews), config.continuity, maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity)), overrides, cast.characters, clip => {
         const location = locationOf(cast, screenplay.scenes.find(s => s.id === clip.sceneId)!.location)
         return {views: location ? allViews[location.id] : undefined, staging: coverage.find(c => c.sceneId === clip.sceneId)?.staging ?? ''}
     })

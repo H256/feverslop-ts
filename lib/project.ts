@@ -201,9 +201,10 @@ export type Project = {
     // before - the shots are planned from it. A beat whose blocking stayed unusable has no entry: its shots plan their own staging
     blocking?: Record<string, Blocking>,
     shotViews?: Record<string, number[]>,  // beatId -> per shot of the beat the view of the place's sheet (0-4, LOCATION_VIEWS) the shot is in - only with config.locationView "auto"
+    shotViewPlans?: Record<string, string>, // effective direction plan used to choose each cached view
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
-export type StepName = Exclude<keyof Project, 'inputs' | 'partials' | 'castingCopies'>
+export type StepName = Exclude<keyof Project, 'inputs' | 'partials' | 'castingCopies' | 'shotViewPlans'>
 
 /** An input whose change redoes steps (lib/inputs.ts); `assumed` is the value it had before fingerprints existed. */
 export type TrackedInput = { value: string | Uint8Array, steps: StepName[], assumed?: string }

@@ -18,6 +18,7 @@ const {project, session} = useTimeline()
     <h3>Shots</h3>
     <article v-for="shot in clip.shots" :key="shot.label" class="shot">
       <header><span>{{ shot.label.replace(/^\[|\]$/g, '') }}</span><span class="num">{{ shot.at }}s</span></header>
+      <RouterLink v-if="shot.directionId" class="link" :to="{path: `${session.root}/direction`, query: {shot: shot.directionId}}">Direct this shot</RouterLink>
       <p class="how">{{ [shot.framing, shot.camera].filter(Boolean).join(' · ') }}</p>
       <p v-if="shot.action">{{ shot.action }}</p>
       <div v-for="person in shot.people" :key="person.name" class="person"><b>{{ person.name }}</b> {{ person.text }}</div>
