@@ -1,7 +1,7 @@
 import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {writeJsonFile} from "../json-file.ts";
 import {dirname, join} from "node:path";
-import slugify from "slugify";
+import {toSlug} from "../slug.ts";
 import {CASTING_FILE, castingAfterCastChange, type CastEntry, copyKey, droppedCopies, libraryFingerprint, readCastingFile, resolveCasting} from "../casting.ts";
 import {libraryDir, libraryIds} from "../library.ts";
 import {withProjectLock} from "../lock.ts";
@@ -119,7 +119,7 @@ const optionalText = (value: unknown, what: string) => value === undefined || va
 
 /** A new id from a name, as the cast step makes them: lowercase, dashes, a number when it is taken. */
 function newId(name: string, taken: Set<string>, fallback: string) {
-    const base = slugify(name, {lower: true, strict: true}) || fallback
+    const base = toSlug(name) || fallback
     let id = base
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
     taken.add(id)

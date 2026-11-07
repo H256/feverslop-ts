@@ -1,4 +1,4 @@
-import slugify from "slugify";
+import {toSlug} from "../slug.ts";
 import type {Brief, FilmCast, FilmCharacter, FilmProject, Screenplay} from "./types.ts";
 import {characterOf, locationOf, toScreenplay} from "./screenplay.ts";
 import {screenplayToText} from "./fountain.ts";
@@ -115,7 +115,7 @@ export const adaptInput = (data: FilmProject, change: RoleChange) => ({
 })
 
 const newId = (name: string, taken: Set<string>) => {
-    const base = slugify(name, {lower: true, strict: true}) || 'character'
+    const base = toSlug(name) || 'character'
     let id = base
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
     taken.add(id)

@@ -1,4 +1,4 @@
-import slugify from "slugify";
+import {toSlug} from "../slug.ts";
 import {languageName} from "../config.ts";
 import type {DialogueKind, FilmCast, FilmCharacter, FilmCharacterState, FilmLocation, FilmProp, Scene, Screenplay, ScreenplayElement} from "./types.ts";
 
@@ -96,7 +96,7 @@ export function estimateSeconds(screenplay: Screenplay) {
 }
 
 const key = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').trim()
-const toId = (name: string) => slugify(name, {lower: true, strict: true}) || 'x'
+const toId = (name: string) => toSlug(name) || 'x'
 
 // the other looks of a character: at most two, each with a name and what is different
 function statesOf(c: { voiceOnly?: boolean, states?: { name?: string, change?: string, from?: unknown }[] }): { states?: FilmCharacterState[] } {
