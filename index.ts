@@ -1,5 +1,5 @@
 import {cli} from './lib/cli.ts';
-import slugify from "slugify";
+import {toSlug} from "./lib/slug.ts";
 import {existsSync} from "node:fs";
 import {parseArgs} from "node:util";
 import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
@@ -177,7 +177,7 @@ if (args.gallery) {
 // a dry run only says what would be redone (see dryRun below)
 if (!args['dry-run']) for (const step of redoSteps) project.invalidate(step)
 
-const toId = (name: string) => slugify(name, {lower: true, strict: true})
+const toId = toSlug
 const readInput = (name: string) => readInputFile(project.input(name))
 // true if `value`'s fingerprint differs from the one project.syncInputs() recorded after the previous run - a
 // read-only check, for a step that needs to know this before that call itself has run (and recorded) this run's
