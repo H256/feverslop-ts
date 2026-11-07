@@ -15,8 +15,8 @@
 """Stem separation and vocal transcription for the lyrics alignment.
 
 usage: uv run tools/vocals.py separate <song.wav> <stems-dir> [model] [only...]
-       uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt>
-       uv run tools/vocals.py draft <vocals.wav> <language>
+       uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt> [--model=…] [--beam-size=…] [--temperatures=…]
+       uv run tools/vocals.py draft <vocals.wav> <language> [--model=…] [--beam-size=…] [--temperatures=…]
 
 separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
             htdemucs_ft (the fine-tuned 4-source bag of models) gives the cleanest vocal separation of the
@@ -26,7 +26,9 @@ separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,ot
             (on top of the htdemucs_ft stems already on disk, never overwriting them) when a character's prop
             needs one - htdemucs_ft's "other" stem is too coarse (every non-drum/bass/vocal instrument at
             once) to time a guitar's or piano's own entry against.
-transcribe  faster-whisper (CTranslate2) large-v3, the known lyrics as a hotwords hint, word-level timing.
+transcribe  faster-whisper (CTranslate2) large-v3 (large-v3-turbo on a CPU) - [--model=…]
+            [--beam-size=…] [--temperatures=0,0.4,0.8] override the defaults
+            (the "whisper" settings, bun run setup whisper), the known lyrics as a hotwords hint, word-level timing.
             faster-whisper's "hotwords" (not "initial_prompt") are re-injected into every ~30s window
             regardless of condition_on_previous_text, so the known lyrics keep steering the whole song, not
             just the first window - openai-whisper needed a separate carry_initial_prompt flag for that.
@@ -91,6 +93,16 @@ import soundfile as sf
 import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Whisper's defaults per device: a GPU runs the full large-v3 with faster-whisper's own beams and temperature ladder,
+# a CPU the turbo model (4 decoder layers instead of 32), fewer beams and a shorter ladder - on hard vocals every failed
+# window is decoded again at each rung, which takes a CPU minutes. The "whisper" block of the settings file (bun run
+# setup whisper) overrides them with --model=, --beam-size= and --temperatures= (comma-separated).
+whisper = {
+    "model": "large-v3" if device == "cuda" else "large-v3-turbo",
+    "beam_size": 5 if device == "cuda" else 2,
+    "temperatures": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0] if device == "cuda" else [0.0, 0.4, 0.8],
+}
 
 
 def log(message: str):
@@ -215,9 +227,10 @@ def whisper_words(model, audio, language: str, lyrics_file: str, offset: float =
         no_speech_threshold=0.75,
         log_prob_threshold=-0.5,
         compression_ratio_threshold=2.0,
-        # left at faster-whisper's own default (a temperature fallback ladder, not a fixed value) - pinning
-        # this to 0 disables that ladder, so a bad/looping greedy decode (e.g. "the silence of hell" repeated
-        # ~15x) never gets retried at a higher temperature the way whisper normally would recover from it
+        # a ladder, never a single 0 - pinning it to 0 disables the fallback, so a bad/looping greedy decode (e.g.
+        # "the silence of hell" repeated ~15x) never gets retried at a higher temperature to recover from it
+        beam_size=whisper["beam_size"],
+        temperature=whisper["temperatures"],
     )
 
     # per-word timing from faster-whisper - falls back to spreading a segment's words evenly across it (same as
@@ -302,8 +315,8 @@ def fill_deaf_windows(model, vocals: str, words: list[dict], activity: list[dict
 def transcribe(vocals: str, language: str, lyrics_file: str):
     from faster_whisper import WhisperModel
 
-    model = WhisperModel("large-v3", device=device, compute_type="float16" if device == "cuda" else "int8")
-    log(f"faster-whisper large-v3 on {device}")
+    model = WhisperModel(whisper["model"], device=device, compute_type="float16" if device == "cuda" else "int8")
+    log(f"faster-whisper {whisper['model']} on {device}, beam size {whisper['beam_size']}, temperatures {whisper['temperatures']}")
     words = whisper_words(model, vocals, language, lyrics_file)
     activity = vocal_activity(vocals)
     words = fill_deaf_windows(model, vocals, words, activity, language, lyrics_file)
@@ -322,8 +335,8 @@ def format_time(seconds: float) -> str:
 def draft(vocals: str, language: str):
     from faster_whisper import WhisperModel
 
-    model = WhisperModel("large-v3", device=device, compute_type="float16" if device == "cuda" else "int8")
-    log(f"faster-whisper large-v3 on {device}")
+    model = WhisperModel(whisper["model"], device=device, compute_type="float16" if device == "cuda" else "int8")
+    log(f"faster-whisper {whisper['model']} on {device}, beam size {whisper['beam_size']}, temperatures {whisper['temperatures']}")
     # no lyrics file, no hotwords - nothing to bias the decode towards, just whatever whisper actually hears
     segments, _info = model.transcribe(
         vocals,
@@ -333,6 +346,8 @@ def draft(vocals: str, language: str):
         no_speech_threshold=0.75,
         log_prob_threshold=-0.5,
         compression_ratio_threshold=2.0,
+        beam_size=whisper["beam_size"],
+        temperature=whisper["temperatures"],
     )
     n = 0
     for segment in segments:
@@ -347,6 +362,17 @@ def draft(vocals: str, language: str):
 
 if __name__ == "__main__":
     command, *args = sys.argv[1:]
+    for option in [a for a in args if a.startswith("--")]:
+        args.remove(option)
+        name, _, value = option[2:].partition("=")
+        if name == "model" and value:
+            whisper["model"] = value
+        elif name == "beam-size" and value.isdigit() and int(value) >= 1:
+            whisper["beam_size"] = int(value)
+        elif name == "temperatures" and value:
+            whisper["temperatures"] = [float(t) for t in value.split(",")]
+        else:
+            sys.exit(f"unknown or invalid option {option}\n\n{__doc__}")
     if command == "separate" and len(args) >= 2:
         separate(args[0], args[1], args[2] if len(args) > 2 else "htdemucs_ft", args[3:] or None)
     elif command == "transcribe" and len(args) == 3:

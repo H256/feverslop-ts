@@ -4,7 +4,7 @@ import {RouterLink} from 'vue-router'
 import type {EditorReference, Freshness} from '../../../../shared/workspace'
 import SheetMedia from '../../components/SheetMedia.vue'
 import VersionCard from '../../components/VersionCard.vue'
-import {useDraft} from '../../composables/useDraft'
+import {sameText, useDraft} from '../../composables/useDraft'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {plural} from '../../lib/format'
 import {FRESH_LABEL, TERMS} from '../../lib/terms'
@@ -19,10 +19,12 @@ const emit = defineEmits<{changed: []}>()
 const {root, roots} = useProject()
 const {guard} = useToasts()
 const viewer = useViewer()
-const prompt = useDraft(() => props.reference.prompt)
+// what the picture was rendered from: an edited prompt, else the plan's
+const prompt = useDraft(() => props.reference.editedPrompt ?? props.reference.prompt)
 // the prompt belongs to this picture: picking another one (the hash) or leaving the page asks first
 useUnsavedChanges(() => prompt.dirty.value, 'changes to the prompt', {hash: true})
-const actions = useReferenceActions(toRef(props, 'reference'), toRef(props, 'fresh'), async () => emit('changed'))
+const actions = useReferenceActions(toRef(props, 'reference'), async () => emit('changed'))
+const planPrompt = () => { prompt.text.value = props.reference.prompt }
 const exportable = () => props.reference.kind !== 'prop' && !!props.reference.picture
 </script>
 
@@ -33,12 +35,20 @@ const exportable = () => props.reference.kind !== 'prop' && !!props.reference.pi
       <p class="muted section">{{ reference.kind }} · {{ reference.id }}{{ fresh ? ` · ${FRESH_LABEL[fresh]}` : '' }}</p>
       <div v-if="reference.look" class="note">Another look of {{ reference.look.base }}: {{ reference.look.change }}</div>
       <div v-if="reference.library" class="note">Played by library:{{ reference.library }}. It is not rendered here: change it on the <RouterLink :to="`${root}/casting`">Casting</RouterLink> page.</div>
-      <div v-if="fresh === 'pinned' && !reference.library" class="note">Pinned: your own picture, or one made before fingerprints or from an edited prompt. The pipeline leaves it alone.</div>
+      <div v-if="fresh === 'pinned' && !reference.library" class="note">Pinned: your own picture, or one made before fingerprints or from an edited prompt. The pipeline leaves it alone; rendering it again here puts it away as an older version.</div>
       <div v-if="fresh === 'stale'" class="warn">Made from another prompt or anchor than the plan has now.</div>
-      <div class="section"><h3>Prompt</h3><textarea v-model="prompt.text.value" rows="7" aria-label="Prompt" :disabled="!!reference.look" /></div>
+      <div class="section">
+        <h3>Prompt</h3>
+        <textarea v-model="prompt.text.value" rows="7" aria-label="Prompt" :disabled="!!reference.look" />
+        <div v-if="reference.editedPrompt !== undefined" class="btn-row">
+          <span class="muted">Edited: the plan has another prompt. Rendered from the plan's prompt, the picture follows the plan again.</span>
+          <button class="btn" :disabled="sameText(prompt.text.value, reference.prompt)" @click="planPrompt">Take the plan's prompt</button>
+        </div>
+      </div>
       <div class="section btn-row">
-        <button class="btn primary" :disabled="actions.blocked()" :title="actions.blocked() ? 'Pinned or played by the library' : ''" @click="guard(actions.rerender)(false, prompt.text.value)">{{ reference.hasSheet ? 'New sheet, same anchor' : 'Render again' }}</button>
+        <button class="btn primary" :disabled="actions.blocked()" :title="actions.blocked() ? 'Played by the library' : ''" @click="guard(actions.rerender)(false, prompt.text.value)">{{ reference.hasSheet ? 'New sheet, same anchor' : 'Render again' }}</button>
         <button v-if="reference.hasSheet && !reference.look" class="btn" :title="TERMS.Anchor" :disabled="actions.blocked()" @click="guard(actions.rerender)(true, prompt.text.value)">New anchor</button>
+        <button v-if="reference.kind !== 'prop'" class="btn" :disabled="actions.blocked()" :title="actions.blocked() ? 'Played by the library' : 'A picture of your own, made anywhere, as its anchor'" @click="guard(actions.putOwnAnchor)(prompt.text.value)">Use my own anchor</button>
         <button v-if="exportable()" class="btn" @click="guard(actions.putIntoLibrary)()">Put into the library</button>
       </div>
     </SheetMedia>

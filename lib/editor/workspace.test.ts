@@ -11,6 +11,7 @@ import type {EditorTarget} from "./project.ts";
 import {projectGroup, readEditorProject, readListing} from "./project.ts";
 import {allowedOptions, RunControl, runCommand} from "./runs.ts";
 import {editorHandler} from "./server.ts";
+import {checkUploadSize, pictureType, takePictureUpload, UPLOAD_MAX_BYTES} from "./upload.ts";
 import {loadSettings} from "../settings.ts";
 import {explainFailure, runProgress} from "./progress.ts";
 import {chosenUrls, readServer} from "./servers.ts";
@@ -172,6 +173,21 @@ describe('a sheet made again on the same anchor', () => {
         expect(readFileSync(join(dir(), `${sheet}/anchor.png`), 'utf8')).toBe('the-anchor')
         expect(readFileSync(join(dir(), `${sheet}/sequence.mp4`), 'utf8')).toBe('first-video')
     })
+    test('an anchor drawn from an edited prompt goes with the version: the plan draws its own again', () => {
+        write(join(dir(), picture.file), 'edited-sheet')
+        write(join(dir(), `${sheet}/anchor.png`), 'edited-anchor')
+        write(join(dir(), `${sheet}/anchor.png.json`), JSON.stringify({prompt: 'mine', pinned: true, editedPrompt: 'mine'}))
+        const kept = putAwayPicture(picture, dir(), {sequenceSheets: true}, false)
+        expect(existsSync(join(dir(), `${sheet}/anchor.png`))).toBe(false)
+        expect(readFileSync(join(kept, 'anchor.png'), 'utf8')).toBe('edited-anchor')
+    })
+    test('the user\'s own anchor stays for a new sheet, even with a prompt noted on it', () => {
+        write(join(dir(), picture.file), 'own-sheet')
+        write(join(dir(), `${sheet}/anchor.png`), 'own-anchor')
+        write(join(dir(), `${sheet}/anchor.png.json`), JSON.stringify({source: 'user', pinned: true, editedPrompt: 'mine'}))
+        putAwayPicture(picture, dir(), {sequenceSheets: true}, false)
+        expect(readFileSync(join(dir(), `${sheet}/anchor.png`), 'utf8')).toBe('own-anchor')
+    })
     test('a version put away without its anchor (before they kept one) leaves the sheet with the anchor that was there, not none', () => {
         write(join(dir(), `${sheet}/anchor.png`), 'current-anchor')
         write(join(dir(), 'old/attempts/yard-20261101-090000/yard.png'), 'old-picture')
@@ -236,6 +252,8 @@ describe('what can be started', () => {
         expect(runCommand(music, {type: 'clips', ids: ['slot-001', 'slot-002'], again: true})).toEqual({script: 'index.ts', args: ['demo', '--render=videos', '--only=slot-001,slot-002', '--again']})
         expect(runCommand(film, {type: 'clips', ids: ['clip-001']})).toEqual({script: 'film.ts', args: ['demo', '--render=videos', '--only=clip-001']})
         expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, newAnchor: true})).toEqual({script: 'index.ts', args: ['demo', '--render=images', '--only=hall', '--again', '--new-anchor']})
+        expect(runCommand(film, {type: 'pictures', ids: ['hall'], again: true, anchorFile: '/tmp/u/picture.png', descriptionFile: '/tmp/u/description.txt'})).toEqual({script: 'film.ts', args: ['demo', '--render=images', '--only=hall', '--again', '--picture-anchor=/tmp/u/picture.png', '--picture-description=/tmp/u/description.txt']})
+        expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, anchorFile: '/tmp/u/picture.png', describe: true}).args.slice(4)).toEqual(['--picture-anchor=/tmp/u/picture.png', '--describe-picture'])
         expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: '3.2-5'})).toEqual({script: 'index.ts', args: ['demo', '--retake=slot-007:3.2-5']})
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: 'shot2'}).args[1]).toBe('--retake=slot-007:shot2')
@@ -304,6 +322,19 @@ describe('a run', () => {
         expect(runs.stop(project)).toBe(true)
         await until(() => runs.current(project)?.running === false)
         expect(runs.stop(project)).toBe(false)
+    })
+    test('what it is given for the run alone goes when it has ended, or when it is not started', async () => {
+        script('index.ts', `process.exit(0)`)
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-temp')
+        mkdirSync(project.dir, {recursive: true})
+        const given = mkdtempSync(join(root, 'given-'))
+        runs.start(project, {type: 'plan'}, undefined, [given])
+        await until(() => !existsSync(given))
+        expect(existsSync(given)).toBe(false)
+        const refused = mkdtempSync(join(root, 'given-'))
+        expect(() => runs.start(project, {type: 'pictures', ids: ['a b']}, undefined, [refused])).toThrow('no such pictures')
+        expect(existsSync(refused)).toBe(false)
     })
     test('nothing is started while a run in the terminal holds the lock; it can be seen', () => {
         const runs = new RunControl(join(root, 'fake'))
@@ -633,3 +664,42 @@ describe('a choice per clip of a film', () => {
     write(join(target('no-run').dir, 'input/idea.txt'))
     expect((await editorHandler()(new Request('http://localhost/p/music/no-run/api/run'))).status).toBe(404)
  })
+
+describe('a picture sent from the page', () => {
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082', 'hex')
+    test('is what its first bytes say: a PNG, a JPEG or a WebP, never what its name says', () => {
+        expect(pictureType(png)).toBe('png')
+        expect(pictureType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('jpg')
+        expect(pictureType(new Uint8Array([...Buffer.from('RIFF'), 0, 0, 0, 0, ...Buffer.from('WEBP')]))).toBe('webp')
+        expect(pictureType(new Uint8Array(Buffer.from('<svg onload=alert(1)>')))).toBeUndefined()
+        expect(pictureType(new Uint8Array([]))).toBeUndefined()
+    })
+    test('goes into a folder of its own under a name the server gives it, with what is sent with it', async () => {
+        const upload = await takePictureUpload(new File([png], '../../evil.png'))
+        expect(basename(upload.file)).toBe('picture.png')
+        expect(dirname(upload.file)).toBe(upload.folder)
+        expect(dirname(await upload.text('prompt', 'a hall'))).toBe(upload.folder)
+        upload.drop()
+        expect(existsSync(upload.folder)).toBe(false)
+    })
+    test('what is not a picture, empty or too large is refused', async () => {
+        await expect(takePictureUpload(new File(['hello'], 'a.png'))).rejects.toThrow('not a picture')
+        await expect(takePictureUpload(new File([], 'a.png'))).rejects.toThrow('empty')
+        await expect(takePictureUpload('a.png')).rejects.toThrow('no picture sent')
+        expect(() => checkUploadSize(new Request('http://localhost/', {method: 'POST', headers: {'content-length': String(UPLOAD_MAX_BYTES * 2)}}))).toThrow('too large')
+    })
+    test('as the anchor of a reference picture: only for one there is, only a picture', async () => {
+        const project = target('own-anchor')
+        write(join(project.dir, 'input/lyrics.txt'))
+        write(join(project.dir, 'output/assets.json'), [{kind: 'character', id: 'ann', name: 'Ann', file: 'assets/characters/ann.png', prompt: 'Ann', description: 'Ann'}, {kind: 'prop', id: 'cup', name: 'Cup', file: 'assets/props/cup.png', prompt: 'a cup', description: 'a cup'}])
+        const send = async (picture: string, file: File) => {
+            const form = new FormData()
+            form.set('picture', file)
+            const response = await editorHandler()(new Request(`http://localhost/p/music/own-anchor/api/references/${picture}/own-anchor`, {method: 'POST', body: form}))
+            return {status: response.status, error: ((await response.json()) as { error?: string }).error}
+        }
+        expect(await send('nobody', new File([png], 'a.png'))).toEqual({status: 409, error: 'no picture nobody'})
+        expect((await send('cup', new File([png], 'a.png'))).error).toContain('is a prop')
+        expect((await send('ann', new File(['<svg/>'], 'a.png'))).error).toContain('not a picture')
+    })
+})

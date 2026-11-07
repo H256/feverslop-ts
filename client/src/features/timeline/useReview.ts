@@ -72,7 +72,7 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
       c: () => { compare().catch(toasts.fail) },
       Escape: () => end(),
     }
-    const action = keys[event.key]
+    const action = keys[event.key] ?? (event.key.length === 1 ? keys[event.key.toLowerCase()] : undefined)
     if (!action) return false
     event.preventDefault()
     action()

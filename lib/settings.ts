@@ -24,7 +24,12 @@ export type SettingsFile = {
     library?: string,
     /** The post-work steps the same for every project (lib/postwork/config.ts): a marker, a name. A project's config.json beats them. */
     postwork?: Record<string, Record<string, unknown>>,
+    /** The transcription of the vocals stem (tools/vocals.py) - unset: large-v3 on a GPU, large-v3-turbo with fewer beams on a CPU. */
+    whisper?: WhisperSettings,
 }
+
+// beamSize: faster-whisper's beam_size; temperatures: its fallback ladder, a failed window is decoded again at each one
+export type WhisperSettings = { model?: string, beamSize?: number, temperatures?: number[] }
 
 // a missing url is the text server (with its key), a missing model the server's only model
 export type VisionSettings = { url?: string, apiKey?: string, model?: string }
@@ -74,7 +79,7 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('must be a JSON object')
 
-    warnUnknownKeys(raw, ['llm', 'comfy', 'prices', 'library', 'postwork'], file)
+    warnUnknownKeys(raw, ['llm', 'comfy', 'prices', 'library', 'postwork', 'whisper'], file)
     if (raw.postwork !== undefined) {
         const wrong = postworkProblem(raw.postwork)
         if (wrong) fail(wrong)
@@ -102,6 +107,12 @@ export async function readSettingsFile(): Promise<SettingsFile> {
     if (raw.comfy !== undefined) {
         if (!Array.isArray(raw.comfy)) fail(`comfy must be a list of URLs or {"url": …} objects, got ${JSON.stringify(raw.comfy)}`)
         parseComfyEntries(raw.comfy, `${file}: comfy`)
+    }
+    if (raw.whisper !== undefined) {
+        if (!raw.whisper || typeof raw.whisper !== 'object' || Array.isArray(raw.whisper)) fail('whisper must be an object like {"model": …, "beamSize": …, "temperatures": […]}')
+        warnUnknownKeys(raw.whisper, ['model', 'beamSize', 'temperatures'], file, 'whisper.')
+        const wrong = whisperProblem(raw.whisper)
+        if (wrong) fail(`whisper.${wrong}`)
     }
     for (const [model, price] of Object.entries(raw.prices ?? {})) {
         if (typeof price?.inputPerMillion !== 'number' || typeof price?.outputPerMillion !== 'number') fail(`prices.${model} must be like {"inputPerMillion": 0.5, "outputPerMillion": 1.5}`)
@@ -169,6 +180,44 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
         comfy = comfy.map(server => known.find(entry => entry.url === server.url) ?? server)
     }
     return {llm: {url: url && trimSlash(url), apiKey, model, parallel, ...(vision ? {vision} : {})}, comfy, sources}
+}
+
+/** What is wrong with whisper settings ("beamSize must be …"), undefined when nothing is. */
+export function whisperProblem(whisper: WhisperSettings): string | undefined {
+    if (whisper.model !== undefined && (typeof whisper.model !== 'string' || !whisper.model.trim())) return `model must be a model name like "large-v3", got ${JSON.stringify(whisper.model)}`
+    if (whisper.beamSize !== undefined && !(Number.isInteger(whisper.beamSize) && whisper.beamSize >= 1)) return `beamSize must be a whole number of 1 or more, got ${JSON.stringify(whisper.beamSize)}`
+    if (whisper.temperatures !== undefined && !(Array.isArray(whisper.temperatures) && whisper.temperatures.length && whisper.temperatures.every(t => typeof t === 'number' && t >= 0 && t <= 1)))
+        return `temperatures must be a list of numbers from 0 to 1 like [0, 0.4, 0.8], got ${JSON.stringify(whisper.temperatures)}`
+}
+
+/** The effective whisper settings: settings file → env vars, with the source of each - unset values are tools/vocals.py's defaults for the device. */
+export async function loadWhisperSettings(): Promise<{ whisper: WhisperSettings, sources: Record<keyof WhisperSettings, Source> }> {
+    const file = (await readSettingsFile()).whisper ?? {}
+    const env = process.env
+    const sources: Record<keyof WhisperSettings, Source> = {model: 'default', beamSize: 'default', temperatures: 'default'}
+    const whisper: WhisperSettings = {}
+    const set = <K extends keyof WhisperSettings>(key: K, fromFile: WhisperSettings[K], envName: string, parse: (text: string) => WhisperSettings[K]) => {
+        if (fromFile !== undefined) [whisper[key], sources[key]] = [fromFile, 'file']
+        const text = env[envName]
+        if (!text) return
+        const value = parse(text)
+        const wrong = whisperProblem({[key]: value})
+        if (wrong) throw new Error(`${envName}: "${text}" - ${wrong.replace(/, got .*/, '')}`)
+        ;[whisper[key], sources[key]] = [value, 'env']
+    }
+    set('model', file.model, 'FEVERSLOP_WHISPER_MODEL', text => text.trim())
+    set('beamSize', file.beamSize, 'FEVERSLOP_WHISPER_BEAM_SIZE', Number)
+    set('temperatures', file.temperatures, 'FEVERSLOP_WHISPER_TEMPERATURES', text => splitList(text).map(Number))
+    return {whisper, sources}
+}
+
+/** The whisper settings as tools/vocals.py options. */
+export function whisperOptions(whisper: WhisperSettings): string[] {
+    return [
+        ...(whisper.model ? [`--model=${whisper.model}`] : []),
+        ...(whisper.beamSize ? [`--beam-size=${whisper.beamSize}`] : []),
+        ...(whisper.temperatures ? [`--temperatures=${whisper.temperatures.join(',')}`] : []),
+    ]
 }
 
 /** Settings file entries → servers with a unique name each and SDK credentials. */

@@ -1,25 +1,26 @@
 import {cli} from '../lib/cli.ts';
 import {log} from '../lib/log.ts';
-// Sets up the LLM server and the ComfyUI servers - writes the global settings file (see the README, section "Setup").
-// usage: bun run setup [llm | llm-model | vision | comfy | show]
+// Sets up the LLM server, the ComfyUI servers and the transcription - writes the global settings file (see the README, section "Setup").
+// usage: bun run setup [llm | llm-model | vision | comfy | whisper | show]
 import * as p from "@clack/prompts";
 import {existsSync} from "node:fs";
 import {listModels, takesPictures} from "../lib/llm.ts";
 import {styles} from "../lib/log.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
 import {
-    type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, maskSecret, normalizeUrl,
-    parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source,
+    type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, loadWhisperSettings, maskSecret, normalizeUrl,
+    parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source, whisperProblem, type WhisperSettings,
 } from "../lib/settings.ts";
 cli('setup')
 
 
 const commands = {
-    all: 'everything below, in order',
+    all: 'everything below but whisper, in order',
     llm: 'the LLM server: URL, API key and model',
     'llm-model': 'only the model of the configured LLM server',
     vision: 'the model that describes pictures: another model or server, or the text model',
     comfy: 'the ComfyUI servers: add, remove, test',
+    whisper: 'the transcription of the vocals stem: model, beams, temperatures',
     show: 'the effective settings and where each comes from',
 }
 const command = (Bun.argv[2] ?? 'all') as keyof typeof commands
@@ -44,6 +45,7 @@ if (command === 'all' || command === 'llm') await setupLlm()
 if (command === 'llm-model') await setupModel()
 if (command === 'all' || command === 'vision') await setupVision()
 if (command === 'all' || command === 'comfy') await setupComfy()
+if (command === 'whisper') await setupWhisper()
 log.success('Done - see the result with: bun run setup show')
 
 // cancelled with Ctrl+C / Esc: stop without saving the current part
@@ -281,6 +283,48 @@ async function addComfy(entries: ComfyEntry[]) {
     await save(`the server ${server!.name}`)
 }
 
+// the presets - the first two are tools/vocals.py's own defaults on a GPU and on a CPU
+const whisperPresets: Record<string, { label: string, hint: string, settings?: WhisperSettings }> = {
+    auto: {label: 'By device', hint: 'GPU: large-v3, 5 beams - CPU: large-v3-turbo, 2 beams'},
+    full: {label: 'Best', hint: 'large-v3, 5 beams, temperatures 0-1 - a GPU, or a lot of patience', settings: {model: 'large-v3', beamSize: 5, temperatures: [0, 0.2, 0.4, 0.6, 0.8, 1]}},
+    fast: {label: 'Fast', hint: 'large-v3-turbo, 2 beams, temperatures 0, 0.4, 0.8', settings: {model: 'large-v3-turbo', beamSize: 2, temperatures: [0, 0.4, 0.8]}},
+    custom: {label: 'Custom', hint: 'model, beams and temperatures of your own'},
+}
+
+async function setupWhisper() {
+    log.info('Transcription - faster-whisper on the vocals stem (tools/vocals.py)')
+    if (Object.keys(process.env).some(key => key.startsWith('FEVERSLOP_WHISPER_'))) log.warn('FEVERSLOP_WHISPER_* is set - it overrides what is saved here')
+    const current = file.whisper
+    const matching = Object.entries(whisperPresets).find(([, preset]) => preset.settings && JSON.stringify(preset.settings) === JSON.stringify(current))?.[0]
+    const choice = answer(await p.select({
+        message: 'Settings',
+        options: Object.entries(whisperPresets).map(([value, {label, hint}]) => ({value, label, hint})),
+        initialValue: !current ? 'auto' : matching ?? 'custom',
+    }))
+    if (choice === 'auto') {
+        if (!current) return log.info('Transcription settings unchanged')
+        delete file.whisper
+        return save('the transcription settings (by device)')
+    }
+    let whisper = whisperPresets[choice]!.settings
+    if (!whisper) {
+        const model = answer(await p.text({message: 'Model', placeholder: 'large-v3-turbo', initialValue: current?.model ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
+        const beamSize = Number(answer(await p.text({
+            message: 'Beams - 1 is greedy and fastest',
+            initialValue: String(current?.beamSize ?? 2),
+            validate: v => whisperProblem({beamSize: Number(v)}),
+        })))
+        const temperatures = answer(await p.text({
+            message: 'Temperatures, comma-separated - a failed window is decoded again at each one',
+            initialValue: (current?.temperatures ?? [0, 0.4, 0.8]).join(', '),
+            validate: v => whisperProblem({temperatures: (v ?? '').split(',').map(Number)}),
+        })).split(',').map(Number)
+        whisper = {model, beamSize, temperatures}
+    }
+    file.whisper = whisper
+    await save(`the transcription settings (${whisper.model}, ${whisper.beamSize} beams)`)
+}
+
 async function show() {
     const path = settingsPath()
     const {llm, comfy, sources} = await loadSettings()
@@ -304,6 +348,11 @@ async function show() {
             : server.credentials?.type === 'basic' ? ` user ${server.credentials.username}, password ${maskSecret(server.credentials.password)}` : ''
         log.info(`  ${server.name.padEnd(20)} ${server.url}${styles.muted(auth)}`)
     }
+    const {whisper, sources: whisperSources} = await loadWhisperSettings()
+    log.info('\nTranscription (whisper)')
+    log.info(`  model        ${whisper.model ?? styles.muted('by device: large-v3 on a GPU, large-v3-turbo on a CPU')} ${source(whisperSources.model)}`)
+    log.info(`  beams        ${whisper.beamSize ?? styles.muted('by device: 5 on a GPU, 2 on a CPU')} ${source(whisperSources.beamSize)}`)
+    log.info(`  temperatures ${whisper.temperatures?.join(', ') ?? styles.muted('by device: 0-1 in steps of 0.2 on a GPU, 0, 0.4, 0.8 on a CPU')} ${source(whisperSources.temperatures)}`)
     log.info(styles.muted('\nOverrides, lowest first: settings file → project config.json ("llm": {"model": …}) → env vars → flags'))
 }
 
@@ -322,6 +371,9 @@ function printWithoutTerminal() {
               FEVERSLOP_VISION_API_KEY=…
               FEVERSLOP_VISION_MODEL=<vision model id>       (default: the text model)
               FEVERSLOP_COMFY=http://localhost:8188,http://gpu2.lan:8188
+              FEVERSLOP_WHISPER_MODEL=large-v3-turbo   (default: large-v3 on a GPU, large-v3-turbo on a CPU)
+              FEVERSLOP_WHISPER_BEAM_SIZE=2            (default: 5 on a GPU, 2 on a CPU)
+              FEVERSLOP_WHISPER_TEMPERATURES=0,0.4,0.8
 
   per run:    bun index.ts --llm-url=… --llm-model=… --llm-parallel=2 --comfy=http://a:8188,http://b:8188
 

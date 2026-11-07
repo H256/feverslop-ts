@@ -221,6 +221,37 @@ test('library: a question whose work the server refuses stays open, with what wa
   await expect(dialog(page).getByLabel('Library id')).toHaveValue('kael')
 })
 
+test('references: a picture from an edited prompt shows it, and goes back to the plan\'s prompt unpinned', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/references#cem`)
+  const prompt = page.getByRole('textbox', {name: 'Prompt'})
+  await expect(prompt).toHaveValue('Cem in green')
+  await expect(page.getByText('Edited: the plan has another prompt.')).toBeVisible()
+  await page.getByRole('button', {name: 'Take the plan\'s prompt'}).click()
+  await expect(prompt).toHaveValue('Cem in grey')
+  await page.getByRole('button', {name: 'Render again'}).click()
+  await expect(dialog(page)).toContainText('the new picture is not pinned')
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'references/cem/rerender')?.body).toEqual({newAnchor: false, servers: ['gpu']})
+})
+
+test('references: your own picture goes up as the anchor, with a description written by hand', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/references#ann`)
+  await page.getByRole('button', {name: 'Use my own anchor'}).click()
+  await expect(dialog(page)).toContainText('What is there now is put away as an older version')
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082', 'hex')
+  await dialog(page).getByLabel('Picture', {exact: true}).setInputFiles({name: 'mine.png', mimeType: 'image/png', buffer: png})
+  await expect(dialog(page).getByRole('img', {name: 'The picture picked'})).toBeVisible()
+  await expect(dialog(page).getByLabel('Prompt of the picture')).toHaveValue('Ann in red')
+  await dialog(page).getByLabel('Description', {exact: true}).selectOption('text')
+  await dialog(page).getByLabel('Description text').fill('a woman in a green coat')
+  await dialog(page).getByRole('button', {name: 'Put it in'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'references/ann/own-anchor')?.body).toContain('a woman in a green coat')
+  const form = String(posted.find(p => p.path === 'references/ann/own-anchor')!.body)
+  expect(form).toContain('filename="mine.png"')
+  expect(form).toContain('name="servers"')
+  expect(form).not.toContain('name="describe"')
+})
+
 test('references: an edited prompt is not lost by picking another picture', async ({page}) => {
   await page.goto(`${base}/p/music/demo/references#ann`)
   await page.getByRole('textbox', {name: 'Prompt'}).fill('Ann in blue')
@@ -423,4 +454,13 @@ test('timeline: a title card and credits are added to a finished video, with the
     type: 'credits', from: 'demo.mp4', opening: true, end: true, openingSeconds: 4, endSeconds: 0, title: 'Demo Song', artist: 'Klemens',
     disclosure: 'Contains AI-generated content', marker: 'generated-white', extra: ['Thanks to the band', 'feverslop.example'], hardware: '', facts: true, sound: '', save: true,
   }})
+})
+
+test('timeline: R renders the clip at the playhead again, asked first - a key of the help works in capitals too', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/#clip-1`)
+  await expect(page.locator('.ihead h2')).toContainText('clip-1')
+  await page.keyboard.press('Shift+R')
+  await expect(dialog(page)).toContainText('Render clip-1')
+  await dialog(page).getByRole('button', {name: 'Render it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'clips', ids: ['clip-1']}})
 })

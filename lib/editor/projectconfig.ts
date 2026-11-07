@@ -55,8 +55,13 @@ const DEFINITIONS: Definition[] = [
         note: '-1 = the workflow\'s own (8 with the turbo LoRA, 20 of the base model, 4 of the PRISM two-pass). The one pass of a single-pass workflow, or pass 1 of a two-pass one. A change makes the rendered clips stale.'},
     {key: 'videoRefineSteps', label: 'Refine steps (pass 2)', group: 'Sampling', control: 'number', for: 'music',
         note: '-1 = the workflow\'s own (2 with PRISM, 4 with the base model). Only a two-pass workflow has a pass 2. More steps draw more skin detail - too many make it harsh.'},
+    {key: 'continuity', label: 'Continuity', group: 'Continuing clips', control: 'select', for: 'both',
+        choices: target => target.kind === 'film'
+            ? [{value: 'never', label: 'never: every clip is its own cut'}, {value: 'auto', label: 'auto: where the shot planning marked a take that goes on'}, {value: 'scene', label: 'scene: every clip of a scene but its first'}]
+            : [{value: 'never', label: 'never: every clip is its own cut'}, {value: 'auto', label: 'auto: the beats the story planning marked continuous'}, {value: 'always', label: 'always: every clip of a beat but its first'}],
+        note: 'Which clips go on from the last frame of the clip before, without a cut. The drift of a clip is carried on and grows - see "Continuous scenes". In a music video another one redoes the blocking.'},
     {key: 'contextFrames', label: 'Context frames', group: 'Continuing clips', control: 'number', for: 'both',
-        note: 'A clip that goes on from the one before starts on this many of its last frames: 0 = off, else 5 + 17·k - 22 or 39. Needs a continuity other than "never" (in config.json).'},
+        note: 'A clip that goes on from the one before starts on this many of its last frames: 0 = off, else 5 + 17·k - 22 or 39. Needs a continuity other than "never".'},
     {key: 'pinStartFrame', label: 'Pin the first frame', group: 'Continuing clips', control: 'select', for: 'music', choices: () => yesNo,
         note: 'A continuing clip is pinned to the last frame of the clip before it, not only given it as a picture.'},
     {key: 'seed', label: 'Seed', group: 'Seed and retries', control: 'number', for: 'both',
@@ -145,7 +150,7 @@ export async function previewConfig(target: EditorTarget, change: ConfigChange):
     const goes = (was: Record<string, string>, now: Record<string, string>) => Object.keys(now).filter(id => now[id] === 'stale' && was[id] !== 'stale')
     const notes = [
         qaRetriesNote(config.qaRetries),
-        config.contextFrames > 0 && (config as {continuity?: string}).continuity === 'never' ? `contextFrames ${config.contextFrames} does nothing while "continuity" is "never" (in config.json) - no clip goes on from the one before` : undefined,
+        config.contextFrames > 0 && config.continuity === 'never' ? `contextFrames ${config.contextFrames} does nothing while continuity is "never" - no clip goes on from the one before` : undefined,
         config.seed !== -1 && (config.leakRetries > 0 || config.qaRetries > 0) ? 'a fixed seed: rendering a clip again gives the same clip, so the retries change nothing - use -1' : undefined,
     ].filter((note): note is string => !!note)
     return {

@@ -2,6 +2,7 @@ import {existsSync, readdirSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {pictureVersions} from "../archive.ts";
 import {readCastingFile} from "../casting.ts";
+import {isOwnFile, recordedEditedPrompt} from "../provenance.ts";
 import type {PictureJob} from "../render.ts";
 import {readClipRequests, readPictureJobs} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
@@ -28,6 +29,7 @@ export async function readReferences(target: EditorTarget): Promise<EditorRefere
     return jobs.map(job => {
         const sheet = sheetOf(job)
         const framesDir = sheet ? join(dir, sheetFrames(sheet)) : undefined
+        const anchorFile = sheet ? join(dir, sheetAnchor(sheet)) : undefined
         const entry = job.kind === 'character' ? casting.characters?.[job.id] : job.kind === 'location' ? casting.locations?.[job.id] : undefined
         return {
             id: job.id, kind: job.kind, name: job.name, prompt: job.prompt, description: job.description, file: job.file,
@@ -36,6 +38,9 @@ export async function readReferences(target: EditorTarget): Promise<EditorRefere
             video: sheet ? versioned(dir, sheetVideo(sheet)) : undefined,
             frames: framesDir && existsSync(framesDir) ? readdirSync(framesDir).filter(f => f.endsWith('.png')).sort().flatMap(f => versioned(dir, `${sheetFrames(sheet!)}/${f}`) ?? []) : [],
             hasSheet: !!sheet && existsSync(join(dir, sheet)),
+            editedPrompt: recordedEditedPrompt(join(dir, job.file)) ?? (anchorFile && recordedEditedPrompt(anchorFile)),
+            ownPicture: isOwnFile(join(dir, job.file)),
+            ownAnchor: !!anchorFile && isOwnFile(anchorFile),
             look: job.look,
             looks: jobs.filter(other => other.look?.base === job.id).map(other => other.id),
             library: entry?.startsWith('library:') ? entry.slice('library:'.length) : undefined,

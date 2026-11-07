@@ -138,8 +138,11 @@ export type EditorReference = {
   file: string, picture?: Media, anchor?: Media, video?: Media,
   frames: Media[],
   hasSheet: boolean,
+  editedPrompt?: string,      // rendered from a prompt the user edited (pinned): it, not the plan's prompt, is what the picture shows
+  ownPicture: boolean,        // the picture is the user's own (put in place, not rendered here): rendering it again puts it away
+  ownAnchor: boolean,         // so is its anchor: a new anchor puts it away, a new sheet is drawn from it
   look?: {base: string, change: string},
-  looks: string[],            // its other looks: drawn from its anchor, so a new anchor makes them stale
+  looks: string[],           // its other looks: drawn from its anchor, so a new anchor makes them stale
   library?: string,           // played by this asset of the library (casting.json): it is not rendered here
   clips: string[],
   versions: {id: string, picture: Media, anchor?: Media, video?: Media, source: string, made: number, seed?: number, prompt?: string, fingerprint?: string}[],

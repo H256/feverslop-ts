@@ -31,6 +31,12 @@ export const recordedPrompt = (file: string) => {
     return typeof value === 'string' ? value : undefined
 }
 
+/** The prompt a picture was rendered from when the user edited it (lib/render.ts pinEditedPicture), if it was. */
+export const recordedEditedPrompt = (file: string) => {
+    const value = readSidecar(file)?.editedPrompt
+    return typeof value === 'string' ? value : undefined
+}
+
 /** How many frames of the clip before a rendered clip started on (contextFrames), if its sidecar records it. */
 export const recordedContextFrames = (file: string) => {
     const value = readSidecar(file)?.contextFrames
@@ -56,6 +62,9 @@ export const isUserFile = (file: string) => {
     const sidecar = readSidecar(file)
     return sidecar?.source === 'user' || sidecar?.pinned === true
 }
+
+/** Is it a picture of the user's own (tools/replace-character, an upload) - not one rendered here from an edited prompt? */
+export const isOwnFile = (file: string) => readSidecar(file)?.source === 'user'
 
 /** The sidecar of a file the user put in place (tools/replace-character): it is kept as it is, whatever the prompts say later. */
 export const pinnedSidecar = (note: string) => ({source: 'user', pinned: true, note})

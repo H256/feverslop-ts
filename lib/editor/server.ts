@@ -9,6 +9,7 @@ import {loadProjectConfig} from "../config.ts";
 import {libraryDir, libraryIdPattern} from "../library.ts";
 import {listProjects, projectDir, projectExists, validProjectId} from "../project-setup.ts";
 import {clipEstimate, clipFailureRisks, pictureEstimate, readClipRequests} from "../render-state.ts";
+import {configureLlm, picturesReadable} from "../llm.ts";
 import {loadSettings} from "../settings.ts";
 import {filmStatus, projectStatus} from "../status.ts";
 import {readTimings} from "../timings.ts";
@@ -26,6 +27,7 @@ import {type ConfigChange, previewConfig, readConfig, writeConfig} from "./proje
 import {runProgress} from "./progress.ts";
 import {type RunAction, RunControl} from "./runs.ts";
 import {readServers, urlsOfChoice} from "./servers.ts";
+import {checkUploadSize, takePictureUpload} from "./upload.ts";
 import {readPictureJobs} from "../render-state.ts";
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts';
 import type {ProjectStatus} from '../../shared/workspace.ts';
@@ -58,8 +60,15 @@ export function byteRange(header: string, size: number): { first: number, last: 
     return first > last || first >= size ? undefined : {first, last}
 }
 
-// a video is only seekable in the browser when its bytes can be asked for piece by piece
-function serveMedia(file: string, request: Request, versioned: boolean) {
+// what one answer to a range gives at most: the browser asks for the next piece itself
+export const MEDIA_PIECE_BYTES = 4 * 1024 * 1024
+
+/**
+ * A video is only seekable in the browser when its bytes can be asked for piece by piece. A piece is read whole and the file let
+ * go before it is sent: a paused player keeps its request open, and on Windows an open file cannot be replaced - a label or an
+ * intro made again over the video the page shows failed with EPERM.
+ */
+async function serveMedia(file: string, request: Request, versioned: boolean) {
     const blob = Bun.file(file)
     const headers = {
         'Content-Type': MEDIA_TYPES[extname(file).toLowerCase()]!,
@@ -71,9 +80,11 @@ function serveMedia(file: string, request: Request, versioned: boolean) {
     if (!header) return new Response(blob, {headers})
     const range = byteRange(header, blob.size)
     if (!range) return new Response(null, {status: 416, headers: {'Content-Range': `bytes */${blob.size}`}})
-    return new Response(blob.slice(range.first, range.last + 1), {
+    const last = Math.min(range.last, range.first + MEDIA_PIECE_BYTES - 1)
+    const bytes = await blob.slice(range.first, last + 1).arrayBuffer()
+    return new Response(bytes, {
         status: 206,
-        headers: {...headers, 'Content-Range': `bytes ${range.first}-${range.last}/${blob.size}`, 'Content-Length': String(range.last - range.first + 1)},
+        headers: {...headers, 'Content-Range': `bytes ${range.first}-${last}/${blob.size}`, 'Content-Length': String(bytes.byteLength)},
     })
 }
 
@@ -159,6 +170,16 @@ async function estimateClips(target: EditorTarget, ids: string[]) {
         risks: clipFailureRisks(readTimings(), clips, projectConfig.videoWorkflow, servers).map(stripColors),
         fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined,
     }
+}
+
+/**
+ * Can the language model of this project read a picture - a vision model of its own, or a text model that takes pictures? The
+ * server asks no model anything else: what it connects to here is only for this question.
+ */
+async function picturesReadableFor(target: EditorTarget) {
+    const model = target.kind === 'film' ? (await loadFilmConfig(target.dir)).llm.model : (await loadProjectConfig(target.dir)).llm.model
+    configureLlm((await loadSettings({projectModel: model})).llm)
+    return picturesReadable()
 }
 
 async function estimatePictures(target: EditorTarget, count: number) {
@@ -294,6 +315,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (what === 'book') return json(readBook(target))
                 if (what === 'look') return json(readLook(target))
                 if (what === 'config') return json(await readConfig(target))
+                if (what === 'vision') return json({readable: await picturesReadableFor(target)})
             } catch (e) {
                 return failure(e)
             }
@@ -305,9 +327,12 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             if (what === 'run') {
                 const {action: wanted, servers} = await body<{ action: RunAction, servers?: string[] }>()
                 if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures') return refused(new Error('no such action'))
-                // a prompt comes in through its own route below, never as a path from the page
+                // a prompt or a picture comes in through its own route below, never as a path from the page
                 if (wanted.type === 'pictures') {
                     delete wanted.promptFile
+                    delete wanted.anchorFile
+                    delete wanted.descriptionFile
+                    delete wanted.describe
                     wanted.look = atLook(target)
                 }
                 return started(runs.start(target, wanted, await urlsOfChoice(servers)))
@@ -322,12 +347,38 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 const {newAnchor, prompt, servers} = await body<{ newAnchor?: boolean, prompt?: string, servers?: string[] }>()
                 const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
                 if (!job) return refused(new Error(`no picture ${id}`))
-                let promptFile: string | undefined
-                if (prompt !== undefined && prompt.trim() !== job.prompt.trim()) {
-                    promptFile = join(mkdtempSync(join(tmpdir(), 'workspace-prompt-')), `${id}.txt`)
-                    writeFileSync(promptFile, prompt)
+                const urls = await urlsOfChoice(servers)
+                // the edited prompt as a file of its own, for this run only: it goes when the run has ended, or is not started
+                const folder = prompt !== undefined && prompt.trim() !== job.prompt.trim() ? mkdtempSync(join(tmpdir(), 'workspace-prompt-')) : undefined
+                const promptFile = folder && join(folder, `${id}.txt`)
+                if (promptFile) writeFileSync(promptFile, prompt!)
+                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile, look: atLook(target)}, urls, folder ? [folder] : []))
+            }
+            // the user's own picture as the anchor, uploaded: checked (lib/editor/upload.ts), kept for the run only, then put in by the CLI
+            if (what === 'references' && id && action === 'own-anchor') {
+                checkUploadSize(request)
+                const form = await request.formData()
+                const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
+                if (!job) return refused(new Error(`no picture ${id}`))
+                if (job.kind === 'prop') return refused(new Error(`${job.name} is a prop: its picture is drawn from its description only`))
+                const library = (await readReferences(target)).find(r => r.id === id)?.library
+                if (library) return refused(new Error(`${job.name} is played by library:${library} - change it on the Casting page`))
+                const prompt = String(form.get('prompt') ?? '')
+                const description = String(form.get('description') ?? '').trim()
+                const describe = form.get('describe') === 'true'
+                if (prompt.length > 8000 || description.length > 8000) return refused(new Error('the prompt and the description are at most 8000 characters'))
+                if (description && describe) return refused(new Error('a description given by hand, or read from the picture - not both'))
+                const upload = await takePictureUpload(form.get('picture'))
+                try {
+                    const promptFile = prompt.trim() && prompt.trim() !== job.prompt.trim() ? await upload.text('prompt', prompt) : undefined
+                    const descriptionFile = description ? await upload.text('description', description) : undefined
+                    const servers = form.get('servers')
+                    const urls = await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined)
+                    return started(runs.start(target, {type: 'pictures', ids: [id], again: true, anchorFile: upload.file, promptFile, descriptionFile, describe, look: atLook(target)}, urls, [upload.folder]))
+                } catch (e) {
+                    upload.drop()
+                    throw e
                 }
-                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile, look: atLook(target)}, await urlsOfChoice(servers)))
             }
             if (what === 'references' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{ version: string }>()).version))
             if (what === 'casting') {
@@ -370,22 +421,34 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             return notFound()
         }
         if (rest[0] === 'create') {
+            try {
+                checkUploadSize(request)
+            } catch (e) {
+                return refused(e)
+            }
             const form = await request.formData()
             const picture = form.get('anchor')
             const kind = form.get('kind')
             const id = String(form.get('id') ?? '')
             if (!(picture instanceof File) || (kind !== 'character' && kind !== 'location') || !libraryIdPattern.test(id)) return refused(new Error('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes'))
-            const folder = mkdtempSync(join(tmpdir(), 'workspace-anchor-'))
-            const anchor = join(folder, `anchor${extname(picture.name) || '.png'}`)
-            await Bun.write(anchor, picture)
+            // checked as every upload is, and kept for the run only (lib/editor/upload.ts)
+            let upload: Awaited<ReturnType<typeof takePictureUpload>>
+            try {
+                upload = await takePictureUpload(picture)
+            } catch (e) {
+                return refused(e)
+            }
+            const anchor = upload.file
             const optional = (name: string) => {
                 const value = String(form.get(name) ?? '').trim()
                 return value ? [`--${name}=${value}`] : []
             }
             try {
                 const servers = form.get('servers')
-                return json({run: runs.startTool(target, 'tools/create-asset.ts', [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')], await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined))})
+                const urls = await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined)
+                return json({run: runs.startTool(target, 'tools/create-asset.ts', [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')], urls, [upload.folder])})
             } catch (e) {
+                upload.drop()
                 return refused(e)
             }
         }

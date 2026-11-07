@@ -1,5 +1,5 @@
 import {afterAll, beforeAll, describe, expect, test} from "bun:test";
-import {applyReasoning, ask, askJson, configureLlm, EmptyAnswerError, TruncatedError} from "./llm.ts";
+import {applyReasoning, ask, askJson, configureLlm, EmptyAnswerError, modelNames, TruncatedError} from "./llm.ts";
 
 // A fake server that speaks the part of the OpenAI Responses API the pipelines use (model list, a streamed answer), so ask() and askJson() are
 // tested with their retries - cut-off and empty answers - without a language model.
@@ -107,5 +107,42 @@ describe('applyReasoning', () => {
     test('a model that cannot switch it off thinks at low for none', () => {
         expect(applyReasoning(prompt('gemma-4-26b'), 'none')).toMatchObject({reasoning: {effort: 'low'}})
         expect(applyReasoning(prompt('muse-glimmer'), 'none').instructions).toContain('Reasoning strength: low')
+    })
+})
+
+describe('the model behind an alias', () => {
+    test('the names of a model: its id, and what the server says it is', () => {
+        // Strata: an alias as the id, the model in meta.label
+        expect(modelNames({id: 'iq3_s', meta: {label: 'Qwen3.8-Flash-Next IQ3_S', aliases: ['iq3_s']}})).toBe('iq3_s Qwen3.8-Flash-Next IQ3_S')
+        // Lemonade: the checkpoint; vLLM: the folder it was loaded from
+        expect(modelNames({id: 'Gemma-4-26B-A4B-it-GGUF', checkpoint: 'unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M'})).toBe('Gemma-4-26B-A4B-it-GGUF unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_M')
+        expect(modelNames({id: 'Qwen3.8-27B', root: '/models/Qwen3.8-27B-awq', parent: null})).toBe('Qwen3.8-27B /models/Qwen3.8-27B-awq')
+        expect(modelNames({id: 'fake-model'})).toBe('fake-model')
+    })
+    test('the reasoning follows the name, the call keeps the id', () => {
+        const prompt = {model: 'iq3_s', input: 'x', stream: true as const}
+        expect(applyReasoning(prompt, 'none')).toMatchObject({reasoning: {effort: 'low'}})
+        expect(applyReasoning(prompt, 'none', 'iq3_s Qwen3.8-Flash-Next IQ3_S')).toMatchObject({model: 'iq3_s', chat_template_kwargs: {enable_thinking: false}})
+    })
+    test('a server that serves Qwen 3.8 as "iq3_s" gets its thinking switched off for none', async () => {
+        const bodies: Record<string, unknown>[] = []
+        const strata = Bun.serve({
+            port: 0,
+            async fetch(req) {
+                if (new URL(req.url).pathname.endsWith('/models')) return Response.json({object: 'list', data: [{id: 'iq3_s', object: 'model', owned_by: 'strata', meta: {label: 'Qwen3.8-Flash-Next IQ3_S', aliases: ['iq3_s']}}]})
+                bodies.push(await req.json() as Record<string, unknown>)
+                const response = {id: 'r', object: 'response', created_at: 0, model: 'iq3_s', output: [], usage: {input_tokens: 1, output_tokens: 1, total_tokens: 2}}
+                return new Response(sse([{type: 'response.output_text.delta', delta: 'ok', sequence_number: 1}, {type: 'response.completed', response: {...response, status: 'completed'}, sequence_number: 2}]), {headers: {'content-type': 'text/event-stream'}})
+            },
+        })
+        try {
+            configureLlm({url: `http://localhost:${strata.port}/v1`})
+            expect(await ask({instructions: 'i', input: 'x', reasoning: 'none'})).toBe('ok')
+            expect(bodies[0]).toMatchObject({model: 'iq3_s', chat_template_kwargs: {enable_thinking: false}})
+            expect(bodies[0]).not.toHaveProperty('reasoning')
+        } finally {
+            configureLlm({url: `http://localhost:${server.port}/v1`})
+            strata.stop(true)
+        }
     })
 })

@@ -121,6 +121,10 @@ The file, if you'd rather write it yourself:
   behind a proxy with authentication. `name` (default: the host) shows up in the log. Without `comfy`,
   `http://localhost:8188` is used. With several servers, pictures and clips are rendered on all of them in parallel -
   see [docs/comfyui.md](docs/comfyui.md#several-servers).
+- `whisper` is the transcription of the vocals stem (`bun run setup whisper`): `{"model": "large-v3-turbo", "beamSize":
+  2, "temperatures": [0, 0.4, 0.8]}`. Without it, `tools/vocals.py` picks by device: large-v3, 5 beams and temperatures
+  0-1 in steps of 0.2 on a GPU, the values above on a CPU, where large-v3 takes several times as long as the song. A
+  window that fails is decoded again at each temperature - fewer make hard vocals faster but recover from fewer bad decodes.
 
 Everything can be overridden, lowest first: the settings file → the project's `config.json` (only `"llm": {"model":
 …}` - a project may use another model, never another server or key) → env vars → flags (this run only, never saved):
@@ -135,6 +139,9 @@ Everything can be overridden, lowest first: the settings file → the project's 
 | `FEVERSLOP_VISION_API_KEY`             | -                 | its API key                                       |
 | `FEVERSLOP_VISION_MODEL`               | -                 | the model that describes pictures                 |
 | `FEVERSLOP_COMFY` (or the old `COMFY`) | `--comfy=`        | ComfyUI servers, comma-separated: `http://a:8188,http://b:8188` |
+| `FEVERSLOP_WHISPER_MODEL`              | -                 | the whisper model: `large-v3`, `large-v3-turbo`   |
+| `FEVERSLOP_WHISPER_BEAM_SIZE`          | -                 | whisper's beams, 1 or more                        |
+| `FEVERSLOP_WHISPER_TEMPERATURES`       | -                 | whisper's temperatures, comma-separated: `0,0.4,0.8` |
 
 Prefer the settings file or the env var over `--llm-key` - flags end up in the shell history. Without a terminal
 (CI, scripts), `bun run setup` prints these env vars instead of asking.
@@ -751,7 +758,8 @@ singers.
 RTX 50xx/Blackwell `sm_120`, which forces slow driver-side PTX JIT compilation) and downloads the
 models: demucs ≈ 320 MB (htdemucs_ft is a bag of four models), Whisper large-v3 ≈ 3 GB. On an RTX 5090 the separation takes under a minute, the
 transcription a few minutes. Both free the GPU memory as soon as they are done, so ComfyUI can use it right after.
-Without CUDA they run on the CPU, much slower. On macOS there are no CUDA wheels - `tools/vocals.py` takes the regular
+Without CUDA they run on the CPU, much slower - there the transcription takes Whisper large-v3-turbo (≈ 1.6 GB) with
+fewer beams unless the `whisper` settings say otherwise (see [Setup](#setup)). On macOS there are no CUDA wheels - `tools/vocals.py` takes the regular
 PyPI PyTorch there, so the audio pipeline installs and runs on the CPU.
 
 ## Band members and instruments
@@ -928,14 +936,14 @@ The language model writes the same scenes again: a part for whoever is new (with
 - **Several clips**: Ctrl or Shift click marks clips on the timeline, to render them together. During a run every block says waiting, rendering or done. *Review* goes through the marked clips, else the flagged ones, one by one with keys. `?` shows all keys and what the words mean.
 - **References**: every picture with its prompt, sheet, older versions and the clips that use it: a new sheet from the same anchor, a new anchor, an edited prompt (the picture then stays pinned), or into the library.
 - **Casting**: `casting.json` as a page. A choice changes that one entry; *Plan now* takes the asset over and plans again what was planned from the role's old texts (the `--redo` the run would only name), after saying which steps that is. *Change the cast* changes the cast itself, without the library: names, roles and props, and for a music video who is in it at all - *Add a character*, *Add a place* and *Remove* sit on the list of roles too, and open the cast by hand with that change made (a film's script says that, its roles and places keep their ids and change their texts). A film made from an idea has *Add a character* and *Remove* on its list of characters too: a bar below them has the screenplay told anew for that cast (`bun run story <id> --film --adapt`), as a proposal on the Story page; a film from a screenplay of your own says to change the script instead. Saving drops what was planned from the old cast - for a music video the looks only of whoever is new or changed, everyone else keeps theirs; best right after `--until=cast`, when nothing is built on it yet. Afterwards the page offers the new names in the story (as whole words), or the story told anew for whoever came or went.
-- **Settings**: the render settings of the project - workflows (the video workflow from `comfy/workflows/`, the image and sheet workflows), video and picture size, aspect ratio, context frames, seed, the retries, the final frame rate and the finish. A change is checked as the loader checks it and the question before it says which rendered clips and pictures it makes stale (the workflow, the size and the aspect are part of what a clip is made from); nothing is rendered or planned by it. It is `bun run config <id>` in the terminal; other keys of `config.json` (singers, languages) are changed where they belong, or by hand. Not changed while a run is going on.
+- **Settings**: the render settings of the project - workflows (the video workflow from `comfy/workflows/`, the image and sheet workflows), video and picture size, aspect ratio, continuity and context frames, seed, the retries, the final frame rate and the finish. A change is checked as the loader checks it and the question before it says which rendered clips and pictures it makes stale (the workflow, the size and the aspect are part of what a clip is made from); nothing is rendered or planned by it. It is `bun run config <id>` in the terminal; other keys of `config.json` (singers, languages) are changed where they belong, or by hand. Not changed while a run is going on.
 - **Library**: the asset library, who uses what, a new asset from a picture.
 - **Refinish**: an older project larger, at 48 fps and finished, from the clips it has: see [Making an older project over](#making-an-older-project-over).
 - **AI marker**, **Credits** and **Intro**: the EU icon for AI-generated content (or a PNG of your own) over a finished video, a title card and credits around it, or a clip of your own in front of it, each as a new video next to it: see [Before publishing](#before-publishing).
 
 Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
 
-The same in the terminal - every page starts a command, or calls the same code as one (CLI first): `--render=images --only=<picture> --again [--new-anchor] [--picture-prompt=<file>]`, `--render=videos --only=<clip> --preview`, `--render=final --preview` (`<id>-preview.mp4`), `--retake=slot-007:3.2-5.0` or `--retake=slot-007:shot2`; *Versions* and *Make current*: `bun run versions <id> <clip-or-picture> [--pick=<version>]`; *Singers*: `bun run singers <id>`; *Timing*: `bun run timing <id>`; story, cast, look and casting: see [Planning in stages from the terminal](#planning-in-stages-from-the-terminal).
+The same in the terminal - every page starts a command, or calls the same code as one (CLI first): `--render=images --only=<picture> --again [--new-anchor] [--picture-prompt=<file>] [--picture-anchor=<file> [--picture-description=<file> | --describe-picture]]`, `--render=videos --only=<clip> --preview`, `--render=final --preview` (`<id>-preview.mp4`), `--retake=slot-007:3.2-5.0` or `--retake=slot-007:shot2`; *Versions* and *Make current*: `bun run versions <id> <clip-or-picture> [--pick=<version>]`; *Singers*: `bun run singers <id>`; *Timing*: `bun run timing <id>`; story, cast, look and casting: see [Planning in stages from the terminal](#planning-in-stages-from-the-terminal).
 
 A film clip can have a choice of its own: another view of its place, references left out or in another order, in `clip-overrides/<clip>.json` (`bun run override <film-id> <clip> --view=2 --without=<picture>`, or the file by hand). It applies from the next plan run on, and the clip then counts as stale. Where the choice changes what the shots say - a person left out who is in them, or a view other than the planned one - that plan run has the language model fit the shots of this clip to it, one call per such clip: the person goes from the action and the staging of every shot, the camera stands and looks where the chosen view does. The answer is kept until the choice changes. Where the sheet has no view that fits, `bun run add-view <film-id> <location-id> --name=… --shows=…` renders one more as one camera move from the place's anchor, or from another of its views (`--from=<n>`). One move reaches about a quarter turn; a view that looks back the other way came out as another place. So the language model first judges the turn, and such a view is reached in two moves, through a view in between that is kept as well.
 

@@ -9,7 +9,7 @@ const modal = ref<InstanceType<typeof ModalDialog>>()
 const KEYS = [
   ['Space', 'Play or pause'], ['K', 'Pause, normal speed'], ['J / L', 'Slower / faster'], [', / .', 'One frame back / forward'],
   ['← / →', 'Clip before / next clip'], ['Home / End', 'Start / end'], ['O', 'Loop the clip'], ['Shift+O', 'Loop the shot'],
-  ['F', 'Full screen'], ['M', 'Sound on or off'], ['Ctrl+click', 'Mark a clip on the timeline'], ['Shift+click', 'Mark all up to this clip'], ['Ctrl+wheel', 'Zoom the timeline'], ['?', 'This page'],
+  ['F', 'Full screen'], ['M', 'Sound on or off'], ['R', 'Render the clip at the playhead again - asked first'], ['Ctrl+click', 'Mark a clip on the timeline'], ['Shift+click', 'Mark all up to this clip'], ['Ctrl+wheel', 'Zoom the timeline'], ['?', 'This page'],
 ]
 const REVIEW = [['Enter', 'Fine, next clip'], ['R', 'Render again: mark it, next clip'], ['←', 'Clip before'], ['C', 'Compare with its older version'], ['Esc', 'End the review']]
 </script>

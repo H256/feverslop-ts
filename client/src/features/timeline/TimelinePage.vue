@@ -65,12 +65,15 @@ const KEYS: Record<string, () => void> = {
   Home: () => playback.seek(0),
   End: () => playback.seek(project.value.seconds - 0.01),
   m: () => playback.toggleMute(),
+  // asked first, as the button of the clip: what it costs, what goes on from it
+  r: () => { const clip = playback.clip.value; if (clip) actions.renderAgain(clip).catch(toasts.fail) },
 }
 function key(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null
   if (target?.matches?.('input, select, textarea') || document.querySelector('dialog[open]')) return
   if (review.key(event)) return
-  const action = KEYS[event.key]
+  // the help names the keys in capitals: a key is the same with Shift or Caps Lock - but Shift+O, which is a key of its own
+  const action = KEYS[event.key] ?? (event.key.length === 1 ? KEYS[event.key.toLowerCase()] : undefined)
   if (!action || event.ctrlKey || event.metaKey || event.altKey) return
   event.preventDefault()
   action()

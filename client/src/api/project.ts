@@ -3,7 +3,7 @@ import type {
   EditorReference, Estimate, LookChange, LookResult, LookView, ProjectStatus, RunInfo, RunProgress, RunRequest, SingingChange,
   SingingResult, SingingView, StoryForCast, StoryResult, TimingChange, TimingResult, TimingView,
 } from '../../../shared/workspace'
-import {getJson, HttpError, postJson} from './http'
+import {getJson, HttpError, postForm, postJson} from './http'
 
 const id = (value: string) => encodeURIComponent(value)
 
@@ -40,12 +40,16 @@ export function projectApi(root: string) {
     book: (signal?: AbortSignal) => get<BookView>('book', signal),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),
     config: (signal?: AbortSignal) => get<ConfigView>('config', signal),
+    /** Can the project's language model read a picture: a description from an uploaded picture is offered only then. */
+    vision: (signal?: AbortSignal) => get<{readable: boolean}>('vision', signal),
 
     run: (action: RunRequest, servers?: string[]) => post<{run: RunInfo}>('run', {action, ...(servers ? {servers} : {})}),
     stop: () => post<{stopped: boolean}>('stop', {}),
     estimateClips: (clips: string[]) => post<Estimate>('estimate', {clips}),
     estimatePictures: (pictures: number) => post<Estimate>('estimate', {pictures}),
     pickVersion: (clip: string, version: string) => post<unknown>(`versions/${id(clip)}/pick`, {version}),
+    /** The user's own picture as its anchor: picture, prompt, description or describe, servers - as a form, the picture as it is. */
+    ownAnchor: (picture: string, form: FormData) => postForm<{run: RunInfo}>(`${root}/api/references/${id(picture)}/own-anchor`, form),
     rerender: (picture: string, body: {newAnchor: boolean, prompt?: string, servers?: string[]}) => post<{run: RunInfo}>(`references/${id(picture)}/rerender`, body),
     pickReference: (picture: string, version: string) => post<unknown>(`references/${id(picture)}/pick`, {version}),
     setCasting: (body: {kind: 'character' | 'location', id: string, value: string}) => post<{written: true}>('casting', body),
