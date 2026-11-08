@@ -57,6 +57,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
 | `bun run export-song <id>` / `import-song <id> [song]` | a song with its stems and the timing of its lyrics into the library, or from it into a project - see [The asset library](#the-asset-library) |
 | `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
+| `bun run texture-chains <id> [--film]` | measures whether clips that continue on the clip before get grittier from link to link, next to the change at an ordinary cut; reads the rendered clips with ffmpeg only, writes nothing (`--json` for machines) |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run film:init`, `bun film.ts <id>` | the short-film pipeline - see [docs/film.md](docs/film.md) |
