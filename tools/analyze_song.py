@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11,<3.14"
+# requires-python = ">=3.11,<3.13"
 # dependencies = ["librosa>=0.10", "numpy"]
 # ///
 """Analyze a song for beat matching.
