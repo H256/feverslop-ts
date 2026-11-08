@@ -6,7 +6,7 @@ import {recordTiming, type Timing} from "./timings.ts";
 import {accumulatePhases, describeGraph, describeMachine, type Graph, type GraphSetup} from "./graph.ts";
 import {formatDuration, log, startSpinner, styles} from "./log.ts";
 import {aboveRecommended, type AudioWorkflow, type ImageWorkflow, type InterpolationWorkflow, type PixelSize, type RecommendedResolution, clipSeed, resolveSeed, type SequenceWorkflow, type VideoWorkflowModule, type WorkflowResult} from "../comfy/helpers.ts";
-import {type RenderConfig, workflowDir} from "./config.ts";
+import {type RenderConfig, workflowPath} from "./config.ts";
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from "./compose.ts";
 import {secondsAt} from "./frames.ts";
 import {extractFrame, framesOnGrid, probeVideo, trimHead} from "./assemble.ts";
@@ -46,7 +46,9 @@ const CONNECT_TIMEOUT_MS = 60 * 1000
 const SERVER_SILENT_MS = 5 * 60 * 1000
 
 async function loadWorkflow<T extends { default: unknown }>(name: string): Promise<T> {
-    const module = await import(join(workflowDir, `${name}.ts`))
+    const path = workflowPath(name)
+    if (!path) throw new Error(`workflow name must resolve inside comfy/workflows: ${name}`)
+    const module = await import(path)
     if (typeof module.default !== 'function') throw new Error(`comfy/workflows/${name}.ts has no default export function`)
     return module
 }
@@ -55,7 +57,9 @@ const workflowHashes = new Map<string, string>()
 
 /** A hash of the workflow file - a workflow that was edited is another one for the statistics until it has run once. */
 export async function workflowHash(name: string) {
-    if (!workflowHashes.has(name)) workflowHashes.set(name, Bun.hash(await Bun.file(join(workflowDir, `${name}.ts`)).text()).toString(16))
+    const path = workflowPath(name)
+    if (!path) throw new Error(`workflow name must resolve inside comfy/workflows: ${name}`)
+    if (!workflowHashes.has(name)) workflowHashes.set(name, Bun.hash(await Bun.file(path).text()).toString(16))
     return workflowHashes.get(name)!
 }
 

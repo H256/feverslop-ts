@@ -1,5 +1,5 @@
 import {existsSync} from "node:fs";
-import {join} from "node:path";
+import {isAbsolute, join, relative, resolve, sep} from "node:path";
 import type {Aspect, Resolution} from "../comfy/helpers.ts";
 import {log, warnUnknownKeys} from "./log.ts";
 import {FPS} from "./frames.ts";
@@ -117,6 +117,14 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
+/** Resolves a workflow only when the resulting file stays directly inside comfy/workflows. */
+export function workflowPath(name: unknown): string | undefined {
+    if (typeof name !== 'string' || !name || /[\\/\0]/.test(name)) return undefined
+    const file = resolve(workflowDir, `${name}.ts`)
+    const rel = relative(workflowDir, file)
+    if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined
+    return file
+}
 
 // What is wrong with a render setting, or undefined - the film's config checks these the same way
 export const invalidJsonProblem = (error: unknown) =>
@@ -125,8 +133,10 @@ export const seedProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= -1 ? undefined : `seed must be -1 or a whole number >= 0, got ${JSON.stringify(value)}`
 export const resolutionProblem = (key: string, value: unknown): string | undefined =>
     value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)) ? undefined : `${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`
-export const workflowProblem = (key: string, name: unknown): string | undefined =>
-    existsSync(join(workflowDir, `${name}.ts`)) ? undefined : `${key}: no workflow comfy/workflows/${name}.ts`
+export const workflowProblem = (key: string, name: unknown): string | undefined => {
+    const file = workflowPath(name)
+    return file && existsSync(file) ? undefined : `${key}: no workflow comfy/workflows/${name}.ts`
+}
 export function llmProblem(llm: unknown): string | undefined {
     if (!llm || typeof llm !== 'object' || Array.isArray(llm)) return `llm must be an object like {"model": "…"}, got ${JSON.stringify(llm)}`
     const keys = Object.keys(llm).filter(key => key !== 'model')
