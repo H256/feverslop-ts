@@ -14,8 +14,8 @@ import {pictureAsset} from "../lib/compose.ts";
 import {filmRenderConfig} from "../lib/film/pictures.ts";
 import {FilmRenderer} from "../lib/film/render.ts";
 import {filmDir, filmExists, plannedFilmIds} from "../lib/film/setup.ts";
-import {FILMS_DIR} from "../lib/film/store.ts";
-import type {FilmProject} from "../lib/film/types.ts";
+import {FilmStore, FILMS_DIR} from "../lib/film/store.ts";
+import {lockProject} from "../lib/lock.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {mentions} from "../lib/film/names.ts";
 import {configureLlm} from "../lib/llm.ts";
@@ -58,7 +58,10 @@ if (!existsSync(file)) {
     log.cancel(`${file} not found - plan the film first: bun film.ts ${id}`)
     process.exit(1)
 }
-const data: FilmProject = await Bun.file(file).json()
+lockProject(dir, `film ${id}`)
+const store = new FilmStore(id)
+await store.load()
+const data = store.data
 // a narrator who is never seen has no picture to replace
 const characters = (data.cast?.characters ?? []).filter(c => !c.voiceOnly)
 if (!characters.length) {
@@ -93,7 +96,7 @@ const newDescription = await askDescription(targetFile, char, configureFilmLlm, 
 if (newDescription) {
     data.characterDescriptions ??= {}
     data.characterDescriptions[char.id] = newDescription
-    await Bun.write(file, JSON.stringify(data, null, 2))
+    await store.save()
     log.success('Saved the new description to project.json')
     changes.push('the new description is saved in project.json')
 

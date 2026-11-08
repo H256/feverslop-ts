@@ -15,7 +15,8 @@ import {configureLlm} from "../lib/llm.ts";
 import {styles} from "../lib/log.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
-import type {Character, Project} from "../lib/project.ts";
+import {ProjectStore, type Character} from "../lib/project.ts";
+import {lockProject} from "../lib/lock.ts";
 import {type PictureJob, Renderer} from "../lib/render.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
@@ -39,7 +40,10 @@ if (!existsSync(file)) {
     log.error(`${file} not found - plan the project first: bun index.ts ${id}`)
     process.exit(1)
 }
-const data: Project = await Bun.file(file).json()
+lockProject(dir, id)
+const store = new ProjectStore(id)
+await store.load()
+const data = store.data
 const characters = data.cast?.characters ?? []
 if (!characters.length) {
     log.error(`No characters in projects/${id}/project.json yet - plan the project first: bun index.ts ${id}`)
@@ -95,7 +99,7 @@ if (newDescription) {
         data.characterDescriptions ??= {}
         data.characterDescriptions[char.id] = newDescription
     }
-    await Bun.write(file, JSON.stringify(data, null, 2))
+    await store.save()
     log.success('Saved the new description to project.json')
     changes.push('the new description is saved in project.json')
 

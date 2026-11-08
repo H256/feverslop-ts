@@ -10,6 +10,7 @@ import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {type AssetKind, type AssetLayout, assetIds, assetPaths, copyAsset} from "../lib/asset-import.ts";
 import {libraryDir, libraryIds, libraryLayout, readLibraryAsset} from "../lib/library.ts";
+import {lockProject} from "../lib/lock.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {genderNote} from "../lib/gender-check.ts";
 import {configureLlm} from "../lib/llm.ts";
@@ -17,7 +18,7 @@ import {characterViews, describeOrFail, visionFailed} from "../lib/describe-pict
 import {styles} from "../lib/log.ts";
 import {pictureProp, propMissing} from "../lib/prop-check.ts";
 import {listProjects, projectDir, projectExists} from "../lib/project-setup.ts";
-import {type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
+import {ProjectStore, type LocationLayout, type Project, redoAfter, type StepName} from "../lib/project.ts";
 import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
 import {sheetAnchor} from "../lib/sequenceSheet.ts";
@@ -46,7 +47,10 @@ if (!existsSync(file)) {
     log.error(`${file} not found - plan the project first: bun index.ts ${id}`)
     process.exit(1)
 }
-const data: Project = await Bun.file(file).json()
+lockProject(dir, id)
+const store = new ProjectStore(id)
+await store.load()
+const data = store.data
 type Entry = { kind: AssetKind, id: string, name: string }
 const entries = (project: Project): Entry[] => [
     ...(project.cast?.characters ?? []).map(c => ({kind: 'character' as const, id: c.id, name: c.name})),
@@ -170,7 +174,7 @@ if (target.kind === 'location') {
     if (anchor || layout) log.info(`Took ${[anchor && 'the background features', layout && 'the floor plan with its views'].filter(Boolean).join(' and ')} along from ${source.label}`)
 }
 if (changed.length) {
-    await Bun.write(file, JSON.stringify(data, null, 2))
+    await store.save()
     log.success('Saved project.json')
 }
 
