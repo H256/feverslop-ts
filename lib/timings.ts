@@ -1,4 +1,4 @@
-import {appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
+import {appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
 import {AsyncLocalStorage} from "node:async_hooks";
 import {basename, dirname, join} from "node:path";
 import type {GraphSetup, Phase} from "./graph.ts";
@@ -49,9 +49,37 @@ export type Timing = {
 }
 
 const FILE = 'timings.jsonl'
+const HISTORY_MONTHS = 24
 let project: string | undefined
 
-export const timingsFile = () => process.env.FEVERSLOP_TIMINGS || join(dirname(settingsPath()), FILE)
+const currentMonth = () => new Date().toISOString().slice(0, 7)
+const monthFile = (dir: string, month = currentMonth()) => join(dir, `timings-${month}.jsonl`)
+export const timingsFile = () => process.env.FEVERSLOP_TIMINGS || monthFile(dirname(settingsPath()))
+
+function pruneTimingHistory(file: string) {
+    if (process.env.FEVERSLOP_TIMINGS) return
+    const dir = dirname(file)
+    const [year, month] = currentMonth().split('-').map(Number) as [number, number]
+    const cutoff = new Date(year!, month! - HISTORY_MONTHS, 1).toISOString().slice(0, 7)
+    for (const name of readdirSync(dir)) {
+        const match = /^timings-(\d{4}-\d{2})\.jsonl$/.exec(name)
+        if (match && match[1]! < cutoff) rmSync(join(dir, name), {force: true})
+    }
+}
+
+function timingFiles(file: string): string[] {
+    if (process.env.FEVERSLOP_TIMINGS) return [file]
+    const dir = dirname(file)
+    const [year, month] = currentMonth().split('-').map(Number) as [number, number]
+    const cutoff = new Date(year!, month! - HISTORY_MONTHS, 1).toISOString().slice(0, 7)
+    const monthly = readdirSync(dir, {withFileTypes: true}).flatMap(entry => {
+        const match = entry.isFile() && /^timings-(\d{4}-\d{2})\.jsonl$/.exec(entry.name)
+        return match && match[1]! >= cutoff && match[1]! <= currentMonth() ? [join(dir, entry.name)] : []
+    })
+    const legacy = join(dir, FILE)
+    if (existsSync(legacy)) monthly.push(legacy)
+    return monthly.sort()
+}
 
 /** Starts keeping measurements for this project - and moves the lines of the old per-project file into the central one. */
 export function keepTimingsIn(dir: string | undefined) {
@@ -64,6 +92,7 @@ function append(timing: Timing) {
         const file = timingsFile()
         mkdirSync(dirname(file), {recursive: true})
         appendFileSync(file, JSON.stringify(timing) + '\n')
+        pruneTimingHistory(file)
     } catch {
         // statistics are a nicety - never fail a render over them
     }
@@ -88,15 +117,19 @@ const parseLines = (text: string) => text.split('\n').flatMap(line => {
 })
 
 const parsedFiles = new Map<string, {stamp: string, rows: Timing[]}>()
-export function readTimings(file = timingsFile()): Timing[] {
-    if (!existsSync(file)) { parsedFiles.delete(file); return [] }
-    const stat = statSync(file)
-    const stamp = `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
-    const cached = parsedFiles.get(file)
+export function readTimings(file?: string): Timing[] {
+    const target = file ?? timingsFile()
+    const sources = (!file && !process.env.FEVERSLOP_TIMINGS ? timingFiles(target) : [target]).filter(existsSync)
+    if (!sources.length) { parsedFiles.delete(target); return [] }
+    const stamp = sources.map(source => {
+        const stat = statSync(source)
+        return `${source}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
+    }).join('|')
+    const cached = parsedFiles.get(target)
     if (cached?.stamp === stamp) return [...cached.rows]
-    const rows = parseLines(readFileSync(file, 'utf8')).map(row => Object.freeze(row))
-    parsedFiles.delete(file)
-    parsedFiles.set(file, {stamp, rows})
+    const rows = sources.flatMap(source => parseLines(readFileSync(source, 'utf8'))).map(row => Object.freeze(row))
+    parsedFiles.delete(target)
+    parsedFiles.set(target, {stamp, rows})
     if (parsedFiles.size > 4) parsedFiles.delete(parsedFiles.keys().next().value!)
     return [...rows]
 }

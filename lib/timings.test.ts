@@ -1,17 +1,21 @@
 import {afterEach, beforeEach, expect, test} from "bun:test";
 import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {basename, dirname, join} from "node:path";
 import {currentStep, keepTimingsIn, migrateProjectTimings, readTimings, recordTiming, timingsFile, withStep} from "./timings.ts";
 
 let dir: string
+let originalSettings: string | undefined
 beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'timings-'))
+    originalSettings = process.env.FEVERSLOP_SETTINGS
     process.env.FEVERSLOP_TIMINGS = join(dir, 'central', 'timings.jsonl')
 })
 afterEach(() => {
     keepTimingsIn(undefined)
     delete process.env.FEVERSLOP_TIMINGS
+    if (originalSettings === undefined) delete process.env.FEVERSLOP_SETTINGS
+    else process.env.FEVERSLOP_SETTINGS = originalSettings
 })
 
 test('measurements go to the one central file, with their project', () => {
@@ -77,4 +81,18 @@ test('unchanged timings reuse parsed rows; appends invalidate the cache (#667)',
     expect(readTimings()[0]).toBe(first[0])
     recordTiming({kind: 'clip', name: 'w', seconds: 15})
     expect(readTimings()).toHaveLength(2)
+})
+
+test('the default store uses monthly shards and prunes history beyond its retention window (#667)', () => {
+    delete process.env.FEVERSLOP_TIMINGS
+    process.env.FEVERSLOP_SETTINGS = join(dir, 'settings', 'settings.json')
+    const file = timingsFile()
+    expect(basename(file)).toMatch(/^timings-\d{4}-\d{2}\.jsonl$/)
+    mkdirSync(dirname(file), {recursive: true})
+    const old = join(dirname(file), 'timings-2000-01.jsonl')
+    writeFileSync(old, '{"at":"2000-01-01","kind":"clip","name":"old","seconds":1}\n')
+    keepTimingsIn(join(dir, 'p'))
+    recordTiming({kind: 'clip', name: 'new', seconds: 2})
+    expect(existsSync(old)).toBe(false)
+    expect(readTimings().map(t => t.name)).toEqual(['new'])
 })
