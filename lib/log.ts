@@ -2,6 +2,7 @@ import {closeSync, mkdirSync, openSync, writeSync} from "node:fs";
 import {dirname} from "node:path";
 import {format, stripVTControlCharacters, styleText} from "node:util";
 import {noteRunError} from "./run-record.ts";
+import {pruneRunLogs} from './log-retention.ts';
 
 type Format = Parameters<typeof styleText>[0]
 export const style = (format: Format) => (text: string) => process.env.NO_COLOR !== undefined || !process.stdout.isTTY ? text : styleText(format, text)
@@ -356,6 +357,7 @@ function toLog(text: string) {
 export function keepLogIn(path: string) {
     mkdirSync(dirname(path), {recursive: true})
     logFile = {path, fd: openSync(path, 'a')}
+    try { pruneRunLogs(dirname(path), 20, path) } catch { /* retention must not stop a run */ }
     const toFile = (text: string) => {
         if (!logFile || boardWrite) return
         // the status line is drawn as "\r" + the line, and cleared with "\r" - neither is part of the log
