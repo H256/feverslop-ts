@@ -2,6 +2,46 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.8.0 – faster timing correction, editable direction, and finishing tools
+
+_Release prepared; publication pending._
+
+Correct inaccurate lyric timing a passage at a time, mark word starts while listening, and split a word only when a clip boundary really needs it. Planned performances can be adjusted after planning, reference pictures can be supplied or rendered again, and finished videos can receive an intro, title card, credits and an AI marker.
+
+### Timing
+
+- Select words or passages across lines, move them together, or fit them between two times with a preview. Anchor confirmed word starts, collapse groups for easier editing, and undo or redo changes (#629).
+- Mark word onsets while listening with **M**, with pause/resume, restart, Backspace, playback speed, looping and a reaction offset. Inferred word ends stay unchecked until reviewed (#629).
+- Split a word at an explicit character and time boundary, then join its parts again. Saved parts preserve the source text and singer assignments; clips receive their own fragments with continuation hyphens (#629).
+- Inspect clip text and singing windows, navigate unchecked timings and crossing words separately, and correct shared boundaries explicitly. Moving a selection no longer silently shortens neighboring words (#629).
+- Review metadata does not replan shots or turn unplaced words into audible lyrics. Changes to prompt text are detected even when their timing span stays the same (#629).
+
+### Direction and references
+
+- Edit planned performances through the Direction page and `bun run direction`, with scoped changes and validation (#626).
+- Upload your own reference anchor and derive the sheet from it; render a pinned reference again using its edited prompt or the plan's prompt (#621, #622).
+- Four-step PRISM turnaround sheets (#603).
+- Casting assignments follow roles added or removed by hand; film screenplays can be adapted to a changed cast (#604, #605).
+
+### Finished videos and workspace
+
+- Add an AI marker, an intro, or a title card and credits to an existing finished video with `bun run label`, `bun run intro` and `bun run credits` (#610, #611, #612).
+- Replace a finished video even while the workspace is displaying it (#624).
+- Press **R** to render the timeline clip at the playhead again; documented shortcuts also accept capital letters (#625).
+
+### Settings and fixes
+
+- Configure clip sampling and refinement steps; choose continuity independently; set Whisper's model, beam count and temperatures (#606, #615, #617).
+- Reasoning adapters recognize models behind aliases (#619).
+- Close-up prompts explicitly keep other people out of the frame (#616).
+- IDs derived from names are limited to 48 characters to avoid excessively long paths (#628).
+- Updated browser coverage for credits, direction, references and timing (#613, #629).
+
+### Limits
+
+- Timing corrections preserve existing clip cuts; moving clip boundaries remains separate work.
+- Automated tests cover timing persistence and prompt fragments. Real model lip-sync quality has not been validated by a new AI render.
+
 ## v0.7.0 – songs in the library, the timing fixed once, and the settings as a page
 
 _2026-11-04_
