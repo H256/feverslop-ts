@@ -130,7 +130,7 @@ export type TranscriptWord = { text: string, start: number, end: number, probabi
 // (unheard) word timing in real acoustic evidence instead of spreading them blindly across a whole gap
 export type Transcript = { words: TranscriptWord[], activity?: { start: number, end: number }[] }
 
-export type TimedWord = { text: string, start: number, end: number }
+export type TimedWord = { text: string, start: number, end: number, joined?: boolean, anchor?: boolean, estimated?: boolean, group?: string }
 // One sung line of lyrics.txt with its real timing. `line` numbers the sung lines (performance notes excluded)
 export type TimedLine = {
     line: number,

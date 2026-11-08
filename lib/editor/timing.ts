@@ -2,6 +2,7 @@ import {existsSync, readFileSync, statSync} from "node:fs";
 import {writeJsonFile} from "../json-file.ts";
 import {isAbsolute, join, relative, resolve} from "node:path";
 import type {ClipRequest} from "../compose.ts";
+import {splitBySinger} from '../singing-parts.ts';
 import {withProjectLock} from "../lock.ts";
 import {MIN_WORD_SEC, normalizeWord, slotVocals} from "../lyrics.ts";
 import type {Project, TimedLine} from "../project.ts";
@@ -77,9 +78,16 @@ export function outdatedClips(data: Project, requests: Request[]): {clip: string
         if (!request) continue
         const expected = spans((slot.vocals ?? []).filter(v => sung(v.line)))
         const carried = spans((request.vocals ?? []).map(v => ({line: v.line, start: v.at, end: v.end})))
+        const texts = (entries: {line: number, text: string}[]) => {
+            const result = new Map<number, string[]>()
+            for (const e of entries) result.set(e.line, [...(result.get(e.line) ?? []), e.text])
+            return result
+        }
+        const expectedText = texts((slot.vocals ?? []).flatMap(v => splitBySinger(v, slot.start, singing.lines.find(l => l.line === v.line), data.lyricsTiming, singing.singers).filter(p => p.singers.length)))
+        const carriedText = texts(request.vocals ?? [])
         const lines = [...new Set([...expected.keys(), ...carried.keys()])].filter(line => {
             const a = expected.get(line), b = carried.get(line)
-            return !a || !b || Math.abs(a[0] - b[0]) > SAME_TIME || Math.abs(a[1] - b[1]) > SAME_TIME
+            return !a || !b || (expectedText.get(line) ?? []).join(' ') !== (carriedText.get(line) ?? []).join(' ') || Math.abs(a[0] - b[0]) > SAME_TIME || Math.abs(a[1] - b[1]) > SAME_TIME
         }).sort((a, b) => a - b)
         if (lines.length) outdated.push({clip: slot.id, lines})
     }
@@ -98,8 +106,8 @@ export function timingView(dir: string, data: Project, requests: Request[]): Tim
         duration,
         lines: timing.lines.map(l => ({
             line: l.line, section: l.section, text: l.text,
-            words: wordsToPlace(l, duration).map(w => ({text: w.text, start: w.start, end: w.end})),
-            estimated: !l.byHand && l.confidence < ESTIMATED_BELOW,
+            words: wordsToPlace(l, duration).map(w => ({...w})),
+            estimated: l.words.some(w => w.estimated) || (!l.byHand && l.confidence < ESTIMATED_BELOW),
             byHand: !!l.byHand,
             ...(l.words.length ? {} : {unplaced: true}),
             ...(l.off ? {off: true} : {}),
@@ -125,8 +133,13 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
     if (!Array.isArray(change?.lines)) throw new Error('no lines')
     const duration = data.music?.durationSec ?? Infinity
     const result: TimingResult = {changed: [], slots: [], replanned: [], staleClips: [], crossing: []}
+    const singing = data.singing ? structuredClone(data.singing) : undefined
+    const seen = new Set<number>()
     const lines: TimedLine[] = timing.lines.map(l => ({...l, words: [...l.words]}))
     for (const entry of change.lines) {
+        if (!entry || seen.has(entry.line)) throw new Error('invalid or duplicate line')
+        seen.add(entry.line)
+        if (entry.off !== undefined && typeof entry.off !== 'boolean') throw new Error('invalid off')
         const line = lines.find(l => l.line === entry.line)
         if (!line) throw new Error(`no sung line ${entry.line}`)
         const name = `line ${entry.line + 1} ("${line.text}")`
@@ -141,8 +154,29 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
             continue
         }
         const placed = wordsToPlace(line, data.music?.durationSec ?? Math.max(0, ...timing.lines.map(l => l.end)))
-        if (!Array.isArray(entry.words) || entry.words.length !== placed.length) throw new Error(`${name} has ${placed.length} words, not ${entry.words?.length}`)
-        const words = entry.words.map((w, n) => ({text: placed[n]!.text, start: round(Number(w.start)), end: round(Number(w.end))}))
+        if (!Array.isArray(entry.words) || !entry.words.length) throw new Error(`${name}: no words`)
+        const structural = entry.words.some(w => w && w.text !== undefined)
+        if (!structural && entry.words.length !== placed.length) throw new Error(`${name} has ${placed.length} words, not ${entry.words.length}`)
+        const words = entry.words.map((w, n) => {
+            if (!w || (structural && (typeof w.text !== 'string' || !w.text.length || /\s/.test(w.text)))) throw new Error(`${name}: invalid word text`)
+            for (const key of ['joined', 'anchor', 'estimated'] as const) if (w[key] !== undefined && typeof w[key] !== 'boolean') throw new Error(`${name}: invalid ${key}`)
+            if (w.group !== undefined && (typeof w.group !== 'string' || !w.group.trim())) throw new Error(`${name}: invalid group`)
+            const word = {...(structural ? {} : placed[n]), text: structural ? w.text! : placed[n]!.text, start: round(Number(w.start)), end: round(Number(w.end))}
+            for (const key of ['joined', 'anchor', 'estimated', 'group'] as const) if (w[key] !== undefined) Object.assign(word, {[key]: w[key]})
+            return word
+        })
+        const source = (items: typeof placed) => items.map((w, i) => `${i && !w.joined ? ' ' : ''}${w.text}`).join('')
+        if (words[0]!.joined || source(words) !== source(placed)) throw new Error(`${name}: words must preserve source text`)
+        const singerLine = singing?.lines.find(l => l.line === line.line)
+        if (structural && singerLine?.parts) {
+            const offsets = (items: typeof placed) => { let at = 0; return items.map((w, i) => { if (i && !w.joined) at++; const start = at; at += w.text.length; return start }) }
+            const oldOffsets = offsets(placed), newOffsets = offsets(words)
+            singerLine.parts = singerLine.parts.map(part => {
+                const from = newOffsets.indexOf(oldOffsets[part.from]!)
+                if (from < 0) throw new Error(`${name}: cannot join across a singer change`)
+                return {...part, from}
+            })
+        }
         words.forEach((w, n) => {
             if (!Number.isFinite(w.start) || !Number.isFinite(w.end)) throw new Error(`${name}: "${w.text}" has no time`)
             if (w.end - w.start < MIN_WORD_SEC - 1e-9) throw new Error(`${name}: "${w.text}" is shorter than ${MIN_WORD_SEC} s`)
@@ -150,24 +184,43 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
             if (n > 0 && w.start < words[n - 1]!.end - 1e-9) throw new Error(`${name}: "${w.text}" starts before "${words[n - 1]!.text}" ends`)
         })
         // given back as it was (bun run timing --set has every line): times are kept to the millisecond, so they are compared so
-        const same = words.every((w, n) => w.start === round(placed[n]!.start) && w.end === round(placed[n]!.end))
+        const same = words.length === placed.length && words.every((w, n) => {
+            const before = placed[n]!
+            return w.start === round(before.start) && w.end === round(before.end) &&
+                (['text', 'joined', 'anchor', 'estimated', 'group'] as const).every(key => w[key] === before[key])
+        })
         if (same) continue
+        const placementChanged = words.length !== placed.length || words.some((w, n) => {
+            const before = placed[n]!
+            return w.start !== round(before.start) || w.end !== round(before.end) || w.text !== before.text || !!w.joined !== !!before.joined
+        })
+        const reviewed = structural && words.every(w => w.estimated === false)
+        if (!line.words.length && !placementChanged && !reviewed) throw new Error(`${name}: Place or review this line before grouping or anchoring`)
         line.words = words
         line.start = words[0]!.start
         line.end = words.at(-1)!.end
-        line.confidence = 1
-        line.byHand = true
+        if (placementChanged || reviewed) {
+            line.confidence = 1
+            line.byHand = true
+        }
         if (!result.changed.includes(line.line)) result.changed.push(line.line)
     }
     if (!result.changed.length) return result
     data.lyricsTiming = {...timing, lines}
+    if (singing) data.singing = singing
 
     // the cut stays: what each clip sings is worked out again, as step 10 does it
     const slots = data.timeline?.slots ?? []
+    // Anchors, review flags and UI groups do not change what is sung. Keep them in the saved
+    // words, but do not discard expensive shot plans merely for organizing the editor.
+    const audible = (vocals: NonNullable<typeof slots[number]['vocals']>) => vocals.map(v => ({
+        ...v, words: v.words.map(({text, start, end, joined}) => ({text, start, end, ...(joined ? {joined} : {})})),
+    }))
     for (const slot of slots) {
         const vocals = slotVocals(slot, data.lyricsTiming)
-        if (JSON.stringify(vocals) === JSON.stringify(slot.vocals ?? [])) continue
+        const changed = JSON.stringify(audible(vocals)) !== JSON.stringify(audible(slot.vocals ?? []))
         slot.vocals = vocals
+        if (!changed) continue
         result.slots.push(slot.id)
     }
     const beatOfSlot = new Map((data.mapping ?? []).map(m => [m.slotId, m.beatId]))

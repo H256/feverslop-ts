@@ -1,3 +1,4 @@
+import {vocalText} from './lyrics.ts';
 import type {LyricsTiming, Singing, TimedWord} from "./project.ts";
 
 // A singer can change within a line: a line of `singing` then has parts, each from a word of the line on (the index into
@@ -70,7 +71,7 @@ export function splitBySinger<V extends { start: number, end: number, text: stri
     const close = () => {
         if (!current) return
         const words = current.words
-        pieces.push({...vocal, text: words.map(w => w.text).join(' '), start: words[0]!.start, end: words.at(-1)!.end, words, singers: line.parts![current.k]!.singers})
+        pieces.push({...vocal, text: vocalText(words, words.at(-1) === vocal.words.at(-1) && vocal.text === vocalText(vocal.words) + '-', words[0] === vocal.words[0] && !!words[0]?.joined), start: words[0]!.start, end: words.at(-1)!.end, words, singers: line.parts![current.k]!.singers})
     }
     for (const w of vocal.words) {
         const k = partOf(w)

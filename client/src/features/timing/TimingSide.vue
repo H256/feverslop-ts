@@ -18,7 +18,7 @@ const KEYS = [
   {name: 'Space', value: 'listen to the line or the word; a click on the waveform plays from there'},
   {name: '↑ ↓', value: 'the line before or after'},
   {name: 'N', value: 'the next line that wants a look - a cut in a word, an early start, an old prompt, a guessed time; Shift+N goes back'},
-  {name: 'Ctrl+Z', value: 'undo'},
+  {name: 'Ctrl+Z / Ctrl+Shift+Z', value: 'undo / redo'},
 ]
 // the clips that do not know a move yet, with the line they are out of date for
 const outdated = computed(() => props.view.outdated.map(({clip, lines}) => {
@@ -32,7 +32,7 @@ const effects = computed(() => {
   return [
     replanned.length && `${replanned.join(', ')} ${replanned.length > 1 ? 'are' : 'is'} planned again if what ${replanned.length > 1 ? 'their' : 'its'} clips sing changes: the language model, no GPU`,
     clips.length && `up to ${plural(clips.length, 'clip')} go stale${clips.length <= 8 ? `: ${clips.join(', ')}` : ''}. Nothing is rendered on its own.`,
-    'The moved lines count as placed by hand: no longer estimated.',
+    'Inferred or uncertain times stay unchecked until you mark them reviewed.',
   ].filter((line): line is string => !!line)
 })
 </script>

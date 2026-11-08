@@ -161,3 +161,121 @@ describe('outdatedClips - the clips that do not know a move yet', () => {
         expect(outdatedClips(project(), [{id: 'slot-001', beatId: 'b1'}, {id: 'slot-002', beatId: 'b2'}])).toEqual([])
     })
 })
+
+describe('structural timing edits', () => {
+    test('split metadata survives reload, legacy movement and join; singer indices follow source words', () => {
+        const data = project()
+        data.singing = {singers: ['a', 'b'], lines: [{line: 0, text: 'we rise', singers: ['a', 'b'], parts: [{from: 0, singers: ['a']}, {from: 1, singers: ['b']}]}]}
+        const split = [{text: 'w', start: .5, end: .7, anchor: true, group: 'g'}, {text: 'e', joined: true, start: .7, end: .9, estimated: true, group: 'g'}, {text: 'rise', start: 1, end: 1.4}]
+        applyTiming(data, {lines: [{line: 0, words: split}]}, [])
+        const reload = JSON.parse(JSON.stringify(data)) as Project
+        expect(timingView('', reload, [])!.lines[0]!.words).toEqual(split)
+        expect(reload.singing!.lines[0]!.parts![1]!.from).toBe(2)
+        applyTiming(reload, {lines: [{line: 0, words: split.map(w => ({start: w.start + .1, end: w.end + .1}))}]}, [])
+        expect(reload.lyricsTiming!.lines[0]!.words[1]).toMatchObject({joined: true, estimated: true, group: 'g'})
+        applyTiming(reload, {lines: [{line: 0, words: words(['we', 'rise'], .5)}]}, [])
+        expect(reload.lyricsTiming!.lines[0]!.words).toEqual(words(['we', 'rise'], .5))
+        expect(reload.singing!.lines[0]!.parts![1]!.from).toBe(1)
+    })
+    test('invalid source or metadata rejects the entire request before mutation', () => {
+        for (const bad of [
+            [{text: 'we', start: .5, end: .9}, {text: 'fall', start: 1, end: 1.4}],
+            [{text: 'we', joined: true, start: .5, end: .9}, {text: 'rise', start: 1, end: 1.4}],
+            [{text: 'we', anchor: 'yes', start: .5, end: .9}, {text: 'rise', start: 1, end: 1.4}],
+        ]) {
+            const data = project(), before = JSON.stringify(data)
+            expect(() => applyTiming(data, {lines: [{line: 1, off: true}, {line: 0, words: bad as any}]}, [])).toThrow()
+            expect(JSON.stringify(data)).toBe(before)
+        }
+    })
+    test('outdated clips detect changed prompt text with identical spans', () => {
+        const data = project()
+        data.singing = {singers: ['a'], lines: []}
+        expect(outdatedClips(data, [{id: 'slot-001', beatId: 'b1', vocals: [{line: 0, text: 'w- rise', at: .5, end: 1.4, singers: []}]}])).toEqual([{clip: 'slot-001', lines: [0]}])
+    })
+})
+
+
+test('provisional words remain estimated even after manual saving', () => {
+    const data = project()
+    applyTiming(data, {lines: [{line: 0, words: words(['we', 'rise'], .5).map(w => ({...w, estimated: true}))}]}, [])
+    expect(timingView('', data, [])!.lines[0]!.estimated).toBe(true)
+})
+
+test('a structural no-op ignores object property order', () => {
+    const data = project()
+    Object.assign(data.lyricsTiming!.lines[0]!.words[0]!, {group: 'g', anchor: true})
+    expect(applyTiming(data, {lines: [{line: 0, words: data.lyricsTiming!.lines[0]!.words}]}, []).changed).toEqual([])
+})
+
+test('editor-only metadata saves without invalidating shot plans', () => {
+    const data = project()
+    const result = applyTiming(data, {lines: [{line: 0, words: data.lyricsTiming!.lines[0]!.words.map(w => ({...w, group: 'phrase', anchor: true, estimated: true}))}]}, requests)
+    expect(result.changed).toEqual([0])
+    expect(result.slots).toEqual([])
+    expect(result.replanned).toEqual([])
+    expect(Object.keys(data.shotMoments!)).toEqual(['b1', 'b2'])
+})
+
+test('reviewed timing persists even if the original alignment was uncertain', () => {
+    const data = project()
+    applyTiming(data, {lines: [{line: 1, words: data.lyricsTiming!.lines[1]!.words.map(w => ({...w, estimated: false}))}]}, [])
+    expect(timingView('', data, [])!.lines[1]!.estimated).toBe(false)
+})
+
+test('grouping unplaced placeholders cannot make them audible; explicit review can', () => {
+    const data = project()
+    data.lyricsTiming!.lines[1]!.words = []
+    const placeholders = timingView('', data, [])!.lines[1]!.words
+    const before = JSON.stringify(data)
+    expect(() => applyTiming(data, {lines: [{line: 1, words: placeholders.map(w => ({...w, group: 'g'}))}]}, [])).toThrow('Place or review')
+    expect(JSON.stringify(data)).toBe(before)
+    applyTiming(data, {lines: [{line: 1, words: placeholders.map(w => ({...w, estimated: false}))}]}, [])
+    expect(timingView('', data, [])!.lines[1]!.unplaced).toBeUndefined()
+    expect(timingView('', data, [])!.lines[1]!.estimated).toBe(false)
+})
+
+test('a join cannot erase a singer boundary and leaves all data unchanged', () => {
+    const data = project()
+    data.lyricsTiming!.lines[0]!.words = [{text: 'w', start: .5, end: .7}, {text: 'e', joined: true, start: .7, end: .9}, {text: 'rise', start: 1, end: 1.4}]
+    data.singing = {singers: ['a', 'b'], lines: [{line: 0, text: 'we rise', singers: ['a', 'b'], parts: [{from: 0, singers: ['a']}, {from: 1, singers: ['b']}]}]}
+    const before = JSON.stringify(data)
+    expect(() => applyTiming(data, {lines: [{line: 0, words: words(['we', 'rise'], .5)}]}, [])).toThrow('singer change')
+    expect(JSON.stringify(data)).toBe(before)
+})
+
+
+test('metadata-only edits preserve uncertain alignment confidence and placement status', () => {
+    const data = project()
+    const line = data.lyricsTiming!.lines[1]!
+    const result = applyTiming(data, {lines: [{line: 1, words: line.words.map(w => ({...w, group: 'review', anchor: true}))}]}, [])
+    expect(data.lyricsTiming!.lines[1]!.confidence).toBe(.2)
+    expect(data.lyricsTiming!.lines[1]!.byHand).toBeUndefined()
+    expect(timingView('', data, [])!.lines[1]!.estimated).toBe(true)
+    expect(result.replanned).toEqual([])
+})
+
+test('unplaced placeholders reject grouping without placement or explicit review atomically', () => {
+    for (const metadata of [{group: 'g'}, {anchor: true}]) {
+        const data = project()
+        Object.assign(data.lyricsTiming!.lines[1]!, {start: 6, end: 6, words: [], confidence: 0})
+        const placeholders = timingView('', data, [])!.lines[1]!.words
+        const before = JSON.stringify(data)
+        expect(() => applyTiming(data, {lines: [{line: 0, off: true}, {line: 1, words: placeholders.map(w => ({...w, ...metadata}))}]}, [])).toThrow('Place or review this line before grouping or anchoring')
+        expect(JSON.stringify(data)).toBe(before)
+    }
+})
+
+test('explicit review accepts unchanged positions and survives reload for estimated and unplaced lines', () => {
+    for (const unplaced of [false, true]) {
+        const data = project()
+        if (unplaced) Object.assign(data.lyricsTiming!.lines[1]!, {start: 6, end: 6, words: [], confidence: 0})
+        const view = timingView('', data, [])!.lines[1]!
+        applyTiming(data, {lines: [{line: 1, words: view.words.map(w => ({...w, estimated: false}))}]}, [])
+        const reload = JSON.parse(JSON.stringify(data)) as Project
+        expect(reload.lyricsTiming!.lines[1]!.words.length).toBe(2)
+        expect(reload.lyricsTiming!.lines[1]!.byHand).toBe(true)
+        expect(timingView('', reload, [])!.lines[1]!.estimated).toBe(false)
+        expect(timingView('', reload, [])!.lines[1]!.unplaced).toBeUndefined()
+    }
+})

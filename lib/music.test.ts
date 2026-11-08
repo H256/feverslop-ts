@@ -1,3 +1,4 @@
+import {splitBySinger} from './singing-parts.ts';
 import {describe, expect, test} from "bun:test";
 import {activityRanges, buildTimeline, chooseClipStarts, splitAtVocalGaps, framePower, isFightBeat, parseLyricSections, projectLyricSections, splitFightSlots} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
@@ -53,6 +54,23 @@ describe('splitFightSlots', () => {
     const vael: Character = {id: 'vael', name: 'Vael', role: 'x'}
     const beat = (id: string, kind: StoryBeat['kind'], ids: string[]) => ({id, kind, characterIds: ids, intensity: 0.5, weight: 1} as StoryBeat)
     const slot = (i: number, start: number, end: number, extra: Partial<Slot> = {}): Slot => ({id: `slot-${i + 1}`, index: i, section: 's', start, end, bars: Math.round((end - start) / 2), energy: 0.6, lyrics: [], ...extra})
+
+    test('fight children recalculate joined fragments and preserve parent edge markers', () => {
+        const words = [{text: 'we', start: .5, end: 1}, {text: 'ri', start: 1.5, end: 1.9}, {text: 'se', joined: true, start: 2, end: 2.5}, {text: 'a', start: 3, end: 3.5}]
+        for (const parentFragment of [false, true]) {
+            const parentWords = words.map((w, n) => n === 0 && parentFragment ? {...w, joined: true} : {...w})
+            const vocals = [{line: 0, text: parentFragment ? '-we rise a-' : 'we rise a', start: .5, end: 3.5, words: parentWords}]
+            const r = splitFightSlots([slot(0, 0, 4, {vocals})], [{slotId: 'slot-1', beatId: 'fight'}], [beat('fight', 'hit', ['orcs'])], [orcs], music)
+            const expected = parentFragment ? ['-we ri-', '-se a-'] : ['we ri-', '-se a']
+            expect(r.slots.map(s => s.vocals![0]!.text)).toEqual(expected)
+            const t: LyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 's', text: 'we rise a', start: .5, end: 3.5, confidence: 1, words: parentWords}]}
+            for (const parts of [undefined, [{from: 0, singers: ['a']}, {from: 1, singers: ['b']}]]) {
+                const line = {line: 0, text: 'we rise a', singers: ['a', 'b'], parts}
+                expect(r.slots.map(s => splitBySinger(s.vocals![0]!, s.start, line, t, []).map(p => p.text).join(' '))).toEqual(expected)
+            }
+            expect(r.slots[1]!.vocals![0]!.start).toBe(0)
+        }
+    })
 
     test('a fight beat is a hit with a crowd in it', () => {
         expect(isFightBeat(beat('a', 'hit', ['vael', 'orcs']), [vael, orcs])).toBe(true)

@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {alignLyrics, keepTogether, refineSections, tightenStarts} from "./lyrics.ts";
+import {slotVocals, alignLyrics, keepTogether, refineSections, tightenStarts} from "./lyrics.ts";
 import type {LyricSection, LyricsTiming, MusicMap} from "./project.ts";
 
 // 120 bpm: a bar every 2 s
@@ -107,5 +107,23 @@ describe('tightenStarts', () => {
     test('a start never moves past what is left of its word', () => {
         const {timing} = tightenStarts({lines: [line(0, [[1, 1.5], [1.5, 3]])]}, peaks)
         expect(timing.lines[0]!.words[0]!.end - timing.lines[0]!.words[0]!.start).toBeGreaterThanOrEqual(0.05)
+    })
+})
+
+
+describe('slotVocals split source words', () => {
+    const timing: LyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: 'we rise', start: 3, end: 5.5, confidence: 1, words: [
+        {text: 'w', start: 3, end: 4, anchor: true}, {text: 'e', start: 4, end: 4.5, joined: true, estimated: true}, {text: 'rise', start: 5, end: 5.5},
+    ]}]}
+    test('hyphens exist only in clip prompt text, tail begins at zero', () => {
+        const before = JSON.stringify(timing)
+        const head = slotVocals({start: 0, end: 4}, timing)[0]!
+        const tail = slotVocals({start: 4, end: 8}, timing)[0]!
+        expect(head.text).toBe('w-')
+        expect(tail.text).toBe('-e rise')
+        expect(tail.start).toBe(0)
+        expect(tail.words[0]).toEqual({text: 'e', start: 0, end: .5, joined: true, estimated: true})
+        expect(slotVocals({start: 0, end: 8}, timing)[0]!.text).toBe('we rise')
+        expect(JSON.stringify(timing)).toBe(before)
     })
 })

@@ -423,16 +423,23 @@ export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: L
 /** The timing without the lines left out on the Timing page (`off`): what is sung. */
 export const sungOnly = (timing: LyricsTiming): LyricsTiming => timing.lines.some(l => l.off) ? {...timing, lines: timing.lines.filter(l => !l.off)} : timing
 
+/** Reassemble source parts; hyphens describe only fragments at the edges of a clip. */
+export function vocalText(words: TimedWord[], trailing = false, leading = !!words[0]?.joined): string {
+    return (leading ? '-' : '') + words.map((w, i) => `${i && !w.joined ? ' ' : ''}${w.text}`).join('') + (trailing ? '-' : '')
+}
+
 export function slotVocals(slot: Pick<Slot, 'start' | 'end'>, timing: LyricsTiming): SlotVocal[] {
     const first = frameAt(slot.start)
     const last = frameAt(slot.end)
     const origin = secondsAt(first)
-    const relative = (w: TimedWord) => ({text: w.text, start: round(w.start - origin), end: round(w.end - origin)})
+    const relative = (w: TimedWord) => ({...w, start: round(w.start - origin), end: round(w.end - origin)})
 
     return sungOnly(timing).lines.flatMap(line => {
-        const words = line.words.filter(w => w.end - w.start >= MIN_WORD_SEC && frameAt(w.start) >= first && frameAt(w.start) < last).map(relative)
+        const selected = line.words.filter(w => w.end - w.start >= MIN_WORD_SEC && frameAt(w.start) >= first && frameAt(w.start) < last)
+        const words = selected.map(relative)
+        const trailing = !!line.words[line.words.indexOf(selected.at(-1)!) + 1]?.joined
         return words.length
-            ? [{line: line.line, text: words.map(w => w.text).join(' '), start: words[0]!.start, end: words.at(-1)!.end, words}]
+            ? [{line: line.line, text: vocalText(words, trailing), start: words[0]!.start, end: words.at(-1)!.end, words}]
             : []
     })
 }

@@ -44,3 +44,20 @@ describe('splitBySinger', () => {
         expect(splitBySinger(vocal, 9, undefined, timing, ['lead']).map(p => p.singers)).toEqual([['lead']])
     })
 })
+
+
+test('singer splitting recombines joined pieces and preserves clip fragment suffix', () => {
+    const splitWords = [{text: 'w', start: 0, end: .2}, {text: 'e', joined: true, start: .2, end: .4}, {text: 'ri', start: .5, end: .7}]
+    const t: LyricsTiming = {lines: [{...timing.lines[0]!, words: [...splitWords, {text: 'se', joined: true, start: 1, end: 1.2}]}]}
+    const v = {text: 'we ri-', start: 0, end: .7, words: splitWords}
+    const line = {line: 0, text: 'we rise', singers: ['a', 'b'], parts: [{from: 0, singers: ['a']}, {from: 2, singers: ['b']}]}
+    expect(splitBySinger(v, 0, line, t, []).map(p => p.text)).toEqual(['we', 'ri-'])
+})
+
+
+test('literal trailing hyphens are not mistaken for a continuation marker', () => {
+    const t: LyricsTiming = {lines: [{...timing.lines[0]!, words: [{text: 'we', start: 0, end: .4}, {text: 'go-', start: .5, end: 1}]}]}
+    const v = {text: 'we go-', start: 0, end: 1, words: t.lines[0]!.words}
+    const line = {line: 0, text: 'we go-', singers: ['a', 'b'], parts: [{from: 0, singers: ['a']}, {from: 1, singers: ['b']}]}
+    expect(splitBySinger(v, 0, line, t, []).map(p => p.text)).toEqual(['we', 'go-'])
+})

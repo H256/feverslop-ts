@@ -18,6 +18,7 @@ import {EARLY_FROM, leadOf} from './fit'
 import TimingEditor from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
 import TimingSide from './TimingSide.vue'
+import TimingTools from './TimingTools.vue'
 import {useTimingDraft} from './useTimingDraft'
 
 /**
@@ -32,6 +33,7 @@ const {planNow} = usePlanning()
 const draft = useTimingDraft(toRef(props, 'view'))
 const saved = ref<string>()
 const editor = ref<InstanceType<typeof TimingEditor>>()
+const timingTools = ref<InstanceType<typeof TimingTools>>()
 useUnsavedChanges(() => draft.edits.value.size > 0, 'moved lines')
 watch(() => draft.edits.value.size, count => { if (count) saved.value = undefined })
 
@@ -49,7 +51,7 @@ const outdated = computed(() => {
   return found
 })
 // the lines that want a look, in the order of the song: a clip cut in a word, an early start, an old prompt, a guessed time
-const problems = computed(() => props.view.lines.filter(l => !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || (l.estimated && !draft.isChanged(l)))))
+const problems = computed(() => props.view.lines.filter(l => !l.off && (draft.crossing(l).length || earlyLines.value.has(l.line) || outdated.value.has(l.line) || draft.unchecked(l))))
 const nextProblem = (back = false) => {
   const all = problems.value
   if (!all.length) return toasts.show('Nothing left to look at.')
@@ -57,6 +59,12 @@ const nextProblem = (back = false) => {
   const ordered = back ? [...all].reverse() : all
   const found = ordered.find(l => back ? props.view.lines.indexOf(l) < at : props.view.lines.indexOf(l) > at) ?? ordered[0]!
   choose(found.line)
+}
+const nextKind = (kind: 'unchecked' | 'cut') => {
+  const all = props.view.lines.filter(l => !l.off && (kind === 'unchecked' ? draft.unchecked(l) : draft.crossing(l).length))
+  const at = props.view.lines.findIndex(l => l.line === draft.selected.value)
+  const found = all.find(l => props.view.lines.indexOf(l) > at) ?? all[0]
+  if (found) choose(found.line)
 }
 const tightenAll = () => { draft.tighten(earlyLines.value) }
 // a line left out (heard, but not sung) or sung again - saved at once, as bun run timing --off / --on does it
@@ -78,8 +86,8 @@ const FILTERS = computed(() => [
   ...(outdated.value.size ? [{value: 'old', label: `Prompt old (${outdated.value.size})`}] : []),
 ] as const)
 const filter = ref<LineFilter>('all')
-const choose = (n: number) => {
-  draft.choose(n)
+const choose = (n: number, extend = false) => {
+  draft.choose(n, extend)
   editor.value?.focus()
 }
 
@@ -133,7 +141,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="split view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
+  <div class="split view" :inert="saving.pending.value" :aria-busy="saving.pending.value" @keydown.capture="timingTools?.key($event)">
     <div class="scrollpage">
       <PageBar title="When the lyrics are sung"><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /></PageBar>
       <div class="tedit-wrap">
@@ -141,7 +149,7 @@ onMounted(() => {
           <template v-if="draft.line.value">
             <b>{{ draft.line.value.text }}</b>
             <span class="muted num">{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span>
-            <span v-if="draft.line.value.estimated && !draft.isChanged(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess">estimated</span>
+            <span v-if="draft.unchecked(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess">estimated</span>
             <span v-if="draft.isChanged(draft.line.value)" class="chip" style="color: var(--accent)">moved</span>
             <span v-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
             <span v-if="lead >= EARLY_FROM" class="chip stale" title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it.">starts {{ lead.toFixed(1) }} s early</span>
@@ -150,17 +158,20 @@ onMounted(() => {
           <div class="spacer" />
           <button v-if="draft.line.value" class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
           <button v-if="draft.line.value && lead >= EARLY_FROM" class="btn" title="Move the start of the first word to where the singing begins" @click="draft.tighten(new Map([[draft.line.value.line, lead]]))">Tighten the start</button>
-          <button v-if="draft.line.value && draft.crossing(draft.line.value).length" class="btn" title="Cut the part on the shorter side off the word, so that it is sung in one clip" @click="draft.clearCuts(draft.line.value)">Clear the cut</button>
+          <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
+          <button class="btn" @click="nextKind('cut')">Next cut</button>
           <button v-if="problems.length" class="btn" :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`" @click="nextProblem()">Next problem ({{ problems.length }})</button>
           <button v-if="draft.line.value" class="btn" :disabled="draft.edits.value.size > 0" :title="draft.edits.value.size ? 'Save the moved lines first' : draft.line.value.off ? 'The line is sung again: the clips it falls into sing it' : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'" @click="setOff(draft.line.value, !draft.line.value.off)">{{ draft.line.value.off ? 'Sing it again' : 'Leave the line out' }}</button>
           <button v-if="draft.line.value && draft.isChanged(draft.line.value)" class="btn" title="Back to the saved times" @click="draft.resetLine(draft.line.value)">Reset line</button>
           <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
+          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
           <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
         </div>
         <TimingEditor ref="editor" :view="view" :draft="draft" :peaks="peaks" :head="player.time.value" :playing="!!player.playing.value" @play="play" @stop="player.stop()" @next="nextProblem" />
+        <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
         <div>
-          <div v-if="draft.line.value && draft.crossing(draft.line.value).length" class="warn">A clip cut falls into {{ draft.crossing(draft.line.value).map(c => `"${c.word.text}"`).join(', ') }}: the word is then sung half in one clip, half in the next. Clear the cut above (it shortens the word), move it, or cut the song again on the right.</div>
+          <div v-if="draft.line.value && draft.crossing(draft.line.value).length" class="warn">A clip cut falls into {{ draft.crossing(draft.line.value).map(c => `"${c.word.text}"`).join(', ') }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing after listening.</div>
           <div v-if="draft.overlaps.value.length" class="warn">This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.</div>
         </div>
       </div>

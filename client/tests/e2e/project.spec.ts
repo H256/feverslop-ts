@@ -170,7 +170,7 @@ test('timing: a line moved by key, undone, moved again and saved', async ({page}
   await expect(page.getByText('1 line moved')).toHaveCount(0)
   await editorBox.press('Shift+ArrowRight')
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.5, end: 2.5}, {start: 2.5, end: 3.5}]}]})
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1.5, end: 2.5, estimated: true}, {start: 2.5, end: 3.5, estimated: true}]}]})
 })
 
 // what the review found: answers that come late, changes made while saving, a refusal in a question, a draft of another pick
@@ -354,7 +354,7 @@ test('timing: a first word that starts before its singing is said, tightened wit
   await expect(page.getByText('starts 0.4 s early')).toHaveCount(0)
   await expect(page.getByText('1 line moved')).toBeVisible()
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toEqual({lines: [{line: 0, words: [{start: 1.4, end: 2}, {start: 2, end: 3}]}]})
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1.4, end: 2, estimated: true}, {start: 2, end: 3}]}]})
 })
 
 test('timeline: the clips that are not rendered are marked and rendered with one button, asked first', async ({page}) => {
@@ -374,22 +374,112 @@ test('timeline: every clip can be rendered again in one go, asked first', async 
   await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-1', 'clip-2'], again: true}, servers: ['gpu']})
 })
 
-test('timing: a clip cut inside a word is cleared with one click, and the next problem key goes to the line that wants a look', async ({page}) => {
+test('timing: range editing exposes reversible split and review controls without destructive cut clearing', async ({page}) => {
   await page.goto(`${base}/p/music/demo/timing`)
   await page.locator('.tline-row').first().click()
-  // moved by 3.5 s: the cut at 5 s falls into the second word
-  for (let n = 0; n < 7; n++) await page.keyboard.press('Shift+ArrowRight')
-  await expect(page.locator('.warn').first()).toContainText('A clip cut falls into "')
-  await page.getByRole('button', {name: 'Clear the cut'}).click()
-  await expect(page.locator('.warn', {hasText: 'A clip cut falls'})).toHaveCount(0)
-  // one undo brings the cut back
-  await page.getByRole('button', {name: 'Undo'}).click()
-  await expect(page.locator('.warn', {hasText: 'A clip cut falls'}).first()).toBeVisible()
-  // the key N picks the next line that wants a look; the button says how many there are
-  await expect(page.getByRole('button', {name: /Next problem \(\d+\)/})).toBeVisible()
-  await page.locator('.tedit').focus()
-  await page.keyboard.press('n')
-  await expect(page.locator('.tedit-head b')).toBeVisible()
+  await expect(page.getByRole('button', {name: 'Clear the cut', exact: true})).toHaveCount(0)
+  await expect(page.getByRole('button', {name: 'Mark reviewed', exact: true})).toBeVisible()
+  await page.getByRole('button', {name: 'Group selection', exact: true}).click()
+  await expect(page.getByRole('button', {name: 'Collapse group', exact: true})).toBeVisible()
+  await page.getByRole('button', {name: 'Undo', exact: true}).click()
+  await page.getByRole('button', {name: 'Redo', exact: true}).click()
+  await expect(page.getByRole('button', {name: 'Collapse group', exact: true})).toBeVisible()
+  await page.getByRole('button', {name: 'Collapse group', exact: true}).click()
+  await expect(page.locator('.tword')).toHaveCount(1)
+  await page.getByRole('button', {name: 'Expand group', exact: true}).click()
+  await expect(page.locator('.tword')).toHaveCount(2)
+})
+
+test('timing: split, join and redo preserve the audible word and send structural data', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.locator('.tword').first().click({position: {x: 15, y: 30}})
+  await expect(page.getByText('1 word selected', {exact: true})).toBeVisible()
+  await page.getByText('Fit, split and shared boundary', {exact: true}).click()
+  await page.getByLabel('Split after character', {exact: true}).fill('2')
+  await page.getByLabel('Split time', {exact: true}).fill('1.5')
+  await page.getByRole('button', {name: 'Split word', exact: true}).click()
+  await expect(page.locator('.tword')).toHaveCount(3)
+  await page.getByRole('button', {name: 'Join parts', exact: true}).click()
+  await expect(page.locator('.tword')).toHaveCount(2)
+  await page.getByRole('button', {name: 'Undo', exact: true}).click()
+  await expect(page.locator('.tword')).toHaveCount(3)
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{text: 'He', start: 1, end: 1.5}, {text: 'llo', joined: true, start: 1.5, end: 2}, {text: 'night', start: 2, end: 3}]}]})
+})
+
+test('timing: fit previews a passage, keeps it unchecked and can undo in one step', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.getByText('Fit, split and shared boundary', {exact: true}).click()
+  await page.getByLabel('Fit start', {exact: true}).fill('3')
+  await page.getByLabel('Fit end', {exact: true}).fill('7')
+  await page.getByRole('button', {name: 'Preview fit', exact: true}).click()
+  await expect(page.getByText(/Preview \(anchors stay fixed\)/)).toContainText('Hello 3.00–5.00')
+  await page.getByRole('button', {name: 'Apply fit', exact: true}).click()
+  await expect(page.locator('.tword').first()).toHaveAttribute('title', /0:03.*0:05/)
+  await expect(page.locator('.tedit-head')).toContainText('estimated')
+  await page.getByRole('button', {name: 'Undo', exact: true}).click()
+  await expect(page.locator('.tword').first()).toHaveAttribute('title', /0:01.*0:02/)
+  await page.screenshot({path: 'test-results/timing-editor.png', fullPage: true})
+})
+
+test('timing: shift-select words and move them together without losing the gap', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.locator('.tword').first().click({position: {x: 15, y: 30}})
+  await page.locator('.tword').nth(1).click({modifiers: ['Shift'], position: {x: 15, y: 30}})
+  await expect(page.getByText('2 words selected', {exact: true})).toBeVisible()
+  await page.locator('.tedit').press('Shift+ArrowRight')
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1.5, end: 2.5}, {start: 2.5, end: 3.5}]}]})
+})
+
+test('timing: the whole-line bar moves every word and keeps the viewport still during dragging', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.locator('.tword').first().click({position: {x: 15, y: 30}})
+  const bar = await page.locator('.tline').boundingBox()
+  const cutBefore = await page.locator('.tcut').first().evaluate(e => e.getBoundingClientRect().x)
+  await page.mouse.move(bar!.x + 20, bar!.y + 8)
+  await page.mouse.down()
+  await page.mouse.move(bar!.x + 55, bar!.y + 8, {steps: 5})
+  expect(await page.locator('.tcut').first().evaluate(e => e.getBoundingClientRect().x)).toBeCloseTo(cutBefore, 1)
+  await page.mouse.up()
+  await expect(page.getByText('2 words selected', {exact: true})).toBeVisible()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  const body = posted.find(p => p.path === 'timing')?.body as {lines: {words: {start: number, end: number}[]}[]}
+  const words = body.lines[0]!.words
+  expect(words[0]!.start).toBeGreaterThan(1)
+  expect(words[1]!.start - words[0]!.start).toBeCloseTo(1, 2)
+  expect(words[0]!.end).toBeCloseTo(words[1]!.start, 2)
+})
+
+test('timing: listening marks exactly one onset per key, pauses and applies an offset', async ({page}) => {
+  await page.addInitScript(() => {
+    class FakeAudio {
+      dataset: Record<string, string> = {}; currentTime = 0; paused = true; ended = false; playbackRate = 1; preservesPitch = true
+      constructor(_src: string) { (window as unknown as {testAudio: FakeAudio}).testAudio = this }
+      play() { this.paused = false; return Promise.resolve() }
+      pause() { this.paused = true }
+    }
+    window.Audio = FakeAudio as unknown as typeof Audio
+  })
+  await page.route('**/api/timing', route => route.request().method() === 'POST' ? route.fallback() : route.fulfill({json: {timing: {
+    duration: 10, lines: [{line: 0, section: 'Verse', text: 'Hello night', words: [{text: 'Hello', start: 1, end: 2}, {text: 'night', start: 2, end: 3}], estimated: true, byHand: false, beats: []}],
+    cuts: [{id: 'clip-1', start: 0, end: 10}], beats: [], unplanned: [], outdated: [], audio: {file: 'vocals.wav', v: 1},
+  }}}))
+  await page.goto(`${base}/p/music/demo/timing`)
+  await page.getByText('Listen and mark onsets', {exact: true}).click()
+  await page.getByRole('button', {name: 'Start marking', exact: true}).click()
+  const time = (t: number) => page.evaluate(t => { (window as unknown as {testAudio: {currentTime: number}}).testAudio.currentTime = t }, t)
+  await time(1.2); await page.keyboard.press('m')
+  await expect(page.getByRole('status')).toContainText('1/3 marks')
+  await page.keyboard.press('Space')
+  await expect(page.getByRole('button', {name: 'Resume', exact: true})).toBeVisible()
+  await page.keyboard.press('Space')
+  await time(2.2); await page.keyboard.press('m')
+  await time(3.2); await page.keyboard.press('m')
+  await page.getByLabel('Reaction offset (ms)').fill('200')
+  await page.getByRole('button', {name: 'Apply marks', exact: true}).click()
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1, end: 2, anchor: true, estimated: true}, {start: 2, end: 3, anchor: true, estimated: true}]}]})
 })
 
 test('timeline: the AI marker is put on a finished video, from the settings of the project, changed in the question', async ({page}) => {

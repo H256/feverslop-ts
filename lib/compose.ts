@@ -1016,10 +1016,10 @@ function spread<T>(items: T[], k: number, n: number): T[] {
     return to > from ? items.slice(from, to) : [items[Math.min(from, items.length - 1)]!]
 }
 
-// the guide: basic punctuation only, every line ends with . ? or !
+// Basic punctuation; a continuation fragment keeps its open hyphen instead of a full stop.
 function normalizeLyric(line: string) {
     const clean = line.replace(/\.{2,}|…/g, '.').replace(/[~*]+/g, '').replace(/([!?.,])\1+/g, '$1').trim().replace(/[,;:]+$/, '')
-    return /[.?!]$/.test(clean) ? clean : `${clean}.`
+    return /[.?!-]$/.test(clean) ? clean : `${clean}.`
 }
 
 export const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
