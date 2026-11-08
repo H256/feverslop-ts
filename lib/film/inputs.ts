@@ -11,12 +11,12 @@ import {readInput} from "../inputs.ts";
 export const filmMode = async (dir: string): Promise<FilmMode> => await readInput(dir, 'screenplay.txt') ? 'screenplay' : 'idea'
 
 /** Every input and setting of a film with the steps an edit of it redoes. */
-export async function filmInputs(dir: string, config: FilmConfig): Promise<Record<string, FilmInput>> {
+export async function filmInputs(dir: string, config: FilmConfig & {targetDurationSet?: boolean}): Promise<Record<string, FilmInput>> {
     return {
         'idea.txt': {value: await readInput(dir, 'idea.txt'), steps: ['brief']},
         'screenplay.txt': {value: await readInput(dir, 'screenplay.txt'), steps: ['brief']},
         dialogueLanguage: {value: config.dialogueLanguage, steps: ['brief']},
-        targetDuration: {value: String(config.targetDuration), steps: ['outline', 'coverage']},
+        targetDuration: {value: `${config.targetDuration}:${config.targetDurationSet === true}`, steps: ['outline', 'coverage']},
         'style.txt': {value: await readInput(dir, 'style.txt'), steps: ['lookBrief']},
         subtitles: {value: config.subtitles, steps: ['subtitles']},
         // designed views of the places change what the coverage is planned against

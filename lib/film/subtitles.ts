@@ -6,6 +6,8 @@ import {dialogueOf, LEAD_IN_SEC} from "./coverage.ts";
 import type {FilmClipRequest} from "./compose.ts";
 import {speechSeconds} from "./screenplay.ts";
 import type {Screenplay} from "./types.ts";
+import {secondsAt} from '../frames.ts';
+import type {AssemblyCuts} from './timeline.ts';
 
 // Subtitles of the film: <id>.srt and a track in the mp4. The text is the translation of a line - from the screenplay itself ("script"), or
 // translated by the language model into the language in config.json (subtitles). The timing is an estimate - the clip starts a line
@@ -34,14 +36,15 @@ export function subtitleTexts(screenplay: Screenplay, translated: Record<string,
  * The cues of the film. starts: the second of the film every clip starts at. A line spoken over several clips (a long line cut at its sentence
  * ends) is one cue from the start of its first part to the end of its last.
  */
-export function subtitleCues(clips: FilmClipRequest[], starts: number[], texts: Record<string, string>): Cue[] {
+export function subtitleCues(clips: FilmClipRequest[], starts: number[], texts: Record<string, string>, cuts?: AssemblyCuts): Cue[] {
     const spans = new Map<string, Cue>()
     clips.forEach((clip, i) => {
-        const clipEnd = starts[i]! + clip.seconds
+        const skipped = cuts ? secondsAt(cuts.skipped[i]!) : 0
+        const clipEnd = starts[i]! + (cuts ? secondsAt(cuts.used[i]! - cuts.skipped[i]!) : clip.seconds)
         for (const line of clip.dialogue) {
             const text = texts[lineKey(clip.sceneId, line.line)]
             if (!text) continue
-            const start = starts[i]! + line.at + LEAD_IN_SEC
+            const start = starts[i]! + Math.max(0, line.at + LEAD_IN_SEC - skipped)
             const end = Math.min(clipEnd, start + Math.max(1, speechSeconds(line.text) - 0.5))
             const known = spans.get(lineKey(clip.sceneId, line.line))
             spans.set(lineKey(clip.sceneId, line.line), known ? {start: Math.min(known.start, start), end: Math.max(known.end, end), text} : {start, end, text})

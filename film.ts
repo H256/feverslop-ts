@@ -587,7 +587,7 @@ async function planClips() {
         totalFrames: clips.reduce((sum, c) => sum + c.frames, 0),
         clips: requests.map(r => ({id: r.id, scene: r.sceneId, frameStart: r.frameStart, frames: r.frames, seconds: r.seconds, shots: r.shots.length, dialogue: r.dialogue.length, ...(r.startsFrom ? {startsFrom: r.startsFrom} : {}), request: `clips/${r.id}.json`})),
     }, null, 2))
-    await Bun.write(join(outputDir, 'timeline.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
+    await Bun.write(join(outputDir, 'timeline-plan.edl'), timelineEdl(screenplay.title, requests.map(r => ({id: r.id, frames: r.frames, startsFrom: r.startsFrom}))))
     await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
     for (const request of requests) log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
     log.step('Clips', `${clips.length} ${styles.muted(`· ${secondsAt(clips.reduce((sum, c) => sum + c.frames, 0)).toFixed(1)}s · ${requests.reduce((sum, r) => sum + r.dialogue.length, 0)} dialogue lines · requests in ${clipRequestsIn(outputDir)}`)}`)
@@ -714,7 +714,8 @@ if (render.has('final') && args.preview) {
             return Object.fromEntries(lines.flatMap(l => typeof answer[l.key] === 'string' && (answer[l.key] as string).trim() ? [[l.key, (answer[l.key] as string).trim()]] : []))
         })
     }
-    const cues = subtitleCues(selected, result.starts, subtitleTexts(screenplay, translated, config.subtitles))
+    await Bun.write(join(film.dir, 'output', 'timeline.edl'), timelineEdl(screenplay.title, selected, result))
+    const cues = subtitleCues(selected, result.starts, subtitleTexts(screenplay, translated, config.subtitles), result)
     if (cues.length) {
         const srt = target.replace(/\.mp4$/, '.srt')
         await Bun.write(srt, toSrt(cues))

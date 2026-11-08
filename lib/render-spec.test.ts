@@ -50,6 +50,14 @@ describe('picture and sheet specs', () => {
 })
 
 describe('clip specs', () => {
+    test('music continuation inputs invalidate cached renders (#669)', () => {
+        const dir = project()
+        const request = {id: 'slot-002', prompt: 'p', frames: 100, startsFrom: 'slot-001', assets: {pictures: [], audio: []}}
+        const config = {...video, pinStartFrame: false, contextFrames: 0}
+        const base = specId(clipSpec(request, dir, config))
+        expect(specId(clipSpec(request, dir, {...config, pinStartFrame: true}))).not.toBe(base)
+        expect(specId(clipSpec(request, dir, {...config, contextFrames: 22}))).not.toBe(base)
+    })
     const clip = (extra: Record<string, unknown> = {}) => ({
         id: 'slot-002', prompt: 'p', frames: 100, startsFrom: undefined as string | undefined,
         assets: {pictures: [{kind: 'character', file: 'assets/a.png'}, {kind: 'frame', file: 'assets/f.png'}], audio: [{stem: 'drums', songStart: 1, songEnd: 2}]},

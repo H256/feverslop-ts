@@ -31,9 +31,16 @@ export function nextViewNumber(projectDir: string, locationId: string): number {
 export function extraViews(projectDir: string, locationId: string): { name: string, shows: string, file: string }[] {
     const folder = sheetViews(sequenceSheetDir('location', locationId))
     if (!existsSync(join(projectDir, folder))) return []
-    return readdirSync(join(projectDir, folder)).filter(f => /^view-\d+\.png$/.test(f)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5))).map(f => {
-        const {name, shows} = JSON.parse(readFileSync(join(projectDir, folder, `${f}.json`), 'utf8')) as { name: string, shows: string }
-        return {name, shows, file: `${folder}/${f}`}
+    return readdirSync(join(projectDir, folder)).filter(f => /^view-\d+\.png$/.test(f)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5))).flatMap(f => {
+        const sidecar = join(projectDir, folder, `${f}.json`)
+        try {
+            const value = JSON.parse(readFileSync(sidecar, 'utf8'))
+            if (typeof value?.name !== 'string' || typeof value?.shows !== 'string' || !value.name.trim() || !value.shows.trim()) throw new Error('name and shows must be nonempty strings')
+            return [{name: value.name, shows: value.shows, file: `${folder}/${f}`}]
+        } catch {
+            log.warn(`Skipping extra view ${folder}/${f}: repair its missing or invalid sidecar ${sidecar}`)
+            return []
+        }
     })
 }
 

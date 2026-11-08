@@ -2,8 +2,21 @@ import {describe, expect, test} from 'bun:test';
 import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {nextViewNumber, viewRoute} from './views.ts';
+import {extraViews, nextViewNumber, viewRoute} from './views.ts';
 import {sequenceSheetDir, sheetViews} from '../sequenceSheet.ts';
+
+test('unusable extra-view sidecars do not hide valid views (#654)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'extra-views-'))
+    try {
+        const folder = join(dir, sheetViews(sequenceSheetDir('location', 'stage')))
+        mkdirSync(folder, {recursive: true})
+        for (const n of [6, 7, 8, 9]) writeFileSync(join(folder, `view-${n}.png`), 'picture')
+        writeFileSync(join(folder, 'view-7.png.json'), '{')
+        writeFileSync(join(folder, 'view-8.png.json'), JSON.stringify({name: 42}))
+        writeFileSync(join(folder, 'view-9.png.json'), JSON.stringify({name: 'rear', shows: 'door'}))
+        expect(extraViews(dir, 'stage').map(({name, shows}) => ({name, shows}))).toEqual([{name: 'rear', shows: 'door'}])
+    } finally { rmSync(dir, {recursive: true, force: true}) }
+})
 test('new view numbers start after the sheet and preserve surviving views after deletion', () => {
     const dir = mkdtempSync(join(tmpdir(), 'view-number-'))
     try {

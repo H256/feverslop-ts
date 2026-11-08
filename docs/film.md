@@ -114,7 +114,7 @@ directions (a lost line stops the run, `--allow-import-gaps` goes on anyway).
 | 8c | `locationViews` | Only with `"locationViews": true`: the floor plan and the five views of every location sheet, designed for the place - see [Location views](#location-views) | cast, locationDescriptions |
 | 8d | `props` | The things the story names that people handle and that come back (at most six), each with a look put together from the thing alone - see [Props](#props) | screenplay, cast |
 | 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
-| 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json`, `output/timeline.edl` (the film as an edit decision list for an editor: DaVinci Resolve, Premiere, … - the clips cut as the assembled film cuts them) | coverage |
+| 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json`, `output/timeline-plan.edl` (the planned edit decision list for an editor: DaVinci Resolve, Premiere, … - the clips cut as the assembled film cuts them) | coverage |
 | 10a | –          | Only with `--render=…` and `sequenceSheets`: once a location's sheet is rendered, a vision model reads what each of its five views shows (`sheetViews`), and the LLM chooses the view of every shot (`shotViews`) - cached in `project.json`, see [Location views](#location-views) | coverage, rendered sheets |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
 | 12a | `subtitles` | Only with `--render=final` and `"subtitles": "en"` (a language code) in config.json: every line that is not in that language, translated | screenplay |
@@ -349,3 +349,5 @@ A film planned before has props after its next run, but its shots name them only
 
 1. A generated score (the music-video pipeline can make music)
 2. Tests for the parts that need servers (LLM, ComfyUI)
+
+Assembly writes `output/timeline.edl` from the actual cuts, including extra dialogue frames and continuation trimming. Planning leaves this assembled EDL intact.
