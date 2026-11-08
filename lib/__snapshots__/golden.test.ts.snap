@@ -12750,6 +12750,11 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
               ],
             ],
             "4f5471ea886d1a4e",
+            [
+              "continuation",
+              true,
+              0,
+            ],
           ],
         },
         "workflow": "h3-ref2video",
@@ -13454,7 +13459,7 @@ exports[`rendering and joining, with ffmpeg music video: a clip and one that goe
       "workflow": "h3-ref2video",
     },
     {
-      "fingerprint": "d40bfb8487b97b02",
+      "fingerprint": "efb2f9968f7a3cc4",
       "frameStart": 372,
       "frames": 48,
       "renderedFrames": 56,
@@ -14380,6 +14385,11 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
               ],
             ],
             "af8dcbc7202299dc",
+            [
+              "continuation",
+              true,
+              22,
+            ],
           ],
         },
         "workflow": "h3-ref2video-2pass",
@@ -15230,7 +15240,7 @@ exports[`rendering and joining, with ffmpeg music video: context frames, two-pas
     {
       "aspect": "9:16",
       "contextFrames": 22,
-      "fingerprint": "33821467e030b92",
+      "fingerprint": "eccd0b977691a2f3",
       "frameStart": 372,
       "frames": 48,
       "renderedFrames": 48,
@@ -19817,6 +19827,11 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
               ],
             ],
             "4f5471ea886d1a4e",
+            [
+              "continuation",
+              true,
+              22,
+            ],
           ],
         },
         "workflow": "h3-ref2video",
@@ -20528,7 +20543,7 @@ exports[`rendering and joining, with ffmpeg music video: the backdrop check afte
     },
     {
       "contextFrames": 22,
-      "fingerprint": "d40bfb8487b97b02",
+      "fingerprint": "346040fdd7a99b93",
       "frameStart": 372,
       "frames": 48,
       "renderedFrames": 48,
