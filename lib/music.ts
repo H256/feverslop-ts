@@ -42,12 +42,35 @@ export function projectLyricSections(lyrics: string, analyzed?: string[]): Lyric
     return !analyzedWith(sections) && analyzedWith(perTag) ? perTag : sections
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+export function musicMapProblem(value: unknown): string | undefined {
+    if (!isRecord(value)) return 'expected an object'
+    if (!isFiniteNumber(value.bpm) || !isFiniteNumber(value.durationSec)) return 'bpm and durationSec must be finite numbers'
+    if (!Array.isArray(value.downbeats) || !value.downbeats.every(isFiniteNumber)) return 'downbeats must be an array of finite numbers'
+    if (!Array.isArray(value.barEnergy) || !value.barEnergy.every(isFiniteNumber)) return 'barEnergy must be an array of finite numbers'
+    if (!Array.isArray(value.sections) || !value.sections.every(section => isRecord(section) && typeof section.label === 'string' && isFiniteNumber(section.start) && isFiniteNumber(section.end) && isFiniteNumber(section.energy))) return 'sections must contain {label, start, end, energy}'
+    return undefined
+}
+
+export function transcriptProblem(value: unknown): string | undefined {
+    if (!isRecord(value) || !Array.isArray(value.words)) return 'expected an object with a words array'
+    if (!value.words.every(word => isRecord(word) && typeof word.text === 'string' && isFiniteNumber(word.start) && isFiniteNumber(word.end) && isFiniteNumber(word.probability))) return 'words must contain {text, start, end, probability}'
+    if (value.activity !== undefined && (!Array.isArray(value.activity) || !value.activity.every(range => isRecord(range) && isFiniteNumber(range.start) && isFiniteNumber(range.end)))) return 'activity must contain {start, end} ranges'
+    return undefined
+}
+
 // the Python helpers by absolute path: the run may be started from any working directory
 const pythonTool = (name: string) => join(import.meta.dir, '..', 'tools', name)
 
 export async function analyzeSong(songFile: string, labels: string[]): Promise<MusicMap> {
     const stdout = await runProcess(['uv', 'run', '--locked', pythonTool('analyze_song.py'), songFile, JSON.stringify(labels)], {errorMessage: err => `Song analysis failed:\n${err}`})
-    return JSON.parse(stdout)
+    let result: unknown
+    try { result = JSON.parse(stdout) } catch (error) { throw new Error(`Song analysis returned invalid JSON: ${(error as Error).message}`) }
+    const problem = musicMapProblem(result)
+    if (problem) throw new Error(`Song analysis returned invalid data: ${problem}`)
+    return result as MusicMap
 }
 
 // The song's stems as WAV files in <projectDir>/stems/, paths relative to the project. demucs htdemucs_ft gives vocals,
@@ -72,7 +95,12 @@ export async function separateInstrumentStems(songFile: string, projectDir: stri
 // Whisper (large-v3, large-v3-turbo on a CPU - see tools/vocals.py) on the vocals stem, word timestamps, the lyrics as prompt
 export async function transcribeVocals(vocalsFile: string, language: string, lyricsFile: string): Promise<Transcript> {
     const {whisper} = await loadWhisperSettings()
-    return JSON.parse(await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile, ...whisperOptions(whisper)], 'Transcription'))
+    const stdout = await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile, ...whisperOptions(whisper)], 'Transcription')
+    let result: unknown
+    try { result = JSON.parse(stdout) } catch (error) { throw new Error(`Transcription returned invalid JSON: ${(error as Error).message}`) }
+    const problem = transcriptProblem(result)
+    if (problem) throw new Error(`Transcription returned invalid data: ${problem}`)
+    return result as Transcript
 }
 
 // Instrument activity: where a stem is actually played - grounds a character's on-screen prop use (a guitarist's playing)

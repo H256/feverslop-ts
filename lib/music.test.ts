@@ -1,11 +1,23 @@
 import {splitBySinger} from './singing-parts.ts';
 import {describe, expect, test} from "bun:test";
-import {activityRanges, buildTimeline, chooseClipStarts, splitAtVocalGaps, framePower, isFightBeat, parseLyricSections, projectLyricSections, splitFightSlots} from "./music.ts";
+import {activityRanges, buildTimeline, chooseClipStarts, splitAtVocalGaps, framePower, isFightBeat, musicMapProblem, parseLyricSections, projectLyricSections, splitFightSlots, transcriptProblem} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
 // bars every 3 s; a word runs 5.5-6.5 (over the boundary at 6) and a pause lies at 9
 const timing = {lines: [{line: 0, section: 's', sectionIndex: 0, text: 'a b', start: 3.2, end: 8.5, confidence: 1, words: [word('a', 3.2, 5.0), word('b', 5.5, 6.5), word('c', 6.8, 8.5)]}]} as unknown as LyricsTiming
+
+describe('Python music helper output contracts', () => {
+    test('validates music analysis output before returning it for caching', () => {
+        expect(musicMapProblem({bpm: 120, durationSec: 60, downbeats: [0, 2], barEnergy: [0.1], sections: [{label: 'Verse', start: 0, end: 30, energy: 0.1}]})).toBeUndefined()
+        expect(musicMapProblem({bpm: 120, durationSec: 60, downbeats: [0, 'bad'], barEnergy: [], sections: []})).toContain('downbeats')
+    })
+    test('validates transcript words and optional activity ranges', () => {
+        expect(transcriptProblem({words: [{text: 'hello', start: 0, end: 1, probability: 0.9}], activity: [{start: 0, end: 1}]})).toBeUndefined()
+        expect(transcriptProblem({words: [{start: 0, end: 1, probability: 0.9}]})).toContain('words')
+        expect(transcriptProblem({words: [], activity: [{start: 'bad', end: 1}]})).toContain('activity')
+    })
+})
 
 describe('splitAtVocalGaps', () => {
     const sung = (words: [number, number][]) => ({lines: [{line: 0, section: 's', sectionIndex: 0, text: '', start: words[0]![0], end: words.at(-1)![1], confidence: 1, words: words.map(([s, e]) => word('x', s, e))}]}) as unknown as LyricsTiming
