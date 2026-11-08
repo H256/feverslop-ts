@@ -12,7 +12,10 @@ permissions:
   contents: write
 
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
   release:
+    needs: checks
     # Forgejo Actions reads .github/workflows too - this job is for GitHub only.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest

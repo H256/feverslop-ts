@@ -54,6 +54,9 @@ changes the plan, `projectInputs`.
 
 ## Tests and checks
 
+The Checks workflow runs the backend tests and typecheck on pushes and pull requests. Release publication depends on those
+checks, so create version tags only from green builds.
+
 ### Workspace startup without a configured machine
 
 ```bash
