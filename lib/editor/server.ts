@@ -201,7 +201,7 @@ export function eventCursor(request: Request, after: number) {
 }
 
 /** The lines of a run as they come, as server-sent events: a page can come and go, and follow a run it did not start. */
-function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number) {
+export function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number) {
     let after = eventCursor(request, from)
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream({
