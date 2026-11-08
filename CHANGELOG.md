@@ -4,7 +4,7 @@ One section per release. The section of a tag becomes its GitHub release (`.gith
 
 ## v0.8.0 – faster timing correction, editable direction, and finishing tools
 
-_Release prepared; publication pending._
+_2026-11-08_
 
 Correct inaccurate lyric timing a passage at a time, mark word starts while listening, and split a word only when a clip boundary really needs it. Planned performances can be adjusted after planning, reference pictures can be supplied or rendered again, and finished videos can receive an intro, title card, credits and an AI marker.
 
