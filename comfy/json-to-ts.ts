@@ -65,7 +65,9 @@ function renderValue(classType: string, input: string, value: unknown): string {
     const spec = inputSpec(classType, input)
     if (isLink(value)) {
         const [id, slot] = value
-        const source = objectInfo[graph[id]!.class_type]
+        // a link to a node that is not in the file (deleted, or not exported): leave a marker to fix by hand
+        if (!graph[id]) return `undefined as never /* TODO: link to node ${id}, which is not in the workflow file */`
+        const source = objectInfo[graph[id].class_type]
         const outputName = source?.output_name?.[slot] ?? source?.output?.[slot]
         if (!outputName) return `${variable(id)} /* output ${slot}: unknown node */`
         const ref = `${variable(id)}${access(outputName)}`
