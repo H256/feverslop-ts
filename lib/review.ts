@@ -49,7 +49,11 @@ export async function reviewed<D, S extends keyof D & string, K extends S>(proje
     }
 }
 
-const editorCommand = () => process.env.VISUAL || process.env.EDITOR || 'vi'
+const editorCommand = () => process.env.VISUAL || process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi')
+
+/** The command that opens `file` in `editor`: through sh, so an editor with arguments ("code -w") works as it is set - Windows has no sh, there the words are split at spaces. */
+export const editorArgv = (editor: string, file: string, platform: string = process.platform): string[] =>
+    platform === 'win32' ? [...editor.trim().split(/\s+/), file] : ['sh', '-c', `${editor} "$1"`, 'sh', file]
 
 /** Opens the value in the editor: text as text, everything else as JSON - read back and checked; undefined when unchanged or broken. */
 async function editValue<V>(name: string, value: V): Promise<V | undefined> {
@@ -59,8 +63,13 @@ async function editValue<V>(name: string, value: V): Promise<V | undefined> {
     try {
         const before = asText ? value as string : JSON.stringify(value, null, 2)
         await Bun.write(file, before + '\n')
-        // through the shell, so an editor with arguments ("code -w") works as it is set
-        const editor = Bun.spawn(['sh', '-c', `${editorCommand()} "$1"`, 'sh', file], {stdio: ['inherit', 'inherit', 'inherit']})
+        let editor
+        try {
+            editor = Bun.spawn(editorArgv(editorCommand(), file), {stdio: ['inherit', 'inherit', 'inherit']})
+        } catch (e) {
+            log.warn(`cannot open ${editorCommand()} (${(e as Error).message}) - set VISUAL or EDITOR; ${name} stays as it was`)
+            return undefined
+        }
         if (await editor.exited !== 0) {
             log.warn(`${editorCommand()} ended with code ${editor.exitCode} - ${name} stays as it was`)
             return undefined

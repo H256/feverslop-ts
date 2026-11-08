@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {checkShape, reviewed} from "./review.ts";
+import {checkShape, editorArgv, reviewed} from "./review.ts";
 
 describe('an edited step keeps its shape', () => {
     test('a list stays a list', () => {
@@ -28,5 +28,14 @@ describe('reviewed with a film', () => {
         // --review, but taken from project.json: not in film.generated
         expect(await reviewed(film, true, 'lookBrief', async () => film.data.lookBrief!, value => shown.push(value))).toBe('cached look')
         expect(shown).toEqual(['new summary', 'cached look'])
+    })
+})
+
+describe('the editor command', () => {
+    test('goes through sh where there is one, so editor arguments work', () => {
+        expect(editorArgv('code -w', '/t/x.json', 'linux')).toEqual(['sh', '-c', 'code -w "$1"', 'sh', '/t/x.json'])
+    })
+    test('is split at spaces on Windows, which has no sh', () => {
+        expect(editorArgv('code  -w', 'C:/t/x.json', 'win32')).toEqual(['code', '-w', 'C:/t/x.json'])
     })
 })
