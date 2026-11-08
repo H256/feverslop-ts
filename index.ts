@@ -46,7 +46,7 @@ import {projectInputs, songFileOf, stepUsed, readInputFile} from "./lib/inputs.t
 import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from "./lib/render-state.ts";
 import {reviewed} from "./lib/review.ts";
 import {parseUntil, stopAfter} from "./lib/stages.ts";
-import {CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
+import {applyLibraryText, CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
 import {type LibraryAsset, libraryDir} from "./lib/library.ts";
 import {type AssetKind} from "./lib/asset-import.ts";
 import {redoAfter, unplannedBeats} from "./lib/project.ts";
@@ -458,9 +458,7 @@ function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>
         if (!key.startsWith(`${kind}:`)) continue
         const id = key.slice(kind.length + 1)
         const value = pick(asset)
-        if (value === undefined || JSON.stringify(values[id]) === JSON.stringify(value)) continue
-        values[id] = value
-        castChanged.add(step)
+        if (applyLibraryText(values, id, value)) castChanged.add(step)
     }
 }
 

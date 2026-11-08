@@ -25,6 +25,12 @@ export type CastEntry = { kind: AssetKind, id: string, libraryId: string }
 export type CastingCopies = Record<string, { library: string, fingerprint: string }>
 export const copyKey = (kind: AssetKind, id: string) => `${kind}:${id}`
 
+/** Applies one library-authored text only when it differs, and reports whether a cached value changed. */
+export function applyLibraryText<T>(values: Record<string, T>, id: string, value: T | undefined): boolean {
+    if (value === undefined || JSON.stringify(values[id]) === JSON.stringify(value)) return false
+    values[id] = value
+    return true
+}
 /** Every character and place of the cast as "project:<id>" - what the file starts as. */
 export const defaultCasting = (cast: Cast): CastingFile => ({
     characters: Object.fromEntries(cast.characters.map(c => [c.id, `project:${c.id}`])),
@@ -177,10 +183,3 @@ export async function castFromLibrary({dir, cast, library, copies, again}: {
     for (const entry of copied) log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
     return {entries: casting.entries, assets, copies: next, changed: copied.length > 0 || dropped.length > 0}
 }
-
-/** A library asset's texts for the steps that would otherwise write them: look, description, background, floor plan. */
-export const libraryTexts = (asset: LibraryAsset) => ({
-    description: asset.description,
-    ...(asset.anchors ? {anchors: asset.anchors} : {}),
-    ...(asset.layout ? {layout: asset.layout} : {}),
-})

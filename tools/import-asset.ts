@@ -23,6 +23,7 @@ import {loadSettings} from "../lib/settings.ts";
 import {answer as wizardAnswer} from "../lib/wizard.ts";
 import {sheetAnchor} from "../lib/sequenceSheet.ts";
 import {clipRequestsDir} from "../lib/previous-output.ts";
+import {applyLibraryText} from "../lib/casting.ts";
 cli('import-asset')
 
 // what a cancel after the copy must say: the pictures are already swapped, only project.json is untouched
@@ -154,21 +155,18 @@ const mode = answer(await p.select({
 let description = mode === 'source' ? theirs : mode === 'keep' ? ours : await fromPicture()
 if (!description) description = answer(await p.text({message: 'Type the description (leave empty to keep the current one)'})) || ours
 const changed: StepName[] = []
-if (description && description !== ours) {
-    descriptions[target.id] = description
+if (description && applyLibraryText(descriptions, target.id, description)) {
     changed.push(target.kind === 'character' ? 'characterDescriptions' : 'locationDescriptions')
 }
 
 // a place's background features and floor plan describe its picture too - taken along when the source has them
 if (target.kind === 'location') {
     const anchor = source.anchors(sourceId)
-    if (anchor && anchor !== data.locationAnchors?.[target.id]) {
-        (data.locationAnchors ??= {})[target.id] = anchor
+    if (anchor && applyLibraryText(data.locationAnchors ??= {}, target.id, anchor)) {
         changed.push('locationAnchors')
     }
     const layout = source.floorPlan(sourceId)
-    if (layout && JSON.stringify(layout) !== JSON.stringify(data.locationLayouts?.[target.id])) {
-        (data.locationLayouts ??= {})[target.id] = layout
+    if (layout && applyLibraryText(data.locationLayouts ??= {}, target.id, layout)) {
         changed.push('locationLayouts')
     }
     if (anchor || layout) log.info(`Took ${[anchor && 'the background features', layout && 'the floor plan with its views'].filter(Boolean).join(' and ')} along from ${source.label}`)

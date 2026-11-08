@@ -2,7 +2,7 @@ import {afterEach, describe, expect, test} from "bun:test";
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
-import {CASTING_FILE, castFromLibrary, castingAfterCastChange, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
+import {applyLibraryText, CASTING_FILE, castFromLibrary, castingAfterCastChange, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
 
 const dirs: string[] = []
 const folder = (files: Record<string, string> = {}) => {
@@ -55,6 +55,14 @@ describe('casting.json', () => {
             'casting.json: "orcs" is a group - a group is made by the project, "library:kael-red" is not used',
         ])
     })
+})
+
+test('the shared library text rule compares before assigning', () => {
+    const values = {kael: {description: 'old'}}
+    expect(applyLibraryText(values, 'kael', {description: 'old'})).toBe(false)
+    expect(applyLibraryText(values, 'kael', {description: 'new'})).toBe(true)
+    expect(values.kael).toEqual({description: 'new'})
+    expect(applyLibraryText(values, 'kael', undefined)).toBe(false)
 })
 
 describe('copyCasting', () => {

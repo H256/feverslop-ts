@@ -29,7 +29,6 @@ export function assetIds(projectDir: string, kind: AssetKind): string[] {
     if (existsSync(sheets)) for (const d of readdirSync(sheets)) if (statSync(join(sheets, d)).isDirectory()) ids.add(d)
     return [...ids].sort()
 }
-
 // left behind by a render that did not finish, or the record of one - not part of a finished asset
 const unfinished = (file: string) => /\.(partial|pending)\b|\.vision(-\d+)?\.png$/.test(file)
 
@@ -58,10 +57,6 @@ export function copyPlan(sourceDir: string, source: AssetLayout, target: AssetLa
         })
 }
 
-/** The project-to-project plan of import-asset - see copyPlan. */
-export const importPlan = (sourceDir: string, sourceId: string, targetId: string, kind: AssetKind) =>
-    copyPlan(sourceDir, assetPaths(kind, sourceId), assetPaths(kind, targetId))
-
 /**
  * Copies an asset: the target's own files of it are put away in `<archiveDir>/old/attempts` first (nothing is deleted),
  * every copied file a render checks gets a pinned sidecar - the user's choice, never reported stale and never rendered
@@ -81,10 +76,4 @@ export function copyAsset(
         if (pin) writeFileSync(join(target.dir, `${to}.json`), JSON.stringify(pinnedSidecar(`copied from ${source.label}/${from}`), null, 2))
     }
     return {copied: plan.length, ...(putAway ? {putAway} : {})}
-}
-
-/** import-asset between two projects - see copyAsset. */
-export function importAsset(sourceDir: string, sourceLabel: string, sourceId: string, targetDir: string, targetId: string, kind: AssetKind) {
-    if (!copyPlan(sourceDir, assetPaths(kind, sourceId), assetPaths(kind, targetId)).length) throw new Error(`${sourceLabel} has no ${kind} "${sourceId}" in assets/`)
-    return copyAsset({dir: sourceDir, layout: assetPaths(kind, sourceId), label: sourceLabel}, {dir: targetDir, layout: assetPaths(kind, targetId), archiveName: targetId})
 }

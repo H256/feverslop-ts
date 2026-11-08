@@ -2,7 +2,7 @@ import {afterEach, describe, expect, test} from "bun:test";
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
-import {assetIds, importAsset, importPlan} from "./asset-import.ts";
+import {assetIds, assetPaths, copyAsset, copyPlan} from "./asset-import.ts";
 import {redoAfter} from "./project.ts";
 
 const dirs: string[] = []
@@ -26,10 +26,10 @@ const sheet = (id: string) => ({
     [`assets/sequence/characters/${id}/frames/frame_00.png`]: 'f0', [`assets/sequence/characters/${id}/frames/frame_01.png`]: 'f1',
 })
 
-describe('importPlan / importAsset', () => {
+describe('copyAsset - the shared production copy path', () => {
     test('every file of the asset, renamed to the target id - sidecars and unfinished renders left out', () => {
         const source = project({...sheet('kaelen'), 'assets/sequence/characters/kaelen/anchor.png.partial.png': 'x', 'assets/sequence/characters/kaelen/sequence.mp4.pending.json': '{}'})
-        expect(importPlan(source, 'kaelen', 'kael', 'character').map(f => [f.to, f.pin])).toEqual([
+        expect(copyPlan(source, assetPaths('character', 'kaelen'), assetPaths('character', 'kael')).map(f => [f.to, f.pin])).toEqual([
             ['assets/characters/kael.png', true],
             ['assets/sequence/characters/kael/anchor.png', true],
             ['assets/sequence/characters/kael/frames/frame_00.png', false],
@@ -40,7 +40,7 @@ describe('importPlan / importAsset', () => {
     test('copies with pinned sidecars and puts the old pictures away, deleting nothing', () => {
         const source = project(sheet('kaelen'))
         const target = project({...sheet('kael'), 'assets/sequence/characters/kael/frames/frame_05.png': 'old only'})
-        const done = importAsset(source, 'tides-a', 'kaelen', target, 'kael', 'character')
+        const done = copyAsset({dir: source, layout: assetPaths('character', 'kaelen'), label: 'tides-a'}, {dir: target, layout: assetPaths('character', 'kael'), archiveName: 'kael'})
         expect(done.copied).toBe(5)
         expect(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png'), 'utf8')).toBe('anchor')
         expect(JSON.parse(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png.json'), 'utf8'))).toEqual({source: 'user', pinned: true, note: 'copied from tides-a/assets/sequence/characters/kaelen/anchor.png'})
@@ -51,7 +51,7 @@ describe('importPlan / importAsset', () => {
     })
     test('a source without the asset is an error, nothing is touched', () => {
         const target = project(sheet('kael'))
-        expect(() => importAsset(project({}), 'empty', 'kaelen', target, 'kael', 'character')).toThrow('has no character "kaelen"')
+        expect(() => copyAsset({dir: project({}), layout: assetPaths('character', 'kaelen'), label: 'empty'}, {dir: target, layout: assetPaths('character', 'kael'), archiveName: 'kael'})).toThrow('has no finished pictures')
         expect(existsSync(join(target, 'assets/characters/kael.png'))).toBe(true)
     })
     test('assetIds: the ids with a picture or a sheet', () => {
