@@ -66,6 +66,10 @@ for b in sorted(candidates, key=lambda b: -novelty[b]):
         break
     if all(abs(b - c) >= 4 for c in chosen):
         chosen.append(b)
+if len(chosen) < len(labels) - 1:
+    # fewer section starts than labels would silently drop the last sections (and the song would be analyzed again on every run)
+    sys.exit(f"Song analysis: found only {len(chosen) + 1} section(s) in {n_bars} bars for {len(labels)} lyric sections - "
+             "the song is too short or its beat could not be tracked; merge sections in the lyrics or use a longer song")
 starts = [0.0] + [float(downbeats[b]) for b in sorted(chosen)]
 ends = starts[1:] + [duration]
 
