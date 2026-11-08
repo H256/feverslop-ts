@@ -259,8 +259,7 @@ anchor itself) - harmless, it's only ever read for the debug record of how a fil
 One thing to watch: the turnaround video's prompt still describes the character/location from this project's own
 generated text description (`characterDescriptions`/`locationDescriptions` in `project.json`), not from the image
 itself - a supplied anchor that looks very different from what that text says invites the same kind of
-identity-drift the video model shows when its picture and its prompt disagree (see the description-vs-picture fix
-in [PR #8](https://forgejo.elysium.lan/H256/feverslop-ts/pulls/8)). If you're carrying a character over into a
+identity-drift the video model shows when its picture and its prompt disagree. If you're carrying a character over into a
 different story, it's worth checking - and if needed editing by hand - that project's `characterDescriptions` entry
 so it actually matches the image you dropped in, before rendering.
 
