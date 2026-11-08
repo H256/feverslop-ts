@@ -6,12 +6,13 @@
 //   library/<characters|locations>/<id>/sheet/       anchor.png, sequence.mp4, frames/
 // A project always gets a copy (lib/asset-import.ts), so it stays complete without the library.
 
-import {existsSync, mkdirSync, readdirSync, writeFileSync} from "node:fs";
+import {closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync} from "node:fs";
 import {join, resolve} from "node:path";
 import type {AssetKind, AssetLayout} from "./asset-import.ts";
 import {log} from "./log.ts";
 import type {LocationLayout} from "./project.ts";
 import {readSettingsFile} from "./settings.ts";
+import {ownProcessIdentity, processAlive, processIdentity} from './process-identity.ts';
 
 export type LibraryAsset = {
     kind: AssetKind,
@@ -62,6 +63,62 @@ export function writeLibraryAsset(dir: string, asset: LibraryAsset) {
 /** Why the library takes no new asset of this id - it has one, and an asset there is never overwritten. Undefined: the id is free. */
 export async function libraryTaken(dir: string, kind: AssetKind, id: string): Promise<string | undefined> {
     if (await readLibraryAsset(dir, kind, id)) return `The library already has a ${kind} "${id}" (${join(dir, libraryFolder(kind, id))}) - it is never overwritten`
+}
+
+const localAssetLocks = new Map<string, Promise<void>>()
+
+/** Serializes creation of one library id across this process and other CLI processes. */
+export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: string, work: () => T | Promise<T>): Promise<T> {
+    const key = `${resolve(dir)}\n${kind}\n${id}`
+    const previous = localAssetLocks.get(key)
+    let releaseLocal!: () => void
+    const local = new Promise<void>(resolve => { releaseLocal = resolve })
+    localAssetLocks.set(key, local)
+    const lockDir = join(dir, '.locks')
+    const lockFile = join(lockDir, `${kind}-${id}.lock`)
+    try {
+        await previous
+        mkdirSync(lockDir, {recursive: true})
+        let acquired = false
+        for (let attempt = 0; attempt < 2 && !acquired; attempt++) {
+            let fd: number
+            try {
+                fd = openSync(lockFile, 'wx')
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+                let holder: {pid?: number, identity?: string} | undefined
+                try { holder = JSON.parse(readFileSync(lockFile, 'utf8')) }
+                catch { /* a writer may have created the file but not finished its record */ }
+                let fresh = false
+                try { fresh = Date.now() - statSync(lockFile).mtimeMs < 300_000 } catch { /* it disappeared */ }
+                const pid = Number.isSafeInteger(holder?.pid) && holder!.pid! > 0 ? holder!.pid : undefined
+                if (pid && processAlive(pid)) {
+                    const identity = processIdentity(pid)
+                    if (!holder?.identity || !identity || identity === holder.identity) {
+                        throw new Error(`library asset ${kind} "${id}" is being written by process ${pid}`)
+                    }
+                }
+                if (!holder && fresh) throw new Error(`library asset ${kind} "${id}" has a lock being initialized; retry shortly`)
+                rmSync(lockFile, {force: true})
+                continue
+            }
+            let writeError: unknown
+            try { writeSync(fd, JSON.stringify({pid: process.pid, identity: ownProcessIdentity()})) }
+            catch (error) { writeError = error }
+            finally { closeSync(fd) }
+            if (writeError) { rmSync(lockFile, {force: true}); throw writeError }
+            acquired = true
+        }
+        if (!acquired) throw new Error(`could not lock library asset ${kind} "${id}"`)
+        try {
+            const taken = await libraryTaken(dir, kind, id)
+            if (taken) throw new Error(taken)
+            return await work()
+        } finally { rmSync(lockFile, {force: true}) }
+    } finally {
+        releaseLocal()
+        if (localAssetLocks.get(key) === local) localAssetLocks.delete(key)
+    }
 }
 
 /**

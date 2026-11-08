@@ -7,12 +7,13 @@ import {log} from '../lib/log.ts';
 // usage: bun run create-asset <character|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]
 import * as p from "@clack/prompts";
 import {existsSync, mkdirSync, renameSync, rmSync, writeFileSync} from "node:fs";
+import {randomUUID} from "node:crypto";
 import {basename, dirname, join} from "node:path";
 import {type AssetKind, assetPaths, copyAsset} from "../lib/asset-import.ts";
 import {pictureAsset} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {characterViews, describeOrFail, visionFailed} from "../lib/describe-picture.ts";
-import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken} from "../lib/library.ts";
+import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken, withNewLibraryAsset} from "../lib/library.ts";
 import {ask, askJson, configureLlm} from "../lib/llm.ts";
 import {runProcess} from "../lib/process.ts";
 import {locationAnchorPrompt, locationLayoutPrompt} from "../lib/prompts.ts";
@@ -57,7 +58,7 @@ const settings = await loadSettings({projectModel: config.llm.model})
 configureLlm(settings.llm)
 
 // a project-shaped work folder: the renderer makes the sheet where a project has it, the result then goes into the library
-const work = join(library, '.work', `${kind}-${id}`)
+const work = join(library, '.work', `${kind}-${id}-${randomUUID()}`)
 rmSync(work, {recursive: true, force: true})
 const {sheet} = assetPaths(kind, id!)
 const anchor = join(work, sheetAnchor(sheet))
@@ -113,13 +114,17 @@ if (kind === 'character' && !flag('description')) {
     else log.info(description!)
 }
 
-const {copied} = copyAsset({dir: work, layout: assetPaths(kind, id!), label: `create-asset ${basename(anchorPicture)}`}, {dir: library, layout: libraryLayout(kind, id!), archiveName: id!})
-rmSync(work, {recursive: true, force: true})
-finishLibraryAsset(library, {
-    kind, id: id!, name, description: description!,
-    ...(anchors ? {anchors} : {}), ...(layout ? {layout} : {}),
-    source: `picture ${basename(anchorPicture)}`,
-}, copied, {success: true, tail: ` - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`})
+try {
+    await withNewLibraryAsset(library, kind, id!, () => {
+        const {copied} = copyAsset({dir: work, layout: assetPaths(kind, id!), label: `create-asset ${basename(anchorPicture)}`}, {dir: library, layout: libraryLayout(kind, id!), archiveName: id!})
+        rmSync(work, {recursive: true, force: true})
+        finishLibraryAsset(library, {
+            kind, id: id!, name, description: description!,
+            ...(anchors ? {anchors} : {}), ...(layout ? {layout} : {}),
+            source: `picture ${basename(anchorPicture)}`,
+        }, copied, {success: true, tail: ` - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`})
+    })
+} catch (error) { fail((error as Error).message) }
 
 // cancelled with Ctrl+C / Esc - the work folder stays, the next run starts it again
 function answer<T>(value: T) {

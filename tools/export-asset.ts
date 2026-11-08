@@ -8,7 +8,7 @@ import {log} from '../lib/log.ts';
 import {existsSync} from "node:fs";
 import {join} from "node:path";
 import {type AssetKind, assetIds, assetPaths, copyAsset} from "../lib/asset-import.ts";
-import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken} from "../lib/library.ts";
+import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken, withNewLibraryAsset} from "../lib/library.ts";
 import {projectDir, projectExists} from "../lib/project-setup.ts";
 import type {Project} from "../lib/project.ts";
 import {filmDir, filmExists} from "../lib/film/setup.ts";
@@ -49,15 +49,19 @@ if (taken) fail(`${taken}; give this one another id: --as=<library id>`)
 
 const description = (kind === 'character' ? data.characterDescriptions : data.locationDescriptions)?.[assetId!]
 if (!description) fail(`${id} has no description of ${assetId} yet - plan it further first: ${run}`)
-const {copied} = copyAsset(
-    {dir, layout: assetPaths(kind, assetId!), label: `${id}`},
-    {dir: library, layout: libraryLayout(kind, libraryId), archiveName: libraryId},
-)
-finishLibraryAsset(library, {
-    kind, id: libraryId,
-    name: (character ?? location)!.name,
-    description: description!,
-    ...(kind === 'location' && !isFilm && (data as Project).locationAnchors?.[assetId!] ? {anchors: (data as Project).locationAnchors![assetId!]} : {}),
-    ...(kind === 'location' && !isFilm && (data as Project).locationLayouts?.[assetId!] ? {layout: (data as Project).locationLayouts![assetId!]} : {}),
-    source: `${id}/${assetId}`,
-}, copied)
+try {
+    await withNewLibraryAsset(library, kind, libraryId, () => {
+        const {copied} = copyAsset(
+            {dir, layout: assetPaths(kind, assetId!), label: `${id}`},
+            {dir: library, layout: libraryLayout(kind, libraryId), archiveName: libraryId},
+        )
+        finishLibraryAsset(library, {
+            kind, id: libraryId,
+            name: (character ?? location)!.name,
+            description: description!,
+            ...(kind === 'location' && !isFilm && (data as Project).locationAnchors?.[assetId!] ? {anchors: (data as Project).locationAnchors![assetId!]} : {}),
+            ...(kind === 'location' && !isFilm && (data as Project).locationLayouts?.[assetId!] ? {layout: (data as Project).locationLayouts![assetId!]} : {}),
+            source: `${id}/${assetId}`,
+        }, copied)
+    })
+} catch (error) { fail((error as Error).message) }

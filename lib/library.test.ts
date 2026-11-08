@@ -3,7 +3,7 @@ import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync}
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 import {assetPaths, copyAsset} from "./asset-import.ts";
-import {libraryDir, libraryIds, libraryLayout, libraryRef, readLibraryAsset, writeLibraryAsset} from "./library.ts";
+import {libraryDir, libraryIds, libraryLayout, libraryRef, readLibraryAsset, withNewLibraryAsset, writeLibraryAsset} from "./library.ts";
 
 const dirs: string[] = []
 const folder = (files: Record<string, string> = {}) => {
@@ -45,6 +45,48 @@ describe('the library', () => {
         expect(libraryIds(library, 'location')).toEqual(['stage'])
         expect(await readLibraryAsset(library, 'location', 'stage')).toMatchObject({kind: 'location', id: 'stage', anchors: 'the back wall'})
         expect(await readLibraryAsset(library, 'location', 'half-done')).toBeUndefined()
+    })
+    test('concurrent writers cannot replace the same library id', async () => {
+        const library = folder()
+        let writes = 0
+        const create = (name: string) => withNewLibraryAsset(library, 'character', 'same-id', async () => {
+            writes++
+            await Bun.sleep(10)
+            writeLibraryAsset(library, {kind: 'character', id: 'same-id', name, description: name})
+        })
+
+        const results = await Promise.allSettled([create('first'), create('second')])
+
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+        expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+        expect(writes).toBe(1)
+        expect(await readLibraryAsset(library, 'character', 'same-id')).toMatchObject({name: expect.any(String)})
+    })
+    test('a second process cannot write a library id held by the first process', async () => {
+        const library = folder()
+        const ready = join(library, 'ready')
+        const moduleUrl = new URL('./library.ts', import.meta.url).href
+        const script = `
+            import {writeFileSync} from 'node:fs'
+            import {withNewLibraryAsset, writeLibraryAsset} from ${JSON.stringify(moduleUrl)}
+            try {
+                await withNewLibraryAsset(${JSON.stringify(library)}, 'character', 'shared-id', async () => {
+                    writeFileSync(${JSON.stringify(ready)}, 'locked')
+                    await Bun.sleep(500)
+                    writeLibraryAsset(${JSON.stringify(library)}, {kind: 'character', id: 'shared-id', name: 'winner', description: 'winner'})
+                })
+            } catch (error) { console.error((error as Error).message); process.exitCode = 1 }
+        `
+        const first = Bun.spawn([process.execPath, '-e', script], {cwd: process.cwd(), stdout: 'pipe', stderr: 'pipe'})
+        const deadline = Date.now() + 10_000
+        while (!existsSync(ready) && Date.now() < deadline) await Bun.sleep(10)
+        expect(existsSync(ready)).toBe(true)
+        const second = Bun.spawn([process.execPath, '-e', script], {cwd: process.cwd(), stdout: 'pipe', stderr: 'pipe'})
+        const exits = await Promise.all([first.exited, second.exited])
+
+        expect(exits.filter(code => code === 0)).toHaveLength(1)
+        expect(exits.filter(code => code !== 0)).toHaveLength(1)
+        expect(await readLibraryAsset(library, 'character', 'shared-id')).toMatchObject({name: 'winner'})
     })
     test('libraryRef reads "library:<id>", nothing else', () => {
         expect(libraryRef('library:kael-red')).toBe('kael-red')
