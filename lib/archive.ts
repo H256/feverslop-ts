@@ -1,5 +1,5 @@
 import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
-import {basename, dirname, join} from "node:path";
+import {basename, dirname, join, relative} from "node:path";
 import {boundaryFrameAsset} from "./compose.ts";
 import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from "./sequenceSheet.ts";
 
@@ -16,6 +16,29 @@ export function archiveFiles(projectDir: string, name: string, files: string[]) 
     for (const file of files) {
         const from = join(projectDir, file)
         if (existsSync(from)) renameSync(from, join(keep, basename(file)))
+    }
+    return keep
+}
+
+/** Archives every file below the given project-relative trees while preserving its directory structure. */
+export function archiveTrees(projectDir: string, name: string, roots: string[]): string {
+    const files = roots.flatMap(root => {
+        const absolute = join(projectDir, root)
+        if (!existsSync(absolute)) return []
+        if (!statSync(absolute).isDirectory()) return [root]
+        return (readdirSync(absolute, {recursive: true}) as string[])
+            .map(file => join(absolute, file))
+            .filter(file => existsSync(file) && statSync(file).isFile())
+            .map(file => relative(projectDir, file))
+    })
+    if (!files.length) return ''
+    let keep = join(projectDir, 'old', 'attempts', name)
+    for (let n = 2; existsSync(keep); n++) keep = join(projectDir, 'old', 'attempts', `${name}-${n}`)
+    for (const file of files) {
+        const from = join(projectDir, file)
+        const to = join(keep, file)
+        mkdirSync(dirname(to), {recursive: true})
+        renameSync(from, to)
     }
     return keep
 }

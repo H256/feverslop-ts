@@ -4,7 +4,7 @@
 // cancel says stay with each tool.
 import * as p from "@clack/prompts";
 import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from "node:fs";
-import {basename, dirname, join} from "node:path";
+import {basename, dirname, join, relative} from "node:path";
 import {visionUrls} from "./describe-picture.ts";
 import {ask} from "./llm.ts";
 import {log} from "./log.ts";
@@ -13,6 +13,7 @@ import {runProcess} from "./process.ts";
 import {characterImageDescriptionPrompt} from "./prompts.ts";
 import {pinnedSidecar} from "./provenance.ts";
 import {pictureAsset} from "./compose.ts";
+import {archiveFiles, versionStamp} from "./archive.ts";
 import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from "./sequenceSheet.ts";
 
 /** Where the new picture goes: with sequence sheets the anchor the sheet is made from, else the picture the clips use. */
@@ -54,10 +55,10 @@ export function clearSheetOfOldAnchor(dir: string, assetId: string, changes: str
         join(seqDir, SHEET_FRAMES),
     ]
     const removed = stale.filter(existsSync)
-    for (const f of removed) rmSync(f, {recursive: true, force: true})
+    if (removed.length) archiveFiles(dir, `${assetId}-stale-${versionStamp()}`, removed.map(f => relative(dir, f)))
     if (!removed.length) return false
     log.info(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
-    changes.push('the old reference sheet and sequence video were deleted')
+    changes.push('the old reference sheet and sequence video were archived')
     return true
 }
 

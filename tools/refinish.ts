@@ -6,7 +6,7 @@ import {completeDerivative} from '../lib/refinish.ts';
 // usage: bun run refinish <id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH]
 //        [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001,...] [--again] [--comfy=URL]     (--only: those clips, no final video)
 import {existsSync, mkdirSync, readFileSync} from "node:fs";
-import {join} from "node:path";
+import {join, relative} from "node:path";
 import {parseArgs} from "node:util";
 import {archiveFiles, versionStamp} from "../lib/archive.ts";
 import {assembleFinal, probeVideo} from "../lib/assemble.ts";
@@ -14,7 +14,7 @@ import {onlyClips, renderAll} from "../lib/batch.ts";
 import type {ClipRequest} from "../lib/compose.ts";
 import {loadProjectConfig} from "../lib/config.ts";
 import {finishCopy, interpolateClips} from "../lib/final-pass.ts";
-import {finishOf} from "../lib/finish.ts";
+import {finishOf, finishedName} from "../lib/finish.ts";
 import {FPS, secondsAt} from "../lib/frames.ts";
 import {songFileOf} from "../lib/inputs.ts";
 import {multiplierFor} from "../lib/interpolate.ts";
@@ -125,6 +125,16 @@ const target = join(dir, finalName(id!, variant))
 const finishing = options.finish ? finishOf(config.finish === false ? true : config.finish) : undefined
 const multiplier = options.fps !== FPS ? multiplierFor(options.fps)! : 1
 const smooth = target.replace(/\.mp4$/, `-${options.fps}fps.mp4`)
+if (!only.size) {
+    const outputs = [target]
+    if (options.fps !== FPS) outputs.push(smooth)
+    if (finishing) {
+        outputs.push(finishedName(target))
+        if (options.fps !== FPS) outputs.push(finishedName(smooth))
+    }
+    const existing = outputs.filter(existsSync).map(file => relative(dir, file))
+    if (existing.length) archiveFiles(dir, `refinish-${variant}-${versionStamp()}`, existing)
+}
 const interpolate = async (shown: { id: string, frames: number, shots?: { at: number }[] }[]) =>
     (await interpolateClips(renderer, shown, config.interpolationModel, options.fps, {folder: options.upscale === 'none' ? 'videos/interpolated' : `${folder}/interpolated`, sources})).files
 

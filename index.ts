@@ -274,7 +274,7 @@ if (render.has('song')) {
     } else {
         log.section('1b · GENERATING THE SONG AUDIO')
         if (existsSync(generatedSongFile)) {
-            rmSync(generatedSongFile)
+            archiveFiles(project.dir, `song-${versionStamp()}`, ['input/song.wav'])
             log.step('Redo', styles.muted('song.wav - the lyrics or style changed'))
         }
         using songRenderer = new Renderer(project.id, project.dir, config, settings.comfy)

@@ -1,8 +1,19 @@
 import {expect, test} from 'bun:test';
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {archiveFiles, clipVersions, restoreClipVersion} from './archive.ts';
+import {archiveFiles, archiveTrees, clipVersions, restoreClipVersion} from './archive.ts';
+
+test('directory trees can be archived without flattening their paths', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tree-archive-'))
+    try {
+        mkdirSync(join(dir, 'videos/nested'), {recursive: true})
+        writeFileSync(join(dir, 'videos/nested/clip.mp4'), 'render')
+        const archived = archiveTrees(dir, 'film-migrate-test', ['videos'])
+        expect(existsSync(join(dir, 'videos/nested/clip.mp4'))).toBe(false)
+        expect(readFileSync(join(archived, 'videos/nested/clip.mp4'), 'utf8')).toBe('render')
+    } finally { rmSync(dir, {recursive: true, force: true}) }
+})
 
 test('size-rejected takes can be listed and restored with their metadata (#661)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'size-archive-'))

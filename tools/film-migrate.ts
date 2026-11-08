@@ -13,6 +13,8 @@ import {boundaryFrameAsset} from "../lib/compose.ts";
 import {promptHash} from "../lib/film/render.ts";
 import {filmDir} from "../lib/film/setup.ts";
 import {clipRequestRef, clipRequestsDir} from "../lib/previous-output.ts";
+import {archiveTrees, versionStamp} from "../lib/archive.ts";
+import {lockProject} from "../lib/lock.ts";
 cli('film:migrate')
 
 
@@ -72,6 +74,8 @@ if (!apply) {
 
 const videos = join(film, 'videos')
 const frames = join(film, 'assets/clips')
+lockProject(film, `film ${id}`)
+archiveTrees(film, `film-migrate-${versionStamp()}`, ['videos', 'assets/clips', `${id}.mp4`])
 rmSync(videos, {recursive: true, force: true})
 mkdirSync(videos, {recursive: true})
 if (existsSync(frames)) for (const f of readdirSync(frames)) rmSync(join(frames, f))
