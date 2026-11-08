@@ -12,7 +12,7 @@ import {FPS} from "../lib/frames.ts";
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from "../lib/config.ts";
 import {styles} from "../lib/log.ts";
 import {projectExists, validProjectId, writeProject} from "../lib/project-setup.ts";
-import {answer, askResolution, askStyle, askText} from "../lib/wizard.ts";
+import {answer, askResolution, askStyle, askText, projectWorkflows} from "../lib/wizard.ts";
 import {libraryDir} from "../lib/library.ts";
 import {ProjectStore} from "../lib/project.ts";
 import {importSong, librarySongIds, type LibrarySong, readLibrarySong, songsLike} from "../lib/song-library.ts";
@@ -499,8 +499,7 @@ function resolutionText(r: Resolution) {
 /** An image or video workflow from comfy/workflows/ - the film pipeline's own and the helper ones are not offered. */
 async function askWorkflow(label: string, kind: 'image' | 'video'): Promise<string> {
     const fallback = kind === 'image' ? defaults.imageWorkflow : defaults.videoWorkflow
-    const names = readdirSync(workflowDir).filter(f => f.endsWith('.ts')).map(f => f.slice(0, -3))
-        .filter(n => kind === 'image' ? n.endsWith('-image') : n.includes('ref2video') && !n.includes('-film'))
+    const names = projectWorkflows(readdirSync(workflowDir).filter(f => f.endsWith('.ts')).map(f => f.slice(0, -3)), kind)
         .sort((a, b) => Number(b === fallback) - Number(a === fallback) || a.localeCompare(b))
     return answer(await p.select({
         message: label,

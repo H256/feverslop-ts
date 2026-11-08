@@ -121,3 +121,10 @@ export async function askResolution(label: string): Promise<Resolution> {
     if (mode === 'megapixels') return Number(answer(await p.text({message: 'Megapixels', placeholder: '1.1', validate: v => Number(v) > 0 ? undefined : 'a positive number'})))
     return answer(await p.text({message: 'Size', placeholder: '1920x1088', validate: v => v && /^\d+x\d+$/.test(v) ? undefined : 'e.g. 1920x1088'})) as `${number}x${number}`
 }
+
+// workflows in comfy/workflows/ that are not picked for a project's pictures or clips: the film pipeline's own and the helpers
+const NOT_A_PROJECT_WORKFLOW = /-film|interpolate|upscale|refine|sequence-to-sheet|song/
+
+/** The workflows init offers for the pictures or the clips: any file name in comfy/workflows/ but the film pipeline's and the helpers - a workflow of your own is found by "video" in its name, everything else is a picture workflow. */
+export const projectWorkflows = (names: string[], kind: 'image' | 'video'): string[] =>
+    names.filter(n => !NOT_A_PROJECT_WORKFLOW.test(n) && n.includes('video') === (kind === 'video'))
