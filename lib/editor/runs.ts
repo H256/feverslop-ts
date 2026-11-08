@@ -1,6 +1,6 @@
 import {existsSync, readdirSync, readFileSync, rmSync, statSync} from "node:fs";
 import {join} from "node:path";
-import {lockHolder} from "../lock.ts";
+import {lockHolder, verifiedLockHolder} from "../lock.ts";
 import {lastRun, runState} from "../run-record.ts";
 import type {EditorKind, EditorTarget} from "./project.ts";
 import {STEP_NAMES} from "../project.ts";
@@ -315,6 +315,7 @@ export class RunControl {
         }
         const holder = lockHolder(target.dir)
         if (!holder) return false
+        if (verifiedLockHolder(target.dir) !== holder) throw new Error('Cannot verify the process identity of this lock; stop the run in its original terminal')
         process.kill(holder)
         return true
     }

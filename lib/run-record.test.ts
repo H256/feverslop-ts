@@ -8,6 +8,10 @@ const run = (more: Partial<RunRecord> = {}): RunRecord => ({command: 'bun index.
 const ended = {endedAt: '2026-10-31T01:00:00.000Z', exitCode: 0}
 
 describe('runState', () => {
+    test('a live but unrelated PID does not keep a crashed run running (#665)', () => {
+        expect(runState(run({pid: process.pid}))).toBe('stopped')
+        expect(runState({...run({pid: process.pid}), identity: 'another-process-start'})).toBe('stopped')
+    })
     test('no end: running while its process lives, stopped when it is gone', () => {
         expect(runState(run(), () => true)).toBe('running')
         expect(runState(run(), () => false)).toBe('stopped')
@@ -33,6 +37,24 @@ describe('commandLine', () => {
 
 test('a project without a record has no last run', () => {
     expect(lastRun(mkdtempSync(join(tmpdir(), 'run-')))).toBeUndefined()
+})
+
+test('review stop is recorded as stopped without a Done footer (#642)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'review-stop-'))
+    const script = `
+        import {mock} from 'bun:test';
+        mock.module('@clack/prompts', () => ({select: async () => 'stop', isCancel: () => false}));
+        const {reviewed} = await import(${JSON.stringify(join(import.meta.dir, 'review.ts'))});
+        const {cli} = await import(${JSON.stringify(join(import.meta.dir, 'cli.ts'))});
+        const {startRunRecord} = await import(${JSON.stringify(join(import.meta.dir, 'run-record.ts'))});
+        cli('film'); startRunRecord(${JSON.stringify(dir)}, 'review');
+        await reviewed({file: 'project.json', data: {}, generated: new Set(['story']), invalidate() {}, async save() {}}, true, 'story', async () => 'story', () => {});
+    `
+    const child = Bun.spawn(['bun', '-e', script], {stdout: 'pipe', stderr: 'pipe'})
+    const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+    expect(code).toBe(0)
+    expect(out + err).not.toContain('Done')
+    expect(runState(lastRun(dir)!)).toBe('stopped')
 })
 
 test('an ended run says how, a killed one leaves no end', async () => {

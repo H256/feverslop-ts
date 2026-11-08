@@ -1,17 +1,21 @@
 import {mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {processAlive} from "./lock.ts";
+import {runResult} from './log.ts';
+import {ownProcessIdentity, sameProcess} from './process-identity.ts';
 
 // What the last run of a project did, in <project>/logs/last-run.json: the command, and how it ended. A run that is
 // killed writes no end, so the next run and `status` can tell it apart from one that finished. Replaced by every run.
 export type RunRecord = {
     command: string
     pid: number
+    identity?: string
     startedAt: string
     endedAt?: string
     exitCode?: number
     error?: string
     failures?: string[]     // the renders that failed: "clip slot-046: HIP out of memory..."
+    cancelled?: boolean
 }
 export type RunState = 'running' | 'stopped' | 'failed' | 'finished'
 
@@ -36,20 +40,20 @@ export function lastRun(dir: string): RunRecord | undefined {
     }
 }
 
-export function runState(run: RunRecord, alive: (pid: number) => boolean = processAlive): RunState {
+export function runState(run: RunRecord, alive: (pid: number) => boolean = pid => processAlive(pid) && sameProcess(pid, run.identity)): RunState {
     if (run.endedAt === undefined) return alive(run.pid) ? 'running' : 'stopped'
     if (run.error || run.failures?.length) return 'failed'
-    return run.exitCode ? 'stopped' : 'finished'
+    return run.exitCode || run.cancelled ? 'stopped' : 'finished'
 }
 
 /** Starts the record of this run, ended when the process exits. Returns the run before it. */
 export function startRunRecord(dir: string, command: string): RunRecord | undefined {
     const previous = lastRun(dir)
     const file = join(dir, FILE)
-    const record: RunRecord = {command, pid: process.pid, startedAt: new Date().toISOString()}
+    const record: RunRecord = {command, pid: process.pid, identity: ownProcessIdentity(), startedAt: new Date().toISOString()}
     current = record
     save(file, record)
-    process.on('exit', code => save(file, {...record, endedAt: new Date().toISOString(), exitCode: code}))
+    process.on('exit', code => save(file, {...record, endedAt: new Date().toISOString(), exitCode: code, ...(runResult().cancelled ? {cancelled: true} : {})}))
     return previous
 }
 

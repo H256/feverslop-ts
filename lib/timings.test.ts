@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, expect, test} from "bun:test";
-import {existsSync, mkdtempSync, writeFileSync} from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {currentStep, keepTimingsIn, migrateProjectTimings, readTimings, recordTiming, timingsFile, withStep} from "./timings.ts";
@@ -55,4 +55,26 @@ test('the step of an LLM call is the one it runs in', async () => {
         await Bun.sleep(1)
         expect(currentStep()).toBe('story')
     })
+})
+
+test('failed migration preserves the source and can be retried (#668)', () => {
+    const legacy = join(dir, 'timings.jsonl')
+    writeFileSync(legacy, '{"at":"2026-01-01","kind":"clip","name":"w","seconds":12}\n')
+    // A directory at the destination makes appending fail on every platform.
+    mkdirSync(timingsFile(), {recursive: true})
+    expect(migrateProjectTimings(dir)).toBe(0)
+    expect(existsSync(legacy)).toBe(true)
+    expect(existsSync(`${legacy}.migrated`)).toBe(false)
+    rmSync(timingsFile(), {recursive: true})
+    expect(migrateProjectTimings(dir)).toBe(1)
+    expect(readTimings()).toHaveLength(1)
+})
+
+test('unchanged timings reuse parsed rows; appends invalidate the cache (#667)', () => {
+    keepTimingsIn(join(dir, 'p'))
+    recordTiming({kind: 'clip', name: 'w', seconds: 12})
+    const first = readTimings()
+    expect(readTimings()[0]).toBe(first[0])
+    recordTiming({kind: 'clip', name: 'w', seconds: 15})
+    expect(readTimings()).toHaveLength(2)
 })

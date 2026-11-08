@@ -1,10 +1,12 @@
 import {closeSync, existsSync, openSync, readFileSync, rmSync, writeSync} from "node:fs";
 import {join} from "node:path";
+import {ownProcessIdentity, processIdentity, sameProcess} from './process-identity.ts';
 
 // Every save writes the whole project.json from the state the run loaded: two runs on one project would silently drop
 // each other's steps. So a run that writes holds a lock file with its process id for as long as it lives.
 
 export const processAlive = (pid: number) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0) return false
     try {
         process.kill(pid, 0)
         return true
@@ -16,10 +18,27 @@ export const processAlive = (pid: number) => {
 
 /** The process that holds the project's lock now - undefined when it is free, or held by a process that is gone. */
 export function lockHolder(dir: string): number | undefined {
-    const file = join(dir, '.lock')
-    if (!existsSync(file)) return undefined
-    const holder = Number(readFileSync(file, 'utf8').trim())
-    return Number.isInteger(holder) && processAlive(holder) ? holder : undefined
+    const holder = readLock(dir)
+    if (!holder || !processAlive(holder.pid)) return undefined
+    const actual = holder.identity ? processIdentity(holder.pid) : undefined
+    // A failed OS query is not evidence that a live holder is stale: keep excluding other writers.
+    return actual && holder.identity !== actual ? undefined : holder.pid
+}
+
+function readLock(dir: string): {pid: number, identity?: string} | undefined {
+    try {
+        const text = readFileSync(join(dir, '.lock'), 'utf8').trim()
+        const value = JSON.parse(text)
+        const pid = typeof value === 'number' ? value : value?.pid
+        if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+        return {pid, ...(typeof value?.identity === 'string' ? {identity: value.identity} : {})}
+    } catch { return undefined }
+}
+
+/** Only verified locks may authorize a destructive signal. Legacy locks still exclude concurrent writers. */
+export function verifiedLockHolder(dir: string): number | undefined {
+    const holder = readLock(dir)
+    return holder && sameProcess(holder.pid, holder.identity) ? holder.pid : undefined
 }
 
 function takeLock(dir: string, what: string): () => void {
@@ -27,13 +46,13 @@ function takeLock(dir: string, what: string): () => void {
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
             const fd = openSync(file, 'wx')
-            writeSync(fd, String(process.pid))
-            closeSync(fd)
+            try { writeSync(fd, JSON.stringify({pid: process.pid, identity: ownProcessIdentity()})) }
+            finally { closeSync(fd) }
             return () => rmSync(file, {force: true})
         } catch (e) {
             if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
-            const holder = Number(readFileSync(file, 'utf8').trim())
-            if (Number.isInteger(holder) && holder !== process.pid && processAlive(holder)) {
+            const holder = lockHolder(dir)
+            if (holder !== undefined && holder !== process.pid) {
                 throw new Error(`${what} is being worked on by another run (process ${holder}) - wait for it to finish; if it is not running any more, delete ${file}`)
             }
             rmSync(file, {force: true})

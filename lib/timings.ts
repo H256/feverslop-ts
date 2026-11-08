@@ -1,8 +1,10 @@
-import {appendFileSync, existsSync, mkdirSync, readFileSync, renameSync} from "node:fs";
+import {appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
 import {AsyncLocalStorage} from "node:async_hooks";
 import {basename, dirname, join} from "node:path";
 import type {GraphSetup, Phase} from "./graph.ts";
 import {settingsPath} from "./settings.ts";
+import {processAlive} from './lock.ts';
+import {log} from './log.ts';
 
 // Every measured duration, one JSON line each, in ONE file for all projects (next to the settings file, outside the
 // repo) so projects can be compared - override with FEVERSLOP_TIMINGS. Append-only; numbers and names only, never a
@@ -18,6 +20,7 @@ export type Timing = {
     seconds: number           // of one job / one call
     outcome?: 'retry' | 'failed' | 'again'   // missing: it worked; for those, seconds is what the failed try took (0 when unknown)
     reason?: string           // short, a fixed word or an error class - no text of the prompt or the answer
+    migration?: string        // idempotency key for a legacy row copied into the central store
     step?: string             // the pipeline step an LLM call belongs to
 
     // renders - what the ComfyUI graph said and where it ran
@@ -84,18 +87,51 @@ const parseLines = (text: string) => text.split('\n').flatMap(line => {
     }
 })
 
+const parsedFiles = new Map<string, {stamp: string, rows: Timing[]}>()
 export function readTimings(file = timingsFile()): Timing[] {
-    return existsSync(file) ? parseLines(readFileSync(file, 'utf8')) : []
+    if (!existsSync(file)) { parsedFiles.delete(file); return [] }
+    const stat = statSync(file)
+    const stamp = `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
+    const cached = parsedFiles.get(file)
+    if (cached?.stamp === stamp) return [...cached.rows]
+    const rows = parseLines(readFileSync(file, 'utf8')).map(row => Object.freeze(row))
+    parsedFiles.delete(file)
+    parsedFiles.set(file, {stamp, rows})
+    if (parsedFiles.size > 4) parsedFiles.delete(parsedFiles.keys().next().value!)
+    return [...rows]
 }
 
 /** The per-project file of the first format → the central file (every line gets its project); the old file is kept as .migrated. */
 export function migrateProjectTimings(dir: string) {
     const legacy = join(dir, FILE)
     if (!existsSync(legacy)) return 0
-    const lines = parseLines(readFileSync(legacy, 'utf8'))
-    for (const line of lines) append({project: basename(dir), ...line})
-    renameSync(legacy, `${legacy}.migrated`)
-    return lines.length
+    const lock = `${legacy}.migration.lock`
+    let fd: number
+    try {
+        if (existsSync(lock)) {
+            const pid = Number(readFileSync(lock, 'utf8'))
+            if (processAlive(pid) || Date.now() - statSync(lock).mtimeMs < 300000) return 0
+            rmSync(lock, {force: true})
+        }
+        fd = openSync(lock, 'wx')
+    } catch { return 0 }
+    try {
+        writeFileSync(fd, String(process.pid))
+        if (!existsSync(legacy)) return 0
+        const text = readFileSync(legacy, 'utf8')
+        const id = Bun.hash(`${legacy}\n${text}`).toString(16)
+        const lines = parseLines(text).map((line, n) => ({project: basename(dir), ...line, migration: `${id}:${n}`}))
+        const copied = new Set(readTimings().map(row => row.migration).filter(Boolean))
+        const missing = lines.filter(line => !copied.has(line.migration))
+        mkdirSync(dirname(timingsFile()), {recursive: true})
+        // One append under the source lock; a retry after an interrupted append skips complete copied rows.
+        if (missing.length) appendFileSync(timingsFile(), '\n' + missing.map(line => JSON.stringify(line)).join('\n') + '\n')
+        renameSync(legacy, `${legacy}.migrated`)
+        return lines.length
+    } catch {
+        log.warn(`Could not migrate ${legacy}; the source is retained and will be retried`)
+        return 0
+    } finally { closeSync(fd); rmSync(lock, {force: true}) }
 }
 
 // the pipeline step an LLM call belongs to - set where a step runs (lib/project.ts), read where the call is recorded

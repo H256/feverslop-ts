@@ -31,7 +31,7 @@ export async function reviewed<D, S extends keyof D & string, K extends S>(proje
             ],
         })
         if (clack.isCancel(choice) || choice === 'stop') {
-            log.step('Stopped', styles.muted(`${name} is saved in ${project.file} - the next run goes on from it (--redo=${name} --review to look at it again)`))
+            log.cancel(`${name} is saved in ${project.file} - the next run goes on from it (--redo=${name} --review to look at it again)`)
             process.exit(0)
         }
         if (choice === 'accept') return value
