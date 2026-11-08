@@ -263,7 +263,7 @@ export type SingingResult = {
   staleClips: string[],
 }
 
-export type TimingWord = {text: string, start: number, end: number}
+export type TimingWord = {text: string, start: number, end: number, joined?: boolean, anchor?: boolean, estimated?: boolean, group?: string}
 export type TimingLine = {
   line: number,
   section: string,
@@ -286,7 +286,7 @@ export type TimingView = {
   audio?: Media,              // the vocals stem, else the song
 }
 // words: the line's words moved; off: the line left out (true) or sung again (false) - one of the two, or both
-export type TimingChange = {lines: {line: number, words?: {start: number, end: number}[], off?: boolean}[]}
+export type TimingChange = {lines: {line: number, words?: (Pick<TimingWord, 'start' | 'end'> & Partial<Omit<TimingWord, 'start' | 'end'>>)[], off?: boolean}[]}
 export type TimingResult = {
   changed: number[],          // the lines that moved
   slots: string[],            // the clips of the cut whose vocals changed

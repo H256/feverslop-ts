@@ -354,7 +354,13 @@ textarea.book { width: 100%; min-height: 50vh; font: 14px/1.6 var(--sans); }
 .tlayer > * { pointer-events: auto; }
 .tline { position: absolute; top: 6px; height: 18px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 11px; line-height: 18px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: grab; }
 .tline.changed { background: var(--accent); color: var(--accent-text); }
-.tword { position: absolute; top: 28px; height: 136px; border-radius: 4px; background: light-dark(#cf3d1b22, #ff6f4d26); border: 1px solid var(--accent); cursor: grab; min-width: 3px; }
+.tword { position: absolute; top: 28px; height: 94px; border-radius: 4px; background: light-dark(#cf3d1b22, #ff6f4d26); border: 1px solid var(--accent); cursor: grab; min-width: 3px; }
+.tword.anchored { border-top-width: 3px; }
+.tword.grouped { border-bottom-style: double; border-bottom-width: 3px; }
+.tselection { position: absolute; top: 146px; height: 18px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 4px; font-size: 10px; padding: 0 8px; cursor: grab; white-space: nowrap; overflow: hidden; }
+.tselection .grip { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; background: var(--accent); }
+.tselection .grip.l { left: 0; }
+.tselection .grip.r { right: 0; }
 .tword span { position: absolute; left: 4px; right: 2px; top: 1px; font-size: 12px; white-space: nowrap; overflow: hidden; pointer-events: none; }
 .tword.chosen { background: light-dark(#cf3d1b44, #ff6f4d4d); box-shadow: 0 0 0 1px var(--accent); }
 .tword.crossed { border-color: var(--danger); }

@@ -23,14 +23,13 @@ export function shifted(words: Span[], by: number, duration = Infinity) {
 }
 
 /**
- * A word moved, or one of its edges: a neighbour it runs into gives way, down to MIN_WORD - an estimated line has its words spread
- * without gaps, and a word that could not push would not move at all.
+ * A word or its edge stops at its neighbor. Shared-boundary movement is an explicit action.
  */
 export function movedWord(words: TimingWord[], n: number, by: number, edge: 'start' | 'end' | undefined, duration: number): TimingWord[] {
   const out = words.map(w => ({...w}))
   const w = out[n]!, prev = out[n - 1], next = out[n + 1]
-  const low = prev ? prev.start + MIN_WORD : 0
-  const high = next ? next.end - MIN_WORD : duration
+  const low = prev ? prev.end : 0
+  const high = next ? next.start : duration
   if (edge === 'start') w.start = clamp(w.start + by, low, w.end - MIN_WORD)
   else if (edge === 'end') w.end = clamp(w.end + by, w.start + MIN_WORD, high)
   else {
@@ -38,8 +37,6 @@ export function movedWord(words: TimingWord[], n: number, by: number, edge: 'sta
     w.start = clamp(w.start + by, low, high - length)
     w.end = w.start + length
   }
-  if (prev && prev.end > w.start) prev.end = w.start
-  if (next && next.start < w.end) next.start = w.end
   return out
 }
 
@@ -48,24 +45,13 @@ export const cutsIn = (view: TimingView, from: number, to: number) => view.cuts.
 /** The words a cut falls into: sung half in one clip, half in the next. */
 export const crossingOf = (view: TimingView, words: TimingWord[]) => words.flatMap(w => cutsIn(view, w.start + 0.02, w.end - 0.02).map(cut => ({word: w, cut})))
 
-/**
- * The smallest change that takes a clip cut out of a word: the side of the cut that is shorter is cut off the word, so it is sung
- * wholly in one clip. A word that would be left with nothing but a sliver is moved over the cut instead, as it is.
- */
-export function clearedCut(words: TimingWord[], n: number, cut: number, duration: number): TimingWord[] {
-  const w = words[n]!
-  const before = cut - w.start, after = w.end - cut
-  if (Math.min(before, after) >= MIN_WORD) {
-    return before <= after ? movedWord(words, n, before, 'start', duration) : movedWord(words, n, -after, 'end', duration)
-  }
-  return movedWord(words, n, before <= after ? before : -after, undefined, duration)
-}
-
 /** What saving does: the clips whose vocals change, the beats planned again - worked out as the server does it, roughly. */
 export function timingChanges(view: TimingView, moved: TimingLine[], wordsOf: (line: TimingLine) => TimingWord[]) {
   const touched = new Set<string>()
   for (const line of moved) {
     const words = wordsOf(line)
+    const audible = (ws: TimingWord[]) => JSON.stringify(ws.map(({text, start, end, joined}) => ({text, start, end, joined: !!joined})))
+    if (audible(words) === audible(line.words)) continue
     const span = [Math.min(words[0]!.start, line.words[0]!.start), Math.max(words.at(-1)!.end, line.words.at(-1)!.end)] as const
     for (const cut of view.cuts) if (cut.end > span[0] && cut.start < span[1] && cut.beat) touched.add(cut.beat)
   }

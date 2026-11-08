@@ -1,12 +1,31 @@
 import {describe, expect, test} from "bun:test";
 import {buildClipRequests, type Input, singingPerBeat} from "./compose.ts";
 import type {Character, StoryBeat} from "./project.ts";
+import {slotVocals} from './lyrics.ts';
 
 const characters: Character[] = [
     {id: 'shaman', name: 'Shaman', role: 'drummer'},
     {id: 'runa', name: 'Runa', role: 'cat'},
 ]
 const beat = {id: 'b1', order: 1, summary: 'The Shaman drums.', moments: ['The Shaman drums.'], locationId: 'clearing', characterIds: ['shaman'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
+
+test('a split word reaches two final prompts without a false stop before its continuation', () => {
+    const words = [{text: 'Rosma', start: 3, end: 4}, {text: 'rienbaum.', joined: true, start: 4, end: 5.9}]
+    const lyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: 'Rosmarienbaum.', start: 3, end: 5.9, words, confidence: 1}]}
+    const slots = [0, 4].map((start, index) => ({id: `slot-${index}`, index, section: 'Verse', start, end: start + 4, bars: 2, energy: .5, lyrics: [], vocals: slotVocals({start, end: start + 4}, lyricsTiming)}))
+    const input: Input = {
+        slots, mapping: slots.map(s => ({slotId: s.id, beatId: 'b1'})), beats: [beat], characters,
+        locations: [{id: 'clearing', name: 'Clearing'}], characterDescriptions: {shaman: 'A singer.'}, locationDescriptions: {clearing: 'A clearing.'}, lookBrief: '',
+        music: {bpm: 120, durationSec: 8, downbeats: [0, 2, 4, 6], barEnergy: [.5, .5, .5, .5], sections: []}, language: 'German', stemsAvailable: true,
+        singing: {singers: ['shaman'], lines: [{line: 0, text: 'Rosmarienbaum.', singers: ['shaman']}]}, lyricsTiming,
+        shotMoments: {b1: {shots: [{action: 'The Shaman sings.', characters: ['shaman']}]}},
+    }
+    const [head, tail] = buildClipRequests(input)
+    expect(head!.prompt).toContain('<d>[German] Rosma-</d>')
+    expect(tail!.prompt).toContain('<d>[German] -rienbaum.</d>')
+    expect(tail!.vocals![0]!.at).toBe(0)
+    expect(tail!.prompt).toContain('only actually sings from 00:04.000')
+})
 
 function clipFor(shotCharacters: string[][]) {
     const input: Input = {

@@ -2,7 +2,7 @@ import {existsSync, rmSync, statSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {basename, join} from "node:path";
 import type {Assignment, Character, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, SlotVocal, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
-import {refineSections, slotVocals} from "./lyrics.ts";
+import {refineSections, slotVocals, vocalText} from "./lyrics.ts";
 import {formatTime, round} from "./frames.ts";
 import {log} from "./log.ts";
 import {lastLines, runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
@@ -441,11 +441,14 @@ export function splitFightSlots(slots: Slot[], mapping: Assignment[], beats: Sto
         edges.slice(0, -1).forEach((from, k) => {
             const to = edges[k + 1]!
             const vocals: SlotVocal[] = (slot.vocals ?? []).flatMap(v => {
-                const words = v.words
-                    .filter(w => slot.start + (w.start + w.end) / 2 >= from && slot.start + (w.start + w.end) / 2 < to)
-                    .map(w => ({...w, start: round(slot.start + w.start - from), end: round(slot.start + w.end - from)}))
+                const selected = v.words.filter(w => slot.start + (w.start + w.end) / 2 >= from && slot.start + (w.start + w.end) / 2 < to)
+                const words = selected.map(w => ({...w, start: round(slot.start + w.start - from), end: round(slot.start + w.end - from)}))
                 if (!words.length) return []
-                return [{...v, start: words[0]!.start, end: words.at(-1)!.end, words}]
+                const lastIndex = v.words.indexOf(selected.at(-1)!)
+                const trailing = lastIndex + 1 < v.words.length
+                    ? !!v.words[lastIndex + 1]!.joined
+                    : v.text === vocalText(v.words) + '-'
+                return [{...v, text: vocalText(words, trailing), start: words[0]!.start, end: words.at(-1)!.end, words}]
             })
             out.push({
                 ...slot,

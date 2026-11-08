@@ -8,7 +8,7 @@ import type {TimingDraft} from './useTimingDraft'
 /** The lines of the song to pick one: when it starts, its section, and whether it is estimated, moved or cut through. */
 export type LineFilter = 'all' | 'estimated' | 'changed' | 'early' | 'old'
 const props = defineProps<{view: TimingView, draft: TimingDraft, filter: LineFilter, leads: Map<number, number>, outdated: Map<number, string[]>}>()
-const emit = defineEmits<{choose: [line: number]}>()
+const emit = defineEmits<{choose: [line: number, extend: boolean]}>()
 const early = (line: TimingLine) => (props.leads.get(line.line) ?? 0) >= EARLY_FROM
 const keep: Record<LineFilter, (line: TimingLine) => boolean> = {
   all: () => true,
@@ -32,12 +32,12 @@ const EMPTY: Record<LineFilter, string> = {
   early: 'No first word starts before its singing.',
   old: 'Every clip has the times of the lines it sings.',
 }
-const stateOf = (line: TimingLine) => line.off ? 'left out' : line.unplaced && !props.draft.isChanged(line) ? 'not found' : line.estimated && !props.draft.isChanged(line) ? 'estimated' : props.draft.isChanged(line) ? 'moved' : line.byHand ? 'by hand' : ''
+const stateOf = (line: TimingLine) => line.off ? 'left out' : line.unplaced && !props.draft.isChanged(line) ? 'not found' : props.draft.unchecked(line) ? 'estimated' : props.draft.isChanged(line) ? 'moved' : line.byHand ? 'by hand' : ''
 </script>
 
 <template>
   <div ref="list" class="tlines">
-    <button v-for="line in shown" :key="line.line" :class="['tline-row', {selected: line.line === draft.selected.value, changed: draft.isChanged(line)}]" :data-line="line.line" @click="emit('choose', line.line)">
+    <button v-for="line in shown" :key="line.line" :class="['tline-row', {selected: draft.selection.value.some(s => s.line.line === line.line), changed: draft.isChanged(line)}]" :data-line="line.line" @click="emit('choose', line.line, $event.shiftKey)">
       <time>{{ clock(draft.startOf(line)) }}</time>
       <span class="muted">{{ line.section }}</span>
       <span :style="line.off ? {textDecoration: 'line-through', color: 'var(--muted)'} : undefined">{{ line.text }}</span>

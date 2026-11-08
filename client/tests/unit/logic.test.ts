@@ -3,7 +3,7 @@ import type {EditorClip, EditorProject, ProjectListing, SingingLine, SingingView
 import {bestSource, chain, fileOf, reviewList, sourceOptions, stateOf} from '../../src/features/timeline/clips'
 import {filterOf, groupProjects, matchesState, queryOf} from '../../src/features/projects/listing'
 import {changeOf, changesOf, kept, partsOfView, sectionsOf, spanOf, splitAt, type Part} from '../../src/features/singers/parts'
-import {clearedCut, crossingOf, fixWords, movedWord, timingChanges, MIN_WORD} from '../../src/features/timing/words'
+import {crossingOf, fixWords, movedWord, timingChanges} from '../../src/features/timing/words'
 import {stagesBetween} from '../../src/features/plan/stages'
 import {clock} from '../../src/lib/format'
 
@@ -63,12 +63,9 @@ describe('who sings', () => {
 describe('the timing of the words', () => {
   const line: TimingLine = {line: 0, section: 'Verse', text: 'a b c', words, estimated: true, byHand: false, beats: ['b1']}
   const view: TimingView = {duration: 10, lines: [line], cuts: [{id: 'c1', start: 0, end: 2.5, beat: 'b1'}, {id: 'c2', start: 2.5, end: 10}], beats: [{id: 'b1', planned: true, clips: ['c1']}], unplanned: [], outdated: []}
-  test('a word that runs into a neighbour pushes it, down to the shortest word', () => {
-    const moved = movedWord(words, 1, 0.8, undefined, 10)
-    expect(moved[1]).toEqual({text: 'b', start: 2.8, end: 3.8})
-    expect(moved[2]!.start).toBeCloseTo(3.8)
-    const far = movedWord(words, 1, 5, undefined, 10)
-    expect(far[1]!.end).toBeCloseTo(4 - MIN_WORD)
+  test('moving a word stops at its neighbors without shortening them', () => {
+    expect(movedWord(words, 1, .8, undefined, 10)).toEqual(words)
+    expect(movedWord(words, 1, 5, undefined, 10)).toEqual(words)
   })
   test('words back where they were are no change; words stay inside the song', () => {
     expect(fixWords(line, words, 10)).toBeUndefined()
@@ -79,24 +76,6 @@ describe('the timing of the words', () => {
     const changes = timingChanges(view, [line], () => words.map(w => ({...w, start: w.start + 0.1, end: w.end + 0.1})))
     expect(changes.replanned).toEqual(['b1'])
     expect(changes.clips).toEqual(['c1'])
-  })
-})
-
-describe('a clip cut inside a word', () => {
-  const sung = (...spans: [number, number][]) => spans.map(([start, end], n) => ({text: 'w' + n, start, end}))
-  const view = {duration: 10, cuts: [{id: 'c1', start: 0, end: 5}, {id: 'c2', start: 5, end: 10}]} as TimingView
-  test('the shorter side is cut off the word, so that the cut is gone', () => {
-    const early = clearedCut(sung([1, 2], [4.5, 6]), 1, 5, 10)
-    expect(early[1]).toEqual({text: 'w1', start: 5, end: 6})
-    const late = clearedCut(sung([1, 2], [3, 5.2]), 1, 5, 10)
-    expect(late[1]).toEqual({text: 'w1', start: 3, end: 5})
-    expect(crossingOf(view, early)).toEqual([])
-    expect(crossingOf(view, late)).toEqual([])
-  })
-  test('a sliver of a word is not what stays: the word is moved over the cut as it is', () => {
-    const moved = clearedCut(sung([4.97, 5.47]), 0, 5, 10)
-    expect(moved[0]!.end - moved[0]!.start).toBeCloseTo(0.5)
-    expect(crossingOf(view, moved)).toEqual([])
   })
 })
 
