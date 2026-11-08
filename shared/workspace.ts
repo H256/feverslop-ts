@@ -304,7 +304,6 @@ export type RunRequest =
   | {type: 'adapt-story', add?: {name: string, role: string}[], remove?: string[]}   // add, remove: a film's roles (#589)
   | {type: 'final', preview?: boolean}
   | {type: 'plan', until?: string, redo?: string[]}
-  | {type: 'refresh', what: ('pictures' | 'clips')[]}
   | {type: 'retake', clip: string, range: string}
   | {type: 'repeat', command: string}
   | {type: 'next', command: string}

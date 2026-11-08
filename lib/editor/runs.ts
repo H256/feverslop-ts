@@ -76,11 +76,6 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (action.until !== undefined && !(UNTIL_STAGES as readonly string[]).includes(action.until)) throw new Error(`no such stage: ${action.until}`)
             return run(...(redo.length ? [`--redo=${redo.join(',')}`] : []), ...(action.until ? [`--until=${action.until}`] : []))
         }
-        case 'refresh': {
-            const what = action.what.filter(w => w === 'pictures' || w === 'clips')
-            if (!what.length) throw new Error('nothing to refresh')
-            return run(`--render=${what.map(w => w === 'pictures' ? 'images' : 'videos').join(',')}`, `--refresh=${what.join(',')}`)
-        }
         case 'retake':
             if (!CLIP_ID.test(action.clip) || !/^(\d+(\.\d+)?-\d+(\.\d+)?|shot\d+)$/.test(action.range)) throw new Error(`not a part of a clip: ${action.clip}:${action.range}`)
             return run(`--retake=${action.clip}:${action.range}`)

@@ -156,7 +156,7 @@ const allTargets = (): EditorTarget[] => [
     ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
 ]
 
-const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'refresh', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'export-song', 'add-view', 'refinish', 'look-pictures', 'adapt-story', 'label', 'intro', 'credits'])
+const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'export-song', 'add-view', 'refinish', 'look-pictures', 'adapt-story', 'label', 'intro', 'credits'])
 /** A music video planned up to the look: a picture is rendered there and then, the shots are not planned for it (#540). */
 const atLook = (target: EditorTarget) => target.kind === 'music' && stageOf(target) === 'look'
 
