@@ -185,7 +185,7 @@ rounded to multiples of 32. The pipeline computes the size itself, not a node on
 one renders the same size, and a clip that comes out at another size is put away in `old/attempts/` and fails instead of
 being scaled in the final video.
 
-`kroma-image` renders in two passes and saves twice the size it samples at: its `-1` is a 544×960 first pass,
+The one exception to the sizes above is `kroma-image`: it renders in two passes and saves twice the size it samples at (`krea2-image` and the clip workflows save exactly the size asked for): its `-1` is a 544×960 first pass,
 scaled up 2× to 1088×1920 (characters; 1920×1088 for locations), and `imageResolution` sets the size of the first
 pass - `"1088x1920"` gives a 2176×3840 picture.
 
