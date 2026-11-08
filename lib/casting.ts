@@ -10,7 +10,7 @@
 import {existsSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import {archiveFiles, versionStamp} from "./archive.ts";
-import {type AssetKind, assetPaths, copyAsset} from "./asset-import.ts";
+import {type AssetKind, assetPaths, copyAsset, copyPlan} from "./asset-import.ts";
 import {type LibraryAsset, libraryFolder, libraryIds, libraryLayout, libraryRef, readLibraryAsset} from "./library.ts";
 import {log, styles} from "./log.ts";
 
@@ -132,7 +132,9 @@ export function copyCasting(projectDir: string, library: string, entries: CastEn
         const key = copyKey(entry.kind, entry.id)
         const fingerprint = libraryFingerprint(library, entry.kind, entry.libraryId)
         const was = copies[key]
-        const there = existsSync(join(projectDir, assetPaths(entry.kind, entry.id).picture))
+        const target = assetPaths(entry.kind, entry.id)
+        const plan = copyPlan(library, libraryLayout(entry.kind, entry.libraryId), target)
+        const there = plan.length > 0 && plan.every(file => existsSync(join(projectDir, file.to)))
         if (!(was && was.library === entry.libraryId && was.fingerprint === fingerprint && there)) {
             copyAsset({dir: library, layout: libraryLayout(entry.kind, entry.libraryId), label: `library:${entry.libraryId}`}, {dir: projectDir, layout: assetPaths(entry.kind, entry.id), archiveName: entry.id})
             copied.push(entry)

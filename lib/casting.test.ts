@@ -87,6 +87,21 @@ describe('copyCasting', () => {
         expect(third.copied).toEqual(entries)
         expect(existsSync(join(project, 'assets/characters/lyra.png'))).toBe(true)
     })
+    test('a sheet-only library asset is complete without a picture and is not re-archived on each run', () => {
+        const lib = folder({
+            'characters/kael-red/asset.json': '{"name":"Kael","description":"A man."}',
+            'characters/kael-red/sheet/anchor.png': 'anchor',
+            'characters/kael-red/sheet/frames/frame_00.png': 'frame',
+        })
+        const project = folder()
+        const first = copyCasting(project, lib, entries)
+        expect(first.copied).toEqual(entries)
+        expect(existsSync(join(project, 'assets/characters/lyra.png'))).toBe(false)
+        expect(readFileSync(join(project, 'assets/sequence/characters/lyra/anchor.png'), 'utf8')).toBe('anchor')
+        const second = copyCasting(project, lib, entries, first.copies)
+        expect(second.copied).toEqual([])
+        expect(existsSync(join(project, 'old/attempts'))).toBe(false)
+    })
     test('droppedCopies: what the record has and casting.json no longer asks for', () => {
         expect(droppedCopies({'character:lyra': {library: 'kael-red', fingerprint: 'x'}, 'location:stage': {library: 'temple', fingerprint: 'y'}}, [{kind: 'location', id: 'stage', libraryId: 'temple'}])).toEqual(['character:lyra'])
     })
