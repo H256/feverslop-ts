@@ -2,7 +2,7 @@ import {cli} from '../lib/cli.ts';
 import {log} from '../lib/log.ts';
 // Creates a new short film: asks for a story idea or a screenplay (any language), a visual style and, if wanted, the
 // film's settings - then writes films/<id>/ and prints the command to run it.
-// usage: bun run film:init
+// usage: bun run film:init [film-id]   (the id only pre-fills the first question)
 import * as p from "@clack/prompts";
 import {loadFilmConfig, filmDefaults, type FilmConfig} from "../lib/film/config.ts";
 import {filmExists, writeFilm} from "../lib/film/setup.ts";
@@ -28,6 +28,7 @@ log.section('feverslop-ts · new short film')
 const id = answer(await p.text({
     message: 'Film id (used as the directory name)',
     placeholder: 'the-last-lighthouse',
+    initialValue: Bun.argv[2] && !Bun.argv[2].startsWith('-') ? Bun.argv[2] : undefined,
     validate: value => {
         if (!value) return 'required'
         if (!validProjectId(value)) return 'lowercase letters, digits and "-" only'

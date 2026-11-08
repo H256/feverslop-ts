@@ -3,7 +3,7 @@ import {log} from '../lib/log.ts';
 // Creates a new project: asks for the song (an audio file, or one to generate from a song idea or from lyrics of your
 // own), who sings it, lyrics and/or a story idea, the look and the render settings - then shows a summary to change any
 // answer in, writes projects/<id>/ and prints the command to run it.
-// usage: bun run init
+// usage: bun run init [project-id]   (the id only pre-fills the first question)
 import * as p from "@clack/prompts";
 import {existsSync, readdirSync} from "node:fs";
 import type {Resolution} from "../comfy/helpers.ts";
@@ -66,6 +66,7 @@ const a = {
     preset: 'defaults', imageWorkflow: defaults.imageWorkflow, videoWorkflow: defaults.videoWorkflow, imageResolution: -1, videoResolution: -1,
     continuity: defaults.continuity, contextFrames: defaults.contextFrames, finalFps: defaults.finalFps, finish: defaults.finish,
 } as unknown as Answers
+const positionalId = Bun.argv[2] && !Bun.argv[2].startsWith('-') ? Bun.argv[2] : undefined
 const hasSong = () => a.songSource === 'file' || a.songSource === 'library'
 // a song of the library brings its lyrics - a file of your own needs them asked for
 const asksLyrics = () => a.songSource === 'file'
@@ -95,7 +96,7 @@ const steps: Record<string, Step> = {
             a.id = answer(await p.text({
                 message: 'Project id (used as the directory name)',
                 placeholder: 'well-of-youth-gothic-trio',
-                initialValue: a.id,
+                initialValue: a.id ?? positionalId,
                 validate: value => {
                     if (!value) return 'required'
                     if (!validProjectId(value)) return 'lowercase letters, digits and "-" only'
