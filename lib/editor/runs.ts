@@ -1,4 +1,4 @@
-import {existsSync, readdirSync, readFileSync, rmSync, statSync} from "node:fs";
+import {closeSync, existsSync, openSync, readdirSync, readSync, rmSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {lockHolder, verifiedLockHolder} from "../lock.ts";
 import {lastRun, runState} from "../run-record.ts";
@@ -297,8 +297,31 @@ export class RunControl {
         // a run started in the terminal: its log, as it grows
         const log = newestLog(target.dir)
         if (!log || !lockHolder(target.dir)) return {lines: [], next: after}
-        const all = readFileSync(log, 'utf8').split(/\r?\n/).filter(line => line.trim())
+        const all = this.terminalLog(this.key(target), log)
         return {lines: all.slice(after), next: all.length}
+    }
+
+    // the lines of the log being followed, per project: only the bytes appended since the last poll are read
+    private logs = new Map<string, { file: string, bytes: number, lines: string[] }>()
+
+    private terminalLog(key: string, file: string): string[] {
+        let seen = this.logs.get(key)
+        const size = statSync(file).size
+        if (!seen || seen.file !== file || size < seen.bytes) this.logs.set(key, seen = {file, bytes: 0, lines: []})
+        if (size > seen.bytes) {
+            const chunk = Buffer.alloc(size - seen.bytes)
+            const fd = openSync(file, 'r')
+            try {
+                readSync(fd, chunk, 0, chunk.length, seen.bytes)
+            } finally {
+                closeSync(fd)
+            }
+            // only whole lines: a line still being written is read when it is complete
+            const end = chunk.lastIndexOf(10) + 1
+            seen.bytes += end
+            for (const line of chunk.subarray(0, end).toString('utf8').split(/\r?\n/)) if (line.trim()) seen.lines.push(line)
+        }
+        return seen.lines
     }
 
     /** Stops the run of this project. Finished outputs stay, jobs on a server are picked up by the next run. */

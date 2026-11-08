@@ -1,5 +1,5 @@
 import {afterAll, beforeAll, describe, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
+import {appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {basename, dirname, join} from "node:path";
 import {clipVersions, pictureVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
@@ -352,6 +352,21 @@ describe('a run', () => {
         expect(lines).toEqual(['first', 'second'])
         write(join(project.dir, 'logs/20260101-000000.log'), 'first\nsecond\nthird\n')
         expect(runs.lines(project, next).lines).toEqual(['third'])
+    })
+    test('a run in the terminal: a log that grows is read from where it was, a line is shown when it is complete', () => {
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-e')
+        const file = join(project.dir, 'logs/20260101-000000.log')
+        write(join(project.dir, '.lock'), String(process.ppid))
+        write(file, 'first\nsec')
+        const one = runs.lines(project, 0)
+        expect(one.lines).toEqual(['first'])
+        appendFileSync(file, 'ond\n\nthird\n')
+        const two = runs.lines(project, one.next)
+        expect(two.lines).toEqual(['second', 'third'])
+        // a log that starts over (a smaller file) is read from its start
+        write(file, 'new\n')
+        expect(runs.lines(project, 0).lines).toEqual(['new'])
     })
 })
 
