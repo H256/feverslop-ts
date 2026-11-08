@@ -57,6 +57,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
 | `bun run export-song <id>` / `import-song <id> [song]` | a song with its stems and the timing of its lyrics into the library, or from it into a project - see [The asset library](#the-asset-library) |
 | `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
+| `bun run texture-chains <id> [--film]` | measures whether clips that continue on the clip before get grittier from link to link, next to the change at an ordinary cut; reads the rendered clips with ffmpeg only, writes nothing (`--json` for machines) |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run film:init`, `bun film.ts <id>` | the short-film pipeline - see [docs/film.md](docs/film.md) |
@@ -355,8 +356,8 @@ Dark gothic oil painting in the manner of Caravaggio, heavy chiaroscuro, candlel
 [docs/style-examples.md](docs/style-examples.md) lists all the built-in styles (classic to modern live action, anime,
 2D/3D animation, stop-motion, painted and found-media looks) to copy into `style.txt`.
 
-The longest clip the video model can generate is set in `lib/frames.ts` as `MAX_CLIP_SEC` (10 seconds - the H3 node
-actually renders such a slot as 10.13 s, see [The final video](#the-final-video)).
+The longest clip the video model can generate is set in `lib/frames.ts` as `MAX_CLIP_SEC` (about 9.29 s, not 10 - the H3 node
+renders such a slot as 226 frames (about 9.4 s), see [The final video](#the-final-video)).
 
 ## Steps
 
@@ -691,8 +692,8 @@ The full guide, with the options every workflow gets, the helpers and a checklis
 - **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped
   connection changes nothing. If FeverSlop TS stops while ComfyUI is still rendering (Ctrl+C, crash, sleep), the next
   run picks the job up again via `<file>.pending.json` instead of rendering it twice.
-- **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full 10 s
-  slot renders 10.13 s; the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
+- **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full-length
+  slot renders 226 frames (about 9.4 s); the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
   strict - the rounding adds up to 16 frames (0.67 s).
 - **Model names are fixed in the workflow files.** Change them there, or copy a workflow under a new name.
 - **Uploads and results pile up on the server** under `feverslop-ts/<project-id>/` in ComfyUI's `input/` and `output/`.
