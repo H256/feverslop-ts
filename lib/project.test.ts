@@ -16,6 +16,10 @@ describe('what the next run would redo, without redoing it', () => {
         expect(project.redoneBy(['story'])).toEqual(['story', 'summary', 'cast', 'lookBrief', 'beats'])
         expect(project.data.summary).toBe('x')
     })
+    test('changing the summary redoes singer choices that use it', () => {
+        const project = store({summary: 'old story', cast: {characters: [], locations: []}, singing: {singers: []}})
+        expect(project.redoneBy(['summary'])).toContain('singing')
+    })
     test('a changed input names its steps; an unchanged one does not', () => {
         const project = store({inputs: {'story-idea.txt': Bun.hash('old').toString(16)}, story: 's'})
         expect(project.changedInputs({'story-idea.txt': {value: 'new', steps: ['story']}})).toEqual([{name: 'story-idea.txt', steps: ['story']}])

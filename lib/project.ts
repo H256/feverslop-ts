@@ -220,7 +220,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     story: [],
     summary: ['story'],
     cast: ['story'],
-    singing: ['cast'],
+    singing: ['cast', 'summary'],
     lookBrief: ['summary'],
     characterLooks: ['cast', 'lookBrief'],
     characterLookVariants: ['characterLooks', 'beats'],
