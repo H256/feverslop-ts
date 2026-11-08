@@ -1,3 +1,4 @@
+import {boundedMemo} from "./memo.ts";
 import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {isAbsolute, join, relative} from "node:path";
 import {probeVideo} from "../assemble.ts";
@@ -80,12 +81,11 @@ export function groupsOf(clips: EditorClip[], label: (id: string) => string): Ed
     return groups
 }
 
-const probed = new Map<string, Promise<VideoInfo | undefined>>()
+const probed = boundedMemo<Promise<VideoInfo | undefined>>(500)
 /** What a video is, asked of ffprobe once per version of the file. */
 const probedVideo = (file: string, v: number) => {
     const key = `${file}:${v}`
-    if (!probed.has(key)) probed.set(key, probeVideo(file).catch(() => undefined))
-    return probed.get(key)!
+    return probed(key, () => probeVideo(file).catch(() => undefined))
 }
 
 const FINAL_NAME = new RegExp(`^(?:--([a-z0-9.-]+?))?(-preview)?(?:-(\\d+)fps)?(-finished)?((?:-(?:${POSTWORK_ENDING_NAMES.join('|')}))*)$`)

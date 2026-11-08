@@ -1,3 +1,4 @@
+import {boundedMemo} from "./memo.ts";
 import {existsSync, mkdtempSync, statSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {extname, isAbsolute, join, relative, resolve, sep} from "node:path";
@@ -239,8 +240,9 @@ function runEvents(runs: RunControl, target: EditorTarget, request: Request, fro
 }
 
 export function editorHandler(runs = new RunControl(), options: EditorOptions = {}) {
-    const waveforms = new Map<string, Promise<number[] | undefined>>()
-    const thumbnails = new Map<string, Promise<Uint8Array | undefined>>()
+    // bounded: a re-rendered file is a new key, the entries of its old versions must not stay forever
+    const waveform = boundedMemo<Promise<number[] | undefined>>(100)
+    const thumbnailOf = boundedMemo<Promise<Uint8Array | undefined>>(300)
     const oneByOne = limiter(THUMBNAILS_AT_ONCE)
 
     // every page is the built client: its router shows the page of the address
@@ -251,8 +253,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
         const width = Number(url.searchParams.get('w') ?? THUMBNAIL_WIDTHS[0])
         if (!file || !THUMBNAIL_WIDTHS.includes(width) || !['.png', '.jpg', '.jpeg', '.webp'].includes(extname(file).toLowerCase())) return notFound()
         const key = `${file}:${width}:${statSync(file).mtimeMs}`
-        if (!thumbnails.has(key)) thumbnails.set(key, oneByOne(() => makeThumbnail(file, width)).catch(() => undefined))
-        const bytes = await thumbnails.get(key)
+        const bytes = await thumbnailOf(key, () => oneByOne(() => makeThumbnail(file, width)).catch(() => undefined))
         // ffmpeg could not make one: the picture itself will do
         if (!bytes) return serveMedia(file, request, url.searchParams.has('v'))
         return new Response(bytes, {headers: {'Content-Type': 'image/jpeg', 'Cache-Control': url.searchParams.has('v') ? 'private, max-age=86400, immutable' : 'no-cache'}})
@@ -283,8 +284,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     const file = source && mediaFile(target.dir, source)
                     if (!file) return json({peaks: null})
                     const key = `${file}:${statSync(file).mtimeMs}`
-                    if (!waveforms.has(key)) waveforms.set(key, readWaveform(file).catch(() => undefined))
-                    return json({peaks: await waveforms.get(key) ?? null})
+                    return json({peaks: await waveform(key, () => readWaveform(file).catch(() => undefined)) ?? null})
                 }
                 if (what === 'progress') {
                     const current = runs.current(target)
@@ -305,8 +305,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     const file = audio && mediaFile(target.dir, audio.file)
                     if (!file) return json({peaks: null})
                     const key = `fine:${file}:${statSync(file).mtimeMs}`
-                    if (!waveforms.has(key)) waveforms.set(key, readFineWaveform(file, 100).catch(() => undefined))
-                    return json({peaks: await waveforms.get(key) ?? null})
+                    return json({peaks: await waveform(key, () => readFineWaveform(file, 100).catch(() => undefined)) ?? null})
                 }
                 if (what === 'casting') {
                     const project = await readEditorProject(target)
