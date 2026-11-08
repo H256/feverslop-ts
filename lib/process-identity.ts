@@ -20,3 +20,15 @@ export function processIdentity(pid: number): string | undefined {
 let own: string | undefined
 export const ownProcessIdentity = () => own ??= processIdentity(process.pid)
 export const sameProcess = (pid: number, identity: string | undefined) => !!identity && identity === processIdentity(pid)
+
+/** Whether a PID currently names a live process. */
+export const processAlive = (pid: number) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0) return false
+    try {
+        process.kill(pid, 0)
+        return true
+    } catch (e) {
+        // EPERM: the process exists, it is only not ours
+        return (e as NodeJS.ErrnoException).code === 'EPERM'
+    }
+}

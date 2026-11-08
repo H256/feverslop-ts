@@ -1,20 +1,12 @@
 import {closeSync, existsSync, openSync, readFileSync, rmSync, writeSync} from "node:fs";
 import {join} from "node:path";
-import {ownProcessIdentity, processIdentity, sameProcess} from './process-identity.ts';
+import {sweepPartials} from './partial-cleanup.ts';
+import {ownProcessIdentity, processAlive, processIdentity, sameProcess} from './process-identity.ts';
 
 // Every save writes the whole project.json from the state the run loaded: two runs on one project would silently drop
 // each other's steps. So a run that writes holds a lock file with its process id for as long as it lives.
 
-export const processAlive = (pid: number) => {
-    if (!Number.isSafeInteger(pid) || pid <= 0) return false
-    try {
-        process.kill(pid, 0)
-        return true
-    } catch (e) {
-        // EPERM: the process exists, it is only not ours
-        return (e as NodeJS.ErrnoException).code === 'EPERM'
-    }
-}
+export {processAlive} from './process-identity.ts';
 
 /** The process that holds the project's lock now - undefined when it is free, or held by a process that is gone. */
 export function lockHolder(dir: string): number | undefined {
@@ -65,6 +57,7 @@ function takeLock(dir: string, what: string): () => void {
 export function lockProject(dir: string, what: string): () => void {
     const release = takeLock(dir, what)
     process.on('exit', release)
+    try { sweepPartials(dir) } catch { /* cleanup must not stop a run */ }
     return release
 }
 
