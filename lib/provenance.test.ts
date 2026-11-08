@@ -9,6 +9,15 @@ import type {ClipRequest} from "./compose.ts";
 const dir = () => mkdtempSync(join(tmpdir(), 'prov-'))
 
 describe('freshness', () => {
+    test('a generated video without readable metadata is stale, not implicitly user-pinned (#650)', () => {
+        const d = dir(), file = join(d, 'clip.mp4')
+        writeFileSync(file, 'video')
+        expect(freshness(file, 'request')).toBe('stale')
+        writeFileSync(`${file}.json`, '{')
+        expect(freshness(file, 'request')).toBe('stale')
+        writeFileSync(`${file}.json`, JSON.stringify(pinnedSidecar('own video')))
+        expect(freshness(file, 'request')).toBe('pinned')
+    })
     test('a file without a sidecar, or from before fingerprints, is pinned', () => {
         const d = dir()
         writeFileSync(join(d, 'a.png'), 'x')

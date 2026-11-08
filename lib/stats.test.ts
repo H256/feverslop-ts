@@ -4,6 +4,11 @@ import type {Timing} from "./timings.ts";
 
 const clip = (seconds: number, extra: Partial<Timing> = {}): Timing => ({at: '', kind: 'clip', name: 'wan', seconds, variant: 'v1', server: 'gpu1', ...extra})
 
+test('resumed fetch times are excluded from duration benchmarks (#663)', () => {
+    const [row] = groupRows([clip(100), clip(120), clip(1, {outcome: 'resumed'})], by.variant)
+    expect(row).toMatchObject({n: 2, median: 110, retries: 0, failed: 0})
+})
+
 test('median and p90 of the warm jobs; cold starts, outliers, retries and failures are counted apart', () => {
     const rows = groupRows([clip(100), clip(110), clip(90), clip(105), clip(1000), clip(400, {cold: true}), clip(0, {outcome: 'retry'}), clip(3, {outcome: 'failed'})], by.variant)
     expect(rows).toHaveLength(1)

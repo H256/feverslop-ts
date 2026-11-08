@@ -51,11 +51,15 @@ export const recordedFingerprint = (file: string) => {
 
 export function freshness(file: string, current: string): Freshness {
     const sidecar = readSidecar(file)
+    if (!sidecar && file.endsWith('.mp4') && existsSync(file)) return 'stale'
     if (!sidecar || sidecar.source === 'user' || sidecar.pinned === true) return 'pinned'
     const recorded = sidecar.fingerprint
     if (typeof recorded !== 'string') return 'pinned'
     return recorded === current ? 'current' : 'stale'
 }
+
+/** Video bytes alone do not establish that a generated take was committed successfully. */
+export const incompleteClip = (file: string) => file.endsWith('.mp4') && existsSync(file) && !readSidecar(file)
 
 /** Is it a file the user put in place (its sidecar says so)? */
 export const isUserFile = (file: string) => {

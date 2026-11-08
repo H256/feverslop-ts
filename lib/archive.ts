@@ -43,7 +43,7 @@ export type ClipVersion = {
     video: string,
     firstFrame?: string,
     lastFrame?: string,
-    source: 'again' | 'stale' | 'leak',     // why it was put away: rendered again on request, from an older plan, a grey backdrop
+    source: 'again' | 'stale' | 'leak' | 'size', // includes takes rejected for an unexpected output size
     made: number,                           // when it was rendered: the time of its file
     seed?: number,
     workflow?: string,
@@ -60,9 +60,10 @@ export function clipVersions(projectDir: string, clipId: string): ClipVersion[] 
     const versions: ClipVersion[] = []
     const again = new RegExp(`^${escapeId(clipId)}-${STAMP}(-\\d+)?$`)
     const stale = new RegExp(`^stale-${STAMP}-videos-${escapeId(clipId)}\\.mp4(-\\d+)?$`)
+    const size = new RegExp(`^size-${STAMP}-videos-${escapeId(clipId)}\\.mp4(-\\d+)?$`)
     const attempts = join(projectDir, 'old', 'attempts')
     for (const folder of existsSync(attempts) ? readdirSync(attempts) : []) {
-        const source = again.test(folder) ? 'again' : stale.test(folder) ? 'stale' : undefined
+        const source = again.test(folder) ? 'again' : stale.test(folder) ? 'stale' : size.test(folder) ? 'size' : undefined
         const video = `${clipId}.mp4`
         if (!source || !existsSync(join(attempts, folder, video))) continue
         const record = readRecord(join(attempts, folder, `${video}.json`))
@@ -112,6 +113,7 @@ export function restoreClipVersion(projectDir: string, clipId: string, versionId
     const folder = join(projectDir, version.id)
     putBack(join(projectDir, version.video), join(projectDir, video), now)
     if (existsSync(join(folder, `${clipId}.mp4.json`))) putBack(join(folder, `${clipId}.mp4.json`), join(projectDir, `${video}.json`), now)
+    else writeFileSync(join(projectDir, `${video}.json`), JSON.stringify({source: 'user', pinned: true, restoredFrom: version.id}, null, 2))
     for (const frame of frames) if (existsSync(join(folder, basename(frame)))) putBack(join(folder, basename(frame)), join(projectDir, frame), now)
     if (!readdirSync(folder).length) rmdirSync(folder)
     return {putAway}

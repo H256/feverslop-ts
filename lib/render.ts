@@ -14,7 +14,7 @@ import {paddedClip, withOriginalSound} from "./refinish.ts";
 import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
 import {backdropSeconds, hasBackdropRun} from "./leak.ts";
 import {bestTake, checkClip, describe as describeFindings, type Finding} from "./clip-qa.ts";
-import {freshness, isOwnFile, isUserFile, recordedEditedPrompt, recordedFingerprint, recordedPrompt} from "./provenance.ts";
+import {freshness, incompleteClip, isOwnFile, isUserFile, recordedEditedPrompt, recordedFingerprint, recordedPrompt} from "./provenance.ts";
 import {anchorSpec, clipSpec, lookAnchorSpec, pictureSpec, type RenderSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
 import {fileFingerprint} from "./provenance.ts";
 import {matchColors} from "./colormatch.ts";
@@ -23,6 +23,7 @@ import {archiveFiles, pictureFiles, versionStamp} from "./archive.ts";
 import {characterLookSequencePrompt, characterSequencePrompt, composeSheet, expressionOf, locationSequencePrompt, LOOK_SEQUENCE_FRAMES, lookSheetFrames, selectFrameIndices, SEQUENCE_FRAMES, sequenceSheetDir, sheetAnchor, sheetFrame, sheetFrames, sheetLayout, sheetVideo, sheetViews} from "./sequenceSheet.ts";
 import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
+import {produceMedia} from './media-file.ts';
 import {clipRequestRef} from "./previous-output.ts";
 
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
@@ -427,6 +428,11 @@ export class Renderer implements Disposable {
      * --refresh=<kind> put away in old/attempts and rendered again. True when the file has to be rendered again.
      */
     staleFile(kind: 'pictures' | 'clips', file: string, current: string, away: string[]): boolean {
+        if (kind === 'clips' && incompleteClip(join(this.projectDir, file))) {
+            const keep = archiveFiles(this.projectDir, `stale-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, away)
+            log.warn(`${file} has no readable sidecar; incomplete take kept in ${keep}, rendering again. Own videos need a sidecar with source: "user"`)
+            return true
+        }
         if (freshness(join(this.projectDir, file), current) !== 'stale') return false
         if (!this.refresh.has(kind)) {
             log.warn(`${file} was made from another prompt, workflow or picture than the plan has now - it is used as it is; --refresh=${kind} renders it again (the old one is kept in old/attempts)`)
@@ -566,9 +572,9 @@ export class Renderer implements Disposable {
             return {result, uploads: [], meta: {seed, duration}}
         })
 
-        await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', downloaded, '-c:a', 'pcm_s16le', songFile], {
+        await produceMedia(songFile, partial => runProcess(['ffmpeg', '-y', '-v', 'error', '-i', downloaded, '-c:a', 'pcm_s16le', partial], {
             errorMessage: err => `ffmpeg failed to convert the generated song to wav:\n${err}`,
-        })
+        }))
         rmSync(downloaded)
         await Bun.write(`${songFile}.json`, JSON.stringify({workflow: this.config.songWorkflow, seed, duration, style: brief.style, lyrics: brief.lyrics}, null, 2))
         log.step('Saved', 'input/song.wav')
@@ -668,7 +674,8 @@ export class Renderer implements Disposable {
         // are computed by the workflow file, not by the server (comfy/helpers.ts, pixelSize); what still comes out at
         // another size is put away and fails, instead of being used
         if (expected && (rendered.width !== expected.width || rendered.height !== expected.height)) {
-            const keep = archiveFiles(this.projectDir, `size-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, [file])
+            await Bun.write(`${target}.json`, JSON.stringify({workflow: this.config.videoWorkflow, seed, fingerprint: request, renderedFrames: rendered.frames, size: `${rendered.width}x${rendered.height}`, rejected: 'size'}))
+            const keep = archiveFiles(this.projectDir, `size-${versionStamp()}-${file.replace(/[\/]/g, '-')}`, [file, `${file}.json`, boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
             throw new Error(`${file} came out at ${rendered.width}x${rendered.height}, ${this.config.videoWorkflow} renders ${JSON.stringify(this.config.videoResolution)} (${this.config.videoAspect}) at ${expected.width}x${expected.height} - put away in ${keep}; the server that rendered it computes another size`)
         }
         if (rendered.frames < clip.frames) log.warn(`${file} has ${rendered.frames} frames, the clip needs ${clip.frames} - delete it and render again`)
@@ -911,7 +918,7 @@ export class Renderer implements Disposable {
         await withOriginalSound(rendered, source, frames, length !== frames, target)
         rmSync(rendered, {force: true})
         if (clipFile !== source) rmSync(clipFile, {force: true})
-        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'h3-refine', seed, denoise, size: `${size.width}x${size.height}`, frames, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
+        await Bun.write(`${target}.json`, JSON.stringify({complete: true, bytes: statSync(target).size, workflow: 'h3-refine', seed, denoise, size: `${size.width}x${size.height}`, frames, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
         log.step('Saved', `${relative(this.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height} · ${this.took(rendered)}`)}`)
     }
 
@@ -934,7 +941,7 @@ export class Renderer implements Disposable {
         await withOriginalSound(rendered, source, frames, length !== frames, target)
         rmSync(rendered, {force: true})
         if (clipFile !== source) rmSync(clipFile, {force: true})
-        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'h3-latent-upscale', size: `${size.width}x${size.height}`, frames, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
+        await Bun.write(`${target}.json`, JSON.stringify({complete: true, bytes: statSync(target).size, workflow: 'h3-latent-upscale', size: `${size.width}x${size.height}`, frames, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
         log.step('Saved', `${relative(this.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height}`)}`)
     }
 
@@ -951,7 +958,7 @@ export class Renderer implements Disposable {
         }))
         await withOriginalSound(rendered, source, 0, false, target)
         rmSync(rendered, {force: true})
-        await Bun.write(`${target}.json`, JSON.stringify({workflow: 'video-upscale', model, size: `${size.width}x${size.height}`, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
+        await Bun.write(`${target}.json`, JSON.stringify({complete: true, bytes: statSync(target).size, workflow: 'video-upscale', model, size: `${size.width}x${size.height}`, source: relative(this.projectDir, source).replace(/\\/g, '/'), sourceFingerprint: fileFingerprint(source)}, null, 2))
         log.step('Saved', `${relative(this.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height}`)}`)
     }
 
@@ -1136,7 +1143,9 @@ export class Renderer implements Disposable {
         if (!home) this.settle(target)
 
         // a job already finished on its server needs no free one: only its result is fetched
-        if (home && initial && await this.jobState(home, initial.promptId) === 'finished') {
+        // This is only an optimization. A failed probe must enter the protected resume loop, not abort the render.
+        const finished = home && initial && await this.jobState(home, initial.promptId).catch(() => undefined) === 'finished'
+        if (home && initial && finished) {
             this.settle(target)
             const started = Date.now()
             const trace: Trace = []
@@ -1206,7 +1215,7 @@ export class Renderer implements Disposable {
         const setup = job?.setup
         recordTiming({
             kind: what.kind, name: what.workflow, seconds: Math.round(seconds * 10) / 10,
-            ...(failure ? {outcome: 'failed' as const, reason: failure.name} : {}),
+            ...(failure ? {outcome: 'failed' as const, reason: failure.name} : !fresh ? {outcome: 'resumed' as const} : {}),
             ...(job?.variant ? {variant: job.variant, workflowHash: await workflowHash(what.workflow)} : {}),
             ...(setup ? {setup, ...(setup.frames ? {frames: setup.frames} : {}), ...(setup.pixels ? {pixels: setup.pixels} : {})} : {}),
             server: server.name, ...this.machines.get(server.name),
@@ -1290,7 +1299,10 @@ export class Renderer implements Disposable {
         const file = files.findLast(f => extensions.some(e => f.filename.endsWith(e)))
         if (!file) throw new Error(`${label}: the output node saved no ${extensions.join(' or ')} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
         // written next to the target first, so an interrupted download never looks like a finished file
-        await Bun.write(`${target}.download`, await server.api.getImage(file))
+        const query = new URLSearchParams({filename: file.filename, type: file.type, subfolder: file.subfolder ?? ''})
+        const response = await server.api.fetchApi(`/view?${query}`)
+        if (!response.ok) throw new Error(`${label}: output download failed with HTTP ${response.status}`)
+        await Bun.write(`${target}.download`, await response.blob())
         renameSync(`${target}.download`, target)
         rmSync(`${target}.pending.json`, {force: true})
     }

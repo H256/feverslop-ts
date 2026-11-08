@@ -18,7 +18,7 @@ export type Timing = {
     kind: 'llm' | 'picture' | 'clip' | 'song' | 'interpolation'
     name: string              // the workflow (renders) or the model (LLM calls)
     seconds: number           // of one job / one call
-    outcome?: 'retry' | 'failed' | 'again'   // missing: it worked; for those, seconds is what the failed try took (0 when unknown)
+    outcome?: 'retry' | 'failed' | 'again' | 'resumed' // resumed: only this run's wait/fetch time, never a complete render duration
     reason?: string           // short, a fixed word or an error class - no text of the prompt or the answer
     migration?: string        // idempotency key for a legacy row copied into the central store
     step?: string             // the pipeline step an LLM call belongs to

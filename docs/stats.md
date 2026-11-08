@@ -38,4 +38,5 @@ bun run stats --since=2026-10-01 --json > stats.json
 
 The source remains the central timings JSONL (`FEVERSLOP_TIMINGS` overrides its path). Like the previous stats command, legacy project timing files are migrated into that store before reading. Invalid duration values are excluded from metrics and counted in the overview; malformed JSON lines retain the existing reader behavior of being ignored.
 
+Resumed jobs carry `outcome: "resumed"`: their wait/download duration is retained, but excluded from render benchmarks and estimates because the original compute time is unknown.
 Unchanged timing files reuse a bounded parsed-file cache, invalidated by file identity, size and timestamps. The append-only history is retained. Legacy migration serializes readers of each source, preserves it on write failure, and deduplicates copied rows on retry.

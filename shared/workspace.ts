@@ -123,7 +123,7 @@ export type ClipVersion = {
   video: string,
   firstFrame?: string,
   lastFrame?: string,
-  source: 'again' | 'stale' | 'leak',     // why it was put away: rendered again on request, from an older plan, a grey backdrop
+  source: 'again' | 'stale' | 'leak' | 'size',
   made: number,                           // when it was rendered: the time of its file
   seed?: number,
   workflow?: string,

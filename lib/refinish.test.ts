@@ -1,11 +1,23 @@
 import {describe, expect, test} from "bun:test";
-import {mkdtempSync, rmSync} from "node:fs";
+import {mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import h3LatentUpscale from "../comfy/workflows/h3-latent-upscale.ts";
 import h3Refine, {renderFrames} from "../comfy/workflows/h3-refine.ts";
-import {finalName, paddedClip, readOptions, targetSize, variantOf, withOriginalSound} from "./refinish.ts";
+import {completeDerivative, finalName, paddedClip, readOptions, targetSize, variantOf, withOriginalSound} from "./refinish.ts";
 import {finalLabel} from "./editor/project.ts";
+
+test('only explicitly completed derivatives are reusable (#664)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'derivative-')), file = join(dir, 'clip.mp4')
+    try {
+        writeFileSync(file, 'video')
+        expect(completeDerivative(file)).toBe(false)
+        writeFileSync(`${file}.json`, JSON.stringify({complete: true, bytes: 5}))
+        expect(completeDerivative(file)).toBe(true)
+        writeFileSync(file, 'cut')
+        expect(completeDerivative(file)).toBe(false)
+    } finally { rmSync(dir, {recursive: true, force: true}) }
+})
 
 describe('what is asked for', () => {
     test('a preset, and what is said beside it on top', () => {

@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts';
+import {completeDerivative} from '../lib/refinish.ts';
 // A project made before larger clips, 48 fps and the finish gets them afterwards, from the clips it has. No plan run: it reads output/clips/ and the
 // settings of the project, nothing is generated and no prompt changes. Nothing it has is overwritten: videos/ and the final video stay as they are, every
 // variant has its own folder videos/refined/<variant>/ and its own final videos <id>--<variant>[-48fps][-finished].mp4, so they can be compared.
@@ -100,7 +101,7 @@ if (options.upscale !== 'none') {
     for (const clip of selected) {
         const source = join(dir, 'videos', `${clip.id}.mp4`)
         const target = fileOf(clip)
-        if (existsSync(target)) {
+        if (completeDerivative(target)) {
             log.step('Exists', styles.muted(`${folder}/${clip.id}.mp4`))
             continue
         }

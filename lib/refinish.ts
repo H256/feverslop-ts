@@ -1,5 +1,14 @@
 import {FPS} from "./frames.ts";
 import {runProcess} from "./process.ts";
+import {produceMedia} from './media-file.ts';
+import {existsSync, readFileSync, statSync} from 'node:fs';
+
+export function completeDerivative(file: string): boolean {
+    try {
+        const meta = JSON.parse(readFileSync(`${file}.json`, 'utf8'))
+        return existsSync(file) && meta.complete === true && meta.bytes === statSync(file).size
+    } catch { return false }
+}
 
 // A project made before larger clips, 48 fps and the finish gets them afterwards, from the clips it has (tools/refinish.ts). No plan run: on an old project
 // that would generate new steps and change prompts. Nothing it has is overwritten: every variant has a folder of its own, its final videos names of their own.
@@ -71,5 +80,5 @@ export const paddedClip = (source: string, target: string, extra: number) =>
 
 /** The rendered picture with the sound of the original clip, as many frames as that has. The picture is only encoded again when frames were cut off. */
 export const withOriginalSound = (rendered: string, original: string, frames: number, cut: boolean, target: string) =>
-    runProcess(['ffmpeg', '-y', '-v', 'error', '-i', rendered, '-i', original, '-map', '0:v', '-map', '1:a?', ...(cut ? ['-frames:v', String(frames), '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-pix_fmt', 'yuv420p'] : ['-c:v', 'copy']), '-c:a', 'copy', '-movflags', '+faststart', target],
-        {errorMessage: err => `ffmpeg could not put the sound of ${original} under ${rendered}:\n${err}`})
+    produceMedia(target, partial => runProcess(['ffmpeg', '-y', '-v', 'error', '-i', rendered, '-i', original, '-map', '0:v', '-map', '1:a?', ...(cut ? ['-frames:v', String(frames), '-c:v', 'libx264', '-preset', 'medium', '-crf', '15', '-pix_fmt', 'yuv420p'] : ['-c:v', 'copy']), '-c:a', 'copy', '-movflags', '+faststart', partial],
+        {errorMessage: err => `ffmpeg could not put the sound of ${original} under ${rendered}:\n${err}`}))

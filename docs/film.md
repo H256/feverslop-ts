@@ -350,4 +350,5 @@ A film planned before has props after its next run, but its shots name them only
 1. A generated score (the music-video pipeline can make music)
 2. Tests for the parts that need servers (LLM, ComfyUI)
 
+A video without a readable JSON sidecar is incomplete, rather than implicitly user-owned. Rendering preserves it in `old/attempts` and regenerates it. For an intentionally supplied video, write `<video>.json` with `{"source":"user","pinned":true}`. Explicitly restoring an old sidecar-less take records that choice automatically.
 Assembly writes `output/timeline.edl` from the actual cuts, including extra dialogue frames and continuation trimming. Planning leaves this assembled EDL intact.
