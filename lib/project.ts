@@ -158,6 +158,7 @@ export type Singing = { singers: string[], lines: { line: number, text: string, 
 export type Assignment = { slotId: string, beatId: string }
 
 export type Project = {
+    formatVersion?: number,            // cached step shapes; versioned migrations live with PROJECT_FORMAT_REDO below - not a step
     inputs?: Record<string, string>, // fingerprints of the input files and settings - not a step
     partials?: Partials,             // answers of a running step, one per element (lib/partials.ts) - not a step
     // which library asset each role or place of casting.json was copied from, in which version (lib/casting.ts) - not a step
@@ -204,7 +205,7 @@ export type Project = {
     shotViewPlans?: Record<string, string>, // effective direction plan used to choose each cached view
     shotMoments?: Record<string, BeatShots | string[]>,   // beatId -> the staged shots of the beat, replacing beat.moments when not --legacy-moments (string[]: a plan from before the staging)
 }
-export type StepName = Exclude<keyof Project, 'inputs' | 'partials' | 'castingCopies' | 'shotViewPlans'>
+export type StepName = Exclude<keyof Project, 'formatVersion' | 'inputs' | 'partials' | 'castingCopies' | 'shotViewPlans'>
 
 /** An input whose change redoes steps (lib/inputs.ts); `assumed` is the value it had before fingerprints existed. */
 export type TrackedInput = { value: string | Uint8Array, steps: StepName[], assumed?: string }
@@ -244,6 +245,19 @@ const dependsOn: Record<StepName, StepName[]> = {
 }
 
 export const STEP_NAMES = Object.keys(dependsOn) as StepName[]
+
+/** Bump when a cached step's persisted shape changes; list the affected root steps in the new version's entry. */
+export const PROJECT_FORMAT_VERSION = 1
+export const PROJECT_FORMAT_REDO: Record<number, StepName[]> = {
+    1: [], // all earlier shape changes remain readable through existing adapters; no redo is required
+}
+
+/** Cached roots changed between versions and their cached dependents, in pipeline order. */
+export function projectFormatRedo(from: number, to: number, data: Partial<Record<StepName, unknown>>, changes = PROJECT_FORMAT_REDO): StepName[] {
+    const roots = [...new Set(Array.from({length: Math.max(0, to - from)}, (_, index) => changes[from + index + 1] ?? []).flat())]
+        .filter(step => data[step] !== undefined)
+    return [...roots, ...builtOn(roots, data)]
+}
 
 /**
  * The beats a run plans the shots of again: shot plans exist, but not for these (a beat whose answers stayed unusable, a
@@ -301,6 +315,7 @@ export class ProjectStore {
     data: Project = {}
     // the steps generated in this run (not taken from project.json)
     readonly generated = new Set<StepName>()
+    private formatMigrationPending = false
 
     constructor(readonly id: string) {
         this.dir = join('projects', id)
@@ -319,6 +334,19 @@ export class ProjectStore {
             throw new Error(`${this.file} is not valid JSON (${e instanceof Error ? e.message : String(e)}) - fix it by hand, or delete it to start over (every step is generated again)`)
         }
         if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) throw new Error(`${this.file} must be a JSON object - fix it by hand, or delete it to start over (every step is generated again)`)
+        const previous = this.data.formatVersion ?? 0
+        if (!Number.isSafeInteger(previous) || previous < 0) throw new Error(`${this.file}: formatVersion must be a non-negative whole number - fix it by hand`)
+        if (previous > PROJECT_FORMAT_VERSION) throw new Error(`${this.file} uses project format ${previous}, newer than this program supports (${PROJECT_FORMAT_VERSION}) - update feverslop-ts before opening it`)
+        if (previous < PROJECT_FORMAT_VERSION) {
+            const redo = projectFormatRedo(previous, PROJECT_FORMAT_VERSION, this.data)
+            if (redo.length) {
+                this.formatMigrationPending = true
+                log.warn(`${this.file} uses project format ${previous}; cached step shapes changed. Redo them with: bun index.ts ${this.id} --redo=${redo.join(',')}`)
+            } else {
+                this.data.formatVersion = PROJECT_FORMAT_VERSION
+                await this.save()
+            }
+        }
     }
 
     // saves one after the other: elements of a step asked at once (llm.parallel) save as each answer comes in
@@ -326,6 +354,7 @@ export class ProjectStore {
 
     // written next to the target first, so a crash mid-write never leaves a truncated project.json
     save() {
+        if (!this.formatMigrationPending) this.data.formatVersion = PROJECT_FORMAT_VERSION
         this.saving = this.saving.catch(() => {}).then(async () => {
             await Bun.write(partialOf(this.file), JSON.stringify(this.data, null, 2))
             replaceWithPartial(this.file)

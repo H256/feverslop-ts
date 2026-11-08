@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {type Project, ProjectStore} from "./project.ts";
+import {projectFormatRedo, type Project, ProjectStore} from "./project.ts";
 import type {ProjectConfig} from "./config.ts";
 import {projectInputs, stepUsed} from "./inputs.ts";
 
@@ -10,6 +10,10 @@ const store = (data: object) => {
 }
 
 describe('what the next run would redo, without redoing it', () => {
+    test('format migrations name only cached changed steps and their dependents', () => {
+        expect(projectFormatRedo(0, 1, {locationLooks: 'look'})).toEqual([])
+        expect(projectFormatRedo(1, 2, {locationLooks: 'look', locationDescriptions: {}, shotMoments: {}}, {2: ['locationLooks']})).toEqual(['locationLooks', 'locationDescriptions', 'shotMoments'])
+    })
     test('a step and the steps built on it that have a result', () => {
         const project = store({story: 's', summary: 'x', cast: {characters: [], locations: []}, lookBrief: 'l', beats: [], music: {}})
         expect(project.redoneBy(['summary'])).toEqual(['summary', 'lookBrief'])

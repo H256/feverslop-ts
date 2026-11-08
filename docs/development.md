@@ -52,6 +52,13 @@ For changing FeverSlop TS itself. Using it: the [README](../README.md).
 A new config field: `lib/config.ts` (type, default, check), the [config.json](../README.md#configjson) table and, if it
 changes the plan, `projectInputs`.
 
+### Changing a cached step's shape
+
+When a `project.json` step result changes shape, increment `PROJECT_FORMAT_VERSION` and add the affected root step names
+to that version in `PROJECT_FORMAT_REDO` (`lib/project.ts`). Loading an older project then names those cached roots and
+their dependents in a `--redo` command. Keep compatibility adapters only when old data must remain usable before that
+redo; the format registry records the migration instead of adding another silent branch at each read site.
+
 ## Tests and checks
 
 The Checks workflow runs the backend tests and typecheck on pushes and pull requests. Release publication depends on those
