@@ -44,7 +44,9 @@ bar_energy = (bar_energy - bar_energy.min()) / max(np.ptp(bar_energy), 1e-9)
 chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
 mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
 bar_frames = librosa.time_to_frames(downbeats, sr=sr)
-per_bar = [librosa.util.sync(f, bar_frames)[:, 1:] for f in (chroma, mfcc)]  # drop the pickup before bar 0
+# sync() makes one column per bar plus the pickup before the first downbeat - unless that downbeat is at frame 0, then there is no pickup
+pickup = 1 if len(bar_frames) and bar_frames[0] > 0 else 0
+per_bar = [librosa.util.sync(f, bar_frames)[:, pickup:] for f in (chroma, mfcc)]
 features = np.vstack([librosa.util.normalize(f, axis=0) for f in per_bar] + [bar_energy[None, :]])
 features = (features - features.mean(axis=1, keepdims=True)) / (features.std(axis=1, keepdims=True) + 1e-9)
 unit = features / (np.linalg.norm(features, axis=0, keepdims=True) + 1e-9)
