@@ -24,6 +24,9 @@ import {sheetAnchor} from "../lib/sequenceSheet.ts";
 import {clipRequestsDir} from "../lib/previous-output.ts";
 cli('import-asset')
 
+// what a cancel after the copy must say: the pictures are already swapped, only project.json is untouched
+let alreadyDone = ''
+
 
 const usage = 'usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]'
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -129,6 +132,7 @@ if (!answer(await p.confirm({
 const done = copyAsset({dir: source.dir, layout: source.layout(sourceId), label: fromLibrary ? 'library' : source.label}, {dir, layout: assetPaths(target.kind, target.id), archiveName: target.id})
 log.success(`Copied ${done.copied} file(s) to ${sheet}${existsSync(join(dir, picture)) ? ` and ${picture}` : ''} - pinned, never rendered again`)
 if (done.putAway) log.info(`The old pictures are in ${done.putAway}`)
+alreadyDone = `the pictures were already copied to ${sheet}${done.putAway ? ` and the old ones put away in ${done.putAway}` : ''}; project.json was not changed`
 
 // 3. the description that goes with the picture
 const config = await loadProjectConfig(dir)
@@ -227,5 +231,5 @@ function fail(message: string): never {
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T) {
-    return wizardAnswer(value, 'Cancelled')
+    return wizardAnswer(value, alreadyDone ? `Cancelled - ${alreadyDone}` : 'Cancelled - nothing was changed')
 }
