@@ -111,9 +111,9 @@ directions (a lost line stops the run, `--allow-import-gaps` goes on anyway).
 | 6 | `lookBrief`  | The film look - extends `style.txt` | summary |
 | 7 | `characterLooks`, `characterDescriptions` | Krea 2 prompt per character who is seen, and the description without the picture's pose and background for the clip prompts | cast, lookBrief |
 | 8 | `locationLooks`, `locationDescriptions` | the same for the locations | cast, lookBrief, summary |
-| 8c | `locationViews` | Only with `"locationViews": true`: the floor plan and the five views of every location sheet, designed for the place - see [Location views](#location-views) | cast, locationDescriptions |
+| 8c | `locationViews` | Only with `"locationViews": true`: the floor plan and the five views of every location sheet, designed for the place - see [Location views](#location-views) | cast, locationLooks, screenplay |
 | 8d | `props` | The things the story names that people handle and that come back (at most six), each with a look put together from the thing alone - see [Props](#props) | screenplay, cast |
-| 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast |
+| 9 | `coverage`   | Every scene broken into shots (framing, camera, who is in it, action, which dialogue lines). The answer is checked: every line in exactly one shot, in order | screenplay, cast, lookBrief, locationViews, props, characterDescriptions, locationDescriptions |
 | 10 | –           | Shots packed into clips of ≤ ~9.3 s, then the H3 requests - built deterministically, never cached: `output/clips/clip-001.json …`, `output/timeline.json`, `output/timeline-plan.edl` (the planned edit decision list for an editor: DaVinci Resolve, Premiere, … - the clips cut as the assembled film cuts them) | coverage |
 | 10a | –          | Only with `--render=…` and `sequenceSheets`: once a location's sheet is rendered, a vision model reads what each of its five views shows (`sheetViews`), and the LLM chooses the view of every shot (`shotViews`) - cached in `project.json`, see [Location views](#location-views) | coverage, rendered sheets |
 | 11 | –           | Reference pictures and clips rendered with ComfyUI (only with `--render=images` / `--render=videos`). A clip that starts on the last frame of the one before waits for it, those render one after the other | |
@@ -253,6 +253,8 @@ and every place `"project:<id>"`; from then on it is yours:
   `from` is the number of the scene (1 = the first) in which the look first shows.
 - A `"library:<id>"` role gets the library's picture and sheet copied in (never rendered, its old pictures go to `old/attempts`),
   and the library's description stands in for its look and its description - the clip prompts describe it as the library does.
+- If the library entry or `casting.json` changes that text after planning, the film saves the new text and names the cached steps to redo;
+  character state looks and descriptions are included because they were derived from the base character look.
 - An entry the library does not have stops the run before anything is made. A narrator's voice has no picture and no entry.
 - Back to `"project:"`: the library pictures are put away, `bun film.ts <id> --redo=characterLooks` (or `locationLooks`)
   writes its own look again, `--render=images` draws it.

@@ -24,7 +24,7 @@ const dependsOn: Record<FilmStepName, FilmStepName[]> = {
     locationDescriptions: ['locationLooks'],
     locationViews: ['locationLooks', 'cast', 'screenplay'],
     props: ['screenplay', 'cast'],
-    coverage: ['screenplay', 'cast', 'lookBrief', 'locationViews', 'props'],
+    coverage: ['screenplay', 'cast', 'lookBrief', 'locationViews', 'props', 'characterDescriptions', 'locationDescriptions'],
     scriptNotes: ['screenplay'],
     scriptFixes: ['screenplay'],
     subtitles: ['screenplay'],

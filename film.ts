@@ -33,7 +33,7 @@ import {previewSources} from "./lib/assemble.ts";
 import {parseRetake} from "./lib/retake.ts";
 import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import type {AssetKind} from "./lib/asset-import.ts";
-import {castFromLibrary, copyKey} from "./lib/casting.ts";
+import {applyLibraryText, castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
 import {applyDirectionOverlay} from './lib/direction/service.ts';
 import {lockProject} from "./lib/lock.ts";
@@ -47,7 +47,7 @@ import {applyScriptFixes, estimateSeconds, locationOf, mergeRawCasts, missingDia
 import {filmExists, filmIds} from "./lib/film/setup.ts";
 import {applyAnnotations, parseFountain} from "./lib/film/fountain-import.ts";
 import {askFilmJson as askJson} from "./lib/film/json.ts";
-import {FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
+import {filmBuiltOn, FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from "./lib/film/store.ts";
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from "./lib/film/types.ts";
 import {ask, configureLlm} from "./lib/llm.ts";
 import {keepLogIn, log, styles} from "./lib/log.ts";
@@ -369,8 +369,11 @@ if (config.sequenceSheets && config.locationViews) for (const l of cast.location
     if (asset) log.warn(`${l.id} is library:${asset.id} - its sheet is the library's, not one of the designed views (locationViews): a shot may name a view its picture does not show`)
 }
 // a library asset's description, also in a step kept from an earlier run (casting.json was changed since)
-const fromLibrary = (kind: AssetKind, values: Record<string, string>) => {
-    for (const [key, asset] of casting.assets) if (key.startsWith(`${kind}:`)) values[key.slice(kind.length + 1)] = asset.description
+const libraryTextChanges = new Set<FilmStepName>()
+const fromLibrary = (kind: AssetKind, step: FilmStepName, values: Record<string, string>) => {
+    for (const [key, asset] of casting.assets) {
+        if (key.startsWith(`${kind}:`) && applyLibraryText(values, key.slice(kind.length + 1), asset.description)) libraryTextChanges.add(step)
+    }
 }
 
 stopAfter(until, 'cast', film.file, `bun film.ts ${filmId}`)
@@ -418,7 +421,7 @@ const characterLooks = await film.step('characterLooks', '7 · CRAFTING CHARACTE
     }
     return looks
 })
-fromLibrary('character', characterLooks)
+fromLibrary('character', 'characterLooks', characterLooks)
 for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 
 /////////// 7b · the character looks without the reference sheet (pose, grey background, studio light) - for the clip prompts
@@ -435,7 +438,7 @@ const characterDescriptions = await film.step('characterDescriptions', '7b · DE
     }
     return descriptions
 })
-fromLibrary('character', characterDescriptions)
+fromLibrary('character', 'characterDescriptions', characterDescriptions)
 for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
 
 /////////// 8 · LOCATION LOOKS
@@ -448,7 +451,7 @@ const locationLooks = await film.step('locationLooks', '8 · CRAFTING LOCATION L
     }
     return looks
 })
-fromLibrary('location', locationLooks)
+fromLibrary('location', 'locationLooks', locationLooks)
 for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
 
 /////////// 8b · the location looks without the establishing shot (camera, "empty") - for the clip prompts
@@ -461,7 +464,13 @@ const locationDescriptions = await film.step('locationDescriptions', '8b · DESC
     }
     return descriptions
 })
-fromLibrary('location', locationDescriptions)
+fromLibrary('location', 'locationDescriptions', locationDescriptions)
+if (libraryTextChanges.size) {
+    await film.save()
+    // The base library text is already written into its step; include those steps so character state prompts refresh too.
+    const redo = [...new Set([...libraryTextChanges, ...filmBuiltOn([...libraryTextChanges], film.data)])]
+    log.warn(`library text changed - saved to ${film.file}; redo the steps built on the old text with: bun film.ts ${filmId} --redo=${redo.join(',')}`)
+}
 for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
 
 /////////// 8c · LOCATION VIEWS - the five views of a location's reference sheet, designed for the place and its story (only with sequence sheets)

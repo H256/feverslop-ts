@@ -1,5 +1,5 @@
 import {expect, test} from "bun:test";
-import {filmStepProblem} from "./store.ts";
+import {filmBuiltOn, filmRedoAfter, filmStepProblem} from "./store.ts";
 
 test('cached film screenplay rejects malformed dialogue before a later prompt crashes', () => {
     expect(filmStepProblem('screenplay', {title: 'A', language: 'en', scenes: [{id: 's1', setting: 'INT', location: 'Room', time: 'DAY', elements: [{type: 'dialogue', speaker: 'Mara', kind: 'spoken'}]}]})).toContain('screenplay.scenes[0].elements[0].text/type')
@@ -13,4 +13,11 @@ test('cached film coverage rejects malformed shots with a precise path', () => {
 test('cached simple steps require their documented value shape', () => {
     expect(filmStepProblem('summary', {text: 'summary'})).toContain('a string')
     expect(filmStepProblem('scriptNotes', ['ok', 2])).toContain('an array of strings')
+})
+
+test('library text changes name cached film descriptions and coverage for redo', () => {
+    const cached = {characterLooks: {}, characterDescriptions: {}, locationLooks: {}, locationDescriptions: {}, coverage: []}
+    expect(filmBuiltOn(['characterLooks'], cached)).toEqual(['characterDescriptions', 'coverage'])
+    expect(filmBuiltOn(['locationLooks'], {...cached, locationViews: {}})).toContain('coverage')
+    expect(filmRedoAfter(['characterDescriptions'], cached)).toEqual(['coverage'])
 })
