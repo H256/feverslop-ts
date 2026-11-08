@@ -21,6 +21,7 @@ test('a split word reaches two final prompts without a false stop before its con
         shotMoments: {b1: {shots: [{action: 'The Shaman sings.', characters: ['shaman']}]}},
     }
     const [head, tail] = buildClipRequests(input)
+    expect([head, tail].map(clip => ({prompt: clip!.prompt, assets: clip!.assets, startsFrom: clip!.startsFrom}))).toMatchSnapshot('music composition: split lyrics, cast, audio and continuation (#658)')
     expect(head!.prompt).toContain('<d>[German] Rosma-</d>')
     expect(tail!.prompt).toContain('<d>[German] -rienbaum.</d>')
     expect(tail!.vocals![0]!.at).toBe(0)
