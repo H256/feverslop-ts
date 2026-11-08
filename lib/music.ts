@@ -42,8 +42,11 @@ export function projectLyricSections(lyrics: string, analyzed?: string[]): Lyric
     return !analyzedWith(sections) && analyzedWith(perTag) ? perTag : sections
 }
 
+// the Python helpers by absolute path: the run may be started from any working directory
+const pythonTool = (name: string) => join(import.meta.dir, '..', 'tools', name)
+
 export async function analyzeSong(songFile: string, labels: string[]): Promise<MusicMap> {
-    const stdout = await runProcess(['uv', 'run', 'tools/analyze_song.py', songFile, JSON.stringify(labels)], {errorMessage: err => `Song analysis failed:\n${err}`})
+    const stdout = await runProcess(['uv', 'run', pythonTool('analyze_song.py'), songFile, JSON.stringify(labels)], {errorMessage: err => `Song analysis failed:\n${err}`})
     return JSON.parse(stdout)
 }
 
@@ -137,7 +140,7 @@ export function activityRanges(power: number[], hopSec: number, barSec: number):
 
 // progress (and the model downloads on first use) are shown as they happen, stdout is the result
 async function runVocalsTool(args: string[], what: string) {
-    return runProcess(['uv', 'run', 'tools/vocals.py', ...args], {
+    return runProcess(['uv', 'run', pythonTool('vocals.py'), ...args], {
         stderr: 'tee',
         errorMessage: stderr => [`${what} failed (tools/vocals.py ${args[0]}):`, ...lastLines(stderr)].join('\n'),
     })
