@@ -156,7 +156,7 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
     const visionApiKey = pick('visionApiKey', [['file', file.llm?.vision?.apiKey], ['env', env.FEVERSLOP_VISION_API_KEY]])
     const visionModel = pick('visionModel', [['file', file.llm?.vision?.model], ['env', env.FEVERSLOP_VISION_MODEL]])
     if (visionUrl && sources.visionUrl === 'env') checkUrl(visionUrl, 'FEVERSLOP_VISION_URL')
-    const vision = visionUrl || visionModel
+    const vision = visionUrl || visionApiKey || visionModel
         ? {...(visionUrl ? {url: trimSlash(visionUrl)} : {}), ...(visionApiKey ? {apiKey: visionApiKey} : {}), ...(visionModel ? {model: visionModel} : {})}
         : undefined
 

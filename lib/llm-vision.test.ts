@@ -4,7 +4,7 @@ import {loadSettings} from "./settings.ts";
 
 // Two fake servers: a text server and a vision server, each with its models, /props as llama.cpp has it (vision on or
 // off, or none at all) and a streamed Responses answer that names the server and the model it was asked for.
-type Fake = { name: string, models: string[], vision?: boolean, refuseImages?: boolean, calls: { model: string, images: number }[] }
+type Fake = { name: string, models: string[], vision?: boolean, refuseImages?: boolean, calls: { model: string, images: number }[], keys: (string | null)[] }
 const sse = (events: object[]) => events.map(e => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
 
 function serve(fake: Fake) {
@@ -15,6 +15,7 @@ function serve(fake: Fake) {
             if (path === '/v1/models') return Response.json({object: 'list', data: fake.models.map(id => ({id, object: 'model', created: 0, owned_by: 'test'}))})
             if (path === '/props') return fake.vision === undefined ? new Response('not found', {status: 404}) : Response.json({modalities: {vision: fake.vision, audio: false}})
             if (path !== '/v1/responses') return new Response('not found', {status: 404})
+            fake.keys.push(req.headers.get('authorization'))
             const body = await req.json() as { model: string, input: string | { content: { type: string }[] }[] }
             const images = typeof body.input === 'string' ? 0 : body.input.flatMap(m => m.content).filter(c => c.type === 'input_image').length
             fake.calls.push({model: body.model, images})
@@ -28,8 +29,8 @@ function serve(fake: Fake) {
     })
 }
 
-const textFake: Fake = {name: 'text', models: ['qwen-27b', 'qwen-vl'], calls: []}
-const visionFake: Fake = {name: 'vision', models: ['gemma-vl'], vision: true, calls: []}
+const textFake: Fake = {name: 'text', models: ['qwen-27b', 'qwen-vl'], calls: [], keys: []}
+const visionFake: Fake = {name: 'vision', models: ['gemma-vl'], vision: true, calls: [], keys: []}
 let textServer: ReturnType<typeof Bun.serve>
 let visionServer: ReturnType<typeof Bun.serve>
 const textUrl = () => `http://localhost:${textServer.port}/v1`
@@ -49,6 +50,8 @@ afterAll(() => {
 afterEach(() => {
     textFake.calls = []
     visionFake.calls = []
+    textFake.keys = []
+    visionFake.keys = []
     textFake.vision = undefined
     textFake.refuseImages = undefined
 })
@@ -86,6 +89,12 @@ describe('a vision model of its own', () => {
         configureLlm({url: textUrl(), model: 'qwen-27b', vision: {model: 'qwen-vl'}})
         expect(await ask(picture)).toBe('text:qwen-vl')
         expect(await ask(words)).toBe('text:qwen-27b')
+    })
+    test('an API key alone overrides the text key while using the text server and model', async () => {
+        textFake.vision = true
+        configureLlm({url: textUrl(), apiKey: 'text-key', model: 'qwen-27b', vision: {apiKey: 'vision-key'}})
+        expect(await ask(picture)).toBe('text:qwen-27b')
+        expect(textFake.keys).toEqual(['Bearer vision-key'])
     })
     test('a vision model the server does not have is named with its setup', async () => {
         configureLlm({url: textUrl(), model: 'qwen-27b', vision: {model: 'nope'}})

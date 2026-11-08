@@ -339,7 +339,7 @@ async function show() {
     if (!llm.vision) log.info(`  ${styles.muted('the text model')}`)
     else {
         log.info(`  url      ${llm.vision.url ?? styles.muted('the text server')} ${source(sources.visionUrl)}`)
-        if (llm.vision.url) log.info(`  api key  ${llm.vision.apiKey ? maskSecret(llm.vision.apiKey) : styles.muted('none')} ${source(sources.visionApiKey)}`)
+        log.info(`  api key  ${llm.vision.apiKey ? maskSecret(llm.vision.apiKey) : styles.muted('none')} ${source(sources.visionApiKey)}`)
         log.info(`  model    ${llm.vision.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.visionModel)}`)
     }
     log.info(`\nComfyUI ${source(sources.comfy)}`)

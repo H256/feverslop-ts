@@ -36,8 +36,8 @@ export function configureLlm(llm: LlmSettings) {
     text = {url: llm.url, apiKey: llm.apiKey, model: llm.model, label: 'Model'}
     const v = llm.vision
     // only a model: the text server (and its key) with another model
-    vision = v?.url || v?.model
-        ? {url: v.url ?? llm.url, apiKey: v.url ? v.apiKey : llm.apiKey, model: v.model, label: 'Vision model'}
+    vision = v?.url || v?.model || v?.apiKey
+        ? {url: v.url ?? llm.url, apiKey: v.url ? v.apiKey : v.apiKey ?? llm.apiKey, model: v.model ?? (v.url ? undefined : llm.model), label: 'Vision model'}
         : text
 }
 

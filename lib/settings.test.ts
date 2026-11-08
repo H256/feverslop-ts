@@ -6,7 +6,8 @@ import {loadSettings, maskSecret, normalizeUrl, parseComfyEntries, readSettingsF
 
 const envKeys = [
     "FEVERSLOP_SETTINGS", "FEVERSLOP_LLM_URL", "FEVERSLOP_LLM_API_KEY", "FEVERSLOP_LLM_MODEL",
-    "FEVERSLOP_LLM_PARALLEL", "FEVERSLOP_COMFY", "COMFY",
+    "FEVERSLOP_LLM_PARALLEL", "FEVERSLOP_VISION_URL", "FEVERSLOP_VISION_API_KEY", "FEVERSLOP_VISION_MODEL",
+    "FEVERSLOP_COMFY", "COMFY",
 ]
 const originalEnv = new Map(envKeys.map(key => [key, process.env[key]]))
 const directories: string[] = []
@@ -101,5 +102,15 @@ describe("settings", () => {
         expect(result.llm).toEqual({parallel: 1})
         expect(result.comfy).toEqual([{url: "http://localhost:8188", name: "localhost:8188"}])
         expect(Object.values(result.sources)).toEqual(Array(8).fill("default"))
+    })
+
+    test("retains a vision API key when no separate vision URL or model is set", async () => {
+        settingsFile(JSON.stringify({llm: {vision: {apiKey: "file-vision-key"}}}))
+        expect((await loadSettings()).llm.vision).toEqual({apiKey: "file-vision-key"})
+        expect((await loadSettings()).sources.visionApiKey).toBe("file")
+
+        process.env.FEVERSLOP_VISION_API_KEY = "env-vision-key"
+        expect((await loadSettings()).llm.vision).toEqual({apiKey: "env-vision-key"})
+        expect((await loadSettings()).sources.visionApiKey).toBe("env")
     })
 })
