@@ -355,8 +355,8 @@ Dark gothic oil painting in the manner of Caravaggio, heavy chiaroscuro, candlel
 [docs/style-examples.md](docs/style-examples.md) lists all the built-in styles (classic to modern live action, anime,
 2D/3D animation, stop-motion, painted and found-media looks) to copy into `style.txt`.
 
-The longest clip the video model can generate is set in `lib/frames.ts` as `MAX_CLIP_SEC` (10 seconds - the H3 node
-actually renders such a slot as 10.13 s, see [The final video](#the-final-video)).
+The longest clip the video model can generate is set in `lib/frames.ts` as `MAX_CLIP_SEC` (about 9.29 s, not 10 - the H3 node
+renders such a slot as 226 frames (about 9.4 s), see [The final video](#the-final-video)).
 
 ## Steps
 
@@ -691,8 +691,8 @@ The full guide, with the options every workflow gets, the helpers and a checklis
 - **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped
   connection changes nothing. If FeverSlop TS stops while ComfyUI is still rendering (Ctrl+C, crash, sleep), the next
   run picks the job up again via `<file>.pending.json` instead of rendering it twice.
-- **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full 10 s
-  slot renders 10.13 s; the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
+- **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full-length
+  slot renders 226 frames (about 9.4 s); the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
   strict - the rounding adds up to 16 frames (0.67 s).
 - **Model names are fixed in the workflow files.** Change them there, or copy a workflow under a new name.
 - **Uploads and results pile up on the server** under `feverslop-ts/<project-id>/` in ComfyUI's `input/` and `output/`.
