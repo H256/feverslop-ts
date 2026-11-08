@@ -829,6 +829,10 @@ export class Renderer implements Disposable {
         const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['retake', plan.first, plan.end, prompt, this.config.videoWorkflow, fileFingerprint(video)]}
         await this.render<{ seed: number }>({label: `part of ${clip.id}`, spec, kind: 'clip', workflow: this.config.videoWorkflow, resolution: this.config.videoResolution}, rendered, '.mp4',
             () => job(plan, {...guides, prompt, uploads, seed, filenamePrefix: `${this.remoteDir}/videos/${clip.id}-retake`}))
+        // The server has consumed these local inputs; they are guide media, not project assets.
+        for (const upload of uploads) {
+            try { rmSync(upload.from, {force: true}) } catch { /* a guide that cannot be removed must not lose the retake */ }
+        }
 
         const spliced = join(this.projectDir, `${work}_spliced.mp4`)
         await spliceVideo({original: video, rendered, plan, width: info.width, height: info.height, target: spliced})
