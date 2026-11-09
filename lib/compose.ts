@@ -100,6 +100,8 @@ export type Input = {
     locationDescriptions: Record<string, string>,
     // per place the fixed features behind the people of every shot (step locationAnchors) - none: no background sentence
     locationAnchors?: Record<string, string>,
+    // per place its floor plan without people (step locationLayouts): the layout of a clip that does not open its beat
+    locationLayouts?: Record<string, { layout: string }>,
     lookBrief: string,
     music: MusicMap,
     language: string,           // for <d>[...], e.g. "English"
@@ -394,7 +396,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, locationLayouts, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s) - split where a singer changes within a line
@@ -938,8 +940,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
                 // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
                 ...(locationSubject && castSubjects.length ? [`The whole picture is ${locationSubject.label}: every figure stands inside it, at the positions described below, surrounded by the place itself.`] : []),
-                // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not
-                ...(staging && !slot.micro ? [`Layout of the place: ${withLabels(staging, planTokens)}`] : []),
+                // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not.
+                // It is where everyone is when the beat begins - said as a floor plan, not a shot: read as one, the model opened the clip
+                // on it, a wide shot of the singer walking down the corridor before [Shot 1] at the window (#740). A later clip of the beat
+                // gets the place's floor plan without people: by then they are where its shots put them.
+                ...(staging && !slot.micro ? [layoutLine(opensScene, withLabels(staging, planTokens), location && locationLayouts?.[location.id]?.layout)] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 // a fact that names somebody without a picture in this piece of a fight is left out
                 ...(state.length ? [`Continuity from earlier scenes: ${state.filter(f => !slot.micro || idsIn(f, beatTokens).every(id => cast.some(c => c.id === id))).map(f => withLabels(f, beatTokens)).join('; ')}.`] : []).filter(line => !(slot.micro && line.endsWith(': .'))),
@@ -1016,6 +1021,13 @@ function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, durati
         if (options.length) moved[j] = round(options.reduce((a, b) => Math.abs(a - t) <= Math.abs(b - t) ? a : b))
     }
     return moved
+}
+
+/** The layout sentence of a clip (see buildClip): the beat's staging where it opens, else the place's own floor plan. */
+export function layoutLine(opensScene: boolean, staging: string, placeLayout: string | undefined) {
+    if (opensScene) return `Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: ${staging}`
+    if (placeLayout) return `Layout of the place - a floor plan, not a shot of its own: ${placeLayout}`
+    return `Layout of the place as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them: ${staging}`
 }
 
 // "The smiths raise ..." reads on after "while" as "the smiths raise ..." - names and labels keep their case
