@@ -598,6 +598,10 @@ Two things in the timeline and the prompt help the mouth:
 - **No long silence inside a singing clip** (`vocalGap`, 1.5 s by default): "keep lips closed outside the span" does not
   hold when a clip opens on seconds of silence - the singing starts early. Such a clip is cut where the voice comes in,
   a long silent tail where it stops; the silence is rendered as a clip of its own.
+- **No line starting at the very end of a clip:** a line whose first word comes in the last second of a clip is not
+  sung there - the model does not get the mouth going in what is left. The cut avoids such a bar boundary where it can
+  (`chooseClipStarts`), and where it cannot (a section's end) the next clip starts just before the line (`pullLateOnsets`,
+  on the downbeat right before it when that is close). A project made before keeps its clips until `--redo=timeline`.
 - **Held notes:** a sung word of a second or more gets its own sentence in the shot - one open vowel shape held, only
   jaw and throat moving - or the mouth flaps open and shut on it. The length comes from `lyricsTiming`, nothing else.
 

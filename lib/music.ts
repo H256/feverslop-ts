@@ -187,6 +187,10 @@ export async function mixStems(files: string[], outFile: string): Promise<string
     return outFile
 }
 
+// a line that starts this close to the end of a clip is not sung there - a boundary there costs almost as much as a cut word
+const LATE_ONSET_SEC = 1
+const LATE_ONSET_COST = 0.8
+
 /**
  * Cuts every section into clips of a power-of-two bar count that fits the hardware limit.
  * With the lyrics timing, the sections start where their vocals start and every clip gets the words sung in it.
@@ -196,6 +200,8 @@ export async function mixStems(files: string[], outFile: string): Promise<string
  * boundary: a clip that ends in the middle of a word leaves the video model half a word at its end and a fragment at the start
  * of the next clip. Only the timing of the words is used. Dynamic programming over the bar boundaries, minimizing
  * - a word cut by a boundary (1 each), a line that goes on over a boundary between two words (small),
+ * - a line that starts in the last LATE_ONSET_SEC of a clip (most of a word): the video model does not get the mouth going in what
+ *   is left of the clip (#739: "Der Regen" 0.68 s before the end of schwarzer-flur's slot-004 - not sung at all),
  * - the clip length deviating from `barsPerSlot` (small - the usual length stays the usual one).
  * Returns the bar index where each clip starts, or undefined if no split keeps every clip within maxClipSec.
  */
@@ -203,11 +209,13 @@ export function chooseClipStarts(barTimes: number[], sectionStart: number, secti
     const n = barTimes.length
     if (!n) return undefined
     const words = timing.lines.flatMap(l => l.words)
+    const onsets = timing.lines.flatMap(l => l.off || !l.words.length ? [] : [l.words[0]!.start])
     const margin = 0.05
     const cutCost = (t: number) => {
         const cut = words.filter(w => w.start < t - margin && w.end > t + margin).length
-        if (cut) return cut
-        return timing.lines.some(l => l.start < t - margin && l.end > t + margin) ? 0.1 : 0
+        const late = onsets.some(s => s < t - margin && s >= t - LATE_ONSET_SEC) ? LATE_ONSET_COST : 0
+        if (cut) return cut + late
+        return (timing.lines.some(l => l.start < t - margin && l.end > t + margin) ? 0.1 : 0) + late
     }
     const timeAt = (k: number) => k === 0 ? sectionStart : k === n ? sectionEnd : barTimes[k]!
     // best[j]: cheapest way to have clips cover bars 0..j-1, with a boundary before bar j
@@ -279,6 +287,28 @@ export function splitAtVocalGaps<T extends Pick<Slot, 'start' | 'end' | 'bars'>>
         else merged.push({...p})
     }
     return merged.map(p => p.slot)
+}
+
+/**
+ * A line that starts in the last LATE_ONSET_SEC of a clip is sung in the next one: the boundary moves to just before its first word
+ * (onto the downbeat right before it when that is close) - where the clip before keeps MIN_GAP_CLIP_SEC, the next one stays within
+ * maxClipSec and no word is cut. In place. chooseClipStarts avoids most of these already; the ones left are at a section's end.
+ */
+export function pullLateOnsets<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(slots: T[], timing: LyricsTiming, downbeats: number[], maxClipSec: number, barSec: number) {
+    const words = timing.lines.flatMap(l => l.off ? [] : l.words)
+    const onsets = timing.lines.flatMap(l => l.off || !l.words.length ? [] : [l.words[0]!.start]).sort((a, b) => a - b)
+    for (let i = 0; i + 1 < slots.length; i++) {
+        const a = slots[i]!, b = slots[i + 1]!
+        if (Math.abs(a.end - b.start) > 0.01) continue
+        const onset = onsets.find(s => s >= a.end - LATE_ONSET_SEC && s < a.end - 0.05)
+        if (onset === undefined) continue
+        const into = downbeats.find(d => d <= onset && d > onset - DOWNBEAT_SNAP_SEC) ?? round(onset - ONSET_LEAD_SEC)
+        if (into - a.start < MIN_GAP_CLIP_SEC || b.end - into > maxClipSec) continue
+        if (words.some(w => w.start < into - 0.05 && w.end > into + 0.05)) continue
+        a.end = b.start = into
+        a.bars = Math.max(1, Math.round((a.end - a.start) / barSec))
+        b.bars = Math.max(1, Math.round((b.end - b.start) / barSec))
+    }
 }
 
 export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], maxClipSec: number, timing?: LyricsTiming, vocalGap = 0): Timeline {
@@ -376,6 +406,8 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         lines.forEach((line, i) => split[Math.floor(i * split.length / lines.length)]!.lyrics.push(line))
         slots.push(...split)
     })
+    // what the split could not avoid (a section's end is fixed): a line starting in the last second of a clip starts the next one
+    if (timing) pullLateOnsets(slots, timing, music.downbeats, maxClipSec, barSec)
 
     slots.forEach((slot, i) => {
         slot.index = i
