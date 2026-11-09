@@ -13,7 +13,7 @@ import {useTimeline} from './context'
 import TimelineLegend from './TimelineLegend.vue'
 
 /** The timeline: a ruler, the sections or scenes, the sound, the clips and what is sung or said - zoomed, scrolled and scrubbed. */
-const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session} = useTimeline()
+const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct} = useTimeline()
 const {theme} = ChromeService.use()
 const MAX_PPS = 160
 const scroller = ref<HTMLElement>()
@@ -95,6 +95,27 @@ const hues = computed(() => {
   for (const group of project.value.groups) if (!map.has(group.label)) map.set(group.label, hueAt(map.size))
   return map
 })
+// The cast lanes (#735): one per character, the stretches of the shots that show them - who is in the picture at all, and where they
+// sing, play or speak. Neighbouring shots that show the same are one stretch. A click directs the shot under it.
+type CastStretch = {key: string, start: number, length: number, does: string[], shot?: string, title: string}
+const castOpen = ref(true)
+const castLanes = computed(() => {
+  const lanes = new Map<string, {id: string, name: string, stretches: CastStretch[]}>()
+  for (const clip of project.value.clips) {
+    clip.shots.forEach((shot, n) => {
+      const start = clip.start + shot.at
+      const end = clip.start + (clip.shots[n + 1]?.at ?? clip.end - clip.start)
+      for (const who of shot.cast ?? []) {
+        const lane = lanes.get(who.id) ?? lanes.set(who.id, {id: who.id, name: who.name, stretches: []}).get(who.id)!
+        const last = lane.stretches.at(-1)
+        const does = [...who.does]
+        if (last && Math.abs(last.start + last.length - start) < 0.05 && last.does.join() === does.join()) { last.length = end - last.start; continue }
+        lane.stretches.push({key: `${clip.id}:${n}:${who.id}`, start, length: Math.max(0.05, end - start), does, shot: shot.directionId, title: `${who.name}${does.length ? ` - ${does.join(', ')}` : ''} · ${clip.id} ${shot.label.replace(/^\[|\]$/g, '')}`})
+      }
+    })
+  }
+  return [...lanes.values()]
+})
 const spoken = computed(() => project.value.clips.flatMap(clip => clip.lines.map((line, n) => ({key: `${clip.id}:${n}`, line, start: clip.start + line.at, length: Math.max(0.1, (line.end ?? clip.end - clip.start) - line.at)}))))
 
 function hover(event: PointerEvent) {
@@ -113,6 +134,7 @@ const hidePeek = () => { peek.value = undefined }
     <div class="tbar">
       <TimelineLegend />
       <div class="spacer" />
+      <button v-if="castLanes.length" :class="['cast-toggle', {on: castOpen}]" :title="castOpen ? 'Hide who is in which shot' : 'Show who is in which shot - grey: in the picture, orange: sings or speaks, green: plays'" @click="castOpen = !castOpen">Cast</button>
       <div class="zoom">
         <button title="Show the whole video" @click="fit">Fit</button>
         <label for="zoom" class="muted">Zoom</label>
@@ -126,6 +148,7 @@ const hidePeek = () => { peek.value = undefined }
         <div class="lane-wave">{{ peaks ? (project.song ? 'Song' : 'Sound') : '' }}</div>
         <div class="lane-clips">Clips</div>
         <div class="lane-lines">{{ film ? 'Lines' : 'Sung' }}</div>
+        <div v-for="lane in castOpen ? castLanes : []" :key="lane.id" class="lane-cast" :title="lane.name">{{ lane.name }}</div>
       </div>
       <div ref="scroller" class="scroll" @scroll.passive="left = scroller!.scrollLeft" @wheel="wheel">
         <div class="track" ref="track" :style="{'--seconds': project.seconds, '--pps': pps}">
@@ -139,6 +162,9 @@ const hidePeek = () => { peek.value = undefined }
           </div>
           <div class="lane lane-lines" @pointerdown="scrub">
             <div v-for="item in spoken" :key="item.key" class="spoken" :title="item.line.who ? `${item.line.who}: ${item.line.text}` : item.line.text" :style="{'--s': item.start, '--d': item.length}"><span>{{ item.line.text }}</span></div>
+          </div>
+          <div v-for="lane in castOpen ? castLanes : []" :key="lane.id" class="lane lane-cast" @pointerdown="scrub">
+            <button v-for="s in lane.stretches" :key="s.key" :class="['cast', ...s.does]" :title="s.shot ? `${s.title} - click to direct this shot` : s.title" :style="{'--s': s.start, '--d': s.length}" @pointerdown.stop @click="s.shot && direct(s.shot)" />
           </div>
           <div class="playhead" />
         </div>

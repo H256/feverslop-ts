@@ -131,6 +131,7 @@ bun index.ts mein-video
 ![Timeline mit Monitor und Clip-Details](images/workspace/timeline.jpg)
 
 - **Oben links** läuft das Video, **unten** liegt die Timeline mit Abschnitten, Ton, Clips und gesungenen oder gesprochenen Zeilen.
+- **Darunter** hat jede Figur eine schmale Spur: grau, wo sie im Bild ist, orange, wo sie singt oder spricht, grün, wo sie spielt. Ein Klick auf einen Abschnitt öffnet den Shot im Regie-Dialog (siehe [Einen Shot direkt in der Timeline führen](#einen-shot-direkt-in-der-timeline-führen)). **Cast** über der Timeline blendet die Spuren aus und ein.
 - **Rechts** stehen die Details des gewählten Clips: **Prompt**, **Shots**, **References**, **Render** und **Versions**.
 - **Rechts neben der Abspielzeit** wählst du, was läuft: das fertige Video oder **Clips over the song**, also die einzelnen Clips. Zum Beurteilen von Clips nimmst du Letzteres, denn ein fertiges Video zeigt die Clips so, wie sie beim Zusammenbau waren.
 
