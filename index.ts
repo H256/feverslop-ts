@@ -28,6 +28,7 @@ import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAw
 import {languageName, loadProjectConfig} from "./lib/config.ts";
 import {alignLyrics, lowConfidence, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
 import {readFineWaveform} from "./lib/waveform.ts";
+import {MISSING_WORD_LEAD, RATE, voiceLead} from "./shared/timing-fit.ts";
 import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, previewSources, formatSlotRanges} from "./lib/assemble.ts";
@@ -1135,6 +1136,16 @@ if (shotViews) {
 ////////// BUILDING THE MINIMAX H3 REQUESTS
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
 log.section('12 · BUILDING THE MINIMAX H3 REQUESTS')
+// the vocals stem's loudness: a shot does not forbid the lip-sync where its singing is already heard (lib/compose.ts, voiceLead)
+const vocalPeaks = stems && singing ? await readFineWaveform(join(project.dir, stems.vocals), RATE).catch(() => undefined) : undefined
+// singing heard well before a line's first word: the clips follow the sound, but the timing most likely lost a word there (#738)
+if (vocalPeaks && lyricsTiming) {
+    const early = lyricsTiming.lines.flatMap((line, n) => {
+        const lead = voiceLead(line.words, vocalPeaks, lyricsTiming.lines[n - 1]?.end ?? 0)
+        return lead >= MISSING_WORD_LEAD ? [`"${line.text}" (${lead.toFixed(1)} s)`] : []
+    })
+    if (early.length) log.warn(`${early.length} line(s) are heard before their first word - a word may be missing in their timing: ${early.join(', ')}. Check them on the workspace's Timing page`)
+}
 const clips = buildClipRequests({
     slots: clipSlots,
     mapping,
@@ -1150,6 +1161,7 @@ const clips = buildClipRequests({
     language,
     singing,
     lyricsTiming,
+    vocalPeaks,
     shotMoments: args['legacy-moments'] ? undefined : directedPlan.shotMoments,
     propActivity,
     stemsAvailable: Boolean(stems),
