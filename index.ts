@@ -26,7 +26,7 @@ import {parseRetake} from "./lib/retake.ts";
 import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from "./lib/own-picture.ts";
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
-import {alignLyrics, lowConfidence, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
+import {alignLyrics, lowConfidence, lyricsProblems, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
 import {readFineWaveform} from "./lib/waveform.ts";
 import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
@@ -375,6 +375,10 @@ if (lyricsTiming) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))
         log.line(`   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`)
     }
+    // with known lyrics nothing is lost and nothing added (#738): every line once, placed, with its own words
+    for (const p of lyricsProblems(alignedTiming!, lyricSections)) log.warn(`line ${p.line + 1} "${p.text}": ${p.problem} - check it on the Timing page (bun run timing ${projectId})`)
+    const suggested = alignedTiming!.lines.filter(l => l.adlib && l.off)
+    if (suggested.length) log.step('Ad-libs', styles.muted(`${suggested.length} line(s) heard that lyrics.txt does not have - not sung until taken: ${suggested.map(l => `${l.line + 1} "${l.text}"`).join(', ')} (bun run timing ${projectId} --on=N)`))
     const unsure = lowConfidence(lyricsTiming)
     if (unsure.length) log.warn(`${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them on the workspace's Timing page (bun run editor), or fix lyricsTiming in ${project.file} by hand, then --redo=timeline`)
 }

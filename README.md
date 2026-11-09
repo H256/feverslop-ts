@@ -46,7 +46,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run look <id> [--film]` | print the look of the whole and of every character and place; `--json` / `--set=look.json` change texts, `--again=<id>` have one written anew |
 | `bun run casting <id> [--film]` | casting.json, what the next plan run takes over and the `--redo` it needs; `--set=character:<id>=library:<asset>` |
 | `bun run singers <id>` | who sings which line; `--line=12:mara,ben`, or `--json` / `--set=singers.json` (a singer change within a line as `parts`) |
-| `bun run timing <id>` | when each sung line is; `--json` / `--set=timing.json` moves its words, `--tighten` starts the lines that begin in silence where the singing does |
+| `bun run timing <id>` | when each sung line is; `--json` / `--set=timing.json` moves its words, `--tighten` starts the lines that begin in silence where the singing does, `--reset=N,M|all` sets lines placed by hand back to the automatic timing, `--on=N` sings an ad-lib (heard, not in lyrics.txt - a suggestion until then); lines that do not match lyrics.txt are said |
 | `bun run direction <id> [--film]` | tune an existing performance: saved instructions, scoped to character/scene/shot or song time, LLM `--preview`, `--take` / `--drop`, plan versions; [direction guide](docs/direction.md) |
 | `bun run versions <id> <clip-or-picture> [--film]` | the older versions put away; `--pick=<version>` makes one the current one again |
 | `bun run config <id> [--film]` | the render settings of a project (`config.json`): printed, or changed with `--set=videoWorkflow=h3-ref2video-prism-2pass` (more than once), `--unset=seed` takes one back to its default; says which rendered clips and pictures a change makes stale |

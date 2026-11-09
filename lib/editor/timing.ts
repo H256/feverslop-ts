@@ -4,8 +4,10 @@ import {isAbsolute, join, relative, resolve} from "node:path";
 import type {ClipRequest} from "../compose.ts";
 import {splitBySinger} from '../singing-parts.ts';
 import {withProjectLock} from "../lock.ts";
-import {MIN_WORD_SEC, normalizeWord, slotVocals} from "../lyrics.ts";
-import type {Project, TimedLine} from "../project.ts";
+import {alignLyrics, lyricsProblems, MIN_WORD_SEC, normalizeWord, slotVocals, tightenStarts} from "../lyrics.ts";
+import {projectLyricSections} from "../music.ts";
+import type {LyricsTiming, Project, TimedLine} from "../project.ts";
+import {readFineWaveform} from "../waveform.ts";
 import {readClipRequests} from "../render-state.ts";
 import type {EditorTarget} from "./project.ts";
 import type {TimingWord, TimingLine, TimingView, TimingChange, TimingResult} from '../../shared/workspace.ts';
@@ -94,9 +96,30 @@ export function outdatedClips(data: Project, requests: Request[]): {clip: string
     return outdated
 }
 
+/** The lyrics sections of a project, as the plan reads input/lyrics.txt - undefined without it. */
+function lyricSectionsOf(dir: string, data: Project) {
+    const file = join(dir, 'input', 'lyrics.txt')
+    return existsSync(file) ? projectLyricSections(readFileSync(file, 'utf8'), data.music?.sections.map(s => s.label)) : undefined
+}
+
+/**
+ * The timing as the alignment makes it, from the transcript kept in the project - whisper does not run again: the lyrics on the
+ * words heard, the first words started where the vocals stem has sound (as step 2c). For a line placed by hand to go back to it.
+ */
+export async function automaticTiming(dir: string, data: Project): Promise<LyricsTiming> {
+    const sections = lyricSectionsOf(dir, data)
+    if (!sections || !data.transcript || !data.music) throw new Error('no transcript or no lyrics - the automatic timing comes with the plan run (bun index.ts --until=story)')
+    const aligned = alignLyrics(sections, data.transcript.words, data.music.sections, data.transcript.activity, data.music.bpm)
+    const vocals = data.stems?.vocals && join(dir, data.stems.vocals)
+    const loudness = vocals ? await readFineWaveform(vocals, 100).catch(() => undefined) : undefined
+    return loudness ? tightenStarts(aligned, loudness).timing : aligned
+}
+
 export function timingView(dir: string, data: Project, requests: Request[]): TimingView | undefined {
     const timing = data.lyricsTiming
     if (!timing) return undefined
+    const sections = lyricSectionsOf(dir, data)
+    const problems = sections ? lyricsProblems(timing, sections) : []
     const beatOfSlot = new Map((data.mapping ?? []).map(m => [m.slotId, m.beatId]))
     const slots = data.timeline?.slots ?? []
     const beats = data.beats ?? []
@@ -109,6 +132,8 @@ export function timingView(dir: string, data: Project, requests: Request[]): Tim
             words: wordsToPlace(l, duration).map(w => ({...w})),
             estimated: l.words.some(w => w.estimated) || (!l.byHand && l.confidence < ESTIMATED_BELOW),
             byHand: !!l.byHand,
+            ...(l.adlib ? {adlib: true} : {}),
+            ...(problems.some(p => p.line === l.line) && !l.adlib ? {problem: problems.filter(p => p.line === l.line).map(p => p.problem).join('; ')} : {}),
             ...(l.words.length ? {} : {unplaced: true}),
             ...(l.off ? {off: true} : {}),
             beats: [...new Set(slots.filter(s => s.vocals?.some(v => v.line === l.line)).map(s => beatOfSlot.get(s.id)).filter(b => b !== undefined))],
@@ -127,7 +152,7 @@ export function timingView(dir: string, data: Project, requests: Request[]): Tim
  * sings something else now. Throws on what cannot be: a line that is not there, another number of words, words out of
  * order or overlapping, shorter than MIN_WORD_SEC, outside the song.
  */
-export function applyTiming(data: Project, change: TimingChange, requests: Request[]): TimingResult {
+export function applyTiming(data: Project, change: TimingChange, requests: Request[], automatic?: LyricsTiming): TimingResult {
     const timing = data.lyricsTiming
     if (!timing) throw new Error('the lyrics have no timing in this project - "alignLyrics" is off, or the plan has not aligned them yet')
     if (!Array.isArray(change?.lines)) throw new Error('no lines')
@@ -143,6 +168,19 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         const line = lines.find(l => l.line === entry.line)
         if (!line) throw new Error(`no sung line ${entry.line}`)
         const name = `line ${entry.line + 1} ("${line.text}")`
+        // back to what the alignment makes of it: its words and times, not placed by hand any more
+        if (entry.reset) {
+            const auto = automatic?.lines.find(l => l.line === line.line && !!l.adlib === !!line.adlib)
+            if (!auto) throw new Error(`${name}: the automatic timing has no such line`)
+            const before = JSON.stringify([line.words, line.byHand])
+            line.words = auto.words.map(w => ({...w}))
+            line.start = auto.start
+            line.end = auto.end
+            line.confidence = auto.confidence
+            delete line.byHand
+            if (JSON.stringify([line.words, line.byHand]) !== before) result.changed.push(line.line)
+            continue
+        }
         // left out, or sung again: the line keeps its words either way
         if (entry.off !== undefined && entry.off !== !!line.off) {
             if (entry.off) line.off = true
@@ -249,11 +287,13 @@ export async function readTiming(target: EditorTarget): Promise<TimingView | und
 export async function writeTiming(target: EditorTarget, change: TimingChange): Promise<TimingResult> {
     if (target.kind !== 'music') throw new Error('lyrics timing is for music videos')
     const requests = await readClipRequests<ClipRequest>(target.dir)
+    // a line set back: the automatic timing is worked out first (the stem is read), outside the lock
+    const automatic = change?.lines?.some(l => l?.reset) ? await automaticTiming(target.dir, readJson<Project>(join(target.dir, 'project.json')) ?? {}) : undefined
     return withProjectLock(target.dir, target.id, () => {
         const file = join(target.dir, 'project.json')
         const data = readJson<Project>(file)
         if (!data) throw new Error('no project.json yet - run the plan first')
-        const result = applyTiming(data, change, requests)
+        const result = applyTiming(data, change, requests, automatic)
         if (!result.changed.length) return result
         // next to it first, as the pipeline writes it: a crash mid-write never leaves half a project.json
         writeJsonFile(file, data)

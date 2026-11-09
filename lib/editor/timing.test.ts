@@ -279,3 +279,18 @@ test('explicit review accepts unchanged positions and survives reload for estima
         expect(timingView('', reload, [])!.lines[1]!.unplaced).toBeUndefined()
     }
 })
+
+describe('applyTiming - back to the automatic timing (#738)', () => {
+    test('a line placed by hand takes the automatic words and is not by hand any more; its clips sing it again there', () => {
+        const data = project()
+        applyTiming(data, {lines: [{line: 1, words: at(6.5)}]}, requests)
+        expect(data.lyricsTiming!.lines[1]!.byHand).toBe(true)
+        const automatic = {lines: [{...data.lyricsTiming!.lines[1]!, byHand: undefined, words: words(['and', 'fall'], 6), start: 6, end: 6.9, confidence: 0.2}]}
+        const result = applyTiming(data, {lines: [{line: 1, reset: true}]}, requests, automatic)
+        expect(result.changed).toEqual([1])
+        expect(data.lyricsTiming!.lines[1]).toMatchObject({start: 6, words: words(['and', 'fall'], 6)})
+        expect(data.lyricsTiming!.lines[1]!.byHand).toBeUndefined()
+        // without the automatic timing, or a line it does not have: said
+        expect(() => applyTiming(project(), {lines: [{line: 1, reset: true}]}, requests)).toThrow('automatic timing has no such line')
+    })
+})
