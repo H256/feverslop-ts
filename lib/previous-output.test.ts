@@ -1,8 +1,8 @@
-import {afterEach, describe, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {PREVIOUS, requestChanges, startOutput, whileHeld} from "./previous-output.ts";
+import {afterEach, describe, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {PREVIOUS, requestChanges, startOutput, whileHeld} from './previous-output.ts'
 
 let dir: string
 afterEach(() => rmSync(dir, {recursive: true, force: true}))
@@ -64,7 +64,9 @@ describe('a folder held open by another program', () => {
     })
     test('still held after all waits: stops with what to do', () => {
         const {result, calls} = run(10)
-        expect(result).toThrow(/projects\/p\/output is held open by another program \(EPERM.*close what has it or a file in it open.*run the same command again/)
+        expect(result).toThrow(
+            /projects\/p\/output is held open by another program \(EPERM.*close what has it or a file in it open.*run the same command again/,
+        )
         expect(calls()).toBe(4)
     })
     test('another error is not waited for', () => {

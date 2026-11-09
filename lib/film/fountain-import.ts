@@ -10,10 +10,10 @@
 // ("^"), text before the first slugline, a source without sluglines or without a character cue.
 
 export type ImportedElement =
-    | { type: 'action', text: string }
-    | { type: 'dialogue', speaker: string, text: string, kind: 'spoken' | 'offscreen' | 'voiceover', delivery?: string, translation?: string, language?: string }
-export type ImportedScene = { setting: 'INT' | 'EXT' | 'INT/EXT', location: string, time: string, shot?: string, elements: ImportedElement[] }
-export type ImportedScreenplay = { title?: string, language?: string, scenes: ImportedScene[] }
+    | {type: 'action'; text: string}
+    | {type: 'dialogue'; speaker: string; text: string; kind: 'spoken' | 'offscreen' | 'voiceover'; delivery?: string; translation?: string; language?: string}
+export type ImportedScene = {setting: 'INT' | 'EXT' | 'INT/EXT'; location: string; time: string; shot?: string; elements: ImportedElement[]}
+export type ImportedScreenplay = {title?: string; language?: string; scenes: ImportedScene[]}
 
 const SLUGLINE = /^(?:(INT\.?\s*\/\s*EXT|INT\/EXT|I\s*\/\s*E|INT|EXT|EST)(?:\.\s*|\s+))(.+)$/i
 const hasLower = (value: string) => value !== value.toLocaleUpperCase()
@@ -30,7 +30,13 @@ function slugline(line: string): Omit<ImportedScene, 'elements'> | undefined {
     const rest = (match ? match[2]! : body).replace(/\s*#[^#]*#\s*$/, '').trim()
     const dash = rest.search(/\s+[-–—]\s+(?!.*\s[-–—]\s)/)
     const location = (dash >= 0 ? rest.slice(0, dash) : rest).trim()
-    const time = dash >= 0 ? rest.slice(dash).replace(/^\s*[-–—]\s*/, '').trim() : ''
+    const time =
+        dash >= 0
+            ? rest
+                  .slice(dash)
+                  .replace(/^\s*[-–—]\s*/, '')
+                  .trim()
+            : ''
     if (!location) return undefined
     return {setting, location, time: time || 'DAY'}
 }
@@ -42,7 +48,15 @@ export function parseFountain(source: string): ImportedScreenplay | undefined {
         .replace(/\r\n?/g, '\n')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/\[\[[\s\S]*?\]\]/g, '')
-    const blocks = cleaned.split(/\n[ \t]*\n/).map(block => block.split('\n').map(line => line.replace(/\s+$/, '')).filter(line => line.trim() !== '')).filter(lines => lines.length)
+    const blocks = cleaned
+        .split(/\n[ \t]*\n/)
+        .map(block =>
+            block
+                .split('\n')
+                .map(line => line.replace(/\s+$/, ''))
+                .filter(line => line.trim() !== ''),
+        )
+        .filter(lines => lines.length)
 
     let title: string | undefined
     let language: string | undefined
@@ -81,7 +95,10 @@ export function parseFountain(source: string): ImportedScreenplay | undefined {
         if (lines.length === 1 && ((/^>/.test(first) && !/<\s*$/.test(first)) || (!hasLower(first) && /\bTO:$/.test(first)))) continue
         // centered text "> text <" is action
         const centered = lines.length === 1 ? first.match(/^>\s*(.+?)\s*<$/) : null
-        if (centered) { current.elements.push({type: 'action', text: centered[1]!}); continue }
+        if (centered) {
+            current.elements.push({type: 'action', text: centered[1]!})
+            continue
+        }
         // forced action
         if (first.startsWith('!')) {
             current.elements.push({type: 'action', text: [first.slice(1).trim(), ...lines.slice(1).map(l => l.trim())].join(' ').trim()})
@@ -94,7 +111,8 @@ export function parseFountain(source: string): ImportedScreenplay | undefined {
         if (lines.length > 1 && (forcedCue || (!hasLower(cueText) && hasLetter(cueText) && !/^\(/.test(cueText)))) {
             if (/\^\s*$/.test(cueText)) return undefined // dual dialogue
             const kindMatch = cueText.match(EXTENSION)
-            const kind: 'spoken' | 'offscreen' | 'voiceover' = kindMatch && /^v/i.test(kindMatch[1]!) ? 'voiceover' : kindMatch && /^o/i.test(kindMatch[1]!) ? 'offscreen' : 'spoken'
+            const kind: 'spoken' | 'offscreen' | 'voiceover' =
+                kindMatch && /^v/i.test(kindMatch[1]!) ? 'voiceover' : kindMatch && /^o/i.test(kindMatch[1]!) ? 'offscreen' : 'spoken'
             const speaker = cueText.replace(EXTENSION, '').replace(EXTENSION, '').trim()
             if (!speaker) return undefined
             let delivery: string | undefined
@@ -115,7 +133,13 @@ export function parseFountain(source: string): ImportedScreenplay | undefined {
             continue
         }
 
-        current.elements.push({type: 'action', text: lines.map(l => l.trim()).join(' ').trim()})
+        current.elements.push({
+            type: 'action',
+            text: lines
+                .map(l => l.trim())
+                .join(' ')
+                .trim(),
+        })
     }
 
     if (!scenes.length) return undefined
@@ -124,9 +148,9 @@ export function parseFountain(source: string): ImportedScreenplay | undefined {
 }
 
 /** What the annotation step answers for a scene - every field optional, a missing or unusable one leaves the scene as parsed. */
-type SceneNotes = { location?: unknown, time?: unknown, shot?: unknown, actions?: unknown, lines?: unknown }
+type SceneNotes = {location?: unknown; time?: unknown; shot?: unknown; actions?: unknown; lines?: unknown}
 
-const clean = (value: unknown) => typeof value === 'string' ? value.trim() : ''
+const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
 /**
  * Merges the annotation into the parsed screenplay: place and time in English, the actions in plain English, and per
@@ -134,7 +158,7 @@ const clean = (value: unknown) => typeof value === 'string' ? value.trim() : ''
  * answer whose lists do not match the scene (a different number of actions or lines) is not used for that scene at all.
  */
 export function applyAnnotations(parsed: ImportedScreenplay, answer: unknown): ImportedScreenplay {
-    const scenes = (answer && typeof answer === 'object' ? (answer as { scenes?: unknown }).scenes : undefined)
+    const scenes = answer && typeof answer === 'object' ? (answer as {scenes?: unknown}).scenes : undefined
     const notes: SceneNotes[] = Array.isArray(scenes) ? scenes : []
     return {
         ...parsed,
@@ -142,8 +166,9 @@ export function applyAnnotations(parsed: ImportedScreenplay, answer: unknown): I
             const note = notes[i] && typeof notes[i] === 'object' ? notes[i]! : {}
             const actionCount = scene.elements.filter(e => e.type === 'action').length
             const lineCount = scene.elements.length - actionCount
-            const actions = Array.isArray(note.actions) && note.actions.length === actionCount && note.actions.every(a => clean(a)) ? note.actions.map(clean) : undefined
-            const lines = Array.isArray(note.lines) && note.lines.length === lineCount ? note.lines as Record<string, unknown>[] : undefined
+            const actions =
+                Array.isArray(note.actions) && note.actions.length === actionCount && note.actions.every(a => clean(a)) ? note.actions.map(clean) : undefined
+            const lines = Array.isArray(note.lines) && note.lines.length === lineCount ? (note.lines as Record<string, unknown>[]) : undefined
             let a = 0
             let l = 0
             return {

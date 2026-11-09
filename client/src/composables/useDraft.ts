@@ -10,7 +10,11 @@ export const sameText = (a: string | undefined, b: string | undefined) => (a ?? 
 export function useDraft(saved: () => string | undefined) {
   const text = ref(saved() ?? '')
   const dirty = computed(() => !sameText(text.value, saved()))
-  watch(saved, (now, before) => { if (sameText(text.value, before)) text.value = now ?? '' })
-  const reset = () => { text.value = saved() ?? '' }
+  watch(saved, (now, before) => {
+    if (sameText(text.value, before)) text.value = now ?? ''
+  })
+  const reset = () => {
+    text.value = saved() ?? ''
+  }
   return {text, dirty, reset}
 }

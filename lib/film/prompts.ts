@@ -1,8 +1,8 @@
 // Prompts of the short-film pipeline. Everything is written in English; only dialogue stays in its own language.
 // These are separate from lib/prompts.ts on purpose - the music-video prompts are tuned for songs and stay as they are.
-import type {AskOptions} from "../llm.ts";
-import type {Brief, FilmCast, FilmCharacter, FilmLocation, FilmProject, FilmProp, Outline, Scene, Screenplay} from "./types.ts";
-import {screenplayToText} from "./fountain.ts";
+import type {AskOptions} from '../llm.ts'
+import type {Brief, FilmCast, FilmCharacter, FilmLocation, FilmProject, FilmProp, Outline, Scene, Screenplay} from './types.ts'
+import {screenplayToText} from './fountain.ts'
 
 // What the video model can actually show - the constraints of the generation, not taste. A clip is at most ~10 seconds
 // of one location with a handful of people; speech comes out of the model itself, from the prompt.
@@ -25,7 +25,7 @@ export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguag
 ${source}`,
         instructions: `You are a script editor. You are given ${mode === 'screenplay' ? 'a screenplay' : 'a story idea for a short film'} in any language. Answer only with JSON:
 {"title": "", "language": "", "logline": "", "genre": "", "tone": "", "setting": ""}
-- "title": the film's title - ${mode === 'screenplay' ? 'the screenplay\'s own title if it has one, else a short fitting one' : 'a short fitting title, in the language of the dialogue'}, no quotation marks.
+- "title": the film's title - ${mode === 'screenplay' ? "the screenplay's own title if it has one, else a short fitting one" : 'a short fitting title, in the language of the dialogue'}, no quotation marks.
 - "language": the ISO 639-1 code of the language the characters ${dialogueLanguage ? `speak: always "${dialogueLanguage}"` : mode === 'screenplay' ? 'speak in the screenplay (the dominant one if several)' : 'will speak - the language the idea is written in'}.
 - "logline": one sentence in English: who wants what, and what stands in the way.
 - "genre", "tone", "setting": a few words each, in English. The setting is era and place.`,
@@ -33,9 +33,10 @@ ${source}`,
 }
 
 export function outlinePrompt(idea: string, brief: Brief, targetSeconds: number): AskOptions {
-    const duration = targetSeconds > 0
-        ? `The finished film runs about ${targetSeconds} seconds. Plan the scenes so their "seconds" add up to that: roughly one scene per 15-30 seconds.`
-        : 'The film is as long as the story needs, but a short film: 1-3 minutes.'
+    const duration =
+        targetSeconds > 0
+            ? `The finished film runs about ${targetSeconds} seconds. Plan the scenes so their "seconds" add up to that: roughly one scene per 15-30 seconds.`
+            : 'The film is as long as the story needs, but a short film: 1-3 minutes.'
     return {
         maxTokens: 8192,
         reasoning: 'medium',
@@ -116,7 +117,10 @@ ${screenplayJson}`,
  * The annotation of a screenplay that code has already read (lib/film/fountain-import.ts): what the structure cannot say.
  * The answer holds no dialogue - the model is shown the lines to read their language, and cannot change them.
  */
-export function fountainAnnotatePrompt(scenes: { location: string, time: string, actions: string[], lines: { text: string, delivery?: string }[] }[], language: string): AskOptions {
+export function fountainAnnotatePrompt(
+    scenes: {location: string; time: string; actions: string[]; lines: {text: string; delivery?: string}[]}[],
+    language: string,
+): AskOptions {
     return {
         maxTokens: 12288,
         reasoning: 'low',
@@ -154,15 +158,23 @@ export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: 
     return {
         maxTokens: 12288,
         reasoning: 'medium',
-        input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${outline ? `Planning notes (use them for appearance and voice where they cover a character):
+        input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${
+            outline
+                ? `Planning notes (use them for appearance and voice where they cover a character):
 ${outline.characters.map(c => `- ${c.name}: ${c.role}. ${c.appearance}. Voice: ${c.voice}`).join('\n')}
 
-` : ''}${original ? `The screenplay as its writer handed it in - it may carry a character list or notes (ages, looks) that are facts for the cast:
+`
+                : ''
+        }${
+            original
+                ? `The screenplay as its writer handed it in - it may carry a character list or notes (ages, looks) that are facts for the cast:
 ${original}
 
 ---
 The same screenplay, structured:
-` : 'Screenplay:\n'}${screenplayToText(screenplay, true)}`,
+`
+                : 'Screenplay:\n'
+        }${screenplayToText(screenplay, true)}`,
         instructions: `You are a casting and location director. Read the screenplay and list everyone who appears or speaks in it, and every place it takes place in. Answer only with JSON:
 {
   "characters": [{"name": "", "aliases": [""], "role": "", "appearance": "", "voice": "", "voiceOnly": false, "states": [{"name": "", "change": "", "from": 1}]}],
@@ -184,15 +196,21 @@ Locations: the "description" is the place as the film first shows it - what stan
 /** A read-through of the script for what contradicts itself - the planning and the video model can only follow a script that does. */
 export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleChanges: NonNullable<FilmProject['roleChanges']> = []): AskOptions {
     // a role added or taken out after the idea was written: the script differs from the idea in who is in it, on purpose
-    const changed = idea && roleChanges.length ? `\n\nThe cast was changed on purpose since the idea was written - a difference from the idea in who is in the film, and what follows from it, is no fault:\n${roleChanges.map(change => [
-        ...change.removed.map(name => `- ${name} left the film`),
-        ...change.added.map(role => `- ${role.name} came in: ${role.role}`),
-    ].join('\n')).join('\n')}` : ''
+    const changed =
+        idea && roleChanges.length
+            ? `\n\nThe cast was changed on purpose since the idea was written - a difference from the idea in who is in the film, and what follows from it, is no fault:\n${roleChanges
+                  .map(change =>
+                      [...change.removed.map(name => `- ${name} left the film`), ...change.added.map(role => `- ${role.name} came in: ${role.role}`)].join(
+                          '\n',
+                      ),
+                  )
+                  .join('\n')}`
+            : ''
     return {
         // thinking and answer share the limit: a long script made the model think through all of it and never answer
         maxTokens: 12288,
         reasoning: 'low',
-        input: `${idea ? `Story idea the script was written from:\n${idea}${changed}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n')}`,
+        input: `${idea ? `Story idea the script was written from:\n${idea}${changed}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => (e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`))].join('\n')).join('\n\n')}`,
         instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.${idea ? ' Also: a step the story idea names that the script does not show, or shows in another order or with another ending.' : ''}
 Answer only with JSON: {"notes": ["s5-s7: <what contradicts what, in one sentence>"]}. Name the scenes. At most 8 notes, the ones that matter most for the picture; [] if the script is consistent.`,
     }
@@ -206,7 +224,8 @@ Places: ${cast.locations.map(l => l.name).join(', ')}
 
 Screenplay:
 ${screenplayToText(screenplay)}`,
-        instructions: 'You are an expert for story summarization. You receive a screenplay and summarize it in a short paragraph, in English, keeping characters and places intact. Answer only with the summary.',
+        instructions:
+            'You are an expert for story summarization. You receive a screenplay and summarize it in a short paragraph, in English, keeping characters and places intact. Answer only with the summary.',
     }
 }
 
@@ -234,7 +253,7 @@ ${screenplayToText(screenplay)}`,
 }
 
 // The one style that fits the film: genre, tone, setting and audience decide. No draw and no forced variety - the look has to carry the tone of the film.
-export function styleChoicePrompt(brief: Brief, summary: string, styleList: { id: string, name: string }[]): AskOptions {
+export function styleChoicePrompt(brief: Brief, summary: string, styleList: {id: string; name: string}[]): AskOptions {
     return {
         maxTokens: 2048,
         input: `Choose the film style from the list that suits this short film best, for a film generated with AI image and video models.
@@ -280,13 +299,31 @@ Answer only with JSON: {"views": [{"name": "", "shows": ""}, ...five entries]}
     }
 }
 
-export function coveragePrompt(scene: Scene, location: FilmLocation, characters: FilmCharacter[], language: string, lookBrief: string, budgetSeconds: number | undefined, maxShots: number, problems: string[] = [], before?: { scene: string, ends: Record<string, string>, view?: string }, views?: { name: string, shows: string }[], sceneNumber?: number, props?: FilmProp[], director?: string[]): AskOptions {
+export function coveragePrompt(
+    scene: Scene,
+    location: FilmLocation,
+    characters: FilmCharacter[],
+    language: string,
+    lookBrief: string,
+    budgetSeconds: number | undefined,
+    maxShots: number,
+    problems: string[] = [],
+    before?: {scene: string; ends: Record<string, string>; view?: string},
+    views?: {name: string; shows: string}[],
+    sceneNumber?: number,
+    props?: FilmProp[],
+    director?: string[],
+): AskOptions {
     // a look is offered only from its scene on: told "soaked - from scene 3 on" in scene 1, the planning drew it there already
     const looksHere = (c: FilmCharacter) => (c.states ?? []).filter(s => sceneNumber === undefined || s.from === undefined || s.from <= sceneNumber)
     let line = 0
-    const script = scene.elements.map(element => element.type === 'action'
-        ? element.text
-        : `D${++line} ${element.speaker}${element.kind === 'voiceover' ? ' (voice-over)' : element.kind === 'offscreen' ? ' (off-screen)' : ''}${element.delivery ? ` (${element.delivery})` : ''}: ${element.text}`).join('\n')
+    const script = scene.elements
+        .map(element =>
+            element.type === 'action'
+                ? element.text
+                : `D${++line} ${element.speaker}${element.kind === 'voiceover' ? ' (voice-over)' : element.kind === 'offscreen' ? ' (off-screen)' : ''}${element.delivery ? ` (${element.delivery})` : ''}: ${element.text}`,
+        )
+        .join('\n')
     return {
         maxTokens: 16384,
         reasoning: 'medium',
@@ -294,14 +331,43 @@ export function coveragePrompt(scene: Scene, location: FilmLocation, characters:
         // scene, and the problems of an answer asked again, is in the input
         input: `Scene: ${scene.setting}. ${scene.location} - ${scene.time}
 Place: ${location.name} - ${location.description}
-${views?.length ? `The picture of the place is a sheet of views: ${views.map((v, i) => `${i + 1}. ${v.name}`).join('; ')}. Every shot gets the number of the view that is its background ("placeView").\n` : ''}Characters you may use, exactly as spelled: ${characters.filter(c => !c.voiceOnly).map(c => c.name + (looksHere(c).length ? ` (other looks: ${looksHere(c).map(s => `"${s.name}" = ${s.change}${s.from ? ` - from scene ${s.from} on` : ''}`).join('; ')})` : '')).join(', ')}
+${views?.length ? `The picture of the place is a sheet of views: ${views.map((v, i) => `${i + 1}. ${v.name}`).join('; ')}. Every shot gets the number of the view that is its background ("placeView").\n` : ''}Characters you may use, exactly as spelled: ${characters
+            .filter(c => !c.voiceOnly)
+            .map(
+                c =>
+                    c.name +
+                    (looksHere(c).length
+                        ? ` (other looks: ${looksHere(c)
+                              .map(s => `"${s.name}" = ${s.change}${s.from ? ` - from scene ${s.from} on` : ''}`)
+                              .join('; ')})`
+                        : ''),
+            )
+            .join(', ')}
 ${props?.length ? `Props you may use, exactly as spelled - each has a picture of its own: ${props.map(p => `${p.name} (${p.description.replace(/[.\s]+$/, '')})`).join('; ')}.\n` : ''}Dialogue language: ${language}
 Film look (its camera language is yours too): ${lookBrief}
-${before ? `The scene before (${before.scene}) ended like this - if this scene goes on from it (same place, no jump in time), everybody starts where it left them: ${Object.entries(before.ends).map(([name, where]) => `${name} ${where}`).join('; ')}.${before.view ? ` Its last shot was taken ${before.view} - a shot of the other person in the same place looks back the other way along the line between them, so the people keep their sides: whoever stood on the left of the frame stays on that side of the place, and a reverse shot shows the opposite side of the place behind the person it is taken of.` : ''}\n` : ''}
+${
+    before
+        ? `The scene before (${before.scene}) ended like this - if this scene goes on from it (same place, no jump in time), everybody starts where it left them: ${Object.entries(
+              before.ends,
+          )
+              .map(([name, where]) => `${name} ${where}`)
+              .join(
+                  '; ',
+              )}.${before.view ? ` Its last shot was taken ${before.view} - a shot of the other person in the same place looks back the other way along the line between them, so the people keep their sides: whoever stood on the left of the frame stays on that side of the place, and a reverse shot shows the opposite side of the place behind the person it is taken of.` : ''}\n`
+        : ''
+}
 Most shots: ${maxShots}
-${budgetSeconds ? `Planned length of this scene: about ${budgetSeconds} seconds.
-` : ''}${scene.shot ? `The writer's heading for this scene: ${scene.shot} - the framing the writer wants for it.
-` : ''}
+${
+    budgetSeconds
+        ? `Planned length of this scene: about ${budgetSeconds} seconds.
+`
+        : ''
+}${
+            scene.shot
+                ? `The writer's heading for this scene: ${scene.shot} - the framing the writer wants for it.
+`
+                : ''
+        }
 ${script}${director?.length ? `\n\nFixed by the director - every shot keeps to it, whatever the script says:\n${director.map(n => `- ${n}`).join('\n')}` : ''}${problems.length ? `\n\nYour last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}` : ''}`,
         instructions: `You are a film director planning the shots of one scene of a short film. The film is generated clip by clip with an AI video model: a clip is at most ~9 seconds long and holds a few shots, every shot lives in one clip and is never split.
 Plan the shots for the whole scene, in order. Every action and every dialogue line of the scene appears in exactly one shot - none dropped, none repeated, in the order of the script. Show only what the scene contains: no people, creatures, events or lines that the script does not put there - a scene without people shows none, a place is shown as a place. Every shot keeps to the staging: a person does not change posture, place or clothing from one shot to the next unless the action says that they do - and then says how - and the camera positions are ones that can really see the staging (no impossible angles). A shot shows something new - a new action, a person, a detail of the place, or a line of dialogue: never plan a second shot of what an earlier one already shows, and atmosphere (mist, rain, noise) is one shot, not several. The scene has material for at most the number of shots given with it ("Most shots") - fewer is better; a scene with no people and no dialogue is one long shot of up to 8 seconds with a slow camera move. A fast action sequence (see "fast") is the exception: up to 6 shots however short its script is - the script says what happens, the shots show how it unfolds, beat by beat; nothing else happens and nothing comes out differently. Nobody speaks words in a shot unless it is one of the numbered dialogue lines: an action that has someone speak without a line makes the video model invent words. Voices, whispers, chanting or cries that the script itself describes are written as indistinct, wordless sounds. The dialogue lines are numbered D1, D2, ...: list the numbers of the lines spoken in a shot in "lines".
@@ -334,14 +400,15 @@ ${filmableRules}`,
 }
 
 /** The reference picture prompt of a character in another look: the same prompt with only the change applied. */
-export function stateLookPrompt(baseLook: string, name: string, state: { name: string, change: string }): AskOptions {
+export function stateLookPrompt(baseLook: string, name: string, state: {name: string; change: string}): AskOptions {
     return {
         maxTokens: 2048,
         input: `Image prompt of the character ${name}:
 ${baseLook}
 
 The same character in another look - "${state.name}": ${state.change}`,
-        instructions: 'You adapt an image prompt. Write the same prompt for the same character in the other look: every word that is not affected by the change stays exactly as it is (face, hair, build, medium, lens, light, background, pose, format), only clothing, condition or details the change touches are rewritten. Every garment of the outfit stays, head to feet (trousers or skirt, shoes included) - a look that changes the hair keeps the whole outfit. Answer only with the new prompt.',
+        instructions:
+            'You adapt an image prompt. Write the same prompt for the same character in the other look: every word that is not affected by the change stays exactly as it is (face, hair, build, medium, lens, light, background, pose, format), only clothing, condition or details the change touches are rewritten. Every garment of the outfit stays, head to feet (trousers or skirt, shoes included) - a look that changes the hair keeps the whole outfit. Answer only with the new prompt.',
     }
 }
 
@@ -354,7 +421,7 @@ export function scriptFixPrompt(screenplay: Screenplay, notes: string[]): AskOpt
 ${notes.map(n => `- ${n}`).join('\n')}
 
 Screenplay (scene ids, action lines numbered by their place among the elements of the scene):
-${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map((e, i) => e.type === 'action' ? `[${i}] ${e.text}` : `${e.speaker}: ${e.text}`)].join('\n')).join('\n\n')}`,
+${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map((e, i) => (e.type === 'action' ? `[${i}] ${e.text}` : `${e.speaker}: ${e.text}`))].join('\n')).join('\n\n')}`,
         instructions: `You are a script doctor. Resolve the contradictions with the smallest changes to the screenplay.
 - Dialogue is never changed, and no scene, line or character is added or dropped. You change the text of ACTION lines, and the time of day of a scene.
 - A change of state is an event on screen: the person is bound with a rope that is long enough to walk the yard - and the rope is tied to a post; someone is freed because the rope tears; an object is taken down from a shelf by a hand that can reach it. Do not make a contradiction go away by deleting what happens - make it consistent by saying how.
@@ -377,12 +444,33 @@ For each view say where the camera stands and what it looks toward, in terms of 
 Answer only with JSON: {"views": [{"name": "", "shows": ""}]} - exactly ${images.length}, in the order of the images. "name": where the camera stands and what it looks toward, a few words ("from the stage, looking out over the empty seats"). "shows": what is in the picture, one sentence.`,
         images,
         instructions: 'You are a film location scout who describes the views of a place from its pictures. Answer only with JSON.',
-        schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: images.length, maxItems: images.length, items: {type: 'object', additionalProperties: false, required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}}}}},
+        schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['views'],
+            properties: {
+                views: {
+                    type: 'array',
+                    minItems: images.length,
+                    maxItems: images.length,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['name', 'shows'],
+                        properties: {name: {type: 'string'}, shows: {type: 'string'}},
+                    },
+                },
+            },
+        },
     }
 }
 
 /** The view of the place's sheet each shot of a scene is in - as the music video chooses it (index.ts, shotViews). 1-based. */
-export function shotViewsPrompt(views: { name: string, shows: string }[], staging: string, shots: { framing: string, camera: string, view?: string, action: string }[]): AskOptions {
+export function shotViewsPrompt(
+    views: {name: string; shows: string}[],
+    staging: string,
+    shots: {framing: string; camera: string; view?: string; action: string}[],
+): AskOptions {
     return {
         input: `A place is shown to the video model as one of the views of its reference sheet. For every shot below choose the view the shot is in. First find where the shot's camera stands (its "view": on the stage or in the seats, at which door, at which wall), then the way it looks - and choose the view whose camera stands on that same side and looks the same way. A view that looks the opposite way is wrong even when it names the same things: a shot from the seats looking at the stage is a view from the seats, never one from the stage looking out.
 views (number: where the camera stands and what it shows):
@@ -397,7 +485,12 @@ Answer only with JSON: {"views": [one number from 1 to ${views.length} per shot,
         // a short thought: without it the choice went by the words a view shares with the shot ("stage edge") - the shots "from the
         // audience side, looking back at her" got the view from the stage looking out (last-rehearsal). A film has few shots per scene
         reasoning: 'low',
-        schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: shots.length, maxItems: shots.length, items: {type: 'integer', minimum: 1, maximum: views.length}}}},
+        schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['views'],
+            properties: {views: {type: 'array', minItems: shots.length, maxItems: shots.length, items: {type: 'integer', minimum: 1, maximum: views.length}}},
+        },
     }
 }
 
@@ -405,10 +498,17 @@ Answer only with JSON: {"views": [one number from 1 to ${views.length} per shot,
  * The shots of one clip fitted to what the user chose for it alone (clip-overrides/): people left out of its picture, and the view of
  * the place its camera has. The shots stay the shots - only where the camera is and what the picture shows follow the choice.
  */
-export function clipFitPrompt(shots: { framing: string, camera: string, view?: string, action: string, people: { id: string, name: string, state?: string, motion?: string }[] }[], change: { without: string[], view?: { name: string, shows: string } }, staging: string, problems: string[] = []): AskOptions {
+export function clipFitPrompt(
+    shots: {framing: string; camera: string; view?: string; action: string; people: {id: string; name: string; state?: string; motion?: string}[]}[],
+    change: {without: string[]; view?: {name: string; shows: string}},
+    staging: string,
+    problems: string[] = [],
+): AskOptions {
     const asked = [
-        change.without.length && `${change.without.join(' and ')} ${change.without.length > 1 ? 'are' : 'is'} not in the picture of this clip at all. Take them out of every shot: out of the camera's view, the action, where everyone is and what moves. What the others do stays, in the same order - done alone, or toward someone who is not seen.`,
-        change.view && `The camera of every shot is where this view of the place is, looking the same way: ${change.view.name} - ${change.view.shows}. Write each shot's "view" (where the camera stands and what it looks toward) and "camera" (how it moves) from there; the framing stays.`,
+        change.without.length &&
+            `${change.without.join(' and ')} ${change.without.length > 1 ? 'are' : 'is'} not in the picture of this clip at all. Take them out of every shot: out of the camera's view, the action, where everyone is and what moves. What the others do stays, in the same order - done alone, or toward someone who is not seen.`,
+        change.view &&
+            `The camera of every shot is where this view of the place is, looking the same way: ${change.view.name} - ${change.view.shows}. Write each shot's "view" (where the camera stands and what it looks toward) and "camera" (how it moves) from there; the framing stays.`,
     ].filter(Boolean)
     return {
         input: `A clip of a film was planned as the shots below. For this clip alone the director changed:
@@ -423,12 +523,31 @@ Answer only with JSON: {"shots": [per shot, in order: {"view": "...", "camera": 
         instructions: 'You are a film director who adapts the shots of one clip to a change. Answer only with JSON.',
         reasoning: 'low',
         schema: {
-            type: 'object', additionalProperties: false, required: ['shots'], properties: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['shots'],
+            properties: {
                 shots: {
-                    type: 'array', minItems: shots.length, maxItems: shots.length, items: {
-                        type: 'object', additionalProperties: false, required: ['view', 'camera', 'action', 'people'], properties: {
-                            view: {type: 'string'}, camera: {type: 'string'}, action: {type: 'string'},
-                            people: {type: 'array', items: {type: 'object', additionalProperties: false, required: ['id', 'state', 'motion'], properties: {id: {type: 'string'}, state: {type: 'string'}, motion: {type: 'string'}}}},
+                    type: 'array',
+                    minItems: shots.length,
+                    maxItems: shots.length,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['view', 'camera', 'action', 'people'],
+                        properties: {
+                            view: {type: 'string'},
+                            camera: {type: 'string'},
+                            action: {type: 'string'},
+                            people: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    additionalProperties: false,
+                                    required: ['id', 'state', 'motion'],
+                                    properties: {id: {type: 'string'}, state: {type: 'string'}, motion: {type: 'string'}},
+                                },
+                            },
                         },
                     },
                 },
@@ -441,7 +560,7 @@ Answer only with JSON: {"shots": [per shot, in order: {"view": "...", "camera": 
  * How far the camera turns from one view of a place to another (add-view, #532). One move from a picture reaches a view up to about a
  * quarter turn from it; the reverse side is invented anew - then a view in between is written, about a quarter turn from both.
  */
-export function viewTurnPrompt(place: string, from: { name: string, shows: string }, to: { name: string, shows: string }): AskOptions {
+export function viewTurnPrompt(place: string, from: {name: string; shows: string}, to: {name: string; shows: string}): AskOptions {
     return {
         input: `The camera of a film moves through one place in a single move, from the first view to the second. Judge how far it turns.
 The place: ${place}
@@ -454,9 +573,17 @@ Answer only with JSON: {"turn": "same" | "side" | "reverse", "between": {"name":
         instructions: 'You are a film director who knows how a camera moves through a place. Answer only with JSON.',
         reasoning: 'low',
         schema: {
-            type: 'object', additionalProperties: false, required: ['turn'], properties: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['turn'],
+            properties: {
                 turn: {type: 'string', enum: ['same', 'side', 'reverse']},
-                between: {type: 'object', additionalProperties: false, required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}},
+                between: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['name', 'shows'],
+                    properties: {name: {type: 'string'}, shows: {type: 'string'}},
+                },
             },
         },
     }
@@ -467,9 +594,15 @@ Answer only with JSON: {"turn": "same" | "side" | "reverse", "between": {"name":
  * it. The scenes, their places and their order stay, and the dialogue of everyone else as far as it can - code checks the answer
  * (lib/film/adapt.ts). The new characters come back with what the cast has of them, the ones who stay keep theirs.
  */
-export function adaptScreenplayPrompt(screenplay: Screenplay, brief: Brief, cast: { staying: FilmCharacter[], added: { name: string, role: string }[], removed: FilmCharacter[] }, problems: string[] = []): AskOptions {
+export function adaptScreenplayPrompt(
+    screenplay: Screenplay,
+    brief: Brief,
+    cast: {staying: FilmCharacter[]; added: {name: string; role: string}[]; removed: FilmCharacter[]},
+    problems: string[] = [],
+): AskOptions {
     const scenes = screenplay.scenes.map(({setting, location, time, shot, elements}) => ({setting, location, time, ...(shot ? {shot} : {}), elements}))
-    const person = (c: { name: string, role: string, aliases?: string[] }) => `- ${c.name}${c.aliases?.length ? ` (cues: ${c.aliases.join(', ')})` : ''}: ${c.role}`
+    const person = (c: {name: string; role: string; aliases?: string[]}) =>
+        `- ${c.name}${c.aliases?.length ? ` (cues: ${c.aliases.join(', ')})` : ''}: ${c.role}`
     return {
         maxTokens: 16384,
         reasoning: 'medium',

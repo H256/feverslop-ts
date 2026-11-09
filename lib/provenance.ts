@@ -1,4 +1,4 @@
-import {existsSync, readFileSync} from "node:fs";
+import {existsSync, readFileSync} from 'node:fs'
 
 // What a generated file was made from: its sidecar (<file>.json) carries a fingerprint of the request. Compared with the
 // fingerprint of the request as it is now, a file is
@@ -12,7 +12,7 @@ export type Freshness = 'pinned' | 'current' | 'stale'
 export const fingerprint = (...parts: unknown[]) => Bun.hash(JSON.stringify(parts)).toString(16)
 
 /** The fingerprint of a file's content - 'missing' for a file that is not there yet. */
-export const fileFingerprint = (path: string) => existsSync(path) ? Bun.hash(readFileSync(path)).toString(16) : 'missing'
+export const fileFingerprint = (path: string) => (existsSync(path) ? Bun.hash(readFileSync(path)).toString(16) : 'missing')
 
 function readSidecar(file: string): Record<string, unknown> | undefined {
     const sidecar = `${file}.json`
@@ -40,7 +40,7 @@ export const recordedEditedPrompt = (file: string) => {
 /** How many frames of the clip before a rendered clip started on (contextFrames), if its sidecar records it. */
 export const recordedContextFrames = (file: string) => {
     const value = readSidecar(file)?.contextFrames
-    return Number.isInteger(value) ? value as number : undefined
+    return Number.isInteger(value) ? (value as number) : undefined
 }
 
 /** The fingerprint a rendered file's sidecar records, if it has one. */

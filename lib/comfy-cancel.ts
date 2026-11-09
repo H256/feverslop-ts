@@ -9,7 +9,7 @@ import type {ComfyServer} from './settings.ts'
 const ASK_MS = 4000
 
 export const authOf = (server: Pick<ComfyServer, 'credentials'>): Record<string, string> => {
-    const credentials = server.credentials as { type?: string, token?: string, username?: string, password?: string } | undefined
+    const credentials = server.credentials as {type?: string; token?: string; username?: string; password?: string} | undefined
     if (credentials?.token) return {Authorization: `Bearer ${credentials.token}`}
     if (credentials?.username) return {Authorization: `Basic ${btoa(`${credentials.username}:${credentials.password ?? ''}`)}`}
     return {}
@@ -19,22 +19,24 @@ export const authOf = (server: Pick<ComfyServer, 'credentials'>): Record<string,
 export type CancelOutcome = 'interrupted' | 'removed' | 'gone' | 'unreachable'
 
 type QueueItem = [number, string, ...unknown[]]
-type Queue = { queue_running?: QueueItem[], queue_pending?: QueueItem[] }
+type Queue = {queue_running?: QueueItem[]; queue_pending?: QueueItem[]}
 
 /**
  * Cancels one job on its server. A job waiting in the queue is deleted from it; the running job is interrupted only when the queue
  * says it is ours - /interrupt alone stops whatever runs, and the prompt id given with it makes a ComfyUI that knows it check as well.
  */
 export async function cancelJob(server: Pick<ComfyServer, 'url' | 'credentials'>, promptId: string, fetcher: typeof fetch = fetch): Promise<CancelOutcome> {
-    const call = (path: string, body?: unknown) => fetcher(`${server.url}${path}`, {
-        method: body === undefined ? 'GET' : 'POST', signal: AbortSignal.timeout(ASK_MS),
-        headers: {...authOf(server), ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
-        ...(body === undefined ? {} : {body: JSON.stringify(body)}),
-    })
+    const call = (path: string, body?: unknown) =>
+        fetcher(`${server.url}${path}`, {
+            method: body === undefined ? 'GET' : 'POST',
+            signal: AbortSignal.timeout(ASK_MS),
+            headers: {...authOf(server), ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
+            ...(body === undefined ? {} : {body: JSON.stringify(body)}),
+        })
     try {
         const response = await call('/queue')
         if (!response.ok) return 'unreachable'
-        const queue = await response.json() as Queue
+        const queue = (await response.json()) as Queue
         if (queue.queue_pending?.some(item => item[1] === promptId)) {
             await call('/queue', {delete: [promptId]})
             return 'removed'
@@ -50,26 +52,32 @@ export async function cancelJob(server: Pick<ComfyServer, 'url' | 'credentials'>
 }
 
 /** A job this process queued or attached to and is waiting for. */
-export type ActiveJob = { label: string, server: Pick<ComfyServer, 'name' | 'url' | 'credentials'>, promptId: string, pendingFile: string }
+export type ActiveJob = {label: string; server: Pick<ComfyServer, 'name' | 'url' | 'credentials'>; promptId: string; pendingFile: string}
 
 const active = new Map<string, ActiveJob>()
 
 /** Keeps a job while it is waited for (lib/render.ts) - Ctrl+C cancels what is kept here. */
-export const trackJob = (job: ActiveJob) => { active.set(job.pendingFile, job) }
-export const untrackJob = (pendingFile: string) => { active.delete(pendingFile) }
+export const trackJob = (job: ActiveJob) => {
+    active.set(job.pendingFile, job)
+}
+export const untrackJob = (pendingFile: string) => {
+    active.delete(pendingFile)
+}
 export const activeJobs = () => [...active.values()]
 
 /**
  * Cancels jobs and removes their pending files, so the next run renders them again instead of attaching. A job on a server that
  * does not answer keeps its file: it may still run there, and the next run attaches to it rather than rendering it twice.
  */
-export async function cancelJobs(jobs: ActiveJob[], fetcher: typeof fetch = fetch): Promise<{ job: ActiveJob, outcome: CancelOutcome }[]> {
-    return Promise.all(jobs.map(async job => {
-        const outcome = await cancelJob(job.server, job.promptId, fetcher)
-        if (outcome !== 'unreachable') rmSync(job.pendingFile, {force: true})
-        active.delete(job.pendingFile)
-        return {job, outcome}
-    }))
+export async function cancelJobs(jobs: ActiveJob[], fetcher: typeof fetch = fetch): Promise<{job: ActiveJob; outcome: CancelOutcome}[]> {
+    return Promise.all(
+        jobs.map(async job => {
+            const outcome = await cancelJob(job.server, job.promptId, fetcher)
+            if (outcome !== 'unreachable') rmSync(job.pendingFile, {force: true})
+            active.delete(job.pendingFile)
+            return {job, outcome}
+        }),
+    )
 }
 
 /** The pending files under a project folder, without old/ (put-away takes) and the kept files of jobs for another request. */
@@ -91,7 +99,9 @@ function pendingFiles(dir: string): string[] {
 export async function jobsQueuedSince(dir: string, since: number, servers: Pick<ComfyServer, 'name' | 'url' | 'credentials'>[]): Promise<ActiveJob[]> {
     const jobs: ActiveJob[] = []
     for (const pendingFile of pendingFiles(dir)) {
-        const job = await Bun.file(pendingFile).json().catch(() => undefined) as { promptId?: string, queuedAt?: number, attachedAt?: number, server?: { name: string, url: string } } | undefined
+        const job = (await Bun.file(pendingFile)
+            .json()
+            .catch(() => undefined)) as {promptId?: string; queuedAt?: number; attachedAt?: number; server?: {name: string; url: string}} | undefined
         if (!job?.promptId || !job.server || Math.max(job.queuedAt ?? 0, job.attachedAt ?? 0) < since) continue
         // a server given for this run only (--comfy=) is not in the settings: asked without credentials
         const server = servers.find(s => s.url === job.server!.url) ?? servers.find(s => s.name === job.server!.name) ?? job.server

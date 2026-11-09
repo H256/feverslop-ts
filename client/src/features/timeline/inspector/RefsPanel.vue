@@ -20,7 +20,9 @@ const freshOf = (picture: EditorPicture) => {
   const job = project.value.pictures.find(p => p.file === picture.file)
   return job ? fresh.value.pictures[job.id] : undefined
 }
-const open = (picture: EditorPicture) => { if (picture.exists) viewer.open(picture, session.roots, picture.label, picture.name, picture.description) }
+const open = (picture: EditorPicture) => {
+  if (picture.exists) viewer.open(picture, session.roots, picture.label, picture.name, picture.description)
+}
 </script>
 
 <template>
@@ -31,14 +33,25 @@ const open = (picture: EditorPicture) => { if (picture.exists) viewer.open(pictu
         <MediaThumb :media="picture.exists ? picture : undefined" :roots="session.roots" :width="640" :alt="picture.name" cls="" missing="Missing" />
         <div>
           <b>{{ picture.name || picture.label }}</b>
-          <small>{{ picture.label.replace(/[<>]/g, '') }} · {{ why(picture) }}<span v-if="freshOf(picture) === 'stale'" class="stale" :title="TERMS.Stale">stale</span><span v-if="freshOf(picture) === 'pinned'" :title="TERMS.Pinned">pinned</span></small>
+          <small
+            >{{ picture.label.replace(/[<>]/g, '') }} · {{ why(picture)
+            }}<span v-if="freshOf(picture) === 'stale'" class="stale" :title="TERMS.Stale">stale</span
+            ><span v-if="freshOf(picture) === 'pinned'" :title="TERMS.Pinned">pinned</span></small
+          >
         </div>
       </button>
     </div>
   </div>
   <div v-if="clip.audio.length" class="section">
     <h3>Sound</h3>
-    <FactList :facts="clip.audio.map(a => ({name: a.label.replace(/[<>]/g, ''), value: `${a.stem ?? ''} · ${a.songStart.toFixed(1)}s – ${a.songEnd.toFixed(1)}s of the song`}))" />
+    <FactList
+      :facts="
+        clip.audio.map(a => ({
+          name: a.label.replace(/[<>]/g, ''),
+          value: `${a.stem ?? ''} · ${a.songStart.toFixed(1)}s – ${a.songEnd.toFixed(1)}s of the song`,
+        }))
+      "
+    />
   </div>
   <OverridePanel v-if="project.kind === 'film'" :clip="clip" />
 </template>

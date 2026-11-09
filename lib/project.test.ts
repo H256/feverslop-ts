@@ -1,7 +1,7 @@
-import {describe, expect, test} from "bun:test";
-import {projectFormatRedo, type Project, ProjectStore} from "./project.ts";
-import type {ProjectConfig} from "./config.ts";
-import {projectInputs, stepUsed} from "./inputs.ts";
+import {describe, expect, test} from 'bun:test'
+import {projectFormatRedo, type Project, ProjectStore} from './project.ts'
+import type {ProjectConfig} from './config.ts'
+import {projectInputs, stepUsed} from './inputs.ts'
 
 const store = (data: object) => {
     const project = new ProjectStore('zz-not-on-disk')
@@ -12,7 +12,11 @@ const store = (data: object) => {
 describe('what the next run would redo, without redoing it', () => {
     test('format migrations name only cached changed steps and their dependents', () => {
         expect(projectFormatRedo(0, 1, {locationLooks: 'look'})).toEqual([])
-        expect(projectFormatRedo(1, 2, {locationLooks: 'look', locationDescriptions: {}, shotMoments: {}}, {2: ['locationLooks']})).toEqual(['locationLooks', 'locationDescriptions', 'shotMoments'])
+        expect(projectFormatRedo(1, 2, {locationLooks: 'look', locationDescriptions: {}, shotMoments: {}}, {2: ['locationLooks']})).toEqual([
+            'locationLooks',
+            'locationDescriptions',
+            'shotMoments',
+        ])
     })
     test('a step and the steps built on it that have a result', () => {
         const project = store({story: 's', summary: 'x', cast: {characters: [], locations: []}, lookBrief: 'l', beats: [], music: {}})
@@ -37,7 +41,13 @@ describe('what the next run would redo, without redoing it', () => {
 })
 
 describe('the blocking, a step of its own before the shots', () => {
-    const planned: Project = {beats: [], mapping: [],blocking: {b1: {staging: 's', starts: {}, ends: {}}}, shotMoments: {b1: {shots: []}}, shotViews: {b1: [0]}}
+    const planned: Project = {
+        beats: [],
+        mapping: [],
+        blocking: {b1: {staging: 's', starts: {}, ends: {}}},
+        shotMoments: {b1: {shots: []}},
+        shotViews: {b1: [0]},
+    }
     test('redoing the shots keeps the blocking', () => {
         const project = store(planned)
         expect(project.redoneBy(['shotMoments'])).toEqual(['shotMoments', 'shotViews'])

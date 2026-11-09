@@ -1,9 +1,9 @@
-import {describe, expect, test} from 'bun:test';
-import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
-import {extraViews, nextViewNumber, viewRoute} from './views.ts';
-import {sequenceSheetDir, sheetViews} from '../sequenceSheet.ts';
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {extraViews, nextViewNumber, viewRoute} from './views.ts'
+import {sequenceSheetDir, sheetViews} from '../sequenceSheet.ts'
 
 test('unusable extra-view sidecars do not hide valid views (#654)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'extra-views-'))
@@ -15,7 +15,9 @@ test('unusable extra-view sidecars do not hide valid views (#654)', () => {
         writeFileSync(join(folder, 'view-8.png.json'), JSON.stringify({name: 42}))
         writeFileSync(join(folder, 'view-9.png.json'), JSON.stringify({name: 'rear', shows: 'door'}))
         expect(extraViews(dir, 'stage').map(({name, shows}) => ({name, shows}))).toEqual([{name: 'rear', shows: 'door'}])
-    } finally { rmSync(dir, {recursive: true, force: true}) }
+    } finally {
+        rmSync(dir, {recursive: true, force: true})
+    }
 })
 test('new view numbers start after the sheet and preserve surviving views after deletion', () => {
     const dir = mkdtempSync(join(tmpdir(), 'view-number-'))
@@ -26,7 +28,9 @@ test('new view numbers start after the sheet and preserve surviving views after 
         for (const n of [6, 7]) writeFileSync(join(folder, `view-${n}.png`), 'kept')
         rmSync(join(folder, 'view-6.png'))
         expect(nextViewNumber(dir, 'stage')).toBe(8)
-    } finally { rmSync(dir, {recursive: true, force: true}) }
+    } finally {
+        rmSync(dir, {recursive: true, force: true})
+    }
 })
 
 describe('one more view of a place (#532)', () => {
@@ -39,6 +43,10 @@ describe('one more view of a place (#532)', () => {
     test('a view up to a quarter turn away, or an answer that cannot be read, is one move', async () => {
         expect((await viewRoute('a dark theatre', from, to, async () => ({turn: 'side'}))).steps).toEqual([to])
         expect((await viewRoute('a dark theatre', from, to, async () => ({turn: 'reverse'}))).steps).toEqual([to])
-        expect(await viewRoute('a dark theatre', from, to, async () => { throw new Error('no server') })).toEqual({steps: [to], turn: 'unknown'})
+        expect(
+            await viewRoute('a dark theatre', from, to, async () => {
+                throw new Error('no server')
+            }),
+        ).toEqual({steps: [to], turn: 'unknown'})
     })
 })

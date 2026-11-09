@@ -2,9 +2,11 @@
 import {computed} from 'vue'
 
 /** Pages of a long list: the first, the last and those around this one - a long list does not need every number. */
-const props = defineProps<{page: number, pages: number, first: number, shown: number, total: number}>()
+const props = defineProps<{page: number; pages: number; first: number; shown: number; total: number}>()
 const emit = defineEmits<{go: [page: number]}>()
-const numbers = computed(() => [...new Set([1, props.page - 1, props.page, props.page + 1, props.pages])].filter(n => n >= 1 && n <= props.pages).sort((a, b) => a - b))
+const numbers = computed(() =>
+  [...new Set([1, props.page - 1, props.page, props.page + 1, props.pages])].filter(n => n >= 1 && n <= props.pages).sort((a, b) => a - b),
+)
 </script>
 
 <template>

@@ -1,14 +1,14 @@
-import {existsSync, readdirSync, readFileSync} from "node:fs";
-import {join} from "node:path";
-import {visionUrls} from "../describe-picture.ts";
-import {picturesReadable, type AskOptions} from "../llm.ts";
-import {log, styles} from "../log.ts";
-import {askFilmJson as askJson} from "./json.ts";
-import {placeViewFrame} from "./pictures.ts";
-import {sheetViewsPrompt, shotViewsPrompt, viewTurnPrompt} from "./prompts.ts";
-import type {FilmStore} from "./store.ts";
-import type {FilmCast, LocationView, SceneCoverage} from "./types.ts";
-import {sequenceSheetDir, sheetViews} from "../sequenceSheet.ts";
+import {existsSync, readdirSync, readFileSync} from 'node:fs'
+import {join} from 'node:path'
+import {visionUrls} from '../describe-picture.ts'
+import {picturesReadable, type AskOptions} from '../llm.ts'
+import {log, styles} from '../log.ts'
+import {askFilmJson as askJson} from './json.ts'
+import {placeViewFrame} from './pictures.ts'
+import {sheetViewsPrompt, shotViewsPrompt, viewTurnPrompt} from './prompts.ts'
+import type {FilmStore} from './store.ts'
+import type {FilmCast, LocationView, SceneCoverage} from './types.ts'
+import {sequenceSheetDir, sheetViews} from '../sequenceSheet.ts'
 
 // Which view of a place each shot is in, without designed views (config.locationViews). A clip was given the whole location sheet,
 // and the video model took its first view as the background whatever the shot's camera said (last-rehearsal: the rows of seats
@@ -20,32 +20,41 @@ const VIEWS = 5
 /** Next unused view number, even when earlier views were deleted or metadata is absent. */
 export function nextViewNumber(projectDir: string, locationId: string): number {
     const folder = join(projectDir, sheetViews(sequenceSheetDir('location', locationId)))
-    const numbers = existsSync(folder) ? readdirSync(folder).flatMap(file => {
-        const match = /^view-(\d+)\.(?:png|mp4)(?:\.json)?$/.exec(file)
-        return match ? [Number(match[1])] : []
-    }) : []
+    const numbers = existsSync(folder)
+        ? readdirSync(folder).flatMap(file => {
+              const match = /^view-(\d+)\.(?:png|mp4)(?:\.json)?$/.exec(file)
+              return match ? [Number(match[1])] : []
+          })
+        : []
     return Math.max(VIEWS, ...numbers) + 1
 }
 
 /** The further views of a place, rendered one by one (bun run add-view): after the five of its sheet, with the file each one is in. */
-export function extraViews(projectDir: string, locationId: string): { name: string, shows: string, file: string }[] {
+export function extraViews(projectDir: string, locationId: string): {name: string; shows: string; file: string}[] {
     const folder = sheetViews(sequenceSheetDir('location', locationId))
     if (!existsSync(join(projectDir, folder))) return []
-    return readdirSync(join(projectDir, folder)).filter(f => /^view-\d+\.png$/.test(f)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5))).flatMap(f => {
-        const sidecar = join(projectDir, folder, `${f}.json`)
-        try {
-            const value = JSON.parse(readFileSync(sidecar, 'utf8'))
-            if (typeof value?.name !== 'string' || typeof value?.shows !== 'string' || !value.name.trim() || !value.shows.trim()) throw new Error('name and shows must be nonempty strings')
-            return [{name: value.name, shows: value.shows, file: `${folder}/${f}`}]
-        } catch {
-            log.warn(`Skipping extra view ${folder}/${f}: repair its missing or invalid sidecar ${sidecar}`)
-            return []
-        }
-    })
+    return readdirSync(join(projectDir, folder))
+        .filter(f => /^view-\d+\.png$/.test(f))
+        .sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)))
+        .flatMap(f => {
+            const sidecar = join(projectDir, folder, `${f}.json`)
+            try {
+                const value = JSON.parse(readFileSync(sidecar, 'utf8'))
+                if (typeof value?.name !== 'string' || typeof value?.shows !== 'string' || !value.name.trim() || !value.shows.trim())
+                    throw new Error('name and shows must be nonempty strings')
+                return [{name: value.name, shows: value.shows, file: `${folder}/${f}`}]
+            } catch {
+                log.warn(`Skipping extra view ${folder}/${f}: repair its missing or invalid sidecar ${sidecar}`)
+                return []
+            }
+        })
 }
 
 /** The views of the places with their further ones behind them: only a clip's own choice ever takes one of those, so the plan stays as it is. */
-export function withExtraViews<V extends { name: string, shows: string }>(projectDir: string, views: Record<string, V[]>): Record<string, (V | { name: string, shows: string, file: string })[]> {
+export function withExtraViews<V extends {name: string; shows: string}>(
+    projectDir: string,
+    views: Record<string, V[]>,
+): Record<string, (V | {name: string; shows: string; file: string})[]> {
     return Object.fromEntries(Object.entries(views).map(([id, known]) => [id, [...known, ...extraViews(projectDir, id)]]))
 }
 
@@ -73,20 +82,30 @@ export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptio
             continue
         }
         readable ??= picturesReadable().then(yes => {
-            if (!yes) log.step('Views', styles.muted('the view of the place per clip needs a model that reads pictures - bun run setup vision; until then the clips are given the whole sheet'))
+            if (!yes)
+                log.step(
+                    'Views',
+                    styles.muted(
+                        'the view of the place per clip needs a model that reads pictures - bun run setup vision; until then the clips are given the whole sheet',
+                    ),
+                )
             return yes
         })
-        if (!await readable) continue
+        if (!(await readable)) continue
         log.step('Views', `${styles.name(location.id)} ${styles.muted('- reading its sheet with the vision model')}`)
         try {
-            const answer = await askJson<{ views: LocationView[] }>(sheetViewsPrompt(await visionUrls(frames), location, descriptions[location.id] ?? location.description))
+            const answer = await askJson<{views: LocationView[]}>(
+                sheetViewsPrompt(await visionUrls(frames), location, descriptions[location.id] ?? location.description),
+            )
             if (answer.views?.length !== VIEWS) throw new Error(`${answer.views?.length ?? 0} views instead of ${VIEWS}`)
             result[location.id] = answer.views.map(v => ({name: String(v.name ?? '').trim(), shows: String(v.shows ?? '').trim()}))
             film.data.sheetViews = {...film.data.sheetViews, [location.id]: {fingerprint, views: result[location.id]!}}
             changed = true
             log.line(styles.muted(`        ${result[location.id]!.map((v, n) => `${n + 1}. ${v.name}`).join(' · ')}`))
         } catch (e) {
-            log.warn(`the sheets of the places could not be read (${location.id}: ${e instanceof Error ? e.message : e}) - their clips get the whole sheet, the next run asks again`)
+            log.warn(
+                `the sheets of the places could not be read (${location.id}: ${e instanceof Error ? e.message : e}) - their clips get the whole sheet, the next run asks again`,
+            )
             // one warning, not one per place: the next ones would fail the same way
             readable = Promise.resolve(false)
         }
@@ -96,7 +115,12 @@ export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptio
 }
 
 /** The view of every shot of the scenes whose place has read views (1-based), chosen again only when the shots or the views changed. */
-export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[], locationOfScene: (sceneId: string) => string | undefined, sheetViews: Record<string, LocationView[]>): Promise<Record<string, number[]>> {
+export async function chooseShotViews(
+    film: FilmStore,
+    coverage: SceneCoverage[],
+    locationOfScene: (sceneId: string) => string | undefined,
+    sheetViews: Record<string, LocationView[]>,
+): Promise<Record<string, number[]>> {
     const result: Record<string, number[]> = {}
     for (const scene of coverage) {
         const views = sheetViews[locationOfScene(scene.sceneId) ?? '']
@@ -111,7 +135,7 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
             continue
         }
         try {
-            const answer = await askJson<{ views: unknown[] }>(question)
+            const answer = await askJson<{views: unknown[]}>(question)
             result[scene.sceneId] = shots.map((_, n) => {
                 const v = Number(answer.views?.[n])
                 return Number.isInteger(v) && v >= 1 && v <= views.length ? v : 1
@@ -121,7 +145,9 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
             await film.save()
             log.step('Views', `${styles.name(scene.sceneId)} ${styles.muted(`shots in views ${result[scene.sceneId]!.join(', ')}`)}`)
         } catch (e) {
-            log.warn(`${scene.sceneId}: the views of its shots could not be chosen (${e instanceof Error ? e.message : e}) - its clips get the whole sheet, the next run asks again`)
+            log.warn(
+                `${scene.sceneId}: the views of its shots could not be chosen (${e instanceof Error ? e.message : e}) - its clips get the whole sheet, the next run asks again`,
+            )
         }
     }
     return result
@@ -134,21 +160,34 @@ export async function chooseShotViews(film: FilmStore, coverage: SceneCoverage[]
  * reads only without them), so the planning's numbers stay.
  */
 export const withShotViews = (coverage: SceneCoverage[], shotViews: Record<string, number[]>): SceneCoverage[] =>
-    coverage.map(scene => shotViews[scene.sceneId] ? {...scene, shots: scene.shots.map((s, n) => ({...s, placeView: shotViews[scene.sceneId]![n]}))} : scene)
+    coverage.map(scene => (shotViews[scene.sceneId] ? {...scene, shots: scene.shots.map((s, n) => ({...s, placeView: shotViews[scene.sceneId]![n]}))} : scene))
 
 /** Every view of a place with the picture it starts from: the sheet's (designed or read from it), then those made one by one (add-view). */
-export function placeViews(projectDir: string, data: { locationViews?: Record<string, LocationView[]>, sheetViews?: Record<string, { views: LocationView[] }> }, locationId: string): { name: string, shows: string, file: string }[] {
-    const sheet = (data.locationViews?.[locationId] ?? data.sheetViews?.[locationId]?.views ?? []).map((v, n) => ({name: v.name, shows: v.shows, file: placeViewFrame(locationId, n + 1)}))
+export function placeViews(
+    projectDir: string,
+    data: {locationViews?: Record<string, LocationView[]>; sheetViews?: Record<string, {views: LocationView[]}>},
+    locationId: string,
+): {name: string; shows: string; file: string}[] {
+    const sheet = (data.locationViews?.[locationId] ?? data.sheetViews?.[locationId]?.views ?? []).map((v, n) => ({
+        name: v.name,
+        shows: v.shows,
+        file: placeViewFrame(locationId, n + 1),
+    }))
     return [...sheet, ...extraViews(projectDir, locationId)]
 }
 
-export type ViewStep = { name: string, shows: string }
+export type ViewStep = {name: string; shows: string}
 /**
  * The views to render to reach a new one from where the move starts: the view itself, or - when it looks back the other way, which one
  * move does not reach (the place is invented anew) - first a view in between, then the view from there. Judged by the language model;
  * when it cannot say, the view is rendered directly, as before.
  */
-export async function viewRoute(place: string, from: ViewStep, to: ViewStep, ask: (options: AskOptions) => Promise<{ turn?: unknown, between?: { name?: unknown, shows?: unknown } }> = askJson): Promise<{ steps: ViewStep[], turn: string }> {
+export async function viewRoute(
+    place: string,
+    from: ViewStep,
+    to: ViewStep,
+    ask: (options: AskOptions) => Promise<{turn?: unknown; between?: {name?: unknown; shows?: unknown}}> = askJson,
+): Promise<{steps: ViewStep[]; turn: string}> {
     const answer = await ask(viewTurnPrompt(place, from, to)).catch(() => undefined)
     const turn = typeof answer?.turn === 'string' ? answer.turn : 'unknown'
     const between = answer?.between

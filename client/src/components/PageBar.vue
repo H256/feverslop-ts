@@ -4,5 +4,8 @@ defineProps<{title: string}>()
 </script>
 
 <template>
-  <div class="pagebar"><h2>{{ title }}</h2><slot /></div>
+  <div class="pagebar">
+    <h2>{{ title }}</h2>
+    <slot />
+  </div>
 </template>

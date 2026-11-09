@@ -1,11 +1,11 @@
-import {existsSync, readFileSync, renameSync, writeFileSync} from "node:fs";
-import {join} from "node:path";
-import {readSettingsFile, saveSettings} from "../settings.ts";
-import {POSTWORK_DEFAULTS, POSTWORK_STEPS, postworkProblem, type PostworkSettings, type PostworkStep} from "./config.ts";
+import {existsSync, readFileSync, renameSync, writeFileSync} from 'node:fs'
+import {join} from 'node:path'
+import {readSettingsFile, saveSettings} from '../settings.ts'
+import {POSTWORK_DEFAULTS, POSTWORK_STEPS, postworkProblem, type PostworkSettings, type PostworkStep} from './config.ts'
 
 // Where the settings of the post-work steps are read from and kept (lib/postwork/config.ts says the order).
 
-export type PostworkLayer = { [S in PostworkStep]?: Partial<PostworkSettings[S]> }
+export type PostworkLayer = {[S in PostworkStep]?: Partial<PostworkSettings[S]>}
 
 const projectConfigFile = (dir: string) => join(dir, 'config.json')
 function readProjectConfig(dir: string): Record<string, unknown> {
@@ -17,10 +17,13 @@ function readProjectConfig(dir: string): Record<string, unknown> {
 }
 
 /** The layers of a step's settings, in the order they win: the defaults, the settings file, the project's config.json. */
-export async function postworkLayers(dir: string): Promise<{ settings: PostworkLayer, project: PostworkLayer }> {
-    const settings = ((await readSettingsFile()) as { postwork?: PostworkLayer }).postwork ?? {}
+export async function postworkLayers(dir: string): Promise<{settings: PostworkLayer; project: PostworkLayer}> {
+    const settings = ((await readSettingsFile()) as {postwork?: PostworkLayer}).postwork ?? {}
     const project = (readProjectConfig(dir).postwork ?? {}) as PostworkLayer
-    for (const [where, layer] of [['the settings file', settings], [projectConfigFile(dir), project]] as const) {
+    for (const [where, layer] of [
+        ['the settings file', settings],
+        [projectConfigFile(dir), project],
+    ] as const) {
         const wrong = postworkProblem(layer)
         if (wrong) throw new Error(`${where}: ${wrong}`)
     }
@@ -46,12 +49,17 @@ export function withOptions<S extends PostworkStep>(step: S, base: PostworkSetti
  * given change, the rest of the file stays as it is. A value that is the default of the layer below is still written: it
  * is what was asked for.
  */
-export async function savePostwork<S extends PostworkStep>(where: 'project' | 'settings', dir: string, step: S, values: Partial<PostworkSettings[S]>): Promise<string> {
+export async function savePostwork<S extends PostworkStep>(
+    where: 'project' | 'settings',
+    dir: string,
+    step: S,
+    values: Partial<PostworkSettings[S]>,
+): Promise<string> {
     const given = Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined))
     const wrong = postworkProblem({[step]: given})
     if (wrong) throw new Error(wrong)
     if (where === 'settings') {
-        const file = await readSettingsFile() as { postwork?: PostworkLayer }
+        const file = (await readSettingsFile()) as {postwork?: PostworkLayer}
         const postwork = {...file.postwork, [step]: {...file.postwork?.[step], ...given}}
         await saveSettings({...file, postwork} as Parameters<typeof saveSettings>[0])
         return 'the settings file'

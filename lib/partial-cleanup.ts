@@ -1,6 +1,6 @@
-import {readdirSync, rmSync, statSync} from 'node:fs';
-import {join} from 'node:path';
-import {processAlive} from './process-identity.ts';
+import {readdirSync, rmSync, statSync} from 'node:fs'
+import {join} from 'node:path'
+import {processAlive} from './process-identity.ts'
 
 /** Called under the project write lock. Never follows symlinks or touches pending jobs/final outputs. */
 export function sweepPartials(dir: string): number {
@@ -21,7 +21,9 @@ export function sweepPartials(dir: string): number {
             if (Date.now() - statSync(file).mtimeMs < 24 * 60 * 60 * 1000) continue
             rmSync(file)
             removed++
-        } catch { /* best-effort housekeeping: another process may hold the file */ }
+        } catch {
+            /* best-effort housekeeping: another process may hold the file */
+        }
     }
     return removed
 }

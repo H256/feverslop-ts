@@ -4,7 +4,7 @@ import {useToasts} from '../../services/toasts'
 import type {ClipActions} from './useClipActions'
 import type {Timeline} from './useTimeline'
 
-type Review = {clips: EditorClip[], index: number, again: Set<string>, restore: () => void}
+type Review = {clips: EditorClip[]; index: number; again: Set<string>; restore: () => void}
 
 /**
  * Going through clips one by one, with keys: each one in a loop, fine or to be rendered again. A final video would show the clips as
@@ -68,8 +68,13 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
       Enter: () => step(1),
       ArrowRight: () => step(1),
       ArrowLeft: () => step(-1),
-      r: () => { r.again.add(clip.id); step(1) },
-      c: () => { compare().catch(toasts.fail) },
+      r: () => {
+        r.again.add(clip.id)
+        step(1)
+      },
+      c: () => {
+        compare().catch(toasts.fail)
+      },
       Escape: () => end(),
     }
     const action = keys[event.key] ?? (event.key.length === 1 ? keys[event.key.toLowerCase()] : undefined)

@@ -4,8 +4,13 @@ import {stubProject, type Posted} from './fixtures'
 
 let editor: Awaited<ReturnType<typeof startEditor>>
 let base: string
-test.beforeAll(async () => { editor = await startEditor(); base = editor.base })
-test.afterAll(async () => { await editor?.stop() })
+test.beforeAll(async () => {
+  editor = await startEditor()
+  base = editor.base
+})
+test.afterAll(async () => {
+  await editor?.stop()
+})
 
 let posted: Posted[]
 let errors: string[]
@@ -14,7 +19,9 @@ test.beforeEach(async ({page}) => {
   page.on('pageerror', error => errors.push(error.message))
   posted = await stubProject(page)
 })
-test.afterEach(() => { expect(errors).toEqual([]) })
+test.afterEach(() => {
+  expect(errors).toEqual([])
+})
 const dialog = (page: Page) => page.getByRole('dialog')
 const paths = () => posted.map(p => p.path)
 
@@ -45,7 +52,9 @@ test('timeline: the clip at the playhead, its tabs, and a render asked before it
   await expect(page.locator('.ihead h2')).toContainText('clip-2')
   await expect(page).toHaveURL(/#clip-2$/)
   // a link to a clip on the open page: the playhead goes there
-  await page.evaluate(() => { location.hash = 'clip-1' })
+  await page.evaluate(() => {
+    location.hash = 'clip-1'
+  })
   await expect(page.locator('.ihead h2')).toContainText('clip-1')
 })
 
@@ -78,7 +87,9 @@ test('casting: a library asset for a role, asked with what goes stale', async ({
   await page.keyboard.type('Roof')
   await page.getByRole('button', {name: 'Save the cast'}).click()
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
-  await expect.poll(() => posted.find(p => p.path === 'cast')?.body).toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: [{id: 'bar', name: 'Bar'}, {name: 'Roof'}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'cast')?.body)
+    .toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: [{id: 'bar', name: 'Bar'}, {name: 'Roof'}]})
 })
 
 test('casting: roles removed on their cards, put back, and saved together from the bar', async ({page}) => {
@@ -112,7 +123,9 @@ test('casting a film: a role added and one taken out start the screenplay told a
   await expect(dialog(page)).toContainText('new: Kai · gone: Bo')
   await expect(dialog(page)).toContainText('Taking it drops what is read from the script')
   await dialog(page).getByRole('button', {name: 'Have it written'}).click()
-  await expect.poll(() => filmPosted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'adapt-story', add: [{name: 'Kai', role: 'the night porter'}], remove: ['bo']}})
+  await expect
+    .poll(() => filmPosted.find(p => p.path === 'run')?.body)
+    .toMatchObject({action: {type: 'adapt-story', add: [{name: 'Kai', role: 'the night porter'}], remove: ['bo']}})
   await expect(page.locator('.castbar')).toBeHidden()
 })
 
@@ -135,7 +148,9 @@ test('look: one text changed and one written anew, saved together', async ({page
   await page.getByRole('button', {name: 'Save', exact: true}).click()
   await expect(dialog(page)).toContainText('What is planned from the looks goes: beats.')
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
-  await expect.poll(() => posted.find(p => p.path === 'look')?.body).toEqual({elements: [{kind: 'character', id: 'ann', description: 'a tall woman'}], again: [{kind: 'character', id: 'ann'}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'look')?.body)
+    .toEqual({elements: [{kind: 'character', id: 'ann', description: 'a tall woman'}], again: [{kind: 'character', id: 'ann'}]})
 })
 
 test('references: a picture rendered again with its edited prompt', async ({page}) => {
@@ -170,7 +185,19 @@ test('timing: a line moved by key, undone, moved again and saved', async ({page}
   await expect(page.getByText('1 line moved')).toHaveCount(0)
   await editorBox.press('Shift+ArrowRight')
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1.5, end: 2.5, estimated: true}, {start: 2.5, end: 3.5, estimated: true}]}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'timing')?.body)
+    .toMatchObject({
+      lines: [
+        {
+          line: 0,
+          words: [
+            {start: 1.5, end: 2.5, estimated: true},
+            {start: 2.5, end: 3.5, estimated: true},
+          ],
+        },
+      ],
+    })
 })
 
 // what the review found: answers that come late, changes made while saving, a refusal in a question, a draft of another pick
@@ -193,7 +220,9 @@ test('singers: while a change is saved the page cannot be changed, and what was 
   let release: () => void = () => {}
   await page.route('**/api/singing', async route => {
     if (route.request().method() !== 'POST') return route.fallback()
-    await new Promise<void>(resolve => { release = resolve })
+    await new Promise<void>(resolve => {
+      release = resolve
+    })
     await route.fallback()
   })
   await page.goto(`${base}/p/music/demo/singers#line-0`)
@@ -214,19 +243,21 @@ test('library: a question whose work the server refuses stays open, with what wa
   // the picture is required: the form says so instead of closing
   await dialog(page).getByRole('button', {name: 'Render it'}).click()
   await expect(dialog(page)).toBeVisible()
-  await dialog(page).getByLabel('Picture').setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
+  await dialog(page)
+    .getByLabel('Picture')
+    .setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
   await dialog(page).getByLabel('Library id').fill('kael')
   await dialog(page).getByRole('button', {name: 'Render it'}).click()
   await expect(dialog(page).getByRole('alert')).toHaveText('library:kael already exists')
   await expect(dialog(page).getByLabel('Library id')).toHaveValue('kael')
 })
 
-test('references: a picture from an edited prompt shows it, and goes back to the plan\'s prompt unpinned', async ({page}) => {
+test("references: a picture from an edited prompt shows it, and goes back to the plan's prompt unpinned", async ({page}) => {
   await page.goto(`${base}/p/music/demo/references#cem`)
   const prompt = page.getByRole('textbox', {name: 'Prompt'})
   await expect(prompt).toHaveValue('Cem in green')
   await expect(page.getByText('Edited: the plan has another prompt.')).toBeVisible()
-  await page.getByRole('button', {name: 'Take the plan\'s prompt'}).click()
+  await page.getByRole('button', {name: "Take the plan's prompt"}).click()
   await expect(prompt).toHaveValue('Cem in grey')
   await page.getByRole('button', {name: 'Render again'}).click()
   await expect(dialog(page)).toContainText('the new picture is not pinned')
@@ -238,7 +269,10 @@ test('references: your own picture goes up as the anchor, with a description wri
   await page.goto(`${base}/p/music/demo/references#ann`)
   await page.getByRole('button', {name: 'Use my own anchor'}).click()
   await expect(dialog(page)).toContainText('What is there now is put away as an older version')
-  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082', 'hex')
+  const png = Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082',
+    'hex',
+  )
   await dialog(page).getByLabel('Picture', {exact: true}).setInputFiles({name: 'mine.png', mimeType: 'image/png', buffer: png})
   await expect(dialog(page).getByRole('img', {name: 'The picture picked'})).toBeVisible()
   await expect(dialog(page).getByLabel('Prompt of the picture')).toHaveValue('Ann in red')
@@ -284,21 +318,29 @@ test('library: an asset asked for in the library starts nothing in the project o
   let answer: () => void = () => {}
   await page.route('**/api/library/assets', route => route.fulfill({json: {dir: 'library', assets: []}}))
   await page.route('**/api/library/create', async route => {
-    await new Promise<void>(resolve => { answer = resolve })
+    await new Promise<void>(resolve => {
+      answer = resolve
+    })
     await route.fulfill({json: {run: {source: 'here', command: 'bun tools/create-asset.ts kael', pid: 9, startedAt: '2026-11-03T00:00:00Z', running: true}}})
   })
-  await page.route('**/api/library/run-events*', route => route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: 'event: state\ndata: null\n\n'}))
+  await page.route('**/api/library/run-events*', route =>
+    route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: 'event: state\ndata: null\n\n'}),
+  )
   await page.goto(`${base}/p/music/demo/`)
   await page.getByRole('navigation', {name: 'Workspace'}).getByRole('link', {name: 'Library'}).click()
   await page.getByRole('button', {name: 'New asset from a picture'}).click()
-  await dialog(page).getByLabel('Picture').setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
+  await dialog(page)
+    .getByLabel('Picture')
+    .setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
   await dialog(page).getByRole('button', {name: 'Render it'}).click()
   await expect(dialog(page).getByRole('button', {name: 'Working…'})).toBeVisible()
   await page.goBack()
   await expect(page.locator('.ihead h2')).toContainText('clip-1')
   // the project follows its runs; a late answer of the library must not start that over from the start (after=0) for its run
   const reconnects: string[] = []
-  page.on('request', request => { if (request.url().includes('/p/music/demo/api/run-events')) reconnects.push(request.url()) })
+  page.on('request', request => {
+    if (request.url().includes('/p/music/demo/api/run-events')) reconnects.push(request.url())
+  })
   answer()
   await page.waitForTimeout(500)
   expect(reconnects).toEqual([])
@@ -316,10 +358,9 @@ test('settings: a workflow chosen, the question says what it makes stale, and on
   await expect(dialog(page)).toContainText('Video workflow: h3-ref2video-2pass → h3-ref2video-prism-2pass')
   await expect(dialog(page)).toContainText('1 of 1 rendered clip would be made from something else then')
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
-  await expect.poll(() => posted.filter(p => p.path === 'config').map(p => p.body)).toEqual([
-    {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}, dryRun: true},
-    {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}},
-  ])
+  await expect
+    .poll(() => posted.filter(p => p.path === 'config').map(p => p.body))
+    .toEqual([{change: {videoWorkflow: 'h3-ref2video-prism-2pass'}, dryRun: true}, {change: {videoWorkflow: 'h3-ref2video-prism-2pass'}}])
 })
 
 test('settings: a setting back to its default takes the key out of config.json; leaving with a change asks first', async ({page}) => {
@@ -336,7 +377,9 @@ test('settings: a setting back to its default takes the key out of config.json; 
   await expect(dialog(page)).toContainText('changes to the settings')
 })
 
-test('timing: a first word that starts before its singing is said, tightened with one click, and a clip that does not know the move is named', async ({page}) => {
+test('timing: a first word that starts before its singing is said, tightened with one click, and a clip that does not know the move is named', async ({
+  page,
+}) => {
   await page.goto(`${base}/p/music/demo/timing`)
   // the first word starts at 1 s, the singing at 1.4 s
   await expect(page.getByText('starts 0.4 s early')).toBeVisible()
@@ -354,7 +397,19 @@ test('timing: a first word that starts before its singing is said, tightened wit
   await expect(page.getByText('starts 0.4 s early')).toHaveCount(0)
   await expect(page.getByText('1 line moved')).toBeVisible()
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1.4, end: 2, estimated: true}, {start: 2, end: 3}]}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'timing')?.body)
+    .toMatchObject({
+      lines: [
+        {
+          line: 0,
+          words: [
+            {start: 1.4, end: 2, estimated: true},
+            {start: 2, end: 3},
+          ],
+        },
+      ],
+    })
 })
 
 test('timeline: the clips that are not rendered are marked and rendered with one button, asked first', async ({page}) => {
@@ -392,7 +447,10 @@ test('timing: range editing exposes reversible split and review controls without
 
 test('timing: split, join and redo preserve the audible word and send structural data', async ({page}) => {
   await page.goto(`${base}/p/music/demo/timing`)
-  await page.locator('.tword').first().click({position: {x: 15, y: 30}})
+  await page
+    .locator('.tword')
+    .first()
+    .click({position: {x: 15, y: 30}})
   await expect(page.getByText('1 word selected', {exact: true})).toBeVisible()
   await page.getByText('Fit, split and shared boundary', {exact: true}).click()
   await page.getByLabel('Split after character', {exact: true}).fill('2')
@@ -404,7 +462,20 @@ test('timing: split, join and redo preserve the audible word and send structural
   await page.getByRole('button', {name: 'Undo', exact: true}).click()
   await expect(page.locator('.tword')).toHaveCount(3)
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{text: 'He', start: 1, end: 1.5}, {text: 'llo', joined: true, start: 1.5, end: 2}, {text: 'night', start: 2, end: 3}]}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'timing')?.body)
+    .toMatchObject({
+      lines: [
+        {
+          line: 0,
+          words: [
+            {text: 'He', start: 1, end: 1.5},
+            {text: 'llo', joined: true, start: 1.5, end: 2},
+            {text: 'night', start: 2, end: 3},
+          ],
+        },
+      ],
+    })
 })
 
 test('timing: fit previews a passage, keeps it unchecked and can undo in one step', async ({page}) => {
@@ -424,27 +495,56 @@ test('timing: fit previews a passage, keeps it unchecked and can undo in one ste
 
 test('timing: shift-select words and move them together without losing the gap', async ({page}) => {
   await page.goto(`${base}/p/music/demo/timing`)
-  await page.locator('.tword').first().click({position: {x: 15, y: 30}})
-  await page.locator('.tword').nth(1).click({modifiers: ['Shift'], position: {x: 15, y: 30}})
+  await page
+    .locator('.tword')
+    .first()
+    .click({position: {x: 15, y: 30}})
+  await page
+    .locator('.tword')
+    .nth(1)
+    .click({modifiers: ['Shift'], position: {x: 15, y: 30}})
   await expect(page.getByText('2 words selected', {exact: true})).toBeVisible()
   await page.locator('.tedit').press('Shift+ArrowRight')
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1.5, end: 2.5}, {start: 2.5, end: 3.5}]}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'timing')?.body)
+    .toMatchObject({
+      lines: [
+        {
+          line: 0,
+          words: [
+            {start: 1.5, end: 2.5},
+            {start: 2.5, end: 3.5},
+          ],
+        },
+      ],
+    })
 })
 
 test('timing: the whole-line bar moves every word and keeps the viewport still during dragging', async ({page}) => {
   await page.goto(`${base}/p/music/demo/timing`)
-  await page.locator('.tword').first().click({position: {x: 15, y: 30}})
+  await page
+    .locator('.tword')
+    .first()
+    .click({position: {x: 15, y: 30}})
   const bar = await page.locator('.tline').boundingBox()
-  const cutBefore = await page.locator('.tcut').first().evaluate(e => e.getBoundingClientRect().x)
+  const cutBefore = await page
+    .locator('.tcut')
+    .first()
+    .evaluate(e => e.getBoundingClientRect().x)
   await page.mouse.move(bar!.x + 20, bar!.y + 8)
   await page.mouse.down()
   await page.mouse.move(bar!.x + 55, bar!.y + 8, {steps: 5})
-  expect(await page.locator('.tcut').first().evaluate(e => e.getBoundingClientRect().x)).toBeCloseTo(cutBefore, 1)
+  expect(
+    await page
+      .locator('.tcut')
+      .first()
+      .evaluate(e => e.getBoundingClientRect().x),
+  ).toBeCloseTo(cutBefore, 1)
   await page.mouse.up()
   await expect(page.getByText('2 words selected', {exact: true})).toBeVisible()
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  const body = posted.find(p => p.path === 'timing')?.body as {lines: {words: {start: number, end: number}[]}[]}
+  const body = posted.find(p => p.path === 'timing')?.body as {lines: {words: {start: number; end: number}[]}[]}
   const words = body.lines[0]!.words
   expect(words[0]!.start).toBeGreaterThan(1)
   expect(words[1]!.start - words[0]!.start).toBeCloseTo(1, 2)
@@ -454,32 +554,88 @@ test('timing: the whole-line bar moves every word and keeps the viewport still d
 test('timing: listening marks exactly one onset per key, pauses and applies an offset', async ({page}) => {
   await page.addInitScript(() => {
     class FakeAudio {
-      dataset: Record<string, string> = {}; currentTime = 0; paused = true; ended = false; playbackRate = 1; preservesPitch = true
-      constructor(_src: string) { (window as unknown as {testAudio: FakeAudio}).testAudio = this }
-      play() { this.paused = false; return Promise.resolve() }
-      pause() { this.paused = true }
+      dataset: Record<string, string> = {}
+      currentTime = 0
+      paused = true
+      ended = false
+      playbackRate = 1
+      preservesPitch = true
+      constructor(_src: string) {
+        ;(window as unknown as {testAudio: FakeAudio}).testAudio = this
+      }
+      play() {
+        this.paused = false
+        return Promise.resolve()
+      }
+      pause() {
+        this.paused = true
+      }
     }
     window.Audio = FakeAudio as unknown as typeof Audio
   })
-  await page.route('**/api/timing', route => route.request().method() === 'POST' ? route.fallback() : route.fulfill({json: {timing: {
-    duration: 10, lines: [{line: 0, section: 'Verse', text: 'Hello night', words: [{text: 'Hello', start: 1, end: 2}, {text: 'night', start: 2, end: 3}], estimated: true, byHand: false, beats: []}],
-    cuts: [{id: 'clip-1', start: 0, end: 10}], beats: [], unplanned: [], outdated: [], audio: {file: 'vocals.wav', v: 1},
-  }}}))
+  await page.route('**/api/timing', route =>
+    route.request().method() === 'POST'
+      ? route.fallback()
+      : route.fulfill({
+          json: {
+            timing: {
+              duration: 10,
+              lines: [
+                {
+                  line: 0,
+                  section: 'Verse',
+                  text: 'Hello night',
+                  words: [
+                    {text: 'Hello', start: 1, end: 2},
+                    {text: 'night', start: 2, end: 3},
+                  ],
+                  estimated: true,
+                  byHand: false,
+                  beats: [],
+                },
+              ],
+              cuts: [{id: 'clip-1', start: 0, end: 10}],
+              beats: [],
+              unplanned: [],
+              outdated: [],
+              audio: {file: 'vocals.wav', v: 1},
+            },
+          },
+        }),
+  )
   await page.goto(`${base}/p/music/demo/timing`)
   await page.getByText('Listen and mark onsets', {exact: true}).click()
   await page.getByRole('button', {name: 'Start marking', exact: true}).click()
-  const time = (t: number) => page.evaluate(t => { (window as unknown as {testAudio: {currentTime: number}}).testAudio.currentTime = t }, t)
-  await time(1.2); await page.keyboard.press('m')
+  const time = (t: number) =>
+    page.evaluate(t => {
+      ;(window as unknown as {testAudio: {currentTime: number}}).testAudio.currentTime = t
+    }, t)
+  await time(1.2)
+  await page.keyboard.press('m')
   await expect(page.getByRole('status')).toContainText('1/3 marks')
   await page.keyboard.press('Space')
   await expect(page.getByRole('button', {name: 'Resume', exact: true})).toBeVisible()
   await page.keyboard.press('Space')
-  await time(2.2); await page.keyboard.press('m')
-  await time(3.2); await page.keyboard.press('m')
+  await time(2.2)
+  await page.keyboard.press('m')
+  await time(3.2)
+  await page.keyboard.press('m')
   await page.getByLabel('Reaction offset (ms)').fill('200')
   await page.getByRole('button', {name: 'Apply marks', exact: true}).click()
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect.poll(() => posted.find(p => p.path === 'timing')?.body).toMatchObject({lines: [{line: 0, words: [{start: 1, end: 2, anchor: true, estimated: true}, {start: 2, end: 3, anchor: true, estimated: true}]}]})
+  await expect
+    .poll(() => posted.find(p => p.path === 'timing')?.body)
+    .toMatchObject({
+      lines: [
+        {
+          line: 0,
+          words: [
+            {start: 1, end: 2, anchor: true, estimated: true},
+            {start: 2, end: 3, anchor: true, estimated: true},
+          ],
+        },
+      ],
+    })
 })
 
 test('timeline: the AI marker is put on a finished video, from the settings of the project, changed in the question', async ({page}) => {
@@ -487,7 +643,10 @@ test('timeline: the AI marker is put on a finished video, from the settings of t
   await page.unrouteAll()
   posted = await stubProject(page, 'music', {
     final: {state: 'current', file: 'demo.mp4', v: 1},
-    finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}, {file: 'demo-finished.mp4', v: 1, label: 'Final finished', state: 'current', preview: false}],
+    finals: [
+      {file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false},
+      {file: 'demo-finished.mp4', v: 1, label: 'Final finished', state: 'current', preview: false},
+    ],
   })
   await page.goto(`${base}/p/music/demo/`)
   await page.getByRole('button', {name: 'AI marker'}).click()
@@ -499,18 +658,36 @@ test('timeline: the AI marker is put on a finished video, from the settings of t
   await dialog(page).getByLabel('When').selectOption('interval')
   await dialog(page).getByLabel('Every (seconds)').fill('30')
   await dialog(page).getByLabel('Marker').selectOption('basic-black')
-  await dialog(page).getByRole('checkbox', {name: /Keep these settings/}).check()
+  await dialog(page)
+    .getByRole('checkbox', {name: /Keep these settings/})
+    .check()
   await dialog(page).getByRole('button', {name: 'Put it on'}).click()
-  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {
-    type: 'label', from: 'demo-finished.mp4', marker: 'basic-black', mode: 'interval', seconds: 5, interval: 30, corner: 'top-right', size: 6, margin: 3, save: true,
-  }})
+  await expect
+    .poll(() => posted.at(-1)?.body)
+    .toEqual({
+      action: {
+        type: 'label',
+        from: 'demo-finished.mp4',
+        marker: 'basic-black',
+        mode: 'interval',
+        seconds: 5,
+        interval: 30,
+        corner: 'top-right',
+        size: 6,
+        margin: 3,
+        save: true,
+      },
+    })
 })
 
 test('timeline: an intro is put in front of a finished video - input/intro.mp4 of the project, or a path - and kept for every project', async ({page}) => {
   await page.unrouteAll()
   posted = await stubProject(page, 'music', {
     final: {state: 'current', file: 'demo.mp4', v: 1},
-    finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}, {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false}],
+    finals: [
+      {file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false},
+      {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false},
+    ],
   })
   await page.goto(`${base}/p/music/demo/`)
   await page.getByRole('button', {name: 'Intro', exact: true}).click()
@@ -518,11 +695,17 @@ test('timeline: an intro is put in front of a finished video - input/intro.mp4 o
   // the intro of the project is offered without a path
   await expect(dialog(page).getByLabel(/Intro \(path/)).toHaveAttribute('placeholder', 'input/intro.mp4 of this project')
   await dialog(page).getByLabel('From').selectOption('demo-labeled.mp4')
-  await dialog(page).getByLabel(/Intro \(path/).fill('D:/videos/channel.mp4')
+  await dialog(page)
+    .getByLabel(/Intro \(path/)
+    .fill('D:/videos/channel.mp4')
   await dialog(page).getByLabel(/Fade/).fill('0.5')
-  await dialog(page).getByRole('checkbox', {name: /every project/}).check()
+  await dialog(page)
+    .getByRole('checkbox', {name: /every project/})
+    .check()
   await dialog(page).getByRole('button', {name: 'Put it in front'}).click()
-  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'intro', from: 'demo-labeled.mp4', file: 'D:/videos/channel.mp4', fade: 0.5, saveDefault: true}})
+  await expect
+    .poll(() => posted.at(-1)?.body)
+    .toEqual({action: {type: 'intro', from: 'demo-labeled.mp4', file: 'D:/videos/channel.mp4', fade: 0.5, saveDefault: true}})
 })
 
 test('timeline: a title card and credits are added to a finished video, with the lines of the project and its artist', async ({page}) => {
@@ -535,15 +718,36 @@ test('timeline: a title card and credits are added to a finished video, with the
   await page.getByRole('button', {name: 'Credits', exact: true}).click()
   await expect(dialog(page).getByLabel('Artist (by …)')).toHaveValue('Klemens')
   await expect(dialog(page).getByLabel(/Lines of your own/)).toHaveValue('Thanks to the band')
-  await dialog(page).getByLabel('Title (empty: the project\'s)').fill('Demo Song')
-  await dialog(page).getByLabel(/Lines of your own/).fill('Thanks to the band\n\nfeverslop.example')
+  await dialog(page).getByLabel("Title (empty: the project's)").fill('Demo Song')
+  await dialog(page)
+    .getByLabel(/Lines of your own/)
+    .fill('Thanks to the band\n\nfeverslop.example')
   await dialog(page).getByLabel('Marker on the title card').selectOption('generated-white')
-  await dialog(page).getByRole('checkbox', {name: /this project/}).check()
+  await dialog(page)
+    .getByRole('checkbox', {name: /this project/})
+    .check()
   await dialog(page).getByRole('button', {name: 'Add them'}).click()
-  await expect.poll(() => posted.at(-1)?.body).toEqual({action: {
-    type: 'credits', from: 'demo.mp4', opening: true, end: true, openingSeconds: 4, endSeconds: 0, title: 'Demo Song', artist: 'Klemens',
-    disclosure: 'Contains AI-generated content', marker: 'generated-white', extra: ['Thanks to the band', 'feverslop.example'], hardware: '', facts: true, sound: '', save: true,
-  }})
+  await expect
+    .poll(() => posted.at(-1)?.body)
+    .toEqual({
+      action: {
+        type: 'credits',
+        from: 'demo.mp4',
+        opening: true,
+        end: true,
+        openingSeconds: 4,
+        endSeconds: 0,
+        title: 'Demo Song',
+        artist: 'Klemens',
+        disclosure: 'Contains AI-generated content',
+        marker: 'generated-white',
+        extra: ['Thanks to the band', 'feverslop.example'],
+        hardware: '',
+        facts: true,
+        sound: '',
+        save: true,
+      },
+    })
 })
 
 test('timeline: R renders the clip at the playhead again, asked first - a key of the help works in capitals too', async ({page}) => {

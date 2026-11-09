@@ -11,14 +11,20 @@ const copy = async () => {
   await navigator.clipboard.writeText(props.command)
   copied.value = true
   clearTimeout(timer)
-  timer = setTimeout(() => { copied.value = false }, 1200)
+  timer = setTimeout(() => {
+    copied.value = false
+  }, 1200)
 }
 onScopeDispose(() => clearTimeout(timer))
 </script>
 
 <template>
   <div class="cmd">
-    <code><template v-for="(word, n) in words" :key="n">{{ n ? ' ' : '' }}<span style="display: inline-block">{{ word }}</span></template></code>
+    <code
+      ><template v-for="(word, n) in words" :key="n"
+        >{{ n ? ' ' : '' }}<span style="display: inline-block">{{ word }}</span></template
+      ></code
+    >
     <button title="Copy" aria-label="Copy" @click="copy"><template v-if="copied">✓</template><AppIcon v-else name="copy" /></button>
   </div>
 </template>

@@ -1,32 +1,60 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import type {Project} from "../project.ts";
-import type {FilmProject} from "../film/types.ts";
-import {filmStage, musicStage, nextStage, parseUntil} from "../stages.ts";
-import {applyCast, applyLook, applyStory, applyStoryKeepingCast, bookView, castingRedoOf, castView, lookView, renameInStory, writeCast} from "./preproduction.ts";
-import {KEPT_BY_HAND, keepEach} from "../partials.ts";
-import {runCommand} from "./runs.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import type {Project} from '../project.ts'
+import type {FilmProject} from '../film/types.ts'
+import {filmStage, musicStage, nextStage, parseUntil} from '../stages.ts'
+import {
+    applyCast,
+    applyLook,
+    applyStory,
+    applyStoryKeepingCast,
+    bookView,
+    castingRedoOf,
+    castView,
+    lookView,
+    renameInStory,
+    writeCast,
+} from './preproduction.ts'
+import {KEPT_BY_HAND, keepEach} from '../partials.ts'
+import {runCommand} from './runs.ts'
 
 const music = {id: 'demo', kind: 'music' as const}
 const film = {id: 'demo', kind: 'film' as const}
 
 // a music video planned up to the look: story, cast, singers and the looks are there, no beats yet
 const lookStage = (): Project => ({
-    story: 'Mara rows out to the lighthouse.', summary: 'A rower and a lighthouse.',
+    story: 'Mara rows out to the lighthouse.',
+    summary: 'A rower and a lighthouse.',
     cast: {
         characters: [
             {id: 'mara', name: 'Mara', role: 'the rower', prop: 'a lantern'},
-            {id: 'ben', name: 'Ben', role: 'the drummer', prop: 'a drum kit', propStem: 'drums', propCarried: false, propPlace: 'deck', propInHand: 'drumsticks'},
+            {
+                id: 'ben',
+                name: 'Ben',
+                role: 'the drummer',
+                prop: 'a drum kit',
+                propStem: 'drums',
+                propCarried: false,
+                propPlace: 'deck',
+                propInHand: 'drumsticks',
+            },
         ],
-        locations: [{id: 'deck', name: 'The deck'}, {id: 'tower', name: 'The tower'}],
+        locations: [
+            {id: 'deck', name: 'The deck'},
+            {id: 'tower', name: 'The tower'},
+        ],
     },
-    instrumentStems: {}, propActivity: {drums: []},
+    instrumentStems: {},
+    propActivity: {drums: []},
     singing: {singers: ['mara'], lines: [{line: 0, text: 'row', singers: ['mara']}]},
     lookBrief: 'grainy 16 mm',
-    characterLooks: {mara: 'a', ben: 'b'}, characterDescriptions: {mara: 'a', ben: 'b'},
-    locationLooks: {deck: 'd', tower: 't'}, locationDescriptions: {deck: 'd', tower: 't'}, locationAnchors: {deck: 'd', tower: 't'},
+    characterLooks: {mara: 'a', ben: 'b'},
+    characterDescriptions: {mara: 'a', ben: 'b'},
+    locationLooks: {deck: 'd', tower: 't'},
+    locationDescriptions: {deck: 'd', tower: 't'},
+    locationAnchors: {deck: 'd', tower: 't'},
     locationLayouts: {deck: {layout: 'l', views: []}, tower: {layout: 'l', views: []}},
     partials: {characterLooks: {mara: {fingerprint: 'x', value: 'a'}}},
 })
@@ -63,12 +91,18 @@ describe('a plan run from the page', () => {
     test('up to a stage, with the steps a change asks to plan again', () => {
         expect(runCommand(music, {type: 'plan'})).toEqual({script: 'index.ts', args: ['demo']})
         expect(runCommand(music, {type: 'plan', until: 'cast'})).toEqual({script: 'index.ts', args: ['demo', '--until=cast']})
-        expect(runCommand(film, {type: 'plan', redo: ['locationViews'], until: 'look'})).toEqual({script: 'film.ts', args: ['demo', '--redo=locationViews', '--until=look']})
+        expect(runCommand(film, {type: 'plan', redo: ['locationViews'], until: 'look'})).toEqual({
+            script: 'film.ts',
+            args: ['demo', '--redo=locationViews', '--until=look'],
+        })
     })
 
     test('the casting photos: the pictures of a music video planned up to the look, without planning the shots', () => {
         expect(runCommand(music, {type: 'look-pictures'})).toEqual({script: 'index.ts', args: ['demo', '--until=look', '--render=images']})
-        expect(runCommand(music, {type: 'pictures', ids: ['mara'], again: true, look: true})).toEqual({script: 'index.ts', args: ['demo', '--render=images', '--only=mara', '--again', '--until=look']})
+        expect(runCommand(music, {type: 'pictures', ids: ['mara'], again: true, look: true})).toEqual({
+            script: 'index.ts',
+            args: ['demo', '--render=images', '--only=mara', '--again', '--until=look'],
+        })
         // a film has its pictures from the look on anyway
         expect(runCommand(film, {type: 'pictures', ids: ['hall'], look: true}).args).toEqual(['demo', '--render=images', '--only=hall'])
         expect(() => runCommand(film, {type: 'look-pictures'})).toThrow('a film has its pictures')
@@ -113,14 +147,20 @@ describe('the cast by hand, saved', () => {
         const dir = mkdtempSync(join(tmpdir(), 'cast-saved-'))
         try {
             writeFileSync(join(dir, 'project.json'), JSON.stringify(lookStage()))
-            writeFileSync(join(dir, 'casting.json'), JSON.stringify({characters: {mara: 'library:mara-v2', ben: 'project:ben'}, locations: {deck: 'project:deck', tower: 'project:tower'}}))
+            writeFileSync(
+                join(dir, 'casting.json'),
+                JSON.stringify({characters: {mara: 'library:mara-v2', ben: 'project:ben'}, locations: {deck: 'project:deck', tower: 'project:tower'}}),
+            )
             const wanted = change(lookStage())
-            wanted.characters = [wanted.characters[0]!, {name: 'Ann', role: 'the keeper'} as typeof wanted.characters[number]]
+            wanted.characters = [wanted.characters[0]!, {name: 'Ann', role: 'the keeper'} as (typeof wanted.characters)[number]]
             wanted.locations = [wanted.locations[0]!]
             const result = await writeCast({id: 'demo', dir, kind: 'music'}, wanted)
             expect(result.removed).toEqual(['ben', 'tower'])
             const casting = JSON.parse(readFileSync(join(dir, 'casting.json'), 'utf8'))
-            expect(casting).toEqual({characters: {mara: 'library:mara-v2', [result.added[0]!]: `project:${result.added[0]}`}, locations: {deck: 'project:deck'}})
+            expect(casting).toEqual({
+                characters: {mara: 'library:mara-v2', [result.added[0]!]: `project:${result.added[0]}`},
+                locations: {deck: 'project:deck'},
+            })
         } finally {
             rmSync(dir, {recursive: true, force: true})
         }
@@ -131,13 +171,17 @@ describe('the cast by hand', () => {
     test('a renamed role keeps its id and what else it had; only its looks are written again, the separated instruments stay', () => {
         const data = lookStage()
         const wanted = change(data)
-        wanted.characters[0] = {...wanted.characters[0]!, name: 'Lena', role: 'the keeper\'s daughter'}
+        wanted.characters[0] = {...wanted.characters[0]!, name: 'Lena', role: "the keeper's daughter"}
         const result = applyCast('music', data, wanted)
         expect(result).toEqual({
-            changed: true, dropped: ['singing'], added: [], removed: [], renamed: [{from: 'Mara', to: 'Lena'}],
+            changed: true,
+            dropped: ['singing'],
+            added: [],
+            removed: [],
+            renamed: [{from: 'Mara', to: 'Lena'}],
             remade: ['characterLooks: mara', 'characterDescriptions: mara'],
         })
-        expect(data.cast!.characters[0]).toEqual({id: 'mara', name: 'Lena', role: 'the keeper\'s daughter', prop: 'a lantern'})
+        expect(data.cast!.characters[0]).toEqual({id: 'mara', name: 'Lena', role: "the keeper's daughter", prop: 'a lantern'})
         expect(data.cast!.characters[1]!.propStem).toBe('drums')
         // Ben keeps his look and description - the run takes them as they are and asks only for Mara's
         expect(data.characterLooks).toBeUndefined()
@@ -188,9 +232,15 @@ describe('the cast by hand', () => {
                 characters: [{id: 'ana', name: 'Ana', aliases: ['ANA'], role: 'r', appearance: 'a', voice: 'v'}],
                 locations: [{id: 'hall', name: 'Hall', aliases: ['HALL'], description: 'd'}],
             },
-            summary: 's', characterLooks: {ana: 'x'}, coverage: [], subtitles: {},
+            summary: 's',
+            characterLooks: {ana: 'x'},
+            coverage: [],
+            subtitles: {},
         }
-        const wanted = {characters: [{id: 'ana', name: 'Anna', role: 'r', appearance: 'tall', voice: 'v'}], locations: [{id: 'hall', name: 'Hall', description: 'd'}]}
+        const wanted = {
+            characters: [{id: 'ana', name: 'Anna', role: 'r', appearance: 'tall', voice: 'v'}],
+            locations: [{id: 'hall', name: 'Hall', description: 'd'}],
+        }
         const result = applyCast('film', data, wanted)
         expect(result.dropped).toEqual(['summary', 'characterLooks', 'coverage'])
         expect(data.cast!.characters[0]!.aliases).toEqual(['ANA', 'Anna'])
@@ -222,7 +272,13 @@ describe('the story by hand', () => {
     })
 
     test('a film shows its screenplay as a script reads, and does not change it here', () => {
-        const view = bookView('film', {screenplay: {title: 'T', language: 'en', scenes: [{id: 's1', setting: 'INT', location: 'HALL', time: 'DAY', elements: [{type: 'action', text: 'Ana waits.'}]}]}})
+        const view = bookView('film', {
+            screenplay: {
+                title: 'T',
+                language: 'en',
+                scenes: [{id: 's1', setting: 'INT', location: 'HALL', time: 'DAY', elements: [{type: 'action', text: 'Ana waits.'}]}],
+            },
+        })
         expect(view.editable).toBe(false)
         expect(view.text).toContain('Ana waits.')
         expect(bookView('music', {}).editable).toBe(false)
@@ -233,7 +289,18 @@ describe('an answer kept by hand', () => {
     test('the run takes it whatever it would ask now, and asks for the others', async () => {
         const data = {partials: {characterLooks: {ben: {fingerprint: KEPT_BY_HAND, value: 'kept look'}}}}
         const asked: string[] = []
-        const ask = (key: string) => keepEach(data, async () => {}, 'characterLooks', key, {prompt: 'anything'}, async () => { asked.push(key); return `new ${key}` })
+        const ask = (key: string) =>
+            keepEach(
+                data,
+                async () => {},
+                'characterLooks',
+                key,
+                {prompt: 'anything'},
+                async () => {
+                    asked.push(key)
+                    return `new ${key}`
+                },
+            )
         expect(await ask('ben')).toBe('kept look')
         expect(await ask('mara')).toBe('new mara')
         expect(asked).toEqual(['mara'])
@@ -247,7 +314,10 @@ describe('the look by hand', () => {
     test('what the page shows: the texts of everyone and every place, what goes with them', () => {
         const view = lookView('music', planned())
         expect(view.lookBrief).toBe('grainy 16 mm')
-        expect(view.characters.map(c => [c.id, c.look, c.description])).toEqual([['mara', 'a', 'a'], ['ben', 'b', 'b']])
+        expect(view.characters.map(c => [c.id, c.look, c.description])).toEqual([
+            ['mara', 'a', 'a'],
+            ['ben', 'b', 'b'],
+        ])
         expect(view.locations[0]).toMatchObject({id: 'deck', look: 'd', description: 'd', anchors: 'd', layout: 'l'})
         expect(view.builtOn).toEqual(['blocking', 'shotMoments'])
         expect(view.briefBuiltOn).toContain('characterLooks')
@@ -312,26 +382,51 @@ describe('the look of a film', () => {
     const film = (): FilmProject => ({
         cast: {
             characters: [
-                {id: 'ana', name: 'Ana', aliases: ['ANA'], role: 'r', appearance: 'a', voice: 'v', states: [{id: 'wounded', name: 'wounded', change: 'a bandaged arm'}]},
+                {
+                    id: 'ana',
+                    name: 'Ana',
+                    aliases: ['ANA'],
+                    role: 'r',
+                    appearance: 'a',
+                    voice: 'v',
+                    states: [{id: 'wounded', name: 'wounded', change: 'a bandaged arm'}],
+                },
                 {id: 'bo', name: 'Bo', aliases: ['BO'], role: 'r', appearance: 'b', voice: 'v'},
                 {id: 'narrator', name: 'Narrator', aliases: [], role: 'r', appearance: '', voice: 'v', voiceOnly: true},
             ],
-            locations: [{id: 'hall', name: 'Hall', aliases: ['HALL'], description: 'd'}, {id: 'yard', name: 'Yard', aliases: [], description: 'y'}],
+            locations: [
+                {id: 'hall', name: 'Hall', aliases: ['HALL'], description: 'd'},
+                {id: 'yard', name: 'Yard', aliases: [], description: 'y'},
+            ],
         },
-        summary: 's', lookBrief: 'grainy',
-        characterLooks: {'ana': 'ana look', 'ana--wounded': 'ana wounded look', 'bo': 'bo look'},
-        characterDescriptions: {'ana': 'ana desc', 'ana--wounded': 'ana wounded desc', 'bo': 'bo desc'},
-        locationLooks: {hall: 'hall look', yard: 'yard look'}, locationDescriptions: {hall: 'hall desc', yard: 'yard desc'},
+        summary: 's',
+        lookBrief: 'grainy',
+        characterLooks: {ana: 'ana look', 'ana--wounded': 'ana wounded look', bo: 'bo look'},
+        characterDescriptions: {ana: 'ana desc', 'ana--wounded': 'ana wounded desc', bo: 'bo desc'},
+        locationLooks: {hall: 'hall look', yard: 'yard look'},
+        locationDescriptions: {hall: 'hall desc', yard: 'yard desc'},
         locationViews: {hall: [{name: 'front', shows: 'the door'}], yard: [{name: 'front', shows: 'the gate'}]},
-        props: [], coverage: [],
+        props: [],
+        coverage: [],
     })
 
     test('what the page shows: every look of a character, never a voice, the places without background or floor plan', () => {
         const view = lookView('film', film())
         expect(view.characters.map(c => [c.id, c.name, c.look, c.description])).toEqual([
-            ['ana', 'Ana', 'ana look', 'ana desc'], ['ana--wounded', 'Ana (wounded)', 'ana wounded look', 'ana wounded desc'], ['bo', 'Bo', 'bo look', 'bo desc'],
+            ['ana', 'Ana', 'ana look', 'ana desc'],
+            ['ana--wounded', 'Ana (wounded)', 'ana wounded look', 'ana wounded desc'],
+            ['bo', 'Bo', 'bo look', 'bo desc'],
         ])
-        expect(view.locations[0]).toEqual({kind: 'location', id: 'hall', name: 'Hall', library: undefined, look: 'hall look', description: 'hall desc', anchors: undefined, layout: undefined})
+        expect(view.locations[0]).toEqual({
+            kind: 'location',
+            id: 'hall',
+            name: 'Hall',
+            library: undefined,
+            look: 'hall look',
+            description: 'hall desc',
+            anchors: undefined,
+            layout: undefined,
+        })
         expect(view.builtOn).toEqual(['coverage'])
     })
 
@@ -346,7 +441,7 @@ describe('the look of a film', () => {
         expect(data.locationViews).toBeDefined()
     })
 
-    test('another look of a character changed by hand: its description written again, the character\'s own look kept', () => {
+    test("another look of a character changed by hand: its description written again, the character's own look kept", () => {
         const data = film()
         const result = applyLook('film', data, {elements: [{kind: 'character', id: 'ana--wounded', look: 'a bandaged arm and a torn sleeve'}]})
         expect(result.remade).toEqual(['characterDescriptions: ana--wounded'])
@@ -354,7 +449,7 @@ describe('the look of a film', () => {
         expect(Object.keys(data.partials!.characterDescriptions!)).toEqual(['ana', 'bo'])
     })
 
-    test('a place\'s look changed: its description and its views written again, the other place keeps both', () => {
+    test("a place's look changed: its description and its views written again, the other place keeps both", () => {
         const data = film()
         const result = applyLook('film', data, {elements: [{kind: 'location', id: 'hall', look: 'a hall in candle light'}]})
         expect(result.remade).toEqual(['locationDescriptions: hall', 'locationViews: hall'])
@@ -365,8 +460,15 @@ describe('the look of a film', () => {
 
 describe('the look given back whole (bun run look --set)', () => {
     test('texts with line breaks given back as they were change nothing; a changed one is kept with its paragraphs', () => {
-        const data: Project = {...lookStage(), lookBrief: 'grainy 16 mm.\n\nCold light.', locationLayouts: {deck: {layout: 'a long deck\nwith a rail', views: []}, tower: {layout: 'l', views: []}}}
-        const whole = {lookBrief: 'grainy 16 mm.\r\n\r\nCold light.', elements: [{kind: 'location' as const, id: 'deck', layout: 'a long deck\r\nwith a rail', look: 'd'}]}
+        const data: Project = {
+            ...lookStage(),
+            lookBrief: 'grainy 16 mm.\n\nCold light.',
+            locationLayouts: {deck: {layout: 'a long deck\nwith a rail', views: []}, tower: {layout: 'l', views: []}},
+        }
+        const whole = {
+            lookBrief: 'grainy 16 mm.\r\n\r\nCold light.',
+            elements: [{kind: 'location' as const, id: 'deck', layout: 'a long deck\r\nwith a rail', look: 'd'}],
+        }
         expect(applyLook('music', data, whole)).toEqual({changed: false, dropped: [], remade: []})
         expect(applyLook('music', data, {lookBrief: 'grainy 16 mm.\n\nWarm light.'}).changed).toBe(true)
         expect(data.lookBrief).toBe('grainy 16 mm.\n\nWarm light.')

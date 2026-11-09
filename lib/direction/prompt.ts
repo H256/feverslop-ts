@@ -1,4 +1,4 @@
-import type {AskOptions} from '../llm.ts';
+import type {AskOptions} from '../llm.ts'
 
 export const directionInstructions = `You are editing an existing shot plan, not writing a new story.
 Interpret the director's verbatim instructions as changes to performance and camera. Replace contradictory incidental motion in the old shot; keep compatible details. Preserve story outcomes, identities, appearance, props, audio, dialogue, timing, shot count and duration.
@@ -11,21 +11,35 @@ Editable shot fields: action, framing, camera, view, hold, size (wide/medium/clo
 
 Make action, pose, motion and camera mutually consistent. 'Back to camera' is the required end pose, not an automatic 360-degree turn. Describe left/right relative to the character or image explicitly. A visual instruction cannot change the audio or invent a solo that is not in the song. Do not paste the instruction into the video prompt.
 
-Return JSON {changes:[{shotId,after: COMPLETE updated shot object}],conflicts:[string]}. Return at least one chosen shot (unchanged if already compliant), or conflicts explaining why no edit can be made.`;
+Return JSON {changes:[{shotId,after: COMPLETE updated shot object}],conflicts:[string]}. Return at least one chosen shot (unchanged if already compliant), or conflicts explaining why no edit can be made.`
 
 /** The response envelope is constrained; per-shot protected fields and identity enums are checked by code as well. */
 export function directionPrompt(input: unknown): AskOptions {
     return {
-        reasoning: 'none', label: 'Direction proposal', maxTokens: 16384,
-        instructions: directionInstructions, input: JSON.stringify(input),
+        reasoning: 'none',
+        label: 'Direction proposal',
+        maxTokens: 16384,
+        instructions: directionInstructions,
+        input: JSON.stringify(input),
         schema: {
-            type: 'object', additionalProperties: false, required: ['changes', 'conflicts'],
+            type: 'object',
+            additionalProperties: false,
+            required: ['changes', 'conflicts'],
             properties: {
-                changes: {type: 'array', items: {type: 'object', additionalProperties: false, required: ['shotId', 'after'], properties: {
-                    shotId: {type: 'string'}, after: {type: 'object', additionalProperties: true},
-                }}},
+                changes: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['shotId', 'after'],
+                        properties: {
+                            shotId: {type: 'string'},
+                            after: {type: 'object', additionalProperties: true},
+                        },
+                    },
+                },
                 conflicts: {type: 'array', items: {type: 'string'}},
             },
         },
-    };
+    }
 }

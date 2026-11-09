@@ -1,19 +1,19 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
-import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
-import {join} from "node:path";
-import {plannedFilmIds} from "../lib/film/setup.ts";
-import {FILMS_DIR} from "../lib/film/store.ts";
-import type {FilmProject} from "../lib/film/types.ts";
-import {clipRequestsDir} from "../lib/previous-output.ts";
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
+import {existsSync, readdirSync, readFileSync, writeFileSync} from 'node:fs'
+import {join} from 'node:path'
+import {plannedFilmIds} from '../lib/film/setup.ts'
+import {FILMS_DIR} from '../lib/film/store.ts'
+import type {FilmProject} from '../lib/film/types.ts'
+import {clipRequestsDir} from '../lib/previous-output.ts'
 cli('film:gallery')
-
 
 // bun run film:gallery - films/index.html: every film of films/ on one page - the film to watch, its cast and places, and the files of the plan.
 // A static page with relative links: open it from the disk, nothing is served.
 
-const escape = (value: string) => value.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]!))
-const link = (film: string, file: string, label: string) => existsSync(join(FILMS_DIR, film, file)) ? `<a href="${encodeURI(`${film}/${file}`)}">${escape(label)}</a>` : ''
+const escape = (value: string) => value.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]!)
+const link = (film: string, file: string, label: string) =>
+    existsSync(join(FILMS_DIR, film, file)) ? `<a href="${encodeURI(`${film}/${file}`)}">${escape(label)}</a>` : ''
 const seconds = (project: FilmProject) => Math.round((project.coverage ?? []).reduce((sum, c) => sum + c.shots.reduce((s, x) => s + x.seconds, 0), 0))
 const clock = (total: number) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 
@@ -24,12 +24,21 @@ function card(id: string) {
     const final = existsSync(join(dir, `${id}.mp4`)) ? `${id}.mp4` : existsSync(join(dir, `${id}-partial.mp4`)) ? `${id}-partial.mp4` : undefined
     const rendered = existsSync(join(dir, 'videos')) ? readdirSync(join(dir, 'videos')).filter(f => f.endsWith('.mp4')).length : 0
     const clips = existsSync(clipRequestsDir(dir)) ? readdirSync(clipRequestsDir(dir)).filter(f => /^clip-\d+\.json$/.test(f)).length : 0
-    const style = existsSync(join(dir, 'input/style.txt')) ? readFileSync(join(dir, 'input/style.txt'), 'utf8').trim().split(/(?<=[.!?])\s/)[0] ?? '' : ''
+    const style = existsSync(join(dir, 'input/style.txt'))
+        ? (readFileSync(join(dir, 'input/style.txt'), 'utf8')
+              .trim()
+              .split(/(?<=[.!?])\s/)[0] ?? '')
+        : ''
     const picture = (kind: 'characters' | 'locations', name: string, entry: string) => {
         const file = ['png', 'jpg', 'jpeg', 'webp'].map(ext => `assets/${kind}/${entry}.${ext}`).find(f => existsSync(join(dir, f)))
-        return file ? `<figure><img loading="lazy" src="${encodeURI(`${id}/${file}`)}" alt="${escape(name)}"><figcaption>${escape(name)}</figcaption></figure>` : ''
+        return file
+            ? `<figure><img loading="lazy" src="${encodeURI(`${id}/${file}`)}" alt="${escape(name)}"><figcaption>${escape(name)}</figcaption></figure>`
+            : ''
     }
-    const cast = (project.cast?.characters ?? []).filter(c => !c.voiceOnly).map(c => picture('characters', c.name, c.id)).join('')
+    const cast = (project.cast?.characters ?? [])
+        .filter(c => !c.voiceOnly)
+        .map(c => picture('characters', c.name, c.id))
+        .join('')
     const places = (project.cast?.locations ?? []).map(l => picture('locations', l.name, l.id)).join('')
     return `<article>
   <h2>${escape(title)}</h2>

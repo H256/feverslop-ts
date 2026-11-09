@@ -3,7 +3,7 @@ import {clamp} from '../../lib/format'
 
 /** The shortest a word can be made. */
 export const MIN_WORD = 0.05
-export type Span = {start: number, end: number}
+export type Span = {start: number; end: number}
 
 /** Words as changed: 0 ≤ start, start + MIN_WORD ≤ end ≤ duration. Undefined when they are the line's own again. */
 export function fixWords(line: TimingLine, words: Span[], duration: number): TimingWord[] | undefined {
@@ -17,7 +17,8 @@ export function fixWords(line: TimingLine, words: Span[], duration: number): Tim
 
 /** A whole line moved, as far as the song goes: it keeps its length at either end. */
 export function shifted(words: Span[], by: number, duration = Infinity) {
-  const first = words[0]?.start ?? 0, last = words.at(-1)?.end ?? 0
+  const first = words[0]?.start ?? 0,
+    last = words.at(-1)?.end ?? 0
   const step = clamp(by, -first, Math.max(-first, duration - last))
   return words.map(w => ({start: w.start + step, end: w.end + step}))
 }
@@ -27,7 +28,9 @@ export function shifted(words: Span[], by: number, duration = Infinity) {
  */
 export function movedWord(words: TimingWord[], n: number, by: number, edge: 'start' | 'end' | undefined, duration: number): TimingWord[] {
   const out = words.map(w => ({...w}))
-  const w = out[n]!, prev = out[n - 1], next = out[n + 1]
+  const w = out[n]!,
+    prev = out[n - 1],
+    next = out[n + 1]
   const low = prev ? prev.end : 0
   const high = next ? next.start : duration
   if (edge === 'start') w.start = clamp(w.start + by, low, w.end - MIN_WORD)
@@ -58,7 +61,8 @@ export function timingChanges(view: TimingView, moved: TimingLine[], wordsOf: (l
   const beats = [...touched]
   const beatOf = (id: string) => view.beats.find(x => x.id === id)
   return {
-    lines: moved, beats,
+    lines: moved,
+    beats,
     replanned: beats.filter(b => beatOf(b)?.planned),
     clips: [...new Set(beats.flatMap(b => beatOf(b)?.clips ?? []))].sort(),
     crossing: moved.flatMap(line => crossingOf(view, wordsOf(line))),

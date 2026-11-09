@@ -6,26 +6,26 @@
 //   library/<characters|locations>/<id>/sheet/       anchor.png, sequence.mp4, frames/
 // A project always gets a copy (lib/asset-import.ts), so it stays complete without the library.
 
-import {closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync} from "node:fs";
-import {join, resolve} from "node:path";
-import type {AssetKind, AssetLayout} from "./asset-import.ts";
-import {log} from "./log.ts";
-import type {LocationLayout} from "./project.ts";
-import {readSettingsFile} from "./settings.ts";
-import {ownProcessIdentity, processAlive, processIdentity} from './process-identity.ts';
+import {closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync} from 'node:fs'
+import {join, resolve} from 'node:path'
+import type {AssetKind, AssetLayout} from './asset-import.ts'
+import {log} from './log.ts'
+import type {LocationLayout} from './project.ts'
+import {readSettingsFile} from './settings.ts'
+import {ownProcessIdentity, processAlive, processIdentity} from './process-identity.ts'
 
 export type LibraryAsset = {
-    kind: AssetKind,
-    id: string,
-    name: string,
+    kind: AssetKind
+    id: string
+    name: string
     // what it looks like - the description the clip prompts use
-    description: string,
+    description: string
     // a place: the fixed features behind the people (locationAnchors) and its floor plan with what each view shows
-    anchors?: string,
-    layout?: LocationLayout,
+    anchors?: string
+    layout?: LocationLayout
     // where it came from: "<project>/<id>", or the picture it was made from
-    source?: string,
-    created?: string,
+    source?: string
+    created?: string
 }
 
 /** The library folder: FEVERSLOP_LIBRARY, else "library" in the settings file, else library/ in the working directory. */
@@ -50,7 +50,7 @@ export const libraryLayout = (kind: AssetKind, id: string): AssetLayout => ({
 export async function readLibraryAsset(dir: string, kind: AssetKind, id: string): Promise<LibraryAsset | undefined> {
     const file = join(dir, libraryFolder(kind, id), 'asset.json')
     if (!existsSync(file)) return undefined
-    const asset = await Bun.file(file).json() as LibraryAsset
+    const asset = (await Bun.file(file).json()) as LibraryAsset
     return {...asset, kind, id}
 }
 
@@ -62,7 +62,8 @@ export function writeLibraryAsset(dir: string, asset: LibraryAsset) {
 
 /** Why the library takes no new asset of this id - it has one, and an asset there is never overwritten. Undefined: the id is free. */
 export async function libraryTaken(dir: string, kind: AssetKind, id: string): Promise<string | undefined> {
-    if (await readLibraryAsset(dir, kind, id)) return `The library already has a ${kind} "${id}" (${join(dir, libraryFolder(kind, id))}) - it is never overwritten`
+    if (await readLibraryAsset(dir, kind, id))
+        return `The library already has a ${kind} "${id}" (${join(dir, libraryFolder(kind, id))}) - it is never overwritten`
 }
 
 const localAssetLocks = new Map<string, Promise<void>>()
@@ -72,7 +73,9 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
     const key = `${resolve(dir)}\n${kind}\n${id}`
     const previous = localAssetLocks.get(key)
     let releaseLocal!: () => void
-    const local = new Promise<void>(resolve => { releaseLocal = resolve })
+    const local = new Promise<void>(resolve => {
+        releaseLocal = resolve
+    })
     localAssetLocks.set(key, local)
     const lockDir = join(dir, '.locks')
     const lockFile = join(lockDir, `${kind}-${id}.lock`)
@@ -86,11 +89,18 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
                 fd = openSync(lockFile, 'wx')
             } catch (error) {
                 if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-                let holder: {pid?: number, identity?: string} | undefined
-                try { holder = JSON.parse(readFileSync(lockFile, 'utf8')) }
-                catch { /* a writer may have created the file but not finished its record */ }
+                let holder: {pid?: number; identity?: string} | undefined
+                try {
+                    holder = JSON.parse(readFileSync(lockFile, 'utf8'))
+                } catch {
+                    /* a writer may have created the file but not finished its record */
+                }
                 let fresh = false
-                try { fresh = Date.now() - statSync(lockFile).mtimeMs < 300_000 } catch { /* it disappeared */ }
+                try {
+                    fresh = Date.now() - statSync(lockFile).mtimeMs < 300_000
+                } catch {
+                    /* it disappeared */
+                }
                 const pid = Number.isSafeInteger(holder?.pid) && holder!.pid! > 0 ? holder!.pid : undefined
                 if (pid && processAlive(pid)) {
                     const identity = processIdentity(pid)
@@ -103,10 +113,17 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
                 continue
             }
             let writeError: unknown
-            try { writeSync(fd, JSON.stringify({pid: process.pid, identity: ownProcessIdentity()})) }
-            catch (error) { writeError = error }
-            finally { closeSync(fd) }
-            if (writeError) { rmSync(lockFile, {force: true}); throw writeError }
+            try {
+                writeSync(fd, JSON.stringify({pid: process.pid, identity: ownProcessIdentity()}))
+            } catch (error) {
+                writeError = error
+            } finally {
+                closeSync(fd)
+            }
+            if (writeError) {
+                rmSync(lockFile, {force: true})
+                throw writeError
+            }
             acquired = true
         }
         if (!acquired) throw new Error(`could not lock library asset ${kind} "${id}"`)
@@ -114,7 +131,9 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
             const taken = await libraryTaken(dir, kind, id)
             if (taken) throw new Error(taken)
             return await work()
-        } finally { rmSync(lockFile, {force: true}) }
+        } finally {
+            rmSync(lockFile, {force: true})
+        }
     } finally {
         releaseLocal()
         if (localAssetLocks.get(key) === local) localAssetLocks.delete(key)
@@ -125,7 +144,7 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
  * The last step of a tool that puts an asset into the library, after its files are copied: the record, dated today, and what to do
  * with it next. `copied`: how many files went in; `tail` goes after the message.
  */
-export function finishLibraryAsset(dir: string, asset: Omit<LibraryAsset, 'created'>, copied: number, opts: { tail?: string, success?: boolean } = {}) {
+export function finishLibraryAsset(dir: string, asset: Omit<LibraryAsset, 'created'>, copied: number, opts: {tail?: string; success?: boolean} = {}) {
     writeLibraryAsset(dir, {...asset, created: new Date().toISOString().slice(0, 10)})
     const folder = join(dir, libraryFolder(asset.kind, asset.id))
     const message = `${asset.name} is in the library as ${asset.kind} "${asset.id}" (${copied} files): ${folder}${opts.tail ?? ''}`
@@ -139,8 +158,10 @@ export function finishLibraryAsset(dir: string, asset: Omit<LibraryAsset, 'creat
 export function libraryIds(dir: string, kind: AssetKind): string[] {
     const folder = join(dir, `${kind}s`)
     if (!existsSync(folder)) return []
-    return readdirSync(folder).filter(id => existsSync(join(folder, id, 'asset.json'))).sort()
+    return readdirSync(folder)
+        .filter(id => existsSync(join(folder, id, 'asset.json')))
+        .sort()
 }
 
 /** "library:<id>" → the id, anything else → undefined. */
-export const libraryRef = (value: string | undefined) => value?.startsWith('library:') ? value.slice('library:'.length).trim() : undefined
+export const libraryRef = (value: string | undefined) => (value?.startsWith('library:') ? value.slice('library:'.length).trim() : undefined)

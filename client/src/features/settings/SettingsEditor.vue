@@ -13,14 +13,19 @@ import {costOf, groupsOf, labelOf} from './settings'
 import {useSettingsDraft} from './useSettingsDraft'
 
 /** The settings as a form: changed here, checked and costed before they are saved. */
-const props = defineProps<{settings: SettingView[], refresh: () => Promise<boolean>}>()
+const props = defineProps<{settings: SettingView[]; refresh: () => Promise<boolean>}>()
 const {api, id} = useProject()
 const ask = useAsk()
 const toasts = useToasts()
 const form = useSettingsDraft(toRef(props, 'settings'))
 useUnsavedChanges(() => form.dirty.value, 'changes to the settings')
 // a new reading (a run ended, another tab saved) is taken over while nothing is changed here
-watch(() => props.settings, () => { if (!form.dirty.value) form.reset() })
+watch(
+  () => props.settings,
+  () => {
+    if (!form.dirty.value) form.reset()
+  },
+)
 const saving = usePending()
 const groups = computed(() => groupsOf(form.base.value))
 
@@ -46,7 +51,7 @@ const save = toasts.guard(async () => {
   // while saving the form is not to be changed: it is let go after, and with it whatever was typed meanwhile
   const result = await saving.during(async () => {
     const result = await api.saveConfig(change)
-    if (!result.problems.length && await props.refresh()) form.reset()
+    if (!result.problems.length && (await props.refresh())) form.reset()
     return result
   })
   if (result.problems.length) return problemsOf(result)
@@ -65,6 +70,9 @@ const save = toasts.guard(async () => {
       <PageBar :title="group.name" />
       <SettingField v-for="setting in group.settings" :key="setting.key" :setting="setting" :form="form" />
     </div>
-    <p class="muted">The same from the terminal: <code>bun run config {{ id }}</code>. A change makes what was rendered from another setting stale - the timeline marks it, and nothing is rendered until you ask.</p>
+    <p class="muted">
+      The same from the terminal: <code>bun run config {{ id }}</code
+      >. A change makes what was rendered from another setting stale - the timeline marks it, and nothing is rendered until you ask.
+    </p>
   </div>
 </template>

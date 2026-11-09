@@ -9,8 +9,13 @@ import {usePlayback} from './usePlayback'
 
 export type Tab = 'prompt' | 'shots' | 'refs' | 'render' | 'versions'
 /** A larger look: over a clip on the timeline (at a second of it), over a <Picture N> in a prompt. x and top: where, on the page. */
-export type Peek = {clip?: EditorClip, picture?: EditorPicture, at: number, x: number, top: number}
-export type Compared = {clip: EditorClip, version: {video: string, made: number, seed?: number, id?: string, fromThisPlan?: boolean, source?: string}, fresh?: boolean, refined?: string}
+export type Peek = {clip?: EditorClip; picture?: EditorPicture; at: number; x: number; top: number}
+export type Compared = {
+  clip: EditorClip
+  version: {video: string; made: number; seed?: number; id?: string; fromThisPlan?: boolean; source?: string}
+  fresh?: boolean
+  refined?: string
+}
 
 /**
  * The timeline of one project: its snapshot as it changes, what is stale, the sound, the monitor, the clips marked for a run together,
@@ -29,16 +34,22 @@ export function createTimeline() {
   const marked = reactive(new Set<string>())
   const lastMarked = ref<string>()
   const onlyFlagged = ref(false)
-  const versions = shallowRef<{clip: string, list: ClipVersionView[]}>()
+  const versions = shallowRef<{clip: string; list: ClipVersionView[]}>()
   const compared = shallowRef<Compared>()
   const helpOpen = ref(false)
   // the shot being directed (its direction id), in the dialog over the page
   const directing = ref<string>()
   const peek = shallowRef<Peek>()
 
-  const loadFreshness = async () => { fresh.value = await api.freshness() }
-  const loadStatus = async () => { status.value = await api.status() }
-  const loadWaveform = async () => { peaks.value = (await api.waveform()).peaks ?? undefined }
+  const loadFreshness = async () => {
+    fresh.value = await api.freshness()
+  }
+  const loadStatus = async () => {
+    status.value = await api.status()
+  }
+  const loadWaveform = async () => {
+    peaks.value = (await api.waveform()).peaks ?? undefined
+  }
   /** What hashes or reads the sound comes after the page is up, and again when the project changed. */
   const loadAround = () => Promise.allSettled([loadFreshness(), loadStatus(), loadWaveform()])
 
@@ -48,7 +59,10 @@ export function createTimeline() {
   function chooseSource() {
     const known = (value: string | null) => !!value && sourceOptions(project.value).some(o => o.value === value)
     const kept = localStorage.getItem(sourceKey)
-    if (!sourceChosen && known(kept)) { playback.source.value = kept!; sourceChosen = true }
+    if (!sourceChosen && known(kept)) {
+      playback.source.value = kept!
+      sourceChosen = true
+    }
     if (!sourceChosen || !known(playback.source.value)) playback.source.value = bestSource(project.value)
   }
   const pickSource = (value: Source) => {
@@ -67,7 +81,11 @@ export function createTimeline() {
     const before = {source: playback.source.value, chosen: sourceChosen}
     playback.source.value = value
     sourceChosen = true
-    return () => { playback.source.value = before.source; sourceChosen = before.chosen; chooseSource() }
+    return () => {
+      playback.source.value = before.source
+      sourceChosen = before.chosen
+      chooseSource()
+    }
   }
 
   // the plan or a render changed while the page was open: the same place, in what is there now
@@ -83,17 +101,27 @@ export function createTimeline() {
   usePolling(() => session.reload(), 10_000)
 
   // a run that renders: its clips on the timeline, waiting, rendering or done
-  const pollProgress = async () => { progress.value = (await api.progress()).progress ?? undefined }
+  const pollProgress = async () => {
+    progress.value = (await api.progress()).progress ?? undefined
+  }
   let progressTimer: ReturnType<typeof setInterval> | undefined
-  watch(() => !!run.current.value?.running, running => {
-    clearInterval(progressTimer)
-    progressTimer = undefined
-    if (running) {
-      void pollProgress().catch(() => {})
-      progressTimer = setInterval(() => { void pollProgress().catch(() => {}) }, 2000)
-    } else progress.value = undefined
-  }, {immediate: true})
-  watch(progress, now => { run.detail.value = now?.total ? `${now.done} of ${plural(now.total, 'clip')} done` : '' })
+  watch(
+    () => !!run.current.value?.running,
+    running => {
+      clearInterval(progressTimer)
+      progressTimer = undefined
+      if (running) {
+        void pollProgress().catch(() => {})
+        progressTimer = setInterval(() => {
+          void pollProgress().catch(() => {})
+        }, 2000)
+      } else progress.value = undefined
+    },
+    {immediate: true},
+  )
+  watch(progress, now => {
+    run.detail.value = now?.total ? `${now.done} of ${plural(now.total, 'clip')} done` : ''
+  })
 
   /** Ctrl+click marks one, Shift+click all up to this one; a plain click goes there. */
   function clickClip(event: MouseEvent, clip: EditorClip) {
@@ -111,7 +139,9 @@ export function createTimeline() {
   }
   const markedClips = computed(() => project.value.clips.filter(c => marked.has(c.id)))
   const isFlagged = (clip: EditorClip) => flagged(clip, fresh.value)
-  const markFlagged = () => { for (const c of project.value.clips.filter(isFlagged)) marked.add(c.id) }
+  const markFlagged = () => {
+    for (const c of project.value.clips.filter(isFlagged)) marked.add(c.id)
+  }
   /** Exactly the clips in this state marked: the ones that are marked already are let go. */
   const markState = (state: 'stale' | 'missing' | 'all') => {
     marked.clear()
@@ -121,7 +151,7 @@ export function createTimeline() {
     const clips = project.value.clips.filter(isFlagged)
     if (!clips.length) return
     const t = playback.t.value
-    const next = direction > 0 ? clips.find(c => c.start > t + 0.01) ?? clips[0]! : clips.findLast(c => c.start < t - 0.01) ?? clips.at(-1)!
+    const next = direction > 0 ? (clips.find(c => c.start > t + 0.01) ?? clips[0]!) : (clips.findLast(c => c.start < t - 0.01) ?? clips.at(-1)!)
     playback.seek(next.start)
   }
   /**
@@ -138,10 +168,39 @@ export function createTimeline() {
     return list
   }
 
-  const dispose = () => { clearInterval(progressTimer); run.detail.value = '' }
+  const dispose = () => {
+    clearInterval(progressTimer)
+    run.detail.value = ''
+  }
   return {
-    session, project, fresh, status, peaks, progress, playback, tab, marked, markedClips, onlyFlagged, versions, compared, helpOpen, directing, peek,
-    loadAround, chooseSource, pickSource, forgetSource, holdSource, clickClip, isFlagged, markFlagged, markState, stepFlagged, loadVersions, dispose,
+    session,
+    project,
+    fresh,
+    status,
+    peaks,
+    progress,
+    playback,
+    tab,
+    marked,
+    markedClips,
+    onlyFlagged,
+    versions,
+    compared,
+    helpOpen,
+    directing,
+    peek,
+    loadAround,
+    chooseSource,
+    pickSource,
+    forgetSource,
+    holdSource,
+    clickClip,
+    isFlagged,
+    markFlagged,
+    markState,
+    stepFlagged,
+    loadVersions,
+    dispose,
   }
 }
 export type Timeline = ReturnType<typeof createTimeline>

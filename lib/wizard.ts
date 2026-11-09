@@ -1,11 +1,11 @@
 // Prompt helpers for the interactive CLIs (@clack/prompts), shared by the wizards of the music video (tools/init.ts) and
 // the film (tools/film-init.ts). The other tools take answer() and pass what a cancel means for them.
-import * as p from "@clack/prompts";
-import {existsSync} from "node:fs";
-import {createInterface} from "node:readline/promises";
-import type {Resolution} from "../comfy/helpers.ts";
-import {log, styles} from "./log.ts";
-import {STYLES} from "./styles.ts";
+import * as p from '@clack/prompts'
+import {existsSync} from 'node:fs'
+import {createInterface} from 'node:readline/promises'
+import type {Resolution} from '../comfy/helpers.ts'
+import {log, styles} from './log.ts'
+import {STYLES} from './styles.ts'
 
 // cancelled with Ctrl+C / Esc
 export function answer<T>(value: T, cancelMessage = 'Cancelled - nothing written'): Exclude<T, symbol> {
@@ -17,22 +17,24 @@ export function answer<T>(value: T, cancelMessage = 'Cancelled - nothing written
 }
 
 /** Text from a file path or typed on the spot (clack's text prompt is single-line, unsuited to lyrics, a story or a screenplay). */
-export async function askText(label: string, options: { required?: boolean } = {}): Promise<string | undefined> {
-    const mode = answer(await p.select({
-        message: label,
-        options: [
-            {value: 'type', label: 'Type it now'},
-            {value: 'file', label: 'Read from a file'},
-            ...(options.required ? [] : [{value: 'skip', label: 'Skip'}]),
-        ],
-    }))
+export async function askText(label: string, options: {required?: boolean} = {}): Promise<string | undefined> {
+    const mode = answer(
+        await p.select({
+            message: label,
+            options: [
+                {value: 'type', label: 'Type it now'},
+                {value: 'file', label: 'Read from a file'},
+                ...(options.required ? [] : [{value: 'skip', label: 'Skip'}]),
+            ],
+        }),
+    )
     if (mode === 'skip') return undefined
     if (mode === 'file') return readFromFile()
     return multiline(label)
 }
 
 async function readFromFile() {
-    const path = answer(await p.text({message: 'File path', validate: v => v && existsSync(v) ? undefined : 'file not found'}))
+    const path = answer(await p.text({message: 'File path', validate: v => (v && existsSync(v) ? undefined : 'file not found')}))
     return (await Bun.file(path).text()).trim()
 }
 
@@ -45,35 +47,41 @@ export async function askStyle(): Promise<string | undefined> {
     const BACK = '\0back'
     const back = {value: BACK, label: '← back'}
     while (true) {
-        const mode = answer(await p.select({
-            message: 'Visual style',
-            options: [
-                {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
-                {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
-                {value: 'type', label: 'Type it now'},
-                {value: 'file', label: 'Read from a file'},
-            ],
-        }))
+        const mode = answer(
+            await p.select({
+                message: 'Visual style',
+                options: [
+                    {value: 'skip', label: 'Skip', hint: 'the first run picks one from the built-in list that fits the story'},
+                    {value: 'list', label: 'Choose from the built-in list', hint: `${STYLES.length} styles`},
+                    {value: 'type', label: 'Type it now'},
+                    {value: 'file', label: 'Read from a file'},
+                ],
+            }),
+        )
         if (mode === 'skip') return undefined
         if (mode === 'file') return readFromFile()
         if (mode === 'type') return multiline('Visual style')
 
         const groups = [...new Set(STYLES.map(s => s.group))]
         while (true) {
-            const group = answer(await p.select({
-                message: 'Kind of style',
-                options: [...groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`})), back],
-            }))
+            const group = answer(
+                await p.select({
+                    message: 'Kind of style',
+                    options: [...groups.map(g => ({value: g, label: g, hint: `${STYLES.filter(s => s.group === g).length}`})), back],
+                }),
+            )
             if (group === BACK) break
             // a picked style is shown in full before it is taken - the hint in the list is only its first words
             let last: string | undefined
             while (true) {
-                const picked = answer(await p.select({
-                    message: group,
-                    maxItems: 12,
-                    initialValue: last,
-                    options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
-                }))
+                const picked = answer(
+                    await p.select({
+                        message: group,
+                        maxItems: 12,
+                        initialValue: last,
+                        options: [...STYLES.filter(s => s.group === group).map(s => ({value: s.id, label: s.name, hint: s.text.slice(0, 60)})), back],
+                    }),
+                )
                 if (picked === BACK) break
                 const style = STYLES.find(s => s.id === picked)!
                 p.note(style.text, style.name)
@@ -109,17 +117,22 @@ export async function multiline(label: string): Promise<string> {
 }
 
 export async function askResolution(label: string): Promise<Resolution> {
-    const mode = answer(await p.select({
-        message: label,
-        options: [
-            {value: 'default', label: 'Workflow default', hint: 'default'},
-            {value: 'megapixels', label: 'Megapixels (e.g. 1.1)'},
-            {value: 'fixed', label: 'Fixed size (WIDTHxHEIGHT)'},
-        ],
-    }))
+    const mode = answer(
+        await p.select({
+            message: label,
+            options: [
+                {value: 'default', label: 'Workflow default', hint: 'default'},
+                {value: 'megapixels', label: 'Megapixels (e.g. 1.1)'},
+                {value: 'fixed', label: 'Fixed size (WIDTHxHEIGHT)'},
+            ],
+        }),
+    )
     if (mode === 'default') return -1
-    if (mode === 'megapixels') return Number(answer(await p.text({message: 'Megapixels', placeholder: '1.1', validate: v => Number(v) > 0 ? undefined : 'a positive number'})))
-    return answer(await p.text({message: 'Size', placeholder: '1920x1088', validate: v => v && /^\d+x\d+$/.test(v) ? undefined : 'e.g. 1920x1088'})) as `${number}x${number}`
+    if (mode === 'megapixels')
+        return Number(answer(await p.text({message: 'Megapixels', placeholder: '1.1', validate: v => (Number(v) > 0 ? undefined : 'a positive number')})))
+    return answer(
+        await p.text({message: 'Size', placeholder: '1920x1088', validate: v => (v && /^\d+x\d+$/.test(v) ? undefined : 'e.g. 1920x1088')}),
+    ) as `${number}x${number}`
 }
 
 // workflows in comfy/workflows/ that are not picked for a project's pictures or clips: the film pipeline's own and the helpers

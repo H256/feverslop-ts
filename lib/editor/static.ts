@@ -1,13 +1,20 @@
-import {existsSync, realpathSync, statSync} from 'node:fs';
-import {extname, isAbsolute, join, relative, resolve, sep} from 'node:path';
+import {existsSync, realpathSync, statSync} from 'node:fs'
+import {extname, isAbsolute, join, relative, resolve, sep} from 'node:path'
 
 export const CLIENT_PUBLIC = join(import.meta.dir, 'public')
 export type EditorOptions = {publicDir?: string}
 
 const MIME: Record<string, string> = {
-    '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-    '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon',
-    '.woff': 'font/woff', '.woff2': 'font/woff2',
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
 }
 const missing = () => new Response('Not found', {status: 404})
 const buildMissing = () => new Response('Workspace client is not built. Run: bun run client:build', {status: 503, headers: {'Cache-Control': 'no-cache'}})

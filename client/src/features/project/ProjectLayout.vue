@@ -16,7 +16,9 @@ const session = ProjectService.provide(createProjectSession(route.params.kind as
 const {reload, error, loading} = useResource(signal => session.reload(signal))
 run.follow({events: session.api.events, stop: session.api.stop})
 // what a run changed is read again: every page shows the folder as it is now
-run.onEnd(() => { void reload() })
+run.onEnd(() => {
+  void reload()
+})
 
 const project = session.project
 usePageTitle(() => project.value?.title ?? session.id)
@@ -39,7 +41,9 @@ const pages = computed(() => {
 
 <template>
   <Teleport :to="TOP_NAV" defer>
-    <RouterLink v-for="page in pages" :key="page.name" :to="`${session.root}/${page.path}`" :aria-current="route.name === page.name ? 'page' : undefined">{{ page.label }}</RouterLink>
+    <RouterLink v-for="page in pages" :key="page.name" :to="`${session.root}/${page.path}`" :aria-current="route.name === page.name ? 'page' : undefined">{{
+      page.label
+    }}</RouterLink>
   </Teleport>
   <RouterView v-if="project" />
   <div v-else class="scrollpage"><ResourceState :loading="loading" :error="error" :loaded="false" @retry="reload" /></div>

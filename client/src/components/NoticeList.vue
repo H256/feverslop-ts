@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** What is wrong (errors) and what to look at (warnings), one box each. */
-withDefaults(defineProps<{errors?: string[], warnings?: string[]}>(), {errors: () => [], warnings: () => []})
+withDefaults(defineProps<{errors?: string[]; warnings?: string[]}>(), {errors: () => [], warnings: () => []})
 </script>
 
 <template>

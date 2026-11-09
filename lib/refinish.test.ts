@@ -1,14 +1,15 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import h3LatentUpscale from "../comfy/workflows/h3-latent-upscale.ts";
-import h3Refine, {renderFrames} from "../comfy/workflows/h3-refine.ts";
-import {completeDerivative, finalName, paddedClip, readOptions, targetSize, variantOf, withOriginalSound} from "./refinish.ts";
-import {finalLabel} from "./editor/project.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import h3LatentUpscale from '../comfy/workflows/h3-latent-upscale.ts'
+import h3Refine, {renderFrames} from '../comfy/workflows/h3-refine.ts'
+import {completeDerivative, finalName, paddedClip, readOptions, targetSize, variantOf, withOriginalSound} from './refinish.ts'
+import {finalLabel} from './editor/project.ts'
 
 test('only explicitly completed derivatives are reusable (#664)', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'derivative-')), file = join(dir, 'clip.mp4')
+    const dir = mkdtempSync(join(tmpdir(), 'derivative-')),
+        file = join(dir, 'clip.mp4')
     try {
         writeFileSync(file, 'video')
         expect(completeDerivative(file)).toBe(false)
@@ -16,7 +17,9 @@ test('only explicitly completed derivatives are reusable (#664)', () => {
         expect(completeDerivative(file)).toBe(true)
         writeFileSync(file, 'cut')
         expect(completeDerivative(file)).toBe(false)
-    } finally { rmSync(dir, {recursive: true, force: true}) }
+    } finally {
+        rmSync(dir, {recursive: true, force: true})
+    }
 })
 
 describe('what is asked for', () => {
@@ -26,7 +29,13 @@ describe('what is asked for', () => {
         expect(readOptions({preset: 'fullhd', upscale: 'latent', fps: '24'})).toMatchObject({upscale: 'latent', fps: 24, finish: true})
     })
     test('one by one', () => {
-        expect(readOptions({upscale: 'refine', size: '2x', denoise: '0.3'})).toMatchObject({upscale: 'refine', size: '2x', denoise: 0.3, fps: 24, finish: false})
+        expect(readOptions({upscale: 'refine', size: '2x', denoise: '0.3'})).toMatchObject({
+            upscale: 'refine',
+            size: '2x',
+            denoise: 0.3,
+            fps: 24,
+            finish: false,
+        })
         expect(readOptions({finish: true})).toMatchObject({upscale: 'none', finish: true})
     })
     test('what cannot be is refused', () => {
@@ -54,7 +63,14 @@ describe('the size', () => {
 describe('every variant has its own place', () => {
     const base = {size: 'fullhd', model: 'RealESRGAN_x2plus.pth', denoise: 0.2}
     test('so that they can be compared', () => {
-        const names = [variantOf({...base, upscale: 'none'}), variantOf({...base, upscale: 'refine'}), variantOf({...base, upscale: 'refine', denoise: 0.3}), variantOf({...base, upscale: 'refine', size: '2x'}), variantOf({...base, upscale: 'latent'}), variantOf({...base, upscale: 'model'})]
+        const names = [
+            variantOf({...base, upscale: 'none'}),
+            variantOf({...base, upscale: 'refine'}),
+            variantOf({...base, upscale: 'refine', denoise: 0.3}),
+            variantOf({...base, upscale: 'refine', size: '2x'}),
+            variantOf({...base, upscale: 'latent'}),
+            variantOf({...base, upscale: 'model'}),
+        ]
         expect(names).toEqual(['original', 'refine-fullhd', 'refine-fullhd-d0.3', 'refine-2x', 'latent-fullhd', 'model-realesrgan-x2plus-fullhd'])
         expect(new Set(names).size).toBe(names.length)
     })
@@ -72,13 +88,44 @@ describe('every variant has its own place', () => {
 })
 
 describe('the clip keeps its length and its sound', () => {
-    const framesOf = (file: string) => Number(Bun.spawnSync(['ffprobe', '-v', 'error', '-count_frames', '-select_streams', 'v', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', file]).stdout.toString().trim())
-    const hasSound = (file: string) => Bun.spawnSync(['ffprobe', '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', file]).stdout.toString().includes('audio')
+    const framesOf = (file: string) =>
+        Number(
+            Bun.spawnSync(['ffprobe', '-v', 'error', '-count_frames', '-select_streams', 'v', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', file])
+                .stdout.toString()
+                .trim(),
+        )
+    const hasSound = (file: string) =>
+        Bun.spawnSync(['ffprobe', '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', file])
+            .stdout.toString()
+            .includes('audio')
     test('filled up for the model, cut back after, with the sound of the original', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'refinish-'))
         try {
             const original = join(dir, 'clip.mp4')
-            Bun.spawnSync(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=24', '-f', 'lavfi', '-i', 'sine=frequency=440', '-frames:v', '53', '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', original])
+            Bun.spawnSync([
+                'ffmpeg',
+                '-y',
+                '-v',
+                'error',
+                '-f',
+                'lavfi',
+                '-i',
+                'testsrc=size=64x64:rate=24',
+                '-f',
+                'lavfi',
+                '-i',
+                'sine=frequency=440',
+                '-frames:v',
+                '53',
+                '-shortest',
+                '-c:v',
+                'libx264',
+                '-pix_fmt',
+                'yuv420p',
+                '-c:a',
+                'aac',
+                original,
+            ])
             expect(framesOf(original)).toBe(53)
             const padded = join(dir, 'padded.mp4')
             await paddedClip(original, padded, 3)
@@ -95,7 +142,8 @@ describe('the clip keeps its length and its sound', () => {
 })
 
 describe('the latent upscale job', () => {
-    const types = (result: { workflow: unknown }) => Object.values((result.workflow as { _nodes: Record<string, { class_type: string }> })._nodes).map(n => n.class_type)
+    const types = (result: {workflow: unknown}) =>
+        Object.values((result.workflow as {_nodes: Record<string, {class_type: string}>})._nodes).map(n => n.class_type)
     test('encoded, upscaled, decoded: nothing sampled, no text encoder, no model', () => {
         const nodes = types(h3LatentUpscale({video: 'clip.mp4', size: {width: 1920, height: 1088}, filenamePrefix: 'x'}))
         expect(nodes).toEqual(expect.arrayContaining(['VAEEncodeTiled', 'MinimaxH3LatentUpscaler3D', 'VAEDecode', 'VHS_VideoCombine']))
@@ -105,8 +153,9 @@ describe('the latent upscale job', () => {
 
 describe('the refine job', () => {
     const job = {prompt: 'p', pictures: ['a.png'], video: 'clip.mp4', frames: 56, size: {width: 1920, height: 1088}, denoise: 0.2, seed: 1, filenamePrefix: 'x'}
-    const nodes = (result: { workflow: unknown }) => Object.values((result.workflow as { _nodes: Record<string, { class_type: string, inputs: Record<string, unknown> }> })._nodes)
-    const of = (result: { workflow: unknown }, type: string) => nodes(result).filter(n => n.class_type === type)
+    const nodes = (result: {workflow: unknown}) =>
+        Object.values((result.workflow as {_nodes: Record<string, {class_type: string; inputs: Record<string, unknown>}>})._nodes)
+    const of = (result: {workflow: unknown}, type: string) => nodes(result).filter(n => n.class_type === type)
     test('the second pass on the frames of the clip, at the size asked for', () => {
         const result = h3Refine(job)
         expect(result.size).toEqual(job.size)

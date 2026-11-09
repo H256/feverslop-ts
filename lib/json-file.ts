@@ -1,5 +1,5 @@
-import {renameSync, writeFileSync} from "node:fs";
-import {whileHeld} from "./previous-output.ts";
+import {renameSync, writeFileSync} from 'node:fs'
+import {whileHeld} from './previous-output.ts'
 
 // project.json is written next to itself first and then moved over the old one, so a crash mid-write never leaves half of
 // it. On Windows that move fails (EPERM) while another program has the old file open for a moment - the virus scanner or

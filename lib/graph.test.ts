@@ -1,9 +1,9 @@
-import {describe, expect, test} from "bun:test";
-import {accumulatePhases, describeGraph, describeMachine, type Graph, phaseOf} from "./graph.ts";
-import frameInterpolate from "../comfy/workflows/frame-interpolate.ts";
+import {describe, expect, test} from 'bun:test'
+import {accumulatePhases, describeGraph, describeMachine, type Graph, phaseOf} from './graph.ts'
+import frameInterpolate from '../comfy/workflows/frame-interpolate.ts'
 
 // a small video graph like the H3 workflows: loaders, a turbo LoRA, a sampler, size and frames through primitive nodes
-const graph = (options: { lora?: boolean, prompt?: string, seed?: number, frames?: number, refs?: number, steps?: number } = {}): Graph => {
+const graph = (options: {lora?: boolean; prompt?: string; seed?: number; frames?: number; refs?: number; steps?: number} = {}): Graph => {
     const {lora = true, prompt = 'a dwarf sings', seed = 1, frames = 22, refs = 2, steps = 8} = options
     const g: Graph = {
         '1': {class_type: 'UNETLoader', inputs: {unet_name: 'minimax.safetensors', weight_dtype: 'default'}},
@@ -12,7 +12,10 @@ const graph = (options: { lora?: boolean, prompt?: string, seed?: number, frames
         '4': {class_type: 'PrimitiveInt', inputs: {value: 1280}},
         '5': {class_type: 'PrimitiveInt', inputs: {value: 720}},
         '6': {class_type: 'PrimitiveStringMultiline', inputs: {value: prompt}},
-        '7': {class_type: 'KSampler', inputs: {model: [lora ? '8' : '1', 0], seed, steps, cfg: 1, sampler_name: 'euler', scheduler: 'simple', positive: ['9', 0]}},
+        '7': {
+            class_type: 'KSampler',
+            inputs: {model: [lora ? '8' : '1', 0], seed, steps, cfg: 1, sampler_name: 'euler', scheduler: 'simple', positive: ['9', 0]},
+        },
         '9': {class_type: 'MiniMaxH3ReferenceToVideo', inputs: {prompt: ['6', 0], width: ['4', 0], height: ['5', 0], length: ['3', 0]}},
     }
     if (lora) g['8'] = {class_type: 'LoraLoaderModelOnly', inputs: {lora_name: 'turbo.safetensors', strength_model: 0.8, model: ['1', 0]}}
@@ -52,10 +55,19 @@ describe('variant id', () => {
         expect(variant({steps: 4})).not.toBe(variant())
     })
     test('a frame interpolation is one variant per model and multiplier, whatever clip and shots it gets', () => {
-        const interpolate = (video: string, pieces: { start: number, frames: number }[], multiplier = 2, model = 'rife49.pth') =>
-            describeGraph(frameInterpolate({video, pieces, model, multiplier, filenamePrefix: `interpolated/${video}`}).workflow.build({outputs: {}}).workflow as unknown as Graph).variant
+        const interpolate = (video: string, pieces: {start: number; frames: number}[], multiplier = 2, model = 'rife49.pth') =>
+            describeGraph(
+                frameInterpolate({video, pieces, model, multiplier, filenamePrefix: `interpolated/${video}`}).workflow.build({outputs: {}})
+                    .workflow as unknown as Graph,
+            ).variant
         const one = interpolate('slot-001.mp4', [{start: 0, frames: 118}])
-        expect(interpolate('slot-027.mp4', [{start: 0, frames: 40}, {start: 40, frames: 33}, {start: 73, frames: 12}])).toBe(one)
+        expect(
+            interpolate('slot-027.mp4', [
+                {start: 0, frames: 40},
+                {start: 40, frames: 33},
+                {start: 73, frames: 12},
+            ]),
+        ).toBe(one)
         expect(interpolate('slot-001.mp4', [{start: 0, frames: 118}], 3)).not.toBe(one)
         expect(interpolate('slot-001.mp4', [{start: 0, frames: 118}], 2, 'film_net_fp32.pt')).not.toBe(one)
     })
@@ -70,18 +82,26 @@ describe('phases', () => {
         expect(phaseOf('VHS_VideoCombine')).toBe('save')
     })
     test('a node runs until the next one starts, the last one until the end', () => {
-        const phases = accumulatePhases([
-            {classType: 'UNETLoader', at: 0}, {classType: 'VAELoader', at: 4_000},
-            {classType: 'KSampler', at: 5_000}, {classType: 'VAEDecode', at: 35_000}, {classType: 'SaveImage', at: 38_000},
-        ], 39_000)
+        const phases = accumulatePhases(
+            [
+                {classType: 'UNETLoader', at: 0},
+                {classType: 'VAELoader', at: 4_000},
+                {classType: 'KSampler', at: 5_000},
+                {classType: 'VAEDecode', at: 35_000},
+                {classType: 'SaveImage', at: 38_000},
+            ],
+            39_000,
+        )
         expect(phases).toEqual({load: 5, sampling: 30, decode: 3, save: 1})
     })
 })
 
 test('describeMachine names the GPU, its memory and the versions', () => {
-    expect(describeMachine({
-        system: {comfyui_version: '0.3.60', pytorch_version: '2.8.0', python_version: '3.12.3 (main)'},
-        devices: [{name: 'cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync', vram_total: 25757220864}],
-    })).toEqual({gpu: 'NVIDIA GeForce RTX 4090', vramGb: 24, versions: 'comfyui 0.3.60, torch 2.8.0, python 3.12.3'})
+    expect(
+        describeMachine({
+            system: {comfyui_version: '0.3.60', pytorch_version: '2.8.0', python_version: '3.12.3 (main)'},
+            devices: [{name: 'cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync', vram_total: 25757220864}],
+        }),
+    ).toEqual({gpu: 'NVIDIA GeForce RTX 4090', vramGb: 24, versions: 'comfyui 0.3.60, torch 2.8.0, python 3.12.3'})
     expect(describeMachine({})).toEqual({})
 })

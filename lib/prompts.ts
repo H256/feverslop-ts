@@ -1,7 +1,7 @@
-import type {AskOptions} from "./llm.ts";
-import type {SingerVoice} from "./config.ts";
-import {handsOf} from "./project.ts";
-import {LOCATION_VIEWS} from "./sequenceSheet.ts";
+import type {AskOptions} from './llm.ts'
+import type {SingerVoice} from './config.ts'
+import {handsOf} from './project.ts'
+import {LOCATION_VIEWS} from './sequenceSheet.ts'
 
 // The LLM prompt templates for the early song/story/look pipeline steps (index.ts, steps 1-8b) - kept separate from
 // the orchestration so the prompt copy can be read and edited without the surrounding pipeline wiring.
@@ -62,20 +62,23 @@ Answer only with the style prompt.`,
  */
 export function voiceRules(voice: SingerVoice) {
     if (voice === 'auto') return {lyrics: '', songStyle: '', story: '', cast: '', pick: ''}
-    const who = voice === 'mixed'
-        ? 'two singers, one woman and one man (a duet - the lines are split between them or sung together)'
-        : `${voice === 'female' ? 'women' : 'men'} - every character who sings is ${voice}`
+    const who =
+        voice === 'mixed'
+            ? 'two singers, one woman and one man (a duet - the lines are split between them or sung together)'
+            : `${voice === 'female' ? 'women' : 'men'} - every character who sings is ${voice}`
     return {
-        lyrics: voice === 'mixed'
-            ? '\n- A duet of a woman and a man: write it for two voices that answer each other.'
-            : `\n- Sung by a ${voice === 'female' ? 'woman' : 'man'}: write it from ${voice === 'female' ? 'her' : 'his'} point of view.`,
+        lyrics:
+            voice === 'mixed'
+                ? '\n- A duet of a woman and a man: write it for two voices that answer each other.'
+                : `\n- Sung by a ${voice === 'female' ? 'woman' : 'man'}: write it from ${voice === 'female' ? 'her' : 'his'} point of view.`,
         // the vocal gender tag is given, not left to the LLM - YuE2 sings in the voice the tags name
         songStyle: `\n- The vocal gender tag is exactly "${voice === 'mixed' ? 'male and female vocals, duet' : `${voice} vocal`}", whatever the lyrics suggest.`,
         story: `\n- The song is sung by ${who}. Write them as such from the first sentence on (consistent pronouns, no gender change later), whatever the lyrics or the story idea suggest.`,
         cast: `- The song is sung by ${who}. State their gender in the role (e.g. "a young woman who ..."), even if the story text says otherwise. Other characters are not affected.\n`,
-        pick: voice === 'mixed'
-            ? 'The song is a duet of one woman and one man: pick exactly two singers, one female and one male character.\n'
-            : `The song is sung by ${voice === 'female' ? 'women' : 'men'}: every singer you pick must be a ${voice} character.\n`,
+        pick:
+            voice === 'mixed'
+                ? 'The song is a duet of one woman and one man: pick exactly two singers, one female and one male character.\n'
+                : `The song is sung by ${voice === 'female' ? 'women' : 'men'}: every singer you pick must be a ${voice} character.\n`,
     }
 }
 
@@ -97,7 +100,7 @@ export function storyPrompt(lyrics: string, storyIdea: string, singerVoice: Sing
  * The story told anew for a cast changed by hand (bun run story --adapt, tools/story.ts): the plot, the places, the order and the length stay -
  * only what the people changed is changed. The cast is given as it is now; the model reads in the story who is no longer in it.
  */
-export function adaptStoryPrompt(story: string, cast: { characters: { name: string, role: string, prop?: string }[], locations: { name: string }[] }): AskOptions {
+export function adaptStoryPrompt(story: string, cast: {characters: {name: string; role: string; prop?: string}[]; locations: {name: string}[]}): AskOptions {
     const people = cast.characters.map(c => `- ${c.name}: ${c.role}${c.prop ? ` (carries or plays: ${c.prop})` : ''}`).join('\n')
     const places = cast.locations.map(l => `- ${l.name}`).join('\n')
     return {
@@ -160,22 +163,46 @@ ${voiceRules(singerVoice).cast}The rules for locations are: List them in order o
 story:
 ${storyBase}
 `,
-        instructions: 'You are an expert data extractor for Stories. You receive a Story and extract locations and characters from it. Answer only with the extracted data.',
+        instructions:
+            'You are an expert data extractor for Stories. You receive a Story and extract locations and characters from it. Answer only with the extracted data.',
         schema: {
-            type: 'object', additionalProperties: false, required: ['characters', 'locations'],
+            type: 'object',
+            additionalProperties: false,
+            required: ['characters', 'locations'],
             properties: {
-                characters: {type: 'array', minItems: 1, items: {
-                    type: 'object', additionalProperties: false, required: ['name', 'role', 'prop', 'propStem', 'propCarried', 'propInHand', 'propPlace', 'hands', 'isGroup', 'alike'],
-                    properties: {name: {type: 'string'}, role: {type: 'string'}, prop: {type: 'string'}, propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']}, propCarried: {type: 'boolean'}, propInHand: {type: 'string'}, propPlace: {type: 'string'}, hands: {type: 'string'}, isGroup: {type: 'boolean'}, alike: {type: 'boolean'}},
-                }},
-                locations: {type: 'array', minItems: 1, items: {type: 'object', additionalProperties: false, required: ['name'], properties: {name: {type: 'string'}}}},
+                characters: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['name', 'role', 'prop', 'propStem', 'propCarried', 'propInHand', 'propPlace', 'hands', 'isGroup', 'alike'],
+                        properties: {
+                            name: {type: 'string'},
+                            role: {type: 'string'},
+                            prop: {type: 'string'},
+                            propStem: {enum: ['', 'drums', 'bass', 'guitar', 'piano', 'other']},
+                            propCarried: {type: 'boolean'},
+                            propInHand: {type: 'string'},
+                            propPlace: {type: 'string'},
+                            hands: {type: 'string'},
+                            isGroup: {type: 'boolean'},
+                            alike: {type: 'boolean'},
+                        },
+                    },
+                },
+                locations: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {type: 'object', additionalProperties: false, required: ['name'], properties: {name: {type: 'string'}}},
+                },
             },
         },
     }
 }
 
 // Shortlist, not a single pick: the code then draws one at random, so the LLM's favorites can't decide the look alone.
-export function styleShortlistPrompt(storyText: string, styleList: {id: string, name: string, group?: string}[], count: number): AskOptions {
+export function styleShortlistPrompt(storyText: string, styleList: {id: string; name: string; group?: string}[], count: number): AskOptions {
     return {
         maxTokens: 2048,
         input: `Choose the ${count} film styles from the list that would suit this story or song best, for a music video generated with AI image and video models.
@@ -188,11 +215,16 @@ ${styleList.map(s => `- ${s.id}: ${s.name}${s.group ? ` [${s.group}]` : ''}`).jo
 story or lyrics:
 ${storyText}`,
         instructions: 'You are a film director choosing the visual style of a music video. Answer only with the JSON.',
-        schema: {type: 'object', additionalProperties: false, required: ['styles'], properties: {styles: {type: 'array', minItems: 1, maxItems: count, items: {enum: styleList.map(s => s.id)}}}},
+        schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['styles'],
+            properties: {styles: {type: 'array', minItems: 1, maxItems: count, items: {enum: styleList.map(s => s.id)}}},
+        },
     }
 }
 
-const lookRules =`Describe in 120-180 words, as plain prose:
+const lookRules = `Describe in 120-180 words, as plain prose:
 - Format and style: name the medium first and be specific, in terms of how it is shot, drawn or built (e.g. "live action shot on 35mm film", "2D anime in the style of 90s cel animation", "Studio Ghibli hand-painted anime", "Pixar-style 3D animation", "stop-motion with visible puppet seams", "grainy VHS found-footage horror", "neon-soaked cyberpunk live action", "black ink wash drawing", "hand-painted dark fantasy oil painting").
 - World: architecture, landscapes, materials and textures of the world, as a still: what is where and how it looks. No change or process words (fading, shrinking, contracting, pulling inward, cracking open, slowly ...) - the video model would animate them on the background; what changes in the story is told elsewhere.
 - Color palette and lighting: dominant colors, light sources, contrast, time of day.
@@ -238,12 +270,15 @@ ${storySummary}`,
 // not in the picture at all - only what is held of it. "The way it is held while used" alone still gave a bass that
 // "rests against her waist", hanging neck down with no hand on it - and a bassist who never played in any clip (#323):
 // what it is held with is named, at work on it - the character's own "hands" (handsOf), which need not be hands.
-const bodyRules = '- Head to toe: name what covers the torso, the legs and the feet (trousers, skirt, robe, boots ...) - no part of the body is left undescribed, because a video model invents whatever is missing.\n'
-type PropOf = { prop?: string, propCarried?: false, propInHand?: string, hands?: string }
-const propRule = ({prop, propCarried, propInHand, hands}: PropOf) => !prop ? ''
-    : propCarried === false
-        ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, in the working grip of their ${handsOf({hands})}` : `nothing is in their ${handsOf({hands})}`}.\n`
-        : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each of the ${handsOf({hands})} is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
+const bodyRules =
+    '- Head to toe: name what covers the torso, the legs and the feet (trousers, skirt, robe, boots ...) - no part of the body is left undescribed, because a video model invents whatever is missing.\n'
+type PropOf = {prop?: string; propCarried?: false; propInHand?: string; hands?: string}
+const propRule = ({prop, propCarried, propInHand, hands}: PropOf) =>
+    !prop
+        ? ''
+        : propCarried === false
+          ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, in the working grip of their ${handsOf({hands})}` : `nothing is in their ${handsOf({hands})}`}.\n`
+          : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each of the ${handsOf({hands})} is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
 /**
  * Whether a finished look shows the character's prop in use - read by the LLM, not by a list of words: "rests against her
  * waist", "slung on her back" and "held by the neck at her side" are all the prop at rest, and so is the pose in the picture.
@@ -263,21 +298,29 @@ Answer as JSON: "inUse" true or false, and "why" - one short sentence on how the
 }
 
 // the prop as the character JSON of a look prompt names it: what is in the picture
-const propField = ({prop, propCarried, propInHand}: PropOf) => !prop ? {} : propCarried === false ? (propInHand ? {inHand: propInHand} : {}) : {prop}
+const propField = ({prop, propCarried, propInHand}: PropOf) => (!prop ? {} : propCarried === false ? (propInHand ? {inHand: propInHand} : {}) : {prop})
 
 // otherLooks: the already-designed reference prompts of the rest of the cast (built earlier in the same loop) -
 // without them, two characters with a similar role/archetype (e.g. "loyal companion") reliably converge on
 // near-identical builds, palettes and wardrobes, which a reference-to-video model then can't tell apart on
 // screen and swaps mid-shot. Forcing a comparison against what already exists is what actually spreads them out;
 // asking each character to be "distinctive" in isolation does not, since every character looks distinctive alone.
-export function characterLookPrompt(lookBrief: string, char: { name: string, role: string } & PropOf, otherLooks: { name: string, look: string }[] = []): AskOptions {
+export function characterLookPrompt(
+    lookBrief: string,
+    char: {name: string; role: string} & PropOf,
+    otherLooks: {name: string; look: string}[] = [],
+): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for a character reference sheet of the given character.
 The image must match the film look below - same medium, style, palette and lighting - but it is a clean reference plate, not a film frame: it must be sharp and clearly readable, so leave out anything that would degrade or obscure the detail.
 Consider the character's role in the story when designing the look.
-${otherLooks.length ? `
-The rest of the cast is already designed (below). A video model has to tell these characters apart from a distance, in motion, and even when a described prop or accessory isn't in frame - so this character must be silhouette-distinct from every one of them at a glance: a clearly different build or height, a different hair color/length/style, and a different dominant silhouette element (a cloak, a headpiece, a very different garment shape), not just a different color accent or a different hand-held prop. Where this character's role is similar to one already listed (e.g. both are companions or both are guards), push the divergence harder, not softer.` : ''}
+${
+    otherLooks.length
+        ? `
+The rest of the cast is already designed (below). A video model has to tell these characters apart from a distance, in motion, and even when a described prop or accessory isn't in frame - so this character must be silhouette-distinct from every one of them at a glance: a clearly different build or height, a different hair color/length/style, and a different dominant silhouette element (a cloak, a headpiece, a very different garment shape), not just a different color accent or a different hand-held prop. Where this character's role is similar to one already listed (e.g. both are companions or both are guards), push the divergence harder, not softer.`
+        : ''
+}
 
 Rules:
 - Natural language, one paragraph, 50-100 words.
@@ -291,9 +334,13 @@ ${bodyRules}${propRule(char)}- Keep the medium/style name itself (e.g. "35mm fil
 
 Film look: ${lookBrief}
 Character:
-${JSON.stringify({name: char.name, role: char.role, ...propField(char)})}${otherLooks.length ? `
+${JSON.stringify({name: char.name, role: char.role, ...propField(char)})}${
+            otherLooks.length
+                ? `
 Already-designed cast (for silhouette contrast only - do not copy or borrow their specific colors/props):
-${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}` : ''}`,
+${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}`
+                : ''
+        }`,
         instructions: 'You are an expert character designer who writes prompts for the Krea 2 image model. You answer only with the prompt.',
     }
 }
@@ -302,7 +349,7 @@ ${otherLooks.map(o => `- ${o.name}: ${o.look}`).join('\n')}` : ''}`,
 // individual belonging to the same group, contrasted against the group's own already-designed members instead of
 // against the rest of the cast (characterLookPrompt's otherLooks). Without this every member renders from the
 // same one reference image and reads as the same person duplicated across a shot.
-export function characterVariantLookPrompt(lookBrief: string, char: { name: string, role: string } & PropOf, existingMembers: string[]): AskOptions {
+export function characterVariantLookPrompt(lookBrief: string, char: {name: string; role: string} & PropOf, existingMembers: string[]): AskOptions {
     return {
         input: `
 Write a Krea 2 image prompt for a character reference sheet of ONE individual member of the group below.
@@ -331,13 +378,15 @@ ${existingMembers.map((look, i) => `- Member ${i + 1}: ${look}`).join('\n')}`,
 // For tools/replace-character.ts: describes a character straight from a user-supplied reference image, instead of
 // deriving it from this project's own generated look prompt (characterDescriptionPrompt) - same output shape/rules,
 // so the result drops straight into characterDescriptions/characterDescriptionVariants.
-export function characterImageDescriptionPrompt(imageDataUrls: string | string[], char: { name: string, role: string }): AskOptions {
+export function characterImageDescriptionPrompt(imageDataUrls: string | string[], char: {name: string; role: string}): AskOptions {
     const images = [imageDataUrls].flat()
     return {
         input: `
-${images.length > 1
-            ? `The attached images show the character below: the first is the reference picture, the others are full-body views of the same character from its reference sheet (front, side, back). Describe what they look like`
-            : 'The attached image is the reference picture of the character below. Describe what they look like'}, for a video prompt where they act in many different scenes - so only say what they look like, nothing about the picture itself.
+${
+    images.length > 1
+        ? `The attached images show the character below: the first is the reference picture, the others are full-body views of the same character from its reference sheet (front, side, back). Describe what they look like`
+        : 'The attached image is the reference picture of the character below. Describe what they look like'
+}, for a video prompt where they act in many different scenes - so only say what they look like, nothing about the picture itself.
 
 Keep: age, gender, build, skin, face and distinctive marks, hair, every piece of clothing with its materials and colors, accessories and any props they carry.
 Leave out: the medium and style (e.g. "35mm film photograph of"), the pose and framing, the background, the lighting, film grain and anything else about the picture rather than the character.
@@ -484,8 +533,13 @@ Image prompt of the reference picture: ${look}
 Description: ${description}`,
         instructions: 'You are a production designer who writes the fixed floor plan of a film set. Answer only with JSON.',
         schema: {
-            type: 'object', additionalProperties: false, required: ['layout', 'views'],
-            properties: {layout: {type: 'string'}, views: {type: 'array', minItems: LOCATION_VIEWS.length, maxItems: LOCATION_VIEWS.length, items: {type: 'string'}}},
+            type: 'object',
+            additionalProperties: false,
+            required: ['layout', 'views'],
+            properties: {
+                layout: {type: 'string'},
+                views: {type: 'array', minItems: LOCATION_VIEWS.length, maxItems: LOCATION_VIEWS.length, items: {type: 'string'}},
+            },
         },
     }
 }

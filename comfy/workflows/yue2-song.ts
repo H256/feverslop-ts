@@ -2,7 +2,7 @@
 // the ABC-planning toggle and its preview nodes are
 // dropped (ABC planning is always on, "mode": "full"), style/lyrics/seed are wired to opts directly instead of
 // through primitive nodes.
-import {type AudioWorkflowOptions, dyn, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {type AudioWorkflowOptions, dyn, widget, withInputs, WorkflowBuilder, type WorkflowResult} from '../helpers.ts'
 
 export default function yue2Song(opts: AudioWorkflowOptions): WorkflowResult {
     const wf = new WorkflowBuilder()

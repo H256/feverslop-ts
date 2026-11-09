@@ -26,13 +26,17 @@ TimelineService.provide(timelineContext(timeline, actions, review))
 const {project, playback, session} = timeline
 const run = useRunDock()
 const toasts = useToasts()
-const route = useRoute(), router = useRouter()
+const route = useRoute(),
+  router = useRouter()
 const monitor = ref<InstanceType<typeof PlayerMonitor>>()
 onScopeDispose(timeline.dispose)
 
 // what a run made is read again; a render of clips that were there before is looked at against what was there
 run.onEnd((current, action) => {
-  void session.reload().then(() => actions.afterRender(current, action, review.start)).catch(toasts.fail)
+  void session
+    .reload()
+    .then(() => actions.afterRender(current, action, review.start))
+    .catch(toasts.fail)
 })
 
 const linked = () => project.value.clips.find(c => c.id === route.hash.slice(1))
@@ -44,17 +48,31 @@ onMounted(() => {
   void timeline.loadAround()
 })
 // the clip at the playhead is in the address, and a clip put into the address (a link, back, forward) is gone to
-watch(playback.clip, clip => { if (clip && route.hash !== `#${clip.id}`) void router.replace({hash: `#${clip.id}`}) })
-// a link that directs a shot (?direct=b3:shot2, from the Direction page) opens its dialog
-watch(() => route.query.direct, id => { if (typeof id === 'string' && id) timeline.directing.value = id }, {immediate: true})
-watch(() => route.hash, () => {
-  const clip = linked()
-  if (clip && clip.id !== playback.clip.value?.id) playback.seek(clip.start)
+watch(playback.clip, clip => {
+  if (clip && route.hash !== `#${clip.id}`) void router.replace({hash: `#${clip.id}`})
 })
+// a link that directs a shot (?direct=b3:shot2, from the Direction page) opens its dialog
+watch(
+  () => route.query.direct,
+  id => {
+    if (typeof id === 'string' && id) timeline.directing.value = id
+  },
+  {immediate: true},
+)
+watch(
+  () => route.hash,
+  () => {
+    const clip = linked()
+    if (clip && clip.id !== playback.clip.value?.id) playback.seek(clip.start)
+  },
+)
 
 const KEYS: Record<string, () => void> = {
   ' ': () => playback.setPlaying(!playback.playing.value),
-  k: () => { playback.setPlaying(false); playback.setSpeed(1) },
+  k: () => {
+    playback.setPlaying(false)
+    playback.setSpeed(1)
+  },
   j: () => playback.changeSpeed(-1),
   l: () => playback.changeSpeed(1),
   ',': () => playback.stepFrame(-1),
@@ -62,14 +80,19 @@ const KEYS: Record<string, () => void> = {
   o: () => playback.toggleLoop(false),
   O: () => playback.toggleLoop(true),
   f: () => monitor.value?.toggleFullscreen(),
-  '?': () => { timeline.helpOpen.value = true },
+  '?': () => {
+    timeline.helpOpen.value = true
+  },
   ArrowLeft: () => playback.step(-1),
   ArrowRight: () => playback.step(1),
   Home: () => playback.seek(0),
   End: () => playback.seek(project.value.seconds - 0.01),
   m: () => playback.toggleMute(),
   // asked first, as the button of the clip: what it costs, what goes on from it
-  r: () => { const clip = playback.clip.value; if (clip) actions.renderAgain(clip).catch(toasts.fail) },
+  r: () => {
+    const clip = playback.clip.value
+    if (clip) actions.renderAgain(clip).catch(toasts.fail)
+  },
 }
 function key(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null
@@ -83,10 +106,17 @@ function key(event: KeyboardEvent) {
 }
 addEventListener('keydown', key)
 onScopeDispose(() => removeEventListener('keydown', key))
-const closeCompare = () => { timeline.compared.value = undefined }
-const closeHelp = () => { timeline.helpOpen.value = false }
+const closeCompare = () => {
+  timeline.compared.value = undefined
+}
+const closeHelp = () => {
+  timeline.helpOpen.value = false
+}
 // closed: a link that opened it (?direct=) is left, so it opens the dialog again when followed again
-const closeDirector = () => { timeline.directing.value = undefined; if (route.query.direct) void router.replace({query: {}, hash: route.hash}) }
+const closeDirector = () => {
+  timeline.directing.value = undefined
+  if (route.query.direct) void router.replace({query: {}, hash: route.hash})
+}
 </script>
 
 <template>

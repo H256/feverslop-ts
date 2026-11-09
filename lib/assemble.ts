@@ -1,11 +1,11 @@
-import {existsSync, mkdirSync, renameSync} from "node:fs";
-import {join} from "node:path";
-import {log, startSpinner, styles} from "./log.ts";
-import {FPS, formatTime, frameAt, secondsAt} from "./frames.ts";
-import type {ClipRequest} from "./compose.ts";
-import {captureProcess, runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
+import {existsSync, mkdirSync, renameSync} from 'node:fs'
+import {join} from 'node:path'
+import {log, startSpinner, styles} from './log.ts'
+import {FPS, formatTime, frameAt, secondsAt} from './frames.ts'
+import type {ClipRequest} from './compose.ts'
+import {captureProcess, runProcess, SHORT_PROCESS_TIMEOUT_MS} from './process.ts'
 
-export type VideoInfo = { frames: number, width: number, height: number, fps: number, hasAudio: boolean }
+export type VideoInfo = {frames: number; width: number; height: number; fps: number; hasAudio: boolean}
 
 // "slot-001, slot-002, slot-004, slot-005, slot-006" -> "slot-001-002, slot-004-006" - a long run of missing
 // clips reads a lot faster as ranges than as one giant comma list
@@ -23,8 +23,13 @@ export function formatSlotRanges(ids: string[]): string {
 
 export async function probeVideo(file: string): Promise<VideoInfo> {
     const run = async (...args: string[]) => {
-        const stdout = await runProcess(['ffprobe', '-v', 'error', '-of', 'json', ...args, file], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
-        return JSON.parse(stdout) as { streams: { codec_type: string, nb_frames?: string, nb_read_frames?: string, width?: number, height?: number, r_frame_rate?: string }[] }
+        const stdout = await runProcess(['ffprobe', '-v', 'error', '-of', 'json', ...args, file], {
+            timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
+            errorMessage: err => `ffprobe failed for ${file}:\n${err}`,
+        })
+        return JSON.parse(stdout) as {
+            streams: {codec_type: string; nb_frames?: string; nb_read_frames?: string; width?: number; height?: number; r_frame_rate?: string}[]
+        }
     }
     const {streams} = await run('-show_entries', 'stream=codec_type,nb_frames,width,height,r_frame_rate')
     const video = streams.find(s => s.codec_type === 'video')
@@ -46,11 +51,13 @@ export async function probeVideo(file: string): Promise<VideoInfo> {
  * so its own frame count (48 at 12 fps) is not what ends up in the film (96).
  */
 export const framesOnGrid = (info: Pick<VideoInfo, 'frames' | 'fps'>) =>
-    Math.abs(info.fps - FPS) > 0.01 ? Math.round(info.frames * FPS / info.fps) : info.frames
+    Math.abs(info.fps - FPS) > 0.01 ? Math.round((info.frames * FPS) / info.fps) : info.frames
 
 /** The duration of an audio or video file in seconds, from its container. */
 async function probeDuration(file: string): Promise<number> {
-    const stdout = await runProcess(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], {errorMessage: err => `ffprobe failed for ${file}:\n${err}`})
+    const stdout = await runProcess(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], {
+        errorMessage: err => `ffprobe failed for ${file}:\n${err}`,
+    })
     const seconds = Number(stdout.trim())
     if (!Number.isFinite(seconds)) throw new Error(`${file} has no readable duration`)
     return seconds
@@ -59,17 +66,44 @@ async function probeDuration(file: string): Promise<number> {
 /** Cuts the first `frames` frames off a video, its sound with them - written next to it first, then put in its place. */
 export async function trimHead(video: string, frames: number) {
     const partial = video.replace(/\.mp4$/, '.trim.mp4')
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video,
-        '-vf', `trim=start_frame=${frames},setpts=PTS-STARTPTS`, '-af', `atrim=start=${secondsAt(frames)},asetpts=PTS-STARTPTS`,
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '256k', partial],
-        {errorMessage: err => `ffmpeg could not cut the first ${frames} frames off ${video}:\n${err}`})
+    await runProcess(
+        [
+            'ffmpeg',
+            '-y',
+            '-v',
+            'error',
+            '-i',
+            video,
+            '-vf',
+            `trim=start_frame=${frames},setpts=PTS-STARTPTS`,
+            '-af',
+            `atrim=start=${secondsAt(frames)},asetpts=PTS-STARTPTS`,
+            '-c:v',
+            'libx264',
+            '-preset',
+            'medium',
+            '-crf',
+            '14',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'aac',
+            '-b:a',
+            '256k',
+            partial,
+        ],
+        {errorMessage: err => `ffmpeg could not cut the first ${frames} frames off ${video}:\n${err}`},
+    )
     renameSync(partial, video)
 }
 
 /** Saves frame `index` (0-based) of a video as a PNG - written next to the target first, like the downloads. */
 export async function extractFrame(video: string, index: number, target: string) {
     const partial = target.replace(/\.png$/, '.partial.png')
-    const {stderr, code} = await captureProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `select=eq(n\\,${index})`, '-frames:v', '1', partial], {stdout: 'ignore', timeoutMs: SHORT_PROCESS_TIMEOUT_MS})
+    const {stderr, code} = await captureProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', `select=eq(n\\,${index})`, '-frames:v', '1', partial], {
+        stdout: 'ignore',
+        timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
+    })
     if (code !== 0 || !existsSync(partial)) throw new Error(`ffmpeg could not extract frame ${index} of ${video}:\n${stderr}`)
     renameSync(partial, target)
 }
@@ -78,18 +112,48 @@ export async function extractFrame(video: string, index: number, target: string)
  * The files of a preview video of the whole thing, a clip each: its preview, else its render, else black with silence for as long as it
  * lasts - so that the cuts and the sound stay where they are, and a clip that is missing is seen as a gap. The first file with a picture sets the size.
  */
-export async function previewSources(projectDir: string, clips: { id: string, frames: number }[]): Promise<string[]> {
+export async function previewSources(projectDir: string, clips: {id: string; frames: number}[]): Promise<string[]> {
     const found = clips.map(c => [join(projectDir, 'previews', `${c.id}.mp4`), join(projectDir, 'videos', `${c.id}.mp4`)].find(file => existsSync(file)))
     const first = found.find(Boolean)
     const {width, height} = first ? await probeVideo(first) : {width: 640, height: 360}
     mkdirSync(join(projectDir, 'previews'), {recursive: true})
-    return Promise.all(clips.map(async (clip, i) => {
-        if (found[i]) return found[i]!
-        const filler = join(projectDir, 'previews', `${clip.id}.gap.mp4`)
-        await runProcess(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=black:s=${width}x${height}:r=${FPS}`, '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-frames:v', String(clip.frames), '-t', String(secondsAt(clip.frames)), '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', filler],
-            {errorMessage: err => `ffmpeg could not make the gap for ${clip.id}:\n${err}`})
-        return filler
-    }))
+    return Promise.all(
+        clips.map(async (clip, i) => {
+            if (found[i]) return found[i]!
+            const filler = join(projectDir, 'previews', `${clip.id}.gap.mp4`)
+            await runProcess(
+                [
+                    'ffmpeg',
+                    '-y',
+                    '-v',
+                    'error',
+                    '-f',
+                    'lavfi',
+                    '-i',
+                    `color=black:s=${width}x${height}:r=${FPS}`,
+                    '-f',
+                    'lavfi',
+                    '-i',
+                    'anullsrc=r=48000:cl=stereo',
+                    '-frames:v',
+                    String(clip.frames),
+                    '-t',
+                    String(secondsAt(clip.frames)),
+                    '-c:v',
+                    'libx264',
+                    '-preset',
+                    'ultrafast',
+                    '-pix_fmt',
+                    'yuv420p',
+                    '-c:a',
+                    'aac',
+                    filler,
+                ],
+                {errorMessage: err => `ffmpeg could not make the gap for ${clip.id}:\n${err}`},
+            )
+            return filler
+        }),
+    )
 }
 
 /**
@@ -98,31 +162,46 @@ export async function previewSources(projectDir: string, clips: { id: string, fr
  * The clips own consecutive ranges of the song's frame grid, so every clip starts on exactly the frame
  * its audio started on during generation, and the song can be laid under the whole video unchanged.
  */
-export async function assembleFinal({clips, projectDir, songFile, songAudio, target, interpolated, sources}: {
-    clips: ClipRequest[],
-    projectDir: string,
-    songFile: string,
-    songAudio: boolean,     // true: the original song is the soundtrack, false: the clips' own audio
-    target: string,
+export async function assembleFinal({
+    clips,
+    projectDir,
+    songFile,
+    songAudio,
+    target,
+    interpolated,
+    sources,
+}: {
+    clips: ClipRequest[]
+    projectDir: string
+    songFile: string
+    songAudio: boolean // true: the original song is the soundtrack, false: the clips' own audio
+    target: string
     // the clips with more frames (lib/interpolate.ts): `multiplier` times their frames at FPS * multiplier, the video saved at `fps`
-    interpolated?: { files: string[], multiplier: number, fps: number },
+    interpolated?: {files: string[]; multiplier: number; fps: number}
     // other files for the clips than the ones in videos/ - the preview video
-    sources?: string[],
+    sources?: string[]
 }) {
     const m = interpolated?.multiplier ?? 1
     const outFps = interpolated?.fps ?? FPS
     if (interpolated && !songAudio) throw new Error('the interpolated clips are silent - a final video at another frame rate needs "songAudio": true')
     const files = interpolated?.files ?? sources ?? clips.map(c => join(projectDir, 'videos', `${c.id}.mp4`))
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
-    if (missing.length) throw new Error(`Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`)
+    if (missing.length)
+        throw new Error(
+            `Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`,
+        )
 
     const infos = await Promise.all(files.map(probeVideo))
     clips.forEach((clip, i) => {
         if (interpolated) {
-            if (infos[i]!.frames < clip.frames * m) throw new Error(`${files[i]} has ${infos[i]!.frames} frames, ${clip.frames * m} expected - delete it and run again`)
+            if (infos[i]!.frames < clip.frames * m)
+                throw new Error(`${files[i]} has ${infos[i]!.frames} frames, ${clip.frames * m} expected - delete it and run again`)
             return
         }
-        if (framesOnGrid(infos[i]!) < clip.frames) throw new Error(`videos/${clip.id}.mp4 has ${framesOnGrid(infos[i]!)} frames (at ${FPS} fps), but the clip needs ${clip.frames} - delete it and render again`)
+        if (framesOnGrid(infos[i]!) < clip.frames)
+            throw new Error(
+                `videos/${clip.id}.mp4 has ${framesOnGrid(infos[i]!)} frames (at ${FPS} fps), but the clip needs ${clip.frames} - delete it and render again`,
+            )
         if (!songAudio && !infos[i]!.hasAudio) throw new Error(`videos/${clip.id}.mp4 has no audio - set "songAudio": true in config.json`)
     })
 
@@ -133,7 +212,9 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     let cursor = 0
     for (const clip of clips) {
         if (clip.frameStart !== cursor) {
-            log.warn(`${clip.id} starts at ${formatTime(secondsAt(clip.frameStart), true)} but the clips before it end at ${formatTime(secondsAt(cursor), true)} - the clips don't tile the song, everything after this is out of sync with it`)
+            log.warn(
+                `${clip.id} starts at ${formatTime(secondsAt(clip.frameStart), true)} but the clips before it end at ${formatTime(secondsAt(cursor), true)} - the clips don't tile the song, everything after this is out of sync with it`,
+            )
             break
         }
         cursor += clip.frames
@@ -141,7 +222,9 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     if (songAudio) {
         const songFrames = frameAt(await probeDuration(songFile))
         if (Math.abs(songFrames - totalFrames) > 1) {
-            log.warn(`the clips add up to ${formatTime(secondsAt(totalFrames), true)} (${totalFrames} frames) but the song is ${formatTime(secondsAt(songFrames), true)} (${songFrames} frames) - the final video ends ${totalFrames < songFrames ? 'before the song does' : 'after the song ends'}`)
+            log.warn(
+                `the clips add up to ${formatTime(secondsAt(totalFrames), true)} (${totalFrames} frames) but the song is ${formatTime(secondsAt(songFrames), true)} (${songFrames} frames) - the final video ends ${totalFrames < songFrames ? 'before the song does' : 'after the song ends'}`,
+            )
         }
     }
 
@@ -154,30 +237,55 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
     const resampled = interpolated ? 0 : infos.filter(i => Math.abs(i.fps - FPS) > 0.01).length
     if (resampled) log.warn(`${resampled} clip(s) have another frame rate than ${FPS} fps and are resampled`)
 
-    const filters = clips.map((clip, i) => [
-        `[${i}:v]${!interpolated && Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames * m},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
-        ...(songAudio ? [] : [`[${i}:a]atrim=end=${secondsAt(clip.frames)},asetpts=PTS-STARTPTS[a${i}]`]),
-    ].join(';'))
-    const concatInputs = clips.map((_, i) => songAudio ? `[v${i}]` : `[v${i}][a${i}]`).join('')
+    const filters = clips.map((clip, i) =>
+        [
+            `[${i}:v]${!interpolated && Math.abs(infos[i]!.fps - FPS) > 0.01 ? `fps=${FPS},` : ''}trim=end_frame=${clip.frames * m},setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p[v${i}]`,
+            ...(songAudio ? [] : [`[${i}:a]atrim=end=${secondsAt(clip.frames)},asetpts=PTS-STARTPTS[a${i}]`]),
+        ].join(';'),
+    )
+    const concatInputs = clips.map((_, i) => (songAudio ? `[v${i}]` : `[v${i}][a${i}]`)).join('')
     // more frames: all clips at FPS * multiplier, then down to the frame rate of the video (60 fps: every 2nd of 120)
     const concatOut = interpolated ? `[vc];[vc]fps=${outFps}[v]` : songAudio ? '[v]' : '[v][a]'
     filters.push(`${concatInputs}concat=n=${clips.length}:v=1:a=${songAudio ? 0 : 1}${concatOut}`)
 
     const partial = `${target}.partial.mp4`
     const args = [
-        'ffmpeg', '-y', '-v', 'error', '-progress', 'pipe:1', '-nostats',
+        'ffmpeg',
+        '-y',
+        '-v',
+        'error',
+        '-progress',
+        'pipe:1',
+        '-nostats',
         ...files.flatMap(f => ['-i', f]),
         ...(songAudio ? ['-i', songFile] : []),
-        '-filter_complex', filters.join(';'),
-        '-map', '[v]', '-map', songAudio ? `${clips.length}:a:0` : '[a]',
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(outFps),
-        '-c:a', 'aac', '-b:a', '320k',
-        '-movflags', '+faststart',
+        '-filter_complex',
+        filters.join(';'),
+        '-map',
+        '[v]',
+        '-map',
+        songAudio ? `${clips.length}:a:0` : '[a]',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'medium',
+        '-crf',
+        '18',
+        '-pix_fmt',
+        'yuv420p',
+        '-r',
+        String(outFps),
+        '-c:a',
+        'aac',
+        '-b:a',
+        '320k',
+        '-movflags',
+        '+faststart',
         partial,
     ]
 
     let frame = 0
-    const outFrames = Math.round(totalFrames * outFps / FPS)
+    const outFrames = Math.round((totalFrames * outFps) / FPS)
     const stopSpinner = startSpinner(() => `${styles.name('ffmpeg')} ${styles.muted(`frame ${frame} / ${outFrames}`)}`)
     try {
         const proc = Bun.spawn(args, {stdout: 'pipe', stderr: 'pipe'})
@@ -186,7 +294,7 @@ export async function assembleFinal({clips, projectDir, songFile, songAudio, tar
             const match = new TextDecoder().decode(chunk).match(/frame=(\d+)/g)
             if (match) frame = Number(match.at(-1)!.slice(6))
         }
-        if (await proc.exited !== 0) throw new Error(`ffmpeg failed:\n${await stderr}`)
+        if ((await proc.exited) !== 0) throw new Error(`ffmpeg failed:\n${await stderr}`)
     } finally {
         stopSpinner()
     }

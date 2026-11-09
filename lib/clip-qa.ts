@@ -4,15 +4,15 @@
 // plan has no cut for was a planned cut a little early or late, or one more cut in the same place - said, not rendered again.
 // A picture that stands still is counted only where there is light enough to see a move.
 
-import {existsSync, mkdirSync, renameSync} from "node:fs";
-import {basename, join} from "node:path";
+import {existsSync, mkdirSync, renameSync} from 'node:fs'
+import {basename, join} from 'node:path'
 
 // small and grey: the brightness and how much moves is all that is measured
 const WIDTH = 160
 const HEIGHT = 90
 
-export type FrameStats = { mean: number, peak: number, diff: number }
-export type Finding = { kind: 'black' | 'frozen' | 'cut', at: number, seconds: number }
+export type FrameStats = {mean: number; peak: number; diff: number}
+export type Finding = {kind: 'black' | 'frozen' | 'cut'; at: number; seconds: number}
 
 /** The thresholds, on 8-bit grey values. Start values from #405, checked against our own clips (see the PR). */
 export const QA = {
@@ -27,7 +27,8 @@ export const QA = {
 /** The mean brightness, the bright peak (99th percentile) and the mean absolute difference to the frame before. */
 export function frameStats(frame: Uint8Array, before?: Uint8Array): FrameStats {
     const histogram = new Uint32Array(256)
-    let sum = 0, diff = 0
+    let sum = 0,
+        diff = 0
     for (let i = 0; i < frame.length; i++) {
         const v = frame[i]!
         histogram[v]!++
@@ -37,7 +38,10 @@ export function frameStats(frame: Uint8Array, before?: Uint8Array): FrameStats {
     let peak = 255
     for (let v = 0, seen = 0; v < 256; v++) {
         seen += histogram[v]!
-        if (seen >= frame.length * 0.99) { peak = v; break }
+        if (seen >= frame.length * 0.99) {
+            peak = v
+            break
+        }
     }
     return {mean: sum / frame.length, peak, diff: before ? diff / frame.length : 0}
 }
@@ -72,7 +76,11 @@ export function findProblems(stats: FrameStats[], fps: number, cuts: number[] = 
     // a jump: one frame changes far more than the clip moves at all (its median), and more than a fast move does
     const typical = median(stats.slice(1).map(s => s.diff))
     const planned = (at: number) => cuts.some(c => Math.abs(c - at) <= QA.planned)
-    const cut = stats.flatMap((s, n) => n > 0 && !isBlack(s) && !isBlack(stats[n - 1]!) && s.diff > QA.cut.diff && s.diff > QA.cut.times * typical && !planned(n / fps) ? [{kind: 'cut' as const, at: n / fps, seconds: 0}] : [])
+    const cut = stats.flatMap((s, n) =>
+        n > 0 && !isBlack(s) && !isBlack(stats[n - 1]!) && s.diff > QA.cut.diff && s.diff > QA.cut.times * typical && !planned(n / fps)
+            ? [{kind: 'cut' as const, at: n / fps, seconds: 0}]
+            : [],
+    )
     return [...black, ...frozen, ...cut].sort((a, b) => a.at - b.at)
 }
 
@@ -80,12 +88,32 @@ export function findProblems(stats: FrameStats[], fps: number, cuts: number[] = 
 export const scoreOf = (findings: Finding[]) => findings.reduce((sum, f) => sum + 10 + f.seconds, 0)
 
 /** The stats of the first `frames` frames of a video (all, when not given), decoded small and grey. */
-export async function clipStats(video: string, frames?: number): Promise<{ stats: FrameStats[], fps: number }> {
-    const probe = Bun.spawn(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'csv=p=0', video], {stdout: 'pipe', stderr: 'pipe'})
+export async function clipStats(video: string, frames?: number): Promise<{stats: FrameStats[]; fps: number}> {
+    const probe = Bun.spawn(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'csv=p=0', video], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+    })
     const [rate] = await Promise.all([new Response(probe.stdout).text(), probe.exited])
     const [num, den] = rate.trim().split('/').map(Number)
     const fps = num && den ? num / den : 24
-    const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', video, ...(frames ? ['-frames:v', String(frames)] : []), '-vf', `scale=${WIDTH}:${HEIGHT}`, '-f', 'rawvideo', '-pix_fmt', 'gray', '-'], {stdout: 'pipe', stderr: 'pipe'})
+    const proc = Bun.spawn(
+        [
+            'ffmpeg',
+            '-v',
+            'error',
+            '-i',
+            video,
+            ...(frames ? ['-frames:v', String(frames)] : []),
+            '-vf',
+            `scale=${WIDTH}:${HEIGHT}`,
+            '-f',
+            'rawvideo',
+            '-pix_fmt',
+            'gray',
+            '-',
+        ],
+        {stdout: 'pipe', stderr: 'pipe'},
+    )
     const [bytes, stderr, code] = await Promise.all([
         new Response(proc.stdout).arrayBuffer().then(b => new Uint8Array(b)),
         new Response(proc.stderr).text(),
@@ -106,12 +134,13 @@ export async function checkClip(video: string, cuts: number[], frames?: number):
     return findProblems(stats, fps, cuts)
 }
 
-export const describe = (findings: Finding[]) => findings.map(f => f.kind === 'cut' ? `a jump at ${f.at.toFixed(1)} s` : `${f.kind} ${f.at.toFixed(1)}-${(f.at + f.seconds).toFixed(1)} s`).join(', ')
+export const describe = (findings: Finding[]) =>
+    findings.map(f => (f.kind === 'cut' ? `a jump at ${f.at.toFixed(1)} s` : `${f.kind} ${f.at.toFixed(1)}-${(f.at + f.seconds).toFixed(1)} s`)).join(', ')
 
 /** What happened to the takes of a clip: rendered again, or the take before kept since the new one was worse. */
 export type TakeEvent =
-    | { kind: 'again', findings: Finding[], seed: number, attempt: number, put: string }
-    | { kind: 'kept', seed: number, worse: number, findings: Finding[], put: string }
+    | {kind: 'again'; findings: Finding[]; seed: number; attempt: number; put: string}
+    | {kind: 'kept'; seed: number; worse: number; findings: Finding[]; put: string}
 
 const isHard = (f: Finding) => f.kind !== 'cut'
 
@@ -120,8 +149,18 @@ const isHard = (f: Finding) => f.kind !== 'cut'
  * and the clip made again with a derived seed (first + 7919·k, not a new random one), and the take with the lower score kept - the
  * other one stays put away. The clip file and its sidecar (.json) move together. `said` hears what happened.
  */
-export async function bestTake(o: { target: string, seed: number, retries: number, check: () => Promise<Finding[]>, again: (seed: number) => Promise<number>, putAway: (seed: number) => string, said?: (event: TakeEvent) => void }): Promise<{ seed: number, findings: Finding[] }> {
-    const move = (from: string, to: string) => { for (const suffix of ['', '.json']) if (existsSync(from + suffix)) renameSync(from + suffix, to + suffix) }
+export async function bestTake(o: {
+    target: string
+    seed: number
+    retries: number
+    check: () => Promise<Finding[]>
+    again: (seed: number) => Promise<number>
+    putAway: (seed: number) => string
+    said?: (event: TakeEvent) => void
+}): Promise<{seed: number; findings: Finding[]}> {
+    const move = (from: string, to: string) => {
+        for (const suffix of ['', '.json']) if (existsSync(from + suffix)) renameSync(from + suffix, to + suffix)
+    }
     let seed = o.seed
     let findings = await o.check()
     for (let k = 1; k <= o.retries && findings.some(isHard); k++) {

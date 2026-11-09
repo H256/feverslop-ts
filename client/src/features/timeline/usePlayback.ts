@@ -12,7 +12,7 @@ const JUMP_AT = 0.2
 const A_FRAME = 1 / 24
 const MOST_RATE_CHANGE = 0.1
 
-export type Loop = {from: number, to: number, label: string}
+export type Loop = {from: number; to: number; label: string}
 type Elements = {videos: [HTMLVideoElement, HTMLVideoElement]}
 
 /**
@@ -34,7 +34,7 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
   // what the monitor shows besides the video
   const notice = ref<string>()
   const poster = ref<string>()
-  const flag = shallowRef<{text: string, title: string}>()
+  const flag = shallowRef<{text: string; title: string}>()
   // bumped when what a video element plays changes: the facts read from it are read again
   const shown = ref(0)
 
@@ -48,15 +48,25 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
   const standby = () => elements!.videos[1 - active]!
   const final = () => finalOf(project.value, source.value)
   const usesSong = () => !!project.value.song && !final()
-  const setSrc = (node: HTMLMediaElement, url: string) => { if (node.dataset.url !== url) { node.dataset.url = url; node.src = url } }
+  const setSrc = (node: HTMLMediaElement, url: string) => {
+    if (node.dataset.url !== url) {
+      node.dataset.url = url
+      node.src = url
+    }
+  }
 
   const attach = (videos: [HTMLVideoElement, HTMLVideoElement]) => {
     elements = {videos}
-    for (const node of videos) node.addEventListener('loadedmetadata', () => { shown.value++ })
+    for (const node of videos)
+      node.addEventListener('loadedmetadata', () => {
+        shown.value++
+      })
     songChanged()
   }
   /** The song of the project, when it has one: loaded once per file. */
-  const songChanged = () => { if (project.value.song) setSrc(song, mediaUrl(project.value.song, roots)) }
+  const songChanged = () => {
+    if (project.value.song) setSrc(song, mediaUrl(project.value.song, roots))
+  }
 
   function applySound() {
     song.muted = muted.value
@@ -78,20 +88,27 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
       applySound()
       if (Math.abs(video().currentTime - t.value) > 0.01) video().currentTime = t.value
       video().playbackRate = speed.value
-      if (playing.value) video().play().catch(() => {})
+      if (playing.value)
+        video()
+          .play()
+          .catch(() => {})
       shown.value++
       return
     }
     const file = at && fileOf(at, source.value)
     if (!at || !file) {
-      for (const node of elements.videos) { node.hidden = true; node.pause() }
+      for (const node of elements.videos) {
+        node.hidden = true
+        node.pause()
+      }
       shown.value++
       notice.value = at ? 'Not rendered' : project.value.clips.length ? 'No clip here' : 'No clips planned yet'
       const stand = at?.pictures.find(p => p.kind === 'location' && p.exists) ?? at?.pictures.find(p => p.exists)
       if (stand) poster.value = mediaUrl(stand, roots)
       return
     }
-    if (file === at.preview) flag.value = {text: at.preview.approximate ? 'Preview - approximate' : 'Preview', title: at.preview.approximate ? TERMS.Approximate : ''}
+    if (file === at.preview)
+      flag.value = {text: at.preview.approximate ? 'Preview - approximate' : 'Preview', title: at.preview.approximate ? TERMS.Approximate : ''}
     const url = mediaUrl(file, roots)
     if (video().dataset.url !== url && standby().dataset.url === url) {
       video().pause()
@@ -103,7 +120,10 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
     standby().pause()
     applySound()
     if (Math.abs(video().currentTime - offset) > 0.01) video().currentTime = offset
-    if (playing.value) video().play().catch(() => {})
+    if (playing.value)
+      video()
+        .play()
+        .catch(() => {})
     // the clip after this one is loaded in advance
     const following = project.value.clips[project.value.clips.indexOf(at) + 1]
     const nextFile = following && fileOf(following, source.value)
@@ -129,7 +149,10 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
       lastTick = performance.now()
       if (usesSong()) song.play().catch(() => setPlaying(false))
       const here = clipAt(project.value, t.value)
-      if (final() || (here && fileOf(here, source.value))) video().play().catch(() => {})
+      if (final() || (here && fileOf(here, source.value)))
+        video()
+          .play()
+          .catch(() => {})
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(tick)
     } else {
@@ -154,7 +177,10 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
     if (loop.value && at >= loop.value.to) {
       seek(loop.value.from)
       if (usesSong() && song.paused) song.play().catch(() => {})
-      if (video().paused && !video().hidden) video().play().catch(() => {})
+      if (video().paused && !video().hidden)
+        video()
+          .play()
+          .catch(() => {})
       frame = requestAnimationFrame(tick)
       return
     }
@@ -179,7 +205,9 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
     }
     setRate(Math.abs(late) < A_FRAME ? 1 : 1 + clamp(late, -MOST_RATE_CHANGE, MOST_RATE_CHANGE))
   }
-  const setRate = (rate: number) => { if (Math.abs(video().playbackRate - rate * speed.value) > 0.004) video().playbackRate = rate * speed.value }
+  const setRate = (rate: number) => {
+    if (Math.abs(video().playbackRate - rate * speed.value) > 0.004) video().playbackRate = rate * speed.value
+  }
 
   function setSpeed(value: number) {
     speed.value = value
@@ -194,8 +222,14 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
   /** O: the clip in a loop, Shift+O: the shot at the playhead - or the loop ended. */
   function toggleLoop(shotOnly: boolean) {
     const c = clip.value
-    if (loop.value || !c) { loop.value = undefined; return }
-    if (!shotOnly) { loop.value = {from: c.start, to: c.end, label: c.id}; return }
+    if (loop.value || !c) {
+      loop.value = undefined
+      return
+    }
+    if (!shotOnly) {
+      loop.value = {from: c.start, to: c.end, label: c.id}
+      return
+    }
     const index = c.shots.findLastIndex(shot => shot.at <= t.value - c.start)
     const shot = c.shots[Math.max(0, index)]
     const end = c.shots[index + 1]?.at ?? c.end - c.start
@@ -209,7 +243,10 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
     const target = direction < 0 && clip.value && t.value - clip.value.start > 0.5 ? index : clamp(index + direction, 0, clips.length - 1)
     seek(clips[target]!.start)
   }
-  const toggleMute = () => { muted.value = !muted.value; applySound() }
+  const toggleMute = () => {
+    muted.value = !muted.value
+    applySound()
+  }
   const setSource = (value: Source) => {
     source.value = value
     if (usesSong()) song.currentTime = t.value
@@ -228,12 +265,22 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
     const preview = !!file && file === c?.preview
     const node = elements && video()
     if (!node || node.hidden || (!whole && !file)) return undefined
-    const size = node.videoWidth ? `${node.videoWidth}×${node.videoHeight}` : whole ? sizeOf(whole) : c?.video?.size?.replace('x', '×') ?? ''
+    const size = node.videoWidth ? `${node.videoWidth}×${node.videoHeight}` : whole ? sizeOf(whole) : (c?.video?.size?.replace('x', '×') ?? '')
     const fps = whole ? fpsOf(whole) : `${project.value.fps} fps`
-    const behind = whole ? (whole.state === 'older' ? 'Older than its clips' : '') : c && !preview && stateOf(c, fresh.value) === 'stale' ? 'Stale: made from another plan' : ''
+    const behind = whole
+      ? whole.state === 'older'
+        ? 'Older than its clips'
+        : ''
+      : c && !preview && stateOf(c, fresh.value) === 'stale'
+        ? 'Stale: made from another plan'
+        : ''
     return {
       text: size ? [size, fps].filter(Boolean).join(' · ') : '',
-      title: whole ? whole.file : [file?.file, preview ? 'a preview' : c?.video?.workflow, c?.video?.seed !== undefined && !preview ? `seed ${c.video.seed}` : ''].filter(Boolean).join(' · '),
+      title: whole
+        ? whole.file
+        : [file?.file, preview ? 'a preview' : c?.video?.workflow, c?.video?.seed !== undefined && !preview ? `seed ${c.video.seed}` : '']
+            .filter(Boolean)
+            .join(' · '),
       // what is on the monitor is not what the project is now: said where one looks
       behind,
       behindTitle: whole ? 'A clip was rendered after this video was made: it does not show that clip.' : TERMS.Stale,
@@ -248,8 +295,30 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
   }
   onScopeDispose(dispose)
   return {
-    t, playing, clip, speed, loop, muted, source, notice, poster, flag, info,
-    attach, songChanged, seek, setPlaying, refresh, setSpeed, changeSpeed, stepFrame, toggleLoop, step, toggleMute, setSource, applySound,
+    t,
+    playing,
+    clip,
+    speed,
+    loop,
+    muted,
+    source,
+    notice,
+    poster,
+    flag,
+    info,
+    attach,
+    songChanged,
+    seek,
+    setPlaying,
+    refresh,
+    setSpeed,
+    changeSpeed,
+    stepFrame,
+    toggleLoop,
+    step,
+    toggleMute,
+    setSource,
+    applySound,
     usesSong,
   }
 }

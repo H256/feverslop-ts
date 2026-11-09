@@ -1,31 +1,43 @@
-import {cli} from '../lib/cli.ts';
+import {cli} from '../lib/cli.ts'
 // A clip in front of a finished video (#608, docs/postwork.md): a logo, a channel ident, a title card. Reads one final video
 // of the project and writes <name>-intro.mp4 next to it; the intro takes the size and frame rate of the video. The intro
 // is input/intro.mp4 of the project, or the path in "postwork": {"intro": {"file": ...}} of the settings file or config.json,
 // or --file=; --save keeps the options for the project, --save-default for every project.
 // usage: bun run intro <id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]
-import {basename, join} from "node:path";
-import {parseArgs} from "node:util";
-import {versionStamp} from "../lib/archive.ts";
-import {probeVideo} from "../lib/assemble.ts";
-import {filmDir, filmExists} from "../lib/film/setup.ts";
-import {lockProject} from "../lib/lock.ts";
-import {keepLogIn, log, styles} from "../lib/log.ts";
-import {introFile, type IntroSettings} from "../lib/postwork/config.ts";
-import {introFilter, introVideo} from "../lib/postwork/intro.ts";
-import {loadPostwork, savePostwork, withOptions} from "../lib/postwork/store.ts";
-import {sourceVideo} from "../lib/postwork/video.ts";
-import {projectDir, projectExists} from "../lib/project-setup.ts";
-import {beginRun} from "../lib/run-record-view.ts";
+import {basename, join} from 'node:path'
+import {parseArgs} from 'node:util'
+import {versionStamp} from '../lib/archive.ts'
+import {probeVideo} from '../lib/assemble.ts'
+import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {lockProject} from '../lib/lock.ts'
+import {keepLogIn, log, styles} from '../lib/log.ts'
+import {introFile, type IntroSettings} from '../lib/postwork/config.ts'
+import {introFilter, introVideo} from '../lib/postwork/intro.ts'
+import {loadPostwork, savePostwork, withOptions} from '../lib/postwork/store.ts'
+import {sourceVideo} from '../lib/postwork/video.ts'
+import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {beginRun} from '../lib/run-record-view.ts'
 cli('intro')
 
 const usage = 'usage: bun run intro <id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]'
-const {values: args, positionals: [id]} = (() => {
+const {
+    values: args,
+    positionals: [id],
+} = (() => {
     try {
-        return parseArgs({args: Bun.argv.slice(2), allowPositionals: true, options: {
-            film: {type: 'boolean', default: false}, from: {type: 'string'}, file: {type: 'string'}, fade: {type: 'string'},
-            save: {type: 'boolean', default: false}, 'save-default': {type: 'boolean', default: false}, 'dry-run': {type: 'boolean', default: false},
-        }})
+        return parseArgs({
+            args: Bun.argv.slice(2),
+            allowPositionals: true,
+            options: {
+                film: {type: 'boolean', default: false},
+                from: {type: 'string'},
+                file: {type: 'string'},
+                fade: {type: 'string'},
+                save: {type: 'boolean', default: false},
+                'save-default': {type: 'boolean', default: false},
+                'dry-run': {type: 'boolean', default: false},
+            },
+        })
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
@@ -50,7 +62,22 @@ log.step('From', basename(source))
 
 if (args['dry-run']) {
     const [main, introInfo] = await Promise.all([probeVideo(source), probeVideo(clip)])
-    log.step('Filter', styles.muted(introFilter({width: main.width, height: main.height, fps: main.fps, introSeconds: introInfo.frames / introInfo.fps, introAudio: introInfo.hasAudio, videoAudio: main.hasAudio}, intro)))
+    log.step(
+        'Filter',
+        styles.muted(
+            introFilter(
+                {
+                    width: main.width,
+                    height: main.height,
+                    fps: main.fps,
+                    introSeconds: introInfo.frames / introInfo.fps,
+                    introAudio: introInfo.hasAudio,
+                    videoAudio: main.hasAudio,
+                },
+                intro,
+            ),
+        ),
+    )
     log.step('Dry run', styles.muted('nothing written'))
     process.exit(0)
 }

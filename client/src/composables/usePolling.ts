@@ -9,10 +9,17 @@ export function usePolling(work: () => Promise<unknown>, ms: number, {onFocus = 
   const tick = async () => {
     if (busy || document.hidden) return
     busy = true
-    try { await work() } catch {} finally { busy = false }
+    try {
+      await work()
+    } catch {
+    } finally {
+      busy = false
+    }
   }
   const timer = setInterval(tick, ms)
-  const focus = () => { void tick() }
+  const focus = () => {
+    void tick()
+  }
   if (onFocus) addEventListener('focus', focus)
   onScopeDispose(() => {
     clearInterval(timer)

@@ -6,5 +6,10 @@ usePageTitle('Page not found')
 </script>
 
 <template>
-  <div class="boot"><div><p>There is no such page.</p><p><RouterLink to="/">All projects</RouterLink></p></div></div>
+  <div class="boot">
+    <div>
+      <p>There is no such page.</p>
+      <p><RouterLink to="/">All projects</RouterLink></p>
+    </div>
+  </div>
 </template>

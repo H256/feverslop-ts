@@ -1,13 +1,15 @@
-import {describe, expect, test} from 'bun:test';
-import type {AskOptions} from './llm.ts';
-import {genderNote} from './gender-check.ts';
+import {describe, expect, test} from 'bun:test'
+import type {AskOptions} from './llm.ts'
+import {genderNote} from './gender-check.ts'
 
 describe('genderNote', () => {
     const request: AskOptions[] = []
-    const answering = (answer: unknown) => async <T>(options: AskOptions) => {
-        request.push(options)
-        return answer as T
-    }
+    const answering =
+        (answer: unknown) =>
+        async <T>(options: AskOptions) => {
+            request.push(options)
+            return answer as T
+        }
 
     test('notes conflicting known genders and names the supplied text noun', async () => {
         request.length = 0

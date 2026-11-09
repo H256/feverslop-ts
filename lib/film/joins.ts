@@ -1,17 +1,17 @@
-import {existsSync, readFileSync} from "node:fs";
-import {join} from "node:path";
-import type {AskOptions} from "../llm.ts";
-import {boundaryFrameAsset} from "../compose.ts";
-import type {FilmClipRequest} from "./compose.ts";
+import {existsSync, readFileSync} from 'node:fs'
+import {join} from 'node:path'
+import type {AskOptions} from '../llm.ts'
+import {boundaryFrameAsset} from '../compose.ts'
+import type {FilmClipRequest} from './compose.ts'
 
 // A cut within a scene goes to another camera position, and every clip is drawn by itself: the people can come out in another
 // posture, other clothes or with something else in the hand than in the clip before - the staging asks for the same, but
 // only says it. This compares the last frame of a clip with the first frame of the next one in the same scene, with a model
 // that reads pictures (bun run film:check-joins). It only says what it finds: rendering a clip again stays explicit.
 
-export type Join = { from: string, to: string, sceneId: string }
-export type JoinVerdict = { fits: boolean, differences: string[] }
-export type JoinRecord = JoinVerdict & { fingerprint: string }
+export type Join = {from: string; to: string; sceneId: string}
+export type JoinVerdict = {fits: boolean; differences: string[]}
+export type JoinRecord = JoinVerdict & {fingerprint: string}
 
 /** Another wording of the question asks every join again. */
 const QUESTION_VERSION = 2
@@ -65,7 +65,9 @@ Answer only with JSON: {"fits": true or false, "differences": ["one short senten
         instructions: 'You are a script supervisor who checks the continuity of a film across a cut from two frames. Answer only with JSON.',
         reasoning: 'low',
         schema: {
-            type: 'object', additionalProperties: false, required: ['fits', 'differences'],
+            type: 'object',
+            additionalProperties: false,
+            required: ['fits', 'differences'],
             properties: {fits: {type: 'boolean'}, differences: {type: 'array', items: {type: 'string'}}},
         },
     }
@@ -73,7 +75,7 @@ Answer only with JSON: {"fits": true or false, "differences": ["one short senten
 
 /** A verdict as the model gave it, made plain: no differences is a fit, whatever "fits" says. */
 export function readVerdict(raw: unknown): JoinVerdict {
-    const o = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
+    const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const differences = Array.isArray(o.differences) ? o.differences.map(d => String(d).trim()).filter(Boolean) : []
     return {fits: differences.length === 0, differences}
 }

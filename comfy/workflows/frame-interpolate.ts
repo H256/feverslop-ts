@@ -3,13 +3,21 @@
 // its own: a piece of n frames gives (n - 1) * multiplier + 1 frames, and its last frame is held for the multiplier - 1
 // frames up to the next shot, so the clip keeps its length exactly (n * multiplier frames) and nothing is made between two
 // shots. Silent - the song goes under the final video as it is.
-import {dyn, FPS, type InterpolationWorkflowOptions, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {dyn, FPS, type InterpolationWorkflowOptions, withInputs, WorkflowBuilder, type WorkflowResult} from '../helpers.ts'
 
 export default function frameInterpolate(opts: InterpolationWorkflowOptions): WorkflowResult {
     const wf = new WorkflowBuilder()
     if (!opts.pieces.length) throw new Error('frame-interpolate: no pieces - a clip has at least one shot')
 
-    const clip = wf.VHS_LoadVideo({video: dyn(opts.video), force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1})
+    const clip = wf.VHS_LoadVideo({
+        video: dyn(opts.video),
+        force_rate: 0,
+        custom_width: 0,
+        custom_height: 0,
+        frame_load_cap: 0,
+        skip_first_frames: 0,
+        select_every_nth: 1,
+    })
     const model = wf.FrameInterpolationModelLoader({model_name: opts.model})
 
     // per piece: its interpolated frames, then its last frame held up to the cut - all in one batch, in order (autogrow

@@ -27,12 +27,16 @@ const width = ref(0)
 const film = computed(() => project.value.kind === 'film')
 
 const fitScale = () => width.value / Math.max(1, project.value.seconds)
-const zoom = computed(() => Math.round(Math.log(pps.value / fitScale()) / Math.log(MAX_PPS / fitScale()) * 100) || 0)
+const zoom = computed(() => Math.round((Math.log(pps.value / fitScale()) / Math.log(MAX_PPS / fitScale())) * 100) || 0)
 function setScale(next: number, anchorTime?: number, anchorX?: number) {
   pps.value = clamp(next, fitScale(), Math.max(MAX_PPS, fitScale()))
   if (anchorTime !== undefined && scroller.value) scroller.value.scrollLeft = anchorTime * pps.value - anchorX!
 }
-const fit = () => { fitted.value = true; setScale(fitScale()); if (scroller.value) scroller.value.scrollLeft = 0 }
+const fit = () => {
+  fitted.value = true
+  setScale(fitScale())
+  if (scroller.value) scroller.value.scrollLeft = 0
+}
 const zoomed = (event: Event) => {
   const value = Number((event.target as HTMLInputElement).value)
   const box = scroller.value!
@@ -47,7 +51,10 @@ const zoomed = (event: Event) => {
 const wheel = (event: WheelEvent) => {
   const box = scroller.value!
   if (!event.ctrlKey) {
-    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) { box.scrollLeft += event.deltaY; event.preventDefault() }
+    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      box.scrollLeft += event.deltaY
+      event.preventDefault()
+    }
     return
   }
   event.preventDefault()
@@ -59,9 +66,14 @@ const observer = new ResizeObserver(() => {
   width.value = scroller.value?.clientWidth ?? 0
   setScale(fitted.value ? fitScale() : pps.value)
 })
-onMounted(() => { if (scroller.value) observer.observe(scroller.value) })
+onMounted(() => {
+  if (scroller.value) observer.observe(scroller.value)
+})
 onScopeDispose(() => observer.disconnect())
-watch(() => project.value.seconds, () => setScale(fitted.value ? fitScale() : pps.value))
+watch(
+  () => project.value.seconds,
+  () => setScale(fitted.value ? fitScale() : pps.value),
+)
 
 // the playhead moves every frame: set on the track itself, nothing else is drawn again for it - and it stays in sight
 watch(playback.t, t => {
@@ -87,7 +99,12 @@ function scrub(event: PointerEvent) {
   if (wasPlaying) playback.setPlaying(false)
   playback.seek(timeAt(event))
   // playing goes on when the button is let go - not when the drag is cancelled or the page goes with it
-  drag(e => playback.seek(timeAt(e)), released => { if (released && wasPlaying) playback.setPlaying(true) })
+  drag(
+    e => playback.seek(timeAt(e)),
+    released => {
+      if (released && wasPlaying) playback.setPlaying(true)
+    },
+  )
 }
 
 const hues = computed(() => {
@@ -97,10 +114,10 @@ const hues = computed(() => {
 })
 // The cast lanes (#735): one per character, the stretches of the shots that show them - who is in the picture at all, and where they
 // sing, play or speak. Neighbouring shots that show the same are one stretch. A click directs the shot under it.
-type CastStretch = {key: string, start: number, length: number, does: string[], shot?: string, title: string}
+type CastStretch = {key: string; start: number; length: number; does: string[]; shot?: string; title: string}
 const castOpen = ref(true)
 const castLanes = computed(() => {
-  const lanes = new Map<string, {id: string, name: string, stretches: CastStretch[]}>()
+  const lanes = new Map<string, {id: string; name: string; stretches: CastStretch[]}>()
   for (const clip of project.value.clips) {
     clip.shots.forEach((shot, n) => {
       const start = clip.start + shot.at
@@ -109,24 +126,48 @@ const castLanes = computed(() => {
         const lane = lanes.get(who.id) ?? lanes.set(who.id, {id: who.id, name: who.name, stretches: []}).get(who.id)!
         const last = lane.stretches.at(-1)
         const does = [...who.does]
-        if (last && Math.abs(last.start + last.length - start) < 0.05 && last.does.join() === does.join()) { last.length = end - last.start; continue }
-        lane.stretches.push({key: `${clip.id}:${n}:${who.id}`, start, length: Math.max(0.05, end - start), does, shot: shot.directionId, title: `${who.name}${does.length ? ` - ${does.join(', ')}` : ''} · ${clip.id} ${shot.label.replace(/^\[|\]$/g, '')}`})
+        if (last && Math.abs(last.start + last.length - start) < 0.05 && last.does.join() === does.join()) {
+          last.length = end - last.start
+          continue
+        }
+        lane.stretches.push({
+          key: `${clip.id}:${n}:${who.id}`,
+          start,
+          length: Math.max(0.05, end - start),
+          does,
+          shot: shot.directionId,
+          title: `${who.name}${does.length ? ` - ${does.join(', ')}` : ''} · ${clip.id} ${shot.label.replace(/^\[|\]$/g, '')}`,
+        })
       }
     })
   }
   return [...lanes.values()]
 })
-const spoken = computed(() => project.value.clips.flatMap(clip => clip.lines.map((line, n) => ({key: `${clip.id}:${n}`, line, start: clip.start + line.at, length: Math.max(0.1, (line.end ?? clip.end - clip.start) - line.at)}))))
+const spoken = computed(() =>
+  project.value.clips.flatMap(clip =>
+    clip.lines.map((line, n) => ({
+      key: `${clip.id}:${n}`,
+      line,
+      start: clip.start + line.at,
+      length: Math.max(0.1, (line.end ?? clip.end - clip.start) - line.at),
+    })),
+  ),
+)
 
 function hover(event: PointerEvent) {
   const node = (event.target as HTMLElement).closest<HTMLElement>('.clip')
   const clip = node && project.value.clips.find(c => c.id === node.dataset.id)
-  if (!node || !clip) { peek.value = undefined; return }
+  if (!node || !clip) {
+    peek.value = undefined
+    return
+  }
   const box = node.getBoundingClientRect()
   peek.value = {clip, at: (clip.end - clip.start) * clamp((event.clientX - box.left) / box.width, 0, 0.999), x: event.clientX, top: box.top}
 }
 const pick = (event: MouseEvent, clip: EditorClip) => clickClip(event, clip)
-const hidePeek = () => { peek.value = undefined }
+const hidePeek = () => {
+  peek.value = undefined
+}
 </script>
 
 <template>
@@ -134,11 +175,18 @@ const hidePeek = () => { peek.value = undefined }
     <div class="tbar">
       <TimelineLegend />
       <div class="spacer" />
-      <button v-if="castLanes.length" :class="['cast-toggle', {on: castOpen}]" :title="castOpen ? 'Hide who is in which shot' : 'Show who is in which shot - grey: in the picture, orange: sings or speaks, green: plays'" @click="castOpen = !castOpen">Cast</button>
+      <button
+        v-if="castLanes.length"
+        :class="['cast-toggle', {on: castOpen}]"
+        :title="castOpen ? 'Hide who is in which shot' : 'Show who is in which shot - grey: in the picture, orange: sings or speaks, green: plays'"
+        @click="castOpen = !castOpen"
+      >
+        Cast
+      </button>
       <div class="zoom">
         <button title="Show the whole video" @click="fit">Fit</button>
         <label for="zoom" class="muted">Zoom</label>
-        <input id="zoom" type="range" min="0" max="100" :value="zoom" title="Ctrl + wheel over the timeline" @input="zoomed">
+        <input id="zoom" type="range" min="0" max="100" :value="zoom" title="Ctrl + wheel over the timeline" @input="zoomed" />
       </div>
     </div>
     <div class="tbody">
@@ -154,17 +202,52 @@ const hidePeek = () => { peek.value = undefined }
         <div class="track" ref="track" :style="{'--seconds': project.seconds, '--pps': pps}">
           <div class="lane lane-ruler" @pointerdown="scrub"><canvas ref="ruler" /></div>
           <div class="lane lane-groups" @pointerdown="scrub">
-            <div v-for="group in project.groups" :key="group.id" class="group" :title="group.label" :style="{'--s': group.start, '--d': group.end - group.start, '--h': hues.get(group.label)}">{{ group.label }}</div>
+            <div
+              v-for="group in project.groups"
+              :key="group.id"
+              class="group"
+              :title="group.label"
+              :style="{'--s': group.start, '--d': group.end - group.start, '--h': hues.get(group.label)}"
+            >
+              {{ group.label }}
+            </div>
           </div>
           <div class="lane lane-wave" @pointerdown="scrub"><canvas ref="wave" /></div>
           <div :class="['lane lane-clips', {dimmed: onlyFlagged}]" @pointermove="hover" @pointerleave="hidePeek">
-            <ClipBlock v-for="clip in project.clips" :key="clip.id" :clip="clip" :state="stateOf(clip, fresh)" :selected="clip === playback.clip.value" :marked="marked.has(clip.id)" :flagged="isFlagged(clip)" :progress="progress?.clips[clip.id]" :roots="session.roots" @pick="pick($event, clip)" />
+            <ClipBlock
+              v-for="clip in project.clips"
+              :key="clip.id"
+              :clip="clip"
+              :state="stateOf(clip, fresh)"
+              :selected="clip === playback.clip.value"
+              :marked="marked.has(clip.id)"
+              :flagged="isFlagged(clip)"
+              :progress="progress?.clips[clip.id]"
+              :roots="session.roots"
+              @pick="pick($event, clip)"
+            />
           </div>
           <div class="lane lane-lines" @pointerdown="scrub">
-            <div v-for="item in spoken" :key="item.key" class="spoken" :title="item.line.who ? `${item.line.who}: ${item.line.text}` : item.line.text" :style="{'--s': item.start, '--d': item.length}"><span>{{ item.line.text }}</span></div>
+            <div
+              v-for="item in spoken"
+              :key="item.key"
+              class="spoken"
+              :title="item.line.who ? `${item.line.who}: ${item.line.text}` : item.line.text"
+              :style="{'--s': item.start, '--d': item.length}"
+            >
+              <span>{{ item.line.text }}</span>
+            </div>
           </div>
           <div v-for="lane in castOpen ? castLanes : []" :key="lane.id" class="lane lane-cast" @pointerdown="scrub">
-            <button v-for="s in lane.stretches" :key="s.key" :class="['cast', ...s.does]" :title="s.shot ? `${s.title} - click to direct this shot` : s.title" :style="{'--s': s.start, '--d': s.length}" @pointerdown.stop @click="s.shot && direct(s.shot)" />
+            <button
+              v-for="s in lane.stretches"
+              :key="s.key"
+              :class="['cast', ...s.does]"
+              :title="s.shot ? `${s.title} - click to direct this shot` : s.title"
+              :style="{'--s': s.start, '--d': s.length}"
+              @pointerdown.stop
+              @click="s.shot && direct(s.shot)"
+            />
           </div>
           <div class="playhead" />
         </div>

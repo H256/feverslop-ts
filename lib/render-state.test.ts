@@ -1,11 +1,17 @@
-import {describe, expect, test} from "bun:test";
-import {clipFailureRisks} from "./render-state.ts";
-import type {Timing} from "./timings.ts";
+import {describe, expect, test} from 'bun:test'
+import {clipFailureRisks} from './render-state.ts'
+import type {Timing} from './timings.ts'
 
 const now = Date.parse('2026-10-31T00:00:00.000Z')
 const job = (frames: number, failed: boolean, more: Partial<Timing> = {}): Timing => ({
-    at: '2026-10-30T00:00:00.000Z', kind: 'clip', name: 'wf', seconds: 600, server: 'a', frames,
-    ...(failed ? {outcome: 'failed' as const} : {}), ...more,
+    at: '2026-10-30T00:00:00.000Z',
+    kind: 'clip',
+    name: 'wf',
+    seconds: 600,
+    server: 'a',
+    frames,
+    ...(failed ? {outcome: 'failed' as const} : {}),
+    ...more,
 })
 const jobs = (frames: number, failed: number, ok: number, more: Partial<Timing> = {}) => [
     ...Array.from({length: failed}, () => job(frames, true, more)),
@@ -15,7 +21,9 @@ const risks = (timings: Timing[], frames = 209) => clipFailureRisks(timings, [{f
 
 describe('clipFailureRisks', () => {
     test('names the server, the count, the time lost and the clips it concerns', () => {
-        expect(risks(jobs(209, 3, 7))).toEqual(['a: 3 of 10 clips over 150 frames failed in the last 14 days (30 min of GPU time) - 1 clip(s) of this run are that long'])
+        expect(risks(jobs(209, 3, 7))).toEqual([
+            'a: 3 of 10 clips over 150 frames failed in the last 14 days (30 min of GPU time) - 1 clip(s) of this run are that long',
+        ])
     })
     test('says nothing about few failures or a small share', () => {
         expect(risks(jobs(209, 2, 1))).toEqual([])

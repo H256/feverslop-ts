@@ -1,5 +1,5 @@
-import {join} from "node:path";
-import {fileFingerprint, fingerprint, recordedFingerprint} from "./provenance.ts";
+import {join} from 'node:path'
+import {fileFingerprint, fingerprint, recordedFingerprint} from './provenance.ts'
 
 // What one rendered file is made from, in one place per kind of file. The id of a spec is the fingerprint the sidecar of
 // the file records (lib/provenance.ts), the one a queued job is bound to (.pending.json) and the one the final video
@@ -7,44 +7,66 @@ import {fileFingerprint, fingerprint, recordedFingerprint} from "./provenance.ts
 // The seed is deliberately not part of it: another seed is the same request, rendered again.
 
 export type RenderSpec = {
-    kind: 'picture' | 'anchor' | 'sequence' | 'sheet' | 'song' | 'clip' | 'interpolation',
-    id: string,                     // what it is called: the character, the place, the clip
-    parts: unknown[],               // the inputs that decide the id, in a fixed order
-    fixed?: string,                 // a file the user put in place: its content is its id
+    kind: 'picture' | 'anchor' | 'sequence' | 'sheet' | 'song' | 'clip' | 'interpolation'
+    id: string // what it is called: the character, the place, the clip
+    parts: unknown[] // the inputs that decide the id, in a fixed order
+    fixed?: string // a file the user put in place: its content is its id
 }
 
 export const specId = (spec: RenderSpec) => spec.fixed ?? fingerprint(...spec.parts)
 
-type ImageConfig = { imageWorkflow: string, imageResolution: unknown }
+type ImageConfig = {imageWorkflow: string; imageResolution: unknown}
 // videoAspect only when it is not the default - the clips of a project from before it do not go stale
 // the steps likewise: -1 (the workflow's own) or not given is what a project from before them had
-type VideoConfig = { videoWorkflow: string, videoResolution: unknown, videoAspect?: string, videoSteps?: number, videoRefineSteps?: number, pinStartFrame?: boolean, contextFrames?: number }
-const aspectPart = (config: VideoConfig) => config.videoAspect && config.videoAspect !== '16:9' ? [config.videoAspect] : []
-const stepsPart = (config: VideoConfig) => config.videoSteps !== undefined && config.videoSteps !== -1 || config.videoRefineSteps !== undefined && config.videoRefineSteps !== -1
-    ? [['steps', config.videoSteps ?? -1, config.videoRefineSteps ?? -1]] : []
+type VideoConfig = {
+    videoWorkflow: string
+    videoResolution: unknown
+    videoAspect?: string
+    videoSteps?: number
+    videoRefineSteps?: number
+    pinStartFrame?: boolean
+    contextFrames?: number
+}
+const aspectPart = (config: VideoConfig) => (config.videoAspect && config.videoAspect !== '16:9' ? [config.videoAspect] : [])
+const stepsPart = (config: VideoConfig) =>
+    (config.videoSteps !== undefined && config.videoSteps !== -1) || (config.videoRefineSteps !== undefined && config.videoRefineSteps !== -1)
+        ? [['steps', config.videoSteps ?? -1, config.videoRefineSteps ?? -1]]
+        : []
 
 /** A reference picture: what its prompt, workflow and size say. */
-export const pictureSpec = (picture: { id: string, prompt: string }, config: ImageConfig): RenderSpec =>
-    ({kind: 'picture', id: picture.id, parts: [picture.prompt, config.imageWorkflow, config.imageResolution]})
+export const pictureSpec = (picture: {id: string; prompt: string}, config: ImageConfig): RenderSpec => ({
+    kind: 'picture',
+    id: picture.id,
+    parts: [picture.prompt, config.imageWorkflow, config.imageResolution],
+})
 
 /** The anchor of a sequence sheet: like a picture - or, when the user replaced it (tools/replace-character), the file itself. */
-export const anchorSpec = (picture: { id: string, prompt: string }, config: ImageConfig, userFile?: string): RenderSpec =>
+export const anchorSpec = (picture: {id: string; prompt: string}, config: ImageConfig, userFile?: string): RenderSpec =>
     userFile ? {kind: 'anchor', id: picture.id, parts: [], fixed: fileFingerprint(userFile)} : {...pictureSpec(picture, config), kind: 'anchor'}
 
 /** The anchor of another look of a character (PictureJob.look): made from the anchor of its normal picture and the change - another one of either makes it stale. */
-export const lookAnchorSpec = (id: string, baseAnchor: string, change: string): RenderSpec =>
-    ({kind: 'anchor', id, parts: ['look', fileFingerprint(baseAnchor), change]})
+export const lookAnchorSpec = (id: string, baseAnchor: string, change: string): RenderSpec => ({
+    kind: 'anchor',
+    id,
+    parts: ['look', fileFingerprint(baseAnchor), change],
+})
 
 /** The turnaround video and the sheet made of it: the anchor, the prompt of the sequence and its workflow. */
-export const sequenceSpec = (kind: 'sequence' | 'sheet', id: string, anchor: RenderSpec, sequencePrompt: string, sequenceWorkflow: string): RenderSpec =>
-    ({kind, id, parts: [specId(anchor), sequencePrompt, sequenceWorkflow]})
+export const sequenceSpec = (kind: 'sequence' | 'sheet', id: string, anchor: RenderSpec, sequencePrompt: string, sequenceWorkflow: string): RenderSpec => ({
+    kind,
+    id,
+    parts: [specId(anchor), sequencePrompt, sequenceWorkflow],
+})
 
-export const songSpec = (brief: { style: string, lyrics: string }, config: { songWorkflow: string, songDuration: number }): RenderSpec =>
-    ({kind: 'song', id: 'song', parts: [brief.style, brief.lyrics, config.songWorkflow, config.songDuration]})
+export const songSpec = (brief: {style: string; lyrics: string}, config: {songWorkflow: string; songDuration: number}): RenderSpec => ({
+    kind: 'song',
+    id: 'song',
+    parts: [brief.style, brief.lyrics, config.songWorkflow, config.songDuration],
+})
 
 /** The file of the clip a clip goes on from: what that one was made from is part of this one. */
 const predecessorId = (projectDir: string, startsFrom: string | undefined) =>
-    startsFrom ? recordedFingerprint(join(projectDir, `videos/${startsFrom}.mp4`)) ?? '' : ''
+    startsFrom ? (recordedFingerprint(join(projectDir, `videos/${startsFrom}.mp4`)) ?? '') : ''
 
 /**
  * A music-video clip: its prompt and length, the workflow, the content of the pictures it is given, the spans of its
@@ -52,13 +74,26 @@ const predecessorId = (projectDir: string, startsFrom: string | undefined) =>
  * its successors stale.
  */
 export function clipSpec(
-    clip: { id: string, prompt: string, frames: number, startsFrom?: string, assets: { pictures: { kind: string, file: string }[], audio: { stem?: string, songStart: number, songEnd: number }[] } },
-    projectDir: string, config: VideoConfig,
+    clip: {
+        id: string
+        prompt: string
+        frames: number
+        startsFrom?: string
+        assets: {pictures: {kind: string; file: string}[]; audio: {stem?: string; songStart: number; songEnd: number}[]}
+    },
+    projectDir: string,
+    config: VideoConfig,
 ): RenderSpec {
     return {
-        kind: 'clip', id: clip.id,
+        kind: 'clip',
+        id: clip.id,
         parts: [
-            clip.prompt, clip.frames, config.videoWorkflow, config.videoResolution, ...aspectPart(config), ...stepsPart(config),
+            clip.prompt,
+            clip.frames,
+            config.videoWorkflow,
+            config.videoResolution,
+            ...aspectPart(config),
+            ...stepsPart(config),
             clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
             clip.assets.audio.map(a => [a.stem, a.songStart, a.songEnd]),
             predecessorId(projectDir, clip.startsFrom),
@@ -69,13 +104,19 @@ export function clipSpec(
 
 /** A film clip: its prompt hash (prompt and length), workflow, size, whether the start frame is pinned, pictures and predecessor. */
 export function filmClipSpec(
-    clip: { id: string, promptHash: string, startsFrom?: string, assets: { pictures: { kind: string, file: string }[] } },
-    projectDir: string, config: VideoConfig & { pinStartFrame?: boolean },
+    clip: {id: string; promptHash: string; startsFrom?: string; assets: {pictures: {kind: string; file: string}[]}},
+    projectDir: string,
+    config: VideoConfig & {pinStartFrame?: boolean},
 ): RenderSpec {
     return {
-        kind: 'clip', id: clip.id,
+        kind: 'clip',
+        id: clip.id,
         parts: [
-            clip.promptHash, config.videoWorkflow, config.videoResolution, ...aspectPart(config), config.pinStartFrame === true,
+            clip.promptHash,
+            config.videoWorkflow,
+            config.videoResolution,
+            ...aspectPart(config),
+            config.pinStartFrame === true,
             clip.assets.pictures.filter(p => p.kind !== 'frame').map(p => fileFingerprint(join(projectDir, p.file))),
             predecessorId(projectDir, clip.startsFrom),
         ],

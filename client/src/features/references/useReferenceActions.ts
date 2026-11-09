@@ -9,7 +9,8 @@ import {type OwnAnchor, ownAnchorForm, ownAnchorProblem} from './ownAnchor'
 import OwnAnchorForm from './OwnAnchorForm.vue'
 
 const VERSION_SOURCE: Record<string, string> = {again: 'rendered again', stale: 'from an older plan', library: 'before the library took over'}
-export const versionAbout = (version: EditorReference['versions'][number]) => [VERSION_SOURCE[version.source], version.seed !== undefined && `seed ${version.seed}`].filter(Boolean).join(' · ')
+export const versionAbout = (version: EditorReference['versions'][number]) =>
+  [VERSION_SOURCE[version.source], version.seed !== undefined && `seed ${version.seed}`].filter(Boolean).join(' · ')
 
 /**
  * What can be done with one reference picture, each asked first: render it again, take an older version back, put it into the library.
@@ -21,8 +22,10 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
   const {api, start, starter, takeServers} = useProject()
   const blocked = () => !!reference.value.library
   const sideEffects = () => [
-    reference.value.clips.length > 0 && `${plural(reference.value.clips.length, 'clip')} made from this picture will go stale. They are not rendered on their own.`,
-    reference.value.readsViews && 'A new sheet changes what is read from it: the vision model reads the views again at the next run, and shots can get another view.',
+    reference.value.clips.length > 0 &&
+      `${plural(reference.value.clips.length, 'clip')} made from this picture will go stale. They are not rendered on their own.`,
+    reference.value.readsViews &&
+      'A new sheet changes what is read from it: the vision model reads the views again at the next run, and shots can get another view.',
   ]
 
   /**
@@ -39,10 +42,13 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     const yes = await ask({
       title: `Render ${r.name} again?`,
       lines: [
-        anchorGoes ? 'A new anchor: another person or place from another seed, and everything after it is new.' : 'A new sheet from the same anchor: the same person or place, other views.',
+        anchorGoes
+          ? 'A new anchor: another person or place from another seed, and everything after it is new.'
+          : 'A new sheet from the same anchor: the same person or place, other views.',
         asked?.estimate,
-        edited && 'The edited prompt is kept with this picture, which stays pinned: the plan never replaces it on its own. The prompt of the plan stays as it was.',
-        back && 'It is rendered from the plan\'s prompt again: the new picture is not pinned and follows the plan from then on.',
+        edited &&
+          'The edited prompt is kept with this picture, which stays pinned: the plan never replaces it on its own. The prompt of the plan stays as it was.',
+        back && "It is rendered from the plan's prompt again: the new picture is not pinned and follows the plan from then on.",
         !anchorGoes && r.ownAnchor && 'The new sheet is drawn from your own anchor.',
       ],
       warnings: [
@@ -67,7 +73,10 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
    */
   async function putOwnAnchor(prompt: string) {
     const r = reference.value
-    const readable = await api.vision().then(v => v.readable).catch(() => false)
+    const readable = await api
+      .vision()
+      .then(v => v.readable)
+      .catch(() => false)
     const draft = reactive<OwnAnchor>({prompt, how: 'keep', description: r.description})
     await ask({
       title: `Your own anchor for ${r.name}`,
@@ -75,10 +84,7 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
         'Your picture becomes the anchor: the same person or place from then on, the sheet is drawn from it. The pipeline never replaces it on its own.',
         'What is there now is put away as an older version - Make current brings it back.',
       ],
-      warnings: [
-        ...sideEffects(),
-        r.looks.length > 0 && `Its other looks are drawn from this anchor and go stale too: ${r.looks.join(', ')}.`,
-      ],
+      warnings: [...sideEffects(), r.looks.length > 0 && `Its other looks are drawn from this anchor and go stale too: ${r.looks.join(', ')}.`],
       body: () => h(OwnAnchorForm, {draft, readable}),
       confirm: 'Put it in',
       render: true,
@@ -92,7 +98,12 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     })
   }
   async function pick(version: EditorReference['versions'][number]) {
-    const yes = await ask({title: 'Make this version the current one?', lines: ['What is there now is put away and stays selectable.'], warnings: sideEffects(), confirm: 'Make it current'})
+    const yes = await ask({
+      title: 'Make this version the current one?',
+      lines: ['What is there now is put away and stays selectable.'],
+      warnings: sideEffects(),
+      confirm: 'Make it current',
+    })
     if (!yes) return
     await api.pickReference(reference.value.id, version.id)
     await done()
@@ -103,7 +114,17 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     await ask({
       title: `Put ${r.name} into the library?`,
       lines: ['Its picture, its whole sheet and its texts are copied. An asset the library already has is never overwritten.'],
-      body: () => h(FormField, {label: 'Library id'}, () => h('input', {type: 'text', required: true, value: as.value, onInput: (event: Event) => { as.value = (event.target as HTMLInputElement).value }})),
+      body: () =>
+        h(FormField, {label: 'Library id'}, () =>
+          h('input', {
+            type: 'text',
+            required: true,
+            value: as.value,
+            onInput: (event: Event) => {
+              as.value = (event.target as HTMLInputElement).value
+            },
+          }),
+        ),
       confirm: 'Put it in',
       submit: () => start({type: 'export-asset', asset: r.id, as: as.value.trim()}),
     })

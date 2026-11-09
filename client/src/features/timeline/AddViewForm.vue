@@ -8,7 +8,7 @@ defineProps<{draft: NewView}>()
 
 <template>
   <div>
-    <FormField label="Where the camera is"><input v-model="draft.name" type="text" placeholder="behind the bar, looking at the door" required></FormField>
+    <FormField label="Where the camera is"><input v-model="draft.name" type="text" placeholder="behind the bar, looking at the door" required /></FormField>
     <FormField label="What it shows"><textarea v-model="draft.shows" rows="3" placeholder="What is seen from there" /></FormField>
   </div>
 </template>

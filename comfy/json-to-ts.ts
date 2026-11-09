@@ -1,19 +1,21 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 // Converts a ComfyUI workflow in API format into a draft workflow file for comfy/workflows/.
 // usage: bun comfy/json-to-ts.ts <workflow-api.json> <name> --kind=image|video|audio [--force] [--comfy=http://host:8188]
 // See docs/custom-workflows.md for the steps after the conversion.
 //
 // Reads output names and dropdown values from the running server, and the builder method
 // names from comfy/nodes.ts - so run `bun run comfy:types` first after installing nodes.
-import {existsSync} from "node:fs";
-import {join} from "node:path";
-import {parseArgs} from "node:util";
-import {fetchNodeList, nodeServer} from "./node-list.ts";
+import {existsSync} from 'node:fs'
+import {join} from 'node:path'
+import {parseArgs} from 'node:util'
+import {fetchNodeList, nodeServer} from './node-list.ts'
 cli('comfy:convert')
 
-
-const {values: args, positionals: [source, name]} = parseArgs({
+const {
+    values: args,
+    positionals: [source, name],
+} = parseArgs({
     args: Bun.argv.slice(2),
     allowPositionals: true,
     options: {kind: {type: 'string', default: 'image'}, force: {type: 'boolean', default: false}, comfy: {type: 'string'}},
@@ -28,7 +30,7 @@ if (existsSync(target) && !args.force) {
     process.exit(1)
 }
 
-type ApiNode = { class_type: string, inputs: Record<string, unknown>, _meta?: { title?: string } }
+type ApiNode = {class_type: string; inputs: Record<string, unknown>; _meta?: {title?: string}}
 const json = await Bun.file(source).json()
 const graph: Record<string, ApiNode> = json.prompt ?? json
 if (Object.values(graph).some(n => typeof n?.class_type !== 'string')) {
@@ -45,13 +47,16 @@ if (!existsSync(nodesFile)) {
     process.exit(1)
 }
 // every method starts with `this.addNode("<class_type>", inputs)` on its first line
-const methods = new Map([...(await Bun.file(nodesFile).text()).matchAll(/^ {2}(\w+)\(inputs[^\n]*\r?\n\s+const id = this\.addNode\(("(?:[^"\\]|\\.)*")/gm)]
-    .map(([, method, classType]) => [JSON.parse(classType!) as string, method!]))
+const methods = new Map(
+    [...(await Bun.file(nodesFile).text()).matchAll(/^ {2}(\w+)\(inputs[^\n]*\r?\n\s+const id = this\.addNode\(("(?:[^"\\]|\\.)*")/gm)].map(
+        ([, method, classType]) => [JSON.parse(classType!) as string, method!],
+    ),
+)
 
 const isLink = (value: unknown): value is [string, number] => Array.isArray(value) && value.length === 2 && typeof value[1] === 'number'
 const identifier = /^[A-Za-z_$][\w$]*$/
-const access = (key: string) => identifier.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`
-const property = (key: string) => identifier.test(key) ? key : JSON.stringify(key)
+const access = (key: string) => (identifier.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`)
+const property = (key: string) => (identifier.test(key) ? key : JSON.stringify(key))
 const variables = new Map<string, string>()
 const variable = (id: string) => variables.get(id)!
 const widgetTypes = new Set(['INT', 'FLOAT', 'STRING', 'BOOLEAN', 'COMBO'])
@@ -77,7 +82,7 @@ function renderValue(classType: string, input: string, value: unknown): string {
         return source?.output?.[slot] === '*' ? `${ref} as never` : ref
     }
     // values the server doesn't list (uploaded files, dynamic lists) need dyn()
-    const options = Array.isArray(spec?.[0]) ? spec[0] : spec?.[0] === 'COMBO' ? (spec[1] as { options?: unknown[] })?.options : undefined
+    const options = Array.isArray(spec?.[0]) ? spec[0] : spec?.[0] === 'COMBO' ? (spec[1] as {options?: unknown[]})?.options : undefined
     if (options && typeof value === 'string' && !options.includes(value)) return `dyn(${JSON.stringify(value)})`
     return JSON.stringify(value)
 }
@@ -122,9 +127,13 @@ function emit(id: string) {
 
 for (const id of Object.keys(graph)) emit(id)
 
-const optionsType = args.kind === 'image' ? 'ImageWorkflowOptions'
-    : args.kind === 'audio' ? 'AudioWorkflowOptions'
-        : args.kind === 'sequence' ? 'SequenceWorkflowOptions'
+const optionsType =
+    args.kind === 'image'
+        ? 'ImageWorkflowOptions'
+        : args.kind === 'audio'
+          ? 'AudioWorkflowOptions'
+          : args.kind === 'sequence'
+            ? 'SequenceWorkflowOptions'
             : 'VideoWorkflowOptions'
 const output = outputNodes.at(-1)
 const code = `// Draft generated from ${source} by comfy/json-to-ts.ts - see docs/custom-workflows.md

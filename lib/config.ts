@@ -1,87 +1,87 @@
-import {existsSync} from "node:fs";
-import {isAbsolute, join, relative, resolve, sep} from "node:path";
-import type {Aspect, Resolution} from "../comfy/helpers.ts";
-import {log, warnUnknownKeys} from "./log.ts";
-import {FPS} from "./frames.ts";
-import {multiplierFor} from "./interpolate.ts";
-import {type Finish, finishOf, finishProblem, MILD_FINISH} from "./finish.ts";
-import {postworkProblem} from "./postwork/config.ts";
+import {existsSync} from 'node:fs'
+import {isAbsolute, join, relative, resolve, sep} from 'node:path'
+import type {Aspect, Resolution} from '../comfy/helpers.ts'
+import {log, warnUnknownKeys} from './log.ts'
+import {FPS} from './frames.ts'
+import {multiplierFor} from './interpolate.ts'
+import {type Finish, finishOf, finishProblem, MILD_FINISH} from './finish.ts'
+import {postworkProblem} from './postwork/config.ts'
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
-    seed: number,                   // -1 = random per render
-    imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
-    videoResolution: Resolution,
-    videoAspect: Aspect,            // the clips' aspect ratio, "16:9" (default), "9:16", "2:1", "2:3", ...
+    seed: number // -1 = random per render
+    imageResolution: Resolution // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
+    videoResolution: Resolution
+    videoAspect: Aspect // the clips' aspect ratio, "16:9" (default), "9:16", "2:1", "2:3", ...
     // sampling steps of a clip: -1 = the workflow's own (8 with the turbo LoRA, 20 of the base model, 4 + 2 of the PRISM two-pass).
     // videoSteps is the one pass of a single-pass workflow or pass 1 of a two-pass one, videoRefineSteps pass 2 of a two-pass one
-    videoSteps: number,
-    videoRefineSteps: number,
-    imageWorkflow: string,          // file name in comfy/workflows/, without .ts
-    videoWorkflow: string,
-    songAudio: boolean,             // final video: the original song replaces the clips' own audio
-    songWorkflow: string,           // file name in comfy/workflows/, without .ts - used by --render=song
-    songDuration: number,           // seconds - an upper bound for a generated song; -1 = the workflow's own default
+    videoSteps: number
+    videoRefineSteps: number
+    imageWorkflow: string // file name in comfy/workflows/, without .ts
+    videoWorkflow: string
+    songAudio: boolean // final video: the original song replaces the clips' own audio
+    songWorkflow: string // file name in comfy/workflows/, without .ts - used by --render=song
+    songDuration: number // seconds - an upper bound for a generated song; -1 = the workflow's own default
     // every character and location gets a multi-angle reference sheet (turnaround video -> sampled frames ->
     // composited grid) instead of one flat hero image - see lib/sequenceSheet.ts. Off falls back to the plain
     // hero image (the old renderPicture path) - useful to cut render cost while iterating on a project.
-    sequenceSheets: boolean,
-    sequenceWorkflow: string,       // file name in comfy/workflows/, without .ts
+    sequenceSheets: boolean
+    sequenceWorkflow: string // file name in comfy/workflows/, without .ts
     // a continuing clip (config.continuity) is also pinned to the last frame of the clip before it as its first frame
     // (MiniMaxH3AddGuide), not only given it as a reference picture
-    pinStartFrame: boolean,
+    pinStartFrame: boolean
     // a continuing clip starts on this many of the last frames of the clip before (0 = off, else 5 + 17·k: 22, 39) instead
     // of its one last frame: rendered that much longer, the motion goes on, the head is cut off again (lib/render.ts)
-    contextFrames: number,
+    contextFrames: number
     // the clips of a fight beat (a "hit" with a crowd of creatures in it) are cut into one-bar pieces with one shot each,
     // and a piece has only the people of its shot as references - see splitFightSlots in lib/music.ts. Off by default
-    fightClips: boolean,
+    fightClips: boolean
     // seconds: a clip whose singing starts (or stops) more than this after its start (before its end) is cut there, so the
     // silence is a clip of its own and no lip movement starts early - see splitAtVocalGaps in lib/music.ts. 0 = off
-    vocalGap: number,
+    vocalGap: number
     // a clip that came out as the reference pictures lined up on their grey backdrop (see lib/leak.ts) is rendered again,
     // with another seed, up to this many times. 0 = off: the check costs a little, a render again costs a whole clip
-    leakRetries: number,
+    leakRetries: number
     // a rendered clip with black frames or a picture that stands still for seconds (lib/clip-qa.ts) is rendered again with
     // another, derived seed, and the better take kept - up to this many times. 0 = off: every retry costs a whole clip
-    qaRetries: number,
+    qaRetries: number
     // the frame rate of a second final video, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by
     // frame interpolation (lib/interpolate.ts, a ComfyUI job per clip). 24 (default) = off
-    finalFps: number,
-    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    finalFps: number
+    interpolationModel: string // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
     // a light grade and sharpen of the final video(s), written as <name>-finished.mp4 next to them (lib/finish.ts):
     // false (default) = off, true = the mild one, an object = the mild one with its fields replaced
-    finish: boolean | Partial<Finish>,
+    finish: boolean | Partial<Finish>
     // --preview: the factor on the pixels (0.25 = half the width and height) and the sampling steps of a workflow with the turbo LoRA.
     // A two-pass workflow renders only its first pass, whatever these say
-    preview: { scale: number, steps: number },
+    preview: {scale: number; steps: number}
 }
 
 export type SingerVoice = 'auto' | 'female' | 'male' | 'mixed'
 
 export type PlanConfig = {
-    singers: string[],              // [] = clip mode, ["auto"] = the LLM picks, or character names / ids
+    singers: string[] // [] = clip mode, ["auto"] = the LLM picks, or character names / ids
     // voice of the song: "auto" = whatever the story gives, "female"/"male" = everybody who sings is a woman/man,
     // "mixed" = a duet of one woman and one man
-    singerVoice: SingerVoice,
-    lyricsLanguage: string,         // ISO 639-1 code, for Whisper and the <d>[Language] tag
-    alignLyrics: boolean,           // stems + transcript + real lyric timing - default: on when someone sings
+    singerVoice: SingerVoice
+    lyricsLanguage: string // ISO 639-1 code, for Whisper and the <d>[Language] tag
+    alignLyrics: boolean // stems + transcript + real lyric timing - default: on when someone sings
     // clips of one beat that run on without a cut start on the previous clip's last frame: "auto" = the beats the story
     // planning marked as one continuous take, "always" = every clip but the first of each beat, "never" (default) = every
     // clip is its own cut. Off by default: a continuing clip starts on whatever the clip before it drifted to, and the
     // drift (doubled people, displaced wall patches) is carried on and grows - see README "Continuous scenes"
-    continuity: 'auto' | 'always' | 'never',
+    continuity: 'auto' | 'always' | 'never'
     // which view of the location's reference sheet a clip gets as its place picture: "auto" (default, see below), -1 = the whole sheet (all its views
     // side by side - the video model shows that back as a grid, with the sheet's empty cell as a black patch, in the
     // first seconds of a clip), 0-4 = that one view of it, from the frames the sheet was composed of
     // (assets/sequence/locations/<id>/frames/frame_0N.png): 0 front, 1 right, 2 behind, 3 left, 4 wide; "auto" = the
     // shot planning chooses the view of every shot (step shotViews) and a clip gets the one of its first shot - from
     // the text of the plan and the names of the views, deliberately not from the pictures (no vision model needed)
-    locationView: number | 'auto',
+    locationView: number | 'auto'
 }
 
 // a project may use another model than the settings - never another server or key
-export type LlmConfig = { llm: { model?: string } }
+export type LlmConfig = {llm: {model?: string}}
 
 export type ProjectConfig = RenderConfig & PlanConfig & LlmConfig
 
@@ -132,7 +132,9 @@ export const invalidJsonProblem = (error: unknown) =>
 export const seedProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= -1 ? undefined : `seed must be -1 or a whole number >= 0, got ${JSON.stringify(value)}`
 export const resolutionProblem = (key: string, value: unknown): string | undefined =>
-    value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value)) ? undefined : `${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`
+    value === -1 || (typeof value === 'number' && value > 0) || /^\d+x\d+$/.test(String(value))
+        ? undefined
+        : `${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`
 export const workflowProblem = (key: string, name: unknown): string | undefined => {
     const file = workflowPath(name)
     return file && existsSync(file) ? undefined : `${key}: no workflow comfy/workflows/${name}.ts`
@@ -141,35 +143,54 @@ export function llmProblem(llm: unknown): string | undefined {
     if (!llm || typeof llm !== 'object' || Array.isArray(llm)) return `llm must be an object like {"model": "…"}, got ${JSON.stringify(llm)}`
     const keys = Object.keys(llm).filter(key => key !== 'model')
     if (keys.length) return `llm: a project can only set "model" - the server and API key are in the settings (bun run setup llm), got ${keys.join(', ')}`
-    const {model} = llm as { model?: unknown }
-    return model !== undefined && (typeof model !== 'string' || !model.trim()) ? `llm.model must be a model id of the LLM server, got ${JSON.stringify(model)}` : undefined
+    const {model} = llm as {model?: unknown}
+    return model !== undefined && (typeof model !== 'string' || !model.trim())
+        ? `llm.model must be a model id of the LLM server, got ${JSON.stringify(model)}`
+        : undefined
 }
 export const aspectProblem = (value: unknown): string | undefined =>
     /^[1-9]\d*:[1-9]\d*$/.test(String(value)) ? undefined : `videoAspect must be an aspect ratio like "16:9", "9:16" or "2:3", got ${JSON.stringify(value)}`
 export const stepsProblem = (key: string, value: unknown): string | undefined =>
-    value === -1 || (Number.isInteger(value) && (value as number) >= 1) ? undefined : `${key} must be -1 (the workflow's own) or a whole number of steps from 1, got ${JSON.stringify(value)}`
+    value === -1 || (Number.isInteger(value) && (value as number) >= 1)
+        ? undefined
+        : `${key} must be -1 (the workflow's own) or a whole number of steps from 1, got ${JSON.stringify(value)}`
 export const contextFramesProblem = (value: unknown): string | undefined =>
-    Number.isInteger(value) && (value as number) >= 0 && (value === 0 || (value as number) % 17 === 5) ? undefined : `contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(value)}`
+    Number.isInteger(value) && (value as number) >= 0 && (value === 0 || (value as number) % 17 === 5)
+        ? undefined
+        : `contextFrames must be 0 (off) or 5 + 17·k frames - 22 or 39 - got ${JSON.stringify(value)}`
 export const leakRetriesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 ? undefined : `leakRetries must be a whole number, 0 or more, got ${JSON.stringify(value)}`
 export const qaRetriesProblem = (value: unknown): string | undefined =>
     Number.isInteger(value) && (value as number) >= 0 ? undefined : `qaRetries must be a whole number, 0 or more, got ${JSON.stringify(value)}`
 /** Not capped - only said: each retry is a whole render of the clip. */
 export const qaRetriesNote = (value: number): string | undefined =>
-    value > 2 ? `qaRetries ${value}: a clip can be rendered up to ${value + 1} times - 1 or 2 is usually enough, as a black or standing take is rare` : undefined
+    value > 2
+        ? `qaRetries ${value}: a clip can be rendered up to ${value + 1} times - 1 or 2 is usually enough, as a black or standing take is rare`
+        : undefined
 export const finalFpsProblem = (value: unknown): string | undefined =>
-    Number.isInteger(value) && (value as number) >= FPS && (value === FPS || multiplierFor(value as number)) ? undefined
+    Number.isInteger(value) && (value as number) >= FPS && (value === FPS || multiplierFor(value as number))
+        ? undefined
         : `finalFps must be ${FPS} (off) or a frame rate frame interpolation reaches from ${FPS}, e.g. 48 or 60, got ${JSON.stringify(value)}`
 export const interpolationModelProblem = (value: unknown): string | undefined =>
-    typeof value === 'string' && value.trim() ? undefined : `interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(value)}`
+    typeof value === 'string' && value.trim()
+        ? undefined
+        : `interpolationModel must be a file name in ComfyUI's models/frame_interpolation/, got ${JSON.stringify(value)}`
 export const previewProblem = (value: unknown): string | undefined => {
-    const preview = value as { scale?: unknown, steps?: unknown } | null
-    return preview && typeof preview === 'object' && typeof preview.scale === 'number' && preview.scale > 0 && preview.scale <= 1 && Number.isInteger(preview.steps) && (preview.steps as number) >= 1 ? undefined
+    const preview = value as {scale?: unknown; steps?: unknown} | null
+    return preview &&
+        typeof preview === 'object' &&
+        typeof preview.scale === 'number' &&
+        preview.scale > 0 &&
+        preview.scale <= 1 &&
+        Number.isInteger(preview.steps) &&
+        (preview.steps as number) >= 1
+        ? undefined
         : `preview must be like {"scale": 0.25, "steps": 4} - scale above 0 up to 1, steps a whole number from 1, got ${JSON.stringify(value)}`
 }
 export function finishSettingProblem(value: unknown): string | undefined {
     if (typeof value !== 'boolean') {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) return `finish must be true, false or an object like {"sharpen": 0.3}, got ${JSON.stringify(value)}`
+        if (!value || typeof value !== 'object' || Array.isArray(value))
+            return `finish must be true, false or an object like {"sharpen": 0.3}, got ${JSON.stringify(value)}`
         const unknown = Object.keys(value).filter(k => !(k in MILD_FINISH))
         if (unknown.length) return `finish: unknown field(s) ${unknown.join(', ')} - known are ${Object.keys(MILD_FINISH).join(', ')}`
     }
@@ -198,7 +219,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     // the keys of `config` can't be the allowed ones - a typo'd key from `raw` is in there too
     // "postwork": the steps on the finished video (lib/postwork/), read by their own commands - only checked here
     warnUnknownKeys(raw, [...Object.keys(defaults), 'alignLyrics', 'postwork'], file)
-    const postworkWrong = (raw as { postwork?: unknown }).postwork === undefined ? undefined : postworkProblem((raw as { postwork?: unknown }).postwork)
+    const postworkWrong = (raw as {postwork?: unknown}).postwork === undefined ? undefined : postworkProblem((raw as {postwork?: unknown}).postwork)
     if (postworkWrong) fail(postworkWrong)
 
     const seedWrong = seedProblem(config.seed)
@@ -219,9 +240,11 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     const contextWrong = contextFramesProblem(config.contextFrames)
     if (contextWrong) fail(contextWrong)
     if (typeof config.pinStartFrame !== 'boolean') fail(`pinStartFrame must be true or false, got ${JSON.stringify(config.pinStartFrame)}`)
-    if (typeof config.vocalGap !== 'number' || config.vocalGap < 0) fail(`vocalGap must be 0 (off) or a number of seconds like 1.5, got ${JSON.stringify(config.vocalGap)}`)
+    if (typeof config.vocalGap !== 'number' || config.vocalGap < 0)
+        fail(`vocalGap must be 0 (off) or a number of seconds like 1.5, got ${JSON.stringify(config.vocalGap)}`)
     if (typeof config.fightClips !== 'boolean') fail(`fightClips must be true or false, got ${JSON.stringify(config.fightClips)}`)
-    for (const problem of [finalFpsProblem(config.finalFps), finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)]) if (problem) fail(problem)
+    for (const problem of [finalFpsProblem(config.finalFps), finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel)])
+        if (problem) fail(problem)
     const leakWrong = leakRetriesProblem(config.leakRetries)
     if (leakWrong) fail(leakWrong)
     const qaWrong = qaRetriesProblem(config.qaRetries)
@@ -240,13 +263,17 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     if (!Array.isArray(config.singers) || config.singers.some(s => typeof s !== 'string' || !s.trim())) {
         fail(`singers must be a list of character names, e.g. ["auto"] or ["Thorin"], got ${JSON.stringify(config.singers)}`)
     }
-    if (config.singers.includes('auto') && config.singers.length > 1) fail(`singers: "auto" can't be combined with names, got ${JSON.stringify(config.singers)}`)
-    if (!['auto', 'female', 'male', 'mixed'].includes(config.singerVoice)) fail(`singerVoice must be "auto", "female", "male" or "mixed", got ${JSON.stringify(config.singerVoice)}`)
+    if (config.singers.includes('auto') && config.singers.length > 1)
+        fail(`singers: "auto" can't be combined with names, got ${JSON.stringify(config.singers)}`)
+    if (!['auto', 'female', 'male', 'mixed'].includes(config.singerVoice))
+        fail(`singerVoice must be "auto", "female", "male" or "mixed", got ${JSON.stringify(config.singerVoice)}`)
     if (typeof config.lyricsLanguage !== 'string' || !languageName(config.lyricsLanguage)) {
         fail(`lyricsLanguage must be a language code like "en" or "de", got ${JSON.stringify(config.lyricsLanguage)}`)
     }
-    if (config.locationView !== 'auto' && (!Number.isInteger(config.locationView) || config.locationView < -1 || config.locationView > 4)) fail(`locationView must be -1 (the whole sheet), the number of a view, 0 to 4, or "auto", got ${JSON.stringify(config.locationView)}`)
-    if (!['auto', 'always', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "always" or "never", got ${JSON.stringify(config.continuity)}`)
+    if (config.locationView !== 'auto' && (!Number.isInteger(config.locationView) || config.locationView < -1 || config.locationView > 4))
+        fail(`locationView must be -1 (the whole sheet), the number of a view, 0 to 4, or "auto", got ${JSON.stringify(config.locationView)}`)
+    if (!['auto', 'always', 'never'].includes(config.continuity))
+        fail(`continuity must be "auto", "always" or "never", got ${JSON.stringify(config.continuity)}`)
     if (typeof config.alignLyrics !== 'boolean') fail(`alignLyrics must be true or false, got ${JSON.stringify(config.alignLyrics)}`)
     if (config.singers.length && !config.alignLyrics) fail('singers need the lyrics timing - remove "alignLyrics": false')
 

@@ -10,13 +10,16 @@ const {peek, session} = useTimeline()
 const box = ref<HTMLElement>()
 const video = ref<HTMLVideoElement>()
 const clip = computed(() => peek.value?.clip)
-const stand = computed(() => clip.value ? standIn(clip.value) : peek.value?.picture)
+const stand = computed(() => (clip.value ? standIn(clip.value) : peek.value?.picture))
 let lastSeek = 0
-watch(() => peek.value?.at, at => {
-  if (at === undefined || !video.value || performance.now() - lastSeek < 90) return
-  lastSeek = performance.now()
-  video.value.currentTime = at
-})
+watch(
+  () => peek.value?.at,
+  at => {
+    if (at === undefined || !video.value || performance.now() - lastSeek < 90) return
+    lastSeek = performance.now()
+    video.value.currentTime = at
+  },
+)
 const place = computed(() => {
   const p = peek.value
   if (!p) return {}
@@ -33,8 +36,16 @@ const caption = computed(() => {
 
 <template>
   <div v-if="peek" ref="box" class="peek" :style="place">
-    <video v-if="clip?.video" :key="clip.id" ref="video" :src="mediaUrl(clip.video, session.roots)" muted preload="auto" :poster="stand ? thumbUrl(stand, session.roots, 640) : undefined" />
-    <img v-else-if="stand" :src="thumbUrl(stand, session.roots, 640)" alt="">
+    <video
+      v-if="clip?.video"
+      :key="clip.id"
+      ref="video"
+      :src="mediaUrl(clip.video, session.roots)"
+      muted
+      preload="auto"
+      :poster="stand ? thumbUrl(stand, session.roots, 640) : undefined"
+    />
+    <img v-else-if="stand" :src="thumbUrl(stand, session.roots, 640)" alt="" />
     <div class="num">{{ caption }}</div>
   </div>
 </template>

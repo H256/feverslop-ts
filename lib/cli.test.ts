@@ -1,15 +1,23 @@
-import {expect, test} from 'bun:test';
-import {join} from 'node:path';
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {bannerLines, fitLine} from './log.ts';
+import {expect, test} from 'bun:test'
+import {join} from 'node:path'
+import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {bannerLines, fitLine} from './log.ts'
 
 const root = join(import.meta.dir, '..')
-const run = (file: string, ...args: string[]) => Bun.spawnSync(['bun', file, ...args], {cwd: root, stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1'}})
+const run = (file: string, ...args: string[]) =>
+    Bun.spawnSync(['bun', file, ...args], {cwd: root, stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1'}})
 
 test('all package CLI entry points provide help without starting work', async () => {
     const {scripts} = await Bun.file(join(root, 'package.json')).json()
-    const entries = [...new Set<string>(['index.ts', ...Object.values<string>(scripts).filter(s => /^bun .*\.ts$/.test(s)).map(s => s.slice(4))])]
+    const entries = [
+        ...new Set<string>([
+            'index.ts',
+            ...Object.values<string>(scripts)
+                .filter(s => /^bun .*\.ts$/.test(s))
+                .map(s => s.slice(4)),
+        ]),
+    ]
     for (const entry of entries) {
         const result = run(entry, '--help')
         expect({entry, code: result.exitCode, error: result.stderr.toString()}).toEqual({entry, code: 0, error: ''})
@@ -43,10 +51,16 @@ test('inspect emits a single JSON document, including in quiet mode', () => {
         const clips = join(dir, 'projects', 'demo', 'output', 'clips')
         mkdirSync(clips, {recursive: true})
         writeFileSync(join(clips, 'slot-001.json'), JSON.stringify({id: 'slot-001', beatId: 'b1', prompt: 'A scene', assets: {pictures: [], audio: []}}))
-        const result = Bun.spawnSync(['bun', join(root, 'tools/inspect.ts'), 'demo', 'slot-001', '--json', '--quiet'], {cwd: dir, stdout: 'pipe', stderr: 'pipe'})
+        const result = Bun.spawnSync(['bun', join(root, 'tools/inspect.ts'), 'demo', 'slot-001', '--json', '--quiet'], {
+            cwd: dir,
+            stdout: 'pipe',
+            stderr: 'pipe',
+        })
         expect(result.exitCode).toBe(0)
         expect(JSON.parse(result.stdout.toString())).toMatchObject({project: 'demo', clip: {id: 'slot-001'}, render: {state: 'missing'}})
-    } finally { rmSync(dir, {recursive: true, force: true}) }
+    } finally {
+        rmSync(dir, {recursive: true, force: true})
+    }
 })
 
 test('banner and truncation fit narrow, wide and Unicode terminals', () => {
@@ -69,7 +83,11 @@ test('a banner with a title says FEVERSLOP TS where it fits, and frames the titl
 
 test('quiet keeps prompt instructions and diagnostics; cancellation has no success footer', () => {
     for (const quiet of [false, true]) {
-    const child = Bun.spawnSync(['bun', '-e', `
+        const child = Bun.spawnSync(
+            [
+                'bun',
+                '-e',
+                `
         import {cli} from ${JSON.stringify(join(import.meta.dir, 'cli.ts'))}
         import {log} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
         Bun.argv.splice(0, Bun.argv.length, 'bun', 'test.ts', ...${JSON.stringify(quiet ? ['--quiet'] : [])})
@@ -77,13 +95,16 @@ test('quiet keeps prompt instructions and diagnostics; cancellation has no succe
         log.prompt('Type the lyrics; end with two empty lines')
         log.error('compiler diagnostic')
         log.cancel('No project selected')
-    `], {stdout: 'pipe', stderr: 'pipe'})
-    expect(child.exitCode).toBe(0)
-    if (quiet) expect(child.stdout.toString()).toBe('')
-    expect(child.stdout.toString()).not.toContain('Done')
-    expect(child.stderr.toString()).toContain('end with two empty lines')
-    expect(child.stderr.toString()).toContain('compiler diagnostic')
-    expect(child.stderr.toString()).not.toContain('Done')
+    `,
+            ],
+            {stdout: 'pipe', stderr: 'pipe'},
+        )
+        expect(child.exitCode).toBe(0)
+        if (quiet) expect(child.stdout.toString()).toBe('')
+        expect(child.stdout.toString()).not.toContain('Done')
+        expect(child.stderr.toString()).toContain('end with two empty lines')
+        expect(child.stderr.toString()).toContain('compiler diagnostic')
+        expect(child.stderr.toString()).not.toContain('Done')
     }
 })
 

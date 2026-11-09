@@ -1,8 +1,8 @@
-import {mkdirSync, readFileSync, writeFileSync} from "node:fs";
-import {dirname, join} from "node:path";
-import {processAlive} from "./lock.ts";
-import {runResult} from './log.ts';
-import {ownProcessIdentity, sameProcess} from './process-identity.ts';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs'
+import {dirname, join} from 'node:path'
+import {processAlive} from './lock.ts'
+import {runResult} from './log.ts'
+import {ownProcessIdentity, sameProcess} from './process-identity.ts'
 
 // What the last run of a project did, in <project>/logs/last-run.json: the command, and how it ended. A run that is
 // killed writes no end, so the next run and `status` can tell it apart from one that finished. Replaced by every run.
@@ -14,7 +14,7 @@ export type RunRecord = {
     endedAt?: string
     exitCode?: number
     error?: string
-    failures?: string[]     // the renders that failed: "clip slot-046: HIP out of memory..."
+    failures?: string[] // the renders that failed: "clip slot-046: HIP out of memory..."
     cancelled?: boolean
 }
 export type RunState = 'running' | 'stopped' | 'failed' | 'finished'
@@ -29,7 +29,11 @@ const save = (file: string, record: RunRecord) => {
 
 /** The command as it can be typed again - with the key left out, this file and the log stay on disk. */
 export function commandLine(argv: string[]) {
-    return argv.map((arg, n) => arg.startsWith('--llm-key=') ? '--llm-key=…' : argv[n - 1] === '--llm-key' ? '…' : /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg).join(' ')
+    return argv
+        .map((arg, n) =>
+            arg.startsWith('--llm-key=') ? '--llm-key=…' : argv[n - 1] === '--llm-key' ? '…' : /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg,
+        )
+        .join(' ')
 }
 
 export function lastRun(dir: string): RunRecord | undefined {
@@ -60,7 +64,7 @@ export function startRunRecord(dir: string, command: string): RunRecord | undefi
 export const runCommand = () => current?.command
 
 export function noteRunFailures(failures: string[]) {
-    if (current) current.failures = [...current.failures ?? [], ...failures]
+    if (current) current.failures = [...(current.failures ?? []), ...failures]
 }
 
 export function noteRunError(message: string) {

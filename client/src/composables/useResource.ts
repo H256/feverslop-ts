@@ -13,7 +13,7 @@ export function useResource<T>(load: (signal: AbortSignal) => Promise<T>, {immed
   let current: AbortController | undefined
   async function reload(): Promise<boolean> {
     current?.abort()
-    const controller = current = new AbortController()
+    const controller = (current = new AbortController())
     loading.value = true
     try {
       const result = await load(controller.signal)

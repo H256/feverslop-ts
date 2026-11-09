@@ -1,6 +1,6 @@
-import {mkdtempSync, rmSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {mkdtempSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
 
 // A picture sent from the page: only as large as a picture is, only what its first bytes say is a PNG, a JPEG or a WebP - never
 // what its name or its type header say - written under a name of the server's own into a folder of its own, which goes again
@@ -30,7 +30,9 @@ export function checkUploadSize(request: Request) {
  * The picture of a form field, put into a folder of its own: its path, and the folder that goes again with the run. Texts sent
  * with it go into the same folder (`text`): a run takes them as files, never as a line of shell.
  */
-export async function takePictureUpload(value: unknown): Promise<{ folder: string, file: string, text: (name: string, content: string) => Promise<string>, drop: () => void }> {
+export async function takePictureUpload(
+    value: unknown,
+): Promise<{folder: string; file: string; text: (name: string, content: string) => Promise<string>; drop: () => void}> {
     if (!(value instanceof File)) throw new UploadRefused('no picture sent')
     if (value.size === 0) throw new UploadRefused('the picture is empty')
     if (value.size > UPLOAD_MAX_BYTES) throw new UploadRefused(`the picture is too large - at most ${UPLOAD_MAX_BYTES / 1024 / 1024} MB`)

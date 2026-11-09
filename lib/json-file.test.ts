@@ -1,8 +1,8 @@
-import {expect, test} from "bun:test";
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {partialOf, writeJsonFile} from "./json-file.ts";
+import {expect, test} from 'bun:test'
+import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {partialOf, writeJsonFile} from './json-file.ts'
 
 test('a JSON file is replaced whole, and no partial file is left next to it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'json-file-'))

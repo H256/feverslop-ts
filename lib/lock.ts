@@ -1,12 +1,12 @@
-import {closeSync, existsSync, openSync, readFileSync, rmSync, writeSync} from "node:fs";
-import {join} from "node:path";
-import {sweepPartials} from './partial-cleanup.ts';
-import {ownProcessIdentity, processAlive, processIdentity, sameProcess} from './process-identity.ts';
+import {closeSync, existsSync, openSync, readFileSync, rmSync, writeSync} from 'node:fs'
+import {join} from 'node:path'
+import {sweepPartials} from './partial-cleanup.ts'
+import {ownProcessIdentity, processAlive, processIdentity, sameProcess} from './process-identity.ts'
 
 // Every save writes the whole project.json from the state the run loaded: two runs on one project would silently drop
 // each other's steps. So a run that writes holds a lock file with its process id for as long as it lives.
 
-export {processAlive} from './process-identity.ts';
+export {processAlive} from './process-identity.ts'
 
 /** The process that holds the project's lock now - undefined when it is free, or held by a process that is gone. */
 export function lockHolder(dir: string): number | undefined {
@@ -17,14 +17,16 @@ export function lockHolder(dir: string): number | undefined {
     return actual && holder.identity !== actual ? undefined : holder.pid
 }
 
-function readLock(dir: string): {pid: number, identity?: string} | undefined {
+function readLock(dir: string): {pid: number; identity?: string} | undefined {
     try {
         const text = readFileSync(join(dir, '.lock'), 'utf8').trim()
         const value = JSON.parse(text)
         const pid = typeof value === 'number' ? value : value?.pid
         if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
         return {pid, ...(typeof value?.identity === 'string' ? {identity: value.identity} : {})}
-    } catch { return undefined }
+    } catch {
+        return undefined
+    }
 }
 
 /** Only verified locks may authorize a destructive signal. Legacy locks still exclude concurrent writers. */
@@ -38,14 +40,19 @@ function takeLock(dir: string, what: string): () => void {
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
             const fd = openSync(file, 'wx')
-            try { writeSync(fd, JSON.stringify({pid: process.pid, identity: ownProcessIdentity()})) }
-            finally { closeSync(fd) }
+            try {
+                writeSync(fd, JSON.stringify({pid: process.pid, identity: ownProcessIdentity()}))
+            } finally {
+                closeSync(fd)
+            }
             return () => rmSync(file, {force: true})
         } catch (e) {
             if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
             const holder = lockHolder(dir)
             if (holder !== undefined && holder !== process.pid) {
-                throw new Error(`${what} is being worked on by another run (process ${holder}) - wait for it to finish; if it is not running any more, delete ${file}`)
+                throw new Error(
+                    `${what} is being worked on by another run (process ${holder}) - wait for it to finish; if it is not running any more, delete ${file}`,
+                )
             }
             rmSync(file, {force: true})
         }
@@ -57,7 +64,11 @@ function takeLock(dir: string, what: string): () => void {
 export function lockProject(dir: string, what: string): () => void {
     const release = takeLock(dir, what)
     process.on('exit', release)
-    try { sweepPartials(dir) } catch { /* cleanup must not stop a run */ }
+    try {
+        sweepPartials(dir)
+    } catch {
+        /* cleanup must not stop a run */
+    }
     return release
 }
 

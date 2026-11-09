@@ -1,16 +1,17 @@
-import {describe, expect, test} from "bun:test";
-import {mkdirSync, mkdtempSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {fingerprint, freshness, isUserFile, pinnedSidecar, recordedFingerprint} from "./provenance.ts";
-import {clipFingerprint} from "./render.ts";
-import type {ClipRequest} from "./compose.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {fingerprint, freshness, isUserFile, pinnedSidecar, recordedFingerprint} from './provenance.ts'
+import {clipFingerprint} from './render.ts'
+import type {ClipRequest} from './compose.ts'
 
 const dir = () => mkdtempSync(join(tmpdir(), 'prov-'))
 
 describe('freshness', () => {
     test('a generated video without readable metadata is stale, not implicitly user-pinned (#650)', () => {
-        const d = dir(), file = join(d, 'clip.mp4')
+        const d = dir(),
+            file = join(d, 'clip.mp4')
         writeFileSync(file, 'video')
         expect(freshness(file, 'request')).toBe('stale')
         writeFileSync(`${file}.json`, '{')
@@ -40,9 +41,14 @@ describe('freshness', () => {
 })
 
 describe('clipFingerprint', () => {
-    const clip = (extra: Partial<ClipRequest> = {}) => ({
-        id: 'slot-002', prompt: 'p', frames: 100, assets: {pictures: [{file: 'assets/characters/a.png', kind: 'character'}], audio: []}, ...extra,
-    }) as unknown as ClipRequest
+    const clip = (extra: Partial<ClipRequest> = {}) =>
+        ({
+            id: 'slot-002',
+            prompt: 'p',
+            frames: 100,
+            assets: {pictures: [{file: 'assets/characters/a.png', kind: 'character'}], audio: []},
+            ...extra,
+        }) as unknown as ClipRequest
     const config = {videoWorkflow: 'w', videoResolution: '720x1280'} as never
     test('changes with the content of a picture', () => {
         const d = dir()

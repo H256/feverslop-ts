@@ -1,7 +1,7 @@
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
-import {basename, dirname, join, relative} from "node:path";
-import {boundaryFrameAsset} from "./compose.ts";
-import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from "./sequenceSheet.ts";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, utimesSync, writeFileSync} from 'node:fs'
+import {basename, dirname, join, relative} from 'node:path'
+import {boundaryFrameAsset} from './compose.ts'
+import {SHEET_ANCHOR, SHEET_VIDEO, sheetAnchor, sheetFrames, sheetVideo} from './sequenceSheet.ts'
 
 /**
  * Puts files of a project away in <project>/old/attempts/<name>/ - for something that is rendered again (--again) and whose old version
@@ -62,16 +62,16 @@ function readRecord(file: string): Record<string, unknown> {
 }
 
 export type ClipVersion = {
-    id: string,                             // what to ask for it by: its place, relative to the project
-    video: string,
-    firstFrame?: string,
-    lastFrame?: string,
-    source: 'again' | 'stale' | 'leak' | 'size', // includes takes rejected for an unexpected output size
-    made: number,                           // when it was rendered: the time of its file
-    seed?: number,
-    workflow?: string,
-    size?: string,
-    fingerprint?: string,
+    id: string // what to ask for it by: its place, relative to the project
+    video: string
+    firstFrame?: string
+    lastFrame?: string
+    source: 'again' | 'stale' | 'leak' | 'size' // includes takes rejected for an unexpected output size
+    made: number // when it was rendered: the time of its file
+    seed?: number
+    workflow?: string
+    size?: string
+    fingerprint?: string
 }
 
 /**
@@ -90,9 +90,13 @@ export function clipVersions(projectDir: string, clipId: string): ClipVersion[] 
         const video = `${clipId}.mp4`
         if (!source || !existsSync(join(attempts, folder, video))) continue
         const record = readRecord(join(attempts, folder, `${video}.json`))
-        const inFolder = (file: string) => existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined
+        const inFolder = (file: string) => (existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined)
         versions.push({
-            id: attempt(folder), video: `${attempt(folder)}/${video}`, firstFrame: inFolder(basename(boundaryFrameAsset(clipId, 'ff'))), lastFrame: inFolder(basename(boundaryFrameAsset(clipId, 'lf'))), source,
+            id: attempt(folder),
+            video: `${attempt(folder)}/${video}`,
+            firstFrame: inFolder(basename(boundaryFrameAsset(clipId, 'ff'))),
+            lastFrame: inFolder(basename(boundaryFrameAsset(clipId, 'lf'))),
+            source,
             made: statSync(join(attempts, folder, video)).mtimeMs,
             seed: typeof record.seed === 'number' ? record.seed : undefined,
             workflow: typeof record.workflow === 'string' ? record.workflow : undefined,
@@ -104,7 +108,14 @@ export function clipVersions(projectDir: string, clipId: string): ClipVersion[] 
     const leak = new RegExp(`^${escapeId(clipId)}-seed-(\\d+)\\.mp4$`)
     for (const file of existsSync(leaks) ? readdirSync(leaks) : []) {
         const match = leak.exec(file)
-        if (match) versions.push({id: `old/leaks/${file}`, video: `old/leaks/${file}`, source: 'leak', made: statSync(join(leaks, file)).mtimeMs, seed: Number(match[1])})
+        if (match)
+            versions.push({
+                id: `old/leaks/${file}`,
+                video: `old/leaks/${file}`,
+                source: 'leak',
+                made: statSync(join(leaks, file)).mtimeMs,
+                seed: Number(match[1]),
+            })
     }
     return versions.sort((a, b) => b.made - a.made)
 }
@@ -121,7 +132,7 @@ function putBack(from: string, to: string, now: Date) {
  * go back together. A version from the backdrop check has only its video: its frames are made by the next run, and it has a sidecar
  * with its seed and nothing more - it was not compared with any plan.
  */
-export function restoreClipVersion(projectDir: string, clipId: string, versionId: string): { putAway: string } {
+export function restoreClipVersion(projectDir: string, clipId: string, versionId: string): {putAway: string} {
     const version = clipVersions(projectDir, clipId).find(v => v.id === versionId)
     if (!version) throw new Error(`${clipId} has no version ${versionId}`)
     const video = `videos/${clipId}.mp4`
@@ -143,19 +154,19 @@ export function restoreClipVersion(projectDir: string, clipId: string, versionId
 }
 
 export type PictureVersion = {
-    id: string,
-    picture: string,
-    anchor?: string,
-    video?: string,
-    source: 'again' | 'stale' | 'library',
-    made: number,
-    seed?: number,
-    prompt?: string,
-    fingerprint?: string,
+    id: string
+    picture: string
+    anchor?: string
+    video?: string
+    source: 'again' | 'stale' | 'library'
+    made: number
+    seed?: number
+    prompt?: string
+    fingerprint?: string
 }
 
 /** Everything of a picture that is put away, the newest first: old/attempts/<id>-<time>[-n]/, stale-<time>-assets-<kind>s-<id>.png[-n]/, <id>-library-<time>[-n]/. */
-export function pictureVersions(projectDir: string, picture: { id: string, file: string }): PictureVersion[] {
+export function pictureVersions(projectDir: string, picture: {id: string; file: string}): PictureVersion[] {
     const name = basename(picture.file)
     const stale = new RegExp(`^stale-${STAMP}-${escapeId(picture.file.replace(/\//g, '-'))}(-\\d+)?$`)
     const again = new RegExp(`^${escapeId(picture.id)}-${STAMP}(-\\d+)?$`)
@@ -166,11 +177,15 @@ export function pictureVersions(projectDir: string, picture: { id: string, file:
         const source = again.test(folder) ? 'again' : stale.test(folder) ? 'stale' : library.test(folder) ? 'library' : undefined
         if (!source || !existsSync(join(attempts, folder, name))) continue
         const record = readRecord(join(attempts, folder, `${name}.json`))
-        const inFolder = (file: string) => existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined
+        const inFolder = (file: string) => (existsSync(join(attempts, folder, file)) ? `${attempt(folder)}/${file}` : undefined)
         // the sheet flat beside the picture, or - put away by an older version of the pipeline - in a folder by the picture's id
         const ofSheet = (file: string) => inFolder(file) ?? inFolder(`${picture.id}/${file}`)
         versions.push({
-            id: attempt(folder), picture: `${attempt(folder)}/${name}`, anchor: ofSheet(SHEET_ANCHOR), video: ofSheet(SHEET_VIDEO), source,
+            id: attempt(folder),
+            picture: `${attempt(folder)}/${name}`,
+            anchor: ofSheet(SHEET_ANCHOR),
+            video: ofSheet(SHEET_VIDEO),
+            source,
             made: statSync(join(attempts, folder, name)).mtimeMs,
             seed: typeof record.seed === 'number' ? record.seed : undefined,
             prompt: typeof record.prompt === 'string' ? record.prompt : undefined,
@@ -184,7 +199,7 @@ export function pictureVersions(projectDir: string, picture: { id: string, file:
  * The files of a picture as they lie in a project: the picture, and with a reference sheet in `sheet` its anchor, sequence video and
  * frames. A put-away folder has them flat, by their names.
  */
-export function pictureFiles(projectDir: string, picture: { file: string }, sheet?: string): string[] {
+export function pictureFiles(projectDir: string, picture: {file: string}, sheet?: string): string[] {
     const files = [picture.file, `${picture.file}.json`]
     if (!sheet) return files
     files.push(sheetVideo(sheet), `${sheetVideo(sheet)}.json`, sheetAnchor(sheet), `${sheetAnchor(sheet)}.json`)
@@ -194,7 +209,7 @@ export function pictureFiles(projectDir: string, picture: { file: string }, shee
 }
 
 /** Makes a version the picture's current one: all of what is there now is put away first, all of the version goes back. */
-export function restorePictureVersion(projectDir: string, picture: { id: string, file: string }, versionId: string, sheet?: string): { putAway: string } {
+export function restorePictureVersion(projectDir: string, picture: {id: string; file: string}, versionId: string, sheet?: string): {putAway: string} {
     const version = pictureVersions(projectDir, picture).find(v => v.id === versionId)
     if (!version) throw new Error(`${picture.id} has no version ${versionId}`)
     const putAway = archiveFiles(projectDir, `${picture.id}-${versionStamp()}`, pictureFiles(projectDir, picture, sheet))
@@ -219,9 +234,10 @@ export function restorePictureVersion(projectDir: string, picture: { id: string,
     if (!readdirSync(folder).length) rmdirSync(folder)
     // a version put away before versions kept their anchor (a sheet made again on the same anchor) has none: the anchor that was
     // there goes back rather than none - a sheet without its anchor cannot be made again
-    if (sheet) for (const file of [SHEET_ANCHOR, `${SHEET_ANCHOR}.json`]) {
-        const target = join(projectDir, sheet, file)
-        if (!existsSync(target) && existsSync(join(putAway, file))) copyFileSync(join(putAway, file), target)
-    }
+    if (sheet)
+        for (const file of [SHEET_ANCHOR, `${SHEET_ANCHOR}.json`]) {
+            const target = join(projectDir, sheet, file)
+            if (!existsSync(target) && existsSync(join(putAway, file))) copyFileSync(join(putAway, file), target)
+        }
     return {putAway}
 }

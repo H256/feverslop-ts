@@ -4,5 +4,8 @@ defineProps<{label: string}>()
 </script>
 
 <template>
-  <label class="field"><span>{{ label }}</span><slot /></label>
+  <label class="field"
+    ><span>{{ label }}</span
+    ><slot
+  /></label>
 </template>

@@ -1,6 +1,6 @@
 // The base H3 model without the turbo LoRA: the slower, higher quality variant.
-import {h3Ref2Video} from "./h3-ref2video-builder.ts";
-import {h3RenderFrames, type VideoWorkflowOptions, type WorkflowResult} from "../helpers.ts";
+import {h3Ref2Video} from './h3-ref2video-builder.ts'
+import {h3RenderFrames, type VideoWorkflowOptions, type WorkflowResult} from '../helpers.ts'
 
 export const renderFrames = h3RenderFrames
 

@@ -3,16 +3,16 @@
 // places that lay them out differently - a project (assets/<kind>s/<id>.png, assets/sequence/<kind>s/<id>/) and the
 // library (lib/library.ts).
 
-import {cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync} from "node:fs";
-import {dirname, join, relative} from "node:path";
-import {archiveFiles, versionStamp} from "./archive.ts";
-import {pinnedSidecar} from "./provenance.ts";
-import {SHEET_FRAMES, sequenceSheetDir} from "./sequenceSheet.ts";
+import {cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync} from 'node:fs'
+import {dirname, join, relative} from 'node:path'
+import {archiveFiles, versionStamp} from './archive.ts'
+import {pinnedSidecar} from './provenance.ts'
+import {SHEET_FRAMES, sequenceSheetDir} from './sequenceSheet.ts'
 
 export type AssetKind = 'character' | 'location'
 
 /** Where an asset's files are, relative to the folder they belong to: the picture and the sheet folder. */
-export type AssetLayout = { picture: string, sheet: string }
+export type AssetLayout = {picture: string; sheet: string}
 
 /** The files of an asset in a project. */
 export const assetPaths = (kind: AssetKind, id: string): AssetLayout => ({
@@ -37,7 +37,7 @@ const unfinished = (file: string) => /\.(partial|pending)\b|\.vision(-\d+)?\.png
  * Sidecars (.json next to a file) are not copied - the target gets its own. `pin`: the file is one a render checks (the
  * picture, the anchor, the sequence video - not the frames), so its copy gets a pinned sidecar.
  */
-export function copyPlan(sourceDir: string, source: AssetLayout, target: AssetLayout): { from: string, to: string, pin: boolean }[] {
+export function copyPlan(sourceDir: string, source: AssetLayout, target: AssetLayout): {from: string; to: string; pin: boolean}[] {
     const files: string[] = []
     if (existsSync(join(sourceDir, source.picture))) files.push(source.picture)
     const walk = (rel: string) => {
@@ -63,9 +63,9 @@ export function copyPlan(sourceDir: string, source: AssetLayout, target: AssetLa
  * again (lib/provenance.ts). Returns where the old files went, if there were any.
  */
 export function copyAsset(
-    source: { dir: string, layout: AssetLayout, label: string },
-    target: { dir: string, layout: AssetLayout, archiveName: string },
-): { copied: number, putAway?: string } {
+    source: {dir: string; layout: AssetLayout; label: string},
+    target: {dir: string; layout: AssetLayout; archiveName: string},
+): {copied: number; putAway?: string} {
     const plan = copyPlan(source.dir, source.layout, target.layout)
     if (!plan.length) throw new Error(`${source.label} has no finished pictures`)
     const old = [target.layout.picture, `${target.layout.picture}.json`, target.layout.sheet].filter(f => existsSync(join(target.dir, f)))

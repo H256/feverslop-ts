@@ -1,7 +1,7 @@
-import {existsSync} from "node:fs";
-import {join} from "node:path";
-import type {ProjectConfig} from "./config.ts";
-import type {Project, StepName, TrackedInput} from "./project.ts";
+import {existsSync} from 'node:fs'
+import {join} from 'node:path'
+import type {ProjectConfig} from './config.ts'
+import type {Project, StepName, TrackedInput} from './project.ts'
 
 // The inputs of a project whose change redoes steps - the files in input/ and the settings of config.json that steps are
 // built on, each with the steps it redoes. One place for index.ts (which redoes them) and bun run status (which only says so).
@@ -51,20 +51,31 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
 
 /** Whether the pipeline runs a step at all for this project - the others are not missing, they are not used. */
 export function stepUsed(step: StepName, dir: string, data: Project, config: ProjectConfig): boolean {
-    const props = new Set((data.cast?.characters ?? []).flatMap(c => c.propStem ? [c.propStem] : []))
+    const props = new Set((data.cast?.characters ?? []).flatMap(c => (c.propStem ? [c.propStem] : [])))
     switch (step) {
         // a song from lyrics of your own has no idea.txt - its style is there once it was written
-        case 'songStyle': return existsSync(join(dir, 'input', 'idea.txt')) || data.songStyle !== undefined
-        case 'stems': case 'transcript': case 'lyricsTiming': return config.alignLyrics
+        case 'songStyle':
+            return existsSync(join(dir, 'input', 'idea.txt')) || data.songStyle !== undefined
+        case 'stems':
+        case 'transcript':
+        case 'lyricsTiming':
+            return config.alignLyrics
         // a song separated into all six stems has guitar and piano already
-        case 'instrumentStems': return config.alignLyrics && (['guitar', 'piano'] as const).some(name => props.has(name) && !data.stems?.[name])
-        case 'propActivity': return config.alignLyrics && props.size > 0
-        case 'singing': return config.singers.length > 0
-        case 'shotViews': return config.sequenceSheets && config.locationView === 'auto'
+        case 'instrumentStems':
+            return config.alignLyrics && (['guitar', 'piano'] as const).some(name => props.has(name) && !data.stems?.[name])
+        case 'propActivity':
+            return config.alignLyrics && props.size > 0
+        case 'singing':
+            return config.singers.length > 0
+        case 'shotViews':
+            return config.sequenceSheets && config.locationView === 'auto'
         // made only when the shots are planned: shots planned before the step existed stay without it
-        case 'blocking': return data.blocking !== undefined || data.shotMoments === undefined
-        case 'characterLookVariants': case 'characterDescriptionVariants': return (data.cast?.characters ?? []).some(c => c.isGroup && !c.alike)
-        default: return true
+        case 'blocking':
+            return data.blocking !== undefined || data.shotMoments === undefined
+        case 'characterLookVariants':
+        case 'characterDescriptionVariants':
+            return (data.cast?.characters ?? []).some(c => c.isGroup && !c.alike)
+        default:
+            return true
     }
 }
-

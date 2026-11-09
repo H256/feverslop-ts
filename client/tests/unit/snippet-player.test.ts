@@ -13,16 +13,32 @@ test('audition retains the cursor on pause, resumes, changes speed and loops ins
     preservesPitch = true
     paused = true
     ended = false
-    constructor(_src: string) { nodes.push(this) }
-    pause() { this.paused = true }
-    async play() { this.paused = false }
+    constructor(_src: string) {
+      nodes.push(this)
+    }
+    pause() {
+      this.paused = true
+    }
+    async play() {
+      this.paused = false
+    }
   }
   globalThis.Audio = FakeAudio as unknown as typeof Audio
-  globalThis.requestAnimationFrame = cb => { tick = cb; return 1 }
+  globalThis.requestAnimationFrame = cb => {
+    tick = cb
+    return 1
+  }
   globalThis.cancelAnimationFrame = () => {}
   const scope = effectScope()
   try {
-    const player = scope.run(() => useSnippetPlayer(() => 'vocals.wav', cause => { throw cause }))!
+    const player = scope.run(() =>
+      useSnippetPlayer(
+        () => 'vocals.wav',
+        cause => {
+          throw cause
+        },
+      ),
+    )!
     player.play('mark', 2, 5)
     nodes[0]!.currentTime = 3
     player.pause()

@@ -1,5 +1,5 @@
-import {vocalText} from './lyrics.ts';
-import type {LyricsTiming, Singing, TimedWord} from "./project.ts";
+import {vocalText} from './lyrics.ts'
+import type {LyricsTiming, Singing, TimedWord} from './project.ts'
 
 // A singer can change within a line: a line of `singing` then has parts, each from a word of the line on (the index into
 // lyricsTiming's words of that line) with its own singers. The line's `singers` stay the singers of all its parts, so
@@ -7,7 +7,7 @@ import type {LyricsTiming, Singing, TimedWord} from "./project.ts";
 // in a clip comes from the words' times: a word is sung by the part it starts in - the boundary lies halfway between the
 // last word of one part and the first of the next, so a word time off by a frame does not move it into the other part.
 
-export type SingingPart = { from: number, singers: string[] }
+export type SingingPart = {from: number; singers: string[]}
 export type SingingLine = Singing['lines'][number]
 
 const sameSingers = (a: string[], b: string[]) => a.length === b.length && a.every(id => b.includes(id))
@@ -25,7 +25,8 @@ export function normalizeParts(parts: SingingPart[] | undefined, wordCount: numb
     const merged: SingingPart[] = []
     for (const part of sorted) {
         const before = merged.at(-1)
-        if (before?.from === part.from) before.singers = part.singers            // two parts from one word: the later one counts
+        if (before?.from === part.from)
+            before.singers = part.singers // two parts from one word: the later one counts
         else if (before && sameSingers(before.singers, part.singers)) continue
         else merged.push(part)
     }
@@ -54,9 +55,13 @@ function boundaries(line: SingingLine, timing: LyricsTiming | undefined): number
  * A sung piece of a line in a clip (times relative to `origin`, in song seconds), split where its singer changes: one
  * piece per part it reaches, each with the part's singers. A line without parts is one piece with the line's singers.
  */
-export function splitBySinger<V extends { start: number, end: number, text: string, words: TimedWord[] }>(
-    vocal: V, origin: number, line: SingingLine | undefined, timing: LyricsTiming | undefined, fallback: string[],
-): (V & { singers: string[] })[] {
+export function splitBySinger<V extends {start: number; end: number; text: string; words: TimedWord[]}>(
+    vocal: V,
+    origin: number,
+    line: SingingLine | undefined,
+    timing: LyricsTiming | undefined,
+    fallback: string[],
+): (V & {singers: string[]})[] {
     const whole = [{...vocal, singers: line?.singers ?? fallback}]
     const starts = line && boundaries(line, timing)
     if (!line?.parts || !starts || !vocal.words.length) return whole
@@ -66,12 +71,23 @@ export function splitBySinger<V extends { start: number, end: number, text: stri
         while (k + 1 < starts.length && starts[k + 1]! <= at) k++
         return k
     }
-    const pieces: (V & { singers: string[] })[] = []
-    let current: { k: number, words: TimedWord[] } | undefined
+    const pieces: (V & {singers: string[]})[] = []
+    let current: {k: number; words: TimedWord[]} | undefined
     const close = () => {
         if (!current) return
         const words = current.words
-        pieces.push({...vocal, text: vocalText(words, words.at(-1) === vocal.words.at(-1) && vocal.text === vocalText(vocal.words) + '-', words[0] === vocal.words[0] && !!words[0]?.joined), start: words[0]!.start, end: words.at(-1)!.end, words, singers: line.parts![current.k]!.singers})
+        pieces.push({
+            ...vocal,
+            text: vocalText(
+                words,
+                words.at(-1) === vocal.words.at(-1) && vocal.text === vocalText(vocal.words) + '-',
+                words[0] === vocal.words[0] && !!words[0]?.joined,
+            ),
+            start: words[0]!.start,
+            end: words.at(-1)!.end,
+            words,
+            singers: line.parts![current.k]!.singers,
+        })
     }
     for (const w of vocal.words) {
         const k = partOf(w)
@@ -91,10 +107,10 @@ export function splitBySinger<V extends { start: number, end: number, text: stri
  * starts in - the video model crammed all of it in before the cut and closed the mouth after it, while the line went on.
  * Every piece but the last `continues`: the line goes on in the next shot, so its text gets no full stop.
  */
-export function splitAtCuts<V extends { start: number, end: number, text: string, words: TimedWord[] }>(vocal: V, cuts: number[]): (V & { continues?: boolean })[] {
+export function splitAtCuts<V extends {start: number; end: number; text: string; words: TimedWord[]}>(vocal: V, cuts: number[]): (V & {continues?: boolean})[] {
     if (vocal.words.length < 2) return [vocal]
     const shotOf = (t: number) => cuts.filter(c => c <= t).length
-    const pieces: (V & { continues?: boolean })[] = []
+    const pieces: (V & {continues?: boolean})[] = []
     let words: TimedWord[] = []
     const close = () => {
         if (!words.length) return

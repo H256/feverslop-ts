@@ -18,15 +18,17 @@ export function useClipActions(timeline: Timeline) {
   const toasts = useToasts()
   const {project, session, playback, marked, markedClips} = timeline
   const {api, start} = session
-  const seedNote = (fixedSeed: number | undefined, what: string) => fixedSeed !== undefined && `"seed" is fixed in config.json (${fixedSeed}): the same seed gives the same ${what} again.`
-  const goesOn = (later: string[], what: string) => later.length > 0 && `${later.join(', ')} go on from ${what}. They go stale and are not rendered on their own.`
+  const seedNote = (fixedSeed: number | undefined, what: string) =>
+    fixedSeed !== undefined && `"seed" is fixed in config.json (${fixedSeed}): the same seed gives the same ${what} again.`
+  const goesOn = (later: string[], what: string) =>
+    later.length > 0 && `${later.join(', ')} go on from ${what}. They go stale and are not rendered on their own.`
 
   async function renderAgain(clip: EditorClip) {
     const asked = await api.estimateClips([clip.id]).catch(() => undefined)
     const yes = await ask({
       title: `Render ${clip.id}${clip.video ? ' again' : ''}?`,
       lines: [clip.video && 'A new seed. The version there now is put away and stays selectable.', asked?.estimate],
-      warnings: [...asked?.risks ?? [], seedNote(asked?.fixedSeed, 'clip'), goesOn(chain(project.value, clip), 'this clip')],
+      warnings: [...(asked?.risks ?? []), seedNote(asked?.fixedSeed, 'clip'), goesOn(chain(project.value, clip), 'this clip')],
       confirm: 'Render it',
       render: true,
     })
@@ -40,7 +42,7 @@ export function useClipActions(timeline: Timeline) {
     const yes = await ask({
       title: `Render ${plural(clips.length, 'clip')}${again ? ' again' : ''}?`,
       lines: [clips.map(c => c.id).join(', '), again && 'A new seed each. What is there now is put away and stays selectable.', asked?.estimate],
-      warnings: [...asked?.risks ?? [], seedNote(asked?.fixedSeed, 'clips'), goesOn(later, 'these clips')],
+      warnings: [...(asked?.risks ?? []), seedNote(asked?.fixedSeed, 'clips'), goesOn(later, 'these clips')],
       confirm: 'Render them',
       render: true,
     })
@@ -61,11 +63,19 @@ export function useClipActions(timeline: Timeline) {
   /** A part of a clip rendered again, between the frames around it. */
   async function retake(clip: EditorClip, range: string, from: number, to: number) {
     const seconds = clip.end - clip.start
-    if (project.value.kind === 'film' && clip.lines.some(line => line.at < to && (line.end ?? seconds) > from)) throw new Error('A part with dialogue cannot be rendered on its own yet: the sound of a film comes with the picture.')
+    if (project.value.kind === 'film' && clip.lines.some(line => line.at < to && (line.end ?? seconds) > from))
+      throw new Error('A part with dialogue cannot be rendered on its own yet: the sound of a film comes with the picture.')
     const yes = await ask({
       title: `Render ${clip.id}: ${range} again?`,
-      lines: ['Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.'],
-      warnings: ['Not proven yet: on a 32 GB Radeon the two-pass job ran out of memory, and one try took the server down (#157).', to >= seconds - 0.05 && clip.next && `This part reaches the end of the clip: ${chain(project.value, clip).join(', ')} go on from its last frame and are marked.`],
+      lines: [
+        'Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.',
+      ],
+      warnings: [
+        'Not proven yet: on a 32 GB Radeon the two-pass job ran out of memory, and one try took the server down (#157).',
+        to >= seconds - 0.05 &&
+          clip.next &&
+          `This part reaches the end of the clip: ${chain(project.value, clip).join(', ')} go on from its last frame and are marked.`,
+      ],
       confirm: 'Render it anyway',
       render: true,
     })
@@ -84,7 +94,13 @@ export function useClipActions(timeline: Timeline) {
       body: () => h(RefinishForm, {draft: form}),
       confirm: 'Start',
       render: true,
-      submit: () => start(refinishRequest(form, picked.map(c => c.id))),
+      submit: () =>
+        start(
+          refinishRequest(
+            form,
+            picked.map(c => c.id),
+          ),
+        ),
     })
   }
   /** The finished videos a post-work step can start from: every final one but the low-resolution preview. */
@@ -140,15 +156,13 @@ export function useClipActions(timeline: Timeline) {
         'A title card before a finished video and scrolling credits after it, written next to it as <name>-credits.mp4. The video it is made from stays as it is.',
         'What it was made with - the language model, the models, the graphics cards - is collected from what this project ran; nothing is asked of a model. The run shows the credits line by line.',
       ],
-      warnings: [
-        postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`,
-      ],
+      warnings: [postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`],
       body: () => h(CreditsForm, {draft: form, finals: sources(), markers: postwork.markers, kind}),
       confirm: 'Add them',
       submit: () => start(creditsRequest(form, kind)),
     })
   }
-  async function pickVersion(clip: EditorClip, version: {id: string, fromThisPlan?: boolean, source?: string}) {
+  async function pickVersion(clip: EditorClip, version: {id: string; fromThisPlan?: boolean; source?: string}) {
     const later = chain(project.value, clip)
     const yes = await ask({
       title: `Make this version of ${clip.id} the current one?`,
@@ -211,10 +225,23 @@ export function useClipActions(timeline: Timeline) {
 
   const guarded = <A extends unknown[]>(action: (...args: A) => Promise<unknown>) => toasts.guard(action)
   return {
-    renderAgain: guarded(renderAgain), renderMarked: guarded(renderMarked), preview: guarded(preview), retake: guarded(retake),
-    refinish: guarded(refinish), label: guarded(label), intro: guarded(intro), credits: guarded(credits), pickVersion: guarded(pickVersion), saveOverride: guarded(saveOverride), addView: guarded(addView),
-    repeatLast: guarded(repeatLast), runNext: guarded(runNext), plain: guarded(plain), plan: guarded(plan),
-    renderMarkedNow: renderMarked, afterRender,
+    renderAgain: guarded(renderAgain),
+    renderMarked: guarded(renderMarked),
+    preview: guarded(preview),
+    retake: guarded(retake),
+    refinish: guarded(refinish),
+    label: guarded(label),
+    intro: guarded(intro),
+    credits: guarded(credits),
+    pickVersion: guarded(pickVersion),
+    saveOverride: guarded(saveOverride),
+    addView: guarded(addView),
+    repeatLast: guarded(repeatLast),
+    runNext: guarded(runNext),
+    plain: guarded(plain),
+    plan: guarded(plan),
+    renderMarkedNow: renderMarked,
+    afterRender,
   }
 }
 export type ClipActions = ReturnType<typeof useClipActions>

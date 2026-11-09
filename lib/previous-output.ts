@@ -1,5 +1,5 @@
-import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync} from "node:fs";
-import {join} from "node:path";
+import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync} from 'node:fs'
+import {join} from 'node:path'
 
 // output/ is rebuilt on every run. The output of the run before is kept as output/.previous/ - one generation - so a run
 // can say which clip requests it changed, and any one of them can be compared with `diff`.
@@ -24,8 +24,11 @@ export function whileHeld(folder: string, action: () => void, waits = LOCK_WAITS
                 continue
             }
             // resmon only finds the path as Windows writes it
-            const resmon = process.platform === 'win32' ? `; resmon (CPU → Associated Handles, search "${folder.replaceAll('/', '\\')}") shows who holds it` : ''
-            throw new Error(`${folder} is held open by another program (${code}, still after ${Math.round(waits.reduce((a, b) => a + b, 0) / 1000)} s) - close what has it or a file in it open (a player, an Explorer window or preview, a terminal in it, an editor tab), then run the same command again${resmon}`)
+            const resmon =
+                process.platform === 'win32' ? `; resmon (CPU → Associated Handles, search "${folder.replaceAll('/', '\\')}") shows who holds it` : ''
+            throw new Error(
+                `${folder} is held open by another program (${code}, still after ${Math.round(waits.reduce((a, b) => a + b, 0) / 1000)} s) - close what has it or a file in it open (a player, an Explorer window or preview, a terminal in it, an editor tab), then run the same command again${resmon}`,
+            )
         }
     }
 }
@@ -52,10 +55,15 @@ export const clipRequestRef = (clipId: string) => `output/clips/${clipId}.json`
 /** The clip requests of a clips folder, by clip id: the file's text. */
 export function readRequests(clipsDir: string): Map<string, string> {
     if (!existsSync(clipsDir)) return new Map()
-    return new Map(readdirSync(clipsDir).filter(f => f.endsWith('.json')).sort().map(f => [f.slice(0, -'.json'.length), readFileSync(join(clipsDir, f), 'utf8')]))
+    return new Map(
+        readdirSync(clipsDir)
+            .filter(f => f.endsWith('.json'))
+            .sort()
+            .map(f => [f.slice(0, -'.json'.length), readFileSync(join(clipsDir, f), 'utf8')]),
+    )
 }
 
-export type RequestChanges = { changed: string[], added: string[], gone: string[] }
+export type RequestChanges = {changed: string[]; added: string[]; gone: string[]}
 
 /** Which requests differ between two runs - undefined when there was no run before to compare with. */
 export function requestChanges(outputDir: string): RequestChanges | undefined {

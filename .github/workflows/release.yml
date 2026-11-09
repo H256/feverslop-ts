@@ -4,37 +4,37 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
+    push:
+        tags: ['v*']
+    workflow_dispatch:
 
 permissions:
-  contents: write
+    contents: write
 
 jobs:
-  checks:
-    uses: ./.github/workflows/ci.yml
-  release:
-    needs: checks
-    # Forgejo Actions reads .github/workflows too - this job is for GitHub only.
-    if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Release from CHANGELOG.md
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then tags="$GITHUB_REF_NAME"; else tags=$(git tag -l 'v*' --sort=v:refname); fi
-          for tag in $tags; do
-            title=$(grep -m1 "^## $tag " CHANGELOG.md | sed 's/^## //')
-            if [ -z "$title" ]; then echo "::warning::$tag has no section in CHANGELOG.md"; continue; fi
-            awk -v t="$tag" '/^## /{on = ($2 == t); next} on' CHANGELOG.md > notes.md
-            if gh release view "$tag" >/dev/null 2>&1; then
-              gh release edit "$tag" --title "$title" --notes-file notes.md
-            else
-              gh release create "$tag" --verify-tag --title "$title" --notes-file notes.md
-            fi
-          done
+    checks:
+        uses: ./.github/workflows/ci.yml
+    release:
+        needs: checks
+        # Forgejo Actions reads .github/workflows too - this job is for GitHub only.
+        if: github.server_url == 'https://github.com'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - name: Release from CHANGELOG.md
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  if [ "$GITHUB_REF_TYPE" = tag ]; then tags="$GITHUB_REF_NAME"; else tags=$(git tag -l 'v*' --sort=v:refname); fi
+                  for tag in $tags; do
+                    title=$(grep -m1 "^## $tag " CHANGELOG.md | sed 's/^## //')
+                    if [ -z "$title" ]; then echo "::warning::$tag has no section in CHANGELOG.md"; continue; fi
+                    awk -v t="$tag" '/^## /{on = ($2 == t); next} on' CHANGELOG.md > notes.md
+                    if gh release view "$tag" >/dev/null 2>&1; then
+                      gh release edit "$tag" --title "$title" --notes-file notes.md
+                    else
+                      gh release create "$tag" --verify-tag --title "$title" --notes-file notes.md
+                    fi
+                  done

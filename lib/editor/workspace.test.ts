@@ -1,20 +1,20 @@
-import {afterAll, beforeAll, describe, expect, test} from "bun:test";
-import {appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {basename, dirname, join} from "node:path";
-import {clipVersions, pictureVersions, restoreClipVersion, restorePictureVersion} from "../archive.ts";
-import {lockHolder, lockProject, withProjectLock} from "../lock.ts";
-import {namedPictures, putAwayPicture} from "../render.ts";
-import {finalStateOf} from "../render-state.ts";
-import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
-import type {EditorTarget} from "./project.ts";
-import {projectGroup, readEditorProject, readListing} from "./project.ts";
-import {allowedOptions, RunControl, runCommand} from "./runs.ts";
-import {editorHandler} from "./server.ts";
-import {checkUploadSize, pictureType, takePictureUpload, UPLOAD_MAX_BYTES} from "./upload.ts";
-import {loadSettings} from "../settings.ts";
-import {explainFailure, runProgress} from "./progress.ts";
-import {chosenUrls, readServer} from "./servers.ts";
+import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
+import {appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {basename, dirname, join} from 'node:path'
+import {clipVersions, pictureVersions, restoreClipVersion, restorePictureVersion} from '../archive.ts'
+import {lockHolder, lockProject, withProjectLock} from '../lock.ts'
+import {namedPictures, putAwayPicture} from '../render.ts'
+import {finalStateOf} from '../render-state.ts'
+import {readCasting, readLibrary, writeCastingEntry} from './library.ts'
+import type {EditorTarget} from './project.ts'
+import {projectGroup, readEditorProject, readListing} from './project.ts'
+import {allowedOptions, RunControl, runCommand} from './runs.ts'
+import {editorHandler} from './server.ts'
+import {checkUploadSize, pictureType, takePictureUpload, UPLOAD_MAX_BYTES} from './upload.ts'
+import {loadSettings} from '../settings.ts'
+import {explainFailure, runProgress} from './progress.ts'
+import {chosenUrls, readServer} from './servers.ts'
 
 let root: string
 const here = process.cwd()
@@ -62,7 +62,11 @@ describe('versions of a clip', () => {
         expect(versions.map(v => v.source).sort()).toEqual(['again', 'leak', 'stale'])
         expect(versions.at(-1)!.source).toBe('again')
         expect(versions.find(v => v.source === 'leak')).toMatchObject({seed: 77, video: `old/leaks/${clip}-seed-77.mp4`})
-        expect(versions.find(v => v.source === 'again')).toMatchObject({seed: 1, workflow: 'wf', firstFrame: `old/attempts/${clip}-20261101-120000/${clip}_ff.png`})
+        expect(versions.find(v => v.source === 'again')).toMatchObject({
+            seed: 1,
+            workflow: 'wf',
+            firstFrame: `old/attempts/${clip}-20261101-120000/${clip}_ff.png`,
+        })
     })
     test('putting one back moves all of it, puts away what is there, and counts as new: the final video is older than it', () => {
         const dir = project()
@@ -118,7 +122,12 @@ describe('versions of a picture', () => {
     test('every kind, with what a sheet has', () => {
         const versions = pictureVersions(dir(), picture)
         expect(versions.map(v => v.source).sort()).toEqual(['again', 'library', 'stale'])
-        expect(versions.find(v => v.source === 'again')).toMatchObject({seed: 5, prompt: 'then', anchor: 'old/attempts/hall-20261101-120000/anchor.png', video: 'old/attempts/hall-20261101-120000/sequence.mp4'})
+        expect(versions.find(v => v.source === 'again')).toMatchObject({
+            seed: 5,
+            prompt: 'then',
+            anchor: 'old/attempts/hall-20261101-120000/anchor.png',
+            video: 'old/attempts/hall-20261101-120000/sequence.mp4',
+        })
     })
     test('putting one back puts its flat files where a sheet has them, and all of what is there away', () => {
         restorePictureVersion(dir(), picture, 'old/attempts/hall-20261101-120000', sheet)
@@ -144,7 +153,10 @@ describe('a picture put away by an older version, its sheet in a folder of its o
         write(join(old, 'elias/anchor.png'), 'then-anchor')
         write(join(old, 'elias/sequence.mp4'), 'then-video')
         write(join(old, 'elias/frames/frame_00.png'), 'then-frame')
-        expect(pictureVersions(dir(), picture)[0]).toMatchObject({anchor: 'old/attempts/elias-20261027-080644/elias/anchor.png', video: 'old/attempts/elias-20261027-080644/elias/sequence.mp4'})
+        expect(pictureVersions(dir(), picture)[0]).toMatchObject({
+            anchor: 'old/attempts/elias-20261027-080644/elias/anchor.png',
+            video: 'old/attempts/elias-20261027-080644/elias/sequence.mp4',
+        })
         restorePictureVersion(dir(), picture, 'old/attempts/elias-20261027-080644', sheet)
         const read = (file: string) => readFileSync(join(dir(), file), 'utf8')
         expect(read(picture.file)).toBe('then')
@@ -181,7 +193,7 @@ describe('a sheet made again on the same anchor', () => {
         expect(existsSync(join(dir(), `${sheet}/anchor.png`))).toBe(false)
         expect(readFileSync(join(kept, 'anchor.png'), 'utf8')).toBe('edited-anchor')
     })
-    test('the user\'s own anchor stays for a new sheet, even with a prompt noted on it', () => {
+    test("the user's own anchor stays for a new sheet, even with a prompt noted on it", () => {
         write(join(dir(), picture.file), 'own-sheet')
         write(join(dir(), `${sheet}/anchor.png`), 'own-anchor')
         write(join(dir(), `${sheet}/anchor.png.json`), JSON.stringify({source: 'user', pinned: true, editedPrompt: 'mine'}))
@@ -215,7 +227,9 @@ describe('the lock', () => {
         const dir = target('locked').dir
         mkdirSync(dir, {recursive: true})
         let during: number | undefined
-        await withProjectLock(dir, 'x', () => { during = lockHolder(dir) })
+        await withProjectLock(dir, 'x', () => {
+            during = lockHolder(dir)
+        })
         expect(during).toBe(process.pid)
         expect(lockHolder(dir)).toBeUndefined()
     })
@@ -233,7 +247,11 @@ describe('the lock', () => {
     test('released also when the work fails', async () => {
         const dir = target('fails').dir
         mkdirSync(dir, {recursive: true})
-        await expect(withProjectLock(dir, 'x', () => { throw new Error('no') })).rejects.toThrow('no')
+        await expect(
+            withProjectLock(dir, 'x', () => {
+                throw new Error('no')
+            }),
+        ).rejects.toThrow('no')
         expect(lockHolder(dir)).toBeUndefined()
     })
     test('the CLI lock still is what it was', () => {
@@ -249,22 +267,42 @@ describe('what can be started', () => {
     const music = {id: 'demo', kind: 'music' as const}
     const film = {id: 'demo', kind: 'film' as const}
     test('what is asked for comes to a command of the pipeline', () => {
-        expect(runCommand(music, {type: 'clips', ids: ['slot-001', 'slot-002'], again: true})).toEqual({script: 'index.ts', args: ['demo', '--render=videos', '--only=slot-001,slot-002', '--again']})
+        expect(runCommand(music, {type: 'clips', ids: ['slot-001', 'slot-002'], again: true})).toEqual({
+            script: 'index.ts',
+            args: ['demo', '--render=videos', '--only=slot-001,slot-002', '--again'],
+        })
         expect(runCommand(film, {type: 'clips', ids: ['clip-001']})).toEqual({script: 'film.ts', args: ['demo', '--render=videos', '--only=clip-001']})
-        expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, newAnchor: true})).toEqual({script: 'index.ts', args: ['demo', '--render=images', '--only=hall', '--again', '--new-anchor']})
-        expect(runCommand(film, {type: 'pictures', ids: ['hall'], again: true, anchorFile: '/tmp/u/picture.png', descriptionFile: '/tmp/u/description.txt'})).toEqual({script: 'film.ts', args: ['demo', '--render=images', '--only=hall', '--again', '--picture-anchor=/tmp/u/picture.png', '--picture-description=/tmp/u/description.txt']})
-        expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, anchorFile: '/tmp/u/picture.png', describe: true}).args.slice(4)).toEqual(['--picture-anchor=/tmp/u/picture.png', '--describe-picture'])
+        expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, newAnchor: true})).toEqual({
+            script: 'index.ts',
+            args: ['demo', '--render=images', '--only=hall', '--again', '--new-anchor'],
+        })
+        expect(
+            runCommand(film, {type: 'pictures', ids: ['hall'], again: true, anchorFile: '/tmp/u/picture.png', descriptionFile: '/tmp/u/description.txt'}),
+        ).toEqual({
+            script: 'film.ts',
+            args: ['demo', '--render=images', '--only=hall', '--again', '--picture-anchor=/tmp/u/picture.png', '--picture-description=/tmp/u/description.txt'],
+        })
+        expect(runCommand(music, {type: 'pictures', ids: ['hall'], again: true, anchorFile: '/tmp/u/picture.png', describe: true}).args.slice(4)).toEqual([
+            '--picture-anchor=/tmp/u/picture.png',
+            '--describe-picture',
+        ])
         expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: '3.2-5'})).toEqual({script: 'index.ts', args: ['demo', '--retake=slot-007:3.2-5']})
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: 'shot2'}).args[1]).toBe('--retake=slot-007:shot2')
     })
     test('a further view of a place: only for a film, with what it shows as one argument each', () => {
-        expect(runCommand(film, {type: 'add-view', location: 'hall', name: 'from the bar', shows: 'the door --film'})).toEqual({script: 'tools/add-view.ts', args: ['demo', 'hall', '--name=from the bar', '--shows=the door --film']})
+        expect(runCommand(film, {type: 'add-view', location: 'hall', name: 'from the bar', shows: 'the door --film'})).toEqual({
+            script: 'tools/add-view.ts',
+            args: ['demo', 'hall', '--name=from the bar', '--shows=the door --film'],
+        })
         expect(() => runCommand(music, {type: 'add-view', location: 'hall', name: 'a', shows: 'b'})).toThrow('a place of a film')
         expect(() => runCommand(film, {type: 'add-view', location: 'hall', name: ' ', shows: 'b'})).toThrow('a place of a film')
     })
     test('the song into the library: a music video only, the id checked, the name one argument', () => {
-        expect(runCommand(music, {type: 'export-song', as: 'epa', name: 'EPA  streikt --film'})).toEqual({script: 'tools/export-song.ts', args: ['demo', '--as=epa', '--name=EPA streikt --film']})
+        expect(runCommand(music, {type: 'export-song', as: 'epa', name: 'EPA  streikt --film'})).toEqual({
+            script: 'tools/export-song.ts',
+            args: ['demo', '--as=epa', '--name=EPA streikt --film'],
+        })
         expect(runCommand(music, {type: 'export-song'})).toEqual({script: 'tools/export-song.ts', args: ['demo']})
         expect(() => runCommand(music, {type: 'export-song', as: '--film'})).toThrow('no usable song id')
         expect(() => runCommand(film, {type: 'export-song'})).toThrow('a film has no song')
@@ -373,15 +411,33 @@ describe('a run', () => {
 describe('the render servers', () => {
     const server = {name: 'a', url: 'http://a'}
     test('how busy one is, from its queue and stats', async () => {
-        const fetcher = (async (url: string) => Response.json(url.endsWith('/queue') ? {queue_running: [1], queue_pending: [1, 2]} : {devices: [{name: 'cuda:0 NVIDIA GeForce RTX 5090 : cudaMallocAsync', vram_free: 2 ** 30 * 7.25, vram_total: 2 ** 30 * 32}]})) as unknown as typeof fetch
-        expect(await readServer(server, fetcher)).toEqual({name: 'a', reachable: true, running: 1, pending: 2, device: 'NVIDIA GeForce RTX 5090', freeGb: 7.3, totalGb: 32})
+        const fetcher = (async (url: string) =>
+            Response.json(
+                url.endsWith('/queue')
+                    ? {queue_running: [1], queue_pending: [1, 2]}
+                    : {devices: [{name: 'cuda:0 NVIDIA GeForce RTX 5090 : cudaMallocAsync', vram_free: 2 ** 30 * 7.25, vram_total: 2 ** 30 * 32}]},
+            )) as unknown as typeof fetch
+        expect(await readServer(server, fetcher)).toEqual({
+            name: 'a',
+            reachable: true,
+            running: 1,
+            pending: 2,
+            device: 'NVIDIA GeForce RTX 5090',
+            freeGb: 7.3,
+            totalGb: 32,
+        })
     })
     test('one that does not answer or answers an error is not reachable, and does not fail the page', async () => {
-        const down = (async () => { throw new Error('refused') }) as unknown as typeof fetch
+        const down = (async () => {
+            throw new Error('refused')
+        }) as unknown as typeof fetch
         const bad = (async () => new Response('Bad Gateway', {status: 502})) as unknown as typeof fetch
         for (const fetcher of [down, bad]) expect(await readServer(server, fetcher)).toEqual({name: 'a', reachable: false, running: 0, pending: 0})
     })
-    const all = [{name: 'rtx', url: 'http://rtx'}, {name: 'radeon', url: 'http://radeon'}]
+    const all = [
+        {name: 'rtx', url: 'http://rtx'},
+        {name: 'radeon', url: 'http://radeon'},
+    ]
     test('a choice by name comes to the URLs of the settings; all of them is the same as saying nothing', () => {
         expect(chosenUrls(all, ['radeon'])).toEqual(['http://radeon'])
         expect(chosenUrls(all, ['rtx', 'radeon'])).toBeUndefined()
@@ -394,7 +450,12 @@ describe('the render servers', () => {
     })
     test('a server of the settings named by its URL keeps its name and credentials', async () => {
         const file = join(root, 'settings-servers.json')
-        write(file, {comfy: [{url: 'http://rtx:8188', name: 'rtx', token: 'secret'}, {url: 'http://radeon', name: 'radeon'}]})
+        write(file, {
+            comfy: [
+                {url: 'http://rtx:8188', name: 'rtx', token: 'secret'},
+                {url: 'http://radeon', name: 'radeon'},
+            ],
+        })
         const before = {settings: process.env.FEVERSLOP_SETTINGS, comfy: process.env.FEVERSLOP_COMFY}
         process.env.FEVERSLOP_SETTINGS = file
         process.env.FEVERSLOP_COMFY = 'http://rtx:8188'
@@ -440,10 +501,17 @@ describe('how far a run has come', () => {
     })
     const started = 1_500_000
     test('what is rendered, on a server, waiting; what was there from before has nothing to do with it', () => {
-        expect(runProgress(dir(), 'bun index.ts x --render=videos', started, clips)).toEqual({clips: {'slot-001': 'done', 'slot-002': 'rendering', 'slot-004': 'waiting'}, done: 1, total: 3})
+        expect(runProgress(dir(), 'bun index.ts x --render=videos', started, clips)).toEqual({
+            clips: {'slot-001': 'done', 'slot-002': 'rendering', 'slot-004': 'waiting'},
+            done: 1,
+            total: 3,
+        })
     })
     test('only the clips it names', () => {
-        expect(runProgress(dir(), 'bun index.ts x --render=videos --only=slot-001,slot-004', started, clips)?.clips).toEqual({'slot-001': 'done', 'slot-004': 'waiting'})
+        expect(runProgress(dir(), 'bun index.ts x --render=videos --only=slot-001,slot-004', started, clips)?.clips).toEqual({
+            'slot-001': 'done',
+            'slot-004': 'waiting',
+        })
     })
     test('with --again a clip from before still is to come', () => {
         expect(runProgress(dir(), 'bun index.ts x --render=videos --only=slot-003 --again', started, clips)?.clips).toEqual({'slot-003': 'waiting'})
@@ -466,7 +534,9 @@ describe('how far a run has come', () => {
 
 describe('what a failure means', () => {
     test('what can be told surely, in words, with what to do', () => {
-        expect(explainFailure('part of slot-016: ComfyUI job failed in MiniMaxH3AddGuide - HIP out of memory. Tried to allocate 7.17 GiB.')?.text).toContain('ran out of memory')
+        expect(explainFailure('part of slot-016: ComfyUI job failed in MiniMaxH3AddGuide - HIP out of memory. Tried to allocate 7.17 GiB.')?.text).toContain(
+            'ran out of memory',
+        )
         expect(explainFailure('clip slot-046: CUDA out of memory')?.text).toContain('ran out of memory')
         expect(explainFailure('ComfyUI x (http://x) has not answered for 5 minutes - start it again')?.text).toContain('does not answer')
         expect(explainFailure('No ComfyUI server reachable (http://x)')?.text).toContain('does not answer')
@@ -478,7 +548,14 @@ describe('what a failure means', () => {
     test('forty clips out of memory are one thing to do', async () => {
         const project = target('explained')
         const failures = Array.from({length: 3}, (_, n) => `clip slot-00${n}: CUDA out of memory`)
-        write(join(project.dir, 'logs/last-run.json'), {command: 'bun index.ts explained', pid: 1, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), exitCode: 1, failures})
+        write(join(project.dir, 'logs/last-run.json'), {
+            command: 'bun index.ts explained',
+            pid: 1,
+            startedAt: new Date().toISOString(),
+            endedAt: new Date().toISOString(),
+            exitCode: 1,
+            failures,
+        })
         const {lastRun} = await readEditorProject(project)
         expect(lastRun?.explained).toHaveLength(1)
         expect(lastRun?.failures).toHaveLength(3)
@@ -493,7 +570,16 @@ describe('the start page', () => {
         write(join(project.dir, 'videos/slot-001.mp4'))
         write(join(project.dir, 'assets/clips/slot-001_ff.png'))
         write(join(project.dir, 'assets/characters/ann.png'))
-        expect(readListing(project)).toMatchObject({id: 'listed', kind: 'music', title: 'listed', clips: 2, rendered: 1, pictures: 1, final: 'missing', thumb: {file: 'assets/clips/slot-001_ff.png'}})
+        expect(readListing(project)).toMatchObject({
+            id: 'listed',
+            kind: 'music',
+            title: 'listed',
+            clips: 2,
+            rendered: 1,
+            pictures: 1,
+            final: 'missing',
+            thumb: {file: 'assets/clips/slot-001_ff.png'},
+        })
     })
     test('takes of one thing fold together, from their ids alone', () => {
         const same = (...ids: string[]) => expect(new Set(ids.map(projectGroup)).size).toBe(1)
@@ -519,10 +605,19 @@ describe('the start page', () => {
         mkdirSync(publicDir, {recursive: true})
         writeFileSync(join(publicDir, 'index.html'), '<title>Workspace</title>')
         const handler = editorHandler(undefined, {publicDir})
-        const {projects} = await (await handler(new Request('http://localhost/api/projects'))).json() as { projects: { id: string, kind: string }[] }
+        const {projects} = (await (await handler(new Request('http://localhost/api/projects'))).json()) as {projects: {id: string; kind: string}[]}
         expect(projects.some(p => p.id === 'listed' && p.kind === 'music')).toBe(true)
         expect(projects.some(p => p.id === 'titled' && p.kind === 'film')).toBe(true)
-        for (const path of ['/', '/library', '/p/music/listed/', '/p/music/listed/references', '/p/music/listed/direction', '/p/film/titled/direction', '/p/film/titled/casting']) expect((await handler(new Request(`http://localhost${path}`))).headers.get('content-type')).toContain('text/html')
+        for (const path of [
+            '/',
+            '/library',
+            '/p/music/listed/',
+            '/p/music/listed/references',
+            '/p/music/listed/direction',
+            '/p/film/titled/direction',
+            '/p/film/titled/casting',
+        ])
+            expect((await handler(new Request(`http://localhost${path}`))).headers.get('content-type')).toContain('text/html')
     })
 })
 
@@ -534,21 +629,54 @@ describe('the finished videos of a project', () => {
         expect(finalLabel('demo', 'demo-48fps.mp4')).toMatchObject({label: 'Final 48 fps'})
         expect(finalLabel('demo', 'demo-48fps-finished.mp4')).toMatchObject({label: 'Final 48 fps finished'})
         expect(finalLabel('demo', 'demo-preview.mp4')).toMatchObject({label: 'Preview video', preview: true})
-        for (const other of ['demo-partial.mp4', 'demo-partial-48fps.mp4', 'demo-2.mp4', 'other.mp4', 'demo.srt', 'demo-b.mp4']) expect(finalLabel('demo', other)).toBeUndefined()
-        const order = ['demo-preview.mp4', 'demo-48fps-finished.mp4', 'demo.mp4', 'demo-48fps.mp4', 'demo-finished.mp4'].sort((a, b) => finalLabel('demo', a)!.order - finalLabel('demo', b)!.order)
+        for (const other of ['demo-partial.mp4', 'demo-partial-48fps.mp4', 'demo-2.mp4', 'other.mp4', 'demo.srt', 'demo-b.mp4'])
+            expect(finalLabel('demo', other)).toBeUndefined()
+        const order = ['demo-preview.mp4', 'demo-48fps-finished.mp4', 'demo.mp4', 'demo-48fps.mp4', 'demo-finished.mp4'].sort(
+            (a, b) => finalLabel('demo', a)!.order - finalLabel('demo', b)!.order,
+        )
         expect(order).toEqual(['demo.mp4', 'demo-finished.mp4', 'demo-48fps.mp4', 'demo-48fps-finished.mp4', 'demo-preview.mp4'])
     })
     test('each with its size and frame rate, and whether it is older than the clips', async () => {
         const project = target('finals')
         const video = async (name: string, size: string, rate: number) => {
             mkdirSync(project.dir, {recursive: true})
-            const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=black:s=${size}:r=${rate}`, '-frames:v', '4', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(project.dir, name)], {stdout: 'ignore', stderr: 'ignore'})
+            const proc = Bun.spawn(
+                [
+                    'ffmpeg',
+                    '-y',
+                    '-v',
+                    'error',
+                    '-f',
+                    'lavfi',
+                    '-i',
+                    `color=black:s=${size}:r=${rate}`,
+                    '-frames:v',
+                    '4',
+                    '-c:v',
+                    'libx264',
+                    '-preset',
+                    'ultrafast',
+                    '-pix_fmt',
+                    'yuv420p',
+                    join(project.dir, name),
+                ],
+                {stdout: 'ignore', stderr: 'ignore'},
+            )
             expect(await proc.exited).toBe(0)
         }
         await video('finals.mp4', '64x36', 24)
         await video('finals-48fps.mp4', '128x72', 48)
         await video('finals-partial.mp4', '64x36', 24)
-        write(join(project.dir, 'output/clips/slot-001.json'), {id: 'slot-001', frameStart: 0, frames: 24, section: 'A', beatId: 'b', shots: [], assets: {pictures: [], audio: []}, prompt: ''})
+        write(join(project.dir, 'output/clips/slot-001.json'), {
+            id: 'slot-001',
+            frameStart: 0,
+            frames: 24,
+            section: 'A',
+            beatId: 'b',
+            shots: [],
+            assets: {pictures: [], audio: []},
+            prompt: '',
+        })
         write(join(project.dir, 'videos/slot-001.mp4'))
         utimesSync(join(project.dir, 'videos/slot-001.mp4'), old, old)
         utimesSync(join(project.dir, 'finals-48fps.mp4'), new Date(500_000), new Date(500_000))
@@ -561,7 +689,17 @@ describe('the finished videos of a project', () => {
 })
 
 describe('marks', () => {
-    const clip = (id: string, more = {}) => ({id, frameStart: 0, frames: 24, section: 'A', beatId: 'b', shots: [], assets: {pictures: [], audio: []}, prompt: '', ...more})
+    const clip = (id: string, more = {}) => ({
+        id,
+        frameStart: 0,
+        frames: 24,
+        section: 'A',
+        beatId: 'b',
+        shots: [],
+        assets: {pictures: [], audio: []},
+        prompt: '',
+        ...more,
+    })
     test('what is known against a clip, from what is on disk', async () => {
         const project = target('marked')
         const {dir} = project
@@ -573,11 +711,27 @@ describe('marks', () => {
         write(join(dir, 'assets/clips/slot-001_lf.png'))
         write(join(dir, 'videos/slot-003.mp4'))
         write(join(dir, 'old/leaks/slot-003-seed-1.mp4'))
-        write(join(dir, 'logs/last-run.json'), {command: 'bun index.ts marked', pid: 1, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), exitCode: 1, failures: ['clip slot-001: HIP out of memory']})
+        write(join(dir, 'logs/last-run.json'), {
+            command: 'bun index.ts marked',
+            pid: 1,
+            startedAt: new Date().toISOString(),
+            endedAt: new Date().toISOString(),
+            exitCode: 1,
+            failures: ['clip slot-001: HIP out of memory'],
+        })
         const {statSync: stat} = await import('node:fs')
-        write(join(dir, 'output/leak-scan.json'), {clips: {'slot-003': {video: Math.round(stat(join(dir, 'videos/slot-003.mp4')).mtimeMs), from: 1, to: 2, samples: 3}, 'slot-002': {video: 1, from: 1, to: 2, samples: 3}}})
+        write(join(dir, 'output/leak-scan.json'), {
+            clips: {
+                'slot-003': {video: Math.round(stat(join(dir, 'videos/slot-003.mp4')).mtimeMs), from: 1, to: 2, samples: 3},
+                'slot-002': {video: 1, from: 1, to: 2, samples: 3},
+            },
+        })
         const {clips} = await readEditorProject(project)
-        const kinds = (id: string) => clips.find(c => c.id === id)!.marks.map(m => m.kind).toSorted()
+        const kinds = (id: string) =>
+            clips
+                .find(c => c.id === id)!
+                .marks.map(m => m.kind)
+                .toSorted()
         expect(kinds('slot-001')).toEqual(['dropped', 'failed'])
         // the scan of slot-002 was of another version of the file: it says nothing about this one
         expect(kinds('slot-002')).toEqual(['older-start'])
@@ -586,7 +740,13 @@ describe('marks', () => {
 })
 
 describe('the casting', () => {
-    const cast = {characters: [{id: 'ann', name: 'Ann'}, {id: 'band', name: 'Band', isGroup: true}], locations: [{id: 'hall', name: 'Hall'}]}
+    const cast = {
+        characters: [
+            {id: 'ann', name: 'Ann'},
+            {id: 'band', name: 'Band', isGroup: true},
+        ],
+        locations: [{id: 'hall', name: 'Hall'}],
+    }
     const project = () => target('cast')
     const save = async () => {
         write(join(root, 'library/characters/kael/asset.json'), {name: 'Kael', description: 'a man', source: 'x/y'})
@@ -601,9 +761,14 @@ describe('the casting', () => {
         write(join(dir, 'assets/characters/ann.png'))
         write(join(dir, 'casting.json'), JSON.stringify({characters: {ann: 'project:ann', band: 'project:band'}, locations: {hall: 'library:gone'}}, null, 2))
     })
-    afterAll(() => { delete process.env.FEVERSLOP_LIBRARY })
+    afterAll(() => {
+        delete process.env.FEVERSLOP_LIBRARY
+    })
     test('every role with its entry, the clips that use it and what is wrong', async () => {
-        const casting = await readCasting(project(), [{id: 'slot-001', pictures: [{file: 'assets/characters/ann.png'}]}, {id: 'slot-002', pictures: []}])
+        const casting = await readCasting(project(), [
+            {id: 'slot-001', pictures: [{file: 'assets/characters/ann.png'}]},
+            {id: 'slot-002', pictures: []},
+        ])
         expect(casting.options.character).toEqual(['kael'])
         const ann = casting.roles.find(r => r.id === 'ann')!
         expect(ann).toMatchObject({entry: 'project:ann', clips: ['slot-001'], picture: {file: 'assets/characters/ann.png'}, errors: []})
@@ -611,7 +776,10 @@ describe('the casting', () => {
     })
     test('a choice changes that one entry and nothing else', async () => {
         await writeCastingEntry(project(), 'character', 'ann', 'library:kael')
-        expect(JSON.parse(readFileSync(join(project().dir, 'casting.json'), 'utf8'))).toEqual({characters: {ann: 'library:kael', band: 'project:band'}, locations: {hall: 'library:gone'}})
+        expect(JSON.parse(readFileSync(join(project().dir, 'casting.json'), 'utf8'))).toEqual({
+            characters: {ann: 'library:kael', band: 'project:band'},
+            locations: {hall: 'library:gone'},
+        })
     })
     test('an asset the library does not have, or anything else, is refused', async () => {
         await expect(writeCastingEntry(project(), 'character', 'ann', 'library:typo')).rejects.toThrow('neither')
@@ -625,7 +793,12 @@ describe('the casting', () => {
     })
     test('the library knows who uses an asset from the casting files', async () => {
         const {assets} = await readLibrary()
-        expect(assets.find(a => a.id === 'kael')).toMatchObject({kind: 'character', name: 'Kael', picture: {file: 'characters/kael/picture.png'}, usedBy: [{kind: 'music', id: 'cast', role: 'ann'}]})
+        expect(assets.find(a => a.id === 'kael')).toMatchObject({
+            kind: 'character',
+            name: 'Kael',
+            picture: {file: 'characters/kael/picture.png'},
+            usedBy: [{kind: 'music', id: 'cast', role: 'ann'}],
+        })
     })
     test('what is being made in the library is not served', async () => {
         const library = join(root, 'library')
@@ -643,7 +816,8 @@ describe('a choice per clip of a film', () => {
         write(join(film.dir, 'input/idea.txt'))
         write(join(film.dir, 'output/clips/clip-001.json'), {id: 'clip-001'})
         const handler = editorHandler()
-        const post = (clip: string, body: unknown) => handler(new Request(`http://localhost/p/film/chosen/api/override/${clip}`, {method: 'POST', body: JSON.stringify(body)}))
+        const post = (clip: string, body: unknown) =>
+            handler(new Request(`http://localhost/p/film/chosen/api/override/${clip}`, {method: 'POST', body: JSON.stringify(body)}))
         expect((await post('clip-001', {placeView: 3})).status).toBe(200)
         expect(JSON.parse(readFileSync(join(film.dir, 'clip-overrides/clip-001.json'), 'utf8'))).toEqual({placeView: 3})
         expect((await post('clip-001', null)).status).toBe(200)
@@ -652,36 +826,41 @@ describe('a choice per clip of a film', () => {
     })
 })
 
- test('malformed URL paths return a JSON error', async () => {
+test('malformed URL paths return a JSON error', async () => {
     const response = await editorHandler()(new Request('http://localhost/%zz'))
     expect(response.status).toBe(503)
     expect(((await response.json()) as {error: string}).error).toBeTruthy()
- })
- test('traversal overrides cannot replace or delete project.json', async () => {
+})
+test('traversal overrides cannot replace or delete project.json', async () => {
     const film = target('safe-override', 'film')
     write(join(film.dir, 'input/idea.txt'))
     const file = join(film.dir, 'project.json')
     const original = '{"screenplay":{}}'
     write(file, original)
     for (const body of [{placeView: 3}, null]) {
-        const response = await editorHandler()(new Request('http://localhost/p/film/safe-override/api/override/..%2F..%2Fproject', {method: 'POST', body: JSON.stringify(body)}))
+        const response = await editorHandler()(
+            new Request('http://localhost/p/film/safe-override/api/override/..%2F..%2Fproject', {method: 'POST', body: JSON.stringify(body)}),
+        )
         expect(response.status).toBe(409)
         expect(readFileSync(file, 'utf8')).toBe(original)
     }
- })
- test('film listings include prop pictures', () => {
+})
+test('film listings include prop pictures', () => {
     const film = target('props-count', 'film')
     write(join(film.dir, 'input/idea.txt'))
     write(join(film.dir, 'assets/props/umbrella.png'))
     expect(readListing(film).pictures).toBe(1)
- })
- test('unused GET run route is absent', async () => {
+})
+test('unused GET run route is absent', async () => {
     write(join(target('no-run').dir, 'input/idea.txt'))
     expect((await editorHandler()(new Request('http://localhost/p/music/no-run/api/run'))).status).toBe(404)
- })
+})
 
 describe('a picture sent from the page', () => {
-    const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082', 'hex')
+    const png = Buffer.from(
+        '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a40000000049454e44ae426082',
+        'hex',
+    )
     test('is what its first bytes say: a PNG, a JPEG or a WebP, never what its name says', () => {
         expect(pictureType(png)).toBe('png')
         expect(pictureType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('jpg')
@@ -701,17 +880,24 @@ describe('a picture sent from the page', () => {
         await expect(takePictureUpload(new File(['hello'], 'a.png'))).rejects.toThrow('not a picture')
         await expect(takePictureUpload(new File([], 'a.png'))).rejects.toThrow('empty')
         await expect(takePictureUpload('a.png')).rejects.toThrow('no picture sent')
-        expect(() => checkUploadSize(new Request('http://localhost/', {method: 'POST', headers: {'content-length': String(UPLOAD_MAX_BYTES * 2)}}))).toThrow('too large')
+        expect(() => checkUploadSize(new Request('http://localhost/', {method: 'POST', headers: {'content-length': String(UPLOAD_MAX_BYTES * 2)}}))).toThrow(
+            'too large',
+        )
     })
     test('as the anchor of a reference picture: only for one there is, only a picture', async () => {
         const project = target('own-anchor')
         write(join(project.dir, 'input/lyrics.txt'))
-        write(join(project.dir, 'output/assets.json'), [{kind: 'character', id: 'ann', name: 'Ann', file: 'assets/characters/ann.png', prompt: 'Ann', description: 'Ann'}, {kind: 'prop', id: 'cup', name: 'Cup', file: 'assets/props/cup.png', prompt: 'a cup', description: 'a cup'}])
+        write(join(project.dir, 'output/assets.json'), [
+            {kind: 'character', id: 'ann', name: 'Ann', file: 'assets/characters/ann.png', prompt: 'Ann', description: 'Ann'},
+            {kind: 'prop', id: 'cup', name: 'Cup', file: 'assets/props/cup.png', prompt: 'a cup', description: 'a cup'},
+        ])
         const send = async (picture: string, file: File) => {
             const form = new FormData()
             form.set('picture', file)
-            const response = await editorHandler()(new Request(`http://localhost/p/music/own-anchor/api/references/${picture}/own-anchor`, {method: 'POST', body: form}))
-            return {status: response.status, error: ((await response.json()) as { error?: string }).error}
+            const response = await editorHandler()(
+                new Request(`http://localhost/p/music/own-anchor/api/references/${picture}/own-anchor`, {method: 'POST', body: form}),
+            )
+            return {status: response.status, error: ((await response.json()) as {error?: string}).error}
         }
         expect(await send('nobody', new File([png], 'a.png'))).toEqual({status: 409, error: 'no picture nobody'})
         expect((await send('cup', new File([png], 'a.png'))).error).toContain('is a prop')

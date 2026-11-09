@@ -1,19 +1,19 @@
-import {closeSync, existsSync, openSync, readdirSync, readSync, rmSync, statSync} from "node:fs";
-import {join} from "node:path";
-import {lockHolder, verifiedLockHolder} from "../lock.ts";
-import {cancelJobs, jobsQueuedSince} from "../comfy-cancel.ts";
-import {type ComfyServer, loadSettings} from "../settings.ts";
+import {closeSync, existsSync, openSync, readdirSync, readSync, rmSync, statSync} from 'node:fs'
+import {join} from 'node:path'
+import {lockHolder, verifiedLockHolder} from '../lock.ts'
+import {cancelJobs, jobsQueuedSince} from '../comfy-cancel.ts'
+import {type ComfyServer, loadSettings} from '../settings.ts'
 
 // how long a stopped run gets to cancel its own jobs before what is left of them is cancelled from here
 const STOP_WAIT_MS = 10_000
-import {lastRun, runState} from "../run-record.ts";
-import type {EditorKind, EditorTarget} from "./project.ts";
-import {STEP_NAMES} from "../project.ts";
-import {UNTIL_STAGES} from "../stages.ts";
-import {FILM_STEP_NAMES} from "../film/store.ts";
-import {VIDEO_NAME} from "../postwork/video.ts";
-import type {RunInfo, RunRequest} from '../../shared/workspace.ts';
-export type {RunInfo} from '../../shared/workspace.ts';
+import {lastRun, runState} from '../run-record.ts'
+import type {EditorKind, EditorTarget} from './project.ts'
+import {STEP_NAMES} from '../project.ts'
+import {UNTIL_STAGES} from '../stages.ts'
+import {FILM_STEP_NAMES} from '../film/store.ts'
+import {VIDEO_NAME} from '../postwork/video.ts'
+import type {RunInfo, RunRequest} from '../../shared/workspace.ts'
+export type {RunInfo} from '../../shared/workspace.ts'
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
 // terminal, so the two exclude each other, and it is asked for by what it should do - never as a command line from the page.
@@ -28,9 +28,19 @@ export type RunAction =
     | RunRequest
     // look: a music video planned up to the look - its pictures are rendered without planning the shots first (#540)
     // anchorFile: the user's own picture as its anchor (an upload), with the description given by hand (descriptionFile) or read from it (describe)
-    | { type: 'pictures', ids: string[], again?: boolean, newAnchor?: boolean, promptFile?: string, look?: boolean, anchorFile?: string, descriptionFile?: string, describe?: boolean }
+    | {
+          type: 'pictures'
+          ids: string[]
+          again?: boolean
+          newAnchor?: boolean
+          promptFile?: string
+          look?: boolean
+          anchorFile?: string
+          descriptionFile?: string
+          describe?: boolean
+      }
 
-const pipeline = (kind: EditorKind) => kind === 'film' ? 'film.ts' : 'index.ts'
+const pipeline = (kind: EditorKind) => (kind === 'film' ? 'film.ts' : 'index.ts')
 
 // what a command of the last run or of `status` may hold to be started from the page: rendering, nothing that asks in the terminal, no keys.
 // Which servers a run goes to is chosen again on the page, so what the command said about them is left out
@@ -46,28 +56,53 @@ export function allowedOptions(kind: EditorKind, id: string, command: string): s
 }
 
 /** The command an action comes to: script and arguments. Throws on what cannot be asked for. */
-export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action: RunAction): { script: string, args: string[] } {
+export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action: RunAction): {script: string; args: string[]} {
     const run = (...args: string[]) => ({script: pipeline(kind), args: [id, ...args]})
     const checked = (ids: string[], pattern: RegExp, what: string) => {
-        if (!Array.isArray(ids) || !ids.length || ids.some(c => typeof c !== 'string' || !pattern.test(c))) throw new Error(`no such ${what}: ${JSON.stringify(ids)}`)
+        if (!Array.isArray(ids) || !ids.length || ids.some(c => typeof c !== 'string' || !pattern.test(c)))
+            throw new Error(`no such ${what}: ${JSON.stringify(ids)}`)
         return ids.join(',')
     }
     switch (action.type) {
         case 'direction':
             return {script: 'tools/direction.ts', args: [id, ...(kind === 'film' ? ['--film'] : []), '--preview']}
         case 'clips':
-            return run('--render=videos', `--only=${checked(action.ids, CLIP_ID, 'clips')}`, ...(action.again ? ['--again'] : []), ...(action.preview ? ['--preview'] : []))
+            return run(
+                '--render=videos',
+                `--only=${checked(action.ids, CLIP_ID, 'clips')}`,
+                ...(action.again ? ['--again'] : []),
+                ...(action.preview ? ['--preview'] : []),
+            )
         case 'pictures':
-            return run('--render=images', `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`, ...(action.again ? ['--again'] : []), ...(action.newAnchor ? ['--new-anchor'] : []), ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []), ...(action.anchorFile ? [`--picture-anchor=${action.anchorFile}`] : []), ...(action.descriptionFile ? [`--picture-description=${action.descriptionFile}`] : []), ...(action.describe ? ['--describe-picture'] : []), ...(action.look && kind === 'music' ? ['--until=look'] : []))
+            return run(
+                '--render=images',
+                `--only=${checked(action.ids, PICTURE_ID, 'pictures')}`,
+                ...(action.again ? ['--again'] : []),
+                ...(action.newAnchor ? ['--new-anchor'] : []),
+                ...(action.promptFile ? [`--picture-prompt=${action.promptFile}`] : []),
+                ...(action.anchorFile ? [`--picture-anchor=${action.anchorFile}`] : []),
+                ...(action.descriptionFile ? [`--picture-description=${action.descriptionFile}`] : []),
+                ...(action.describe ? ['--describe-picture'] : []),
+                ...(action.look && kind === 'music' ? ['--until=look'] : []),
+            )
         case 'adapt-story': {
             if (kind === 'music') return {script: 'tools/story.ts', args: [id, '--adapt']}
             // a film: its screenplay told anew for the roles that come and go (#589) - one argument each, never a line of shell
-            const add = action.add ?? [], remove = action.remove ?? []
+            const add = action.add ?? [],
+                remove = action.remove ?? []
             const plain = (value: unknown, max: number) => typeof value === 'string' && !!value.trim() && value.length <= max && !/[\r\n:]/.test(value)
-            if (!Array.isArray(add) || add.some(a => !plain(a?.name, 80) || typeof a?.role !== 'string' || !a.role.trim() || a.role.length > 600 || /[\r\n]/.test(a.role))) throw new Error('a role added has a name (no colon) and who they are in the story')
-            if (!Array.isArray(remove) || remove.some(r => typeof r !== 'string' || !PICTURE_ID.test(r))) throw new Error(`no such characters: ${JSON.stringify(remove)}`)
+            if (
+                !Array.isArray(add) ||
+                add.some(a => !plain(a?.name, 80) || typeof a?.role !== 'string' || !a.role.trim() || a.role.length > 600 || /[\r\n]/.test(a.role))
+            )
+                throw new Error('a role added has a name (no colon) and who they are in the story')
+            if (!Array.isArray(remove) || remove.some(r => typeof r !== 'string' || !PICTURE_ID.test(r)))
+                throw new Error(`no such characters: ${JSON.stringify(remove)}`)
             if (!add.length && !remove.length) throw new Error('no role to add or take out')
-            return {script: 'tools/story.ts', args: [id, '--film', '--adapt', ...add.map(a => `--add=${a.name.trim()}: ${a.role.trim()}`), ...remove.map(r => `--remove=${r}`)]}
+            return {
+                script: 'tools/story.ts',
+                args: [id, '--film', '--adapt', ...add.map(a => `--add=${a.name.trim()}: ${a.role.trim()}`), ...remove.map(r => `--remove=${r}`)],
+            }
         }
         case 'look-pictures':
             if (kind !== 'music') throw new Error('a film has its pictures from the look on: render them on the References page')
@@ -77,18 +112,30 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         case 'plan': {
             const steps: readonly string[] = kind === 'film' ? FILM_STEP_NAMES : STEP_NAMES
             const redo = action.redo ?? []
-            if (!Array.isArray(redo) || redo.some(step => typeof step !== 'string' || !steps.includes(step))) throw new Error(`no such steps: ${JSON.stringify(redo)}`)
+            if (!Array.isArray(redo) || redo.some(step => typeof step !== 'string' || !steps.includes(step)))
+                throw new Error(`no such steps: ${JSON.stringify(redo)}`)
             if (action.until !== undefined && !(UNTIL_STAGES as readonly string[]).includes(action.until)) throw new Error(`no such stage: ${action.until}`)
             return run(...(redo.length ? [`--redo=${redo.join(',')}`] : []), ...(action.until ? [`--until=${action.until}`] : []))
         }
         case 'retake':
-            if (!CLIP_ID.test(action.clip) || !/^(\d+(\.\d+)?-\d+(\.\d+)?|shot\d+)$/.test(action.range)) throw new Error(`not a part of a clip: ${action.clip}:${action.range}`)
+            if (!CLIP_ID.test(action.clip) || !/^(\d+(\.\d+)?-\d+(\.\d+)?|shot\d+)$/.test(action.range))
+                throw new Error(`not a part of a clip: ${action.clip}:${action.range}`)
             return run(`--retake=${action.clip}:${action.range}`)
         case 'repeat':
         case 'next': {
             // a refinish of this project, with nothing but its own options
             const again = /^bun tools\/refinish\.ts (\S+)((?: --[a-z]+(?:=[A-Za-z0-9.,_-]+)?)*)$/.exec(action.command.trim())
-            if (again && again[1] === id) return {script: 'tools/refinish.ts', args: [id, ...again[2]!.trim().split(' ').filter(option => option && !SERVERS_FLAG.test(option))]}
+            if (again && again[1] === id)
+                return {
+                    script: 'tools/refinish.ts',
+                    args: [
+                        id,
+                        ...again[2]!
+                            .trim()
+                            .split(' ')
+                            .filter(option => option && !SERVERS_FLAG.test(option)),
+                    ],
+                }
             const options = allowedOptions(kind, id, action.command)
             if (!options) throw new Error(`this command cannot be started from here - run it in the terminal: ${action.command}`)
             return run(...options)
@@ -170,8 +217,16 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
                 if (!action.extra.length) args.push('--no-lines')
                 for (const line of action.extra) text('line', line)
             }
-            for (const [name, on] of [['opening', action.opening], ['end', action.end], ['facts', action.facts]] as const) if (on !== undefined) args.push(on ? `--${name}` : `--no-${name}`)
-            for (const [name, value] of [['opening-seconds', action.openingSeconds], ['end-seconds', action.endSeconds]] as const) {
+            for (const [name, on] of [
+                ['opening', action.opening],
+                ['end', action.end],
+                ['facts', action.facts],
+            ] as const)
+                if (on !== undefined) args.push(on ? `--${name}` : `--no-${name}`)
+            for (const [name, value] of [
+                ['opening-seconds', action.openingSeconds],
+                ['end-seconds', action.endSeconds],
+            ] as const) {
                 if (value === undefined) continue
                 if (!/^\d+(\.\d+)?$/.test(String(value))) throw new Error(`no such ${name}: ${value}`)
                 args.push(`--${name}=${value}`)
@@ -181,11 +236,15 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return {script: 'tools/credits.ts', args}
         }
         case 'add-view':
-            if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim()) throw new Error('a further view is for a place of a film, with a name and what it shows')
+            if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim())
+                throw new Error('a further view is for a place of a film, with a name and what it shows')
             return {script: 'tools/add-view.ts', args: [id, action.location, `--name=${action.name.trim()}`, `--shows=${action.shows.trim()}`]}
         case 'export-asset':
             if (!PICTURE_ID.test(action.asset.replace('--', '-')) || (action.as && !PICTURE_ID.test(action.as))) throw new Error('no such asset')
-            return {script: 'tools/export-asset.ts', args: [id, action.asset, ...(action.as ? [`--as=${action.as}`] : []), ...(kind === 'film' ? ['--film'] : [])]}
+            return {
+                script: 'tools/export-asset.ts',
+                args: [id, action.asset, ...(action.as ? [`--as=${action.as}`] : []), ...(kind === 'film' ? ['--film'] : [])],
+            }
         case 'export-song': {
             if (kind === 'film') throw new Error('a film has no song to put into the library')
             if (action.as && !PICTURE_ID.test(action.as)) throw new Error(`"${action.as}" is no usable song id - lowercase letters, digits and dashes`)
@@ -195,12 +254,11 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
     }
 }
 
-
 type Own = {
-    info: RunInfo,
-    proc: Bun.Subprocess,
-    lines: string[],
-    dropped: number,        // lines no longer kept, so that a page that follows knows where it is
+    info: RunInfo
+    proc: Bun.Subprocess
+    lines: string[]
+    dropped: number // lines no longer kept, so that a page that follows knows where it is
 }
 
 /** A stream of text as lines. A line a progress bar keeps rewriting (\r) counts as one each time. */
@@ -237,7 +295,14 @@ export class RunControl {
     start(target: EditorTarget, action: RunAction, servers?: string[], temporary: string[] = []): RunInfo {
         return this.dropping(temporary, () => {
             const {script, args} = runCommand(target, action)
-            return this.spawn(target, script, args, action.type !== 'export-asset' && action.type !== 'export-song' && action.type !== 'leak-scan', servers, temporary)
+            return this.spawn(
+                target,
+                script,
+                args,
+                action.type !== 'export-asset' && action.type !== 'export-song' && action.type !== 'leak-scan',
+                servers,
+                temporary,
+            )
         })
     }
 
@@ -259,10 +324,29 @@ export class RunControl {
         const running = this.own.get(this.key(target))
         if (running?.info.running) throw new Error(`a run is going on here: ${running.info.command}`)
         const holder = locks ? lockHolder(target.dir) : undefined
-        if (holder) throw new Error(`${target.id} is being worked on by another run (process ${holder}) - it can be followed and stopped here, a second one is not started`)
+        if (holder)
+            throw new Error(
+                `${target.id} is being worked on by another run (process ${holder}) - it can be followed and stopped here, a second one is not started`,
+            )
         // no terminal: nothing can be asked (stdin closed), no colours and no animation in the log
-        const proc = Bun.spawn(['bun', join(this.root, script), ...args], {stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1', FEVERSLOP_QUIET: '', FORCE_COLOR: '0', ...(servers ? {FEVERSLOP_COMFY: servers.join(',')} : {})}})
-        const own: Own = {info: {source: 'here', command: ['bun', script, ...args, ...(servers ? [`--comfy=${servers.join(',')}`] : [])].join(' '), pid: proc.pid, startedAt: new Date().toISOString(), running: true}, proc, lines: [], dropped: 0}
+        const proc = Bun.spawn(['bun', join(this.root, script), ...args], {
+            stdin: 'ignore',
+            stdout: 'pipe',
+            stderr: 'pipe',
+            env: {...process.env, NO_COLOR: '1', FEVERSLOP_QUIET: '', FORCE_COLOR: '0', ...(servers ? {FEVERSLOP_COMFY: servers.join(',')} : {})},
+        })
+        const own: Own = {
+            info: {
+                source: 'here',
+                command: ['bun', script, ...args, ...(servers ? [`--comfy=${servers.join(',')}`] : [])].join(' '),
+                pid: proc.pid,
+                startedAt: new Date().toISOString(),
+                running: true,
+            },
+            proc,
+            lines: [],
+            dropped: 0,
+        }
         const add = (text: string) => {
             own.lines.push(text)
             if (own.lines.length > LINES_KEPT) {
@@ -272,10 +356,12 @@ export class RunControl {
         }
         followLines(proc.stdout as ReadableStream<Uint8Array>, add).catch(() => {})
         followLines(proc.stderr as ReadableStream<Uint8Array>, add).catch(() => {})
-        proc.exited.then(code => {
-            own.info.running = false
-            own.info.code = code
-        }).finally(() => dropFolders(temporary))
+        proc.exited
+            .then(code => {
+                own.info.running = false
+                own.info.code = code
+            })
+            .finally(() => dropFolders(temporary))
         this.own.set(this.key(target), own)
         return own.info
     }
@@ -287,13 +373,19 @@ export class RunControl {
         const holder = lockHolder(target.dir)
         if (holder) {
             const record = lastRun(target.dir)
-            return {source: 'terminal', command: record && runState(record) === 'running' ? record.command : `process ${holder}`, pid: holder, startedAt: record?.startedAt ?? '', running: true}
+            return {
+                source: 'terminal',
+                command: record && runState(record) === 'running' ? record.command : `process ${holder}`,
+                pid: holder,
+                startedAt: record?.startedAt ?? '',
+                running: true,
+            }
         }
         return own?.info
     }
 
     /** The lines from `after` on, as far as they are known: `next` is what to ask from the next time. */
-    lines(target: EditorTarget, after: number): { lines: string[], next: number } {
+    lines(target: EditorTarget, after: number): {lines: string[]; next: number} {
         const own = this.own.get(this.key(target))
         if (own && (own.info.running || !lockHolder(target.dir))) {
             const from = Math.max(0, after - own.dropped)
@@ -307,12 +399,12 @@ export class RunControl {
     }
 
     // the lines of the log being followed, per project: only the bytes appended since the last poll are read
-    private logs = new Map<string, { file: string, bytes: number, lines: string[] }>()
+    private logs = new Map<string, {file: string; bytes: number; lines: string[]}>()
 
     private terminalLog(key: string, file: string): string[] {
         let seen = this.logs.get(key)
         const size = statSync(file).size
-        if (!seen || seen.file !== file || size < seen.bytes) this.logs.set(key, seen = {file, bytes: 0, lines: []})
+        if (!seen || seen.file !== file || size < seen.bytes) this.logs.set(key, (seen = {file, bytes: 0, lines: []}))
         if (size > seen.bytes) {
             const chunk = Buffer.alloc(size - seen.bytes)
             const fd = openSync(file, 'r')
@@ -345,10 +437,13 @@ export class RunControl {
         } else {
             const holder = lockHolder(target.dir)
             if (!holder) return false
-            if (verifiedLockHolder(target.dir) !== holder) throw new Error('Cannot verify the process identity of this lock; stop the run in its original terminal')
+            if (verifiedLockHolder(target.dir) !== holder)
+                throw new Error('Cannot verify the process identity of this lock; stop the run in its original terminal')
             started = Date.parse(lastRun(target.dir)?.startedAt ?? '')
             process.kill(holder)
-            ended = (async () => { while (lockHolder(target.dir) === holder) await Bun.sleep(200) })()
+            ended = (async () => {
+                while (lockHolder(target.dir) === holder) await Bun.sleep(200)
+            })()
         }
         await Promise.race([ended, Bun.sleep(STOP_WAIT_MS)])
         if (Number.isFinite(started)) await cancelJobs(await jobsQueuedSince(target.dir, started, servers ?? (await loadSettings()).comfy))
@@ -359,6 +454,8 @@ export class RunControl {
 function newestLog(dir: string): string | undefined {
     const logs = join(dir, 'logs')
     if (!existsSync(logs)) return undefined
-    const files = readdirSync(logs).filter(f => f.endsWith('.log')).map(f => join(logs, f))
+    const files = readdirSync(logs)
+        .filter(f => f.endsWith('.log'))
+        .map(f => join(logs, f))
     return files.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]
 }

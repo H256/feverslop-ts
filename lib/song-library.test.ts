@@ -1,11 +1,11 @@
-import {afterAll, beforeAll, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {loadProjectConfig} from "./config.ts";
-import {projectInputs} from "./inputs.ts";
-import {fingerprintOf, type Project, ProjectStore} from "./project.ts";
-import {exportSong, importSong, librarySongIds, readLibrarySong, songsLike} from "./song-library.ts";
+import {afterAll, beforeAll, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {loadProjectConfig} from './config.ts'
+import {projectInputs} from './inputs.ts'
+import {fingerprintOf, type Project, ProjectStore} from './project.ts'
+import {exportSong, importSong, librarySongIds, readLibrarySong, songsLike} from './song-library.ts'
 
 // ProjectStore works in projects/<id> of the working directory: the test runs in a folder of its own
 const root = mkdtempSync(join(tmpdir(), 'song-library-'))
@@ -18,14 +18,29 @@ afterAll(() => {
 })
 
 const LYRICS = '[Chorus]\nEPA streikt\nUnd ich dreh mich im Kreis\n'
-const timing = {lines: [
-    {line: 0, sectionIndex: 0, section: 'Chorus', text: 'EPA streikt', start: 71, end: 72, words: [{text: 'EPA', start: 71, end: 71.5}, {text: 'streikt', start: 71.5, end: 72}], confidence: 1, byHand: true},
-    {line: 1, sectionIndex: 0, section: 'Chorus', text: 'Und ich dreh mich im Kreis', start: 72.5, end: 75, words: [], confidence: 0},
-]}
+const timing = {
+    lines: [
+        {
+            line: 0,
+            sectionIndex: 0,
+            section: 'Chorus',
+            text: 'EPA streikt',
+            start: 71,
+            end: 72,
+            words: [
+                {text: 'EPA', start: 71, end: 71.5},
+                {text: 'streikt', start: 71.5, end: 72},
+            ],
+            confidence: 1,
+            byHand: true,
+        },
+        {line: 1, sectionIndex: 0, section: 'Chorus', text: 'Und ich dreh mich im Kreis', start: 72.5, end: 75, words: [], confidence: 0},
+    ],
+}
 const music = {bpm: 120, durationSec: 90, downbeats: [], sections: [{label: 'Chorus', start: 0, end: 90, energy: 1}]}
 
 /** A project with input files, stems on disk and, with `planned`, the song's steps and a story on top, as a plan run leaves them. */
-function project(id: string, opts: { song?: string, lyrics?: string, planned?: boolean } = {}) {
+function project(id: string, opts: {song?: string; lyrics?: string; planned?: boolean} = {}) {
     const dir = join('projects', id)
     mkdirSync(join(dir, 'input'), {recursive: true})
     mkdirSync(join(dir, 'stems'), {recursive: true})

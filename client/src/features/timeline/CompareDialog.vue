@@ -24,14 +24,21 @@ const pick = () => {
   close()
   if (version.id) actions.pickVersion(clip, {...version, id: version.id})
 }
-const right = () => props.compared.refined ?? `${dateOf(props.compared.version.made)}${props.compared.version.seed !== undefined ? ` · seed ${props.compared.version.seed}` : ''}`
+const right = () =>
+  props.compared.refined ?? `${dateOf(props.compared.version.made)}${props.compared.version.seed !== undefined ? ` · seed ${props.compared.version.seed}` : ''}`
 </script>
 
 <template>
   <ModalDialog ref="modal" class="compare" label="Compare versions" @close="emit('close')">
     <div class="pair">
-      <div><p class="muted">{{ compared.refined ? 'The original' : compared.fresh ? 'Just rendered' : 'Now' }}</p><video ref="a" :src="compared.clip.video && mediaUrl(compared.clip.video, session.roots)" controls preload="auto" playsinline /></div>
-      <div><p class="muted">{{ right() }}</p><video ref="b" :src="mediaUrl({file: compared.version.video}, session.roots)" controls preload="auto" muted playsinline /></div>
+      <div>
+        <p class="muted">{{ compared.refined ? 'The original' : compared.fresh ? 'Just rendered' : 'Now' }}</p>
+        <video ref="a" :src="compared.clip.video && mediaUrl(compared.clip.video, session.roots)" controls preload="auto" playsinline />
+      </div>
+      <div>
+        <p class="muted">{{ right() }}</p>
+        <video ref="b" :src="mediaUrl({file: compared.version.video}, session.roots)" controls preload="auto" muted playsinline />
+      </div>
     </div>
     <div class="btn-row">
       <button class="btn primary" @click="together">Play both from the start</button>

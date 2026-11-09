@@ -1,6 +1,6 @@
-import {existsSync, renameSync, rmSync} from "node:fs";
-import {basename, join} from "node:path";
-import {startSpinner, styles} from "../log.ts";
+import {existsSync, renameSync, rmSync} from 'node:fs'
+import {basename, join} from 'node:path'
+import {startSpinner, styles} from '../log.ts'
 
 // What the post-work steps share: which final video a step starts from, the name of what it writes, and the encode.
 // A step reads one video of the project folder and writes a new one next to it, the name of the old one with its own
@@ -23,7 +23,8 @@ export const VIDEO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.mp4$/
  */
 export function sourceVideo(dir: string, id: string, from?: string): string {
     if (from !== undefined) {
-        if (!VIDEO_NAME.test(from) || from.endsWith('.partial.mp4')) throw new Error(`--from: "${from}" is not a video of the project - give the file name of one in ${dir}, e.g. ${id}.mp4`)
+        if (!VIDEO_NAME.test(from) || from.endsWith('.partial.mp4'))
+            throw new Error(`--from: "${from}" is not a video of the project - give the file name of one in ${dir}, e.g. ${id}.mp4`)
         if (!existsSync(join(dir, from))) throw new Error(`--from: there is no ${from} in ${dir}`)
         return join(dir, from)
     }
@@ -44,13 +45,17 @@ export async function encode(args: string[], target: string, frames: number, wha
     let frame = 0
     const stopSpinner = startSpinner(() => `${styles.name('ffmpeg')} ${styles.muted(`${what}${frame ? ` - frame ${frame} / ${frames}` : ''}`)}`)
     try {
-        const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-progress', 'pipe:1', '-nostats', ...args, partial], {stdout: 'pipe', stderr: 'pipe', ...(cwd ? {cwd} : {})})
+        const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-progress', 'pipe:1', '-nostats', ...args, partial], {
+            stdout: 'pipe',
+            stderr: 'pipe',
+            ...(cwd ? {cwd} : {}),
+        })
         const stderr = new Response(proc.stderr).text()
         for await (const chunk of proc.stdout) {
             const found = new TextDecoder().decode(chunk).match(/frame=(\d+)/g)
             if (found) frame = Number(found.at(-1)!.slice(6))
         }
-        if (await proc.exited !== 0) throw new Error(`ffmpeg could not write ${basename(target)}:\n${await stderr}`)
+        if ((await proc.exited) !== 0) throw new Error(`ffmpeg could not write ${basename(target)}:\n${await stderr}`)
     } catch (e) {
         rmSync(partial, {force: true})
         throw e
@@ -66,16 +71,24 @@ const OPEN_ELSEWHERE = new Set(['EPERM', 'EBUSY', 'EACCES'])
  * The finished video under its name - over the one of an earlier run. On Windows that fails while another program has the old
  * one open (a player, a virus scan): asked a few times, then said so; the new video goes, the old one stays as it was.
  */
-export async function putInPlace(partial: string, target: string, tries = 10, wait = 300, rename: (from: string, to: string) => void = renameSync): Promise<void> {
+export async function putInPlace(
+    partial: string,
+    target: string,
+    tries = 10,
+    wait = 300,
+    rename: (from: string, to: string) => void = renameSync,
+): Promise<void> {
     for (let attempt = 1; ; attempt++) {
         try {
             return rename(partial, target)
         } catch (e) {
-            const code = (e as { code?: string }).code
+            const code = (e as {code?: string}).code
             if (!code || !OPEN_ELSEWHERE.has(code)) throw e
             if (attempt >= tries) {
                 rmSync(partial, {force: true})
-                throw new Error(`${basename(target)} is open in another program (a video player, the workspace in another tab) and cannot be replaced - close it there and run this again`)
+                throw new Error(
+                    `${basename(target)} is open in another program (a video player, the workspace in another tab) and cannot be replaced - close it there and run this again`,
+                )
             }
             await Bun.sleep(wait)
         }

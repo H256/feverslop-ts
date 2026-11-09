@@ -1,27 +1,62 @@
-import {describe, expect, test} from "bun:test";
-import {buildClipRequests, type Input, layoutLine, singingPerBeat} from "./compose.ts";
-import type {Character, StoryBeat} from "./project.ts";
-import {slotVocals} from './lyrics.ts';
+import {describe, expect, test} from 'bun:test'
+import {buildClipRequests, type Input, layoutLine, singingPerBeat} from './compose.ts'
+import type {Character, StoryBeat} from './project.ts'
+import {slotVocals} from './lyrics.ts'
 
 const characters: Character[] = [
     {id: 'shaman', name: 'Shaman', role: 'drummer'},
     {id: 'runa', name: 'Runa', role: 'cat'},
 ]
-const beat = {id: 'b1', order: 1, summary: 'The Shaman drums.', moments: ['The Shaman drums.'], locationId: 'clearing', characterIds: ['shaman'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
+const beat = {
+    id: 'b1',
+    order: 1,
+    summary: 'The Shaman drums.',
+    moments: ['The Shaman drums.'],
+    locationId: 'clearing',
+    characterIds: ['shaman'],
+    intensity: 0.5,
+    weight: 1,
+    kind: 'build',
+    stateAfter: [],
+} as StoryBeat
 
 test('a split word reaches two final prompts without a false stop before its continuation', () => {
-    const words = [{text: 'Rosma', start: 3, end: 4}, {text: 'rienbaum.', joined: true, start: 4, end: 5.9}]
+    const words = [
+        {text: 'Rosma', start: 3, end: 4},
+        {text: 'rienbaum.', joined: true, start: 4, end: 5.9},
+    ]
     const lyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: 'Rosmarienbaum.', start: 3, end: 5.9, words, confidence: 1}]}
-    const slots = [0, 4].map((start, index) => ({id: `slot-${index}`, index, section: 'Verse', start, end: start + 4, bars: 2, energy: .5, lyrics: [], vocals: slotVocals({start, end: start + 4}, lyricsTiming)}))
+    const slots = [0, 4].map((start, index) => ({
+        id: `slot-${index}`,
+        index,
+        section: 'Verse',
+        start,
+        end: start + 4,
+        bars: 2,
+        energy: 0.5,
+        lyrics: [],
+        vocals: slotVocals({start, end: start + 4}, lyricsTiming),
+    }))
     const input: Input = {
-        slots, mapping: slots.map(s => ({slotId: s.id, beatId: 'b1'})), beats: [beat], characters,
-        locations: [{id: 'clearing', name: 'Clearing'}], characterDescriptions: {shaman: 'A singer.'}, locationDescriptions: {clearing: 'A clearing.'}, lookBrief: '',
-        music: {bpm: 120, durationSec: 8, downbeats: [0, 2, 4, 6], barEnergy: [.5, .5, .5, .5], sections: []}, language: 'German', stemsAvailable: true,
-        singing: {singers: ['shaman'], lines: [{line: 0, text: 'Rosmarienbaum.', singers: ['shaman']}]}, lyricsTiming,
+        slots,
+        mapping: slots.map(s => ({slotId: s.id, beatId: 'b1'})),
+        beats: [beat],
+        characters,
+        locations: [{id: 'clearing', name: 'Clearing'}],
+        characterDescriptions: {shaman: 'A singer.'},
+        locationDescriptions: {clearing: 'A clearing.'},
+        lookBrief: '',
+        music: {bpm: 120, durationSec: 8, downbeats: [0, 2, 4, 6], barEnergy: [0.5, 0.5, 0.5, 0.5], sections: []},
+        language: 'German',
+        stemsAvailable: true,
+        singing: {singers: ['shaman'], lines: [{line: 0, text: 'Rosmarienbaum.', singers: ['shaman']}]},
+        lyricsTiming,
         shotMoments: {b1: {shots: [{action: 'The Shaman sings.', characters: ['shaman']}]}},
     }
     const [head, tail] = buildClipRequests(input)
-    expect([head, tail].map(clip => ({prompt: clip!.prompt, assets: clip!.assets, startsFrom: clip!.startsFrom}))).toMatchSnapshot('music composition: split lyrics, cast, audio and continuation (#658)')
+    expect([head, tail].map(clip => ({prompt: clip!.prompt, assets: clip!.assets, startsFrom: clip!.startsFrom}))).toMatchSnapshot(
+        'music composition: split lyrics, cast, audio and continuation (#658)',
+    )
     expect(head!.prompt).toContain('<d>[German] Rosma-</d>')
     expect(tail!.prompt).toContain('<d>[German] -rienbaum.</d>')
     expect(tail!.vocals![0]!.at).toBe(0)
@@ -98,7 +133,19 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         {id: 'kael', name: 'Kael', role: 'warrior'},
         {id: 'orcs', name: 'Orcs', role: 'crowd', isGroup: true, alike: true},
     ]
-    const fight = {id: 'b9', order: 1, summary: 'Seven hammers swing against a dozen Orcs. Greta, Mira and Kael sing.', moments: [], locationId: 'cave', characterIds: ['greta', 'mira', 'kael', 'orcs'], intensity: 0.9, weight: 1, kind: 'hit', stateAfter: ['Kael is bleeding'], continuous: false} as unknown as StoryBeat
+    const fight = {
+        id: 'b9',
+        order: 1,
+        summary: 'Seven hammers swing against a dozen Orcs. Greta, Mira and Kael sing.',
+        moments: [],
+        locationId: 'cave',
+        characterIds: ['greta', 'mira', 'kael', 'orcs'],
+        intensity: 0.9,
+        weight: 1,
+        kind: 'hit',
+        stateAfter: ['Kael is bleeding'],
+        continuous: false,
+    } as unknown as StoryBeat
     const input = (micro: boolean): Input => ({
         slots: [{id: 'slot-001', index: 0, section: 'A', start: 0, end: 2, bars: 1, energy: 0.8, lyrics: [], ...(micro ? {micro: true} : {})}],
         mapping: [{slotId: 'slot-001', beatId: 'b9'}],
@@ -111,7 +158,14 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         music: {bpm: 120, durationSec: 2, downbeats: [0], barEnergy: [0.8], sections: []},
         language: 'English',
         stemsAvailable: false,
-        shotMoments: {b9: {staging: 'Greta stands in front, Mira and Kael behind her in a file.', shots: [{action: 'Greta drives her hammer into the Orcs.', characters: ['greta', 'orcs'], rest: 'Mira parries an orc, Kael shoves another back.'}]}},
+        shotMoments: {
+            b9: {
+                staging: 'Greta stands in front, Mira and Kael behind her in a file.',
+                shots: [
+                    {action: 'Greta drives her hammer into the Orcs.', characters: ['greta', 'orcs'], rest: 'Mira parries an orc, Kael shoves another back.'},
+                ],
+            },
+        },
     })
 
     test('the summary is the shot, no layout, no rest, no fact about somebody without a picture', () => {
@@ -184,7 +238,10 @@ describe('the background of the place', () => {
             expect(prompt).not.toContain('no other person')
         })
         test('a shot without a size, from a plan made before it, is as it was', () => {
-            const prompt = buildClipRequests({...input(anchor, [beat]), shotMoments: {b1: {shots: [{action: 'The Shaman drums.', characters: ['shaman']}]}}})[0]!.prompt
+            const prompt = buildClipRequests({
+                ...input(anchor, [beat]),
+                shotMoments: {b1: {shots: [{action: 'The Shaman drums.', characters: ['shaman']}]}},
+            })[0]!.prompt
             expect(prompt).toContain('Behind them: the tall pines and the fire pit.')
         })
     })
@@ -245,7 +302,9 @@ describe('{Name} tokens', () => {
     test('a character the layout names by token is in the clip with its picture', () => {
         const clip = buildClipRequests(input('{Shaman} drums.', '{Runa} sits by the fire pit.'))[0]!
         expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
-        expect(clip.prompt).toContain('Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: <Subject 3> sits by the fire pit.')
+        expect(clip.prompt).toContain(
+            'Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: <Subject 3> sits by the fire pit.',
+        )
     })
     test('a token that is nobody of the cast is left as its word, without braces', () => {
         const clip = buildClipRequests(input('{Shaman} nods to {the stranger}.'))[0]!
@@ -257,7 +316,15 @@ describe('a fact goes with whom it is about, or stays at its place', () => {
     const at = (id: string, locationId: string, characterIds: string[], stateAfter: StoryBeat['stateAfter'] = []) =>
         ({...beat, id, locationId, characterIds, summary: 'x', moments: ['x'], stateAfter, tokens: true}) as StoryBeat
     const beats = [
-        at('b1', 'forge', ['shaman'], [{fact: "{Shaman}'s drum is torn", place: false}, {fact: 'the fire burns low', place: true}]),
+        at(
+            'b1',
+            'forge',
+            ['shaman'],
+            [
+                {fact: "{Shaman}'s drum is torn", place: false},
+                {fact: 'the fire burns low', place: true},
+            ],
+        ),
         at('b2', 'clearing', ['shaman']),
         at('b3', 'forge', ['runa']),
     ]
@@ -266,7 +333,10 @@ describe('a fact goes with whom it is about, or stays at its place', () => {
         mapping: beats.map((b, n) => ({slotId: `slot-00${n + 1}`, beatId: b.id})),
         beats,
         characters,
-        locations: [{id: 'forge', name: 'Forge'}, {id: 'clearing', name: 'Clearing'}],
+        locations: [
+            {id: 'forge', name: 'Forge'},
+            {id: 'clearing', name: 'Clearing'},
+        ],
         characterDescriptions: {shaman: 'A stocky shaman.', runa: 'A small grey cat.'},
         locationDescriptions: {forge: 'A forge.', clearing: 'A clearing.'},
         lookBrief: '',
@@ -287,12 +357,39 @@ describe('a fact goes with whom it is about, or stays at its place', () => {
 
 describe('singingPerBeat', () => {
     test('per shot, the singers of the lines sung in it - not all singers of the beat', () => {
-        const beat = {id: 'b1', order: 1, summary: 's', moments: ['m'], locationId: 'hall', characterIds: ['lead', 'band'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
-        const slot = {id: 'slot-001', index: 0, section: 'Verse', start: 0, end: 8, bars: 4, energy: 0.3, lyrics: [], vocals: [
-            {line: 0, text: 'a verse line', start: 0.2, end: 3.5, words: []},
-            {line: 1, text: 'a refrain line', start: 4.2, end: 7.8, words: []},
-        ]}
-        const singing = {singers: ['lead', 'band'], lines: [{line: 0, text: 'a verse line', singers: ['lead']}, {line: 1, text: 'a refrain line', singers: ['lead', 'band']}]}
+        const beat = {
+            id: 'b1',
+            order: 1,
+            summary: 's',
+            moments: ['m'],
+            locationId: 'hall',
+            characterIds: ['lead', 'band'],
+            intensity: 0.5,
+            weight: 1,
+            kind: 'build',
+            stateAfter: [],
+        } as StoryBeat
+        const slot = {
+            id: 'slot-001',
+            index: 0,
+            section: 'Verse',
+            start: 0,
+            end: 8,
+            bars: 4,
+            energy: 0.3,
+            lyrics: [],
+            vocals: [
+                {line: 0, text: 'a verse line', start: 0.2, end: 3.5, words: []},
+                {line: 1, text: 'a refrain line', start: 4.2, end: 7.8, words: []},
+            ],
+        }
+        const singing = {
+            singers: ['lead', 'band'],
+            lines: [
+                {line: 0, text: 'a verse line', singers: ['lead']},
+                {line: 1, text: 'a refrain line', singers: ['lead', 'band']},
+            ],
+        }
         const result = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing})
         const shots = result.b1!.singersPerShot
         expect(shots.length).toBeGreaterThanOrEqual(2)
@@ -301,27 +398,74 @@ describe('singingPerBeat', () => {
     })
 
     test('a line whose singer changes within it: each shot has the singer of the words sung in it', () => {
-        const beat = {id: 'b1', order: 1, summary: 's', moments: ['m'], locationId: 'hall', characterIds: ['ann', 'ben'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
+        const beat = {
+            id: 'b1',
+            order: 1,
+            summary: 's',
+            moments: ['m'],
+            locationId: 'hall',
+            characterIds: ['ann', 'ben'],
+            intensity: 0.5,
+            weight: 1,
+            kind: 'build',
+            stateAfter: [],
+        } as StoryBeat
         // one line over the whole clip: Ann sings its first four words (0.2-3.5 s), Ben the last four (4.2-7.8 s)
-        const words = Array.from({length: 8}, (_, n) => ({text: `w${n}`, start: n < 4 ? 0.2 + n * 0.8 : 4.2 + (n - 4) * 0.9, end: n < 4 ? 0.9 + n * 0.8 : 4.9 + (n - 4) * 0.9}))
-        const slot = {id: 'slot-001', index: 0, section: 'Verse', start: 0, end: 8, bars: 4, energy: 0.3, lyrics: [], vocals: [{line: 0, text: words.map(w => w.text).join(' '), start: 0.2, end: 7.8, words}]}
+        const words = Array.from({length: 8}, (_, n) => ({
+            text: `w${n}`,
+            start: n < 4 ? 0.2 + n * 0.8 : 4.2 + (n - 4) * 0.9,
+            end: n < 4 ? 0.9 + n * 0.8 : 4.9 + (n - 4) * 0.9,
+        }))
+        const slot = {
+            id: 'slot-001',
+            index: 0,
+            section: 'Verse',
+            start: 0,
+            end: 8,
+            bars: 4,
+            energy: 0.3,
+            lyrics: [],
+            vocals: [{line: 0, text: words.map(w => w.text).join(' '), start: 0.2, end: 7.8, words}],
+        }
         const lyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: slot.vocals[0]!.text, start: 0.2, end: 7.8, words, confidence: 1}]}
-        const singing = {singers: ['ann', 'ben'], lines: [{line: 0, text: slot.vocals[0]!.text, singers: ['ann', 'ben'], parts: [{from: 0, singers: ['ann']}, {from: 4, singers: ['ben']}]}]}
+        const singing = {
+            singers: ['ann', 'ben'],
+            lines: [
+                {
+                    line: 0,
+                    text: slot.vocals[0]!.text,
+                    singers: ['ann', 'ben'],
+                    parts: [
+                        {from: 0, singers: ['ann']},
+                        {from: 4, singers: ['ben']},
+                    ],
+                },
+            ],
+        }
         const shots = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing, lyricsTiming}).b1!.singersPerShot
         expect(shots[0]).toEqual(['ann'])
         expect(shots.at(-1)).toEqual(['ben'])
         // without the word times the whole line is sung by both, in every shot
-        expect(singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing}).b1!.singersPerShot.at(-1)).toEqual(['ann', 'ben'])
+        expect(singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing}).b1!.singersPerShot.at(-1)).toEqual([
+            'ann',
+            'ben',
+        ])
     })
 })
 
 // #740: the layout is a floor plan, never a shot of its own - read as one, the clip opened on it before [Shot 1]
 describe('the layout of the place', () => {
     test('where the scene opens: the staging, as where everyone is then, and the clip opens on [Shot 1]', () => {
-        expect(layoutLine(true, 'Elias walks down the corridor.', 'A long corridor.')).toBe('Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: Elias walks down the corridor.')
+        expect(layoutLine(true, 'Elias walks down the corridor.', 'A long corridor.')).toBe(
+            'Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: Elias walks down the corridor.',
+        )
     })
     test('a later clip of the scene: the floor plan of the place without people - or the staging said to be from before', () => {
-        expect(layoutLine(false, 'Elias walks down the corridor.', 'A long corridor.')).toBe('Layout of the place - a floor plan, not a shot of its own: A long corridor.')
-        expect(layoutLine(false, 'Elias walks down the corridor.', undefined)).toContain('as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them')
+        expect(layoutLine(false, 'Elias walks down the corridor.', 'A long corridor.')).toBe(
+            'Layout of the place - a floor plan, not a shot of its own: A long corridor.',
+        )
+        expect(layoutLine(false, 'Elias walks down the corridor.', undefined)).toContain(
+            'as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them',
+        )
     })
 })

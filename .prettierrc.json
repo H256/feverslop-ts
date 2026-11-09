@@ -1,13 +1,11 @@
 {
-  "semi": false,
-  "singleQuote": true,
-  "printWidth": 160,
-  "tabWidth": 4,
-  "trailingComma": "all",
-  "bracketSpacing": false,
-  "arrowParens": "avoid",
-  "endOfLine": "auto",
-  "overrides": [
-    {"files": ["client/**"], "options": {"tabWidth": 2}}
-  ]
+    "semi": false,
+    "singleQuote": true,
+    "printWidth": 160,
+    "tabWidth": 4,
+    "trailingComma": "all",
+    "bracketSpacing": false,
+    "arrowParens": "avoid",
+    "endOfLine": "auto",
+    "overrides": [{"files": ["client/**"], "options": {"tabWidth": 2}}]
 }

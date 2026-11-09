@@ -4,7 +4,7 @@ import AppIcon, {type IconName} from './AppIcon.vue'
 
 /** The system's theme, or a choice kept in this browser. index.html sets it before the first paint. */
 type Theme = 'system' | 'light' | 'dark'
-const THEMES: {value: Theme, label: string, title: string}[] = [
+const THEMES: {value: Theme; label: string; title: string}[] = [
   {value: 'system', label: 'System', title: 'Follow the system setting'},
   {value: 'light', label: 'Light', title: 'Light'},
   {value: 'dark', label: 'Dark', title: 'Dark'},
@@ -23,8 +23,10 @@ watch(theme, value => {
   <fieldset class="theme">
     <legend>Theme</legend>
     <template v-for="option in THEMES" :key="option.value">
-      <input :id="`theme-${option.value}`" v-model="theme" type="radio" name="theme" :value="option.value">
-      <label :for="`theme-${option.value}`" :title="option.title"><AppIcon :name="option.value as IconName" /><span hidden>{{ option.label }}</span></label>
+      <input :id="`theme-${option.value}`" v-model="theme" type="radio" name="theme" :value="option.value" />
+      <label :for="`theme-${option.value}`" :title="option.title"
+        ><AppIcon :name="option.value as IconName" /><span hidden>{{ option.label }}</span></label
+      >
     </template>
   </fieldset>
 </template>

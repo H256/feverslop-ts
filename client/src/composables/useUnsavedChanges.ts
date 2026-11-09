@@ -9,7 +9,9 @@ import {useAsk} from '../services/ask'
  */
 export function useUnsavedChanges(dirty: () => boolean, what = 'changes', {hash = false} = {}) {
   const ask = useAsk()
-  const beforeUnload = (event: BeforeUnloadEvent) => { if (dirty()) event.preventDefault() }
+  const beforeUnload = (event: BeforeUnloadEvent) => {
+    if (dirty()) event.preventDefault()
+  }
   addEventListener('beforeunload', beforeUnload)
   onScopeDispose(() => removeEventListener('beforeunload', beforeUnload))
   const guard = async (to: RouteLocationNormalized, from: RouteLocationNormalized) => {

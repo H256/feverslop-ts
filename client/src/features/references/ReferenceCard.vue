@@ -5,7 +5,7 @@ import {plural} from '../../lib/format'
 import {TERMS} from '../../lib/terms'
 import {useProject} from '../project/session'
 
-defineProps<{reference: EditorReference, fresh?: Freshness, selected: boolean}>()
+defineProps<{reference: EditorReference; fresh?: Freshness; selected: boolean}>()
 defineEmits<{select: []}>()
 const {roots} = useProject()
 </script>

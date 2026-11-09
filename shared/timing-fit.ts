@@ -20,34 +20,39 @@ export const EARLY_FROM = 0.15
 
 /** Where there is sound in a stretch of the loudness: a flag per value. */
 function soundIn(peaks: number[], from: number, to: number): boolean[] {
-  const values = peaks.slice(from, to)
-  const sorted = [...values].sort((a, b) => a - b)
-  const level = Math.max(FLOOR, RELATIVE * (sorted[Math.floor(sorted.length * 0.9)] ?? 0))
-  const loud = values.map(v => v > level)
-  for (let i = 0; i < loud.length;) {
-    if (!loud[i]) { i++; continue }
-    let end = i
-    while (end < loud.length && loud[end]) end++
-    if (end - i < SOUND_BINS) for (let k = i; k < end; k++) loud[k] = false
-    i = end
-  }
-  return loud
+    const values = peaks.slice(from, to)
+    const sorted = [...values].sort((a, b) => a - b)
+    const level = Math.max(FLOOR, RELATIVE * (sorted[Math.floor(sorted.length * 0.9)] ?? 0))
+    const loud = values.map(v => v > level)
+    for (let i = 0; i < loud.length;) {
+        if (!loud[i]) {
+            i++
+            continue
+        }
+        let end = i
+        while (end < loud.length && loud[end]) end++
+        if (end - i < SOUND_BINS) for (let k = i; k < end; k++) loud[k] = false
+        i = end
+    }
+    return loud
 }
 
 /**
  * How long the first word of a line starts before its sound, in seconds - 0 where it starts on it. `words` are the times of the line;
  * a word with no sound in it at all is silent as a whole.
  */
-export function leadOf(words: {start: number, end: number}[], peaks: number[]): number {
-  if (!words.length || !peaks.length) return 0
-  const bin = (t: number) => Math.max(0, Math.min(peaks.length, Math.round(t * RATE)))
-  const first = words[0]!, last = words.at(-1)!
-  const from = bin(first.start - AROUND)
-  const sound = soundIn(peaks, from, bin(last.end + AROUND))
-  const start = bin(first.start), end = Math.max(start, bin(first.end))
-  let at = start
-  while (at < end && sound[at - from] !== true) at++
-  return (at - start) / RATE
+export function leadOf(words: {start: number; end: number}[], peaks: number[]): number {
+    if (!words.length || !peaks.length) return 0
+    const bin = (t: number) => Math.max(0, Math.min(peaks.length, Math.round(t * RATE)))
+    const first = words[0]!,
+        last = words.at(-1)!
+    const from = bin(first.start - AROUND)
+    const sound = soundIn(peaks, from, bin(last.end + AROUND))
+    const start = bin(first.start),
+        end = Math.max(start, bin(first.end))
+    let at = start
+    while (at < end && sound[at - from] !== true) at++
+    return (at - start) / RATE
 }
 
 /** A gap in the sound shorter than this (0.15 s) still belongs to the same singing: a consonant, a breath between two words. */
@@ -65,17 +70,21 @@ const GAP_BINS = 15
  * sign of a word the timing lost (#738: "Die ich in mir verberg" timed from "ich" on, sung from 0.7 s before it) - so a shot does not
  * forbid the lip-sync while the words are already heard. The timing itself is left as it is.
  */
-export function voiceLead(words: {start: number, end: number}[], peaks: number[], notBefore: number): number {
-  if (!words.length || !peaks.length) return 0
-  const bin = (t: number) => Math.max(0, Math.min(peaks.length, Math.round(t * RATE)))
-  const first = words[0]!
-  const from = bin(Math.max(notBefore, first.start - AROUND))
-  const start = bin(first.start)
-  if (start <= from) return 0
-  const sound = soundIn(peaks, from, bin(words.at(-1)!.end))
-  let at = start, silent = 0
-  for (let k = start - 1; k >= from; k--) {
-    if (sound[k - from]) { at = k; silent = 0 } else if (++silent > GAP_BINS) break
-  }
-  return (start - at) / RATE
+export function voiceLead(words: {start: number; end: number}[], peaks: number[], notBefore: number): number {
+    if (!words.length || !peaks.length) return 0
+    const bin = (t: number) => Math.max(0, Math.min(peaks.length, Math.round(t * RATE)))
+    const first = words[0]!
+    const from = bin(Math.max(notBefore, first.start - AROUND))
+    const start = bin(first.start)
+    if (start <= from) return 0
+    const sound = soundIn(peaks, from, bin(words.at(-1)!.end))
+    let at = start,
+        silent = 0
+    for (let k = start - 1; k >= from; k--) {
+        if (sound[k - from]) {
+            at = k
+            silent = 0
+        } else if (++silent > GAP_BINS) break
+    }
+    return (start - at) / RATE
 }

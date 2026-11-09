@@ -1,15 +1,43 @@
-import {splitBySinger} from './singing-parts.ts';
-import {describe, expect, test} from "bun:test";
-import {activityRanges, buildTimeline, chooseClipStarts, pullLateOnsets, splitAtVocalGaps, framePower, isFightBeat, musicMapProblem, parseLyricSections, projectLyricSections, splitFightSlots, transcriptProblem} from "./music.ts";
-import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
+import {splitBySinger} from './singing-parts.ts'
+import {describe, expect, test} from 'bun:test'
+import {
+    activityRanges,
+    buildTimeline,
+    chooseClipStarts,
+    pullLateOnsets,
+    splitAtVocalGaps,
+    framePower,
+    isFightBeat,
+    musicMapProblem,
+    parseLyricSections,
+    projectLyricSections,
+    splitFightSlots,
+    transcriptProblem,
+} from './music.ts'
+import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from './project.ts'
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
 // bars every 3 s; a word runs 5.5-6.5 (over the boundary at 6) and a pause lies at 9
-const timing = {lines: [{line: 0, section: 's', sectionIndex: 0, text: 'a b', start: 3.2, end: 8.5, confidence: 1, words: [word('a', 3.2, 5.0), word('b', 5.5, 6.5), word('c', 6.8, 8.5)]}]} as unknown as LyricsTiming
+const timing = {
+    lines: [
+        {
+            line: 0,
+            section: 's',
+            sectionIndex: 0,
+            text: 'a b',
+            start: 3.2,
+            end: 8.5,
+            confidence: 1,
+            words: [word('a', 3.2, 5.0), word('b', 5.5, 6.5), word('c', 6.8, 8.5)],
+        },
+    ],
+} as unknown as LyricsTiming
 
 describe('Python music helper output contracts', () => {
     test('validates music analysis output before returning it for caching', () => {
-        expect(musicMapProblem({bpm: 120, durationSec: 60, downbeats: [0, 2], barEnergy: [0.1], sections: [{label: 'Verse', start: 0, end: 30, energy: 0.1}]})).toBeUndefined()
+        expect(
+            musicMapProblem({bpm: 120, durationSec: 60, downbeats: [0, 2], barEnergy: [0.1], sections: [{label: 'Verse', start: 0, end: 30, energy: 0.1}]}),
+        ).toBeUndefined()
         expect(musicMapProblem({bpm: 120, durationSec: 60, downbeats: [0, 'bad'], barEnergy: [], sections: []})).toContain('downbeats')
     })
     test('validates transcript words and optional activity ranges', () => {
@@ -20,19 +48,78 @@ describe('Python music helper output contracts', () => {
 })
 
 describe('splitAtVocalGaps', () => {
-    const sung = (words: [number, number][]) => ({lines: [{line: 0, section: 's', sectionIndex: 0, text: '', start: words[0]![0], end: words.at(-1)![1], confidence: 1, words: words.map(([s, e]) => word('x', s, e))}]}) as unknown as LyricsTiming
-    const edges = (slots: { start: number, end: number }[]) => slots.map(s => [s.start, s.end])
+    const sung = (words: [number, number][]) =>
+        ({
+            lines: [
+                {
+                    line: 0,
+                    section: 's',
+                    sectionIndex: 0,
+                    text: '',
+                    start: words[0]![0],
+                    end: words.at(-1)![1],
+                    confidence: 1,
+                    words: words.map(([s, e]) => word('x', s, e)),
+                },
+            ],
+        }) as unknown as LyricsTiming
+    const edges = (slots: {start: number; end: number}[]) => slots.map(s => [s.start, s.end])
     test('a clip whose singing starts late is cut on the downbeat right before the voice comes in', () => {
-        const out = splitAtVocalGaps([{start: 0, end: 8, bars: 4}], sung([[4.1, 5], [5.2, 7.5]]), [0, 2, 4, 6], 1.5, 9.3, 2)
-        expect(edges(out)).toEqual([[0, 4], [4, 8]])
+        const out = splitAtVocalGaps(
+            [{start: 0, end: 8, bars: 4}],
+            sung([
+                [4.1, 5],
+                [5.2, 7.5],
+            ]),
+            [0, 2, 4, 6],
+            1.5,
+            9.3,
+            2,
+        )
+        expect(edges(out)).toEqual([
+            [0, 4],
+            [4, 8],
+        ])
     })
     test('without a downbeat close to it, the cut is just before the first word', () => {
-        const out = splitAtVocalGaps([{start: 0, end: 8, bars: 4}], sung([[3, 5], [5.2, 7.5]]), [0, 2, 4, 6], 1.5, 9.3, 2)
-        expect(edges(out)).toEqual([[0, 2.9], [2.9, 8]])
+        const out = splitAtVocalGaps(
+            [{start: 0, end: 8, bars: 4}],
+            sung([
+                [3, 5],
+                [5.2, 7.5],
+            ]),
+            [0, 2, 4, 6],
+            1.5,
+            9.3,
+            2,
+        )
+        expect(edges(out)).toEqual([
+            [0, 2.9],
+            [2.9, 8],
+        ])
     })
     test('a long silent tail and the silent lead-in of the next clip become one clip', () => {
-        const out = splitAtVocalGaps([{start: 0, end: 8, bars: 4}, {start: 8, end: 16, bars: 4}], sung([[0.2, 2], [2.1, 3.5], [12, 14]]), [0, 2, 4, 6, 8, 10, 12, 14], 1.5, 9.3, 2)
-        expect(edges(out)).toEqual([[0, 3.7], [3.7, 12], [12, 14], [14, 16]])
+        const out = splitAtVocalGaps(
+            [
+                {start: 0, end: 8, bars: 4},
+                {start: 8, end: 16, bars: 4},
+            ],
+            sung([
+                [0.2, 2],
+                [2.1, 3.5],
+                [12, 14],
+            ]),
+            [0, 2, 4, 6, 8, 10, 12, 14],
+            1.5,
+            9.3,
+            2,
+        )
+        expect(edges(out)).toEqual([
+            [0, 3.7],
+            [3.7, 12],
+            [12, 14],
+            [14, 16],
+        ])
     })
     test('a short lead-in or gap 0 leaves the clips alone', () => {
         const slots = [{start: 0, end: 8, bars: 4}]
@@ -52,7 +139,7 @@ describe('chooseClipStarts', () => {
     test('every clip stays within the longest clip', () => {
         const bars = [0, 3, 6, 9, 12]
         const starts = chooseClipStarts(bars, 0, 15, 2, 3, 9.3, timing)!
-        const edges = [...starts.map(i => i === 0 ? 0 : bars[i]!), 15]
+        const edges = [...starts.map(i => (i === 0 ? 0 : bars[i]!)), 15]
         for (let k = 1; k < edges.length; k++) expect(edges[k]! - edges[k - 1]!).toBeLessThanOrEqual(9.3)
     })
     test('no split within the limit gives undefined', () => {
@@ -64,21 +151,50 @@ describe('splitFightSlots', () => {
     const music = {bpm: 112, durationSec: 40, downbeats: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20], barEnergy: [], sections: []} as unknown as MusicMap
     const orcs: Character = {id: 'orcs', name: 'Orcs', role: 'x', isGroup: true, alike: true}
     const vael: Character = {id: 'vael', name: 'Vael', role: 'x'}
-    const beat = (id: string, kind: StoryBeat['kind'], ids: string[]) => ({id, kind, characterIds: ids, intensity: 0.5, weight: 1} as StoryBeat)
-    const slot = (i: number, start: number, end: number, extra: Partial<Slot> = {}): Slot => ({id: `slot-${i + 1}`, index: i, section: 's', start, end, bars: Math.round((end - start) / 2), energy: 0.6, lyrics: [], ...extra})
+    const beat = (id: string, kind: StoryBeat['kind'], ids: string[]) => ({id, kind, characterIds: ids, intensity: 0.5, weight: 1}) as StoryBeat
+    const slot = (i: number, start: number, end: number, extra: Partial<Slot> = {}): Slot => ({
+        id: `slot-${i + 1}`,
+        index: i,
+        section: 's',
+        start,
+        end,
+        bars: Math.round((end - start) / 2),
+        energy: 0.6,
+        lyrics: [],
+        ...extra,
+    })
 
     test('fight children recalculate joined fragments and preserve parent edge markers', () => {
-        const words = [{text: 'we', start: .5, end: 1}, {text: 'ri', start: 1.5, end: 1.9}, {text: 'se', joined: true, start: 2, end: 2.5}, {text: 'a', start: 3, end: 3.5}]
+        const words = [
+            {text: 'we', start: 0.5, end: 1},
+            {text: 'ri', start: 1.5, end: 1.9},
+            {text: 'se', joined: true, start: 2, end: 2.5},
+            {text: 'a', start: 3, end: 3.5},
+        ]
         for (const parentFragment of [false, true]) {
-            const parentWords = words.map((w, n) => n === 0 && parentFragment ? {...w, joined: true} : {...w})
-            const vocals = [{line: 0, text: parentFragment ? '-we rise a-' : 'we rise a', start: .5, end: 3.5, words: parentWords}]
+            const parentWords = words.map((w, n) => (n === 0 && parentFragment ? {...w, joined: true} : {...w}))
+            const vocals = [{line: 0, text: parentFragment ? '-we rise a-' : 'we rise a', start: 0.5, end: 3.5, words: parentWords}]
             const r = splitFightSlots([slot(0, 0, 4, {vocals})], [{slotId: 'slot-1', beatId: 'fight'}], [beat('fight', 'hit', ['orcs'])], [orcs], music)
             const expected = parentFragment ? ['-we ri-', '-se a-'] : ['we ri-', '-se a']
             expect(r.slots.map(s => s.vocals![0]!.text)).toEqual(expected)
-            const t: LyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 's', text: 'we rise a', start: .5, end: 3.5, confidence: 1, words: parentWords}]}
-            for (const parts of [undefined, [{from: 0, singers: ['a']}, {from: 1, singers: ['b']}]]) {
+            const t: LyricsTiming = {
+                lines: [{line: 0, sectionIndex: 0, section: 's', text: 'we rise a', start: 0.5, end: 3.5, confidence: 1, words: parentWords}],
+            }
+            for (const parts of [
+                undefined,
+                [
+                    {from: 0, singers: ['a']},
+                    {from: 1, singers: ['b']},
+                ],
+            ]) {
                 const line = {line: 0, text: 'we rise a', singers: ['a', 'b'], parts}
-                expect(r.slots.map(s => splitBySinger(s.vocals![0]!, s.start, line, t, []).map(p => p.text).join(' '))).toEqual(expected)
+                expect(
+                    r.slots.map(s =>
+                        splitBySinger(s.vocals![0]!, s.start, line, t, [])
+                            .map(p => p.text)
+                            .join(' '),
+                    ),
+                ).toEqual(expected)
             }
             expect(r.slots[1]!.vocals![0]!.start).toBe(0)
         }
@@ -92,9 +208,20 @@ describe('splitFightSlots', () => {
     test('the slots of a fight are cut into bars, the others stay, ids and mapping are numbered anew', () => {
         const slots = [slot(0, 0, 4), slot(1, 4, 12), slot(2, 12, 16)]
         const beats = [beat('b1', 'build', ['vael']), beat('b2', 'hit', ['vael', 'orcs']), beat('b3', 'release', ['vael'])]
-        const mapping = [{slotId: 'slot-1', beatId: 'b1'}, {slotId: 'slot-2', beatId: 'b2'}, {slotId: 'slot-3', beatId: 'b3'}]
+        const mapping = [
+            {slotId: 'slot-1', beatId: 'b1'},
+            {slotId: 'slot-2', beatId: 'b2'},
+            {slotId: 'slot-3', beatId: 'b3'},
+        ]
         const r = splitFightSlots(slots, mapping, beats, [vael, orcs], music)
-        expect(r.slots.map(s => [s.start, s.end])).toEqual([[0, 4], [4, 6], [6, 8], [8, 10], [10, 12], [12, 16]])
+        expect(r.slots.map(s => [s.start, s.end])).toEqual([
+            [0, 4],
+            [4, 6],
+            [6, 8],
+            [8, 10],
+            [10, 12],
+            [12, 16],
+        ])
         expect(r.slots.map(s => s.micro ?? false)).toEqual([false, true, true, true, true, false])
         expect(r.slots.map(s => s.id)).toEqual(['slot-001', 'slot-002', 'slot-003', 'slot-004', 'slot-005', 'slot-006'])
         expect(r.mapping.map(m => m.beatId)).toEqual(['b1', 'b2', 'b2', 'b2', 'b2', 'b3'])
@@ -102,9 +229,20 @@ describe('splitFightSlots', () => {
         expect(r.slots.every((s, i) => s.index === i)).toBe(true)
     })
     test('sung words go to the piece they are sung in, with times relative to it', () => {
-        const vocals = [{line: 0, text: 'Orcs in the dark', start: 1.5, end: 3.4, words: [
-            {text: 'Orcs', start: 1.5, end: 1.9}, {text: 'in', start: 2.1, end: 2.3}, {text: 'the', start: 2.5, end: 2.8}, {text: 'dark', start: 3.0, end: 3.4},
-        ]}]
+        const vocals = [
+            {
+                line: 0,
+                text: 'Orcs in the dark',
+                start: 1.5,
+                end: 3.4,
+                words: [
+                    {text: 'Orcs', start: 1.5, end: 1.9},
+                    {text: 'in', start: 2.1, end: 2.3},
+                    {text: 'the', start: 2.5, end: 2.8},
+                    {text: 'dark', start: 3.0, end: 3.4},
+                ],
+            },
+        ]
         const slots = [slot(0, 4, 12, {vocals, lyrics: ['Orcs in the dark']})]
         const beats = [beat('b2', 'hit', ['vael', 'orcs'])]
         const r = splitFightSlots(slots, [{slotId: 'slot-1', beatId: 'b2'}], beats, [vael, orcs], music)
@@ -121,7 +259,13 @@ describe('splitFightSlots', () => {
 
 describe('buildTimeline', () => {
     test('a long lead-in before late downbeats is cut by time so every clip fits the limit', () => {
-        const music = {bpm: 120, durationSec: 20, downbeats: [15, 17, 19], barEnergy: [0.5, 0.5, 0.5], sections: [{label: 's', start: 0, end: 20, energy: 0.5}]} as unknown as MusicMap
+        const music = {
+            bpm: 120,
+            durationSec: 20,
+            downbeats: [15, 17, 19],
+            barEnergy: [0.5, 0.5, 0.5],
+            sections: [{label: 's', start: 0, end: 20, energy: 0.5}],
+        } as unknown as MusicMap
         const {slots} = buildTimeline(music, [{label: 's', lines: ['a line']}], 9.292)
         expect(slots.length).toBeGreaterThan(1)
         for (const slot of slots) {
@@ -130,16 +274,19 @@ describe('buildTimeline', () => {
         }
         // no gaps: every clip starts where the one before ends, from 0 to the end of the song
         expect(slots[0]!.start).toBe(0)
-        slots.forEach((s, i) => { if (i) expect(s.start).toBe(slots[i - 1]!.end) })
+        slots.forEach((s, i) => {
+            if (i) expect(s.start).toBe(slots[i - 1]!.end)
+        })
         expect(slots.at(-1)!.end).toBe(20)
     })
 })
 
 describe('activityRanges', () => {
     // 0.05 s frames, bars of 2 s; a drum hit is one loud frame, the rest of the beat is quiet bleed
-    const hop = 0.05, bar = 2
+    const hop = 0.05,
+        bar = 2
     const frames = (sec: number, f: (t: number) => number) => Array.from({length: Math.round(sec / hop)}, (_, i) => f(i * hop))
-    const groove = (t: number) => Math.abs(t % 0.5) < hop / 2 ? 1e-2 : 1e-7
+    const groove = (t: number) => (Math.abs(t % 0.5) < hop / 2 ? 1e-2 : 1e-7)
     const silence = () => 1e-9
 
     test('a groove stays active between its hits', () => {
@@ -149,7 +296,11 @@ describe('activityRanges', () => {
         expect(ranges[0]!.end).toBeGreaterThan(19.9)
     })
     test('a break of several bars is inactive, its edges blurred by at most half a bar', () => {
-        const ranges = activityRanges(frames(30, t => t >= 10 && t < 20 ? silence() : groove(t)), hop, bar)
+        const ranges = activityRanges(
+            frames(30, t => (t >= 10 && t < 20 ? silence() : groove(t))),
+            hop,
+            bar,
+        )
         expect(ranges).toHaveLength(2)
         expect(ranges[0]!.end).toBeGreaterThanOrEqual(10)
         expect(ranges[0]!.end).toBeLessThanOrEqual(11.1)
@@ -158,13 +309,23 @@ describe('activityRanges', () => {
     })
     test('a quieter part of the same stem still plays, bleed far below it does not', () => {
         // 0-10 s loud, 10-20 s 12 dB quieter, 20-30 s 40 dB down (bleed)
-        const ranges = activityRanges(frames(30, t => groove(t) * (t < 10 ? 1 : t < 20 ? 10 ** -1.2 : 1e-4)), hop, bar)
+        const ranges = activityRanges(
+            frames(30, t => groove(t) * (t < 10 ? 1 : t < 20 ? 10 ** -1.2 : 1e-4)),
+            hop,
+            bar,
+        )
         expect(ranges).toHaveLength(1)
         expect(ranges[0]!.end).toBeGreaterThanOrEqual(20)
         expect(ranges[0]!.end).toBeLessThanOrEqual(21.1)
     })
     test('a stem that is only bleed is never active', () => {
-        expect(activityRanges(frames(20, t => groove(t) * 1e-4), hop, bar)).toEqual([])
+        expect(
+            activityRanges(
+                frames(20, t => groove(t) * 1e-4),
+                hop,
+                bar,
+            ),
+        ).toEqual([])
         expect(activityRanges([], hop, bar)).toEqual([])
     })
     test('framePower is the mean square per frame', () => {
@@ -172,9 +333,9 @@ describe('activityRanges', () => {
     })
 })
 
-
 describe('parseLyricSections', () => {
-    const lyrics = '[Intro]\n[Low drone]\n[Wind]\n\n[Verse 1]\n[Gravelly vocals]\nThe hammers are silent\nThe fires have gone cold\n\n[Guitar Solo]\n\n[Bridge]\nCold as ice\n'
+    const lyrics =
+        '[Intro]\n[Low drone]\n[Wind]\n\n[Verse 1]\n[Gravelly vocals]\nThe hammers are silent\nThe fires have gone cold\n\n[Guitar Solo]\n\n[Bridge]\nCold as ice\n'
     test('tags right after each other are one section, the first names it and the others are its notes', () => {
         expect(parseLyricSections(lyrics)).toEqual([
             {label: 'Intro', notes: ['Low drone', 'Wind'], lines: []},
@@ -201,30 +362,71 @@ describe('parseLyricSections', () => {
 
 // #739: a line that starts in the last second of a clip is not sung there
 describe('a line starting at the end of a clip', () => {
-    const lines = (...starts: [number, number][]) => ({lines: starts.map(([start, end], n) => ({line: n, section: 's', sectionIndex: 0, text: 'x y', start, end, confidence: 1, words: [word('x', start, start + 0.4), word('y', start + 0.5, end)]}))}) as unknown as LyricsTiming
+    const lines = (...starts: [number, number][]) =>
+        ({
+            lines: starts.map(([start, end], n) => ({
+                line: n,
+                section: 's',
+                sectionIndex: 0,
+                text: 'x y',
+                start,
+                end,
+                confidence: 1,
+                words: [word('x', start, start + 0.4), word('y', start + 0.5, end)],
+            })),
+        }) as unknown as LyricsTiming
     test('the split takes another bar boundary when there is one', () => {
         // bars every 2 s; a line starts at 7.4 - 0.6 s before the boundary at 8
         const starts = chooseClipStarts([0, 2, 4, 6, 8, 10, 12, 14], 0, 16, 4, 4, 9.3, lines([1, 3], [7.4, 9.5]))!
         expect(starts).not.toContain(4)
     })
     test('at a boundary the split cannot move, the next clip starts just before the line - on a downbeat close before it', () => {
-        const slots = [{start: 0, end: 8, bars: 4}, {start: 8, end: 14, bars: 3}]
+        const slots = [
+            {start: 0, end: 8, bars: 4},
+            {start: 8, end: 14, bars: 3},
+        ]
         pullLateOnsets(slots, lines([7.4, 9.5]), [0, 2, 4, 6, 7.3, 8], 9.3, 2)
-        expect(slots.map(s => [s.start, s.end])).toEqual([[0, 7.3], [7.3, 14]])
+        expect(slots.map(s => [s.start, s.end])).toEqual([
+            [0, 7.3],
+            [7.3, 14],
+        ])
         // no downbeat close: just before the word
-        const plain = [{start: 0, end: 8, bars: 4}, {start: 8, end: 14, bars: 3}]
+        const plain = [
+            {start: 0, end: 8, bars: 4},
+            {start: 8, end: 14, bars: 3},
+        ]
         pullLateOnsets(plain, lines([7.4, 9.5]), [0, 2, 4, 6, 8], 9.3, 2)
         expect(plain[0]!.end).toBeCloseTo(7.3)
     })
     test('not when the clip before would be too short, the next one too long, or a word would be cut', () => {
-        const short = [{start: 0, end: 1.5, bars: 1}, {start: 1.5, end: 8, bars: 3}]
+        const short = [
+            {start: 0, end: 1.5, bars: 1},
+            {start: 1.5, end: 8, bars: 3},
+        ]
         pullLateOnsets(short, lines([0.8, 3]), [0, 2], 9.3, 2)
         expect(short[0]!.end).toBe(1.5)
-        const long = [{start: 0, end: 8, bars: 4}, {start: 8, end: 17, bars: 4}]
+        const long = [
+            {start: 0, end: 8, bars: 4},
+            {start: 8, end: 17, bars: 4},
+        ]
         pullLateOnsets(long, lines([7.4, 9.5]), [0, 8], 9.3, 2)
         expect(long[0]!.end).toBe(8)
-        const cut = [{start: 0, end: 8, bars: 4}, {start: 8, end: 14, bars: 3}]
-        pullLateOnsets(cut, {lines: [...lines([7.4, 9.5]).lines, {line: 9, section: 's', sectionIndex: 0, text: 'z', start: 6.5, end: 7.6, confidence: 1, words: [word('z', 6.5, 7.6)]}]} as unknown as LyricsTiming, [0, 8], 9.3, 2)
+        const cut = [
+            {start: 0, end: 8, bars: 4},
+            {start: 8, end: 14, bars: 3},
+        ]
+        pullLateOnsets(
+            cut,
+            {
+                lines: [
+                    ...lines([7.4, 9.5]).lines,
+                    {line: 9, section: 's', sectionIndex: 0, text: 'z', start: 6.5, end: 7.6, confidence: 1, words: [word('z', 6.5, 7.6)]},
+                ],
+            } as unknown as LyricsTiming,
+            [0, 8],
+            9.3,
+            2,
+        )
         expect(cut[0]!.end).toBe(8)
     })
 })

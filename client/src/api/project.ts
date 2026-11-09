@@ -1,7 +1,35 @@
 import type {
-  BookView, CastChange, ConfigChange, ConfigImpact, ConfigResult, ConfigView, CastingRedo, CastingView, CastResult, CastView, ClipVersionView, EditorFreshness, EditorOverride, EditorProject,
-  EditorReference, Estimate, LookChange, LookResult, LookView, ProjectStatus, RunInfo, RunProgress, RunRequest, SingingChange,
-  SingingResult, SingingView, StoryForCast, StoryResult, TimingChange, TimingResult, TimingView,
+  BookView,
+  CastChange,
+  ConfigChange,
+  ConfigImpact,
+  ConfigResult,
+  ConfigView,
+  CastingRedo,
+  CastingView,
+  CastResult,
+  CastView,
+  ClipVersionView,
+  EditorFreshness,
+  EditorOverride,
+  EditorProject,
+  EditorReference,
+  Estimate,
+  LookChange,
+  LookResult,
+  LookView,
+  ProjectStatus,
+  RunInfo,
+  RunProgress,
+  RunRequest,
+  SingingChange,
+  SingingResult,
+  SingingView,
+  StoryForCast,
+  StoryResult,
+  TimingChange,
+  TimingResult,
+  TimingView,
 } from '../../../shared/workspace'
 import {getJson, HttpError, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
@@ -21,7 +49,9 @@ export function projectApi(root: string) {
       const text = await response.text()
       if (!response.ok) {
         let said = `Request failed (${response.status})`
-        try { said = (JSON.parse(text) as {error?: string}).error ?? said } catch {}
+        try {
+          said = (JSON.parse(text) as {error?: string}).error ?? said
+        } catch {}
         throw new HttpError(said, response.status)
       }
       return text
@@ -57,9 +87,10 @@ export function projectApi(root: string) {
     pickVersion: (clip: string, version: string) => post<unknown>(`versions/${id(clip)}/pick`, {version}),
     /** The user's own picture as its anchor: picture, prompt, description or describe, servers - as a form, the picture as it is. */
     ownAnchor: (picture: string, form: FormData) => postForm<{run: RunInfo}>(`${root}/api/references/${id(picture)}/own-anchor`, form),
-    rerender: (picture: string, body: {newAnchor: boolean, prompt?: string, servers?: string[]}) => post<{run: RunInfo}>(`references/${id(picture)}/rerender`, body),
+    rerender: (picture: string, body: {newAnchor: boolean; prompt?: string; servers?: string[]}) =>
+      post<{run: RunInfo}>(`references/${id(picture)}/rerender`, body),
     pickReference: (picture: string, version: string) => post<unknown>(`references/${id(picture)}/pick`, {version}),
-    setCasting: (body: {kind: 'character' | 'location', id: string, value: string}) => post<{written: true}>('casting', body),
+    setCasting: (body: {kind: 'character' | 'location'; id: string; value: string}) => post<{written: true}>('casting', body),
     saveSinging: (change: SingingChange) => post<SingingResult>('singing', change),
     saveCast: (change: CastChange) => post<CastResult>('cast', change),
     storyForCast: (body: StoryForCast) => post<StoryResult>('book/for-cast', body),

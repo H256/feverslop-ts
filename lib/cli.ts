@@ -1,53 +1,144 @@
-import {helpDetails} from "./cli-help.ts";
-import {activeJobs, cancelJobs} from './comfy-cancel.ts';
-import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts';
+import {helpDetails} from './cli-help.ts'
+import {activeJobs, cancelJobs} from './comfy-cancel.ts'
+import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts'
 
 // Shared options are consumed before each tool's own parser. Never inspect values after `--`.
 // banner: the logo at the start - true for the plain one, a string for one with the tool's name under it
-const commands: Record<string, {args: string, description: string, json?: boolean, banner?: boolean | string}> = {
-    plan: {args: '[project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001] [--again] [--preview] [--retake=slot-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--refresh=pictures,clips] [--strict] [--review] [--until=story|cast|look] [--dry-run] [--show=story,cast,clips] [--export=mlt,openshot|all] [--gallery] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--llm-parallel=N] [--comfy=URL] [--legacy-moments] [--debug-audio]', description: 'Plan and render a music video; existing steps are reused.'},
-    film: {args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]', description: 'Plan and render a film.'},
+const commands: Record<string, {args: string; description: string; json?: boolean; banner?: boolean | string}> = {
+    plan: {
+        args: '[project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001] [--again] [--preview] [--retake=slot-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--refresh=pictures,clips] [--strict] [--review] [--until=story|cast|look] [--dry-run] [--show=story,cast,clips] [--export=mlt,openshot|all] [--gallery] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--llm-parallel=N] [--comfy=URL] [--legacy-moments] [--debug-audio]',
+        description: 'Plan and render a music video; existing steps are reused.',
+    },
+    film: {
+        args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]',
+        description: 'Plan and render a film.',
+    },
     setup: {args: '[llm|llm-model|vision|comfy|show]', description: 'Configure servers, or show the effective settings.', banner: true},
     init: {args: '[project-id]', description: 'Create a music-video project interactively.', banner: true},
     'film:init': {args: '[film-id]', description: 'Create a film project interactively.', banner: true},
     example: {args: '[--no-render]', description: 'Create an example project and optionally generate its song.'},
     'replace-character': {args: '<project-id>', description: 'Replace a character interactively.'},
     'film:replace-character': {args: '[film-id]', description: 'Replace a film character interactively.'},
-    story: {args: '<project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<id>] | --take | --drop | --rename="Old Name=New Name"]', description: 'Print the story (a film: its screenplay), replace it, or have it told anew for the cast as a proposal (alias: adapt-story) - a film for a role added or taken out. What was planned from it goes.'},
-    cast: {args: '<project-id> [--film] [--json | --set=cast.json]', description: 'Print the cast, or change names, roles and props and who is in it. What was planned from it goes; a music video keeps the looks of whoever stays.', json: true},
-    look: {args: '<project-id> [--film] [--json | --set=look.json | --again=<id>,location:<id>]', description: 'Print the look of the whole and of every character and place, change texts, or have single ones written anew.', json: true},
-    config: {args: '<project-id> [--film] [--json] [--set=<setting>=<value>]... [--unset=<setting>]...', description: 'Print the render settings of a project (config.json), or change them: workflows, sizes, retries, final frame rate. Says which rendered clips and pictures a change makes stale.', json: true},
-    singers: {args: '<project-id> [--json | --set=singers.json | --line=<n>:<singer>,<singer>]', description: 'Print who sings which line, or change it. The beats a changed line is sung in are planned again.', json: true},
-    timing: {args: '<project-id> [--json | --set=timing.json]', description: 'Print when each sung line is, or move its words. The beats of the clips a moved line is in are planned again.', json: true},
-    versions: {args: '<project-id> <clip-id|picture-id> [--film] [--pick=<version>]', description: 'List the older versions of a clip or picture, or make one the current version again.'},
-    override: {args: '<film-id> <clip-id> [--view=<n>] [--order=<picture>,...] [--without=<picture>,...] [--clear]', description: 'The own view of its place and choice of references of a film clip, from the next plan run on.'},
-    direction: {args: '<project-id> [--film] [--json | --set=FILE | --add=TEXT --scope=SCOPE [--character=ID] | --edit=ID --text=TEXT | --remove=ID | --without=CHARACTER --scope=SCOPE | --size=wide|medium|close|extreme --scope=SCOPE | --unedit=ID] [--preview] [--take] [--no-rebuild] [--drop | --restore=VERSION] [--show=SHOT]', description: 'Direct a planned project: scoped instructions turned into shot edits by the LLM, or direct edits (a person out of a shot, its size); taking them builds the clip prompts again. Nothing is rendered.', json: true},
-    casting: {args: '<project-id> [--film] [--set=character:<id>=library:<asset>]...', description: 'Print casting.json and what the next plan run takes over, with the --redo it needs; change entries.'},
+    story: {
+        args: '<project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<id>] | --take | --drop | --rename="Old Name=New Name"]',
+        description:
+            'Print the story (a film: its screenplay), replace it, or have it told anew for the cast as a proposal (alias: adapt-story) - a film for a role added or taken out. What was planned from it goes.',
+    },
+    cast: {
+        args: '<project-id> [--film] [--json | --set=cast.json]',
+        description:
+            'Print the cast, or change names, roles and props and who is in it. What was planned from it goes; a music video keeps the looks of whoever stays.',
+        json: true,
+    },
+    look: {
+        args: '<project-id> [--film] [--json | --set=look.json | --again=<id>,location:<id>]',
+        description: 'Print the look of the whole and of every character and place, change texts, or have single ones written anew.',
+        json: true,
+    },
+    config: {
+        args: '<project-id> [--film] [--json] [--set=<setting>=<value>]... [--unset=<setting>]...',
+        description:
+            'Print the render settings of a project (config.json), or change them: workflows, sizes, retries, final frame rate. Says which rendered clips and pictures a change makes stale.',
+        json: true,
+    },
+    singers: {
+        args: '<project-id> [--json | --set=singers.json | --line=<n>:<singer>,<singer>]',
+        description: 'Print who sings which line, or change it. The beats a changed line is sung in are planned again.',
+        json: true,
+    },
+    timing: {
+        args: '<project-id> [--json | --set=timing.json]',
+        description: 'Print when each sung line is, or move its words. The beats of the clips a moved line is in are planned again.',
+        json: true,
+    },
+    versions: {
+        args: '<project-id> <clip-id|picture-id> [--film] [--pick=<version>]',
+        description: 'List the older versions of a clip or picture, or make one the current version again.',
+    },
+    override: {
+        args: '<film-id> <clip-id> [--view=<n>] [--order=<picture>,...] [--without=<picture>,...] [--clear]',
+        description: 'The own view of its place and choice of references of a film clip, from the next plan run on.',
+    },
+    direction: {
+        args: '<project-id> [--film] [--json | --set=FILE | --add=TEXT --scope=SCOPE [--character=ID] | --edit=ID --text=TEXT | --remove=ID | --without=CHARACTER --scope=SCOPE | --size=wide|medium|close|extreme --scope=SCOPE | --unedit=ID] [--preview] [--take] [--no-rebuild] [--drop | --restore=VERSION] [--show=SHOT]',
+        description:
+            'Direct a planned project: scoped instructions turned into shot edits by the LLM, or direct edits (a person out of a shot, its size); taking them builds the clip prompts again. Nothing is rendered.',
+        json: true,
+    },
+    casting: {
+        args: '<project-id> [--film] [--set=character:<id>=library:<asset>]...',
+        description: 'Print casting.json and what the next plan run takes over, with the --redo it needs; change entries.',
+    },
     'import-asset': {args: '<project-id> [asset-id] [--from=project[:id]|library:id]', description: 'Import a character or location into a project.'},
     'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character or location to the shared library.'},
-    'export-song': {args: '<project-id> [--as=song-id] [--name=name]', description: 'Put the song of a project into the library: audio, lyrics, stems and the timing of every word.'},
+    'export-song': {
+        args: '<project-id> [--as=song-id] [--name=name]',
+        description: 'Put the song of a project into the library: audio, lyrics, stems and the timing of every word.',
+    },
     'import-song': {args: '<project-id> [song-id]', description: 'Take a song of the library into a project, or list the songs; the plan starts at the story.'},
-    'create-asset': {args: '<character|location> <library-id> --anchor=picture [--name=name] [--role=role] [--description=text] [--like=project]', description: 'Create a library asset from a reference picture.'},
-    'film:check-joins': {args: '<film-id> [--only=clip-004] [--again]', description: 'Check the cuts within a scene with a vision model: posture, clothes and props across the cut. Only reports.'},
+    'create-asset': {
+        args: '<character|location> <library-id> --anchor=picture [--name=name] [--role=role] [--description=text] [--like=project]',
+        description: 'Create a library asset from a reference picture.',
+    },
+    'film:check-joins': {
+        args: '<film-id> [--only=clip-004] [--again]',
+        description: 'Check the cuts within a scene with a vision model: posture, clothes and props across the cut. Only reports.',
+    },
     'film:gallery': {args: '', description: 'Write films/index.html with the available films.'},
     'film:migrate': {args: '<film-id> <old-film-folder> [--apply]', description: 'Preview or apply migration of compatible rendered clips.'},
     'leak-scan': {args: '<project-id> [--film]', description: 'Check rendered clips for leaked studio backdrops.'},
-    'texture-chains': {args: '<project-id> [--film] [--json]', description: 'Measure whether continuing clips get grittier from link to link. Only reads.', json: true},
-    interpolate: {args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]', description: 'Interpolate the rendered clips of a project.'},
+    'texture-chains': {
+        args: '<project-id> [--film] [--json]',
+        description: 'Measure whether continuing clips get grittier from link to link. Only reads.',
+        json: true,
+    },
+    interpolate: {
+        args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]',
+        description: 'Interpolate the rendered clips of a project.',
+    },
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},
-    stats: {args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]', description: 'Compare measured render and LLM performance.', json: true},
-    refinish: {args: '<id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001] [--again] [--comfy=URL]', description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.'},
-    label: {args: '<id> [--film] [--from=<video>] [--marker=generated-white|<png>] [--mode=credits|interval|always] [--seconds=5] [--interval=60] [--corner=top-right|top-left|bottom-right|bottom-left] [--size=6] [--margin=3] [--save | --save-default] [--dry-run]', description: 'Put the AI marker (an EU icon or a PNG of your own) over a finished video: <name>-labeled.mp4 next to it. Optional, see docs/postwork.md.'},
-    credits: {args: '<id> [--film] [--from=<video>] [--title=] [--artist=] [--director=] [--disclosure=] [--marker=] [--line=TEXT]... [--no-lines] [--hardware=] [--no-facts] [--no-opening] [--no-end] [--opening-seconds=4] [--end-seconds=0] [--sound=<file>] [--font=<ttf>] [--save | --save-default] [--dry-run]', description: 'A title card before a finished video and scrolling credits after it - title, who made it, the AI disclosure, your lines, and the models and hardware it was made with: <name>-credits.mp4. Optional, see docs/postwork.md.'},
-    intro: {args: '<id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]', description: 'Put an intro clip (input/intro.mp4, or a path) in front of a finished video: <name>-intro.mp4 next to it. Optional, see docs/postwork.md.'},
-    'add-view': {args: '<film-id> <location-id> --name=<where the camera is> --shows=<what is seen> [--from=<view>] [--comfy=URL]', description: 'Render one more view of a place of a film, from its anchor or another view; one that looks back the other way in two moves.'},
-    editor: {args: '[project-id] [--film] [--port=4173]', description: 'Open the workspace in the browser: all projects, the whole video on one timeline, renders, library and casting.', banner: 'Editor'},
+    stats: {
+        args: '[--by=variant,gpu] [--kind=clip|picture|song|interpolation|llm] [--project=id] [--since=7d] [--sort=name|median|p90|n|failed] [--top=N] [--compare] [--baseline="GPU or group"] [--details] [--json]',
+        description: 'Compare measured render and LLM performance.',
+        json: true,
+    },
+    refinish: {
+        args: '<id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001] [--again] [--comfy=URL]',
+        description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.',
+    },
+    label: {
+        args: '<id> [--film] [--from=<video>] [--marker=generated-white|<png>] [--mode=credits|interval|always] [--seconds=5] [--interval=60] [--corner=top-right|top-left|bottom-right|bottom-left] [--size=6] [--margin=3] [--save | --save-default] [--dry-run]',
+        description:
+            'Put the AI marker (an EU icon or a PNG of your own) over a finished video: <name>-labeled.mp4 next to it. Optional, see docs/postwork.md.',
+    },
+    credits: {
+        args: '<id> [--film] [--from=<video>] [--title=] [--artist=] [--director=] [--disclosure=] [--marker=] [--line=TEXT]... [--no-lines] [--hardware=] [--no-facts] [--no-opening] [--no-end] [--opening-seconds=4] [--end-seconds=0] [--sound=<file>] [--font=<ttf>] [--save | --save-default] [--dry-run]',
+        description:
+            'A title card before a finished video and scrolling credits after it - title, who made it, the AI disclosure, your lines, and the models and hardware it was made with: <name>-credits.mp4. Optional, see docs/postwork.md.',
+    },
+    intro: {
+        args: '<id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]',
+        description:
+            'Put an intro clip (input/intro.mp4, or a path) in front of a finished video: <name>-intro.mp4 next to it. Optional, see docs/postwork.md.',
+    },
+    'add-view': {
+        args: '<film-id> <location-id> --name=<where the camera is> --shows=<what is seen> [--from=<view>] [--comfy=URL]',
+        description: 'Render one more view of a place of a film, from its anchor or another view; one that looks back the other way in two moves.',
+    },
+    editor: {
+        args: '[project-id] [--film] [--port=4173]',
+        description: 'Open the workspace in the browser: all projects, the whole video on one timeline, renders, library and casting.',
+        banner: 'Editor',
+    },
     'client:build': {args: '', description: 'Build the Vue workspace client and install its static files. Stop the preview editor before updating its build.'},
     typecheck: {args: '', description: 'Check project TypeScript types.'},
     'styles:doc': {args: '', description: 'Regenerate the style reference document.'},
     'comfy:types': {args: '[--comfy=URL]', description: 'Regenerate typed ComfyUI nodes from the configured server.'},
-    'comfy:convert': {args: '<workflow-api.json> <name> --kind=image|video|audio|sequence [--force] [--comfy=URL]', description: 'Convert a ComfyUI API workflow into TypeScript.'},
+    'comfy:convert': {
+        args: '<workflow-api.json> <name> --kind=image|video|audio|sequence [--force] [--comfy=URL]',
+        description: 'Convert a ComfyUI API workflow into TypeScript.',
+    },
 }
 
 // A deliberate stop - Ctrl+C, or the workspace's stop on a system that sends a signal - cancels the ComfyUI jobs the run waits for
@@ -74,7 +165,9 @@ export function cli(command: string) {
     const end = original.indexOf('--')
     const options = end < 0 ? original : original.slice(0, end)
     if (options.includes('--help') || options.includes('-h')) {
-        log.info(`${styles.name(command)} — ${spec.description}\n\nUsage: ${usage}${helpDetails(command)}\n\nCommon options:\n  -h, --help     Show help without starting work\n  -v, --verbose  Show cached and detailed output\n      --debug    Show stack traces for failures\n      --quiet    Hide human output; keep warnings, errors and prompts\n      --banner   Show the large terminal banner\n\nSee docs/cli.md for output modes and recovery.`)
+        log.info(
+            `${styles.name(command)} — ${spec.description}\n\nUsage: ${usage}${helpDetails(command)}\n\nCommon options:\n  -h, --help     Show help without starting work\n  -v, --verbose  Show cached and detailed output\n      --debug    Show stack traces for failures\n      --quiet    Hide human output; keep warnings, errors and prompts\n      --banner   Show the large terminal banner\n\nSee docs/cli.md for output modes and recovery.`,
+        )
         process.exit(0)
     }
     const common = new Set(['--verbose', '-v', '--debug', '--quiet', '--banner'])

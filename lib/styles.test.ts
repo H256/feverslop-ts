@@ -1,12 +1,15 @@
-import {expect, test} from "bun:test";
-import {isRealistic, pickStyle, REALISTIC_SHARE, STYLES} from "./styles.ts";
-import {styleShortlistPrompt} from "./prompts.ts";
+import {expect, test} from 'bun:test'
+import {isRealistic, pickStyle, REALISTIC_SHARE, STYLES} from './styles.ts'
+import {styleShortlistPrompt} from './prompts.ts'
 
 const live = STYLES.filter(isRealistic)
 const artistic = STYLES.filter(s => !isRealistic(s))
 
 // a random source that answers with the given values, then goes on with the last one
-const sequence = (...values: number[]) => { let i = 0; return () => values[Math.min(i++, values.length - 1)]! }
+const sequence = (...values: number[]) => {
+    let i = 0
+    return () => values[Math.min(i++, values.length - 1)]!
+}
 
 test('the list has both kinds', () => {
     expect(live.length).toBeGreaterThan(0)
@@ -35,7 +38,14 @@ test('candidates of one kind are drawn from as they are', () => {
 })
 
 test('the shortlist prompt shows the group of every style, so the live action ones can be told', () => {
-    const prompt = styleShortlistPrompt('a song', [{id: 'a', name: 'A', group: 'Live action - eras'}, {id: 'b', name: 'B'}], 5).input
+    const prompt = styleShortlistPrompt(
+        'a song',
+        [
+            {id: 'a', name: 'A', group: 'Live action - eras'},
+            {id: 'b', name: 'B'},
+        ],
+        5,
+    ).input
     expect(prompt).toContain('- a: A [Live action - eras]')
     expect(prompt).toContain('- b: B\n')
 })

@@ -1,6 +1,6 @@
-import {log, styles} from "./log.ts";
-import type {Project} from "./project.ts";
-import type {FilmProject} from "./film/types.ts";
+import {log, styles} from './log.ts'
+import type {Project} from './project.ts'
+import type {FilmProject} from './film/types.ts'
 
 // The preproduction in stages, as a film is made (issue #526): the book first, then who plays and where, then how it looks,
 // then the shots - and only then the expensive part, the rendering. Every stage is the language model only. A run can stop
@@ -12,10 +12,10 @@ import type {FilmProject} from "./film/types.ts";
 //   plan   the beats and shots of a music video, the shots of every scene of a film: what the clips are made from
 
 export const PLAN_STAGES = ['story', 'cast', 'look', 'plan'] as const
-export type PlanStage = typeof PLAN_STAGES[number]
+export type PlanStage = (typeof PLAN_STAGES)[number]
 // where a run can stop: after the plan there is nothing left to stop before but the rendering, which is asked for (--render)
 export const UNTIL_STAGES = ['story', 'cast', 'look'] as const
-export type UntilStage = typeof UNTIL_STAGES[number]
+export type UntilStage = (typeof UNTIL_STAGES)[number]
 
 export const STAGE_NAMES: Record<PlanStage, string> = {story: 'the story', cast: 'the cast', look: 'the look', plan: 'the shot plan'}
 
@@ -46,7 +46,7 @@ export function filmStage(data: FilmProject): PlanStage | undefined {
 }
 
 /** The stage after this one; after the plan comes the rendering, which is not a stage of the plan. */
-export const nextStage = (stage: PlanStage | undefined): PlanStage | undefined => stage === undefined ? 'story' : PLAN_STAGES[PLAN_STAGES.indexOf(stage) + 1]
+export const nextStage = (stage: PlanStage | undefined): PlanStage | undefined => (stage === undefined ? 'story' : PLAN_STAGES[PLAN_STAGES.indexOf(stage) + 1])
 
 /**
  * Ends the run here when --until names this stage: everything so far is saved, the next run goes on from it. The process
@@ -55,7 +55,9 @@ export const nextStage = (stage: PlanStage | undefined): PlanStage | undefined =
 export function stopAfter(until: UntilStage | undefined, stage: UntilStage, file: string, resume: string) {
     if (until !== stage) return
     // shown also after a cached step, whose details only go into the log file
-    log.info(`${styles.label('▸ Stopped')} ${styles.muted(`after ${STAGE_NAMES[stage]} (--until=${stage}) - it is saved in ${file}, the next run goes on from it`)}`)
+    log.info(
+        `${styles.label('▸ Stopped')} ${styles.muted(`after ${STAGE_NAMES[stage]} (--until=${stage}) - it is saved in ${file}, the next run goes on from it`)}`,
+    )
     log.next(resume)
     process.exit(0)
 }

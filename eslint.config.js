@@ -8,10 +8,21 @@ import prettier from 'eslint-config-prettier'
 export default tseslint.config(
     {
         ignores: [
-            '**/node_modules/**', '**/dist/**', 'client/public/**', 'lib/editor/public/**', 'comfy/nodes.ts',
-            'projects/**', 'films/**', 'library/**', 'coverage/**', 'client/playwright-report/**', 'client/test-results/**',
+            '**/node_modules/**',
+            '**/dist/**',
+            'client/public/**',
+            'lib/editor/public/**',
+            'comfy/nodes.ts',
+            'projects/**',
+            'films/**',
+            'library/**',
+            'coverage/**',
+            'client/playwright-report/**',
+            'client/test-results/**',
             // generated or plain JS helpers: not part of the typed code
-            '**/*.js', '**/*.mjs', '**/*.cjs',
+            '**/*.js',
+            '**/*.mjs',
+            '**/*.cjs',
         ],
     },
     ...tseslint.configs.recommendedTypeChecked,

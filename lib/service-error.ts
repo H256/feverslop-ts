@@ -5,7 +5,7 @@
 export function nameService(e: unknown, who: string, known = who): Error {
     const error = e instanceof Error ? e : new Error(String(e))
     if (error.message.includes(known)) return error
-    const status = (error as { status?: number }).status
+    const status = (error as {status?: number}).status
     const shown = status && !error.message.startsWith(String(status)) ? `HTTP ${status} ${error.message}` : error.message
     error.message = `${who}: ${shown || 'no message'}`
     return error

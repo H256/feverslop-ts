@@ -1,10 +1,10 @@
-import {appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync} from "node:fs";
-import {AsyncLocalStorage} from "node:async_hooks";
-import {basename, dirname, join} from "node:path";
-import type {GraphSetup, Phase} from "./graph.ts";
-import {settingsPath} from "./settings.ts";
-import {processAlive} from './lock.ts';
-import {log} from './log.ts';
+import {appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync} from 'node:fs'
+import {AsyncLocalStorage} from 'node:async_hooks'
+import {basename, dirname, join} from 'node:path'
+import type {GraphSetup, Phase} from './graph.ts'
+import {settingsPath} from './settings.ts'
+import {processAlive} from './lock.ts'
+import {log} from './log.ts'
 
 // Every measured duration, one JSON line each, in ONE file for all projects (next to the settings file, outside the
 // repo) so projects can be compared - override with FEVERSLOP_TIMINGS. Append-only; numbers and names only, never a
@@ -16,23 +16,23 @@ export type Timing = {
     at: string
     project?: string
     kind: 'llm' | 'picture' | 'clip' | 'song' | 'interpolation'
-    name: string              // the workflow (renders) or the model (LLM calls)
-    seconds: number           // of one job / one call
+    name: string // the workflow (renders) or the model (LLM calls)
+    seconds: number // of one job / one call
     outcome?: 'retry' | 'failed' | 'again' | 'resumed' // resumed: only this run's wait/fetch time, never a complete render duration
-    reason?: string           // short, a fixed word or an error class - no text of the prompt or the answer
-    migration?: string        // idempotency key for a legacy row copied into the central store
-    step?: string             // the pipeline step an LLM call belongs to
+    reason?: string // short, a fixed word or an error class - no text of the prompt or the answer
+    migration?: string // idempotency key for a legacy row copied into the central store
+    step?: string // the pipeline step an LLM call belongs to
 
     // renders - what the ComfyUI graph said and where it ran
     variant?: string
-    workflowHash?: string     // of the workflow file: an edited workflow is unknown until it ran once
+    workflowHash?: string // of the workflow file: an edited workflow is unknown until it ran once
     setup?: GraphSetup
     server?: string
     gpu?: string
     vramGb?: number
     versions?: string
-    cold?: boolean            // the first job on that server after another set of models
-    queueSeconds?: number     // waiting in ComfyUI's queue, not computing
+    cold?: boolean // the first job on that server after another set of models
+    queueSeconds?: number // waiting in ComfyUI's queue, not computing
     phases?: Partial<Record<Phase, number>>
     resolution?: number | string
     frames?: number
@@ -108,23 +108,29 @@ export function recordTiming(timing: Omit<Timing, 'at' | 'v' | 'project'>) {
     append({v: 2, at: new Date().toISOString(), project, ...timing})
 }
 
-const parseLines = (text: string) => text.split('\n').flatMap(line => {
-    try {
-        return line.trim() ? [JSON.parse(line) as Timing] : []
-    } catch {
-        return []
-    }
-})
+const parseLines = (text: string) =>
+    text.split('\n').flatMap(line => {
+        try {
+            return line.trim() ? [JSON.parse(line) as Timing] : []
+        } catch {
+            return []
+        }
+    })
 
-const parsedFiles = new Map<string, {stamp: string, rows: Timing[]}>()
+const parsedFiles = new Map<string, {stamp: string; rows: Timing[]}>()
 export function readTimings(file?: string): Timing[] {
     const target = file ?? timingsFile()
     const sources = (!file && !process.env.FEVERSLOP_TIMINGS ? timingFiles(target) : [target]).filter(existsSync)
-    if (!sources.length) { parsedFiles.delete(target); return [] }
-    const stamp = sources.map(source => {
-        const stat = statSync(source)
-        return `${source}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
-    }).join('|')
+    if (!sources.length) {
+        parsedFiles.delete(target)
+        return []
+    }
+    const stamp = sources
+        .map(source => {
+            const stat = statSync(source)
+            return `${source}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`
+        })
+        .join('|')
     const cached = parsedFiles.get(target)
     if (cached?.stamp === stamp) return [...cached.rows]
     const rows = sources.flatMap(source => parseLines(readFileSync(source, 'utf8'))).map(row => Object.freeze(row))
@@ -147,14 +153,20 @@ export function migrateProjectTimings(dir: string) {
             rmSync(lock, {force: true})
         }
         fd = openSync(lock, 'wx')
-    } catch { return 0 }
+    } catch {
+        return 0
+    }
     try {
         writeFileSync(fd, String(process.pid))
         if (!existsSync(legacy)) return 0
         const text = readFileSync(legacy, 'utf8')
         const id = Bun.hash(`${legacy}\n${text}`).toString(16)
         const lines = parseLines(text).map((line, n) => ({project: basename(dir), ...line, migration: `${id}:${n}`}))
-        const copied = new Set(readTimings().map(row => row.migration).filter(Boolean))
+        const copied = new Set(
+            readTimings()
+                .map(row => row.migration)
+                .filter(Boolean),
+        )
         const missing = lines.filter(line => !copied.has(line.migration))
         mkdirSync(dirname(timingsFile()), {recursive: true})
         // One append under the source lock; a retry after an interrupted append skips complete copied rows.
@@ -164,7 +176,10 @@ export function migrateProjectTimings(dir: string) {
     } catch {
         log.warn(`Could not migrate ${legacy}; the source is retained and will be retried`)
         return 0
-    } finally { closeSync(fd); rmSync(lock, {force: true}) }
+    } finally {
+        closeSync(fd)
+        rmSync(lock, {force: true})
+    }
 }
 
 // the pipeline step an LLM call belongs to - set where a step runs (lib/project.ts), read where the call is recorded

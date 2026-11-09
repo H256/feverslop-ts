@@ -1,5 +1,5 @@
-import {afterAll, describe, expect, test} from "bun:test";
-import {configureLlm, llmMap} from "./llm.ts";
+import {afterAll, describe, expect, test} from 'bun:test'
+import {configureLlm, llmMap} from './llm.ts'
 
 afterAll(() => configureLlm({}))
 
@@ -8,12 +8,15 @@ async function peak(parallel: number | undefined, items: number) {
     configureLlm({parallel})
     let running = 0
     let most = 0
-    const results = await llmMap(Array.from({length: items}, (_, i) => i), async (item) => {
-        most = Math.max(most, ++running)
-        await Bun.sleep(5)
-        running--
-        return item * 10
-    })
+    const results = await llmMap(
+        Array.from({length: items}, (_, i) => i),
+        async item => {
+            most = Math.max(most, ++running)
+            await Bun.sleep(5)
+            running--
+            return item * 10
+        },
+    )
     return {most, results}
 }
 

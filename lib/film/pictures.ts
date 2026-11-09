@@ -1,11 +1,11 @@
-import {existsSync, readFileSync} from "node:fs";
-import {join} from "node:path";
-import type {FilmConfig} from "./config.ts";
-import {defaults, type RenderConfig} from "../config.ts";
-import type {PictureJob} from "../render.ts";
-import type {FilmCast, FilmProject, FilmProp} from "./types.ts";
-import {pictureAsset} from "../compose.ts";
-import {sequenceSheetDir, sheetAnchor, sheetFrame} from "../sequenceSheet.ts";
+import {existsSync, readFileSync} from 'node:fs'
+import {join} from 'node:path'
+import type {FilmConfig} from './config.ts'
+import {defaults, type RenderConfig} from '../config.ts'
+import type {PictureJob} from '../render.ts'
+import type {FilmCast, FilmProject, FilmProp} from './types.ts'
+import {pictureAsset} from '../compose.ts'
+import {sequenceSheetDir, sheetAnchor, sheetFrame} from '../sequenceSheet.ts'
 
 /** One view of a location's reference sheet as a picture of its own (view 1..5 = frame 0..4 of the sheet video) - the video model gets the one view, not the grid. */
 export const placeViewFrame = (id: string, view: number) => sheetFrame(sequenceSheetDir('location', id), view - 1)
@@ -14,7 +14,7 @@ export const placeViewFrame = (id: string, view: number) => sheetFrame(sequenceS
 export const statePictureId = (characterId: string, stateId: string) => `${characterId}--${stateId}`
 
 // baseId: the character this picture is another look of - drawn with the seed of the normal picture, which keeps the face
-export type FilmPictureJob = PictureJob & { baseId?: string }
+export type FilmPictureJob = PictureJob & {baseId?: string}
 
 /**
  * The picture of a prop: the thing alone on the grey backdrop of the character pictures - a plain picture, no sheet. Nobody holds it
@@ -24,24 +24,53 @@ export const propPicturePrompt = (prop: FilmProp) =>
     `A studio product photograph of ${prop.description.replace(/[.]+$/, '')}. The ${prop.name} alone, whole and centred, on a plain seamless neutral grey backdrop, even soft light from every side, sharp focus. Nothing else in the picture: no hands, no people, no other objects, no text.`
 
 /** The reference pictures of a film: every location, every character who is ever seen (not a narrator's voice), and every prop. */
-export function filmPictures(cast: FilmCast, data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'> & Pick<Partial<FilmProject>, 'locationViews' | 'props'>): FilmPictureJob[] {
+export function filmPictures(
+    cast: FilmCast,
+    data: Pick<FilmProject, 'characterLooks' | 'characterDescriptions' | 'locationLooks' | 'locationDescriptions'> &
+        Pick<Partial<FilmProject>, 'locationViews' | 'props'>,
+): FilmPictureJob[] {
     return [
         ...cast.locations.map(l => ({
-            kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name,
-            prompt: data.locationLooks?.[l.id] ?? '', description: data.locationDescriptions?.[l.id] ?? '',
+            kind: 'location' as const,
+            id: l.id,
+            file: pictureAsset('location', l.id),
+            name: l.name,
+            prompt: data.locationLooks?.[l.id] ?? '',
+            description: data.locationDescriptions?.[l.id] ?? '',
             // the four views after the first, as the sheet's video is asked to cut to them
             ...(data.locationViews?.[l.id]?.length === 5 ? {views: data.locationViews[l.id]!.slice(1).map(v => v.shows)} : {}),
         })),
-        ...cast.characters.filter(c => !c.voiceOnly).map(c => ({
-            kind: 'character' as const, id: c.id, file: pictureAsset('character', c.id), name: c.name,
-            prompt: data.characterLooks?.[c.id] ?? '', description: data.characterDescriptions?.[c.id] ?? '',
-        })),
-        ...cast.characters.filter(c => !c.voiceOnly).flatMap(c => (c.states ?? []).map(s => ({
-            kind: 'character' as const, id: statePictureId(c.id, s.id), baseId: c.id, look: {base: c.id, change: s.change}, file: pictureAsset('character', statePictureId(c.id, s.id)), name: `${c.name} (${s.name})`,
-            prompt: data.characterLooks?.[statePictureId(c.id, s.id)] ?? '', description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
-        }))),
+        ...cast.characters
+            .filter(c => !c.voiceOnly)
+            .map(c => ({
+                kind: 'character' as const,
+                id: c.id,
+                file: pictureAsset('character', c.id),
+                name: c.name,
+                prompt: data.characterLooks?.[c.id] ?? '',
+                description: data.characterDescriptions?.[c.id] ?? '',
+            })),
+        ...cast.characters
+            .filter(c => !c.voiceOnly)
+            .flatMap(c =>
+                (c.states ?? []).map(s => ({
+                    kind: 'character' as const,
+                    id: statePictureId(c.id, s.id),
+                    baseId: c.id,
+                    look: {base: c.id, change: s.change},
+                    file: pictureAsset('character', statePictureId(c.id, s.id)),
+                    name: `${c.name} (${s.name})`,
+                    prompt: data.characterLooks?.[statePictureId(c.id, s.id)] ?? '',
+                    description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
+                })),
+            ),
         ...(data.props ?? []).map(p => ({
-            kind: 'prop' as const, id: p.id, file: pictureAsset('prop', p.id), name: p.name, prompt: propPicturePrompt(p), description: p.description,
+            kind: 'prop' as const,
+            id: p.id,
+            file: pictureAsset('prop', p.id),
+            name: p.name,
+            prompt: propPicturePrompt(p),
+            description: p.description,
         })),
     ]
 }
@@ -59,7 +88,23 @@ export function pictureSeed(projectDir: string, characterId: string): number | u
 
 // What lib/render.ts's Renderer reads - the film's own settings on top of the shared defaults (sequence sheets' workflow)
 export function filmRenderConfig(config: FilmConfig): RenderConfig {
-    return {...defaults, imageWorkflow: config.imageWorkflow, videoWorkflow: config.videoWorkflow, seed: config.seed, imageResolution: config.imageResolution, videoResolution: config.videoResolution, videoAspect: config.videoAspect, sequenceSheets: config.sequenceSheets, contextFrames: config.contextFrames, leakRetries: config.leakRetries, qaRetries: config.qaRetries, finalFps: config.finalFps, interpolationModel: config.interpolationModel, finish: config.finish, preview: config.preview}
+    return {
+        ...defaults,
+        imageWorkflow: config.imageWorkflow,
+        videoWorkflow: config.videoWorkflow,
+        seed: config.seed,
+        imageResolution: config.imageResolution,
+        videoResolution: config.videoResolution,
+        videoAspect: config.videoAspect,
+        sequenceSheets: config.sequenceSheets,
+        contextFrames: config.contextFrames,
+        leakRetries: config.leakRetries,
+        qaRetries: config.qaRetries,
+        finalFps: config.finalFps,
+        interpolationModel: config.interpolationModel,
+        finish: config.finish,
+        preview: config.preview,
+    }
 }
 
-export {renderAll} from "../batch.ts"
+export {renderAll} from '../batch.ts'

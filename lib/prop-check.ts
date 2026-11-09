@@ -2,10 +2,10 @@
 // cheap check that the look prompt did what it was asked: a prop that is missing from the look is missing from the
 // reference picture, and the clips then show the model's own idea of it - or none.
 
-import type {Character} from "./project.ts";
+import type {Character} from './project.ts'
 
 /** What of a character's prop their picture shows: the prop, or - for one that stands in a place - what they hold of it. */
-export const pictureProp = (c: Pick<Character, 'prop' | 'propCarried' | 'propInHand'>) => c.propCarried === false ? c.propInHand : c.prop
+export const pictureProp = (c: Pick<Character, 'prop' | 'propCarried' | 'propInHand'>) => (c.propCarried === false ? c.propInHand : c.prop)
 
 const FILLER = new Set(['a', 'an', 'the', 'of', 'with', 'and', 'in', 'on', 'for', 'her', 'his', 'their', 'its'])
 
@@ -20,7 +20,7 @@ export function propNouns(prop: string): string[] {
     const last = words[words.length - 1]
     if (!last) return []
     const stem = (w: string) => w.replace(/'s$/, '').replace(/(?<=[a-z]{3})s$/, '')
-    const styled = words.flatMap(w => /^[a-z]{3,}-(?:style|type|like)$/.test(w) ? [w.split('-')[0]!] : [])
+    const styled = words.flatMap(w => (/^[a-z]{3,}-(?:style|type|like)$/.test(w) ? [w.split('-')[0]!] : []))
     return [...new Set([stem(last), ...styled])]
 }
 

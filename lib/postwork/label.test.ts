@@ -1,15 +1,15 @@
-import {afterEach, beforeEach, describe, expect, test} from "bun:test";
-import {mkdtempSync, readFileSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {probeVideo} from "../assemble.ts";
-import {runCommand} from "../editor/runs.ts";
-import {finalLabel} from "../editor/project.ts";
-import {loadProjectConfig} from "../config.ts";
-import {markerFile, MARKER_PRESETS, POSTWORK_DEFAULTS, postworkProblem} from "./config.ts";
-import {labelEnable, labelFilter, labelPosition, labelVideo} from "./label.ts";
-import {loadPostwork, savePostwork, withOptions} from "./store.ts";
-import {postworkName, sourceVideo} from "./video.ts";
+import {afterEach, beforeEach, describe, expect, test} from 'bun:test'
+import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {probeVideo} from '../assemble.ts'
+import {runCommand} from '../editor/runs.ts'
+import {finalLabel} from '../editor/project.ts'
+import {loadProjectConfig} from '../config.ts'
+import {markerFile, MARKER_PRESETS, POSTWORK_DEFAULTS, postworkProblem} from './config.ts'
+import {labelEnable, labelFilter, labelPosition, labelVideo} from './label.ts'
+import {loadPostwork, savePostwork, withOptions} from './store.ts'
+import {postworkName, sourceVideo} from './video.ts'
 
 const label = POSTWORK_DEFAULTS.label
 
@@ -96,13 +96,41 @@ describe('post-work videos: where a step starts and what it writes', () => {
         expect(finalLabel('demo', 'demo-labeled.mp4')).toMatchObject({label: 'Final + AI label'})
         expect(finalLabel('demo', 'demo--refine-fullhd-48fps-finished-labeled.mp4')).toMatchObject({label: 'Refinish refine-fullhd 48 fps finished + AI label'})
         expect(finalLabel('demo', 'demo-labeled.mp4.partial.mp4')).toBeUndefined()
-        const order = ['demo-48fps.mp4', 'demo-finished-labeled.mp4', 'demo.mp4', 'demo-finished.mp4'].sort((a, b) => finalLabel('demo', a)!.order - finalLabel('demo', b)!.order)
+        const order = ['demo-48fps.mp4', 'demo-finished-labeled.mp4', 'demo.mp4', 'demo-finished.mp4'].sort(
+            (a, b) => finalLabel('demo', a)!.order - finalLabel('demo', b)!.order,
+        )
         expect(order).toEqual(['demo.mp4', 'demo-finished.mp4', 'demo-finished-labeled.mp4', 'demo-48fps.mp4'])
     })
     test('the page asks for it by what it should be, and gets the command with nothing else', () => {
         const music = {id: 'demo', kind: 'music' as const, dir: '/x'}
-        expect(runCommand(music, {type: 'label', from: 'demo-finished.mp4', marker: 'generated-white', mode: 'interval', seconds: 3, interval: 60, corner: 'top-left', size: 6, margin: 3, save: true}))
-            .toEqual({script: 'tools/label.ts', args: ['demo', '--from=demo-finished.mp4', '--marker=generated-white', '--mode=interval', '--corner=top-left', '--seconds=3', '--interval=60', '--size=6', '--margin=3', '--save']})
+        expect(
+            runCommand(music, {
+                type: 'label',
+                from: 'demo-finished.mp4',
+                marker: 'generated-white',
+                mode: 'interval',
+                seconds: 3,
+                interval: 60,
+                corner: 'top-left',
+                size: 6,
+                margin: 3,
+                save: true,
+            }),
+        ).toEqual({
+            script: 'tools/label.ts',
+            args: [
+                'demo',
+                '--from=demo-finished.mp4',
+                '--marker=generated-white',
+                '--mode=interval',
+                '--corner=top-left',
+                '--seconds=3',
+                '--interval=60',
+                '--size=6',
+                '--margin=3',
+                '--save',
+            ],
+        })
         expect(runCommand({...music, kind: 'film'}, {type: 'label'})).toEqual({script: 'tools/label.ts', args: ['demo', '--film']})
         expect(() => runCommand(music, {type: 'label', from: '../../etc/passwd'})).toThrow('no such from')
         expect(() => runCommand(music, {type: 'label', mode: 'never'})).toThrow('no such mode')
@@ -113,8 +141,28 @@ test('writes <name>-labeled.mp4: the same frames and sound, the marker only wher
     const dir = mkdtempSync(join(tmpdir(), 'label-'))
     const video = join(dir, 'demo.mp4')
     // 4 s of black with a tone: the white marker is the only bright thing in the picture
-    const make = Bun.spawnSync(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=black:s=320x180:r=24:d=4', '-f', 'lavfi', '-i', 'sine=f=440:d=4',
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', video])
+    const make = Bun.spawnSync([
+        'ffmpeg',
+        '-v',
+        'error',
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=black:s=320x180:r=24:d=4',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=f=440:d=4',
+        '-c:v',
+        'libx264',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-shortest',
+        video,
+    ])
     expect(make.exitCode).toBe(0)
     const done = await labelVideo(video, markerFile('generated-white', dir), {...label, mode: 'credits', seconds: 2, size: 20})
     expect(done.file).toBe(join(dir, 'demo-labeled.mp4'))
@@ -122,7 +170,22 @@ test('writes <name>-labeled.mp4: the same frames and sound, the marker only wher
     expect({frames: info.frames, width: info.width, hasAudio: info.hasAudio}).toEqual({frames: 96, width: 320, hasAudio: true})
     // the brightest pixel of a frame in the first two seconds and of one after
     const brightest = (at: number) => {
-        const out = Bun.spawnSync(['ffmpeg', '-v', 'error', '-ss', String(at), '-i', done.file, '-frames:v', '1', '-vf', 'format=gray,signalstats,metadata=print:key=lavfi.signalstats.YMAX:file=-', '-f', 'null', '-'])
+        const out = Bun.spawnSync([
+            'ffmpeg',
+            '-v',
+            'error',
+            '-ss',
+            String(at),
+            '-i',
+            done.file,
+            '-frames:v',
+            '1',
+            '-vf',
+            'format=gray,signalstats,metadata=print:key=lavfi.signalstats.YMAX:file=-',
+            '-f',
+            'null',
+            '-',
+        ])
         return Number(/YMAX=(\d+)/.exec(out.stdout.toString())?.[1])
     }
     expect(brightest(1)).toBeGreaterThan(200)

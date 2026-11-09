@@ -1,11 +1,11 @@
-import {closeSync, mkdirSync, openSync, writeSync} from "node:fs";
-import {dirname} from "node:path";
-import {format, stripVTControlCharacters, styleText} from "node:util";
-import {noteRunError} from "./run-record.ts";
-import {pruneRunLogs} from './log-retention.ts';
+import {closeSync, mkdirSync, openSync, writeSync} from 'node:fs'
+import {dirname} from 'node:path'
+import {format, stripVTControlCharacters, styleText} from 'node:util'
+import {noteRunError} from './run-record.ts'
+import {pruneRunLogs} from './log-retention.ts'
 
 type Format = Parameters<typeof styleText>[0]
-export const style = (format: Format) => (text: string) => process.env.NO_COLOR !== undefined || !process.stdout.isTTY ? text : styleText(format, text)
+export const style = (format: Format) => (text: string) => (process.env.NO_COLOR !== undefined || !process.stdout.isTTY ? text : styleText(format, text))
 export const styles = {
     section: style(['bold', 'white', 'bgMagenta']),
     label: style(['bold', 'magenta']),
@@ -37,7 +37,9 @@ export function wrap(text: string, width: number) {
                     if (Bun.stringWidth(part + char) > width) break
                     part += char
                 }
-                if (!part) { part = [...line][0]! }
+                if (!part) {
+                    part = [...line][0]!
+                }
                 lines.push(part)
                 line = line.slice(part.length)
             }
@@ -57,7 +59,7 @@ let json = false
 let debug = false
 let errorHint = ''
 
-export function configureOutput(options: {quiet?: boolean, json?: boolean, debug?: boolean, hint?: string}) {
+export function configureOutput(options: {quiet?: boolean; json?: boolean; debug?: boolean; hint?: string}) {
     quiet = options.quiet ?? false
     json = options.json ?? false
     debug = options.debug ?? false
@@ -65,7 +67,7 @@ export function configureOutput(options: {quiet?: boolean, json?: boolean, debug
 }
 export const jsonOutput = () => json
 
-export function setOutput(options: { verbose?: boolean, show?: Iterable<string> }) {
+export function setOutput(options: {verbose?: boolean; show?: Iterable<string>}) {
     verbose = options.verbose ?? verbose
     shown = new Set(options.show ?? [])
 }
@@ -104,9 +106,16 @@ export function printBanner(title?: string) {
     if (!process.stdout.isTTY || quiet || json || bannerPrinted) return
     bannerPrinted = true
     const lines = bannerLines(process.stdout.columns || 100, title)
-    const heat = [style(['bold', 'yellowBright']), style(['bold', 'yellow']), style(['bold', 'redBright']), style(['bold', 'red']), style(['bold', 'magentaBright']), style(['bold', 'magenta'])]
+    const heat = [
+        style(['bold', 'yellowBright']),
+        style(['bold', 'yellow']),
+        style(['bold', 'redBright']),
+        style(['bold', 'red']),
+        style(['bold', 'magentaBright']),
+        style(['bold', 'magenta']),
+    ]
     let row = 0
-    const logo = lines.slice(0, -1).map(line => line ? heat[row++ % heat.length]!(line) : (row = 0, line))
+    const logo = lines.slice(0, -1).map(line => (line ? heat[row++ % heat.length]!(line) : ((row = 0), line)))
     print(['', ...logo, styles.name(lines.at(-1)!), ''].join('\n'), true)
 }
 let bannerPrinted = false
@@ -124,18 +133,25 @@ export function bannerLines(width: number, title?: string): string[] {
         S: ['  _____', ' / ____|', '| (___ ', ' \\___ \\', ' ____) |', '|_____/'],
         L: [' _     ', '| |    ', '| |    ', '| |    ', '| |____', '|______|'],
         O: ['  ____ ', ' / __ \\', '| |  | |', '| |  | |', '| |__| |', ' \\____/'],
-        P: [' _____ ', '|  __ \\','| |__) |', '|  ___/', '| |    ', '|_|    '],
+        P: [' _____ ', '|  __ \\', '| |__) |', '|  ___/', '| |    ', '|_|    '],
         T: [' _______ ', '|__   __|', '   | |   ', '   | |   ', '   | |   ', '   |_|   '],
         ' ': ['  ', '  ', '  ', '  ', '  ', '  '],
     }
-    const word = (text: string) => Array.from({length: 6}, (_, row) => [...text].map(c => {
-        const glyph = letters[c]!
-        return glyph[row]!.padEnd(Math.max(...glyph.map(line => line.length)))
-    }).join(' ').trimEnd())
+    const word = (text: string) =>
+        Array.from({length: 6}, (_, row) =>
+            [...text]
+                .map(c => {
+                    const glyph = letters[c]!
+                    return glyph[row]!.padEnd(Math.max(...glyph.map(line => line.length)))
+                })
+                .join(' ')
+                .trimEnd(),
+        )
     const widest = (lines: string[]) => Math.max(...lines.map(l => l.length))
     const choices = [
         ...(title ? [word('FEVERSLOP TS'), [...word('FEVER'), '', ...word('SLOP TS')]] : []),
-        word('FEVERSLOP'), [...word('FEVER'), '', ...word('SLOP')],
+        word('FEVERSLOP'),
+        [...word('FEVER'), '', ...word('SLOP')],
     ]
     const lines = choices.find(lines => widest(lines) <= width) ?? [title ? 'FEVERSLOP TS' : 'FEVERSLOP']
     // the title spaced out and framed to the width of the wordmark: ━━━━  E D I T O R  ━━━━
@@ -162,7 +178,7 @@ export function fitLine(text: string, width: number) {
 // the warnings of this run, for its summary at the end
 const warnings: string[] = []
 export const runWarnings = () => [...warnings]
-const result: {output?: string, next?: string, nextShown?: boolean, cancelled?: boolean} = {}
+const result: {output?: string; next?: string; nextShown?: boolean; cancelled?: boolean} = {}
 export const runResult = () => ({...result})
 
 export const log = {
@@ -176,9 +192,19 @@ export const log = {
     },
     json: (value: unknown) => console.log(JSON.stringify(value, null, 2)),
     success: (message: string) => print(`${styles.answer('✔ Done')} ${message}`, true),
-    next: (command: string) => { result.next = command; result.nextShown = true; print(`${styles.label('→ Next')} ${command}`, true) },
-    output: (path: string) => { result.output = path; print(`${styles.label('▸ Output')} ${path}`, true) },
-    cancel: (message: string) => { result.cancelled = true; print(`${styles.warning('⊘ Cancelled')} ${message}`, true, true) },
+    next: (command: string) => {
+        result.next = command
+        result.nextShown = true
+        print(`${styles.label('→ Next')} ${command}`, true)
+    },
+    output: (path: string) => {
+        result.output = path
+        print(`${styles.label('▸ Output')} ${path}`, true)
+    },
+    cancel: (message: string) => {
+        result.cancelled = true
+        print(`${styles.warning('⊘ Cancelled')} ${message}`, true, true)
+    },
     section: (title: string) => {
         detailsHidden = false
         print(`\n${styles.section(`  ${title}  `)}\n`)
@@ -211,10 +237,11 @@ export const log = {
         print(lines.join('\n'))
     },
     /** A bad --flag/argument: a loud red box with the problem and how to call the script correctly, then exits. */
-    usageError: (message: string, usage: string): never => errorBox(' ✗ BAD USAGE ', [
-        {text: message, style: styles.warning},
-        {text: usage, style: styles.muted},
-    ]),
+    usageError: (message: string, usage: string): never =>
+        errorBox(' ✗ BAD USAGE ', [
+            {text: message, style: styles.warning},
+            {text: usage, style: styles.muted},
+        ]),
     /** Any other uncaught runtime failure (a rejected step, a missing file, ...) - the same loud red box, just
      * without a usage line, instead of Bun's raw stack-trace dump. */
     fatal: (message: string): never => {
@@ -236,7 +263,7 @@ export function failRun(e: unknown): never {
     return log.fatal(e instanceof Error ? e.message : String(e))
 }
 
-function errorBox(heading: string, sections: { text: string, style: (s: string) => string }[]): never {
+function errorBox(heading: string, sections: {text: string; style: (s: string) => string}[]): never {
     clearBoard()
     if (json) {
         console.error(JSON.stringify({error: sections[0]?.text, usage: sections[1]?.text, hint: errorHint || undefined, log: logFile?.path}))
@@ -265,7 +292,7 @@ function errorBox(heading: string, sections: { text: string, style: (s: string) 
  * `⠋ 2 running · clip slot-003 @gpu1 step 4/8 12s · clip slot-004 @gpu2 loading 3s · 1 queued`.
  * Entries return '' to be hidden for a moment; notes (like "1 queued") come last and aren't counted as running.
  */
-type BoardEntry = { status: () => string, start: number, note: boolean }
+type BoardEntry = {status: () => string; start: number; note: boolean}
 const board = new Set<BoardEntry>()
 const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 let frame = 0
@@ -275,8 +302,14 @@ let drawn = 0
 function drawBoard() {
     if (!process.stdout.isTTY || quiet || json) return
     const elapsed = (entry: BoardEntry) => styles.muted(`${((Date.now() - entry.start) / 1000).toFixed(1)}s`)
-    const running = [...board].filter(e => !e.note).map(e => [e.status(), e] as const).filter(([status]) => status)
-    const notes = [...board].filter(e => e.note).map(e => e.status()).filter(Boolean)
+    const running = [...board]
+        .filter(e => !e.note)
+        .map(e => [e.status(), e] as const)
+        .filter(([status]) => status)
+    const notes = [...board]
+        .filter(e => e.note)
+        .map(e => e.status())
+        .filter(Boolean)
     if (!running.length && !notes.length) return
     // A bounded board retains concurrent jobs instead of truncating all but the first.
     const width = (process.stdout.columns || 100) - 1
@@ -284,7 +317,10 @@ function drawBoard() {
     const entries = running.map(([status, entry]) => `  ${status} ${elapsed(entry)}`)
     const visible = entries.slice(0, Math.max(0, limit - 1))
     const hidden = entries.length - visible.length
-    const lines = [`${styles.label(frames[frame++ % frames.length]!)} ${running.length} running${notes.length ? ` · ${notes.join(' · ')}` : ''}${hidden ? ` · ${hidden} more active` : ''}`, ...visible].map(line => fitLine(line, width))
+    const lines = [
+        `${styles.label(frames[frame++ % frames.length]!)} ${running.length} running${notes.length ? ` · ${notes.join(' · ')}` : ''}${hidden ? ` · ${hidden} more active` : ''}`,
+        ...visible,
+    ].map(line => fitLine(line, width))
     clearBoard()
     boardWrite = true
     process.stdout.write(lines.join('\n'))
@@ -300,7 +336,7 @@ function clearBoard() {
 }
 
 /** Adds an entry to the status board - returns the function that removes it again. */
-export function startSpinner(getStatus: () => string, options: { note?: boolean } = {}) {
+export function startSpinner(getStatus: () => string, options: {note?: boolean} = {}) {
     const entry: BoardEntry = {status: getStatus, start: Date.now(), note: options.note ?? false}
     board.add(entry)
     if (process.stdout.isTTY && !quiet && !json) timer ??= setInterval(drawBoard, 100)
@@ -321,7 +357,7 @@ export function formatDuration(ms: number) {
     const seconds = ms / 1000
     if (seconds < 60) return `${seconds.toFixed(1)}s`
     const whole = Math.round(seconds)
-    if (whole >= 3600) return `${Math.floor(whole / 3600)}h ${String(Math.floor(whole % 3600 / 60)).padStart(2, '0')}m`
+    if (whole >= 3600) return `${Math.floor(whole / 3600)}h ${String(Math.floor((whole % 3600) / 60)).padStart(2, '0')}m`
     return `${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, '0')}s`
 }
 
@@ -341,7 +377,7 @@ export const suffix = (...parts: (string | undefined | false)[]) => parts.filter
  * The log of a run: everything it prints - console.log/error/warn and direct writes (the prompts of --review) - also goes
  * into this file, without colour codes and without the redraws of the status line. Opened once per run.
  */
-let logFile: { path: string, fd: number } | undefined
+let logFile: {path: string; fd: number} | undefined
 let boardWrite = false
 
 /** Into the log file only - what the terminal leaves out. */
@@ -357,7 +393,11 @@ function toLog(text: string) {
 export function keepLogIn(path: string) {
     mkdirSync(dirname(path), {recursive: true})
     logFile = {path, fd: openSync(path, 'a')}
-    try { pruneRunLogs(dirname(path), 20, path) } catch { /* retention must not stop a run */ }
+    try {
+        pruneRunLogs(dirname(path), 20, path)
+    } catch {
+        /* retention must not stop a run */
+    }
     const toFile = (text: string) => {
         if (!logFile || boardWrite) return
         // the status line is drawn as "\r" + the line, and cleared with "\r" - neither is part of the log

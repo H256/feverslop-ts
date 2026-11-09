@@ -1,8 +1,8 @@
-import {describe, expect, test} from "bun:test";
-import {existsSync, mkdtempSync, readFileSync, renameSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {putInPlace} from "./video.ts";
+import {describe, expect, test} from 'bun:test'
+import {existsSync, mkdtempSync, readFileSync, renameSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {putInPlace} from './video.ts'
 
 describe('the finished video under its name', () => {
     const files = () => {
@@ -33,7 +33,9 @@ describe('the finished video under its name', () => {
     })
     test('another failure is not waited for', async () => {
         const {target, partial} = files()
-        const broken = () => { throw Object.assign(new Error('ENOSPC'), {code: 'ENOSPC'}) }
+        const broken = () => {
+            throw Object.assign(new Error('ENOSPC'), {code: 'ENOSPC'})
+        }
         await expect(putInPlace(partial, target, 5, 1, broken)).rejects.toThrow('ENOSPC')
     })
 })

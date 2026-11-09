@@ -1,6 +1,11 @@
 /** A request the server refused or could not answer: its own words when it sent some, and the status. */
 export class HttpError extends Error {
-  constructor(message: string, readonly status: number) { super(message) }
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
 }
 
 /**
