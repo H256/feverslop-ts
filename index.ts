@@ -287,13 +287,6 @@ if (replanBeats.length) {
 }
 // the steps named, but with --beats not shotMoments as a whole: just the shot plans of those beats go
 const redoWhole = replanBeats.length ? redoSteps.filter(step => step !== 'shotMoments') : redoSteps
-if (!args['dry-run']) {
-    for (const step of redoWhole) project.invalidate(step)
-    if (replanBeats.length && project.data.shotMoments) {
-        dropBeatPlans(project.data, replanBeats)
-        log.step('Redo', `${styles.name('shotMoments')} ${styles.muted(`of ${replanBeats.join(', ')}`)}`)
-    }
-}
 
 const toId = toSlug
 const readInput = (name: string) => readInputFile(project.input(name))
@@ -311,7 +304,26 @@ const config = await loadProjectConfig(project.dir)
 // a continuing clip with context frames is rendered longer at its head - the clips are planned that much shorter (maxClipFor)
 const maxClipSec = maxClipFor(MAX_CLIP_SEC, config.contextFrames, config.continuity)
 const timelineOutdated = project.data.timeline !== undefined && project.data.timeline.maxClipSec !== maxClipSec
-if (!args['dry-run'] && timelineOutdated) project.invalidate('timeline')
+// --beats keeps the other beats' shots: a run that plans every shot again anyway (a changed setting or input, --redo of a step
+// before the shots) is stopped before it changes anything, with the reason - it would not do what was asked (#762)
+if (replanBeats.length && project.data.shotMoments) {
+    const reasons = await redoReasons()
+    const sweeping = reasons.filter(([, steps]) => project.redoneBy(steps).includes('shotMoments')).map(([why]) => why)
+    if (sweeping.length)
+        log.usageError(
+            `--beats cannot keep the other beats: ${sweeping.join(', ')} - that plans the shots of every beat again. ` +
+                'Undo that change (e.g. set "continuity" in config.json back to what the project was planned with), or plan every beat again without --beats.',
+            usage,
+        )
+}
+if (!args['dry-run']) {
+    for (const step of redoWhole) project.invalidate(step)
+    if (timelineOutdated) project.invalidate('timeline')
+    if (replanBeats.length && project.data.shotMoments) {
+        dropBeatPlans(project.data, replanBeats)
+        log.step('Redo', `${styles.name('shotMoments')} ${styles.muted(`of ${replanBeats.join(', ')}`)}`)
+    }
+}
 const settings = await loadSettings({
     projectModel: config.llm.model,
     llmUrl: args['llm-url'],
@@ -1929,7 +1941,8 @@ log.step('Log', runLogFile() ?? '')
  * sections or clip length - along the dependencies) and the steps not generated yet, then what --render would render,
  * with the estimate from the measured timings. The renders are counted from the requests of the last plan run.
  */
-async function dryRun() {
+/** What makes this run redo steps, with the steps each one names: --redo, changed inputs and settings, gone stems, changed sections, clip length. */
+async function redoReasons(): Promise<[string, StepName[]][]> {
     const changed = project.changedInputs(await projectInputs(project.dir, config))
     const lostStems = (['stems', 'instrumentStems'] as const).filter(
         step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))),
@@ -1940,13 +1953,17 @@ async function dryRun() {
     ).map(s => s.label)
     const sectionsChanged =
         project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
-    const reasons: [string, StepName[]][] = [
+    return [
         ...(redoWhole.length ? [['--redo', redoWhole] as [string, StepName[]]] : []),
         ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
         ...lostStems.map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
         ...(sectionsChanged ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
         ...(timelineOutdated ? [['the longest clip changed', ['timeline']] as [string, StepName[]]] : []),
     ]
+}
+
+async function dryRun() {
+    const reasons = await redoReasons()
     const redone = project.redoneBy(reasons.flatMap(([, steps]) => steps))
     // whether a step is used is read from the project as it is once the redone steps are gone (the blocking is made when the shots are planned again)
     const after = Object.fromEntries(Object.entries(project.data).filter(([step]) => !(redone as string[]).includes(step)))
