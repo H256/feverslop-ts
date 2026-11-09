@@ -333,3 +333,31 @@ test('a new plan: a beat edit applies to its new shots, a shot edit waits to be 
     expect(view.shots[1]!.data.framing).toBeUndefined()
     expect(view.editIssues.map(i => i.editId)).toContain('shot')
 })
+test("the director's words reach the planner for the beats they are about; a rule saved before the beat has shots holds for them (#765)", async () => {
+    const {target, data} = fixture()
+    await setDirectionRules(target, {
+        rules: [
+            {id: 'beat', text: 'They dance a slow waltz.', scope: {kind: 'beat', id: 's1'}},
+            {id: 'who', text: 'Always in red light.', scope: {kind: 'character', id: 'b'}},
+            {id: 'all', text: 'Candlelight only.', scope: {kind: 'global'}},
+            {id: 'shot', text: 'Hold on her face.', scope: {kind: 'shot', id: 's1:shot2'}},
+        ],
+    })
+    expect(directionPlanNotes(target, data)).toEqual({s1: ['They dance a slow waltz.', 'for B: Always in red light.', 'Candlelight only.']})
+    // a beat without shots: the rule is bound to "missing" and is not unresolved once the beat is planned
+    delete data.shotMoments.s1
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    await setDirectionRules(target, {rules: [{id: 'later', text: 'They dance.', scope: {kind: 'beat', id: 's1'}}]})
+    data.shotMoments = {s1: {shots: [{action: 'dance', characters: ['a', 'b']}]}}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    expect(readDirection(target).unresolved).toEqual([])
+})
+test('a rule for the planner only needs no review: a plan run is not held up by it (#765)', async () => {
+    const {target, data} = fixture()
+    await setDirectionRules(target, {rules: [{id: 'p', text: 'They dance.', scope: {kind: 'beat', id: 's1'}, planned: true}]})
+    expect(readDirection(target).pending).toBe(false)
+    expect(() => applyDirectionOverlay(target, data)).not.toThrow()
+    expect(directionPlanNotes(target, data)).toEqual({s1: ['They dance.']})
+    await setDirectionRules(target, {rules: [{id: 'r', text: 'Slowly.', scope: {kind: 'global'}}]})
+    expect(readDirection(target).pending).toBe(true)
+})

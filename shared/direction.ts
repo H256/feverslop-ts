@@ -18,6 +18,8 @@ export type DirectionRule = {
     scope: DirectionScope
     characterId?: string
     binding?: string
+    // for the planner only (#765): kept to when the shots of its scope are planned again, never previewed or reviewed
+    planned?: boolean
 }
 export type DirectionSize = 'wide' | 'medium' | 'close' | 'extreme'
 /**

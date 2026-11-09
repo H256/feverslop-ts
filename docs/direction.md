@@ -87,6 +87,25 @@ Compatible instructions combine. A specific instruction replaces contradictory g
 
 The LLM sees existing shots and relevant context. It must align action, movement, camera and pose and report continuity conflicts instead of quietly changing an unrelated scene. No-thinking editing reduces unnecessary reasoning for local changes; actual latency depends on the model and amount of affected context. A structurally valid plan still cannot guarantee that a video model executes every motion exactly.
 
+## People into beats (music video)
+
+The plan has who is in each beat. To bring someone in - a character of the cast, or a new one who joins it - name the beats and, with `--add`, what they do there:
+
+```powershell
+bun run direction demo --join="Mara: a dancer in her twenties, long black hair, a dark red velvet dress" --join="Lene: a dancer in her thirties, short silver-blond hair, a black lace dress" --scope=beat:beat-07,beat-16 --add="Mara and Lene dance a slow, stately waltz in the candlelit room behind Elias, never touching him; he sings at the front."
+bun run direction demo --with=lene --scope=beat:beat-11 --add="Lene dances alone by the window."
+bun index.ts demo                       # the new looks, and these beats planned again (the language model only)
+bun index.ts demo --render=images       # the pictures of whoever joined
+bun index.ts demo --render=videos --refresh=clips
+```
+
+- `--join` adds a person of their own to the cast, with a picture of their own - several `--join` for several. Only their look and description are written by the next plan run; the story, the beats, the timeline, everyone else's look and every other beat's shots stay. (`bun run cast --set` changes the cast as a whole and drops the plan built on it.)
+- `--with` brings characters of the cast into the beats.
+- The beats lose their floor plan and shots; the next plan run plans just them again, with the people they have now. The note is saved as a rule on each beat, and the planner keeps to it.
+- In the workspace: mark the beats on the timeline (a click on a beat in the Beats lane), then **Add people…**.
+
+Rules on a beat or scene, a character or the whole video always reach the planner when shots are planned again - not only the preview. A rule saved for a beat that has no shots yet holds for the shots it is planned with.
+
 ## Replanning and versions
 
 Broad intent survives regenerated shots. When the source plan changes, review a fresh proposal before rendering from it. Scene and shot bindings include the source they were chosen from: a reused ID is not permission to apply an old instruction to a different scene. Missing or changed bindings are reported for explicit reassignment.

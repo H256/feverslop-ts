@@ -104,8 +104,19 @@ export type EditorClip = {
     refined: {variant: string; file: string; v: number; size?: string; seed?: number; denoise?: number}[] // larger versions of it (bun run refinish)
 }
 export type EditorGroup = {id: string; label: string; start: number; end: number}
+// people brought into beats of a planned music video (#765): characters of the cast, new ones joining it, what they do there
+export type BeatCastChange = {beats: string[]; characters?: string[]; join?: {name: string; role: string}[]; note?: string}
+// joined: the ids of the new characters; remade: the steps written again for them only; replanned: the beats whose shots go
+export type BeatCastResult = {
+    beats: string[]
+    joined: string[]
+    remade: string[]
+    added: {beat: string; character: string}[]
+    replanned: string[]
+    rules?: number
+}
 // a beat of a music video along the timeline (#761): planned - its shots have a plan; without one the next plan run plans them
-export type EditorBeat = {id: string; label: string; start: number; end: number; planned: boolean; clips: string[]}
+export type EditorBeat = {id: string; label: string; start: number; end: number; planned: boolean; clips: string[]; characters: string[]}
 export type EditorFinal = {file: string; v: number; label: string; state: FinalState; preview: boolean; width?: number; height?: number; fps?: number}
 export type EditorProject = {
     id: string

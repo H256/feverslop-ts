@@ -1,5 +1,6 @@
 import {h, reactive} from 'vue'
-import type {EditorClip, EditorOverride, LastRun, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
+import type {BeatCastResult, EditorClip, EditorOverride, LastRun, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
+import BeatCastForm, {type BeatCastDraft} from './BeatCastForm.vue'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
@@ -232,6 +233,48 @@ export function useClipActions(timeline: Timeline) {
     await start({type: 'plan', beats: beats.map(b => b.id)})
     marked.clear()
   }
+  /**
+   * People brought into these beats (#765): of the cast, or new ones joining it, with what they do there as a direction rule. The
+   * beats lose their shots and are planned by the next plan run - asked for right after, the language model only.
+   */
+  async function bringPeople(beatIds: string[]) {
+    const beats = (project.value.beats ?? []).filter(b => beatIds.includes(b.id))
+    if (!beats.length) return
+    const {cast} = await api.cast()
+    const characters = cast?.characters ?? []
+    const draft = reactive<BeatCastDraft>({characters: [], join: [{name: '', role: ''}], note: ''})
+    let result: BeatCastResult | undefined
+    const yes = await ask({
+      title: `Bring people into ${beats.map(b => b.id).join(', ')}`,
+      lines: [
+        'Characters of the cast, or new ones who join it. Each new person is a character of their own: their look is written and their picture rendered, everyone else keeps theirs.',
+        `${beats.length === 1 ? 'This beat loses its shots and is' : `These ${beats.length} beats lose their shots and are`} planned again by the next plan run, with the people and the words below; the other beats keep their shots. Nothing is rendered here.`,
+      ],
+      body: () => h(BeatCastForm, {draft, cast: characters, inAll: characters.map(c => c.id).filter(id => beats.every(b => b.characters.includes(id)))}),
+      confirm: 'Bring them in',
+      submit: async () => {
+        result = await api.saveBeatCast({
+          beats: beats.map(b => b.id),
+          characters: draft.characters,
+          join: draft.join.filter(j => j.name.trim() || j.role.trim()),
+          note: draft.note,
+        })
+      },
+    })
+    if (!yes || !result) return
+    marked.clear()
+    const done = result
+    const now = await ask({
+      title: `Plan ${done.beats.join(', ')} now?`,
+      lines: [
+        done.joined.length && `${done.joined.join(', ')} joined the cast: the plan run writes their look and description.`,
+        `${plural(done.beats.length, 'beat')} planned again, with ${done.added.length ? [...new Set(done.added.map(a => a.character))].join(', ') : 'the people they had'}${done.rules ? ' and the note as a direction rule' : ''}. The language model only, no GPU.`,
+        `Afterwards: ${done.joined.length ? 'the pictures of whoever joined on References, then ' : ''}"Render stale" for the clips of these beats.`,
+      ],
+      confirm: 'Plan now',
+    })
+    if (now) await start({type: 'plan'})
+  }
   const plain = (action: RunRequest) => start(action)
   const plan = () => start({type: 'plan'})
 
@@ -249,6 +292,7 @@ export function useClipActions(timeline: Timeline) {
     renderAgain: guarded(renderAgain),
     renderMarked: guarded(renderMarked),
     replanBeats: guarded(replanBeats),
+    bringPeople: guarded(bringPeople),
     preview: guarded(preview),
     retake: guarded(retake),
     refinish: guarded(refinish),

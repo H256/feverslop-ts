@@ -28,6 +28,9 @@ type State = {
     restored?: boolean
 }
 const hash = (v: unknown): string => createHash('sha256').update(JSON.stringify(v)).digest('hex')
+// the rules a preview rewrites the shots for and a take accepts - a rule for the planner only (planned, #765) is planned with
+// when its beats are planned again and needs no review
+const reviewed = (s: State) => s.rules.filter(r => !r.planned)
 const file = (t: DirectionTarget) => join(t.dir, 'direction.json')
 const source = (t: DirectionTarget): Data => JSON.parse(readFileSync(join(t.dir, 'project.json'), 'utf8'))
 const shots = (t: DirectionTarget, d: Data) => (t.kind === 'film' ? filmShots(d as FilmProject) : musicShots(d as Project, renderConfig(t)))
@@ -90,6 +93,7 @@ function validateRule(r: DirectionRule) {
     } else if (s.kind !== 'global' && (typeof s.id !== 'string' || !s.id)) throw Error('scope requires id')
     if (r.characterId !== undefined && (typeof r.characterId !== 'string' || !r.characterId)) throw Error('invalid characterId')
     if (r.binding !== undefined && typeof r.binding !== 'string') throw Error('invalid binding')
+    if (r.planned !== undefined && typeof r.planned !== 'boolean') throw Error('invalid planned')
 }
 function validateEdit(e: DirectionEdit) {
     if (!e || typeof e.id !== 'string' || !e.id.trim()) throw Error('edit requires id')
@@ -157,7 +161,26 @@ function editRules(t: DirectionTarget, d: Data, s: State): DirectionRule[] {
 /** The edits as notes for the planner, per beat or scene (lib/shot-planner.ts, the film's coverage): what a new plan keeps to. */
 export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, string[]> {
     if (!existsSync(file(t))) return {}
-    return directionNotes(state(t).edits ?? [], groupIds(t, d), nameIn(d))
+    const s = state(t)
+    const notes = directionNotes(s.edits ?? [], groupIds(t, d), nameIn(d))
+    // the director's own words too, for the beats or scenes they are about: a plan made again keeps to them from the start
+    // (#765) - a rule on a shot or a stretch of time stays with the preview, which rewrites the shots that are there
+    const add = (group: string, note: string) => {
+        ;(notes[group] ??= []).push(note)
+    }
+    const nameOf = nameIn(d)
+    for (const r of s.rules) {
+        const text = r.text.trim()
+        const about = r.characterId ? `for ${nameOf(r.characterId)}: ${text}` : text
+        const sc = r.scope
+        if (sc.kind === 'beat' || sc.kind === 'scene') add(sc.id, about)
+        else if (sc.kind === 'global') for (const group of groupIds(t, d)) add(group, about)
+        else if (sc.kind === 'character') {
+            const groups = t.kind === 'film' ? groupIds(t, d) : ((d as Project).beats ?? []).filter(b => b.characterIds.includes(sc.id)).map(b => b.id)
+            for (const group of groups) add(group, `for ${nameOf(sc.id)}: ${text}`)
+        }
+    }
+    return notes
 }
 export {describeEdit}
 function matches(r: DirectionRule, s: DirectionShot) {
@@ -187,8 +210,9 @@ function binding(t: DirectionTarget, d: Data, r: DirectionRule): string | undefi
     return hash({groups, shots: selected})
 }
 function unresolved(t: DirectionTarget, d: Data, s: State) {
-    return s.rules.flatMap(r =>
-        r.binding !== undefined && r.binding !== binding(t, d, r)
+    // a rule saved for a beat or scene without shots yet ('missing') holds for the shots it is planned with (#765)
+    return reviewed(s).flatMap(r =>
+        r.binding !== undefined && r.binding !== 'missing' && r.binding !== binding(t, d, r)
             ? [{ruleId: r.id, message: 'Source scene/shot changed; explicitly rebind or remove this rule.'}]
             : !shots(t, d).some(sh => matches(r, sh))
               ? [{ruleId: r.id, message: 'Scope selects no existing shots.'}]
@@ -233,9 +257,9 @@ export function readDirection(t: DirectionTarget): DirectionView {
         proposal: s.proposal,
         versions: s.versions,
         activeVersion: accepted?.id,
-        pending: s.rules.length > 0 && (s.appliedRules !== hash(s.rules) || !accepted),
+        pending: reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !accepted),
         restored: !!s.restored,
-        proposalStale: !!s.proposal && (s.proposal.sourceFingerprint !== fingerprint(t, d) || s.proposal.rulesFingerprint !== hash(s.rules)),
+        proposalStale: !!s.proposal && (s.proposal.sourceFingerprint !== fingerprint(t, d) || s.proposal.rulesFingerprint !== hash(reviewed(s))),
     }
 }
 /** Saves the edits (the whole list): a shot edit is bound to its current shot unless it keeps the binding it has. */
@@ -286,7 +310,7 @@ export async function setDirectionRules(
             if (t.kind === 'music' && r.scope.kind === 'scene') throw Error('music uses beat scope')
             return {...r, ...(binding(t, d, r) !== undefined ? {binding: r.binding ?? binding(t, d, r)} : {})}
         })
-        if (!s.rules.length && applied(t, d, s)) s.appliedRules = hash(s.rules)
+        if (!reviewed(s).length && applied(t, d, s)) s.appliedRules = hash(reviewed(s))
         delete s.proposal
         save(t, s)
         return readDirection(t)
@@ -372,7 +396,7 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
         if (unresolved(t, d, s).length) throw Error('unresolved rules need explicit rebinding')
         const current = shots(t, overlay(t, d, s))
         // the rules, and for a person an edit took out of a shot whose words still name them, a rule to write it without them
-        const rules = [...s.rules, ...editRules(t, d, s)]
+        const rules = [...reviewed(s), ...editRules(t, d, s)]
         const selected = current.filter(sh => rules.some(r => matches(r, sh)))
         if (!selected.length) throw Error('no selected shots; restore a version to undo edits')
         const run = ask ?? (await import('../llm.ts')).askJson
@@ -418,7 +442,7 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
                 proposal = {
                     id: randomUUID(),
                     sourceFingerprint: initialFingerprint,
-                    rulesFingerprint: hash(s.rules),
+                    rulesFingerprint: hash(reviewed(s)),
                     changes,
                     conflicts: r.conflicts as string[],
                 }
@@ -440,7 +464,7 @@ export async function takeDirection(t: DirectionTarget) {
             s = state(t),
             p = s.proposal
         if (!p) throw Error('no proposal')
-        if (p.sourceFingerprint !== fingerprint(t, d) || p.rulesFingerprint !== hash(s.rules)) throw Error('stale proposal')
+        if (p.sourceFingerprint !== fingerprint(t, d) || p.rulesFingerprint !== hash(reviewed(s))) throw Error('stale proposal')
         if (p.conflicts.length) throw Error('resolve proposal conflicts before taking')
         const all = shots(t, d)
         for (const c of p.changes) {
@@ -462,7 +486,7 @@ export async function takeDirection(t: DirectionTarget) {
         for (const c of p.changes) merged.set(c.shotId, c)
         s.versions.push({...p, changes: [...merged.values()], createdAt: new Date().toISOString()})
         s.activeVersion = p.id
-        s.appliedRules = hash(s.rules)
+        s.appliedRules = hash(reviewed(s))
         s.restored = false
         delete s.proposal
         save(t, s)
@@ -485,7 +509,7 @@ export async function restoreDirection(t: DirectionTarget, id: string) {
         if (v.sourceFingerprint !== fingerprint(t, source(t))) throw Error('stale version belongs to a different source plan')
         overlay(t, source(t), {...s, activeVersion: id})
         s.activeVersion = id
-        s.appliedRules = hash(s.rules)
+        s.appliedRules = hash(reviewed(s))
         s.restored = true
         delete s.proposal
         save(t, s)
@@ -501,7 +525,7 @@ export function applyDirectionOverlay<T extends Data>(
     } = {},
 ): T {
     const s = state(t)
-    const pending = s.rules.length > 0 && (s.appliedRules !== hash(s.rules) || !applied(t, d, s))
+    const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
     if (pending && !options.allowPending)
         throw Error(
             `Direction needs review: bun run direction ${t.id}${t.kind === 'film' ? ' --film' : ''} --preview, then --take. Rebind unresolved scene/shot rules explicitly.`,
