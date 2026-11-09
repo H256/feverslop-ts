@@ -1,8 +1,8 @@
-import {afterEach, expect, spyOn, test} from "bun:test";
-import * as p from "@clack/prompts";
-import {PassThrough} from "node:stream";
-import {log} from "./log.ts";
-import {answer, projectWorkflows} from "./wizard.ts";
+import {afterEach, expect, spyOn, test} from 'bun:test'
+import * as p from '@clack/prompts'
+import {PassThrough} from 'node:stream'
+import {log} from './log.ts'
+import {answer, projectWorkflows} from './wizard.ts'
 
 // what a prompt really returns when it is cancelled
 const cancelled = () => p.confirm({message: 'x', signal: AbortSignal.abort(), input: new PassThrough(), output: new PassThrough()})
@@ -16,7 +16,7 @@ async function cancelMessage(ask: (value: unknown) => unknown) {
     const cancel = spyOn(log, 'cancel').mockImplementation(() => {})
     spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit')
-})
+    })
     const value = await cancelled()
     expect(() => ask(value)).toThrow('exit')
     return cancel.mock.calls.at(-1)![0]
@@ -32,7 +32,20 @@ test('an answer comes back as it is', () => {
     expect(answer(false, 'Cancelled')).toBe(false)
 })
 
-const bundled = ['frame-interpolate', 'h3-latent-upscale', 'h3-ref2video', 'h3-ref2video-2pass', 'h3-ref2video-film', 'h3-ref2video-film-2pass', 'h3-refine', 'h3-sequence-to-sheet', 'krea2-image', 'kroma-image', 'video-upscale', 'yue2-song']
+const bundled = [
+    'frame-interpolate',
+    'h3-latent-upscale',
+    'h3-ref2video',
+    'h3-ref2video-2pass',
+    'h3-ref2video-film',
+    'h3-ref2video-film-2pass',
+    'h3-refine',
+    'h3-sequence-to-sheet',
+    'krea2-image',
+    'kroma-image',
+    'video-upscale',
+    'yue2-song',
+]
 test('projectWorkflows: the bundled ones come out as before', () => {
     expect(projectWorkflows(bundled, 'image')).toEqual(['krea2-image', 'kroma-image'])
     expect(projectWorkflows(bundled, 'video')).toEqual(['h3-ref2video', 'h3-ref2video-2pass'])

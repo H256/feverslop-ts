@@ -1,6 +1,6 @@
-import {expect, test} from "bun:test";
-import {bar, by, byAll, formatRows, groupRows, percentChange, referenceOf} from "./stats.ts";
-import type {Timing} from "./timings.ts";
+import {expect, test} from 'bun:test'
+import {bar, by, byAll, formatRows, groupRows, percentChange, referenceOf} from './stats.ts'
+import type {Timing} from './timings.ts'
 
 const clip = (seconds: number, extra: Partial<Timing> = {}): Timing => ({at: '', kind: 'clip', name: 'wan', seconds, variant: 'v1', server: 'gpu1', ...extra})
 
@@ -10,7 +10,10 @@ test('resumed fetch times are excluded from duration benchmarks (#663)', () => {
 })
 
 test('median and p90 of the warm jobs; cold starts, outliers, retries and failures are counted apart', () => {
-    const rows = groupRows([clip(100), clip(110), clip(90), clip(105), clip(1000), clip(400, {cold: true}), clip(0, {outcome: 'retry'}), clip(3, {outcome: 'failed'})], by.variant)
+    const rows = groupRows(
+        [clip(100), clip(110), clip(90), clip(105), clip(1000), clip(400, {cold: true}), clip(0, {outcome: 'retry'}), clip(3, {outcome: 'failed'})],
+        by.variant,
+    )
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({key: 'wan #v1', n: 4, median: 102.5, cold: 1, outliers: 1, retries: 1, failed: 1})
 })
@@ -33,9 +36,25 @@ test('the table shows the change against the first row', () => {
 })
 
 test('by variant and gpu: a row per card, each compared with the first card of the same variant', () => {
-    const nvidia = {gpu: 'NVIDIA GeForce RTX 5090', server: 'a'}, amd = {gpu: 'AMD Radeon AI PRO R9700', server: 'b'}
-    const rows = groupRows([clip(100, nvidia), clip(300, amd), clip(50, {...nvidia, variant: 'v2'}), clip(100, {...amd, variant: 'v2'}), clip(60, {variant: 'v2', gpu: undefined, server: 'old'})], byAll(['variant', 'gpu']))
-    expect(rows.map(r => r.key)).toEqual(['wan #v1 · AMD Radeon AI PRO R9700', 'wan #v1 · NVIDIA GeForce RTX 5090', 'wan #v2 · AMD Radeon AI PRO R9700', 'wan #v2 · NVIDIA GeForce RTX 5090', 'wan #v2 · old'])
+    const nvidia = {gpu: 'NVIDIA GeForce RTX 5090', server: 'a'},
+        amd = {gpu: 'AMD Radeon AI PRO R9700', server: 'b'}
+    const rows = groupRows(
+        [
+            clip(100, nvidia),
+            clip(300, amd),
+            clip(50, {...nvidia, variant: 'v2'}),
+            clip(100, {...amd, variant: 'v2'}),
+            clip(60, {variant: 'v2', gpu: undefined, server: 'old'}),
+        ],
+        byAll(['variant', 'gpu']),
+    )
+    expect(rows.map(r => r.key)).toEqual([
+        'wan #v1 · AMD Radeon AI PRO R9700',
+        'wan #v1 · NVIDIA GeForce RTX 5090',
+        'wan #v2 · AMD Radeon AI PRO R9700',
+        'wan #v2 · NVIDIA GeForce RTX 5090',
+        'wan #v2 · old',
+    ])
     const reference = referenceOf(rows, 2)
     expect(rows.map(r => percentChange(reference(r)!, r))).toEqual([0, -67, 0, -50, -40])
     expect(formatRows('Renders', rows, reference)).toContain('-67%')

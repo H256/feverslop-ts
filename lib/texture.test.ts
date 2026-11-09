@@ -1,21 +1,23 @@
-import {expect, test} from "bun:test";
-import {type Gray, laplacianEnergy, perLink, shrink, textureOf} from "./texture.ts";
+import {expect, test} from 'bun:test'
+import {type Gray, laplacianEnergy, perLink, shrink, textureOf} from './texture.ts'
 
 // a reproducible noisy picture: a soft gradient with grain of the given strength
 const picture = (grain: number, width = 96, height = 64, seed = 7): Gray => {
     let s = seed
     const random = () => (s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31
     const data = new Uint8Array(width * height)
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) data[y * width + x] = Math.max(0, Math.min(255, Math.round(60 + x + (random() - 0.5) * grain)))
+    for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) data[y * width + x] = Math.max(0, Math.min(255, Math.round(60 + x + (random() - 0.5) * grain)))
     return {data, width, height}
 }
 const blurred = ({data, width, height}: Gray): Gray => {
     const out = new Uint8Array(width * height)
-    for (let y = 1; y < height - 1; y++) for (let x = 1; x < width - 1; x++) {
-        let s = 0
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += data[(y + dy) * width + x + dx]!
-        out[y * width + x] = Math.round(s / 9)
-    }
+    for (let y = 1; y < height - 1; y++)
+        for (let x = 1; x < width - 1; x++) {
+            let s = 0
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += data[(y + dy) * width + x + dx]!
+            out[y * width + x] = Math.round(s / 9)
+        }
     return {data: out, width, height}
 }
 

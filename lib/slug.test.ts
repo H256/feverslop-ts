@@ -1,5 +1,5 @@
-import {expect, test} from "bun:test"
-import {MAX_ID_LENGTH, toSlug} from "./slug.ts"
+import {expect, test} from 'bun:test'
+import {MAX_ID_LENGTH, toSlug} from './slug.ts'
 
 test('a short name stays as it was', () => expect(toSlug('Circus Ring')).toBe('circus-ring'))
 test('a long name is cut at a word', () => {

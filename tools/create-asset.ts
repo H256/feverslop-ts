@@ -1,31 +1,30 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 // A new library character or place from a picture - no project needed: the picture becomes the anchor, a vision-capable
 // model (or you) describes it, a place also gets its background features and floor plan, and ComfyUI renders the
 // reference sheet from it. The result goes into the asset library (lib/library.ts) - an existing asset is never
 // overwritten. Any project then takes it with import-asset or casting.json.
 // usage: bun run create-asset <character|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]
-import * as p from "@clack/prompts";
-import {existsSync, mkdirSync, renameSync, rmSync, writeFileSync} from "node:fs";
-import {randomUUID} from "node:crypto";
-import {basename, dirname, join} from "node:path";
-import {type AssetKind, assetPaths, copyAsset} from "../lib/asset-import.ts";
-import {pictureAsset} from "../lib/compose.ts";
-import {loadProjectConfig} from "../lib/config.ts";
-import {characterViews, describeOrFail, visionFailed} from "../lib/describe-picture.ts";
-import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken, withNewLibraryAsset} from "../lib/library.ts";
-import {ask, askJson, configureLlm} from "../lib/llm.ts";
-import {runProcess} from "../lib/process.ts";
-import {locationAnchorPrompt, locationLayoutPrompt} from "../lib/prompts.ts";
-import {projectDir, projectExists} from "../lib/project-setup.ts";
-import type {LocationLayout} from "../lib/project.ts";
-import {pinnedSidecar} from "../lib/provenance.ts";
-import {Renderer} from "../lib/render.ts";
-import {LOCATION_VIEWS, sheetAnchor} from "../lib/sequenceSheet.ts";
-import {loadSettings} from "../lib/settings.ts";
-import {answer as wizardAnswer} from "../lib/wizard.ts";
+import * as p from '@clack/prompts'
+import {existsSync, mkdirSync, renameSync, rmSync, writeFileSync} from 'node:fs'
+import {randomUUID} from 'node:crypto'
+import {basename, dirname, join} from 'node:path'
+import {type AssetKind, assetPaths, copyAsset} from '../lib/asset-import.ts'
+import {pictureAsset} from '../lib/compose.ts'
+import {loadProjectConfig} from '../lib/config.ts'
+import {characterViews, describeOrFail, visionFailed} from '../lib/describe-picture.ts'
+import {finishLibraryAsset, libraryDir, libraryIdPattern, libraryLayout, libraryTaken, withNewLibraryAsset} from '../lib/library.ts'
+import {ask, askJson, configureLlm} from '../lib/llm.ts'
+import {runProcess} from '../lib/process.ts'
+import {locationAnchorPrompt, locationLayoutPrompt} from '../lib/prompts.ts'
+import {projectDir, projectExists} from '../lib/project-setup.ts'
+import type {LocationLayout} from '../lib/project.ts'
+import {pinnedSidecar} from '../lib/provenance.ts'
+import {Renderer} from '../lib/render.ts'
+import {LOCATION_VIEWS, sheetAnchor} from '../lib/sequenceSheet.ts'
+import {loadSettings} from '../lib/settings.ts'
+import {answer as wizardAnswer} from '../lib/wizard.ts'
 cli('create-asset')
-
 
 const usage = 'usage: bun run create-asset <character|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]'
 const args = Bun.argv.slice(2)
@@ -46,7 +45,12 @@ if (like && !projectExists(like)) fail(`projects/${like} does not exist`)
 const library = await libraryDir()
 const taken = await libraryTaken(library, kind, id!)
 if (taken) fail(`${taken}; choose another id`)
-const name = flag('name') ?? id!.split('-').map(w => w[0]!.toUpperCase() + w.slice(1)).join(' ')
+const name =
+    flag('name') ??
+    id!
+        .split('-')
+        .map(w => w[0]!.toUpperCase() + w.slice(1))
+        .join(' ')
 const role = flag('role') ?? (kind === 'character' ? 'a character' : '')
 
 if (interactive) log.section(`feverslop-ts · create asset · ${kind} ${id}`)
@@ -64,7 +68,9 @@ const {sheet} = assetPaths(kind, id!)
 const anchor = join(work, sheetAnchor(sheet))
 mkdirSync(dirname(anchor), {recursive: true})
 // ffmpeg reads whatever format was given and writes the plain PNG every path here expects
-await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', anchorPicture, '-frames:v', '1', `${anchor}.partial.png`], {errorMessage: err => `ffmpeg could not read ${anchorPicture} as a picture:\n${err}`})
+await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', anchorPicture, '-frames:v', '1', `${anchor}.partial.png`], {
+    errorMessage: err => `ffmpeg could not read ${anchorPicture} as a picture:\n${err}`,
+})
 renameSync(`${anchor}.partial.png`, anchor)
 // the user's picture: the sheet is made from it as it is (lib/render.ts)
 writeFileSync(`${anchor}.json`, JSON.stringify(pinnedSidecar(`made from ${basename(anchorPicture)}`), null, 2))
@@ -79,7 +85,14 @@ if (!description) {
         if (!interactive) fail(`The vision description failed (${described.failed}) - give one with --description=…`)
         log.warn(visionFailed(described.failed))
     }
-    if (interactive) description = answer(await p.text({message: 'Description used in the clip prompts', initialValue: description ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
+    if (interactive)
+        description = answer(
+            await p.text({
+                message: 'Description used in the clip prompts',
+                initialValue: description ?? '',
+                validate: v => (v?.trim() ? undefined : 'required'),
+            }),
+        ).trim()
     else if (description) log.info(description)
 }
 if (!description) fail('No description - give one with --description=…')
@@ -90,7 +103,7 @@ let layout: LocationLayout | undefined
 if (kind === 'location') {
     say('Naming the background features and laying out the place')
     anchors = (await ask(locationAnchorPrompt(description!))).replace(/^["']|["'.\s]+$/g, '') || undefined
-    const answerJson = await askJson<{ layout?: unknown, views?: unknown[] }>(locationLayoutPrompt(name, description!, description!)).catch(() => undefined)
+    const answerJson = await askJson<{layout?: unknown; views?: unknown[]}>(locationLayoutPrompt(name, description!, description!)).catch(() => undefined)
     if (answerJson?.layout) layout = {layout: String(answerJson.layout).trim(), views: LOCATION_VIEWS.map((_, n) => String(answerJson.views?.[n] ?? '').trim())}
     else say('No usable floor plan - the projects lay the place out themselves')
 }
@@ -99,7 +112,15 @@ if (kind === 'location') {
 say('Rendering the reference sheet')
 {
     using renderer = new Renderer(`library-${id}`, work, config, settings.comfy)
-    await renderer.renderSequenceSheet({kind, id: id!, name, file: pictureAsset(kind, id!), prompt: '', description: description!, ...(layout ? {views: layout.views} : {})})
+    await renderer.renderSequenceSheet({
+        kind,
+        id: id!,
+        name,
+        file: pictureAsset(kind, id!),
+        prompt: '',
+        description: description!,
+        ...(layout ? {views: layout.views} : {}),
+    })
 }
 
 // A character is described once more, now from its sheet: the clips are given the sheet, and its full-body views show what an
@@ -110,21 +131,42 @@ if (kind === 'character' && !flag('description')) {
     const fromSheet = await describeOrFail(characterViews(join(work, sheet)), {kind, name, role})
     if (fromSheet.description) description = fromSheet.description
     if (fromSheet.failed) log.warn(`The description from the sheet failed - the one from the picture is kept (${fromSheet.failed})`)
-    if (interactive) description = answer(await p.text({message: 'Description used in the clip prompts (from the sheet)', initialValue: description ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
+    if (interactive)
+        description = answer(
+            await p.text({
+                message: 'Description used in the clip prompts (from the sheet)',
+                initialValue: description ?? '',
+                validate: v => (v?.trim() ? undefined : 'required'),
+            }),
+        ).trim()
     else log.info(description!)
 }
 
 try {
     await withNewLibraryAsset(library, kind, id!, () => {
-        const {copied} = copyAsset({dir: work, layout: assetPaths(kind, id!), label: `create-asset ${basename(anchorPicture)}`}, {dir: library, layout: libraryLayout(kind, id!), archiveName: id!})
+        const {copied} = copyAsset(
+            {dir: work, layout: assetPaths(kind, id!), label: `create-asset ${basename(anchorPicture)}`},
+            {dir: library, layout: libraryLayout(kind, id!), archiveName: id!},
+        )
         rmSync(work, {recursive: true, force: true})
-        finishLibraryAsset(library, {
-            kind, id: id!, name, description: description!,
-            ...(anchors ? {anchors} : {}), ...(layout ? {layout} : {}),
-            source: `picture ${basename(anchorPicture)}`,
-        }, copied, {success: true, tail: ` - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`})
+        finishLibraryAsset(
+            library,
+            {
+                kind,
+                id: id!,
+                name,
+                description: description!,
+                ...(anchors ? {anchors} : {}),
+                ...(layout ? {layout} : {}),
+                source: `picture ${basename(anchorPicture)}`,
+            },
+            copied,
+            {success: true, tail: ` - take it into a project with: bun run import-asset <project-id> <id there> --from=library:${id}`},
+        )
     })
-} catch (error) { fail((error as Error).message) }
+} catch (error) {
+    fail((error as Error).message)
+}
 
 // cancelled with Ctrl+C / Esc - the work folder stays, the next run starts it again
 function answer<T>(value: T) {

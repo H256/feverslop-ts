@@ -2,8 +2,17 @@ import {describe, expect, test} from 'bun:test'
 import type {ConfigImpact, SettingView} from '../../../shared/workspace'
 import {changesOf, costOf, groupsOf, labelOf, textOfValue, valueOfText} from '../../src/features/settings/settings'
 
-const setting = (key: string, value: unknown, more: Partial<SettingView> = {}): SettingView =>
-  ({key, label: key, group: 'Workflows', control: 'text', note: '', value, default: value, own: false, ...more})
+const setting = (key: string, value: unknown, more: Partial<SettingView> = {}): SettingView => ({
+  key,
+  label: key,
+  group: 'Workflows',
+  control: 'text',
+  note: '',
+  value,
+  default: value,
+  own: false,
+  ...more,
+})
 
 describe('the settings of a project', () => {
   test('only what differs from what the project has is sent', () => {
@@ -31,7 +40,13 @@ describe('the settings of a project', () => {
     expect(textOfValue(false)).toBe('false')
   })
   test('a value is read by the label of its choice - on, not true - else as it is', () => {
-    const pin = setting('pinStartFrame', true, {control: 'select', choices: [{value: true, label: 'on'}, {value: false, label: 'off'}]})
+    const pin = setting('pinStartFrame', true, {
+      control: 'select',
+      choices: [
+        {value: true, label: 'on'},
+        {value: false, label: 'off'},
+      ],
+    })
     expect(labelOf(pin, true)).toBe('on')
     expect(labelOf(pin, false)).toBe('off')
     expect(labelOf(setting('videoAspect', '16:9'), '16:9')).toBe('16:9')
@@ -39,12 +54,25 @@ describe('the settings of a project', () => {
   })
   test('the groups come in the order of the settings', () => {
     const settings = [setting('videoWorkflow', 'a'), setting('videoResolution', 2, {group: 'Size'}), setting('imageWorkflow', 'b')]
-    expect(groupsOf(settings).map(g => [g.name, g.settings.map(s => s.key)])).toEqual([['Workflows', ['videoWorkflow', 'imageWorkflow']], ['Size', ['videoResolution']]])
+    expect(groupsOf(settings).map(g => [g.name, g.settings.map(s => s.key)])).toEqual([
+      ['Workflows', ['videoWorkflow', 'imageWorkflow']],
+      ['Size', ['videoResolution']],
+    ])
   })
   test('what a change costs is said in the numbers of the project, or not at all', () => {
-    const impact = (clips: string[], pictures: string[]): ConfigImpact => ({problems: [], changed: ['videoWorkflow'], stale: {clips, pictures}, rendered: {clips: 9, pictures: 4}, notes: []})
+    const impact = (clips: string[], pictures: string[]): ConfigImpact => ({
+      problems: [],
+      changed: ['videoWorkflow'],
+      stale: {clips, pictures},
+      rendered: {clips: 9, pictures: 4},
+      notes: [],
+    })
     expect(costOf(impact([], []))).toEqual([])
-    expect(costOf(impact(['slot-001', 'slot-002'], []))).toEqual(['2 of 9 rendered clips would be made from something else then: they are stale, and nothing is rendered on its own.'])
-    expect(costOf(impact(['slot-001'], ['ann']))[0]).toBe('1 of 9 rendered clips and 1 of 4 rendered pictures would be made from something else then: they are stale, and nothing is rendered on its own.')
+    expect(costOf(impact(['slot-001', 'slot-002'], []))).toEqual([
+      '2 of 9 rendered clips would be made from something else then: they are stale, and nothing is rendered on its own.',
+    ])
+    expect(costOf(impact(['slot-001'], ['ann']))[0]).toBe(
+      '1 of 9 rendered clips and 1 of 4 rendered pictures would be made from something else then: they are stale, and nothing is rendered on its own.',
+    )
   })
 })

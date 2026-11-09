@@ -1,15 +1,18 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {cutsOf, joinFingerprint, joinFrames, joinPrompt, plannedChanges, readVerdict} from "./joins.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {cutsOf, joinFingerprint, joinFrames, joinPrompt, plannedChanges, readVerdict} from './joins.ts'
 
 const clip = (id: string, sceneId: string, startsFrom?: string) => ({id, sceneId, ...(startsFrom ? {startsFrom} : {})})
 
 describe('the cuts within a scene', () => {
     test('two clips of one scene after each other, unless the second goes on from the first', () => {
         const requests = [clip('clip-001', 's1'), clip('clip-002', 's1'), clip('clip-003', 's1', 'clip-002'), clip('clip-004', 's2'), clip('clip-005', 's2')]
-        expect(cutsOf(requests)).toEqual([{from: 'clip-001', to: 'clip-002', sceneId: 's1'}, {from: 'clip-004', to: 'clip-005', sceneId: 's2'}])
+        expect(cutsOf(requests)).toEqual([
+            {from: 'clip-001', to: 'clip-002', sceneId: 's1'},
+            {from: 'clip-004', to: 'clip-005', sceneId: 's2'},
+        ])
     })
     test('a change of scene is no cut to check', () => {
         expect(cutsOf([clip('clip-001', 's1'), clip('clip-002', 's2')])).toEqual([])
@@ -54,7 +57,10 @@ describe('a join', () => {
     })
     test('no differences is a fit, whatever the model says it is', () => {
         expect(readVerdict({fits: false, differences: []})).toEqual({fits: true, differences: []})
-        expect(readVerdict({fits: true, differences: [' Anna holds a cup in the second. ', '']})).toEqual({fits: false, differences: ['Anna holds a cup in the second.']})
+        expect(readVerdict({fits: true, differences: [' Anna holds a cup in the second. ', '']})).toEqual({
+            fits: false,
+            differences: ['Anna holds a cup in the second.'],
+        })
         expect(readVerdict(undefined)).toEqual({fits: true, differences: []})
     })
 })

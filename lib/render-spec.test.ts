@@ -1,9 +1,9 @@
-import {describe, expect, test} from "bun:test";
-import {mkdirSync, mkdtempSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {fingerprint} from "./provenance.ts";
-import {anchorSpec, clipSpec, filmClipSpec, pictureSpec, sequenceSpec, songSpec, specId} from "./render-spec.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {fingerprint} from './provenance.ts'
+import {anchorSpec, clipSpec, filmClipSpec, pictureSpec, sequenceSpec, songSpec, specId} from './render-spec.ts'
 
 const project = () => {
     const dir = mkdtempSync(join(tmpdir(), 'spec-'))
@@ -59,8 +59,17 @@ describe('clip specs', () => {
         expect(specId(clipSpec(request, dir, {...config, contextFrames: 22}))).not.toBe(base)
     })
     const clip = (extra: Record<string, unknown> = {}) => ({
-        id: 'slot-002', prompt: 'p', frames: 100, startsFrom: undefined as string | undefined,
-        assets: {pictures: [{kind: 'character', file: 'assets/a.png'}, {kind: 'frame', file: 'assets/f.png'}], audio: [{stem: 'drums', songStart: 1, songEnd: 2}]},
+        id: 'slot-002',
+        prompt: 'p',
+        frames: 100,
+        startsFrom: undefined as string | undefined,
+        assets: {
+            pictures: [
+                {kind: 'character', file: 'assets/a.png'},
+                {kind: 'frame', file: 'assets/f.png'},
+            ],
+            audio: [{stem: 'drums', songStart: 1, songEnd: 2}],
+        },
         ...extra,
     })
     test('the id lists the same inputs the first fingerprints did, the frame picture left out', () => {

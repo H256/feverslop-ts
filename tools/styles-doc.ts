@@ -1,9 +1,8 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 // Regenerates docs/style-examples.md from lib/styles.ts - edit the styles there, not in the doc.
-import {STYLES} from "../lib/styles.ts";
+import {STYLES} from '../lib/styles.ts'
 cli('styles:doc')
-
 
 const intro = `# Style examples for \`input/style.txt\`
 
@@ -38,10 +37,12 @@ A style line can also carry story-specific rules, just like the examples in \`pr
 
 const groups = [...new Set(STYLES.map(s => s.group))]
 let n = 0
-const body = groups.map(group => {
-    const items = STYLES.filter(s => s.group === group).map(s => `**${++n}. ${s.name}** (\`${s.id}\`)\n${s.text}`)
-    return `## ${group}\n\n${items.join('\n\n')}`
-}).join('\n\n')
+const body = groups
+    .map(group => {
+        const items = STYLES.filter(s => s.group === group).map(s => `**${++n}. ${s.name}** (\`${s.id}\`)\n${s.text}`)
+        return `## ${group}\n\n${items.join('\n\n')}`
+    })
+    .join('\n\n')
 
 await Bun.write('docs/style-examples.md', `${intro}\n${body}\n\n${outro}`)
 log.info(`docs/style-examples.md - ${STYLES.length} styles`)

@@ -1,9 +1,20 @@
-import {describe, expect, test} from "bun:test";
-import type {StoryBeat} from "./project.ts";
-import {beatsPrompt, blockingPrompt, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./shot-planner.ts";
-import {PERSON_FIELDS, SHOT_FIELDS} from "./shot-plan.ts";
+import {describe, expect, test} from 'bun:test'
+import type {StoryBeat} from './project.ts'
+import {beatsPrompt, blockingPrompt, musicStretches, type PlanContext, plannerCalls, planPrompt} from './shot-planner.ts'
+import {PERSON_FIELDS, SHOT_FIELDS} from './shot-plan.ts'
 
-const beat = {id: 'beat-01', order: 1, summary: 'Runa walks in.', moments: ['Runa walks in.'], locationId: 'hall', characterIds: ['runa'], intensity: 0.5, weight: 1, kind: 'build', stateAfter: []} as StoryBeat
+const beat = {
+    id: 'beat-01',
+    order: 1,
+    summary: 'Runa walks in.',
+    moments: ['Runa walks in.'],
+    locationId: 'hall',
+    characterIds: ['runa'],
+    intensity: 0.5,
+    weight: 1,
+    kind: 'build',
+    stateAfter: [],
+} as StoryBeat
 const context: PlanContext = {
     characters: [{id: 'runa', name: 'Runa', role: 'a girl'}],
     locations: [{id: 'hall', name: 'Hall'}],
@@ -19,7 +30,13 @@ const context: PlanContext = {
 describe('the shot planner prompt', () => {
     test('the instructions are the same for every call - which shots and the problems are at the end of the input', () => {
         const first = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
-        const second = planPrompt(context, [beat], undefined, undefined, ['shot 5: "Bob" is not one of the characters'], {from: 4, to: 6, total: 6, written: [{action: 'x'}], staging: 'A hall.'})
+        const second = planPrompt(context, [beat], undefined, undefined, ['shot 5: "Bob" is not one of the characters'], {
+            from: 4,
+            to: 6,
+            total: 6,
+            written: [{action: 'x'}],
+            staging: 'A hall.',
+        })
         expect(second.instructions).toBe(first.instructions)
         expect(first.input).toContain('This call writes ONLY shots 1 to 4 of the 6')
         expect(first.input).toContain('Write the STAGING line first.')
@@ -31,7 +48,11 @@ describe('the shot planner prompt', () => {
 
 describe('asked again: only the calls whose shots have a problem', () => {
     test('the first time every call is asked', () => {
-        expect(plannerCalls(10, 4).map(c => [c.from, c.to, c.keep])).toEqual([[0, 4, false], [4, 8, false], [8, 10, false]])
+        expect(plannerCalls(10, 4).map(c => [c.from, c.to, c.keep])).toEqual([
+            [0, 4, false],
+            [4, 8, false],
+            [8, 10, false],
+        ])
     })
     test('a problem in shot 6 asks the second call again, with only its problem', () => {
         const calls = plannerCalls(10, 4, {issues: [{shot: 5, message: 'shot 6: "Bob" is not one of the characters'}], previousShots: 10})
@@ -67,8 +88,15 @@ describe('the planner sees what the pictures show', () => {
         expect(input).toContain('"Runa":"A girl in a red coat."')
     })
     test('the film look is in the input, and the framing follows it - not "everyone the beat has" (#333)', () => {
-        const {input, instructions} = planPrompt({...context, filmLook: 'Dark night close-ups by firelight.'}, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
-        expect(input).toContain("film look (the director's style - the shot sizes, the camera and the light of the shots follow it): Dark night close-ups by firelight.")
+        const {input, instructions} = planPrompt({...context, filmLook: 'Dark night close-ups by firelight.'}, [beat], undefined, undefined, [], {
+            from: 0,
+            to: 4,
+            total: 6,
+            written: [],
+        })
+        expect(input).toContain(
+            "film look (the director's style - the shot sizes, the camera and the light of the shots follow it): Dark night close-ups by firelight.",
+        )
         expect(instructions).toContain('chosen by what the shot is about and by the "film look" in the input')
         expect(instructions).not.toContain('what can show everyone')
         // a project without a look brief plans as before, without the line
@@ -78,7 +106,14 @@ describe('the planner sees what the pictures show', () => {
 
 describe('the fixed layout of the place', () => {
     test('a place with a layout gives it to the planner; a place without one gives only its description', () => {
-        const withLayout = planPrompt({...context, locationLayouts: {hall: {layout: 'The door is on the left, the hearth at the back.', views: []}}}, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
+        const withLayout = planPrompt(
+            {...context, locationLayouts: {hall: {layout: 'The door is on the left, the hearth at the back.', views: []}}},
+            [beat],
+            undefined,
+            undefined,
+            [],
+            {from: 0, to: 4, total: 6, written: []},
+        )
         expect(withLayout.input).toContain('"layout":"The door is on the left, the hearth at the back."')
         const without = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
         expect(without.input).not.toContain('"layout"')
@@ -102,7 +137,8 @@ describe('the example shot', () => {
         const {instructions} = planPrompt(context, [beat], undefined, undefined, [], {from: 0, to: 4, total: 6, written: []})
         expect(instructions).not.toContain('Weak:')
         expect(instructions).toContain('One shot as it should be written')
-        for (const field of ['framing:', 'size:', 'camera:', 'view:', 'hold:', 'risky:', 'characters:', 'action:', 'person: Kara |', 'rest:']) expect(instructions.split('One shot as it should be written')[1]).toContain(field)
+        for (const field of ['framing:', 'size:', 'camera:', 'view:', 'hold:', 'risky:', 'characters:', 'action:', 'person: Kara |', 'rest:'])
+            expect(instructions.split('One shot as it should be written')[1]).toContain(field)
     })
 })
 
@@ -141,12 +177,15 @@ describe('the music of a beat in the planner prompt', () => {
 
 describe('musicStretches - the music along the way for the beats', () => {
     // 60 s at 120 bpm: a bar every 2 s, quiet first half, loud second half
-    const music = {durationSec: 60, downbeats: Array.from({length: 30}, (_, i) => i * 2), barEnergy: Array.from({length: 30}, (_, i) => i < 15 ? 0.2 : 0.8)}
+    const music = {durationSec: 60, downbeats: Array.from({length: 30}, (_, i) => i * 2), barEnergy: Array.from({length: 30}, (_, i) => (i < 15 ? 0.2 : 0.8))}
     test('one line per stretch with its time and mean loudness', () => {
         expect(musicStretches(music, 2)).toEqual(['0:00-0:30 loudness 0.20', '0:30-1:00 loudness 0.80'])
     })
     test('whose instrument is heard over most of a stretch', () => {
-        const players = [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 60}]}, {name: 'Mara', prop: 'drum kit', ranges: [{start: 25, end: 60}]}]
+        const players = [
+            {name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 60}]},
+            {name: 'Mara', prop: 'drum kit', ranges: [{start: 25, end: 60}]},
+        ]
         expect(musicStretches(music, 3, players)).toEqual([
             "0:00-0:20 loudness 0.20 · heard: Kael's guitar",
             "0:20-0:40 loudness 0.50 · heard: Kael's guitar, Mara's drum kit",
@@ -155,7 +194,15 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(musicStretches(music, 1, [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 5}]}])[0]).toContain('heard: none of the instruments')
     })
     test('the beats prompt carries them and the rules that follow them', () => {
-        const args = {durationSec: 60, beatCount: 2, characters: [{id: 'kael', name: 'Kael', role: 'guitarist'}], locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
+        const args = {
+            durationSec: 60,
+            beatCount: 2,
+            characters: [{id: 'kael', name: 'Kael', role: 'guitarist'}],
+            locations: [{id: 'hall', name: 'Hall'}],
+            lyrics: '',
+            story: 'They play.',
+            performance: '',
+        }
         const input = beatsPrompt({...args, stretches: musicStretches(music, 2, [{name: 'Kael', prop: 'guitar', ranges: [{start: 0, end: 60}]}])}).input
         expect(input).toContain("0:30-1:00 loudness 0.80 · heard: Kael's guitar")
         expect(input).toContain('the last beats are a last surge, not an aftermath')

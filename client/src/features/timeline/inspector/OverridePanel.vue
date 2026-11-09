@@ -10,8 +10,8 @@ const props = defineProps<{clip: EditorClip}>()
 const {actions, session} = useTimeline()
 const override = computed((): Required<EditorOverride> => ({
   placeView: props.clip.override?.placeView ?? 0,
-  without: [...props.clip.override?.without ?? []],
-  order: [...props.clip.override?.order ?? []],
+  without: [...(props.clip.override?.without ?? [])],
+  order: [...(props.clip.override?.order ?? [])],
 }))
 const save = (next: Partial<EditorOverride> | null) => {
   if (next === null) return actions.saveOverride(props.clip, null)
@@ -33,9 +33,18 @@ const move = (id: string, direction: number) => {
   <div v-if="clip.views?.options.length" class="section">
     <h3>View of the place</h3>
     <div class="refs">
-      <button v-for="option in clip.views.options" :key="option.n" :class="['ref', {chosen: option.n === chosen}]" :title="option.shows" @click="save({placeView: option.n})">
+      <button
+        v-for="option in clip.views.options"
+        :key="option.n"
+        :class="['ref', {chosen: option.n === chosen}]"
+        :title="option.shows"
+        @click="save({placeView: option.n})"
+      >
         <MediaThumb :media="option.v ? option : undefined" :roots="session.roots" cls="" missing="Not rendered" />
-        <div><b>{{ option.name }}</b><small>View {{ option.n }}{{ option.n === clip.views.chosen ? ' · in the plan' : '' }}</small></div>
+        <div>
+          <b>{{ option.name }}</b
+          ><small>View {{ option.n }}{{ option.n === clip.views.chosen ? ' · in the plan' : '' }}</small>
+        </div>
       </button>
     </div>
   </div>
@@ -49,7 +58,10 @@ const move = (id: string, direction: number) => {
       <button class="btn" @click="save({without: [...override.without, picture.id]})">Leave out</button>
     </div>
   </div>
-  <div v-if="override.without.length" class="note btn-row"><span style="flex: 1">Left out: {{ override.without.join(', ') }}</span><button class="btn" @click="save({without: []})">Put back</button></div>
+  <div v-if="override.without.length" class="note btn-row">
+    <span style="flex: 1">Left out: {{ override.without.join(', ') }}</span
+    ><button class="btn" @click="save({without: []})">Put back</button>
+  </div>
   <div v-if="clip.override" class="note">
     <p style="margin-bottom: 6px">This clip has a choice of its own. It takes effect with the next plan run, and the clip then goes stale.</p>
     <div class="btn-row"><button class="btn" @click="actions.plan()">Plan now</button><button class="btn" @click="save(null)">Back to the plan</button></div>

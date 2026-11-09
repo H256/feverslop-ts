@@ -1,10 +1,11 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync, rmSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {backdropSeconds, hasBackdropRun, hasFlatBackdrop} from "./leak.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {backdropSeconds, hasBackdropRun, hasFlatBackdrop} from './leak.ts'
 
-const WIDTH = 96, HEIGHT = 54
+const WIDTH = 96,
+    HEIGHT = 54
 
 // a frame whose pixels come from a function of (x, y)
 function frame(pixel: (x: number, y: number) => [number, number, number]): Uint8Array {
@@ -19,14 +20,18 @@ describe('hasFlatBackdrop', () => {
     })
 
     test('a helmet or some hair in the band does not hide the backdrop', () => {
-        expect(hasFlatBackdrop(frame((x, y) => y < 8 && x > 80 ? [200, 160, 40] : [100, 100, 96]))).toBe(true)
+        expect(hasFlatBackdrop(frame((x, y) => (y < 8 && x > 80 ? [200, 160, 40] : [100, 100, 96])))).toBe(true)
     })
 
     test('a dark cave with texture is not one', () => {
-        expect(hasFlatBackdrop(frame((x, y) => {
-            const v = 20 + ((x * 37 + y * 91) % 60)
-            return [v, v * 0.8, v * 0.5]
-        }))).toBe(false)
+        expect(
+            hasFlatBackdrop(
+                frame((x, y) => {
+                    const v = 20 + ((x * 37 + y * 91) % 60)
+                    return [v, v * 0.8, v * 0.5]
+                }),
+            ),
+        ).toBe(false)
     })
 
     test('a dark flat set stays below the brightness of a lit backdrop', () => {
@@ -42,7 +47,7 @@ describe('hasFlatBackdrop', () => {
     })
 
     test('grey lower down in the picture only does not count', () => {
-        expect(hasFlatBackdrop(frame((_, y) => y < 12 ? [25, 20, 15] : [100, 100, 100]))).toBe(false)
+        expect(hasFlatBackdrop(frame((_, y) => (y < 12 ? [25, 20, 15] : [100, 100, 100])))).toBe(false)
     })
 })
 
@@ -52,10 +57,27 @@ describe('backdropSeconds', () => {
         try {
             const file = join(dir, 'clip.mp4')
             // 2 s of a dark cave colour, then 2 s of flat grey
-            const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-y',
-                '-f', 'lavfi', '-i', 'color=c=0x181410:s=320x180:r=8:d=2',
-                '-f', 'lavfi', '-i', 'color=c=0x606260:s=320x180:r=8:d=2',
-                '-filter_complex', '[0:v][1:v]concat=n=2:v=1[v]', '-map', '[v]', '-pix_fmt', 'yuv420p', file])
+            const proc = Bun.spawn([
+                'ffmpeg',
+                '-v',
+                'error',
+                '-y',
+                '-f',
+                'lavfi',
+                '-i',
+                'color=c=0x181410:s=320x180:r=8:d=2',
+                '-f',
+                'lavfi',
+                '-i',
+                'color=c=0x606260:s=320x180:r=8:d=2',
+                '-filter_complex',
+                '[0:v][1:v]concat=n=2:v=1[v]',
+                '-map',
+                '[v]',
+                '-pix_fmt',
+                'yuv420p',
+                file,
+            ])
             expect(await proc.exited).toBe(0)
             const seconds = await backdropSeconds(file)
             expect(seconds.length).toBeGreaterThan(0)

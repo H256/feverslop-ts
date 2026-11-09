@@ -10,7 +10,7 @@ export function useSnippetPlayer(url: () => string | undefined, onError: (cause:
   const paused = ref(false)
   const rate = ref(1)
   const loop = ref(false)
-  let range: {key: string, from: number, to: number} | undefined
+  let range: {key: string; from: number; to: number} | undefined
   let audio: HTMLAudioElement | undefined
   let frame = 0
   const element = () => {
@@ -33,14 +33,21 @@ export function useSnippetPlayer(url: () => string | undefined, onError: (cause:
   }
   const setRate = (value: number) => {
     rate.value = Math.max(0.5, Math.min(1.5, Number.isFinite(value) ? value : 1))
-    if (audio) { audio.playbackRate = rate.value; audio.preservesPitch = true }
+    if (audio) {
+      audio.playbackRate = rate.value
+      audio.preservesPitch = true
+    }
   }
   const watch = () => {
     if (!audio || !range || paused.value || !playing.value) return
     if (audio.currentTime >= range.to || audio.ended) {
       if (!loop.value) return stop()
       audio.currentTime = range.from
-      if (audio.paused) audio.play().catch(cause => { stop(); onError(cause) })
+      if (audio.paused)
+        audio.play().catch(cause => {
+          stop()
+          onError(cause)
+        })
     }
     time.value = audio.currentTime
     frame = requestAnimationFrame(watch)
@@ -57,7 +64,10 @@ export function useSnippetPlayer(url: () => string | undefined, onError: (cause:
     if (!audio || !range) return
     paused.value = false
     playing.value = range.key
-    audio.play().catch(cause => { stop(); onError(cause) })
+    audio.play().catch(cause => {
+      stop()
+      onError(cause)
+    })
     frame = requestAnimationFrame(watch)
   }
   const play = (key: string, from: number, to: number) => {
@@ -69,13 +79,28 @@ export function useSnippetPlayer(url: () => string | undefined, onError: (cause:
     node.currentTime = Math.max(0, from)
     time.value = node.currentTime
     setRate(rate.value)
-    node.play().catch(cause => { stop(); onError(cause) })
+    node.play().catch(cause => {
+      stop()
+      onError(cause)
+    })
     frame = requestAnimationFrame(watch)
   }
   /** Plays it, or stops it when it is what plays. */
-  const toggle = (key: string, from: number, to: number) => playing.value === key ? stop() : play(key, from, to)
+  const toggle = (key: string, from: number, to: number) => (playing.value === key ? stop() : play(key, from, to))
   onScopeDispose(stop)
-  return {playing, time, paused, rate, loop, play, toggle, stop, pause, resume, setRate,
+  return {
+    playing,
+    time,
+    paused,
+    rate,
+    loop,
+    play,
+    toggle,
+    stop,
+    pause,
+    resume,
+    setRate,
     position: () => audio?.currentTime ?? time.value,
-    available: () => !!url()}
+    available: () => !!url(),
+  }
 }

@@ -1,13 +1,12 @@
-import {existsSync, statSync} from "node:fs";
-import {join} from "node:path";
-import {clipFolder, readOptions, variantOf} from "../refinish.ts";
-import type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts';
-export type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts';
+import {existsSync, statSync} from 'node:fs'
+import {join} from 'node:path'
+import {clipFolder, readOptions, variantOf} from '../refinish.ts'
+import type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts'
+export type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts'
 
 // How far a run has come, clip by clip, from what it leaves in the project folder and nothing else: a job on a server has its
 // <file>.pending.json (lib/render.ts), and a clip that is done has a file newer than the start of the run. So it also holds for a
 // run started in the terminal, and the CLI prints what it always printed.
-
 
 /** A value of an option of a command line. */
 const optionOf = (tokens: string[], name: string) => tokens.find(token => token.startsWith(`--${name}=`))?.slice(name.length + 3)
@@ -21,7 +20,12 @@ export function runProgress(dir: string, command: string, startedAt: number, cli
         const id = retake.split(':')[0]!
         return summed({[id]: existsSync(join(dir, 'assets', 'clips', `${id}_retake.mp4.pending.json`)) ? 'rendering' : 'waiting'})
     }
-    if (!optionOf(tokens, 'render')?.split(',').some(what => what === 'videos' || what === 'all')) return undefined
+    if (
+        !optionOf(tokens, 'render')
+            ?.split(',')
+            .some(what => what === 'videos' || what === 'all')
+    )
+        return undefined
     const only = optionOf(tokens, 'only')?.split(',')
     const again = tokens.includes('--again')
     const folder = tokens.includes('--preview') ? 'previews' : 'videos'
@@ -41,12 +45,26 @@ export function runProgress(dir: string, command: string, startedAt: number, cli
 function refinishProgress(dir: string, tokens: string[], clipIds: string[]): RunProgress | undefined {
     const value = (name: string) => optionOf(tokens, name)
     try {
-        const options = readOptions({preset: value('preset'), upscale: value('upscale'), size: value('size'), model: value('model'), denoise: value('denoise'), fps: value('fps'), finish: tokens.includes('--finish')})
+        const options = readOptions({
+            preset: value('preset'),
+            upscale: value('upscale'),
+            size: value('size'),
+            model: value('model'),
+            denoise: value('denoise'),
+            fps: value('fps'),
+            finish: tokens.includes('--finish'),
+        })
         if (options.upscale === 'none') return undefined
         const only = value('only')?.split(',')
         const folder = join(dir, clipFolder(variantOf(options)))
-        return summed(Object.fromEntries((only ? clipIds.filter(id => only.includes(id)) : clipIds).map(id => [id,
-            existsSync(join(folder, `${id}.mp4`)) ? 'done' : existsSync(join(folder, `${id}.rendered.mp4.pending.json`)) ? 'rendering' : 'waiting'])))
+        return summed(
+            Object.fromEntries(
+                (only ? clipIds.filter(id => only.includes(id)) : clipIds).map(id => [
+                    id,
+                    existsSync(join(folder, `${id}.mp4`)) ? 'done' : existsSync(join(folder, `${id}.rendered.mp4.pending.json`)) ? 'rendering' : 'waiting',
+                ]),
+            ),
+        )
     } catch {
         return undefined
     }
@@ -57,14 +75,18 @@ function summed(clips: Record<string, ClipProgress>): RunProgress {
     return {clips, done: states.filter(state => state === 'done').length, total: states.length}
 }
 
-
 /**
  * What a failure of a run means, in plain words, for the failures that can be told surely - by the messages of ComfyUI and of this
  * program, never a text of a language model. The others stay as they are.
  */
 export function explainFailure(failure: string): Explained | undefined {
-    if (/out of memory/i.test(failure)) return {text: 'The render server ran out of memory on this job.', action: 'Repeat on another server, or render a shorter clip or at a smaller size.'}
-    if (/has not answered for|No ComfyUI server reachable/.test(failure)) return {text: 'A render server does not answer.', action: 'Start it again and repeat: a job that is still queued is picked up. Or repeat on another server.'}
+    if (/out of memory/i.test(failure))
+        return {text: 'The render server ran out of memory on this job.', action: 'Repeat on another server, or render a shorter clip or at a smaller size.'}
+    if (/has not answered for|No ComfyUI server reachable/.test(failure))
+        return {
+            text: 'A render server does not answer.',
+            action: 'Start it again and repeat: a job that is still queued is picked up. Or repeat on another server.',
+        }
     if (/being worked on by another run/.test(failure)) return {text: 'Another run is working on this project.', action: 'Wait for it, or stop it.'}
     if (/casting\.json/.test(failure)) return {text: 'casting.json names something the library does not have.', action: 'Change the entry on the Casting page.'}
     return undefined

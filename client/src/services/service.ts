@@ -7,7 +7,10 @@ import {inject, provide, type InjectionKey} from 'vue'
 export function defineService<T>(name: string) {
   const key: InjectionKey<T> = Symbol(name)
   return {
-    provide: (value: T) => { provide(key, value); return value },
+    provide: (value: T) => {
+      provide(key, value)
+      return value
+    },
     use: (): T => {
       const value = inject(key)
       if (value === undefined) throw new Error(`${name} is not provided here`)

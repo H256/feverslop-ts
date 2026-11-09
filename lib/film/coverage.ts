@@ -1,9 +1,9 @@
-import {MAX_REFERENCE_IMAGES} from "../../comfy/helpers.ts";
-import {frameAt, MAX_CLIP_SEC, round} from "../frames.ts";
-import {mentions} from "./names.ts";
-import {characterOf, speechSeconds} from "./screenplay.ts";
-import {collapseEmptyScene, softProblems} from "./shot-checks.ts";
-import type {Facing, FilmCast, FilmProp, Scene, SceneCoverage, Screenplay, Shot} from "./types.ts";
+import {MAX_REFERENCE_IMAGES} from '../../comfy/helpers.ts'
+import {frameAt, MAX_CLIP_SEC, round} from '../frames.ts'
+import {mentions} from './names.ts'
+import {characterOf, speechSeconds} from './screenplay.ts'
+import {collapseEmptyScene, softProblems} from './shot-checks.ts'
+import type {Facing, FilmCast, FilmProp, Scene, SceneCoverage, Screenplay, Shot} from './types.ts'
 
 const FACINGS: readonly string[] = ['left', 'right', 'camera', 'away']
 
@@ -15,10 +15,26 @@ const SPLIT_TARGET_SEC = 8.3
 // the model starts a line about a second into the shot, and the end of a line needs a moment before the cut (measured on rendered clips)
 export const LEAD_IN_SEC = 1.2
 
-type RawShot = { framing?: unknown, camera?: unknown, characters?: unknown, action?: unknown, lines?: unknown, deliveries?: unknown, states?: unknown, view?: unknown, placeView?: unknown, props?: unknown, hold?: unknown, cutaway?: unknown, people?: unknown, seconds?: unknown, continues?: unknown }
-export type RawCoverage = { soundscape?: unknown, staging?: unknown, ends?: unknown, people?: unknown, voices?: unknown, fast?: unknown, shots?: RawShot[] }
+type RawShot = {
+    framing?: unknown
+    camera?: unknown
+    characters?: unknown
+    action?: unknown
+    lines?: unknown
+    deliveries?: unknown
+    states?: unknown
+    view?: unknown
+    placeView?: unknown
+    props?: unknown
+    hold?: unknown
+    cutaway?: unknown
+    people?: unknown
+    seconds?: unknown
+    continues?: unknown
+}
+export type RawCoverage = {soundscape?: unknown; staging?: unknown; ends?: unknown; people?: unknown; voices?: unknown; fast?: unknown; shots?: RawShot[]}
 
-const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
+const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
 export const dialogueOf = (scene: Scene) => scene.elements.filter(element => element.type === 'dialogue')
 
@@ -28,21 +44,24 @@ export const speakingSeconds = (scene: Scene, lines: number[]) => {
     return lines.reduce((sum, n) => sum + speechSeconds(dialogue[n]!.text), 0) + (lines.length ? LEAD_IN_SEC : 0)
 }
 
-const segments = (value: string, granularity: 'sentence' | 'word') =>
-    [...new Intl.Segmenter(undefined, {granularity}).segment(value)].map(s => s.segment)
+const segments = (value: string, granularity: 'sentence' | 'word') => [...new Intl.Segmenter(undefined, {granularity}).segment(value)].map(s => s.segment)
 
 /** The text cut into pieces of at most `maxSec` speaking time: at sentence ends, a sentence that is too long at word breaks. Joined, the pieces are the text. */
 function speechParts(value: string, maxSec: number): string[] {
-    const pieces = segments(value, 'sentence').flatMap(sentence => speechSeconds(sentence) <= maxSec ? [sentence] : (() => {
-        const words = segments(sentence, 'word')
-        const out: string[] = []
-        for (const word of words) out.length && speechSeconds(out.at(-1)! + word) <= maxSec ? out[out.length - 1] += word : out.push(word)
-        return out
-    })())
+    const pieces = segments(value, 'sentence').flatMap(sentence =>
+        speechSeconds(sentence) <= maxSec
+            ? [sentence]
+            : (() => {
+                  const words = segments(sentence, 'word')
+                  const out: string[] = []
+                  for (const word of words) out.length && speechSeconds(out.at(-1)! + word) <= maxSec ? (out[out.length - 1] += word) : out.push(word)
+                  return out
+              })(),
+    )
     const total = speechSeconds(value)
-    const share = Math.min(maxSec, total / Math.ceil(total / maxSec) * 1.25)
+    const share = Math.min(maxSec, (total / Math.ceil(total / maxSec)) * 1.25)
     const parts: string[] = []
-    for (const piece of pieces) parts.length && speechSeconds(parts.at(-1)! + piece) <= share ? parts[parts.length - 1] += piece : parts.push(piece)
+    for (const piece of pieces) parts.length && speechSeconds(parts.at(-1)! + piece) <= share ? (parts[parts.length - 1] += piece) : parts.push(piece)
     return parts.map(p => p.trim()).filter(Boolean)
 }
 
@@ -54,26 +73,35 @@ export function splitLongShot(scene: Scene, shot: Shot): Shot[] {
     if (shot.seconds <= MAX_SPEECH_SHOT_SEC || !shot.lines.length) return [shot]
     const dialogue = dialogueOf(scene)
     const units = shot.lines.flatMap(n => speechParts(dialogue[n]!.text, SPLIT_TARGET_SEC - LEAD_IN_SEC).map(text => ({line: n, text})))
-    const groups: { line: number, text: string }[][] = []
+    const groups: {line: number; text: string}[][] = []
     for (const unit of units) {
         const last = groups.at(-1)
-        const sec = (g: { text: string }[]) => g.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC
+        const sec = (g: {text: string}[]) => g.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC
         last && sec([...last, unit]) <= SPLIT_TARGET_SEC ? last.push(unit) : groups.push([unit])
     }
     if (groups.length < 2) return [shot]
     return groups.map((group, i) => {
         const lines = [...new Set(group.map(u => u.line))]
-        const texts = lines.map(n => group.filter(u => u.line === n).map(u => u.text).join(' '))
-        const whole = (n: number, text: string) => text === dialogue[n]!.text ? undefined : text
+        const texts = lines.map(n =>
+            group
+                .filter(u => u.line === n)
+                .map(u => u.text)
+                .join(' '),
+        )
+        const whole = (n: number, text: string) => (text === dialogue[n]!.text ? undefined : text)
         return {
             ...shot,
             lines,
             ...(lines.some((n, k) => whole(n, texts[k]!)) ? {texts} : {}),
             // the parts after the first go on speaking in the same take: the action is not told again (the model would do it again)
-            action: i ? 'The shot carries on in the same take: every movement continues from where it was, the speaker goes on speaking in the same place and pose, the others stay as they are.' : shot.action,
+            action: i
+                ? 'The shot carries on in the same take: every movement continues from where it was, the speaker goes on speaking in the same place and pose, the others stay as they are.'
+                : shot.action,
             // ... and nobody is told again where they stand or what they do - but how each is in the picture stays (a listener who is only a shoulder at the edge of
             // it must not be given a place in the middle: the video model then draws a whole second person there, or falls back to the character's picture)
-            ...(i && shot.people ? {people: Object.fromEntries(Object.entries(shot.people).map(([id, p]) => [id, {frame: p.frame, facing: p.facing, foreground: p.foreground}]))} : {}),
+            ...(i && shot.people
+                ? {people: Object.fromEntries(Object.entries(shot.people).map(([id, p]) => [id, {frame: p.frame, facing: p.facing, foreground: p.foreground}]))}
+                : {}),
             seconds: round(group.reduce((sum, u) => sum + speechSeconds(u.text), 0) + LEAD_IN_SEC),
             ...(i ? {continues: true} : {}),
         }
@@ -99,17 +127,28 @@ export class CoverageProblem extends Error {
 export function propIds(named: unknown, props: FilmProp[]): string[] {
     if (!Array.isArray(named)) return []
     const key = (name: string) => name.toLowerCase().replace(/\s+/g, ' ').trim()
-    return [...new Set(named.flatMap(n => typeof n === 'string' ? props.filter(p => key(p.name) === key(n)).map(p => p.id) : []))]
+    return [...new Set(named.flatMap(n => (typeof n === 'string' ? props.filter(p => key(p.name) === key(n)).map(p => p.id) : [])))]
 }
 
-export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, strict = true, introduced?: ReadonlySet<string>, sceneNumber?: number, props: FilmProp[] = []): { coverage: SceneCoverage, notes: string[] } {
+export function toCoverage(
+    raw: RawCoverage,
+    scene: Scene,
+    cast: FilmCast,
+    strict = true,
+    introduced?: ReadonlySet<string>,
+    sceneNumber?: number,
+    props: FilmProp[] = [],
+): {coverage: SceneCoverage; notes: string[]} {
     if (!Array.isArray(raw?.shots) || !raw.shots.length) throw new CoverageProblem(['there are no shots'])
     const dialogue = dialogueOf(scene)
     const problems: string[] = []
     const used: number[] = []
 
     const shots = raw.shots.map((shot, i): Shot => {
-        const lines = (Array.isArray(shot.lines) ? shot.lines : []).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= dialogue.length).map(n => n - 1)
+        const lines = (Array.isArray(shot.lines) ? shot.lines : [])
+            .map(Number)
+            .filter(n => Number.isInteger(n) && n >= 1 && n <= dialogue.length)
+            .map(n => n - 1)
         used.push(...lines)
         const names = Array.isArray(shot.characters) ? shot.characters.map(text).filter(Boolean) : []
         const ids = names.flatMap(name => {
@@ -141,8 +180,15 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
         if (shot.people && typeof shot.people === 'object' && !Array.isArray(shot.people)) {
             for (const [who, entry] of Object.entries(shot.people as Record<string, unknown>)) {
                 const character = characterOf(cast, who)
-                const e = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {}
-                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion) || FACINGS.includes(text(e.facing) as Facing))) people[character.id] = {...(text(e.state) ? {state: text(e.state)} : {}), ...(text(e.frame) ? {frame: text(e.frame)} : {}), ...(text(e.motion) ? {motion: text(e.motion)} : {}), ...(FACINGS.includes(text(e.facing) as Facing) ? {facing: text(e.facing) as Facing} : {}), ...(e.foreground === true ? {foreground: true} : {})}
+                const e = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {}
+                if (character && ids.includes(character.id) && (text(e.state) || text(e.frame) || text(e.motion) || FACINGS.includes(text(e.facing) as Facing)))
+                    people[character.id] = {
+                        ...(text(e.state) ? {state: text(e.state)} : {}),
+                        ...(text(e.frame) ? {frame: text(e.frame)} : {}),
+                        ...(text(e.motion) ? {motion: text(e.motion)} : {}),
+                        ...(FACINGS.includes(text(e.facing) as Facing) ? {facing: text(e.facing) as Facing} : {}),
+                        ...(e.foreground === true ? {foreground: true} : {}),
+                    }
             }
         }
         const said = Array.isArray(shot.deliveries) ? shot.deliveries.map(text) : []
@@ -160,7 +206,9 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             ...(text(shot.view) ? {view: text(shot.view)} : {}),
             ...(shot.hold === true ? {hold: true} : {}),
             ...(shot.cutaway === true ? {cutaway: true} : {}),
-            ...(Number.isInteger(Number(shot.placeView)) && Number(shot.placeView) >= 1 && Number(shot.placeView) <= 5 ? {placeView: Number(shot.placeView)} : {}),
+            ...(Number.isInteger(Number(shot.placeView)) && Number(shot.placeView) >= 1 && Number(shot.placeView) <= 5
+                ? {placeView: Number(shot.placeView)}
+                : {}),
             // the props the shot names, by id - a name that is no prop of the film is left out
             ...(propIds(shot.props, props).length ? {props: propIds(shot.props, props)} : {}),
             ...(Object.keys(people).length ? {people} : {}),
@@ -189,7 +237,9 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             if (!early.length) return
             const who = early.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')
             if (strict) {
-                soft.push(`shot ${i + 1}: ${who} ${early.length > 1 ? 'are' : 'is'} not in the script yet - it names them in a later scene; the shot shows the place or whoever the script has there, without them (the look brief says where everyone stands in the film, not who is in this scene)`)
+                soft.push(
+                    `shot ${i + 1}: ${who} ${early.length > 1 ? 'are' : 'is'} not in the script yet - it names them in a later scene; the shot shows the place or whoever the script has there, without them (the look brief says where everyone stands in the film, not who is in this scene)`,
+                )
             } else {
                 shot.characters = shot.characters.filter(id => introduced.has(id))
                 for (const id of early) delete shot.people?.[id]
@@ -200,22 +250,29 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
     // someone who talks to a person in the picture looks at them, not into the lens - the shot of their face is taken from the listener's side
     unique.forEach((shot, i) => {
         if (shot.characters.length < 2) return
-        const speakers = new Set(shot.lines.flatMap(n => {
-            const line = dialogue[n]
-            const who = line?.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
-            return who ? [who.id] : []
-        }))
+        const speakers = new Set(
+            shot.lines.flatMap(n => {
+                const line = dialogue[n]
+                const who = line?.type === 'dialogue' && line.kind === 'spoken' ? characterOf(cast, line.speaker) : undefined
+                return who ? [who.id] : []
+            }),
+        )
         for (const id of speakers) {
             if (shot.people?.[id]?.facing !== 'camera') continue
             const others = shot.characters.filter(c => c !== id).map(c => cast.characters.find(x => x.id === c)?.name ?? c)
-            soft.push(`shot ${i + 1}: ${cast.characters.find(c => c.id === id)?.name ?? id} talks to ${others.join(' and ')} but looks into the lens - they look at ${others.join(' and ')} ("facing": "left" or "right"), and the shot of their face is taken from ${others.join(' and ')}'s side, the listener a shoulder in the foreground or just outside the picture`)
+            soft.push(
+                `shot ${i + 1}: ${cast.characters.find(c => c.id === id)?.name ?? id} talks to ${others.join(' and ')} but looks into the lens - they look at ${others.join(' and ')} ("facing": "left" or "right"), and the shot of their face is taken from ${others.join(' and ')}'s side, the listener a shoulder in the foreground or just outside the picture`,
+            )
         }
     })
     // the action names someone who is not in the shot: the video model draws a stranger for a name without a picture
     unique.forEach((shot, i) => {
         const written = [shot.action, shot.view ?? '', ...Object.values(shot.people ?? {}).flatMap(p => [p.state ?? '', p.frame ?? ''])].join(' ')
         const strangers = cast.characters.filter(c => !c.voiceOnly && !shot.characters.includes(c.id) && mentions(written, c)).map(c => c.name)
-        if (strangers.length) soft.push(`shot ${i + 1}: the shot's text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the action, or put them in the shot`)
+        if (strangers.length)
+            soft.push(
+                `shot ${i + 1}: the shot's text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the action, or put them in the shot`,
+            )
     })
     if (soft.length && strict) throw new CoverageProblem(soft)
     notes.push(...soft.map(p => `kept anyway: ${p}`))
@@ -227,20 +284,32 @@ export function toCoverage(raw: RawCoverage, scene: Scene, cast: FilmCast, stric
             if (character && text(where) && (!introduced || introduced.has(character.id))) ends[character.id] = text(where)
         }
     }
-    return {coverage: {sceneId: scene.id, soundscape: text(raw.soundscape), staging: text(raw.staging), ...(Object.keys(ends).length ? {ends} : {}), ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}), ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}), ...(raw.fast === true ? {fast: true} : {}), shots: unique}, notes}
+    return {
+        coverage: {
+            sceneId: scene.id,
+            soundscape: text(raw.soundscape),
+            staging: text(raw.staging),
+            ...(Object.keys(ends).length ? {ends} : {}),
+            ...(typeof raw.people === 'boolean' ? {people: raw.people} : {}),
+            ...(typeof raw.voices === 'boolean' ? {voices: raw.voices} : {}),
+            ...(raw.fast === true ? {fast: true} : {}),
+            shots: unique,
+        },
+        notes,
+    }
 }
 
 // A clip of the film: consecutive shots of one scene that fit into MAX_CLIP_SEC together
 export type FilmClip = {
-    id: string,                     // clip-001, ...
-    index: number,
-    sceneId: string,
-    opensScene: boolean,
-    shots: Shot[],
-    seconds: number,
-    frameStart: number,             // on the film's 24 fps frame grid
-    frames: number,                 // frames the clip contributes to the final film
-    startsFrom?: string,            // id of the clip it goes on from: it starts on that clip's last frame
+    id: string // clip-001, ...
+    index: number
+    sceneId: string
+    opensScene: boolean
+    shots: Shot[]
+    seconds: number
+    frameStart: number // on the film's 24 fps frame grid
+    frames: number // frames the clip contributes to the final film
+    startsFrom?: string // id of the clip it goes on from: it starts on that clip's last frame
 }
 
 /**
@@ -269,12 +338,18 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
     let frameStart = 0
     for (const scene of screenplay.scenes) {
         // the time a shot needs for its lines is worked out again here: a plan made with a shorter estimate gets the new one
-        const shots = coverage.find(c => c.sceneId === scene.id)?.shots.map(s => ({...s, seconds: round(Math.max(s.seconds, speakingSeconds(scene, s.lines)))})).flatMap(s => splitLongShot(scene, s))
+        const shots = coverage
+            .find(c => c.sceneId === scene.id)
+            ?.shots.map(s => ({...s, seconds: round(Math.max(s.seconds, speakingSeconds(scene, s.lines)))}))
+            .flatMap(s => splitLongShot(scene, s))
         if (!shots) throw new Error(`no shots for scene ${scene.id} - run again, or --redo=coverage`)
         // a single shot that still does not fit a clip (no line to split it at, or one unit longer than a clip) is a plan
         // that cannot be rendered as it is - said here, not found as a failed or cut-off render
         for (const [k, shot] of shots.entries()) {
-            if (shot.seconds > maxClipSec) throw new Error(`scene ${scene.id}, shot ${k + 1}: ${shot.seconds}s is longer than a clip can be (${round(maxClipSec)}s) and cannot be split - shorten it or divide it into shots (--redo=coverage --scenes=${scene.id})`)
+            if (shot.seconds > maxClipSec)
+                throw new Error(
+                    `scene ${scene.id}, shot ${k + 1}: ${shot.seconds}s is longer than a clip can be (${round(maxClipSec)}s) and cannot be split - shorten it or divide it into shots (--redo=coverage --scenes=${scene.id})`,
+                )
         }
         let current: Shot[] = []
         const flush = () => {
@@ -284,8 +359,14 @@ export function packClips(screenplay: Screenplay, coverage: SceneCoverage[], con
             const index = clips.length + 1
             const previous = clips.at(-1)
             clips.push({
-                id: `clip-${String(index).padStart(3, '0')}`, index, sceneId: scene.id, opensScene: !clips.some(c => c.sceneId === scene.id),
-                shots: current, seconds, frameStart, frames,
+                id: `clip-${String(index).padStart(3, '0')}`,
+                index,
+                sceneId: scene.id,
+                opensScene: !clips.some(c => c.sceneId === scene.id),
+                shots: current,
+                seconds,
+                frameStart,
+                frames,
                 ...(previous?.sceneId === scene.id && goesOnWithoutCut(current[0]!, previous.shots.at(-1), continuity) ? {startsFrom: previous.id} : {}),
             })
             frameStart += frames

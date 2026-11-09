@@ -1,8 +1,8 @@
-import {join} from 'node:path';
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
-import {buildClient} from '../lib/editor/client-build.ts';
-import {CLIENT_PUBLIC} from '../lib/editor/static.ts';
+import {join} from 'node:path'
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
+import {buildClient} from '../lib/editor/client-build.ts'
+import {CLIENT_PUBLIC} from '../lib/editor/static.ts'
 
 cli('client:build')
 try {

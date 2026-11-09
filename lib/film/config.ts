@@ -1,69 +1,86 @@
-import {existsSync} from "node:fs";
-import {join} from "node:path";
-import type {Aspect, Resolution} from "../../comfy/helpers.ts";
-import {aspectProblem, contextFramesProblem, previewProblem, defaults, finalFpsProblem, finishSettingProblem, interpolationModelProblem, invalidJsonProblem, languageName, leakRetriesProblem, llmProblem, qaRetriesNote, qaRetriesProblem, resolutionProblem, seedProblem, workflowProblem} from "../config.ts";
-import type {Finish} from "../finish.ts";
-import {postworkProblem} from "../postwork/config.ts";
-import {log, warnUnknownKeys} from "../log.ts";
+import {existsSync} from 'node:fs'
+import {join} from 'node:path'
+import type {Aspect, Resolution} from '../../comfy/helpers.ts'
+import {
+    aspectProblem,
+    contextFramesProblem,
+    previewProblem,
+    defaults,
+    finalFpsProblem,
+    finishSettingProblem,
+    interpolationModelProblem,
+    invalidJsonProblem,
+    languageName,
+    leakRetriesProblem,
+    llmProblem,
+    qaRetriesNote,
+    qaRetriesProblem,
+    resolutionProblem,
+    seedProblem,
+    workflowProblem,
+} from '../config.ts'
+import type {Finish} from '../finish.ts'
+import {postworkProblem} from '../postwork/config.ts'
+import {log, warnUnknownKeys} from '../log.ts'
 
 // films/<id>/config.json - the film pipeline's own settings, all optional
 export type FilmConfig = {
     // the language of the dialogue of a story idea: "auto" = the language the idea is written in. A screenplay keeps
     // its own language - its dialogue is never translated
-    dialogueLanguage: string,
+    dialogueLanguage: string
     // seconds of film: an idea is developed for it, and the shots of every scene are planned to it (a scene gets its share of the
     // script's length). A screenplay is planned to a length only when this is written in config.json; -1 = as long as the story needs
-    targetDuration: number,
-    seed: number,                   // -1 = random per render
-    imageResolution: Resolution,    // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
-    videoResolution: Resolution,
-    videoAspect: Aspect,            // the clips' aspect ratio, "16:9" (default), "9:16", "12:5" (scope), ... - as in the music video
+    targetDuration: number
+    seed: number // -1 = random per render
+    imageResolution: Resolution // -1 = workflow, 1.1 = megapixels, "1920x1088" = fixed
+    videoResolution: Resolution
+    videoAspect: Aspect // the clips' aspect ratio, "16:9" (default), "9:16", "12:5" (scope), ... - as in the music video
     // file names in comfy/workflows/, without .ts - exactly one workflow for the pictures and one for the clips (see docs/custom-workflows.md; a video
     // workflow of the film takes comfy/workflows/h3-ref2video-film.ts's options: pictures only, no audio)
-    imageWorkflow: string,
-    videoWorkflow: string,
+    imageWorkflow: string
+    videoWorkflow: string
     // every character and location gets a multi-angle reference sheet (a short turnaround video, sampled and composited,
     // see lib/sequenceSheet.ts) instead of one picture - false renders just the picture, which is much cheaper
-    sequenceSheets: boolean,
+    sequenceSheets: boolean
     // the five views of a location's sheet are designed for the place and its story (what lies on the other side, the sides, a wide view) and every shot
     // names the view that is its background - for dialogue between people who face each other, where a reverse shot needs the opposite side of the place.
     // Needs sequenceSheets. Off by default: it adds to every clip prompt, so a film planned without it keeps its prompts
-    locationViews: boolean,
+    locationViews: boolean
     // a clip whose first shot goes on in the same take as the last shot of the clip before starts on that clip's last
     // frame: "auto" = where the shot planning marked it, "scene" = every clip of a scene but its first (the people keep their posture and
     // clothes from clip to clip, but the scene is rendered one clip after the other), "never" (default) = every clip is its own cut.
     // Off by default: a continuing clip starts on whatever the clip before it drifted to, and the drift (doubled people,
     // displaced patches of the set) is carried on and grows - see docs/film.md
-    continuity: 'auto' | 'scene' | 'never',
+    continuity: 'auto' | 'scene' | 'never'
     // a continuing clip (continuity) starts on this many of the last frames of the clip before (0 = off, else 5 + 17·k: 22, 39)
     // instead of its one last frame: the motion goes on, not only the pose - as in the music video (lib/render.ts)
-    contextFrames: number,
+    contextFrames: number
     // a clip that came out as the reference pictures lined up on their grey backdrop (lib/leak.ts) is rendered again, with
     // another seed, up to this many times. 0 (default) = off
-    leakRetries: number,
+    leakRetries: number
     // a clip with black frames or a picture that stands still for seconds (lib/clip-qa.ts) is rendered again with another,
     // derived seed, the better take kept - up to this many times. 0 (default) = off - as in the music video
-    qaRetries: number,
+    qaRetries: number
     // the frame rate of a second film, <id>-<fps>fps.mp4 next to the 24 fps one: the clips get more frames by frame interpolation
     // (a ComfyUI job per clip, shot by shot), the sound is the one of the 24 fps film. 24 (default) = off - as in the music video
-    finalFps: number,
-    interpolationModel: string,     // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
+    finalFps: number
+    interpolationModel: string // a file in ComfyUI's models/frame_interpolation/ (RIFE 4.25/4.26 or FILM)
     // a light grade and sharpen of the film(s), written as <id>-finished.mp4 next to them (lib/finish.ts), with the clips matched
     // to one reference (colorMatch) and film grain when asked for: false (default) = off, true = the mild one, an object = the
     // mild one with its fields replaced - as in the music video
-    finish: boolean | Partial<Finish>,
-    preview: { scale: number, steps: number },  // --preview: as in the music video (lib/config.ts)
+    finish: boolean | Partial<Finish>
+    preview: {scale: number; steps: number} // --preview: as in the music video (lib/config.ts)
     // subtitles of the film (<id>.srt, and a track in the mp4): "script" = the translations the screenplay has under its lines, "off", or a language
     // code - every line spoken in another language is translated into it
-    subtitles: string,
+    subtitles: string
     // the subtitles are burned into the picture (always visible, the video is encoded once more) instead of being a track of the mp4 that the player switches on
-    burnSubtitles: boolean,
+    burnSubtitles: boolean
     // every clip's own sound is brought to about the same loudness (the model makes each clip's level on its own)
-    levelMatching: boolean,
+    levelMatching: boolean
     // a score file in input/ (score.mp3, .wav, .flac, .m4a or .ogg) is mixed under the film at this volume in dB (relative to the film's own sound),
     // and ducks under the dialogue
-    scoreVolume: number,
-    llm: { model?: string },        // a project may use another model than the settings - never another server or key
+    scoreVolume: number
+    llm: {model?: string} // a project may use another model than the settings - never another server or key
 }
 
 export const filmDefaults: FilmConfig = {
@@ -94,7 +111,7 @@ export const filmDefaults: FilmConfig = {
 
 // targetDurationSet: targetDuration is written in config.json - for an idea the default applies anyway, a screenplay is only planned
 // to a length when one was asked for
-export type LoadedFilmConfig = FilmConfig & { targetDurationSet: boolean }
+export type LoadedFilmConfig = FilmConfig & {targetDurationSet: boolean}
 
 export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig> {
     const file = join(filmDir, 'config.json')
@@ -113,7 +130,7 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     const config: FilmConfig = {...filmDefaults, ...raw}
     // "postwork": the steps on the finished film (lib/postwork/), read by their own commands - only checked here
     warnUnknownKeys(raw, [...Object.keys(filmDefaults), 'postwork'], file)
-    const postworkWrong = (raw as { postwork?: unknown }).postwork === undefined ? undefined : postworkProblem((raw as { postwork?: unknown }).postwork)
+    const postworkWrong = (raw as {postwork?: unknown}).postwork === undefined ? undefined : postworkProblem((raw as {postwork?: unknown}).postwork)
     if (postworkWrong) fail(postworkWrong)
 
     if (config.dialogueLanguage !== 'auto' && (typeof config.dialogueLanguage !== 'string' || !languageName(config.dialogueLanguage))) {
@@ -137,16 +154,27 @@ export async function loadFilmConfig(filmDir: string): Promise<LoadedFilmConfig>
     if (typeof config.sequenceSheets !== 'boolean') fail(`sequenceSheets must be true or false, got ${JSON.stringify(config.sequenceSheets)}`)
     if (typeof config.locationViews !== 'boolean') fail(`locationViews must be true or false, got ${JSON.stringify(config.locationViews)}`)
     if (config.locationViews && !config.sequenceSheets) fail('locationViews needs sequenceSheets: true - the views are the pictures of the location sheet')
-    for (const problem of [contextFramesProblem(config.contextFrames), leakRetriesProblem(config.leakRetries), qaRetriesProblem(config.qaRetries), finalFpsProblem(config.finalFps),
-        finishSettingProblem(config.finish), interpolationModelProblem(config.interpolationModel), previewProblem(config.preview)]) if (problem) fail(problem)
+    for (const problem of [
+        contextFramesProblem(config.contextFrames),
+        leakRetriesProblem(config.leakRetries),
+        qaRetriesProblem(config.qaRetries),
+        finalFpsProblem(config.finalFps),
+        finishSettingProblem(config.finish),
+        interpolationModelProblem(config.interpolationModel),
+        previewProblem(config.preview),
+    ])
+        if (problem) fail(problem)
     const qaNote = qaRetriesNote(config.qaRetries)
     if (qaNote) log.warn(`${file}: ${qaNote}`)
-    if (config.contextFrames > 0 && config.continuity === 'never') log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
+    if (config.contextFrames > 0 && config.continuity === 'never')
+        log.warn(`${file}: contextFrames ${config.contextFrames} does nothing while "continuity" is "never" - no clip goes on from the one before`)
     if (!['auto', 'scene', 'never'].includes(config.continuity)) fail(`continuity must be "auto", "scene" or "never", got ${JSON.stringify(config.continuity)}`)
-    if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles))) fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
+    if (config.subtitles !== 'script' && config.subtitles !== 'off' && (typeof config.subtitles !== 'string' || !languageName(config.subtitles)))
+        fail(`subtitles must be "script", "off" or a language code like "en", got ${JSON.stringify(config.subtitles)}`)
     if (typeof config.burnSubtitles !== 'boolean') fail(`burnSubtitles must be true or false, got ${JSON.stringify(config.burnSubtitles)}`)
     if (typeof config.levelMatching !== 'boolean') fail(`levelMatching must be true or false, got ${JSON.stringify(config.levelMatching)}`)
-    if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40) fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
+    if (!Number.isFinite(config.scoreVolume) || config.scoreVolume > 0 || config.scoreVolume < -40)
+        fail(`scoreVolume must be between -40 and 0 dB, got ${JSON.stringify(config.scoreVolume)}`)
     const llmWrong = llmProblem(config.llm)
     if (llmWrong) fail(llmWrong)
     return {...config, targetDurationSet: 'targetDuration' in raw}

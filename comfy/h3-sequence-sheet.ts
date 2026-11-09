@@ -3,17 +3,17 @@
 // of a character, different views of a place - later sampled into frames and composited into a multi-angle sheet.
 // The model and its sampling are a recipe: the FL2VA model with its 8-step turbo LoRA (h3-sequence-to-sheet), or a
 // distilled checkpoint that needs no LoRA (h3-sequence-to-sheet-prism).
-import {afterCleanup, dyn, FPS, resolution, type SequenceWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "./helpers.ts";
+import {afterCleanup, dyn, FPS, resolution, type SequenceWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from './helpers.ts'
 
 export type SheetRecipe = {
-    unet: string,
+    unet: string
     // a turbo LoRA on top of the model - none for a distilled checkpoint
-    lora?: string,
+    lora?: string
     // the sigma shift a distilled checkpoint is sampled at (MiniMaxH3SigmaShift)
-    shift?: { video: number, audio: number },
-    sampler: string,
-    scheduler: string,
-    steps: number,
+    shift?: {video: number; audio: number}
+    sampler: string
+    scheduler: string
+    steps: number
 }
 
 // the FL2VA model with its 8-step turbo LoRA, res_multistep/simple
@@ -41,9 +41,11 @@ export function sequenceSheetWorkflow(opts: SequenceWorkflowOptions, recipe: She
 
     const videoVae = wf.VAELoader({vae_name: 'minimax_h3_video_vae_fp16.safetensors'})
     const unet = wf.UNETLoader({unet_name: dyn(recipe.unet), weight_dtype: 'default'}).MODEL
-    const model = recipe.lora ? wf.LoraLoaderModelOnly({lora_name: dyn(recipe.lora), strength_model: 1, model: unet}).MODEL
-        : recipe.shift ? wf.MiniMaxH3SigmaShift({model: unet, shift_video: recipe.shift.video, shift_audio: recipe.shift.audio}).MODEL
-            : unet
+    const model = recipe.lora
+        ? wf.LoraLoaderModelOnly({lora_name: dyn(recipe.lora), strength_model: 1, model: unet}).MODEL
+        : recipe.shift
+          ? wf.MiniMaxH3SigmaShift({model: unet, shift_video: recipe.shift.video, shift_audio: recipe.shift.audio}).MODEL
+          : unet
     const clip = wf.CLIPLoader({clip_name: 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', type: 'minimax', device: 'default'})
 
     const size = resolution(wf, opts.resolution, opts.orientation, 0.85)

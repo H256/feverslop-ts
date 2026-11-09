@@ -1,13 +1,13 @@
-import {afterAll, beforeAll, describe, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, rmSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import h3Ref2Video from "../comfy/workflows/h3-ref2video.ts";
-import h3Ref2VideoFilm from "../comfy/workflows/h3-ref2video-film.ts";
-import h3Ref2Video2Pass from "../comfy/workflows/h3-ref2video-2pass.ts";
-import {scaledSize} from "../comfy/helpers.ts";
-import {previewSources, probeVideo} from "./assemble.ts";
-import {parseRetake, planRetake, retakeFrames, retakePrompt, shotsIn, spliceVideo} from "./retake.ts";
+import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import h3Ref2Video from '../comfy/workflows/h3-ref2video.ts'
+import h3Ref2VideoFilm from '../comfy/workflows/h3-ref2video-film.ts'
+import h3Ref2Video2Pass from '../comfy/workflows/h3-ref2video-2pass.ts'
+import {scaledSize} from '../comfy/helpers.ts'
+import {previewSources, probeVideo} from './assemble.ts'
+import {parseRetake, planRetake, retakeFrames, retakePrompt, shotsIn, spliceVideo} from './retake.ts'
 
 const lengths = (frames: number) => 5 + 17 * Math.ceil(Math.max(0, frames - 5) / 17)
 
@@ -17,7 +17,8 @@ describe('what a part of a clip is', () => {
         expect(parseRetake('clip-012:shot2')).toEqual({clip: 'clip-012', shot: 2})
     })
     test('anything else is refused', () => {
-        for (const wrong of ['slot-007', 'slot-007:3', 'slot-007:shot', '../x:1-2', 'slot-007:1-2 --again']) expect(() => parseRetake(wrong)).toThrow('--retake')
+        for (const wrong of ['slot-007', 'slot-007:3', 'slot-007:shot', '../x:1-2', 'slot-007:1-2 --again'])
+            expect(() => parseRetake(wrong)).toThrow('--retake')
     })
     test('in frames, where the picture cuts', () => {
         expect(retakeFrames({clip: 'c', seconds: [1, 2]}, 100, [])).toEqual({first: 24, end: 48})
@@ -73,13 +74,27 @@ describe('the prompt of a part', () => {
 })
 
 describe('the jobs', () => {
-    const music = {prompt: 'p', pictures: ['a.png'], audios: ['vocals.wav'], song: 'song.wav', songStart: 0, frames: 22, duration: 1, seed: 1, resolution: '1344x768' as const, filenamePrefix: 'x'}
+    const music = {
+        prompt: 'p',
+        pictures: ['a.png'],
+        audios: ['vocals.wav'],
+        song: 'song.wav',
+        songStart: 0,
+        frames: 22,
+        duration: 1,
+        seed: 1,
+        resolution: '1344x768' as const,
+        filenamePrefix: 'x',
+    }
     const film = {prompt: 'p', pictures: ['a.png'], frames: 22, seed: 1, resolution: '1344x768' as const, filenamePrefix: 'x'}
-    const nodes = (result: { workflow: unknown }) => {
-        const built = result.workflow as { workflow?: Record<string, { class_type: string, inputs: Record<string, unknown> }>, _nodes?: Record<string, { class_type: string, inputs: Record<string, unknown> }> }
+    const nodes = (result: {workflow: unknown}) => {
+        const built = result.workflow as {
+            workflow?: Record<string, {class_type: string; inputs: Record<string, unknown>}>
+            _nodes?: Record<string, {class_type: string; inputs: Record<string, unknown>}>
+        }
         return Object.values(built._nodes ?? built.workflow ?? {})
     }
-    const of = (result: { workflow: unknown }, type: string) => nodes(result).filter(n => n.class_type === type)
+    const of = (result: {workflow: unknown}, type: string) => nodes(result).filter(n => n.class_type === type)
 
     test('a preview: fewer steps and a fraction of the pixels; without it a render is what it was', () => {
         const full = h3Ref2Video(music)
@@ -99,7 +114,10 @@ describe('the jobs', () => {
         expect(preview.size).toEqual({width: 672, height: 384})
     })
     test('a part: guided to the frame after it, in every kind of workflow', () => {
-        const guideAt = (result: { workflow: unknown }) => of(result, 'MiniMaxH3AddGuide').map(n => n.inputs.frame_idx).filter(at => at !== 0)
+        const guideAt = (result: {workflow: unknown}) =>
+            of(result, 'MiniMaxH3AddGuide')
+                .map(n => n.inputs.frame_idx)
+                .filter(at => at !== 0)
         expect(guideAt(h3Ref2Video({...music, endFrame: {image: 'after.png', at: 40}}))).toEqual([40])
         expect(guideAt(h3Ref2VideoFilm({...film, endFrame: {image: 'after.png', at: 40}}))).toEqual([40])
         // the first pass only: the second changes little, and encoding at the full size ran out of memory
@@ -116,18 +134,52 @@ describe('joining the part in', () => {
     let dir: string
     const make = async (name: string, color: string, frames: number) => {
         const file = join(dir, name)
-        const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=${color}:s=64x36:r=24`, '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-frames:v', String(frames), '-t', String(frames / 24), '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', file], {stdout: 'ignore', stderr: 'ignore'})
+        const proc = Bun.spawn(
+            [
+                'ffmpeg',
+                '-y',
+                '-v',
+                'error',
+                '-f',
+                'lavfi',
+                '-i',
+                `color=${color}:s=64x36:r=24`,
+                '-f',
+                'lavfi',
+                '-i',
+                'sine=frequency=440:sample_rate=48000',
+                '-frames:v',
+                String(frames),
+                '-t',
+                String(frames / 24),
+                '-c:v',
+                'libx264',
+                '-preset',
+                'ultrafast',
+                '-pix_fmt',
+                'yuv420p',
+                '-c:a',
+                'aac',
+                file,
+            ],
+            {stdout: 'ignore', stderr: 'ignore'},
+        )
         expect(await proc.exited).toBe(0)
         return file
     }
     // the brightness of a frame: which of the videos it comes from
     const brightness = async (file: string, frame: number) => {
-        const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', file, '-vf', `select=eq(n\\,${frame}),scale=1:1,format=gray`, '-frames:v', '1', '-f', 'rawvideo', '-'], {stdout: 'pipe', stderr: 'ignore'})
+        const proc = Bun.spawn(
+            ['ffmpeg', '-v', 'error', '-i', file, '-vf', `select=eq(n\\,${frame}),scale=1:1,format=gray`, '-frames:v', '1', '-f', 'rawvideo', '-'],
+            {stdout: 'pipe', stderr: 'ignore'},
+        )
         const bytes = new Uint8Array(await new Response(proc.stdout).arrayBuffer())
         await proc.exited
         return bytes[0]!
     }
-    beforeAll(() => { dir = mkdtempSync(join(tmpdir(), 'retake-')) })
+    beforeAll(() => {
+        dir = mkdtempSync(join(tmpdir(), 'retake-'))
+    })
     afterAll(() => rmSync(dir, {recursive: true, force: true}))
 
     test('the head and tail of the old clip, the new frames between them, as many frames as before, with sound', async () => {
@@ -159,7 +211,11 @@ describe('joining the part in', () => {
         mkdirSync(join(project, 'videos'), {recursive: true})
         await Bun.write(join(project, 'previews', 'slot-001.mp4'), Bun.file(await make('p.mp4', 'white', 24)))
         await Bun.write(join(project, 'videos', 'slot-002.mp4'), Bun.file(await make('v.mp4', 'gray', 24)))
-        const files = await previewSources(project, [{id: 'slot-001', frames: 24}, {id: 'slot-002', frames: 24}, {id: 'slot-003', frames: 36}])
+        const files = await previewSources(project, [
+            {id: 'slot-001', frames: 24},
+            {id: 'slot-002', frames: 24},
+            {id: 'slot-003', frames: 36},
+        ])
         expect(files[0]).toBe(join(project, 'previews', 'slot-001.mp4'))
         expect(files[1]).toBe(join(project, 'videos', 'slot-002.mp4'))
         expect(existsSync(files[2]!)).toBe(true)

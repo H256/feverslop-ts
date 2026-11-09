@@ -1,20 +1,20 @@
-import {existsSync, renameSync} from "node:fs";
-import {basename, dirname, resolve} from "node:path";
-import {languageName} from "../config.ts";
-import type {AskOptions} from "../llm.ts";
-import {dialogueOf, LEAD_IN_SEC} from "./coverage.ts";
-import type {FilmClipRequest} from "./compose.ts";
-import {speechSeconds} from "./screenplay.ts";
-import type {Screenplay} from "./types.ts";
-import {secondsAt} from '../frames.ts';
-import type {AssemblyCuts} from './timeline.ts';
+import {existsSync, renameSync} from 'node:fs'
+import {basename, dirname, resolve} from 'node:path'
+import {languageName} from '../config.ts'
+import type {AskOptions} from '../llm.ts'
+import {dialogueOf, LEAD_IN_SEC} from './coverage.ts'
+import type {FilmClipRequest} from './compose.ts'
+import {speechSeconds} from './screenplay.ts'
+import type {Screenplay} from './types.ts'
+import {secondsAt} from '../frames.ts'
+import type {AssemblyCuts} from './timeline.ts'
 
 // Subtitles of the film: <id>.srt and a track in the mp4. The text is the translation of a line - from the screenplay itself ("script"), or
 // translated by the language model into the language in config.json (subtitles). The timing is an estimate - the clip starts a line
 // about a second into its shot and speaks it at the speed planned for it (the same estimate the shot planning uses); nothing listens to the
 // finished clips (Whisper is too brittle to build on) - the cues are right to about a second, which is what a reader needs.
 
-export type Cue = { start: number, end: number, text: string }
+export type Cue = {start: number; end: number; text: string}
 
 /** "s3:2" - the 3rd scene's 3rd dialogue line. */
 export const lineKey = (sceneId: string, line: number) => `${sceneId}:${line}`
@@ -52,14 +52,16 @@ export function subtitleCues(clips: FilmClipRequest[], starts: number[], texts: 
     })
     const cues = [...spans.values()].sort((a, b) => a.start - b.start)
     // a cue never runs into the next one
-    cues.forEach((cue, i) => { if (cues[i + 1] && cue.end > cues[i + 1]!.start - 0.05) cue.end = Math.max(cue.start + 0.5, cues[i + 1]!.start - 0.05) })
+    cues.forEach((cue, i) => {
+        if (cues[i + 1] && cue.end > cues[i + 1]!.start - 0.05) cue.end = Math.max(cue.start + 0.5, cues[i + 1]!.start - 0.05)
+    })
     return cues
 }
 
 const time = (seconds: number) => {
     const ms = Math.round(seconds * 1000)
     const part = (n: number, width: number) => String(Math.floor(n)).padStart(width, '0')
-    return `${part(ms / 3600000, 2)}:${part(ms / 60000 % 60, 2)}:${part(ms / 1000 % 60, 2)},${part(ms % 1000, 3)}`
+    return `${part(ms / 3600000, 2)}:${part((ms / 60000) % 60, 2)}:${part((ms / 1000) % 60, 2)},${part(ms % 1000, 3)}`
 }
 
 export const toSrt = (cues: Cue[]) => cues.map((cue, i) => `${i + 1}\n${time(cue.start)} --> ${time(cue.end)}\n${cue.text}\n`).join('\n')
@@ -68,16 +70,45 @@ export const toSrt = (cues: Cue[]) => cues.map((cue, i) => `${i + 1}\n${time(cue
  * The subtitles of a film the way its config has them: burned in (always visible) or a track of the mp4 (the player switches it
  * on) - not both, the text would be there twice.
  */
-export function addSubtitles(film: string, srt: string, config: { burnSubtitles: boolean, subtitles: string }) {
+export function addSubtitles(film: string, srt: string, config: {burnSubtitles: boolean; subtitles: string}) {
     return config.burnSubtitles ? burnSubtitles(film, srt) : muxSubtitles(film, srt, config.subtitles === 'script' ? undefined : config.subtitles)
 }
 
 /** The film with the subtitles as a (switchable) track - the video and the sound are copied, not encoded again. */
 export async function muxSubtitles(film: string, srt: string, language?: string) {
     const partial = `${film}.subs.mp4`
-    const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-i', film, '-i', srt, '-map', '0:v', '-map', '0:a', '-map', '1:s', '-c:v', 'copy', '-c:a', 'copy', '-c:s', 'mov_text', '-metadata:s:s:0', `title=${(language && languageName(language)) || 'Subtitles'}`, '-movflags', '+faststart', partial], {stdout: 'pipe', stderr: 'pipe'})
+    const proc = Bun.spawn(
+        [
+            'ffmpeg',
+            '-y',
+            '-v',
+            'error',
+            '-i',
+            film,
+            '-i',
+            srt,
+            '-map',
+            '0:v',
+            '-map',
+            '0:a',
+            '-map',
+            '1:s',
+            '-c:v',
+            'copy',
+            '-c:a',
+            'copy',
+            '-c:s',
+            'mov_text',
+            '-metadata:s:s:0',
+            `title=${(language && languageName(language)) || 'Subtitles'}`,
+            '-movflags',
+            '+faststart',
+            partial,
+        ],
+        {stdout: 'pipe', stderr: 'pipe'},
+    )
     const stderr = new Response(proc.stderr).text()
-    if (await proc.exited !== 0) throw new Error(`ffmpeg could not add the subtitles:\n${await stderr}`)
+    if ((await proc.exited) !== 0) throw new Error(`ffmpeg could not add the subtitles:\n${await stderr}`)
     if (existsSync(partial)) renameSync(partial, film)
 }
 
@@ -90,17 +121,48 @@ export async function burnSubtitles(film: string, srt: string) {
     // run next to the files: a Windows path with a drive letter has to be escaped in a filter, a plain file name does not
     const cwd = dirname(resolve(film))
     const style = 'Fontsize=15,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=1.2,Shadow=0,MarginV=14,Alignment=2'
-    const proc = Bun.spawn(['ffmpeg', '-y', '-v', 'error', '-i', basename(film), '-vf', `subtitles=${basename(srt)}:force_style='${style}'`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', basename(partial)], {cwd, stdout: 'pipe', stderr: 'pipe'})
+    const proc = Bun.spawn(
+        [
+            'ffmpeg',
+            '-y',
+            '-v',
+            'error',
+            '-i',
+            basename(film),
+            '-vf',
+            `subtitles=${basename(srt)}:force_style='${style}'`,
+            '-c:v',
+            'libx264',
+            '-preset',
+            'medium',
+            '-crf',
+            '18',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'copy',
+            '-movflags',
+            '+faststart',
+            basename(partial),
+        ],
+        {cwd, stdout: 'pipe', stderr: 'pipe'},
+    )
     const stderr = new Response(proc.stderr).text()
-    if (await proc.exited !== 0) throw new Error(`ffmpeg could not burn the subtitles in:
+    if ((await proc.exited) !== 0)
+        throw new Error(`ffmpeg could not burn the subtitles in:
 ${await stderr}`)
     renameSync(partial, film)
 }
 
 /** The translation of every line that is not spoken in the subtitle language, one answer for the whole film. */
-export function subtitlePrompt(screenplay: Screenplay, language: string): { lines: { key: string, text: string }[], options: AskOptions } {
-    const lines = screenplay.scenes.flatMap(scene => dialogueOf(scene).flatMap((line, n) =>
-        line.type === 'dialogue' && (line.language ?? screenplay.language) !== language ? [{key: lineKey(scene.id, n), text: line.text, speaker: line.speaker}] : []))
+export function subtitlePrompt(screenplay: Screenplay, language: string): {lines: {key: string; text: string}[]; options: AskOptions} {
+    const lines = screenplay.scenes.flatMap(scene =>
+        dialogueOf(scene).flatMap((line, n) =>
+            line.type === 'dialogue' && (line.language ?? screenplay.language) !== language
+                ? [{key: lineKey(scene.id, n), text: line.text, speaker: line.speaker}]
+                : [],
+        ),
+    )
     return {
         lines,
         options: {
@@ -108,7 +170,8 @@ export function subtitlePrompt(screenplay: Screenplay, language: string): { line
             input: `Translate every line into ${languageName(language) ?? language}, for subtitles.
 Answer only with JSON: {"<key>": "<translation>", ...} - one entry per key.
 ${lines.map(l => `${l.key} (${l.speaker}): ${l.text}`).join('\n')}`,
-            instructions: 'You translate the dialogue of a film for subtitles: faithful, natural, short enough to read in two lines; names stay as they are. Answer only with the JSON.',
+            instructions:
+                'You translate the dialogue of a film for subtitles: faithful, natural, short enough to read in two lines; names stay as they are. Answer only with the JSON.',
         },
     }
 }

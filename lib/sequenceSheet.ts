@@ -4,13 +4,13 @@
 // into one multi-angle reference sheet - the file every clip actually references (see lib/render.ts
 // renderSequenceSheet). Ported from the predecessor project's fever-slop sequence-to-sheet pipeline, rebuilt on
 // ffmpeg instead of OpenCV/Pillow to stay within this project's stack.
-import {mkdirSync, renameSync} from "node:fs";
-import {dirname} from "node:path";
-import {formatTimestamp, FPS} from "./frames.ts";
-import {captureProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
+import {mkdirSync, renameSync} from 'node:fs'
+import {dirname} from 'node:path'
+import {formatTimestamp, FPS} from './frames.ts'
+import {captureProcess, SHORT_PROCESS_TIMEOUT_MS} from './process.ts'
 
-export const SEQUENCE_FRAMES = 124   // ~5.17s @ 24fps - matches the predecessor project's default
-const SHOT_SECONDS = 0.75            // spacing between beats, clamped to fit the render's duration
+export const SEQUENCE_FRAMES = 124 // ~5.17s @ 24fps - matches the predecessor project's default
+const SHOT_SECONDS = 0.75 // spacing between beats, clamped to fit the render's duration
 
 // the expression of the last beat is picked from these - each with its own facial description, so the
 // prompt never says one expression while describing another
@@ -39,7 +39,11 @@ function beatTimestamps(totalShots: number, frames: number): number[] {
  * other beat holds a neutral expression, so the character's identity/build/wardrobe stay the read - only the
  * final beat exists to give the reference sheet one non-neutral expression to draw on).
  */
-export function characterSequencePrompt(description: string, frames = SEQUENCE_FRAMES, expression = expressionFor(description)): { prompt: string, beatTimes: number[] } {
+export function characterSequencePrompt(
+    description: string,
+    frames = SEQUENCE_FRAMES,
+    expression = expressionFor(description),
+): {prompt: string; beatTimes: number[]} {
     const beatTimes = beatTimestamps(6, frames)
     const prompt = `Six distinct locked-off views joined by hard cuts. ${characterViews(description, beatTimes, 1, expression)} ${SHEET_BACKDROP} Clothing, hair, colours, proportions and every visible detail remain identical across every shot.`
     return {prompt, beatTimes}
@@ -54,7 +58,11 @@ export function characterSequencePrompt(description: string, frames = SEQUENCE_F
  * clothing of the first frame held everything else. The first beat is the lead-in: its frame is not part of the sheet
  * (lookSheetFrames).
  */
-export function characterLookSequencePrompt(change: string, frames = LOOK_SEQUENCE_FRAMES, expression = expressionFor(change)): { prompt: string, beatTimes: number[] } {
+export function characterLookSequencePrompt(
+    change: string,
+    frames = LOOK_SEQUENCE_FRAMES,
+    expression = expressionFor(change),
+): {prompt: string; beatTimes: number[]} {
     const beatTimes = beatTimestamps(7, frames)
     const person = 'the same person as in the first frame, in exactly the same clothing - every garment, sleeve, layer and length as there - with the change'
     const prompt = `Seven distinct locked-off shots joined by hard cuts. [Shot 1] The figure exactly as in the first frame, standing still, nothing about it changes in this shot. From the cut at ${formatTimestamp(beatTimes[1]!)} on, the same person with the same face, build, hair and clothing is changed, and only this is changed: ${change} ${characterViews(person, beatTimes.slice(1), 2, expression, `In this shot too, plainly visible: ${change}`)} ${SHEET_BACKDROP} The change stays in every shot after the first; the clothing is the clothing of the first frame, and hair, colours, proportions and every other visible detail remain identical across these shots.`
@@ -103,7 +111,7 @@ function characterViews(description: string, times: number[], first: number, exp
         `${cut(4)} a rear view of the full figure, the back of the body visible from head to toe with the same framing margin, the mouth closed and a still neutral expression.`,
         `${cut(5)} a medium close-up of the face and shoulders, still facing the camera, the expression now ${expression}: ${EXPRESSIONS[expression]}. Only the expression changes; the figure does not flinch, recoil, turn away or move.`,
     ]
-    return views.map(view => still ? `${view} ${still}` : view).join(' ')
+    return views.map(view => (still ? `${view} ${still}` : view)).join(' ')
 }
 
 // A sheet's files, in its folder - in a project at sequenceSheetDir, in a work folder or the library wherever that keeps it. With / also
@@ -140,10 +148,11 @@ export const LOCATION_VIEWS = [
  * of the first frame: each cut drew them anew (one work light, then two lamps, then a row of spots), and the clips copied
  * whichever view they got.
  */
-export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES, views?: string[]): { prompt: string, beatTimes: number[] } {
+export function locationSequencePrompt(description: string, frames = SEQUENCE_FRAMES, views?: string[]): {prompt: string; beatTimes: number[]} {
     const beatTimes = beatTimestamps(5, frames)
     if (views && views.length >= 4) {
-        const cut = (i: number) => `At ${formatTimestamp(beatTimes[i]!)}, the shot cuts to a new locked-off camera position: ${views[i - 1]!.replace(/[.\s]+$/, '')}.`
+        const cut = (i: number) =>
+            `At ${formatTimestamp(beatTimes[i]!)}, the shot cuts to a new locked-off camera position: ${views[i - 1]!.replace(/[.\s]+$/, '')}.`
         const designed = `Five distinct locked-off tripod views of the same empty location joined by hard cuts, with no camera movement inside any shot: ${description}. [Shot 1] A level, static front view of the location, matching the first frame. [Shot 2] ${cut(1)} [Shot 3] ${cut(2)} [Shot 4] ${cut(3)} [Shot 5] ${cut(4)} The camera never pans, tilts, dollies, orbits, zooms or drifts within a shot; each view is a still tripod frame and the change between views happens only at the cut. Architecture, materials, props, lighting, time of day and layout remain identical across every shot, and every view shows the part of the place that lies on that side. Every fixture of the first frame - each light source, door, window, piece of furniture and prop - keeps its number, its place and its look in every view that shows it: no lamp, light or object is added, doubled or dropped from one view to the next. No people, text, watermark or unrelated structures.`
         return {prompt: designed, beatTimes}
     }
@@ -167,7 +176,7 @@ export function selectFrameIndices(beatTimes: number[], totalFrames: number): nu
 }
 
 /** Grid layout for a reference sheet - character panels are portrait, location panels landscape. */
-export function sheetLayout(kind: 'character' | 'location'): { columns: number, panel: { width: number, height: number } } {
+export function sheetLayout(kind: 'character' | 'location'): {columns: number; panel: {width: number; height: number}} {
     return kind === 'character' ? {columns: 2, panel: {width: 288, height: 512}} : {columns: 3, panel: {width: 512, height: 288}}
 }
 
@@ -175,11 +184,14 @@ export function sheetLayout(kind: 'character' | 'location'): { columns: number, 
  * Composites the given frames into one grid image at `target`: each frame letterboxed (scaled to fit, padded with
  * black) into a `panel`-sized cell, `columns` wide, row-major. Pure ffmpeg (scale+pad+xstack) - no image library.
  */
-export async function composeSheet(framePaths: string[], target: string, panel: { width: number, height: number }, columns: number) {
+export async function composeSheet(framePaths: string[], target: string, panel: {width: number; height: number}, columns: number) {
     if (!framePaths.length) throw new Error('composeSheet: no frames to compose')
-    const scalePad = framePaths.map((_, i) =>
-        `[${i}:v]scale=${panel.width}:${panel.height}:force_original_aspect_ratio=decrease,pad=${panel.width}:${panel.height}:(ow-iw)/2:(oh-ih)/2:color=black[p${i}]`,
-    ).join(';')
+    const scalePad = framePaths
+        .map(
+            (_, i) =>
+                `[${i}:v]scale=${panel.width}:${panel.height}:force_original_aspect_ratio=decrease,pad=${panel.width}:${panel.height}:(ow-iw)/2:(oh-ih)/2:color=black[p${i}]`,
+        )
+        .join(';')
     const layout = framePaths.map((_, i) => `${(i % columns) * panel.width}_${Math.floor(i / columns) * panel.height}`).join('|')
     const stackInputs = framePaths.map((_, i) => `[p${i}]`).join('')
     const filter = `${scalePad};${stackInputs}xstack=inputs=${framePaths.length}:layout=${layout}:fill=black[out]`

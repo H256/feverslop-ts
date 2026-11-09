@@ -10,6 +10,6 @@ export const dateOf = (ms: number) => new Date(ms).toLocaleString(undefined, {da
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 /** The steps a change drops, in words. */
 export const listSteps = (steps: string[]) => steps.join(', ')
-export const errorText = (cause: unknown) => cause instanceof Error ? cause.message : String(cause)
+export const errorText = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 /** The words that are there, the empty ones left out. */
 export const joined = (parts: (string | false | undefined | null)[], by = ' · ') => parts.filter(Boolean).join(by)

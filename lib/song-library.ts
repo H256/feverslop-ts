@@ -8,32 +8,32 @@
 // A project always gets a copy: changing its timing changes no other project and not the library - put it in again as a
 // song of another id. A song in the library is never overwritten.
 
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync} from "node:fs";
-import {basename, extname, join} from "node:path";
-import type {ProjectConfig} from "./config.ts";
-import {projectInputs, songFileOf} from "./inputs.ts";
-import {writeJsonFile} from "./json-file.ts";
-import {fingerprintOf, type Project, ProjectStore, STEP_NAMES, type StepName, type Stems} from "./project.ts";
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync} from 'node:fs'
+import {basename, extname, join} from 'node:path'
+import type {ProjectConfig} from './config.ts'
+import {projectInputs, songFileOf} from './inputs.ts'
+import {writeJsonFile} from './json-file.ts'
+import {fingerprintOf, type Project, ProjectStore, STEP_NAMES, type StepName, type Stems} from './project.ts'
 
 /** The steps that are the song's own - built on nothing but the audio, the lyrics and their language. */
 export const SONG_STEPS = ['music', 'stems', 'transcript', 'lyricsTiming'] as const satisfies readonly StepName[]
 
 export type LibrarySong = {
-    id: string,
-    name: string,
-    created?: string,
+    id: string
+    name: string
+    created?: string
     // where it came from: the project it was put in from
-    source?: string,
+    source?: string
     // of the audio and of the lyrics (trimmed), as project.json keeps them in "inputs": a project with the same song finds it
-    fingerprints: { song: string, lyrics: string },
-    lyricsLanguage: string,
+    fingerprints: {song: string; lyrics: string}
+    lyricsLanguage: string
     // the audio, relative to the song's folder
-    songFile: string,
-    music: NonNullable<Project['music']>,
+    songFile: string
+    music: NonNullable<Project['music']>
     // relative to the song's folder, as in a project: stems/<name>.wav
-    stems: Stems,
-    transcript: NonNullable<Project['transcript']>,
-    lyricsTiming: NonNullable<Project['lyricsTiming']>,
+    stems: Stems
+    transcript: NonNullable<Project['transcript']>
+    lyricsTiming: NonNullable<Project['lyricsTiming']>
 }
 
 export const songFolder = (id: string) => join('songs', id)
@@ -42,13 +42,15 @@ export const songFolder = (id: string) => join('songs', id)
 export function librarySongIds(library: string): string[] {
     const folder = join(library, 'songs')
     if (!existsSync(folder)) return []
-    return readdirSync(folder).filter(id => existsSync(join(folder, id, 'song.json'))).sort()
+    return readdirSync(folder)
+        .filter(id => existsSync(join(folder, id, 'song.json')))
+        .sort()
 }
 
 export async function readLibrarySong(library: string, id: string): Promise<LibrarySong | undefined> {
     const file = join(library, songFolder(id), 'song.json')
     if (!existsSync(file)) return undefined
-    return {...await Bun.file(file).json() as LibrarySong, id}
+    return {...((await Bun.file(file).json()) as LibrarySong), id}
 }
 
 /** The fingerprints of a song file and its lyrics - the way project.json keeps them (lib/inputs.ts trims the lyrics). */
@@ -68,7 +70,8 @@ export async function songsLike(library: string, songFile: string, lyrics: strin
 /** Why a project's song cannot go into the library yet - undefined when it can. */
 export function songNotReady(dir: string, data: Project): string | undefined {
     const missing = SONG_STEPS.filter(step => data[step] === undefined)
-    if (missing.length) return `the song is not worked out yet (${missing.join(', ')}) - plan it first, at least up to the story: bun index.ts ${basename(dir)} --until=story`
+    if (missing.length)
+        return `the song is not worked out yet (${missing.join(', ')}) - plan it first, at least up to the story: bun index.ts ${basename(dir)} --until=story`
     const gone = Object.values(data.stems!).filter(file => !existsSync(join(dir, file)))
     if (gone.length) return `stems are gone: ${gone.join(', ')} - separate them again: bun index.ts ${basename(dir)} --redo=stems`
 }
@@ -78,7 +81,12 @@ export function songNotReady(dir: string, data: Project): string | undefined {
  * own step), and the steps worked out from them. Throws when the id is taken, or when the song or the lyrics changed since the
  * steps were made - the timing would belong to another song.
  */
-export async function exportSong(library: string, dir: string, data: Project, opts: { id: string, name: string, lyricsLanguage: string, source?: string }): Promise<{ song: LibrarySong, copied: number }> {
+export async function exportSong(
+    library: string,
+    dir: string,
+    data: Project,
+    opts: {id: string; name: string; lyricsLanguage: string; source?: string},
+): Promise<{song: LibrarySong; copied: number}> {
     const notReady = songNotReady(dir, data)
     if (notReady) throw new Error(notReady)
     const folder = join(library, songFolder(opts.id))
@@ -88,11 +96,18 @@ export async function exportSong(library: string, dir: string, data: Project, op
     const lyrics = existsSync(lyricsFile) ? await Bun.file(lyricsFile).text() : ''
     const fingerprints = await songFingerprints(songFile, lyrics)
     const inputs = data.inputs ?? {}
-    if (inputs['song.wav'] && inputs['song.wav'] !== fingerprints.song) throw new Error(`${songFile} changed since the song was analysed - plan it again first: bun index.ts ${basename(dir)}`)
-    if (inputs['lyrics.txt'] && inputs['lyrics.txt'] !== fingerprints.lyrics) throw new Error(`${lyricsFile} changed since the lyrics were timed - plan it again first: bun index.ts ${basename(dir)}`)
+    if (inputs['song.wav'] && inputs['song.wav'] !== fingerprints.song)
+        throw new Error(`${songFile} changed since the song was analysed - plan it again first: bun index.ts ${basename(dir)}`)
+    if (inputs['lyrics.txt'] && inputs['lyrics.txt'] !== fingerprints.lyrics)
+        throw new Error(`${lyricsFile} changed since the lyrics were timed - plan it again first: bun index.ts ${basename(dir)}`)
 
     // a project separated before every song got six stems keeps guitar and piano in a step of its own
-    const stems: Stems = {...data.stems!, ...Object.fromEntries(Object.entries(data.instrumentStems ?? {}).filter(([name, file]) => !data.stems![name as keyof Stems] && existsSync(join(dir, file!))))}
+    const stems: Stems = {
+        ...data.stems!,
+        ...Object.fromEntries(
+            Object.entries(data.instrumentStems ?? {}).filter(([name, file]) => !data.stems![name as keyof Stems] && existsSync(join(dir, file!))),
+        ),
+    }
     mkdirSync(join(folder, 'stems'), {recursive: true})
     const songName = `song${extname(songFile).toLowerCase()}`
     copyFileSync(songFile, join(folder, songName))
@@ -104,9 +119,17 @@ export async function exportSong(library: string, dir: string, data: Project, op
         kept[name as keyof Stems] = target
     }
     const song: LibrarySong = {
-        id: opts.id, name: opts.name, created: new Date().toISOString().slice(0, 10), ...(opts.source ? {source: opts.source} : {}),
-        fingerprints, lyricsLanguage: opts.lyricsLanguage, songFile: songName,
-        music: data.music!, stems: kept, transcript: data.transcript!, lyricsTiming: data.lyricsTiming!,
+        id: opts.id,
+        name: opts.name,
+        created: new Date().toISOString().slice(0, 10),
+        ...(opts.source ? {source: opts.source} : {}),
+        fingerprints,
+        lyricsLanguage: opts.lyricsLanguage,
+        songFile: songName,
+        music: data.music!,
+        stems: kept,
+        transcript: data.transcript!,
+        lyricsTiming: data.lyricsTiming!,
     }
     writeJsonFile(join(folder, 'song.json'), song)
     return {song, copied: 2 + Object.keys(stems).length}
@@ -144,15 +167,24 @@ export async function copySongFiles(library: string, song: LibrarySong, dir: str
 }
 
 /** The song's steps as a project keeps them: the stem paths are the same, relative to the project. */
-export const songSteps = (song: LibrarySong): Pick<Project, typeof SONG_STEPS[number]> =>
-    ({music: song.music, stems: song.stems, transcript: song.transcript, lyricsTiming: song.lyricsTiming})
+export const songSteps = (song: LibrarySong): Pick<Project, (typeof SONG_STEPS)[number]> => ({
+    music: song.music,
+    stems: song.stems,
+    transcript: song.transcript,
+    lyricsTiming: song.lyricsTiming,
+})
 
 /**
  * A library song into a project: its files (copySongFiles), then project.json as a plan run would leave it - a changed audio
  * or lyrics file redoes what is built on it (the story of other lyrics, ...), a song step that is not the library's goes with
  * all that is built on it, and the library's steps take their place. Returns the files put away and the steps that went.
  */
-export async function importSong(library: string, song: LibrarySong, store: ProjectStore, config: ProjectConfig): Promise<{ putAway: string[], redone: StepName[], settings: string[] }> {
+export async function importSong(
+    library: string,
+    song: LibrarySong,
+    store: ProjectStore,
+    config: ProjectConfig,
+): Promise<{putAway: string[]; redone: StepName[]; settings: string[]}> {
     const putAway = await copySongFiles(library, song, store.dir)
     const settings = songSettings(store.dir, song, config)
     await store.load()

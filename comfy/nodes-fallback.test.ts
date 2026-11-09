@@ -1,11 +1,11 @@
-import {describe, expect, test} from "bun:test";
-import {existsSync, readdirSync, readFileSync} from "node:fs";
-import {join} from "node:path";
-import {FALLBACK_NODES, FallbackWorkflowBuilder} from "./nodes-fallback.ts";
+import {describe, expect, test} from 'bun:test'
+import {existsSync, readdirSync, readFileSync} from 'node:fs'
+import {join} from 'node:path'
+import {FALLBACK_NODES, FallbackWorkflowBuilder} from './nodes-fallback.ts'
 
 const dir = import.meta.dir
 const generated = join(dir, 'nodes.ts')
-type Builder = Record<string, (inputs: object) => Record<string, unknown>> & { workflow: Record<string, { class_type: string }> }
+type Builder = Record<string, (inputs: object) => Record<string, unknown>> & {workflow: Record<string, {class_type: string}>}
 
 describe('the fallback for a missing comfy/nodes.ts', () => {
     test('knows every node our workflows use', () => {

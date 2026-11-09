@@ -1,4 +1,4 @@
-import {cli} from '../lib/cli.ts';
+import {cli} from '../lib/cli.ts'
 // The story of a music video (a film: its screenplay), as the workspace's Story page has it - CLI first (#548). Without an option
 // it is printed. --set replaces it by a text of your own, and what was planned from the old one goes. --adapt has the language model
 // tell it anew for the cast as it is now: a proposal (output/story-proposal.json), taken with --take or dropped with --drop.
@@ -7,26 +7,41 @@ import {cli} from '../lib/cli.ts';
 // anew for a role that comes or goes (#589) - a proposal (output/screenplay-proposal.json), taken or dropped as a story's. Only where
 // the pipeline wrote the screenplay (from input/idea.txt): a script of your own (input/screenplay.txt) is changed by you.
 // usage: bun run story <project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<id>] | --take | --drop | --rename="Mara Vey=Lena Rook"]
-import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
-import {dirname, join} from "node:path";
-import {parseArgs} from "node:util";
-import {loadProjectConfig} from "../lib/config.ts";
-import {ask, configureLlm} from "../lib/llm.ts";
-import {log, styles} from "../lib/log.ts";
-import type {Project} from "../lib/project.ts";
-import {adaptStoryPrompt} from "../lib/prompts.ts";
-import {loadSettings} from "../lib/settings.ts";
-import {commandTarget, dropStoryProposal, planCommand, readBook, stageOf, SCREENPLAY_PROPOSAL, STORY_PROPOSAL, type StoryProposal, storyFingerprint, writeScreenplayProposal, writeStory, writeStoryForCast} from "../lib/editor/preproduction.ts";
-import {askJson} from "../lib/llm.ts";
-import {loadFilmConfig} from "../lib/film/config.ts";
-import {type AddedRole, parseAddedRole} from "../lib/film/adapt.ts";
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs'
+import {dirname, join} from 'node:path'
+import {parseArgs} from 'node:util'
+import {loadProjectConfig} from '../lib/config.ts'
+import {ask, configureLlm} from '../lib/llm.ts'
+import {log, styles} from '../lib/log.ts'
+import type {Project} from '../lib/project.ts'
+import {adaptStoryPrompt} from '../lib/prompts.ts'
+import {loadSettings} from '../lib/settings.ts'
+import {
+    commandTarget,
+    dropStoryProposal,
+    planCommand,
+    readBook,
+    stageOf,
+    SCREENPLAY_PROPOSAL,
+    STORY_PROPOSAL,
+    type StoryProposal,
+    storyFingerprint,
+    writeScreenplayProposal,
+    writeStory,
+    writeStoryForCast,
+} from '../lib/editor/preproduction.ts'
+import {askJson} from '../lib/llm.ts'
+import {loadFilmConfig} from '../lib/film/config.ts'
+import {type AddedRole, parseAddedRole} from '../lib/film/adapt.ts'
 cli('story')
 
-const usage = 'usage: bun run story <project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<character id>] | --take | --drop | --rename="Old Name=New Name"]'
+const usage =
+    'usage: bun run story <project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<character id>] | --take | --drop | --rename="Old Name=New Name"]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
-            args: Bun.argv.slice(2), allowPositionals: true,
+            args: Bun.argv.slice(2),
+            allowPositionals: true,
             options: {
                 film: {type: 'boolean', default: false},
                 set: {type: 'string'},
@@ -48,14 +63,24 @@ if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>
 const changes = [args.set !== undefined, args.adapt, args.take, args.drop, !!args.rename?.length].filter(Boolean).length
 if (changes > 1) log.usageError('one of --set, --adapt, --take, --drop and --rename at a time', usage)
-if ((args.set !== undefined || args.rename?.length) && t.kind === 'film') log.usageError('a film\'s screenplay is changed in its script (input/) or in project.json (screenplay) - here it is printed, or told anew for a role with --adapt --add/--remove', usage)
-if ((args.add?.length || args.remove?.length) && !(args.adapt && t.kind === 'film')) log.usageError('--add and --remove go with --adapt, for a film (--film): the roles its screenplay is told anew for', usage)
-if (args.adapt && t.kind === 'film' && !args.add?.length && !args.remove?.length) log.usageError('a film\'s screenplay is told anew for a role that comes or goes: --add="Name: who they are" or --remove=<character id> (bun run cast <id> --film lists them)', usage)
+if ((args.set !== undefined || args.rename?.length) && t.kind === 'film')
+    log.usageError(
+        "a film's screenplay is changed in its script (input/) or in project.json (screenplay) - here it is printed, or told anew for a role with --adapt --add/--remove",
+        usage,
+    )
+if ((args.add?.length || args.remove?.length) && !(args.adapt && t.kind === 'film'))
+    log.usageError('--add and --remove go with --adapt, for a film (--film): the roles its screenplay is told anew for', usage)
+if (args.adapt && t.kind === 'film' && !args.add?.length && !args.remove?.length)
+    log.usageError(
+        'a film\'s screenplay is told anew for a role that comes or goes: --add="Name: who they are" or --remove=<character id> (bun run cast <id> --film lists them)',
+        usage,
+    )
 const proposalFile = t.kind === 'film' ? SCREENPLAY_PROPOSAL : STORY_PROPOSAL
 
-const dropped = (steps: string[]) => steps.length
-    ? log.step('Dropped', `${steps.join(', ')} ${styles.muted('- the next plan run makes them again, the language model only')}`)
-    : log.step('Dropped', styles.muted('nothing - nothing was planned from it yet'))
+const dropped = (steps: string[]) =>
+    steps.length
+        ? log.step('Dropped', `${steps.join(', ')} ${styles.muted('- the next plan run makes them again, the language model only')}`)
+        : log.step('Dropped', styles.muted('nothing - nothing was planned from it yet'))
 
 if (args.set !== undefined) {
     if (!existsSync(args.set)) log.usageError(`no file ${args.set}`, usage)
@@ -75,7 +100,12 @@ if (args.set !== undefined) {
     })
     const config = await loadFilmConfig(t.dir)
     configureLlm((await loadSettings({projectModel: config.llm.model})).llm)
-    log.step('Screenplay', styles.muted(`told anew${add.length ? ` with ${add.map(a => a.name).join(', ')}` : ''}${args.remove?.length ? ` without ${args.remove.join(', ')}` : ''}`))
+    log.step(
+        'Screenplay',
+        styles.muted(
+            `told anew${add.length ? ` with ${add.map(a => a.name).join(', ')}` : ''}${args.remove?.length ? ` without ${args.remove.join(', ')}` : ''}`,
+        ),
+    )
     let proposal
     try {
         proposal = await writeScreenplayProposal(t, {add, remove: args.remove ?? []}, askJson, problems => log.warn(`${problems.join('; ')} - asking again`))
@@ -92,7 +122,12 @@ if (args.set !== undefined) {
     if (!data.story || !data.cast) log.usageError(`no story and cast yet - plan up to the cast first: bun index.ts ${t.id} --until=cast`, usage)
     const config = await loadProjectConfig(t.dir)
     configureLlm((await loadSettings({projectModel: config.llm.model})).llm)
-    log.step('Story', styles.muted(`${data.story!.split(/\s+/).length} words, told anew for ${data.cast!.characters.length} character(s) and ${data.cast!.locations.length} place(s)`))
+    log.step(
+        'Story',
+        styles.muted(
+            `${data.story!.split(/\s+/).length} words, told anew for ${data.cast!.characters.length} character(s) and ${data.cast!.locations.length} place(s)`,
+        ),
+    )
     const story = (await ask(adaptStoryPrompt(data.story!, data.cast!))).trim()
     if (!story) throw new Error('the language model gave no story - run it again')
     const out = join(t.dir, STORY_PROPOSAL)
@@ -110,7 +145,11 @@ if (args.set !== undefined) {
     for (const line of result.remade ?? []) log.step('Written anew', `${line} ${styles.muted('- by the next plan run, everyone else keeps theirs')}`)
     dropped(result.dropped)
     log.next(planCommand(t, t.kind === 'film' ? was : 'story'))
-    log.success(t.kind === 'film' ? 'the new screenplay is taken - who stays keeps their looks, the look of the film and the places stay' : 'the new story is taken - the cast, the singers and the looks stay')
+    log.success(
+        t.kind === 'film'
+            ? 'the new screenplay is taken - who stays keeps their looks, the look of the film and the places stay'
+            : 'the new story is taken - the cast, the singers and the looks stay',
+    )
 } else if (args.drop) {
     dropStoryProposal(t)
     log.success('the proposal is dropped - the story stays as it is')
@@ -130,11 +169,18 @@ if (args.set !== undefined) {
 } else {
     // printed as it is, or written to a file to be changed and given back with --set
     const book = readBook(t)
-    if (book.text === undefined) log.usageError(`no ${t.kind === 'film' ? 'screenplay' : 'story'} yet - plan it: ${t.kind === 'film' ? 'bun film.ts' : 'bun index.ts'} ${t.id} --until=story`, usage)
+    if (book.text === undefined)
+        log.usageError(
+            `no ${t.kind === 'film' ? 'screenplay' : 'story'} yet - plan it: ${t.kind === 'film' ? 'bun film.ts' : 'bun index.ts'} ${t.id} --until=story`,
+            usage,
+        )
     if (args.out !== undefined) {
         writeFileSync(args.out, book.text!.trimEnd() + '\n')
         log.next(`change ${args.out}, then: bun run story ${t.id} --set=${args.out}`)
         log.success(`the ${t.kind === 'film' ? 'screenplay' : 'story'} is in ${args.out}`)
     } else log.info(book.text)
-    if (book.proposal) log.warn(`a ${t.kind === 'film' ? 'screenplay' : 'story'} told anew for the cast waits: bun run story ${t.id}${t.kind === 'film' ? ' --film' : ''} --take, or --drop (${proposalFile})`)
+    if (book.proposal)
+        log.warn(
+            `a ${t.kind === 'film' ? 'screenplay' : 'story'} told anew for the cast waits: bun run story ${t.id}${t.kind === 'film' ? ' --film' : ''} --take, or --drop (${proposalFile})`,
+        )
 }

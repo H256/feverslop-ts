@@ -1,31 +1,65 @@
-import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {writeJsonFile} from "../json-file.ts";
-import {dirname, join} from "node:path";
-import {toSlug} from "../slug.ts";
-import {CASTING_FILE, castingAfterCastChange, type CastEntry, copyKey, droppedCopies, libraryFingerprint, readCastingFile, resolveCasting} from "../casting.ts";
-import {libraryDir, libraryIds} from "../library.ts";
-import {withProjectLock} from "../lock.ts";
-import {dropPartials, KEPT_BY_HAND} from "../partials.ts";
-import {builtOn, type Character, type Location, type Project, redoAfter, STEP_NAMES, type StepName} from "../project.ts";
-import {filmStage, musicStage, type PlanStage, nextStage} from "../stages.ts";
-import {projectDir, projectExists, validProjectId} from "../project-setup.ts";
-import {filmDir, filmExists} from "../film/setup.ts";
-import {screenplayToText} from "../film/fountain.ts";
-import {FILM_STEP_NAMES, filmBuiltOn, filmRedoAfter, type FilmStepName} from "../film/store.ts";
-import type {FilmCharacter, FilmLocation, FilmProject} from "../film/types.ts";
-import {adaptInput, adaptProblems, adaptRefusal, castWith, checkRoleChange, droppedByProposal, outlineWith, readAdaptAnswer, type RoleChange, type ScreenplayProposal, screenplayFingerprint} from "../film/adapt.ts";
-import {adaptScreenplayPrompt} from "../film/prompts.ts";
-import type {AskOptions} from "../llm.ts";
-import type {EditorKind, EditorTarget} from "./project.ts";
-import type {CastingRedo, CastMember, CastView, CastChange, CastResult, BookView, LookElement, LookView, LookChange, LookResult} from '../../shared/workspace.ts';
-export type {CastingRedo, CastMember, CastView, CastChange, CastResult, BookView, LookElement, LookView, LookChange, LookResult} from '../../shared/workspace.ts';
+import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {writeJsonFile} from '../json-file.ts'
+import {dirname, join} from 'node:path'
+import {toSlug} from '../slug.ts'
+import {CASTING_FILE, castingAfterCastChange, type CastEntry, copyKey, droppedCopies, libraryFingerprint, readCastingFile, resolveCasting} from '../casting.ts'
+import {libraryDir, libraryIds} from '../library.ts'
+import {withProjectLock} from '../lock.ts'
+import {dropPartials, KEPT_BY_HAND} from '../partials.ts'
+import {builtOn, type Character, type Location, type Project, redoAfter, STEP_NAMES, type StepName} from '../project.ts'
+import {filmStage, musicStage, type PlanStage, nextStage} from '../stages.ts'
+import {projectDir, projectExists, validProjectId} from '../project-setup.ts'
+import {filmDir, filmExists} from '../film/setup.ts'
+import {screenplayToText} from '../film/fountain.ts'
+import {FILM_STEP_NAMES, filmBuiltOn, filmRedoAfter, type FilmStepName} from '../film/store.ts'
+import type {FilmCharacter, FilmLocation, FilmProject} from '../film/types.ts'
+import {
+    adaptInput,
+    adaptProblems,
+    adaptRefusal,
+    castWith,
+    checkRoleChange,
+    droppedByProposal,
+    outlineWith,
+    readAdaptAnswer,
+    type RoleChange,
+    type ScreenplayProposal,
+    screenplayFingerprint,
+} from '../film/adapt.ts'
+import {adaptScreenplayPrompt} from '../film/prompts.ts'
+import type {AskOptions} from '../llm.ts'
+import type {EditorKind, EditorTarget} from './project.ts'
+import type {
+    CastingRedo,
+    CastMember,
+    CastView,
+    CastChange,
+    CastResult,
+    BookView,
+    LookElement,
+    LookView,
+    LookChange,
+    LookResult,
+} from '../../shared/workspace.ts'
+export type {
+    CastingRedo,
+    CastMember,
+    CastView,
+    CastChange,
+    CastResult,
+    BookView,
+    LookElement,
+    LookView,
+    LookChange,
+    LookResult,
+} from '../../shared/workspace.ts'
 
 // The preproduction in the workspace (issue #526): the book, the cast and the look are looked at and changed before the shots
 // are planned and long before anything is rendered. What is changed here is put into project.json as the pipeline would have
 // written it, and every step built on it goes - the next plan run makes those again from it (the language model only). Nothing
 // is rendered: pictures and clips made before stay, and are stale once the plan has new prompts for them.
 
-const readJson = <T>(file: string): T | undefined => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as T : undefined
+const readJson = <T>(file: string): T | undefined => (existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as T) : undefined)
 type Data = Project | FilmProject
 
 const dataOf = (target: EditorTarget): Data => readJson<Data>(join(target.dir, 'project.json')) ?? {}
@@ -36,10 +70,10 @@ function save(target: EditorTarget, data: Data) {
 }
 
 /** The steps of this kind of project, in the order of the pipeline - what a --redo from the page may name. */
-export const stepNamesOf = (kind: EditorKind): readonly string[] => kind === 'film' ? FILM_STEP_NAMES : STEP_NAMES
+export const stepNamesOf = (kind: EditorKind): readonly string[] => (kind === 'film' ? FILM_STEP_NAMES : STEP_NAMES)
 
 /** How far the plan of a project is: the last stage it has, and the one a plan run makes next. */
-export function planStateOf(kind: EditorKind, data: Data): { stage?: PlanStage, next?: PlanStage } {
+export function planStateOf(kind: EditorKind, data: Data): {stage?: PlanStage; next?: PlanStage} {
     const stage = kind === 'film' ? filmStage(data as FilmProject) : musicStage(data as Project)
     return {stage, next: nextStage(stage)}
 }
@@ -50,9 +84,15 @@ export const stageOf = (target: EditorTarget): PlanStage | undefined => planStat
 ////////// A CHANGED casting.json - what the next plan run has to make again (issue #527)
 
 // the steps a library asset stands in for: its texts replace theirs in the run (index.ts castTexts, film.ts fromLibrary)
-const MUSIC_LIBRARY_STEPS: StepName[] = ['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions', 'locationAnchors', 'locationLayouts']
+const MUSIC_LIBRARY_STEPS: StepName[] = [
+    'characterLooks',
+    'characterDescriptions',
+    'locationLooks',
+    'locationDescriptions',
+    'locationAnchors',
+    'locationLayouts',
+]
 const FILM_LIBRARY_STEPS: FilmStepName[] = ['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions']
-
 
 /**
  * What a plan run would take over from casting.json that the project does not have yet - a role the library plays now (or in
@@ -61,7 +101,7 @@ const FILM_LIBRARY_STEPS: FilmStepName[] = ['characterLooks', 'characterDescript
  */
 export async function castingRedo(target: EditorTarget): Promise<CastingRedo> {
     const data = dataOf(target)
-    const raw = data.cast as { characters: { id: string, name: string, voiceOnly?: boolean }[], locations: { id: string, name: string }[] } | undefined
+    const raw = data.cast as {characters: {id: string; name: string; voiceOnly?: boolean}[]; locations: {id: string; name: string}[]} | undefined
     if (!raw) return {changes: [], redo: []}
     const cast = {characters: raw.characters.filter(c => !c.voiceOnly), locations: raw.locations}
     const library = await libraryDir()
@@ -69,7 +109,7 @@ export async function castingRedo(target: EditorTarget): Promise<CastingRedo> {
     try {
         resolved = resolveCasting(readCastingFile(target.dir), cast, (kind, id) => libraryIds(library, kind).includes(id))
     } catch {
-        return {changes: [], redo: []}      // a broken casting.json: the casting page says so, and the run stops on it
+        return {changes: [], redo: []} // a broken casting.json: the casting page says so, and the run stops on it
     }
     if (resolved.errors.length) return {changes: [], redo: []}
     return castingRedoOf(target.kind, data, resolved.entries, entry => libraryFingerprint(library, entry.kind, entry.libraryId))
@@ -88,9 +128,7 @@ export function castingRedoOf(kind: EditorKind, data: Data, entries: CastEntry[]
         ...dropped.map(([, id]) => `${id} is made by the project again`),
     ]
     if (!changes.length) return {changes, redo: []}
-    const redo = new Set<string>(kind === 'film'
-        ? filmRedoAfter(FILM_LIBRARY_STEPS, data as FilmProject)
-        : redoAfter(MUSIC_LIBRARY_STEPS, data as Project))
+    const redo = new Set<string>(kind === 'film' ? filmRedoAfter(FILM_LIBRARY_STEPS, data as FilmProject) : redoAfter(MUSIC_LIBRARY_STEPS, data as Project))
     // a role back to "project:" still has the library's texts: its look is made anew, and with it everything after
     for (const [kind] of dropped) {
         const look = kind === 'character' ? 'characterLooks' : 'locationLooks'
@@ -115,7 +153,8 @@ const cleanText = (value: unknown, what: string, max = 2000): string => {
     if (text.length > max) throw new Error(`${what} is longer than ${max} characters`)
     return text
 }
-const optionalText = (value: unknown, what: string) => value === undefined || value === null || (typeof value === 'string' && !value.trim()) ? undefined : cleanText(value, what)
+const optionalText = (value: unknown, what: string) =>
+    value === undefined || value === null || (typeof value === 'string' && !value.trim()) ? undefined : cleanText(value, what)
 
 /** A new id from a name, as the cast step makes them: lowercase, dashes, a number when it is taken. */
 function newId(name: string, taken: Set<string>, fallback: string) {
@@ -142,7 +181,10 @@ export function castView(kind: EditorKind, data: Data): CastView | undefined {
         return {
             characters: cast.characters.map(c => ({id: c.id, name: c.name, role: c.role, appearance: c.appearance, voice: c.voice, voiceOnly: c.voiceOnly})),
             locations: cast.locations.map(l => ({id: l.id, name: l.name, description: l.description})),
-            canAdd: false, builtOn: filmBuiltOn(['cast'], data as FilmProject), remakes: [], stage,
+            canAdd: false,
+            builtOn: filmBuiltOn(['cast'], data as FilmProject),
+            remakes: [],
+            stage,
             // who is in it is the script's: a role comes or goes with the screenplay told anew - where the pipeline wrote it (#589)
             adapt: {refused: adaptRefusal(data as FilmProject), dropped: droppedByProposal(data as FilmProject)},
         }
@@ -151,7 +193,8 @@ export function castView(kind: EditorKind, data: Data): CastView | undefined {
     return {
         characters: cast.characters.map(c => ({id: c.id, name: c.name, role: c.role, prop: c.prop, group: c.isGroup})),
         locations: cast.locations.map(l => ({id: l.id, name: l.name})),
-        canAdd: true, stage,
+        canAdd: true,
+        stage,
         builtOn: droppedByCast(kind, data, data).filter(step => !isElementStep(kind, step)),
         remakes: droppedByCast(kind, data, data).filter(step => isElementStep(kind, step)),
     }
@@ -184,7 +227,8 @@ function musicCast(cast: NonNullable<Project['cast']>, change: CastChange): NonN
             for (const key of ['propStem', 'propCarried', 'propInHand', 'propPlace'] as const) delete character[key]
         }
         // the place its prop stands in is gone: it carries the prop
-        if (character.propPlace && !locations.some(l => l.id === character.propPlace)) for (const key of ['propCarried', 'propInHand', 'propPlace'] as const) delete character[key]
+        if (character.propPlace && !locations.some(l => l.id === character.propPlace))
+            for (const key of ['propCarried', 'propInHand', 'propPlace'] as const) delete character[key]
         return character
     })
     const ids = new Set<string>()
@@ -197,13 +241,15 @@ function musicCast(cast: NonNullable<Project['cast']>, change: CastChange): NonN
 
 /** The new cast of a film: the script says who is in it - names and texts change, nobody comes or goes. */
 function filmCast(cast: NonNullable<FilmProject['cast']>, change: CastChange): NonNullable<FilmProject['cast']> {
-    const same = (wanted: { id?: string }[], have: { id: string }[]) => wanted.length === have.length && have.every(h => wanted.some(w => w.id === h.id))
-    if (!same(change.characters, cast.characters) || !same(change.locations, cast.locations)) throw new Error('the script says who is in a film and where it is: change it there - here the names and texts change')
+    const same = (wanted: {id?: string}[], have: {id: string}[]) => wanted.length === have.length && have.every(h => wanted.some(w => w.id === h.id))
+    if (!same(change.characters, cast.characters) || !same(change.locations, cast.locations))
+        throw new Error('the script says who is in a film and where it is: change it there - here the names and texts change')
     const characters: FilmCharacter[] = cast.characters.map(old => {
         const wanted = change.characters.find(c => c.id === old.id)!
         const name = cleanText(wanted.name, `the name of ${old.id}`, 200)
         return {
-            ...old, name,
+            ...old,
+            name,
             role: cleanText(wanted.role ?? '', `the role of ${name}`),
             appearance: old.voiceOnly ? old.appearance : cleanText(wanted.appearance ?? '', `what ${name} looks like`),
             voice: cleanText(wanted.voice ?? '', `the voice of ${name}`),
@@ -232,7 +278,7 @@ function drop(data: Data, steps: string[]) {
 
 type ElementKind = 'character' | 'location'
 // per pipeline: the steps with one answer per character or place, and which of them are written from which (same element)
-const ELEMENT_STEPS: Record<EditorKind, Record<string, { kind: ElementKind, then: string[] }>> = {
+const ELEMENT_STEPS: Record<EditorKind, Record<string, {kind: ElementKind; then: string[]}>> = {
     music: {
         characterLooks: {kind: 'character', then: ['characterDescriptions']},
         characterDescriptions: {kind: 'character', then: []},
@@ -264,7 +310,7 @@ function remake(data: Data, step: string, ids: string[]) {
     dropPartials(data, step)
     const kept = Object.entries(values).filter(([key]) => !ids.some(id => ofElement(key, id)))
     if (!kept.length) return
-    const partials = data.partials ??= {}
+    const partials = (data.partials ??= {})
     partials[step] = Object.fromEntries(kept.map(([key, value]) => [key, {fingerprint: KEPT_BY_HAND, value}]))
 }
 
@@ -293,15 +339,15 @@ export function applyCast(kind: EditorKind, data: Data, change: CastChange): Cas
     const before = structuredClone(data)
     const next = kind === 'film' ? filmCast((data as FilmProject).cast!, change) : musicCast((data as Project).cast!, change)
     if (JSON.stringify(next) === JSON.stringify(data.cast)) return {changed: false, dropped: [], remade: [], added: [], removed: [], renamed: []}
-    const ids = (cast: { characters: { id: string }[], locations: { id: string }[] }) => [...cast.characters, ...cast.locations].map(m => m.id)
+    const ids = (cast: {characters: {id: string}[]; locations: {id: string}[]}) => [...cast.characters, ...cast.locations].map(m => m.id)
     const added = ids(next).filter(id => !ids(data.cast!).includes(id))
     const removed = ids(data.cast!).filter(id => !ids(next).includes(id))
-    const members = (cast: { characters: { id: string, name: string }[], locations: { id: string, name: string }[] }) => [...cast.characters, ...cast.locations]
+    const members = (cast: {characters: {id: string; name: string}[]; locations: {id: string; name: string}[]}) => [...cast.characters, ...cast.locations]
     const renamed = members(next).flatMap(m => {
         const was = members(data.cast!).find(o => o.id === m.id)
         return was && was.name !== m.name ? [{from: was.name, to: m.name}] : []
     })
-    ;(data as { cast: unknown }).cast = next
+    ;(data as {cast: unknown}).cast = next
     const builtOnCast = droppedByCast(kind, before, data)
     if (kind === 'film') {
         // a film's summary is written from its cast, and the look and every look from the summary: all of it goes
@@ -309,7 +355,8 @@ export function applyCast(kind: EditorKind, data: Data, change: CastChange): Cas
         return {changed: true, dropped: builtOnCast, remade: [], added, removed, renamed}
     }
     // a music video: the looks of whoever is new or changed are written again, the others stay as they are
-    const changedIn = <T extends { id: string }>(was: T[], now: T[]) => now.filter(m => JSON.stringify(m) !== JSON.stringify(was.find(w => w.id === m.id))).map(m => m.id)
+    const changedIn = <T extends {id: string}>(was: T[], now: T[]) =>
+        now.filter(m => JSON.stringify(m) !== JSON.stringify(was.find(w => w.id === m.id))).map(m => m.id)
     const oldCast = (before as Project).cast!
     const changedCharacters = changedIn(oldCast.characters, next.characters as Character[])
     const changedLocations = changedIn(oldCast.locations, next.locations as Location[])
@@ -317,8 +364,18 @@ export function applyCast(kind: EditorKind, data: Data, change: CastChange): Cas
     const dropped = builtOnCast.filter(step => !isElementStep(kind, step))
     drop(data, dropped)
     const remade = [
-        ...remakeElements(kind, data, elementSteps.filter(s => ELEMENT_STEPS.music[s]!.kind === 'character'), changedCharacters).map(step => `${step}: ${changedCharacters.join(', ')}`),
-        ...remakeElements(kind, data, elementSteps.filter(s => ELEMENT_STEPS.music[s]!.kind === 'location'), changedLocations).map(step => `${step}: ${changedLocations.join(', ')}`),
+        ...remakeElements(
+            kind,
+            data,
+            elementSteps.filter(s => ELEMENT_STEPS.music[s]!.kind === 'character'),
+            changedCharacters,
+        ).map(step => `${step}: ${changedCharacters.join(', ')}`),
+        ...remakeElements(
+            kind,
+            data,
+            elementSteps.filter(s => ELEMENT_STEPS.music[s]!.kind === 'location'),
+            changedLocations,
+        ).map(step => `${step}: ${changedLocations.join(', ')}`),
     ].filter(line => !line.endsWith(': '))
     return {changed: true, dropped, remade, added, removed, renamed}
 }
@@ -345,7 +402,6 @@ export async function writeCast(target: EditorTarget, change: CastChange): Promi
 
 ////////// THE BOOK - the story of a music video, the screenplay of a film
 
-
 export function bookView(kind: EditorKind, data: Data): BookView {
     const state = planStateOf(kind, data)
     if (kind === 'film') {
@@ -364,13 +420,14 @@ export function readBook(target: EditorTarget): BookView {
     if (!proposal) return view
     const cast = (data as FilmProject).cast!
     return {
-        ...view, proposal: screenplayToText(proposal.screenplay),
+        ...view,
+        proposal: screenplayToText(proposal.screenplay),
         proposalCast: {added: proposal.added.map(c => c.name), removed: proposal.removed.map(id => cast.characters.find(c => c.id === id)?.name ?? id)},
     }
 }
 
 /** A music video's story as written on the page, in place: every step built on the old one goes. */
-export function applyStory(data: Project, text: unknown): { changed: boolean, dropped: string[] } {
+export function applyStory(data: Project, text: unknown): {changed: boolean; dropped: string[]} {
     if (data.story === undefined) throw new Error('no story yet - plan up to the story first')
     if (typeof text !== 'string' || !text.trim()) throw new Error('the story is empty')
     const story = text.replace(/\r\n/g, '\n').trim()
@@ -381,8 +438,8 @@ export function applyStory(data: Project, text: unknown): { changed: boolean, dr
     return {changed: true, dropped}
 }
 
-export async function writeStory(target: EditorTarget, text: unknown): Promise<{ changed: boolean, dropped: string[] }> {
-    if (target.kind !== 'music') throw new Error('a film\'s screenplay is changed in its script (input/) or in project.json')
+export async function writeStory(target: EditorTarget, text: unknown): Promise<{changed: boolean; dropped: string[]}> {
+    if (target.kind !== 'music') throw new Error("a film's screenplay is changed in its script (input/) or in project.json")
     return withProjectLock(target.dir, target.id, () => {
         const data = readJson<Project>(join(target.dir, 'project.json'))
         if (!data) throw new Error('no project.json yet - plan up to the story first')
@@ -406,30 +463,45 @@ const LOOK_FIELDS: Record<EditorKind, Record<ElementKind, Partial<Record<LookFie
         location: {look: 'locationLooks', description: 'locationDescriptions'},
     },
 }
-const builtOnOf = (kind: EditorKind, steps: string[], data: Data) => kind === 'film' ? filmBuiltOn(steps as FilmStepName[], data as FilmProject) : builtOn(steps as StepName[], data as Project)
+const builtOnOf = (kind: EditorKind, steps: string[], data: Data) =>
+    kind === 'film' ? filmBuiltOn(steps as FilmStepName[], data as FilmProject) : builtOn(steps as StepName[], data as Project)
 const elementStepsOf = (kind: EditorKind) => Object.keys(ELEMENT_STEPS[kind])
 
 /** The elements of the look: every character (a film's other looks of a character too) and every place, with their texts. */
-function lookElements(kind: EditorKind, data: Data): { characters: LookElement[], locations: LookElement[] } {
+function lookElements(kind: EditorKind, data: Data): {characters: LookElement[]; locations: LookElement[]} {
     const record = data as Record<string, unknown>
     const text = (step: string | undefined, key: string): string | undefined => {
         const value = step ? (record[step] as Record<string, unknown> | undefined)?.[key] : undefined
-        return typeof value === 'string' ? value : value && typeof value === 'object' && 'layout' in value ? String((value as { layout: unknown }).layout) : undefined
+        return typeof value === 'string'
+            ? value
+            : value && typeof value === 'object' && 'layout' in value
+              ? String((value as {layout: unknown}).layout)
+              : undefined
     }
     const copies = data.castingCopies ?? {}
     const element = (elementKind: ElementKind, key: string, id: string, name: string): LookElement => {
         const fields = LOOK_FIELDS[kind][elementKind]
         return {
-            kind: elementKind, id: key, name, library: copies[copyKey(elementKind, id)]?.library,
-            look: text(fields.look, key), description: text(fields.description, key), anchors: text(fields.anchors, key), layout: text(fields.layout, key),
+            kind: elementKind,
+            id: key,
+            name,
+            library: copies[copyKey(elementKind, id)]?.library,
+            look: text(fields.look, key),
+            description: text(fields.description, key),
+            anchors: text(fields.anchors, key),
+            layout: text(fields.layout, key),
         }
     }
-    const cast = data.cast as { characters: { id: string, name: string, voiceOnly?: boolean, states?: { id: string, name: string }[] }[], locations: { id: string, name: string }[] } | undefined
+    const cast = data.cast as
+        | {characters: {id: string; name: string; voiceOnly?: boolean; states?: {id: string; name: string}[]}[]; locations: {id: string; name: string}[]}
+        | undefined
     return {
-        characters: (cast?.characters ?? []).filter(c => !c.voiceOnly).flatMap(c => [
-            element('character', c.id, c.id, c.name),
-            ...(c.states ?? []).map(s => element('character', `${c.id}--${s.id}`, c.id, `${c.name} (${s.name})`)),
-        ]),
+        characters: (cast?.characters ?? [])
+            .filter(c => !c.voiceOnly)
+            .flatMap(c => [
+                element('character', c.id, c.id, c.name),
+                ...(c.states ?? []).map(s => element('character', `${c.id}--${s.id}`, c.id, `${c.name} (${s.name})`)),
+            ]),
         locations: (cast?.locations ?? []).map(l => element('location', l.id, l.id, l.name)),
     }
 }
@@ -469,8 +541,8 @@ export function applyLook(kind: EditorKind, data: Data, change: LookChange): Loo
     }
     const {characters, locations} = lookElements(kind, data)
     const known = (elementKind: ElementKind, id: string) => (elementKind === 'character' ? characters : locations).find(e => e.id === id)
-    const edited = new Map<string, Set<string>>()      // step -> the elements changed by hand
-    const again = new Map<string, Set<string>>()       // step -> the elements written anew
+    const edited = new Map<string, Set<string>>() // step -> the elements changed by hand
+    const again = new Map<string, Set<string>>() // step -> the elements written anew
     const add = (map: Map<string, Set<string>>, step: string, id: string) => map.set(step, (map.get(step) ?? new Set()).add(id))
     for (const wanted of change.elements ?? []) {
         const element = known(wanted.kind, wanted.id)
@@ -478,13 +550,13 @@ export function applyLook(kind: EditorKind, data: Data, change: LookChange): Loo
         for (const field of ['look', 'description', 'anchors', 'layout'] as const) {
             if (wanted[field] === undefined) continue
             const step = LOOK_FIELDS[kind][wanted.kind][field]
-            const values = step ? record[step] as Record<string, unknown> | undefined : undefined
+            const values = step ? (record[step] as Record<string, unknown> | undefined) : undefined
             if (!step || !values || element[field] === undefined) throw new Error(`${element.name} has no ${field} to change`)
             const value = cleanText(wanted[field], `the ${field} of ${element.name}`, 8000)
             // a whole look given back (bun run look --set) has every text: only a changed one counts
             if (sameText(value, element[field]!)) continue
             if (element.library) throw new Error(`${element.name} is played by library:${element.library} - its texts are the library's`)
-            values[wanted.id] = field === 'layout' ? {...values[wanted.id] as object, layout: value} : value
+            values[wanted.id] = field === 'layout' ? {...(values[wanted.id] as object), layout: value} : value
             add(edited, step, wanted.id)
         }
     }
@@ -527,7 +599,7 @@ export async function writeLook(target: EditorTarget, change: LookChange): Promi
 
 // a story written anew for the cast by the language model (bun run story --adapt, tools/story.ts) waits here until it is taken or dropped
 export const STORY_PROPOSAL = join('output', 'story-proposal.json')
-export type StoryProposal = { story: string, for: string }      // for: the story it was written from - another one now: it is gone
+export type StoryProposal = {story: string; for: string} // for: the story it was written from - another one now: it is gone
 export const storyFingerprint = (story: string) => Bun.hash(story.trim()).toString(16)
 
 /** The proposal for this story, if there is one written from it. */
@@ -537,23 +609,29 @@ export function storyProposal(dir: string, story: string | undefined): string | 
 }
 
 /** The steps a story told anew for the same cast drops: the summary and what is planned from the beats on - the cast, who sings and the looks stay. */
-const droppedKeepingCast = (data: Project) => ['summary', 'beats', ...builtOn(['beats'], data)].filter(step => (data as Record<string, unknown>)[step] !== undefined)
+const droppedKeepingCast = (data: Project) =>
+    ['summary', 'beats', ...builtOn(['beats'], data)].filter(step => (data as Record<string, unknown>)[step] !== undefined)
 
 /** A name in the story replaced by another, as a whole word: the full name, then each of its words that changed ("Vey" by "Rook"). */
-export function renameInStory(story: string, renamed: { from: string, to: string }[]): string {
+export function renameInStory(story: string, renamed: {from: string; to: string}[]): string {
     const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const replace = (text: string, from: string, to: string) => from && from !== to ? text.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(from)}(?![\\p{L}\\p{N}])`, 'gu'), to) : text
+    const replace = (text: string, from: string, to: string) =>
+        from && from !== to ? text.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(from)}(?![\\p{L}\\p{N}])`, 'gu'), to) : text
     let result = story
     for (const {from, to} of renamed) {
         result = replace(result, from, to)
-        const was = from.split(/\s+/), now = to.split(/\s+/)
-        if (was.length === now.length) was.forEach((word, i) => { result = replace(result, word, now[i]!) })
+        const was = from.split(/\s+/),
+            now = to.split(/\s+/)
+        if (was.length === now.length)
+            was.forEach((word, i) => {
+                result = replace(result, word, now[i]!)
+            })
     }
     return result
 }
 
 /** A music video's story told anew for the cast it has: the text set, the summary and the plan from the beats on gone. */
-export function applyStoryKeepingCast(data: Project, text: unknown): { changed: boolean, dropped: string[] } {
+export function applyStoryKeepingCast(data: Project, text: unknown): {changed: boolean; dropped: string[]} {
     if (data.story === undefined || !data.cast) throw new Error('no story and cast yet')
     if (typeof text !== 'string' || !text.trim()) throw new Error('the story is empty')
     const story = text.replace(/\r\n/g, '\n').trim()
@@ -565,9 +643,12 @@ export function applyStoryKeepingCast(data: Project, text: unknown): { changed: 
 }
 
 /** The story with the cast as it is now: by a proposal of the language model (taken here), or by the names that changed. A film: its screenplay told anew for a role added or taken out. */
-export async function writeStoryForCast(target: EditorTarget, how: { proposal?: boolean, renamed?: { from: string, to: string }[] }): Promise<{ changed: boolean, dropped: string[], remade?: string[], added?: string[], removed?: string[] }> {
+export async function writeStoryForCast(
+    target: EditorTarget,
+    how: {proposal?: boolean; renamed?: {from: string; to: string}[]},
+): Promise<{changed: boolean; dropped: string[]; remade?: string[]; added?: string[]; removed?: string[]}> {
     if (target.kind === 'film') {
-        if (!how.proposal) throw new Error('a film\'s names are changed on the Casting page (bun run cast --film), its roles with a screenplay told anew')
+        if (!how.proposal) throw new Error("a film's names are changed on the Casting page (bun run cast --film), its roles with a screenplay told anew")
         return takeScreenplayProposal(target)
     }
     return withProjectLock(target.dir, target.id, () => {
@@ -582,7 +663,8 @@ export async function writeStoryForCast(target: EditorTarget, how: { proposal?: 
     })
 }
 
-export const dropStoryProposal = (target: EditorTarget) => rmSync(join(target.dir, target.kind === 'film' ? SCREENPLAY_PROPOSAL : STORY_PROPOSAL), {force: true})
+export const dropStoryProposal = (target: EditorTarget) =>
+    rmSync(join(target.dir, target.kind === 'film' ? SCREENPLAY_PROPOSAL : STORY_PROPOSAL), {force: true})
 
 ////////// A FILM'S ROLE ADDED OR TAKEN OUT - its screenplay told anew for the changed cast, where the pipeline wrote it (#589, lib/film/adapt.ts)
 
@@ -598,8 +680,13 @@ export function screenplayProposal(dir: string, data: FilmProject): ScreenplayPr
  * The screenplay told anew by the language model for the role change: asked again once with what was wrong, then kept as a proposal
  * next to the screenplay - nothing of the film changes. `ask` gives the language model's JSON answer (askJson, configured by the caller).
  */
-export async function writeScreenplayProposal(target: EditorTarget, change: RoleChange, ask: (options: AskOptions) => Promise<unknown>, tell: (problems: string[]) => void = () => {}): Promise<ScreenplayProposal> {
-    if (target.kind !== 'film') throw new Error('a music video\'s story is told anew with bun run story --adapt')
+export async function writeScreenplayProposal(
+    target: EditorTarget,
+    change: RoleChange,
+    ask: (options: AskOptions) => Promise<unknown>,
+    tell: (problems: string[]) => void = () => {},
+): Promise<ScreenplayProposal> {
+    if (target.kind !== 'film') throw new Error("a music video's story is told anew with bun run story --adapt")
     const data = dataOf(target) as FilmProject
     const refused = adaptRefusal(data)
     if (refused) throw new Error(refused)
@@ -632,7 +719,10 @@ export async function writeScreenplayProposal(target: EditorTarget, change: Role
  * the id, and with it the looks - the looks of the new ones are written by the next run), the idea's outline with the same cast, and
  * what is read from the script gone. The look of the whole film and the places stay.
  */
-export function applyScreenplayProposal(data: FilmProject, proposal: ScreenplayProposal): { changed: boolean, dropped: string[], remade: string[], added: string[], removed: string[] } {
+export function applyScreenplayProposal(
+    data: FilmProject,
+    proposal: ScreenplayProposal,
+): {changed: boolean; dropped: string[]; remade: string[]; added: string[]; removed: string[]} {
     if (!data.cast || !data.screenplay) throw new Error('no screenplay and cast yet')
     const removedCharacters = data.cast.characters.filter(c => proposal.removed.includes(c.id))
     const {cast, added} = castWith(data.cast, proposal)
@@ -641,7 +731,7 @@ export function applyScreenplayProposal(data: FilmProject, proposal: ScreenplayP
     data.cast = cast
     if (data.outline) data.outline = outlineWith(data.outline, removedCharacters, proposal.added)
     // the idea still tells of the cast before: the script notes read the script against it knowing what changed
-    data.roleChanges = [...data.roleChanges ?? [], {added: proposal.added.map(({name, role}) => ({name, role})), removed: removedCharacters.map(c => c.name)}]
+    data.roleChanges = [...(data.roleChanges ?? []), {added: proposal.added.map(({name, role}) => ({name, role})), removed: removedCharacters.map(c => c.name)}]
     drop(data, dropped)
     // the looks: everyone who stays keeps theirs (kept by hand), who went is out, who came is asked for by the next run
     const looks = (['characterLooks', 'characterDescriptions'] as const).filter(step => data[step] !== undefined)
@@ -690,11 +780,11 @@ export function planCommand(target: EditorTarget, change: PlanStage, redo: strin
 ////////// WHERE THE PREPRODUCTION STANDS - for bun run status and the workspace alike
 
 export type Preproduction = {
-    stage?: PlanStage,          // the last stage the plan has
-    next?: PlanStage,           // the one a plan run makes next
-    casting: CastingRedo,       // what casting.json says that the project does not have yet, and the --redo for it
-    storyProposal: boolean,     // a story told anew for the cast waits to be taken or dropped
-    nextCommand?: string,       // the plan run that takes the casting over - only when there is something to take over
+    stage?: PlanStage // the last stage the plan has
+    next?: PlanStage // the one a plan run makes next
+    casting: CastingRedo // what casting.json says that the project does not have yet, and the --redo for it
+    storyProposal: boolean // a story told anew for the cast waits to be taken or dropped
+    nextCommand?: string // the plan run that takes the casting over - only when there is something to take over
 }
 
 export async function preproductionOf(target: EditorTarget): Promise<Preproduction> {
@@ -703,7 +793,10 @@ export async function preproductionOf(target: EditorTarget): Promise<Preproducti
     return {
         ...planStateOf(target.kind, data),
         casting,
-        storyProposal: target.kind === 'music' ? storyProposal(target.dir, (data as Project).story) !== undefined : screenplayProposal(target.dir, data as FilmProject) !== undefined,
+        storyProposal:
+            target.kind === 'music'
+                ? storyProposal(target.dir, (data as Project).story) !== undefined
+                : screenplayProposal(target.dir, data as FilmProject) !== undefined,
         ...(casting.changes.length ? {nextCommand: planCommand(target, 'cast', casting.redo)} : {}),
     }
 }

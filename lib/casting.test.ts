@@ -1,8 +1,18 @@
-import {afterEach, describe, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {dirname, join} from "node:path";
-import {applyLibraryText, CASTING_FILE, castFromLibrary, castingAfterCastChange, copyCasting, droppedCopies, readCastingFile, resolveCasting, writeCastingOnce} from "./casting.ts";
+import {afterEach, describe, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {dirname, join} from 'node:path'
+import {
+    applyLibraryText,
+    CASTING_FILE,
+    castFromLibrary,
+    castingAfterCastChange,
+    copyCasting,
+    droppedCopies,
+    readCastingFile,
+    resolveCasting,
+    writeCastingOnce,
+} from './casting.ts'
 
 const dirs: string[] = []
 const folder = (files: Record<string, string> = {}) => {
@@ -19,7 +29,11 @@ afterEach(() => {
 })
 
 const cast = {
-    characters: [{id: 'kael', name: 'Kael'}, {id: 'lyra', name: 'Lyra'}, {id: 'orcs', name: 'Orcs', isGroup: true}],
+    characters: [
+        {id: 'kael', name: 'Kael'},
+        {id: 'lyra', name: 'Lyra'},
+        {id: 'orcs', name: 'Orcs', isGroup: true},
+    ],
     locations: [{id: 'stage', name: 'Stage'}],
 }
 const has = (kind: string, id: string) => (kind === 'character' && id === 'kael-red') || (kind === 'location' && id === 'temple')
@@ -28,14 +42,20 @@ describe('casting.json', () => {
     test('written once with every role and place "project:" - never again, whatever is in it', () => {
         const dir = folder()
         expect(writeCastingOnce(dir, cast)).toBe(true)
-        expect(readCastingFile(dir)).toEqual({characters: {kael: 'project:kael', lyra: 'project:lyra', orcs: 'project:orcs'}, locations: {stage: 'project:stage'}})
+        expect(readCastingFile(dir)).toEqual({
+            characters: {kael: 'project:kael', lyra: 'project:lyra', orcs: 'project:orcs'},
+            locations: {stage: 'project:stage'},
+        })
         writeFileSync(join(dir, CASTING_FILE), '{"characters": {"kael": "library:kael-red"}}')
         expect(writeCastingOnce(dir, {...cast, characters: [...cast.characters, {id: 'new', name: 'New'}]})).toBe(false)
         expect(readFileSync(join(dir, CASTING_FILE), 'utf8')).toBe('{"characters": {"kael": "library:kael-red"}}')
     })
     test('library entries are found; project entries and missing ones run as before, the missing ones named', () => {
         const r = resolveCasting({characters: {kael: 'library:kael-red', lyra: 'project:lyra'}, locations: {stage: 'library:temple'}}, cast, has)
-        expect(r.entries).toEqual([{kind: 'character', id: 'kael', libraryId: 'kael-red'}, {kind: 'location', id: 'stage', libraryId: 'temple'}])
+        expect(r.entries).toEqual([
+            {kind: 'character', id: 'kael', libraryId: 'kael-red'},
+            {kind: 'location', id: 'stage', libraryId: 'temple'},
+        ])
         expect(r.errors).toEqual([])
         expect(r.warnings).toEqual(['characters without an entry in casting.json run as "project:": orcs'])
     })
@@ -48,7 +68,14 @@ describe('casting.json', () => {
         ])
     })
     test('an entry for nobody of the cast and a group as a library asset are warned about, not used', () => {
-        const r = resolveCasting({characters: {ghost: 'library:kael-red', orcs: 'library:kael-red', kael: 'project:kael', lyra: 'project:lyra'}, locations: {stage: 'project:stage'}}, cast, has)
+        const r = resolveCasting(
+            {
+                characters: {ghost: 'library:kael-red', orcs: 'library:kael-red', kael: 'project:kael', lyra: 'project:lyra'},
+                locations: {stage: 'project:stage'},
+            },
+            cast,
+            has,
+        )
         expect(r.entries).toEqual([])
         expect(r.warnings).toEqual([
             'casting.json: "ghost" is no character of the cast (kael, lyra, orcs) - check the entry',
@@ -66,10 +93,12 @@ test('the shared library text rule compares before assigning', () => {
 })
 
 describe('copyCasting', () => {
-    const library = () => folder({
-        'characters/kael-red/asset.json': '{"name":"Kael","description":"A man."}',
-        'characters/kael-red/picture.png': 'sheet', 'characters/kael-red/sheet/anchor.png': 'anchor',
-    })
+    const library = () =>
+        folder({
+            'characters/kael-red/asset.json': '{"name":"Kael","description":"A man."}',
+            'characters/kael-red/picture.png': 'sheet',
+            'characters/kael-red/sheet/anchor.png': 'anchor',
+        })
     const entries = [{kind: 'character' as const, id: 'lyra', libraryId: 'kael-red'}]
     test('copied once; the next run copies nothing while entry and library stay the same', () => {
         const lib = library()
@@ -111,17 +140,28 @@ describe('copyCasting', () => {
         expect(existsSync(join(project, 'old/attempts'))).toBe(false)
     })
     test('droppedCopies: what the record has and casting.json no longer asks for', () => {
-        expect(droppedCopies({'character:lyra': {library: 'kael-red', fingerprint: 'x'}, 'location:stage': {library: 'temple', fingerprint: 'y'}}, [{kind: 'location', id: 'stage', libraryId: 'temple'}])).toEqual(['character:lyra'])
+        expect(
+            droppedCopies({'character:lyra': {library: 'kael-red', fingerprint: 'x'}, 'location:stage': {library: 'temple', fingerprint: 'y'}}, [
+                {kind: 'location', id: 'stage', libraryId: 'temple'},
+            ]),
+        ).toEqual(['character:lyra'])
     })
 })
 
 describe('castFromLibrary - the casting step of the music video and of a film', () => {
-    const library = () => folder({
-        'characters/kael-red/asset.json': JSON.stringify({kind: 'character', id: 'kael-red', name: 'Kael', description: 'a man in red'}),
-        'characters/kael-red/picture.png': 'red',
-    })
+    const library = () =>
+        folder({
+            'characters/kael-red/asset.json': JSON.stringify({kind: 'character', id: 'kael-red', name: 'Kael', description: 'a man in red'}),
+            'characters/kael-red/picture.png': 'red',
+        })
     // a film's cast: no groups, the characters that are seen
-    const filmCast = {characters: [{id: 'leo', name: 'Leo'}, {id: 'mira', name: 'Mira'}], locations: [{id: 'hut', name: 'Hut'}]}
+    const filmCast = {
+        characters: [
+            {id: 'leo', name: 'Leo'},
+            {id: 'mira', name: 'Mira'},
+        ],
+        locations: [{id: 'hut', name: 'Hut'}],
+    }
 
     test('writes casting.json on the first run, copies nothing', async () => {
         const dir = folder()
@@ -149,15 +189,36 @@ describe('castFromLibrary - the casting step of the music video and of a film', 
     })
     test('an entry the library does not have stops it before anything is copied', async () => {
         const dir = folder({[CASTING_FILE]: JSON.stringify({characters: {leo: 'library:kael-red', mira: 'library:nobody'}})})
-        await expect(castFromLibrary({dir, cast: filmCast, library: library(), copies: undefined, again: () => ''})).rejects.toThrow('the library has no character "nobody"')
+        await expect(castFromLibrary({dir, cast: filmCast, library: library(), copies: undefined, again: () => ''})).rejects.toThrow(
+            'the library has no character "nobody"',
+        )
         expect(existsSync(join(dir, 'assets'))).toBe(false)
     })
 })
 
 test('a changed cast: who left loses the entry, also a library one, who came runs as project:, the rest stays as written', () => {
-    const before = {characters: [{id: 'kai', name: 'Kai'}, {id: 'marcus', name: 'Marcus'}, {id: 'doc', name: 'Doc'}], locations: [{id: 'hall', name: 'Hall'}, {id: 'street', name: 'Street'}]}
-    const after = {characters: [{id: 'kai', name: 'Kai'}, {id: 'ann', name: 'Ann'}], locations: [{id: 'hall', name: 'Hall'}]}
-    const file = {characters: {kai: 'library:klemont', marcus: 'project:marcus', doc: 'library:doc-v2'}, locations: {hall: 'project:hall', street: 'project:street'}}
+    const before = {
+        characters: [
+            {id: 'kai', name: 'Kai'},
+            {id: 'marcus', name: 'Marcus'},
+            {id: 'doc', name: 'Doc'},
+        ],
+        locations: [
+            {id: 'hall', name: 'Hall'},
+            {id: 'street', name: 'Street'},
+        ],
+    }
+    const after = {
+        characters: [
+            {id: 'kai', name: 'Kai'},
+            {id: 'ann', name: 'Ann'},
+        ],
+        locations: [{id: 'hall', name: 'Hall'}],
+    }
+    const file = {
+        characters: {kai: 'library:klemont', marcus: 'project:marcus', doc: 'library:doc-v2'},
+        locations: {hall: 'project:hall', street: 'project:street'},
+    }
     expect(castingAfterCastChange(file, before, after)).toEqual({characters: {kai: 'library:klemont', ann: 'project:ann'}, locations: {hall: 'project:hall'}})
     // a cast only renamed changes nothing in the file
     expect(castingAfterCastChange(file, before, {...before, characters: before.characters.map(c => ({...c, name: `${c.name}!`}))})).toBeUndefined()

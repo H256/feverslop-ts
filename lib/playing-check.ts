@@ -3,21 +3,23 @@
 // "drumsticks held rigid" and "pick hand frozen over strings" while the music plays on. Read by the language model,
 // nothing decided from words.
 
-import {askJson, type AskOptions} from "./llm.ts";
-import type {Character, ShotPlan} from "./project.ts";
-import type {Issue, ShotProps} from "./shot-plan.ts";
+import {askJson, type AskOptions} from './llm.ts'
+import type {Character, ShotPlan} from './project.ts'
+import type {Issue, ShotProps} from './shot-plan.ts'
 
-export type PlayingCase = { shot: number, name: string, prop: string, plays: string, motion?: string }
+export type PlayingCase = {shot: number; name: string; prop: string; plays: string; motion?: string}
 
 /** Every heard player of the shots with their phrase - a player without one is already a problem of the plan itself. */
 export function playingCases(shots: ShotPlan[], props: ShotProps | undefined, characters: Pick<Character, 'id' | 'name'>[]): PlayingCase[] {
     if (!props?.length) return []
-    return shots.flatMap((shot, j) => Object.entries(shot.people ?? {}).flatMap(([id, p]) => {
-        const instrument = props.find(e => e.characterId === id)
-        if (!instrument?.activePerShot[j] || !p.playing || !p.plays) return []
-        const name = characters.find(c => c.id === id)?.name ?? id
-        return [{shot: j, name, prop: instrument.prop, plays: p.plays, ...(p.motion ? {motion: p.motion} : {})}]
-    }))
+    return shots.flatMap((shot, j) =>
+        Object.entries(shot.people ?? {}).flatMap(([id, p]) => {
+            const instrument = props.find(e => e.characterId === id)
+            if (!instrument?.activePerShot[j] || !p.playing || !p.plays) return []
+            const name = characters.find(c => c.id === id)?.name ?? id
+            return [{shot: j, name, prop: instrument.prop, plays: p.plays, ...(p.motion ? {motion: p.motion} : {})}]
+        }),
+    )
 }
 
 /**
@@ -26,7 +28,7 @@ export function playingCases(shots: ShotPlan[], props: ShotProps | undefined, ch
  */
 export async function playingIssues(cases: PlayingCase[], ask: <T>(options: AskOptions) => Promise<T> = askJson): Promise<Issue[]> {
     if (!cases.length) return []
-    const answer = await ask<{ playing?: unknown[] }>({
+    const answer = await ask<{playing?: unknown[]}>({
         maxTokens: 512 + cases.length * 16,
         reasoning: 'none',
         input: `In each entry below, the person's instrument is heard in the music through the whole shot. "hands" is what the person's hands do in the shot, "body" what the rest of the body does. Does the entry show the person playing the instrument - the hands making it sound?
@@ -36,10 +38,21 @@ Answer only with JSON: {"playing": [true or false per entry, in order]} - exactl
 ---
 ${JSON.stringify(cases.map(c => ({person: c.name, instrument: c.prop, hands: c.plays, ...(c.motion ? {body: c.motion} : {})})))}`,
         instructions: 'You check music video shot descriptions against the music. Answer only with JSON.',
-        schema: {type: 'object', additionalProperties: false, required: ['playing'], properties: {playing: {type: 'array', minItems: cases.length, maxItems: cases.length, items: {type: 'boolean'}}}},
+        schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['playing'],
+            properties: {playing: {type: 'array', minItems: cases.length, maxItems: cases.length, items: {type: 'boolean'}}},
+        },
     })
-    return cases.flatMap((c, n) => answer.playing?.[n] === false ? [{
-        shot: c.shot,
-        message: `shot ${c.shot + 1}: ${c.name}'s ${c.prop} is heard through this shot, but "${c.plays}"${c.motion ? ` with "${c.motion}"` : ''} does not play it - playing: what ${c.name}'s hands do to play the ${c.prop} all through the shot, and a motion that keeps them on it`,
-    }] : [])
+    return cases.flatMap((c, n) =>
+        answer.playing?.[n] === false
+            ? [
+                  {
+                      shot: c.shot,
+                      message: `shot ${c.shot + 1}: ${c.name}'s ${c.prop} is heard through this shot, but "${c.plays}"${c.motion ? ` with "${c.motion}"` : ''} does not play it - playing: what ${c.name}'s hands do to play the ${c.prop} all through the shot, and a motion that keeps them on it`,
+                  },
+              ]
+            : [],
+    )
 }

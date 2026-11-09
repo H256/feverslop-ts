@@ -1,7 +1,7 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync, readFileSync, rmSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
 
 // keepLogIn changes console and the streams of the whole process - so it runs in a child process here
 describe('the log of a run', () => {
@@ -66,7 +66,11 @@ test('concurrent TTY board stays out of the persisted log', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fs-board-'))
     const file = join(dir, 'run.log')
     try {
-        const child = Bun.spawnSync(['bun', '-e', `
+        const child = Bun.spawnSync(
+            [
+                'bun',
+                '-e',
+                `
             import {keepLogIn, log, startSpinner} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
             Object.defineProperty(process.stdout, 'isTTY', {value: true})
             Object.defineProperty(process.stdout, 'columns', {value: 60})
@@ -76,11 +80,16 @@ test('concurrent TTY board stays out of the persisted log', () => {
             await Bun.sleep(120)
             log.info('persistent event')
             a(); b()
-        `], {stdout: 'pipe', stderr: 'pipe'})
+        `,
+            ],
+            {stdout: 'pipe', stderr: 'pipe'},
+        )
         expect(child.exitCode).toBe(0)
         expect(child.stdout.toString()).toContain('clip-one running')
         expect(child.stdout.toString()).toContain('clip-two loading')
         const saved = readFileSync(file, 'utf8')
         expect(saved).toBe('persistent event\n')
-    } finally { rmSync(dir, {recursive: true, force: true}) }
+    } finally {
+        rmSync(dir, {recursive: true, force: true})
+    }
 })

@@ -24,11 +24,25 @@ const files = computed((): Fact[] => [
   {name: 'Frames', value: c.value.video?.renderedFrames ? `${c.value.frames} of ${c.value.video.renderedFrames} used` : `${c.value.frames}`},
   {name: 'From frame', value: String(c.value.frameStart)},
 ])
-const links = computed((): Fact[] => [{name: 'From', value: c.value.startsFrom}, {name: 'Into', value: c.value.next}])
-const frames = computed(() => ([['First frame', c.value.firstFrame], ['Last frame', c.value.lastFrame]] as const).filter(([, frame]) => frame))
+const links = computed((): Fact[] => [
+  {name: 'From', value: c.value.startsFrom},
+  {name: 'Into', value: c.value.next},
+])
+const frames = computed(() =>
+  (
+    [
+      ['First frame', c.value.firstFrame],
+      ['Last frame', c.value.lastFrame],
+    ] as const
+  ).filter(([, frame]) => frame),
+)
 const command = computed(() => `${project.value.command} --render=videos --only=${c.value.id}${c.value.video ? ' --again' : ''}`)
-const jump = (id: string) => { const target = project.value.clips.find(x => x.id === id); if (target) playback.seek(target.start) }
-const compareRefined = (version: EditorClip['refined'][number]) => compare({clip: c.value, version: {video: version.file, made: version.v, seed: version.seed}, refined: version.variant})
+const jump = (id: string) => {
+  const target = project.value.clips.find(x => x.id === id)
+  if (target) playback.seek(target.start)
+}
+const compareRefined = (version: EditorClip['refined'][number]) =>
+  compare({clip: c.value, version: {video: version.file, made: version.v, seed: version.seed}, refined: version.variant})
 </script>
 
 <template>
@@ -43,7 +57,15 @@ const compareRefined = (version: EditorClip['refined'][number]) => compare({clip
     <article v-for="version in clip.refined" :key="version.variant" class="version" style="grid-template-columns: minmax(0, 1fr)">
       <div>
         <div>{{ version.variant }}</div>
-        <div class="muted num">{{ joined([version.size?.replace('x', '×'), version.denoise !== undefined && `denoise ${version.denoise}`, version.seed !== undefined && `seed ${version.seed}`]) }}</div>
+        <div class="muted num">
+          {{
+            joined([
+              version.size?.replace('x', '×'),
+              version.denoise !== undefined && `denoise ${version.denoise}`,
+              version.seed !== undefined && `seed ${version.seed}`,
+            ])
+          }}
+        </div>
         <div class="btn-row"><button v-if="clip.video" class="btn" @click="compareRefined(version)">Compare with the original</button></div>
       </div>
     </article>
@@ -60,16 +82,29 @@ const compareRefined = (version: EditorClip['refined'][number]) => compare({clip
   </div>
   <div v-if="clip.startsFrom || clip.next" class="section">
     <h3>Goes on</h3>
-    <FactList :facts="links"><template #value="{fact}"><button class="link" @click="jump(fact.value!)">{{ fact.value }}</button></template></FactList>
+    <FactList :facts="links"
+      ><template #value="{fact}"
+        ><button class="link" @click="jump(fact.value!)">{{ fact.value }}</button></template
+      ></FactList
+    >
   </div>
   <div v-if="frames.length" class="section">
     <h3>Frames</h3>
     <div class="frames">
       <figure v-for="[name, frame] in frames" :key="name">
-        <img :src="thumbUrl(frame!, session.roots, 640)" :alt="name" loading="lazy" decoding="async" @click="viewer.open(frame!, session.roots, name, clip.id)">
+        <img
+          :src="thumbUrl(frame!, session.roots, 640)"
+          :alt="name"
+          loading="lazy"
+          decoding="async"
+          @click="viewer.open(frame!, session.roots, name, clip.id)"
+        />
         <figcaption>{{ name }}</figcaption>
       </figure>
     </div>
   </div>
-  <div class="section"><h3>The same in the terminal</h3><CopyCommand :command="command" /></div>
+  <div class="section">
+    <h3>The same in the terminal</h3>
+    <CopyCommand :command="command" />
+  </div>
 </template>

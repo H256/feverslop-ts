@@ -26,7 +26,9 @@ const finish = (yes: boolean) => {
   props.request.answer(yes)
   modal.value?.close()
 }
-const cancel = () => { if (!pending.value) finish(false) }
+const cancel = () => {
+  if (!pending.value) finish(false)
+}
 async function confirm() {
   if (pending.value || answered) return
   if (props.request.render) servers.choose(chosen.value)

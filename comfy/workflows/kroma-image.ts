@@ -1,6 +1,6 @@
 // Originally exported from ComfyUI as kroma.json (see README's "Workflows" section) - two passes: Kroma v0.3.1 turbo
 // renders the picture at half size, which is scaled up 2x and refined by a short second sampling (denoise 0.2).
-import {afterCleanup, dyn, type ImageWorkflowOptions, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "../helpers.ts";
+import {afterCleanup, dyn, type ImageWorkflowOptions, resolution, widget, withInputs, WorkflowBuilder, type WorkflowResult} from '../helpers.ts'
 
 export default function kromaImage(opts: ImageWorkflowOptions): WorkflowResult {
     const wf = new WorkflowBuilder()

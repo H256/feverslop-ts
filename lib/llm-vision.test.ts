@@ -1,30 +1,46 @@
-import {afterAll, afterEach, beforeAll, describe, expect, test} from "bun:test";
-import {ask, configureLlm, picturesReadable, takesPictures} from "./llm.ts";
-import {loadSettings} from "./settings.ts";
+import {afterAll, afterEach, beforeAll, describe, expect, test} from 'bun:test'
+import {ask, configureLlm, picturesReadable, takesPictures} from './llm.ts'
+import {loadSettings} from './settings.ts'
 
 // Two fake servers: a text server and a vision server, each with its models, /props as llama.cpp has it (vision on or
 // off, or none at all) and a streamed Responses answer that names the server and the model it was asked for.
-type Fake = { name: string, models: string[], vision?: boolean, refuseImages?: boolean, calls: { model: string, images: number }[], keys: (string | null)[] }
-const sse = (events: object[]) => events.map(e => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
+type Fake = {name: string; models: string[]; vision?: boolean; refuseImages?: boolean; calls: {model: string; images: number}[]; keys: (string | null)[]}
+const sse = (events: object[]) => events.map(e => `event: ${(e as {type: string}).type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
 
 function serve(fake: Fake) {
     return Bun.serve({
         port: 0,
         async fetch(req) {
             const path = new URL(req.url).pathname
-            if (path === '/v1/models') return Response.json({object: 'list', data: fake.models.map(id => ({id, object: 'model', created: 0, owned_by: 'test'}))})
-            if (path === '/props') return fake.vision === undefined ? new Response('not found', {status: 404}) : Response.json({modalities: {vision: fake.vision, audio: false}})
+            if (path === '/v1/models')
+                return Response.json({object: 'list', data: fake.models.map(id => ({id, object: 'model', created: 0, owned_by: 'test'}))})
+            if (path === '/props')
+                return fake.vision === undefined ? new Response('not found', {status: 404}) : Response.json({modalities: {vision: fake.vision, audio: false}})
             if (path !== '/v1/responses') return new Response('not found', {status: 404})
             fake.keys.push(req.headers.get('authorization'))
-            const body = await req.json() as { model: string, input: string | { content: { type: string }[] }[] }
+            const body = (await req.json()) as {model: string; input: string | {content: {type: string}[]}[]}
             const images = typeof body.input === 'string' ? 0 : body.input.flatMap(m => m.content).filter(c => c.type === 'input_image').length
             fake.calls.push({model: body.model, images})
-            if (images && fake.refuseImages) return Response.json({error: {message: 'image input is not supported - hint: if this is unexpected, you may need to provide the mmproj', type: 'server_error'}}, {status: 500})
-            const response = {id: 'r', object: 'response', created_at: 0, model: body.model, output: [], usage: {input_tokens: 1, output_tokens: 1, total_tokens: 2}}
-            return new Response(sse([
-                {type: 'response.output_text.delta', delta: `${fake.name}:${body.model}`, sequence_number: 1},
-                {type: 'response.completed', response: {...response, status: 'completed'}, sequence_number: 2},
-            ]), {headers: {'content-type': 'text/event-stream'}})
+            if (images && fake.refuseImages)
+                return Response.json(
+                    {error: {message: 'image input is not supported - hint: if this is unexpected, you may need to provide the mmproj', type: 'server_error'}},
+                    {status: 500},
+                )
+            const response = {
+                id: 'r',
+                object: 'response',
+                created_at: 0,
+                model: body.model,
+                output: [],
+                usage: {input_tokens: 1, output_tokens: 1, total_tokens: 2},
+            }
+            return new Response(
+                sse([
+                    {type: 'response.output_text.delta', delta: `${fake.name}:${body.model}`, sequence_number: 1},
+                    {type: 'response.completed', response: {...response, status: 'completed'}, sequence_number: 2},
+                ]),
+                {headers: {'content-type': 'text/event-stream'}},
+            )
         },
     })
 }

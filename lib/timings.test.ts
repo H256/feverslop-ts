@@ -1,8 +1,8 @@
-import {afterEach, beforeEach, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {basename, dirname, join} from "node:path";
-import {currentStep, keepTimingsIn, migrateProjectTimings, readTimings, recordTiming, timingsFile, withStep} from "./timings.ts";
+import {afterEach, beforeEach, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {basename, dirname, join} from 'node:path'
+import {currentStep, keepTimingsIn, migrateProjectTimings, readTimings, recordTiming, timingsFile, withStep} from './timings.ts'
 
 let dir: string
 let originalSettings: string | undefined
@@ -42,11 +42,17 @@ test('damaged lines are skipped when reading', () => {
 
 test('the per-project file of the first format is moved into the central one, not lost', () => {
     const project = join(dir, 'projects', 'old')
-    Bun.write(join(project, 'timings.jsonl'), '{"at":"2026-10-16T10:00:00.000Z","kind":"clip","name":"wan","seconds":90,"resolution":720,"frames":97}\n{"at":"2026-10-16T11:00:00.000Z","kind":"llm","name":"m","seconds":4,"tokensPerSecond":30}\n')
+    Bun.write(
+        join(project, 'timings.jsonl'),
+        '{"at":"2026-10-16T10:00:00.000Z","kind":"clip","name":"wan","seconds":90,"resolution":720,"frames":97}\n{"at":"2026-10-16T11:00:00.000Z","kind":"llm","name":"m","seconds":4,"tokensPerSecond":30}\n',
+    )
     return Bun.sleep(20).then(() => {
         expect(migrateProjectTimings(project)).toBe(2)
         const read = readTimings()
-        expect(read.map(t => [t.project, t.kind, t.seconds])).toEqual([['old', 'clip', 90], ['old', 'llm', 4]])
+        expect(read.map(t => [t.project, t.kind, t.seconds])).toEqual([
+            ['old', 'clip', 90],
+            ['old', 'llm', 4],
+        ])
         expect(read[0]!.v).toBeUndefined()
         expect(existsSync(join(project, 'timings.jsonl'))).toBe(false)
         expect(migrateProjectTimings(project)).toBe(0)

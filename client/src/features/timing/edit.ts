@@ -5,7 +5,8 @@ import {frameAt} from '../../../../lib/frames'
 const round = (t: number) => Math.round(t * 1000) / 1000
 const copy = (words: TimingWord[]) => words.map(w => ({...w}))
 
-export const clipWords = (words: TimingWord[], from: number, to: number) => words.filter(w => w.end - w.start >= MIN_WORD && frameAt(w.start) >= frameAt(from) && frameAt(w.start) < frameAt(to))
+export const clipWords = (words: TimingWord[], from: number, to: number) =>
+  words.filter(w => w.end - w.start >= MIN_WORD && frameAt(w.start) >= frameAt(from) && frameAt(w.start) < frameAt(to))
 export function clipText(words: TimingWord[], from: number, to: number): string {
   const selected = clipWords(words, from, to)
   if (!selected.length) return ''
@@ -37,14 +38,26 @@ export function translate(words: TimingWord[], first: number, last: number, by: 
 
 /** Piecewise affine fitting: confirmed internal onsets are fixed control points. */
 export function fitSelection(words: TimingWord[], first: number, last: number, from: number, to: number, duration: number): TimingWord[] {
-  const start = words[first]!.start, end = words[last]!.end
+  const start = words[first]!.start,
+    end = words[last]!.end
   if (words[first]!.anchor && Math.abs(from - start) > 0.0001) throw new Error('Release the first anchor before moving this endpoint.')
-  const points = [{old: start, next: from}, ...words.slice(first + 1, last + 1).filter(w => w.anchor).map(w => ({old: w.start, next: w.start})), {old: end, next: to}]
+  const points = [
+    {old: start, next: from},
+    ...words
+      .slice(first + 1, last + 1)
+      .filter(w => w.anchor)
+      .map(w => ({old: w.start, next: w.start})),
+    {old: end, next: to},
+  ]
   if (points.some((p, i) => i > 0 && p.next <= points[i - 1]!.next)) throw new Error('The endpoints must stay outside the confirmed anchors.')
   const map = (t: number) => {
-    const n = Math.max(0, points.findIndex((p, i) => i < points.length - 1 && t <= points[i + 1]!.old))
-    const a = points[n]!, b = points[n + 1]!
-    return round(a.next + (t - a.old) / (b.old - a.old) * (b.next - a.next))
+    const n = Math.max(
+      0,
+      points.findIndex((p, i) => i < points.length - 1 && t <= points[i + 1]!.old),
+    )
+    const a = points[n]!,
+      b = points[n + 1]!
+    return round(a.next + ((t - a.old) / (b.old - a.old)) * (b.next - a.next))
   }
   const out = copy(words)
   for (let i = first; i <= last; i++) out[i] = {...out[i]!, start: map(out[i]!.start), end: map(out[i]!.end), estimated: true}
@@ -54,7 +67,8 @@ export function fitSelection(words: TimingWord[], first: number, last: number, f
 
 export function splitWord(words: TimingWord[], index: number, character: number, time: number): TimingWord[] {
   const w = words[index]!
-  if (!Number.isInteger(character) || character <= 0 || character >= w.text.length || /\s/.test(w.text[character - 1]! + w.text[character]!)) throw new Error('Choose a boundary inside the word.')
+  if (!Number.isInteger(character) || character <= 0 || character >= w.text.length || /\s/.test(w.text[character - 1]! + w.text[character]!))
+    throw new Error('Choose a boundary inside the word.')
   if (time - w.start < MIN_WORD || w.end - time < MIN_WORD) throw new Error('Both parts need at least 0.05 seconds.')
   const right = {...w, text: w.text.slice(character), start: round(time), joined: true}
   delete right.anchor
@@ -62,7 +76,8 @@ export function splitWord(words: TimingWord[], index: number, character: number,
 }
 
 export function joinWords(words: TimingWord[], first: number, last: number): TimingWord[] {
-  if (last <= first || words.slice(first + 1, last + 1).some(w => !w.joined)) throw new Error('Only parts of the same source word can be joined. Group whole words instead.')
+  if (last <= first || words.slice(first + 1, last + 1).some(w => !w.joined))
+    throw new Error('Only parts of the same source word can be joined. Group whole words instead.')
   const selected = words.slice(first, last + 1)
   const word = {...selected[0]!, text: selected.map(w => w.text).join(''), end: selected.at(-1)!.end}
   if (selected.some(w => w.estimated)) word.estimated = true

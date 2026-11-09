@@ -14,13 +14,23 @@ export function usePageData<T>(load: (signal: AbortSignal) => Promise<T>) {
   const session = useProject()
   const toasts = useToasts()
   const resource = useResource(load)
-  useRunDock().onEnd(() => { void resource.reload() })
-  watch(resource.error, error => { if (error && resource.data.value !== undefined) toasts.show(`Could not read this page again: ${error}`, true) })
+  useRunDock().onEnd(() => {
+    void resource.reload()
+  })
+  watch(resource.error, error => {
+    if (error && resource.data.value !== undefined) toasts.show(`Could not read this page again: ${error}`, true)
+  })
   /** True when the page and the project show what is in the folder now. */
   const refresh = async () => {
     const [page, project] = await Promise.all([
       resource.reload(),
-      session.reload().then(() => true, cause => { toasts.show(`Could not read the project again: ${errorText(cause)}`, true); return false }),
+      session.reload().then(
+        () => true,
+        cause => {
+          toasts.show(`Could not read the project again: ${errorText(cause)}`, true)
+          return false
+        },
+      ),
     ])
     return page && project
   }

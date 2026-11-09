@@ -1,9 +1,9 @@
-import {afterEach, describe, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {dirname, join} from "node:path";
-import {assetIds, assetPaths, copyAsset, copyPlan} from "./asset-import.ts";
-import {redoAfter} from "./project.ts";
+import {afterEach, describe, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {dirname, join} from 'node:path'
+import {assetIds, assetPaths, copyAsset, copyPlan} from './asset-import.ts'
+import {redoAfter} from './project.ts'
 
 const dirs: string[] = []
 const project = (files: Record<string, string>) => {
@@ -20,15 +20,23 @@ afterEach(() => {
 })
 
 const sheet = (id: string) => ({
-    [`assets/characters/${id}.png`]: 'sheet', [`assets/characters/${id}.png.json`]: '{"fingerprint":"a"}',
-    [`assets/sequence/characters/${id}/anchor.png`]: 'anchor', [`assets/sequence/characters/${id}/anchor.png.json`]: '{"fingerprint":"b"}',
-    [`assets/sequence/characters/${id}/sequence.mp4`]: 'video', [`assets/sequence/characters/${id}/sequence.mp4.json`]: '{}',
-    [`assets/sequence/characters/${id}/frames/frame_00.png`]: 'f0', [`assets/sequence/characters/${id}/frames/frame_01.png`]: 'f1',
+    [`assets/characters/${id}.png`]: 'sheet',
+    [`assets/characters/${id}.png.json`]: '{"fingerprint":"a"}',
+    [`assets/sequence/characters/${id}/anchor.png`]: 'anchor',
+    [`assets/sequence/characters/${id}/anchor.png.json`]: '{"fingerprint":"b"}',
+    [`assets/sequence/characters/${id}/sequence.mp4`]: 'video',
+    [`assets/sequence/characters/${id}/sequence.mp4.json`]: '{}',
+    [`assets/sequence/characters/${id}/frames/frame_00.png`]: 'f0',
+    [`assets/sequence/characters/${id}/frames/frame_01.png`]: 'f1',
 })
 
 describe('copyAsset - the shared production copy path', () => {
     test('every file of the asset, renamed to the target id - sidecars and unfinished renders left out', () => {
-        const source = project({...sheet('kaelen'), 'assets/sequence/characters/kaelen/anchor.png.partial.png': 'x', 'assets/sequence/characters/kaelen/sequence.mp4.pending.json': '{}'})
+        const source = project({
+            ...sheet('kaelen'),
+            'assets/sequence/characters/kaelen/anchor.png.partial.png': 'x',
+            'assets/sequence/characters/kaelen/sequence.mp4.pending.json': '{}',
+        })
         expect(copyPlan(source, assetPaths('character', 'kaelen'), assetPaths('character', 'kael')).map(f => [f.to, f.pin])).toEqual([
             ['assets/characters/kael.png', true],
             ['assets/sequence/characters/kael/anchor.png', true],
@@ -40,10 +48,17 @@ describe('copyAsset - the shared production copy path', () => {
     test('copies with pinned sidecars and puts the old pictures away, deleting nothing', () => {
         const source = project(sheet('kaelen'))
         const target = project({...sheet('kael'), 'assets/sequence/characters/kael/frames/frame_05.png': 'old only'})
-        const done = copyAsset({dir: source, layout: assetPaths('character', 'kaelen'), label: 'tides-a'}, {dir: target, layout: assetPaths('character', 'kael'), archiveName: 'kael'})
+        const done = copyAsset(
+            {dir: source, layout: assetPaths('character', 'kaelen'), label: 'tides-a'},
+            {dir: target, layout: assetPaths('character', 'kael'), archiveName: 'kael'},
+        )
         expect(done.copied).toBe(5)
         expect(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png'), 'utf8')).toBe('anchor')
-        expect(JSON.parse(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png.json'), 'utf8'))).toEqual({source: 'user', pinned: true, note: 'copied from tides-a/assets/sequence/characters/kaelen/anchor.png'})
+        expect(JSON.parse(readFileSync(join(target, 'assets/sequence/characters/kael/anchor.png.json'), 'utf8'))).toEqual({
+            source: 'user',
+            pinned: true,
+            note: 'copied from tides-a/assets/sequence/characters/kaelen/anchor.png',
+        })
         // the old sheet is gone from its place, frame_05 with it - the new one has only its own frames
         expect(existsSync(join(target, 'assets/sequence/characters/kael/frames/frame_05.png'))).toBe(false)
         expect(readdirSync(join(target, done.putAway!)).sort()).toEqual(['kael', 'kael.png', 'kael.png.json'])
@@ -51,13 +66,24 @@ describe('copyAsset - the shared production copy path', () => {
     })
     test('a source without the asset is an error, nothing is touched', () => {
         const target = project(sheet('kael'))
-        expect(() => copyAsset({dir: project({}), layout: assetPaths('character', 'kaelen'), label: 'empty'}, {dir: target, layout: assetPaths('character', 'kael'), archiveName: 'kael'})).toThrow('has no finished pictures')
+        expect(() =>
+            copyAsset(
+                {dir: project({}), layout: assetPaths('character', 'kaelen'), label: 'empty'},
+                {dir: target, layout: assetPaths('character', 'kael'), archiveName: 'kael'},
+            ),
+        ).toThrow('has no finished pictures')
         expect(existsSync(join(target, 'assets/characters/kael.png'))).toBe(true)
     })
     test('assetIds: the ids with a picture or a sheet', () => {
-        expect(assetIds(project({...sheet('mara'), 'assets/characters/lyra.png': 'x', 'assets/characters/lyra.png.partial.png': 'x'}), 'character')).toEqual(['lyra', 'mara'])
+        expect(assetIds(project({...sheet('mara'), 'assets/characters/lyra.png': 'x', 'assets/characters/lyra.png.partial.png': 'x'}), 'character')).toEqual([
+            'lyra',
+            'mara',
+        ])
         // the small copy a picture description makes, left over when ffmpeg failed (#464)
-        expect(assetIds(project({...sheet('mara'), 'assets/characters/lyra.png': 'x', 'assets/characters/lyra.png.vision-0.png': 'x'}), 'character')).toEqual(['lyra', 'mara'])
+        expect(assetIds(project({...sheet('mara'), 'assets/characters/lyra.png': 'x', 'assets/characters/lyra.png.vision-0.png': 'x'}), 'character')).toEqual([
+            'lyra',
+            'mara',
+        ])
     })
 })
 

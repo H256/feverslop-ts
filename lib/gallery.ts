@@ -1,26 +1,37 @@
 // A static HTML overview of what a project has generated so far - `bun index.ts --gallery`. It is a view of the
 // files on disk and project.json, written next to them as gallery.html with relative links, so it opens straight
 // from the folder without a server. Only what exists is listed; nothing here renders anything.
-import {existsSync, readdirSync} from "node:fs";
-import {basename, join} from "node:path";
-import type {Project} from "./project.ts";
-import {boundaryFrameAsset} from "./compose.ts";
-import {plainText} from "./refs.ts";
-import {sequenceSheetDir, sheetAnchor, sheetVideo} from "./sequenceSheet.ts";
+import {existsSync, readdirSync} from 'node:fs'
+import {basename, join} from 'node:path'
+import type {Project} from './project.ts'
+import {boundaryFrameAsset} from './compose.ts'
+import {plainText} from './refs.ts'
+import {sequenceSheetDir, sheetAnchor, sheetVideo} from './sequenceSheet.ts'
 
-type Card = { title: string, subtitle?: string, images?: { src: string, label?: string }[], videos?: { src: string, label?: string }[], text?: string, wide?: boolean }
+type Card = {
+    title: string
+    subtitle?: string
+    images?: {src: string; label?: string}[]
+    videos?: {src: string; label?: string}[]
+    text?: string
+    wide?: boolean
+}
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]!)
 const url = (file: string) => file.split('/').map(encodeURIComponent).join('/')
 
-const media = (dir: string, file: string) => existsSync(join(dir, file)) ? file : undefined
+const media = (dir: string, file: string) => (existsSync(join(dir, file)) ? file : undefined)
 
 // a group character's member images are named <id>-v<member>.png, see groupMemberId in lib/compose.ts
-const memberOf = (id: string, known: Set<string>) => known.has(id) ? undefined : id.match(/^(.+)-v(\d+)$/)?.[2]
+const memberOf = (id: string, known: Set<string>) => (known.has(id) ? undefined : id.match(/^(.+)-v(\d+)$/)?.[2])
 
-function castCards(dir: string, kind: 'character' | 'location', cast: { id: string, name: string, role?: string }[]): Card[] {
+function castCards(dir: string, kind: 'character' | 'location', cast: {id: string; name: string; role?: string}[]): Card[] {
     const folder = `assets/${kind}s`
-    const files = existsSync(join(dir, folder)) ? readdirSync(join(dir, folder)).filter(f => f.endsWith('.png')).map(f => f.slice(0, -4)) : []
+    const files = existsSync(join(dir, folder))
+        ? readdirSync(join(dir, folder))
+              .filter(f => f.endsWith('.png'))
+              .map(f => f.slice(0, -4))
+        : []
     const known = new Set(cast.map(c => c.id))
     const order = (id: string) => cast.findIndex(c => c.id === id || id.startsWith(`${c.id}-v`))
     return files
@@ -50,13 +61,15 @@ function storyboardCards(dir: string, data: Project): Card[] {
         const last = media(dir, boundaryFrameAsset(slot.id, 'lf'))
         if (!first && !last) return []
         const beat = beats.get(beatOf.get(slot.id) ?? '')
-        return [{
-            title: slot.id,
-            subtitle: `${slot.section} · ${slot.start.toFixed(1)}s – ${slot.end.toFixed(1)}s`,
-            images: [...(first ? [{src: first, label: 'first frame'}] : []), ...(last ? [{src: last, label: 'last frame'}] : [])],
-            // the beats write their characters as {Name} - the page shows the names
-            text: beat?.summary && plainText(beat.summary, data.cast?.characters ?? []),
-        }]
+        return [
+            {
+                title: slot.id,
+                subtitle: `${slot.section} · ${slot.start.toFixed(1)}s – ${slot.end.toFixed(1)}s`,
+                images: [...(first ? [{src: first, label: 'first frame'}] : []), ...(last ? [{src: last, label: 'last frame'}] : [])],
+                // the beats write their characters as {Name} - the page shows the names
+                text: beat?.summary && plainText(beat.summary, data.cast?.characters ?? []),
+            },
+        ]
     })
 }
 
@@ -78,20 +91,34 @@ ${(c.videos ?? []).map(v => `<div><video controls preload="metadata" src="${url(
 <figcaption><b>${esc(c.title)}</b>${c.subtitle ? ` <small>${esc(c.subtitle)}</small>` : ''}${c.text ? `<p>${esc(c.text)}</p>` : ''}</figcaption>
 </figure>`
 
-const renderSection = (heading: string, cards: Card[]) => cards.length
-    ? `<h2>${heading}</h2>\n<div class="grid">\n${cards.map(renderCard).join('\n')}\n</div>`
-    : ''
+const renderSection = (heading: string, cards: Card[]) =>
+    cards.length ? `<h2>${heading}</h2>\n<div class="grid">\n${cards.map(renderCard).join('\n')}\n</div>` : ''
 
 /** Writes `<dir>/gallery.html` and returns its path, plus how many items each tab shows. */
 export async function writeGallery(dir: string, id: string, data: Project) {
     const cast = data.cast
     const tabs = [
-        {id: 'cast', name: 'Cast', empty: 'No locations or characters rendered yet - run with --render=images.', html: [
-            renderSection('Locations', castCards(dir, 'location', cast?.locations ?? [])),
-            renderSection('Characters', castCards(dir, 'character', cast?.characters ?? [])),
-        ].join('\n')},
-        {id: 'storyboard', name: 'Storyboard', empty: 'No clip frames yet - they appear once clips are rendered (--render=videos).', html: renderSection('First &amp; last frames', storyboardCards(dir, data))},
-        {id: 'videos', name: 'Videos', empty: 'No videos yet - run with --render=videos, then --render=final.', html: renderSection('Clips', videoCards(dir, data))},
+        {
+            id: 'cast',
+            name: 'Cast',
+            empty: 'No locations or characters rendered yet - run with --render=images.',
+            html: [
+                renderSection('Locations', castCards(dir, 'location', cast?.locations ?? [])),
+                renderSection('Characters', castCards(dir, 'character', cast?.characters ?? [])),
+            ].join('\n'),
+        },
+        {
+            id: 'storyboard',
+            name: 'Storyboard',
+            empty: 'No clip frames yet - they appear once clips are rendered (--render=videos).',
+            html: renderSection('First &amp; last frames', storyboardCards(dir, data)),
+        },
+        {
+            id: 'videos',
+            name: 'Videos',
+            empty: 'No videos yet - run with --render=videos, then --render=final.',
+            html: renderSection('Clips', videoCards(dir, data)),
+        },
     ].map(t => ({...t, html: t.html.trim()}))
 
     const html = `<!doctype html>

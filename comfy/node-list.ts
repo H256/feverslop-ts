@@ -1,7 +1,7 @@
 // The server's node list (/object_info), cleaned the same way for comfy/gen-types.ts and comfy/json-to-ts.ts,
 // so output names in converted workflows always match the generated nodes.ts.
 
-import {authHeaders, type ComfyServer, loadSettings} from "../lib/settings.ts";
+import {authHeaders, type ComfyServer, loadSettings} from '../lib/settings.ts'
 
 export type ObjectInfo = Record<string, any>
 
@@ -23,10 +23,12 @@ export async function fetchNodeList(server: ComfyServer): Promise<ObjectInfo> {
         response = await fetch(`${server.url}/object_info`, {headers: authHeaders(server), signal: AbortSignal.timeout(timeoutMs)})
     } catch (e) {
         const error = e as Error
-        throw new Error(`ComfyUI ${server.name} (${server.url}) is unreachable - ${error.name === 'TimeoutError' ? `no answer within ${timeoutMs / 1000} s` : error.message}. Start it, or pick another server with --comfy=<url>`)
+        throw new Error(
+            `ComfyUI ${server.name} (${server.url}) is unreachable - ${error.name === 'TimeoutError' ? `no answer within ${timeoutMs / 1000} s` : error.message}. Start it, or pick another server with --comfy=<url>`,
+        )
     }
     if (!response.ok) throw new Error(`${server.url}/object_info: ${response.status} ${response.statusText}`)
-    return cleanNodeList(await response.json() as ObjectInfo).objectInfo
+    return cleanNodeList((await response.json()) as ObjectInfo).objectInfo
 }
 
 /**

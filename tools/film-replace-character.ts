@@ -1,31 +1,30 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 // Replaces a character's reference picture and description in an existing film - for swapping in your own art, a picture
 // that came out wrong, or a character carried over from another project. The wizard asks for everything, clears whatever
 // the render would otherwise consider stale (a sequence sheet's video, frames and composite, all built from the old
 // anchor), lets a vision-capable LLM describe the new picture, names the clips that were rendered with the old one and
 // offers to render the new sequence sheet right away. The film counterpart of tools/replace-character.ts.
 // usage: bun run film:replace-character [film-id]
-import * as p from "@clack/prompts";
-import {existsSync} from "node:fs";
-import {join} from "node:path";
-import {loadFilmConfig} from "../lib/film/config.ts";
-import {pictureAsset} from "../lib/compose.ts";
-import {filmRenderConfig} from "../lib/film/pictures.ts";
-import {FilmRenderer} from "../lib/film/render.ts";
-import {filmDir, filmExists, plannedFilmIds} from "../lib/film/setup.ts";
-import {FilmStore, FILMS_DIR} from "../lib/film/store.ts";
-import {lockProject} from "../lib/lock.ts";
-import {genderNote} from "../lib/gender-check.ts";
-import {mentions} from "../lib/film/names.ts";
-import {configureLlm} from "../lib/llm.ts";
-import {styles} from "../lib/log.ts";
-import type {PictureJob} from "../lib/render.ts";
-import {loadSettings} from "../lib/settings.ts";
-import {answer as wizardAnswer} from "../lib/wizard.ts";
-import {askDescription, clearSheetOfOldAnchor, installPicture, renderedClipsWith, replacedPictureFile} from "../lib/replace-character.ts";
+import * as p from '@clack/prompts'
+import {existsSync} from 'node:fs'
+import {join} from 'node:path'
+import {loadFilmConfig} from '../lib/film/config.ts'
+import {pictureAsset} from '../lib/compose.ts'
+import {filmRenderConfig} from '../lib/film/pictures.ts'
+import {FilmRenderer} from '../lib/film/render.ts'
+import {filmDir, filmExists, plannedFilmIds} from '../lib/film/setup.ts'
+import {FilmStore, FILMS_DIR} from '../lib/film/store.ts'
+import {lockProject} from '../lib/lock.ts'
+import {genderNote} from '../lib/gender-check.ts'
+import {mentions} from '../lib/film/names.ts'
+import {configureLlm} from '../lib/llm.ts'
+import {styles} from '../lib/log.ts'
+import type {PictureJob} from '../lib/render.ts'
+import {loadSettings} from '../lib/settings.ts'
+import {answer as wizardAnswer} from '../lib/wizard.ts'
+import {askDescription, clearSheetOfOldAnchor, installPicture, renderedClipsWith, replacedPictureFile} from '../lib/replace-character.ts'
 cli('film:replace-character')
-
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
     log.error('This needs a terminal to ask in - usage: bun run film:replace-character [film-id]')
@@ -70,19 +69,23 @@ if (!characters.length) {
 }
 log.info(`Film ${styles.name(id)}`)
 
-const charId = answer(await p.select({
-    message: 'Character to replace',
-    options: characters.map(c => ({value: c.id, label: `${c.name} ${styles.muted(`(${c.id})`)}`})),
-}))
+const charId = answer(
+    await p.select({
+        message: 'Character to replace',
+        options: characters.map(c => ({value: c.id, label: `${c.name} ${styles.muted(`(${c.id})`)}`})),
+    }),
+)
 const char = characters.find(c => c.id === charId)!
 
-const imagePath = answer(await p.text({
-    message: 'Path to the new reference image (any image format)',
-    validate: value => {
-        if (!value) return 'required'
-        if (!existsSync(value)) return 'file not found'
-    },
-}))
+const imagePath = answer(
+    await p.text({
+        message: 'Path to the new reference image (any image format)',
+        validate: value => {
+            if (!value) return 'required'
+            if (!existsSync(value)) return 'file not found'
+        },
+    }),
+)
 
 const config = await loadFilmConfig(dir)
 const targetFile = replacedPictureFile(dir, char.id, config.sequenceSheets)
@@ -103,11 +106,20 @@ if (newDescription) {
     // a picture of another gender than the script writes: the action lines say "she", the picture is a man (or the other way round)
     try {
         await configureFilmLlm()
-        const own = (data.screenplay?.scenes ?? []).flatMap(s => s.elements).filter(e => e.type === 'action' && mentions(e.text, char)).map(e => e.text).slice(0, 4).join(' ')
+        const own = (data.screenplay?.scenes ?? [])
+            .flatMap(s => s.elements)
+            .filter(e => e.type === 'action' && mentions(e.text, char))
+            .map(e => e.text)
+            .slice(0, 4)
+            .join(' ')
         const note = await genderNote(char.name, `${char.role} ${char.appearance} ${own}`.trim().slice(0, 2500), newDescription, 'script')
         if (note) {
             log.warn(note)
-            log.info(styles.muted(`Edit the action lines of ${char.name} in films/${id}/project.json (screenplay) and plan the shots again (bun film.ts ${id} --redo=coverage); for a story written from an idea, put the gender into the idea.`))
+            log.info(
+                styles.muted(
+                    `Edit the action lines of ${char.name} in films/${id}/project.json (screenplay) and plan the shots again (bun film.ts ${id} --redo=coverage); for a story written from an idea, put the gender into the idea.`,
+                ),
+            )
         }
     } catch {
         // the check is a courtesy: no language model connected, nothing to say
@@ -128,7 +140,10 @@ if (config.sequenceSheets) {
         const settings = await loadSettings({projectModel: config.llm.model})
         using renderer = new FilmRenderer(`film-${id}`, dir, filmRenderConfig(config), settings.comfy)
         const picture: PictureJob = {
-            kind: 'character', id: char.id, file: pictureAsset('character', char.id), name: char.name,
+            kind: 'character',
+            id: char.id,
+            file: pictureAsset('character', char.id),
+            name: char.name,
             // the prompt only makes the anchor image, which was supplied here - never read
             prompt: '',
             description,
@@ -144,7 +159,10 @@ if (config.sequenceSheets) {
 
 // cancelled with Ctrl+C / Esc
 function answer<T>(value: T) {
-    return wizardAnswer(value, changes.length
+    return wizardAnswer(
+        value,
+        changes.length
             ? `Cancelled - already changed: ${changes.join('; ')}.${sheetCleared ? ` Render the new reference sheet with: bun film.ts ${id} --render=images` : ''}`
-            : 'Cancelled - nothing was changed')
+            : 'Cancelled - nothing was changed',
+    )
 }

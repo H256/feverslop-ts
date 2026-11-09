@@ -1,16 +1,26 @@
-import {describe, expect, test} from "bun:test";
-import type {AskOptions} from "./llm.ts";
-import {playingCases, playingIssues} from "./playing-check.ts";
-import type {ShotPlan} from "./project.ts";
+import {describe, expect, test} from 'bun:test'
+import type {AskOptions} from './llm.ts'
+import {playingCases, playingIssues} from './playing-check.ts'
+import type {ShotPlan} from './project.ts'
 
-const characters = [{id: 'kael', name: 'Kael'}, {id: 'mara', name: 'Mara'}, {id: 'elara', name: 'Elara'}]
-const props = [{characterId: 'kael', prop: 'guitar', activePerShot: [true, false]}, {characterId: 'mara', prop: 'drum kit', activePerShot: [true, true]}]
+const characters = [
+    {id: 'kael', name: 'Kael'},
+    {id: 'mara', name: 'Mara'},
+    {id: 'elara', name: 'Elara'},
+]
+const props = [
+    {characterId: 'kael', prop: 'guitar', activePerShot: [true, false]},
+    {characterId: 'mara', prop: 'drum kit', activePerShot: [true, true]},
+]
 const shots: ShotPlan[] = [
-    {action: 'x', people: {
-        kael: {motion: 'steps forward', playing: true, plays: 'strums hard downstrokes'},
-        mara: {motion: 'holds pose', playing: true, plays: 'both wrists locked overhead, sticks held rigid'},
-        elara: {motion: 'sings', singing: true},
-    }},
+    {
+        action: 'x',
+        people: {
+            kael: {motion: 'steps forward', playing: true, plays: 'strums hard downstrokes'},
+            mara: {motion: 'holds pose', playing: true, plays: 'both wrists locked overhead, sticks held rigid'},
+            elara: {motion: 'sings', singing: true},
+        },
+    },
     {action: 'y', people: {kael: {motion: 'turns'}, mara: {playing: true}}},
 ]
 
@@ -28,14 +38,23 @@ describe('playingCases', () => {
 
 describe('playingIssues', () => {
     const asked: AskOptions[] = []
-    const answering = (playing: unknown[]) => async <T>(options: AskOptions) => {
-        asked.push(options)
-        return {playing} as T
-    }
+    const answering =
+        (playing: unknown[]) =>
+        async <T>(options: AskOptions) => {
+            asked.push(options)
+            return {playing} as T
+        }
     const cases = playingCases(shots, props, characters)
     test('a "no" is a problem of its shot, with the phrase and what to write instead', async () => {
         const issues = await playingIssues(cases, answering([true, false]))
-        expect(issues).toEqual([{shot: 0, message: expect.stringContaining('shot 1: Mara\'s drum kit is heard through this shot, but "both wrists locked overhead, sticks held rigid" with "holds pose" does not play it')}])
+        expect(issues).toEqual([
+            {
+                shot: 0,
+                message: expect.stringContaining(
+                    'shot 1: Mara\'s drum kit is heard through this shot, but "both wrists locked overhead, sticks held rigid" with "holds pose" does not play it',
+                ),
+            },
+        ])
         expect(issues[0]!.message).toContain("playing: what Mara's hands do to play the drum kit all through the shot")
     })
     test('one call for the beat, thinking off, the phrases as data', async () => {

@@ -4,9 +4,10 @@ import type {SingingChange, SingingLine, SingingPart, SingingView} from '../../.
  * Who sings a line, as parts: one part from word 0 when the singer does not change within it, else one per change of singer
  * (lib/singing-parts.ts). Pure functions over the page's working copy; the Vue state is in useSingingDraft.
  */
-export type Part = {from: number, singers: Set<string>}
+export type Part = {from: number; singers: Set<string>}
 
-export const partsOfView = (line: SingingLine): Part[] => (line.parts ?? [{from: 0, singers: line.singers}]).map(p => ({from: p.from, singers: new Set(p.singers)}))
+export const partsOfView = (line: SingingLine): Part[] =>
+  (line.parts ?? [{from: 0, singers: line.singers}]).map(p => ({from: p.from, singers: new Set(p.singers)}))
 export const singersOf = (parts: Part[]) => new Set(parts.flatMap(p => [...p.singers]))
 
 /** As the server keeps them: neighbours with the same singers are one part, and the first starts at word 0. */
@@ -41,14 +42,18 @@ export function spanOf(line: SingingLine, parts: Part[], k: number) {
   return {start: line.words[parts[k]!.from]?.start, end: line.words[last]?.end}
 }
 /** The words of part k of a line. */
-export const partText = (line: SingingLine, parts: Part[], k: number) => line.words.slice(parts[k]!.from, parts[k + 1]?.from ?? line.words.length).map(w => w.text).join(' ')
+export const partText = (line: SingingLine, parts: Part[], k: number) =>
+  line.words
+    .slice(parts[k]!.from, parts[k + 1]?.from ?? line.words.length)
+    .map(w => w.text)
+    .join(' ')
 
 /** What saving the changed lines does, worked out as the server does it: the beats planned again, the clips that go stale. */
 export function changesOf(view: SingingView, partsOf: (line: SingingLine) => Part[]) {
   const lines = view.lines.filter(l => !sameParts(partsOf(l), partsOfView(l)))
   const beats = [...new Set(lines.flatMap(l => l.beats))]
   const beatOf = (id: string) => view.beats.find(b => b.id === id)
-  const added: {beat: string, id: string}[] = []
+  const added: {beat: string; id: string}[] = []
   for (const beat of beats) {
     const here = new Set(lines.filter(l => l.beats.includes(beat)).flatMap(l => [...singersOf(partsOf(l))]))
     for (const id of here) if (!beatOf(beat)?.characterIds.includes(id)) added.push({beat, id})
@@ -59,7 +64,11 @@ export function changesOf(view: SingingView, partsOf: (line: SingingLine) => Par
   const formerSingers = view.singers.filter(id => !used.has(id))
   const clipsOf = (id: string) => view.characters.find(ch => ch.id === id)?.clips ?? []
   return {
-    lines, beats, added, newSingers, formerSingers,
+    lines,
+    beats,
+    added,
+    newSingers,
+    formerSingers,
     replanned: beats.filter(b => beatOf(b)?.planned),
     clips: [...new Set([...beats.flatMap(b => beatOf(b)?.clips ?? []), ...[...newSingers, ...formerSingers].flatMap(clipsOf)])].sort(),
     empty: view.lines.filter(l => partsOf(l).some(p => !p.singers.size)),
@@ -69,14 +78,16 @@ export function changesOf(view: SingingView, partsOf: (line: SingingLine) => Par
 export type SingingChanges = ReturnType<typeof changesOf>
 
 /** The request for the changed lines: parts only where the singer changes within a line. */
-export const changeOf = (lines: SingingLine[], partsOf: (line: SingingLine) => Part[]): SingingChange => ({lines: lines.map(l => {
-  const parts = kept(partsOf(l))
-  return parts.length > 1 ? {line: l.line, singers: [...singersOf(partsOf(l))], parts} : {line: l.line, singers: parts[0]!.singers}
-})})
+export const changeOf = (lines: SingingLine[], partsOf: (line: SingingLine) => Part[]): SingingChange => ({
+  lines: lines.map(l => {
+    const parts = kept(partsOf(l))
+    return parts.length > 1 ? {line: l.line, singers: [...singersOf(partsOf(l))], parts} : {line: l.line, singers: parts[0]!.singers}
+  }),
+})
 
 /** The lines in their sections, in the order of the song. */
 export function sectionsOf(lines: SingingLine[]) {
-  const sections: {name: string, lines: SingingLine[]}[] = []
+  const sections: {name: string; lines: SingingLine[]}[] = []
   for (const line of lines) {
     const name = line.section ?? ''
     if (!sections.length || sections.at(-1)!.name !== name) sections.push({name, lines: []})

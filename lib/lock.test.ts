@@ -1,8 +1,8 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {lockHolder, lockProject, processAlive} from "./lock.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {lockHolder, lockProject, processAlive} from './lock.ts'
 
 test('invalid lock PIDs are never live holders (#641)', () => {
     for (const value of ['', '0', '-1', '1.5', 'garbage']) {
@@ -32,7 +32,7 @@ describe('lockProject', () => {
         const dir = mkdtempSync(join(tmpdir(), 'lock-'))
         writeFileSync(join(dir, '.lock'), '2147483646')
         const release = lockProject(dir, 'project x')
-        expect(() => lockProject(dir, 'project x')).not.toThrow()   // our own pid: same run
+        expect(() => lockProject(dir, 'project x')).not.toThrow() // our own pid: same run
         release()
     })
 })

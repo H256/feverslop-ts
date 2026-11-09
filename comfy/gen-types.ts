@@ -1,5 +1,5 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 // Generates comfy/nodes.ts - a typed WorkflowBuilder with one method per node installed on the ComfyUI server.
 // Run again after installing custom nodes or models: bun run comfy:types [--comfy=http://host:8188]
 // Reads the first ComfyUI server of the settings - all servers need the same nodes and models.
@@ -9,12 +9,11 @@ import {log} from '../lib/log.ts';
 //   reachable. cfli reads the node list from the server, so it gets it through a small local proxy that numbers
 //   duplicates: FLOAT, FLOAT_2. Inputs declared both required and optional are kept as required.
 // - the generated imports mix types and values, which verbatimModuleSyntax forbids.
-import {join} from "node:path";
-import {parseArgs} from "node:util";
-import {authHeaders} from "../lib/settings.ts";
-import {cleanNodeList, nodeServer} from "./node-list.ts";
+import {join} from 'node:path'
+import {parseArgs} from 'node:util'
+import {authHeaders} from '../lib/settings.ts'
+import {cleanNodeList, nodeServer} from './node-list.ts'
 cli('comfy:types')
-
 
 const {values: args} = parseArgs({args: Bun.argv.slice(2), options: {comfy: {type: 'string'}}})
 const server = await nodeServer(args.comfy)
@@ -30,7 +29,7 @@ const proxy = Bun.serve({
         for (const [name, value] of Object.entries(authHeaders(server))) headers.set(name, value)
         const response = await fetch(`${server.url}${url.pathname}${url.search}`, {method: request.method, headers, body: request.body})
         if (url.pathname !== '/object_info') return response
-        const cleaned = cleanNodeList(await response.json() as Record<string, any>)
+        const cleaned = cleanNodeList((await response.json()) as Record<string, any>)
         fixed = cleaned.fixed
         return Response.json(cleaned.objectInfo)
     },
@@ -45,9 +44,12 @@ try {
 }
 
 const code = await Bun.file(file).text()
-await Bun.write(file, code.replace(
-    /^import \{ WorkflowBuilder as BaseWorkflowBuilder, ([^}]+) \} from "@saintno\/comfyui-sdk";/m,
-    'import { WorkflowBuilder as BaseWorkflowBuilder } from "@saintno/comfyui-sdk";\nimport type { $1 } from "@saintno/comfyui-sdk";',
-))
+await Bun.write(
+    file,
+    code.replace(
+        /^import \{ WorkflowBuilder as BaseWorkflowBuilder, ([^}]+) \} from "@saintno\/comfyui-sdk";/m,
+        'import { WorkflowBuilder as BaseWorkflowBuilder } from "@saintno/comfyui-sdk";\nimport type { $1 } from "@saintno/comfyui-sdk";',
+    ),
+)
 log.info(`Fixed ${fixed} duplicate output/input names`)
-process.exit(0)   // the proxy's fetches to the ComfyUI server leave keep-alive sockets open that would hang the process otherwise
+process.exit(0) // the proxy's fetches to the ComfyUI server leave keep-alive sockets open that would hang the process otherwise

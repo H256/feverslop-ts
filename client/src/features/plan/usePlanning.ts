@@ -16,7 +16,9 @@ export function usePlanning() {
       title: until ? `Plan up to the ${stageName(until, kind).toLowerCase()}?` : 'Plan everything?',
       lines: [
         ...stagesBetween(plan.next, until).map(stage => `${stageName(stage, kind)}: ${stageDoes(stage, kind)}`),
-        plan.stage ? 'The language model only. Nothing is rendered.' : 'The language model; a music video has its song read first (stems and the lyrics timing, when set). Nothing is rendered.',
+        plan.stage
+          ? 'The language model only. Nothing is rendered.'
+          : 'The language model; a music video has its song read first (stems and the lyrics timing, when set). Nothing is rendered.',
         until ? 'It stops there: look at it here, change it, and go on.' : 'Rendering is asked for on the timeline afterwards.',
       ],
       confirm: 'Plan it',
@@ -32,7 +34,9 @@ export function usePlanning() {
       title: 'Render the pictures of the cast and the places?',
       lines: [
         'Every character and place as the look describes it, before the shots are planned - look at them on References, change a prompt there, render one again.',
-        missing ? `${plural(missing, 'picture')} to render${asked?.estimate ? `: ${asked.estimate}` : ''}. Pictures already there stay.` : 'Every picture is there already: nothing is rendered.',
+        missing
+          ? `${plural(missing, 'picture')} to render${asked?.estimate ? `: ${asked.estimate}` : ''}. Pictures already there stay.`
+          : 'Every picture is there already: nothing is rendered.',
         'The members of a group come with the shot plan: how many there are is read from the beats.',
       ],
       confirm: 'Render them',

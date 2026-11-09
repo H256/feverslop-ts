@@ -41,9 +41,15 @@ export function useSingingDraft(view: Ref<SingingView>) {
     const all = lines.every(l => partsOf(l).every(p => p.singers.has(id)))
     for (const l of lines) for (const p of partsOf(l)) all ? p.singers.delete(id) : p.singers.add(id)
   }
-  const split = (line: SingingLine, word: number) => { active.set(line.line, splitAt(partsOf(line), word)) }
-  const movePart = (line: SingingLine, by: number) => { active.set(line.line, clamp(activeOf(line) + by, 0, partsOf(line).length - 1)) }
-  const addSinger = (id: string) => { if (id && !pool.value.includes(id)) pool.value.push(id) }
+  const split = (line: SingingLine, word: number) => {
+    active.set(line.line, splitAt(partsOf(line), word))
+  }
+  const movePart = (line: SingingLine, by: number) => {
+    active.set(line.line, clamp(activeOf(line) + by, 0, partsOf(line).length - 1))
+  }
+  const addSinger = (id: string) => {
+    if (id && !pool.value.includes(id)) pool.value.push(id)
+  }
   const lineCount = (id: string) => view.value.lines.filter(l => singersOf(partsOf(l)).has(id)).length
   const request = () => changeOf(changes.value.lines, partsOf)
   return {pool, partsOf, hueOf, nameOf, changes, isChanged, activeOf, toggle, toggleAll, split, movePart, addSinger, lineCount, request, reset}

@@ -1,13 +1,14 @@
-import {existsSync} from "node:fs";
-import {join} from "node:path";
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {existsSync} from 'node:fs'
+import {join} from 'node:path'
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 cli('typecheck')
 
 // Type-checks the project - including the ComfyUI workflows against comfy/nodes.ts, so a missing model,
 // a wrong sampler name or a wrong connection is caught before anything is rendered.
 // usage: bun run typecheck
-if (!existsSync(join(import.meta.dir, '..', 'comfy', 'nodes.ts'))) log.warn('No comfy/nodes.ts: the workflows are not checked against a server - generate it with bun run comfy:types')
+if (!existsSync(join(import.meta.dir, '..', 'comfy', 'nodes.ts')))
+    log.warn('No comfy/nodes.ts: the workflows are not checked against a server - generate it with bun run comfy:types')
 const proc = Bun.spawn(['bunx', 'tsc', '--noEmit', '-p', '.'], {stdout: 'pipe', stderr: 'pipe'})
 const [output, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
 

@@ -17,7 +17,9 @@ const {data, loading, error, reload, refresh} = usePageData(async signal => {
   <div v-else class="split view">
     <div class="scrollpage">
       <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
-      <div v-if="data && !data.timing" class="empty">The lyrics have no timing in this project: "alignLyrics" is off, or the plan has not aligned them yet.</div>
+      <div v-if="data && !data.timing" class="empty">
+        The lyrics have no timing in this project: "alignLyrics" is off, or the plan has not aligned them yet.
+      </div>
     </div>
     <aside class="detail" />
   </div>

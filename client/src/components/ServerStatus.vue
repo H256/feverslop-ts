@@ -6,7 +6,12 @@ const servers = useServers()
 
 <template>
   <div class="servers" aria-label="Render servers">
-    <span v-for="server in servers.list.value" :key="server.name" :class="['server', {down: !server.reachable, busy: server.reachable && (server.running || server.pending)}]" :title="serverTitle(server)">
+    <span
+      v-for="server in servers.list.value"
+      :key="server.name"
+      :class="['server', {down: !server.reachable, busy: server.reachable && (server.running || server.pending)}]"
+      :title="serverTitle(server)"
+    >
       <i />{{ serverLabel(server) }}
     </span>
   </div>

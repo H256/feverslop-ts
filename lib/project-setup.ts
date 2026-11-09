@@ -1,16 +1,16 @@
 // Non-interactive helpers shared by tools/init.ts (the wizard) and tools/example.ts (random example projects):
 // where a new project's files go and how they're written - projects/<id>/{input/*, config.json}.
-import {existsSync, readdirSync, statSync} from "node:fs";
-import {join} from "node:path";
-import type {ProjectConfig} from "./config.ts";
+import {existsSync, readdirSync, statSync} from 'node:fs'
+import {join} from 'node:path'
+import type {ProjectConfig} from './config.ts'
 
 export type ProjectSeed = {
     songFile?: string // path to an existing audio file, copied in as input/song.wav, input/song.mp3 or input/song.flac
-    idea?: string      // input/idea.txt - a song idea for --render=song to write lyrics + generate audio from
-    lyrics?: string    // input/lyrics.txt
+    idea?: string // input/idea.txt - a song idea for --render=song to write lyrics + generate audio from
+    lyrics?: string // input/lyrics.txt
     storyIdea?: string // input/story-idea.txt
-    style?: string     // input/style.txt - visual style
-    musicStyle?: string// input/music-style.txt
+    style?: string // input/style.txt - visual style
+    musicStyle?: string // input/music-style.txt
     config?: Partial<ProjectConfig>
 }
 
@@ -29,12 +29,19 @@ export function listProjects(): string[] {
         const file = join(projectDir(id), 'project.json')
         return statSync(existsSync(file) ? file : projectDir(id)).mtimeMs
     }
-    return readdirSync('projects', {withFileTypes: true})
-        // a project has its input/ folder or a project.json - other folders (collected logs, …) are not one
-        .filter(d => d.isDirectory() && validProjectId(d.name) && (existsSync(join(projectDir(d.name), 'input')) || existsSync(join(projectDir(d.name), 'project.json'))))
-        .map(d => ({id: d.name, changed: changed(d.name)}))
-        .sort((a, b) => b.changed - a.changed)
-        .map(d => d.id)
+    return (
+        readdirSync('projects', {withFileTypes: true})
+            // a project has its input/ folder or a project.json - other folders (collected logs, …) are not one
+            .filter(
+                d =>
+                    d.isDirectory() &&
+                    validProjectId(d.name) &&
+                    (existsSync(join(projectDir(d.name), 'input')) || existsSync(join(projectDir(d.name), 'project.json'))),
+            )
+            .map(d => ({id: d.name, changed: changed(d.name)}))
+            .sort((a, b) => b.changed - a.changed)
+            .map(d => d.id)
+    )
 }
 
 // a project id is a directory name and part of the ComfyUI client id - keep it filesystem- and URL-safe

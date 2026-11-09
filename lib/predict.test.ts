@@ -1,9 +1,18 @@
-import {describe, expect, test} from "bun:test";
-import {cost, describePrediction, median, percentile, predictJob, predictJobs, predictLlmSeconds, resolutionPixels, sumTokens} from "./predict.ts";
-import type {Timing} from "./timings.ts";
+import {describe, expect, test} from 'bun:test'
+import {cost, describePrediction, median, percentile, predictJob, predictJobs, predictLlmSeconds, resolutionPixels, sumTokens} from './predict.ts'
+import type {Timing} from './timings.ts'
 
 const clip = (seconds: number, extra: Partial<Timing> = {}): Timing => ({
-    at: '', kind: 'clip', name: 'wan', seconds, variant: 'v1', workflowHash: 'h1', server: 'gpu1', frames: 22, pixels: 400_000, ...extra,
+    at: '',
+    kind: 'clip',
+    name: 'wan',
+    seconds,
+    variant: 'v1',
+    workflowHash: 'h1',
+    server: 'gpu1',
+    frames: 22,
+    pixels: 400_000,
+    ...extra,
 })
 const job = {kind: 'clip' as const, name: 'wan', workflowHash: 'h1', frames: 22, resolution: 0.4}
 
@@ -27,7 +36,11 @@ describe('predictJob', () => {
         expect(p).toEqual({seconds: 200, basis: 'measured', samples: 3, servers: ['gpu1']})
     })
     test('cold starts, failed tries and other workflows are left out', () => {
-        const p = predictJob([clip(100), clip(900, {cold: true}), clip(5, {outcome: 'failed'}), clip(5, {name: 'other'}), clip(5, {workflowHash: 'edited'})], job, ['gpu1'])
+        const p = predictJob(
+            [clip(100), clip(900, {cold: true}), clip(5, {outcome: 'failed'}), clip(5, {name: 'other'}), clip(5, {workflowHash: 'edited'})],
+            job,
+            ['gpu1'],
+        )
         expect(p.seconds).toBe(100)
     })
     test('another size is scaled by frames x pixels and marked as extrapolated', () => {
@@ -62,14 +75,20 @@ describe('predictJobs', () => {
         expect(describePrediction('clip', total)).toBe('3 clips left: about 3m 20s (measured, median of up to 1 jobs on gpu1), 1 without data not counted')
     })
     test('no data at all says so', () => {
-        expect(describePrediction('clip', predictJobs([], [job], ['gpu1']))).toBe('1 clip left: no data for this workflow variant yet, measured during this run')
+        expect(describePrediction('clip', predictJobs([], [job], ['gpu1']))).toBe(
+            '1 clip left: no data for this workflow variant yet, measured during this run',
+        )
     })
 })
 
 describe('LLM', () => {
     const call = (extra: Partial<Timing>): Timing => ({at: '', kind: 'llm', name: 'm', seconds: 1, ...extra})
     test('output length of the step ÷ tokens per second of the model', () => {
-        const timings = [call({step: 'story', completionTokens: 1000, tokensPerSecond: 40}), call({step: 'story', completionTokens: 3000, tokensPerSecond: 60}), call({step: 'other', completionTokens: 9, tokensPerSecond: 50})]
+        const timings = [
+            call({step: 'story', completionTokens: 1000, tokensPerSecond: 40}),
+            call({step: 'story', completionTokens: 3000, tokensPerSecond: 60}),
+            call({step: 'other', completionTokens: 9, tokensPerSecond: 50}),
+        ]
         expect(predictLlmSeconds(timings, 'm', 'story')).toBe(2000 / 50)
     })
     test('no reported numbers, no prediction', () => {

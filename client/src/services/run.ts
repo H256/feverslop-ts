@@ -8,14 +8,15 @@ const LOG_KEPT = 200_000
 
 /** Whose runs are followed: a project's, or the library's - where its events come from and how it is stopped. */
 export type RunScope = {
-  events: string,
-  stop?: () => Promise<unknown>,
-  said?: {done: string, failed: string},
+  events: string
+  stop?: () => Promise<unknown>
+  said?: {done: string; failed: string}
 }
 export type RunEnd = (current: RunInfo | null, action: RunRequest | undefined) => void
 
 export const failedRun = (run: RunInfo) => !run.running && run.code !== undefined && run.code !== 0
-export const runStateText = (run: RunInfo) => run.running ? (run.source === 'terminal' ? 'Running in the terminal' : 'Running') : failedRun(run) ? `Failed (${run.code})` : 'Finished'
+export const runStateText = (run: RunInfo) =>
+  run.running ? (run.source === 'terminal' ? 'Running in the terminal' : 'Running') : failedRun(run) ? `Failed (${run.code})` : 'Finished'
 
 /**
  * The run of the page's scope, started here or in the terminal: its state and its log as server-sent events. A new scope (another
@@ -100,7 +101,9 @@ export function createRunDock(toasts: Toasts) {
    */
   const starter = () => {
     const asked = scope.value
-    return (run: RunInfo, request?: RunRequest) => { if (asked && scope.value === asked) started(run, request) }
+    return (run: RunInfo, request?: RunRequest) => {
+      if (asked && scope.value === asked) started(run, request)
+    }
   }
   /** Called when a run of this scope ends, while the caller lives. */
   const onEnd = (end: RunEnd) => {
@@ -108,7 +111,10 @@ export function createRunDock(toasts: Toasts) {
     onScopeDispose(() => ends.delete(end))
   }
   const running = () => !!current.value?.running
-  const dispose = () => { source?.close(); ends.clear() }
+  const dispose = () => {
+    source?.close()
+    ends.clear()
+  }
   return {current, log, logOpen, closed, detail, scope, follow, starter, onEnd, running, dispose}
 }
 export type RunDock = ReturnType<typeof createRunDock>

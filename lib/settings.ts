@@ -1,66 +1,76 @@
-import {chmodSync, existsSync, mkdirSync, writeFileSync} from "node:fs";
-import {homedir} from "node:os";
-import {dirname, join} from "node:path";
-import type {BasicCredentials, BearerTokenCredentials, SystemStatsResponse} from "@saintno/comfyui-sdk";
-import {warnUnknownKeys} from "./log.ts";
-import {postworkProblem} from "./postwork/config.ts";
+import {chmodSync, existsSync, mkdirSync, writeFileSync} from 'node:fs'
+import {homedir} from 'node:os'
+import {dirname, join} from 'node:path'
+import type {BasicCredentials, BearerTokenCredentials, SystemStatsResponse} from '@saintno/comfyui-sdk'
+import {warnUnknownKeys} from './log.ts'
+import {postworkProblem} from './postwork/config.ts'
 
 // The machine-specific connections: the LLM server and the ComfyUI servers. Stored outside the repo in a global
 // settings file (written by `bun run setup`), overridable per project (llm.model), by env vars and by CLI flags.
 // Documented in the README, section "Setup".
 
-export type ComfyEntry = string | { url: string, name?: string, token?: string, username?: string, password?: string }
+export type ComfyEntry = string | {url: string; name?: string; token?: string; username?: string; password?: string}
 
 // the settings file as written by `bun run setup`
 export type SettingsFile = {
     // parallel: how many LLM calls may run at once - as many as the server has slots (llama-server --parallel N, vLLM); default 1
     // vision: the model that describes pictures (replace-character, import-asset, create-asset) - its own server and/or
     // model, for a text server without a vision projector; without it the text model is asked
-    llm?: { url?: string, apiKey?: string, model?: string, parallel?: number, vision?: VisionSettings },
-    comfy?: ComfyEntry[],
+    llm?: {url?: string; apiKey?: string; model?: string; parallel?: number; vision?: VisionSettings}
+    comfy?: ComfyEntry[]
     /** Turns the tokens of `bun run stats` into money: per model id, price per million tokens (the currency is only a label). */
-    prices?: Record<string, { inputPerMillion: number, outputPerMillion: number, currency?: string }>,
+    prices?: Record<string, {inputPerMillion: number; outputPerMillion: number; currency?: string}>
     /** The asset library (lib/library.ts) - default: library/ in the working directory. */
-    library?: string,
+    library?: string
     /** The post-work steps the same for every project (lib/postwork/config.ts): a marker, a name. A project's config.json beats them. */
-    postwork?: Record<string, Record<string, unknown>>,
+    postwork?: Record<string, Record<string, unknown>>
     /** The transcription of the vocals stem (tools/vocals.py) - unset: large-v3 on a GPU, large-v3-turbo with fewer beams on a CPU. */
-    whisper?: WhisperSettings,
+    whisper?: WhisperSettings
 }
 
 // beamSize: faster-whisper's beam_size; temperatures: its fallback ladder, a failed window is decoded again at each one
-export type WhisperSettings = { model?: string, beamSize?: number, temperatures?: number[] }
+export type WhisperSettings = {model?: string; beamSize?: number; temperatures?: number[]}
 
 // a missing url is the text server (with its key), a missing model the server's only model
-export type VisionSettings = { url?: string, apiKey?: string, model?: string }
+export type VisionSettings = {url?: string; apiKey?: string; model?: string}
 
-export type ComfyServer = { url: string, name: string, credentials?: BasicCredentials | BearerTokenCredentials }
+export type ComfyServer = {url: string; name: string; credentials?: BasicCredentials | BearerTokenCredentials}
 
 export type Source = 'default' | 'file' | 'project' | 'env' | 'flag'
 
 export type Settings = {
-    llm: { url?: string, apiKey?: string, model?: string, parallel: number, vision?: VisionSettings },
-    comfy: ComfyServer[],
-    sources: { llmUrl: Source, llmApiKey: Source, llmModel: Source, llmParallel: Source, visionUrl: Source, visionApiKey: Source, visionModel: Source, comfy: Source },
+    llm: {url?: string; apiKey?: string; model?: string; parallel: number; vision?: VisionSettings}
+    comfy: ComfyServer[]
+    sources: {
+        llmUrl: Source
+        llmApiKey: Source
+        llmModel: Source
+        llmParallel: Source
+        visionUrl: Source
+        visionApiKey: Source
+        visionModel: Source
+        comfy: Source
+    }
 }
 
 // everything that beats the settings file - all optional, strings as typed on the command line
 export type SettingsOverrides = {
-    projectModel?: string,      // "llm": {"model": …} in the project's config.json
-    llmUrl?: string,
-    llmApiKey?: string,
-    llmModel?: string,
-    llmParallel?: string,
-    comfy?: string,             // comma-separated URLs
+    projectModel?: string // "llm": {"model": …} in the project's config.json
+    llmUrl?: string
+    llmApiKey?: string
+    llmModel?: string
+    llmParallel?: string
+    comfy?: string // comma-separated URLs
 }
 
 export const defaultComfy = 'http://localhost:8188'
 
 export function settingsPath() {
     if (process.env.FEVERSLOP_SETTINGS) return process.env.FEVERSLOP_SETTINGS
-    const base = process.platform === 'win32'
-        ? process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming')
-        : process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config')
+    const base =
+        process.platform === 'win32'
+            ? (process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'))
+            : (process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'))
     return join(base, 'feverslop-ts', 'settings.json')
 }
 
@@ -84,7 +94,8 @@ export async function readSettingsFile(): Promise<SettingsFile> {
         const wrong = postworkProblem(raw.postwork)
         if (wrong) fail(wrong)
     }
-    if (raw.library !== undefined && (typeof raw.library !== 'string' || !raw.library.trim())) fail(`library must be a folder path, got ${JSON.stringify(raw.library)}`)
+    if (raw.library !== undefined && (typeof raw.library !== 'string' || !raw.library.trim()))
+        fail(`library must be a folder path, got ${JSON.stringify(raw.library)}`)
 
     if (raw.llm !== undefined) {
         if (!raw.llm || typeof raw.llm !== 'object' || Array.isArray(raw.llm)) fail('llm must be an object like {"url": …, "apiKey": …, "model": …}')
@@ -92,7 +103,8 @@ export async function readSettingsFile(): Promise<SettingsFile> {
         for (const key of ['url', 'apiKey', 'model'] as const) {
             if (raw.llm[key] !== undefined && typeof raw.llm[key] !== 'string') fail(`llm.${key} must be a string, got ${JSON.stringify(raw.llm[key])}`)
         }
-        if (raw.llm.parallel !== undefined && !(Number.isInteger(raw.llm.parallel) && raw.llm.parallel >= 1)) fail(`llm.parallel must be a whole number of 1 or more, got ${JSON.stringify(raw.llm.parallel)}`)
+        if (raw.llm.parallel !== undefined && !(Number.isInteger(raw.llm.parallel) && raw.llm.parallel >= 1))
+            fail(`llm.parallel must be a whole number of 1 or more, got ${JSON.stringify(raw.llm.parallel)}`)
         if (raw.llm.url) checkUrl(raw.llm.url, `${file}: llm.url`)
         const vision = raw.llm.vision
         if (vision !== undefined) {
@@ -109,13 +121,15 @@ export async function readSettingsFile(): Promise<SettingsFile> {
         parseComfyEntries(raw.comfy, `${file}: comfy`)
     }
     if (raw.whisper !== undefined) {
-        if (!raw.whisper || typeof raw.whisper !== 'object' || Array.isArray(raw.whisper)) fail('whisper must be an object like {"model": …, "beamSize": …, "temperatures": […]}')
+        if (!raw.whisper || typeof raw.whisper !== 'object' || Array.isArray(raw.whisper))
+            fail('whisper must be an object like {"model": …, "beamSize": …, "temperatures": […]}')
         warnUnknownKeys(raw.whisper, ['model', 'beamSize', 'temperatures'], file, 'whisper.')
         const wrong = whisperProblem(raw.whisper)
         if (wrong) fail(`whisper.${wrong}`)
     }
     for (const [model, price] of Object.entries(raw.prices ?? {})) {
-        if (typeof price?.inputPerMillion !== 'number' || typeof price?.outputPerMillion !== 'number') fail(`prices.${model} must be like {"inputPerMillion": 0.5, "outputPerMillion": 1.5}`)
+        if (typeof price?.inputPerMillion !== 'number' || typeof price?.outputPerMillion !== 'number')
+            fail(`prices.${model} must be like {"inputPerMillion": 0.5, "outputPerMillion": 1.5}`)
     }
     return raw
 }
@@ -125,14 +139,23 @@ export async function saveSettings(settings: SettingsFile) {
     const file = settingsPath()
     mkdirSync(dirname(file), {recursive: true})
     writeFileSync(file, JSON.stringify(settings, null, 2) + '\n', {mode: 0o600})
-    chmodSync(file, 0o600)      // the mode above only applies to a new file
+    chmodSync(file, 0o600) // the mode above only applies to a new file
 }
 
 /** The effective settings: defaults → settings file → project config → env vars → flags, with the source of each. */
 export async function loadSettings(overrides: SettingsOverrides = {}): Promise<Settings> {
     const file = await readSettingsFile()
     const env = process.env
-    const sources: Settings['sources'] = {llmUrl: 'default', llmApiKey: 'default', llmModel: 'default', llmParallel: 'default', visionUrl: 'default', visionApiKey: 'default', visionModel: 'default', comfy: 'default'}
+    const sources: Settings['sources'] = {
+        llmUrl: 'default',
+        llmApiKey: 'default',
+        llmModel: 'default',
+        llmParallel: 'default',
+        visionUrl: 'default',
+        visionApiKey: 'default',
+        visionModel: 'default',
+        comfy: 'default',
+    }
 
     // the value of the highest layer that sets it
     const pick = (key: keyof Settings['sources'], layers: [Source, string | undefined][]) => {
@@ -144,21 +167,49 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
         }
         return value
     }
-    const url = pick('llmUrl', [['file', file.llm?.url], ['env', env.FEVERSLOP_LLM_URL], ['flag', overrides.llmUrl]])
-    const apiKey = pick('llmApiKey', [['file', file.llm?.apiKey], ['env', env.FEVERSLOP_LLM_API_KEY], ['flag', overrides.llmApiKey]])
-    const model = pick('llmModel', [['file', file.llm?.model], ['project', overrides.projectModel], ['env', env.FEVERSLOP_LLM_MODEL], ['flag', overrides.llmModel]])
+    const url = pick('llmUrl', [
+        ['file', file.llm?.url],
+        ['env', env.FEVERSLOP_LLM_URL],
+        ['flag', overrides.llmUrl],
+    ])
+    const apiKey = pick('llmApiKey', [
+        ['file', file.llm?.apiKey],
+        ['env', env.FEVERSLOP_LLM_API_KEY],
+        ['flag', overrides.llmApiKey],
+    ])
+    const model = pick('llmModel', [
+        ['file', file.llm?.model],
+        ['project', overrides.projectModel],
+        ['env', env.FEVERSLOP_LLM_MODEL],
+        ['flag', overrides.llmModel],
+    ])
     if (url && sources.llmUrl !== 'file') checkUrl(url, sources.llmUrl === 'env' ? 'FEVERSLOP_LLM_URL' : '--llm-url')
-    const parallelText = pick('llmParallel', [['file', file.llm?.parallel === undefined ? undefined : String(file.llm.parallel)], ['env', env.FEVERSLOP_LLM_PARALLEL], ['flag', overrides.llmParallel]])
+    const parallelText = pick('llmParallel', [
+        ['file', file.llm?.parallel === undefined ? undefined : String(file.llm.parallel)],
+        ['env', env.FEVERSLOP_LLM_PARALLEL],
+        ['flag', overrides.llmParallel],
+    ])
     const parallel = parallelText === undefined ? 1 : Number(parallelText)
-    if (!Number.isInteger(parallel) || parallel < 1) throw new Error(`${sources.llmParallel === 'env' ? 'FEVERSLOP_LLM_PARALLEL' : '--llm-parallel'}: "${parallelText}" must be a whole number of 1 or more`)
+    if (!Number.isInteger(parallel) || parallel < 1)
+        throw new Error(`${sources.llmParallel === 'env' ? 'FEVERSLOP_LLM_PARALLEL' : '--llm-parallel'}: "${parallelText}" must be a whole number of 1 or more`)
     // the project's llm.model is the text model only - the vision model stays the machine's
-    const visionUrl = pick('visionUrl', [['file', file.llm?.vision?.url], ['env', env.FEVERSLOP_VISION_URL]])
-    const visionApiKey = pick('visionApiKey', [['file', file.llm?.vision?.apiKey], ['env', env.FEVERSLOP_VISION_API_KEY]])
-    const visionModel = pick('visionModel', [['file', file.llm?.vision?.model], ['env', env.FEVERSLOP_VISION_MODEL]])
+    const visionUrl = pick('visionUrl', [
+        ['file', file.llm?.vision?.url],
+        ['env', env.FEVERSLOP_VISION_URL],
+    ])
+    const visionApiKey = pick('visionApiKey', [
+        ['file', file.llm?.vision?.apiKey],
+        ['env', env.FEVERSLOP_VISION_API_KEY],
+    ])
+    const visionModel = pick('visionModel', [
+        ['file', file.llm?.vision?.model],
+        ['env', env.FEVERSLOP_VISION_MODEL],
+    ])
     if (visionUrl && sources.visionUrl === 'env') checkUrl(visionUrl, 'FEVERSLOP_VISION_URL')
-    const vision = visionUrl || visionApiKey || visionModel
-        ? {...(visionUrl ? {url: trimSlash(visionUrl)} : {}), ...(visionApiKey ? {apiKey: visionApiKey} : {}), ...(visionModel ? {model: visionModel} : {})}
-        : undefined
+    const vision =
+        visionUrl || visionApiKey || visionModel
+            ? {...(visionUrl ? {url: trimSlash(visionUrl)} : {}), ...(visionApiKey ? {apiKey: visionApiKey} : {}), ...(visionModel ? {model: visionModel} : {})}
+            : undefined
 
     let comfy = parseComfyEntries([defaultComfy], 'default')
     if (file.comfy?.length) {
@@ -184,14 +235,19 @@ export async function loadSettings(overrides: SettingsOverrides = {}): Promise<S
 
 /** What is wrong with whisper settings ("beamSize must be …"), undefined when nothing is. */
 export function whisperProblem(whisper: WhisperSettings): string | undefined {
-    if (whisper.model !== undefined && (typeof whisper.model !== 'string' || !whisper.model.trim())) return `model must be a model name like "large-v3", got ${JSON.stringify(whisper.model)}`
-    if (whisper.beamSize !== undefined && !(Number.isInteger(whisper.beamSize) && whisper.beamSize >= 1)) return `beamSize must be a whole number of 1 or more, got ${JSON.stringify(whisper.beamSize)}`
-    if (whisper.temperatures !== undefined && !(Array.isArray(whisper.temperatures) && whisper.temperatures.length && whisper.temperatures.every(t => typeof t === 'number' && t >= 0 && t <= 1)))
+    if (whisper.model !== undefined && (typeof whisper.model !== 'string' || !whisper.model.trim()))
+        return `model must be a model name like "large-v3", got ${JSON.stringify(whisper.model)}`
+    if (whisper.beamSize !== undefined && !(Number.isInteger(whisper.beamSize) && whisper.beamSize >= 1))
+        return `beamSize must be a whole number of 1 or more, got ${JSON.stringify(whisper.beamSize)}`
+    if (
+        whisper.temperatures !== undefined &&
+        !(Array.isArray(whisper.temperatures) && whisper.temperatures.length && whisper.temperatures.every(t => typeof t === 'number' && t >= 0 && t <= 1))
+    )
         return `temperatures must be a list of numbers from 0 to 1 like [0, 0.4, 0.8], got ${JSON.stringify(whisper.temperatures)}`
 }
 
 /** The effective whisper settings: settings file → env vars, with the source of each - unset values are tools/vocals.py's defaults for the device. */
-export async function loadWhisperSettings(): Promise<{ whisper: WhisperSettings, sources: Record<keyof WhisperSettings, Source> }> {
+export async function loadWhisperSettings(): Promise<{whisper: WhisperSettings; sources: Record<keyof WhisperSettings, Source>}> {
     const file = (await readSettingsFile()).whisper ?? {}
     const env = process.env
     const sources: Record<keyof WhisperSettings, Source> = {model: 'default', beamSize: 'default', temperatures: 'default'}
@@ -232,7 +288,8 @@ export function parseComfyEntries(entries: unknown[], where: string): ComfyServe
             const url = normalizeUrl(entry, `${where}, ${at}`)
             return {url, name: new URL(url).host}
         }
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return fail(`${at} must be a URL or an object like {"url": …}, got ${JSON.stringify(entry)}`)
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry))
+            return fail(`${at} must be a URL or an object like {"url": …}, got ${JSON.stringify(entry)}`)
         const e = entry as Exclude<ComfyEntry, string>
         warnUnknownKeys(e, ['url', 'name', 'token', 'username', 'password'], `${where}, ${at}`)
         for (const key of ['url', 'name', 'token', 'username', 'password'] as const) {
@@ -242,8 +299,11 @@ export function parseComfyEntries(entries: unknown[], where: string): ComfyServe
         const url = normalizeUrl(e.url, `${where}, ${at}`)
         if (e.token && (e.username || e.password)) fail(`${at}: use either token or username/password, not both`)
         if (!e.username !== !e.password) fail(`${at}: username and password go together`)
-        const credentials = e.token ? {type: 'bearer_token' as const, token: e.token}
-            : e.username ? {type: 'basic' as const, username: e.username, password: e.password!} : undefined
+        const credentials = e.token
+            ? {type: 'bearer_token' as const, token: e.token}
+            : e.username
+              ? {type: 'basic' as const, username: e.username, password: e.password!}
+              : undefined
         const name = e.name?.trim() || new URL(url).host
         if (!/^[\w.:-]+$/.test(name)) fail(`${at}: name "${name}" may only contain letters, digits, ".", ":", "_" and "-"`)
         return {url, name, ...(credentials ? {credentials} : {})}
@@ -276,7 +336,11 @@ function checkUrl(value: string, where: string) {
 }
 
 const trimSlash = (url: string) => url.replace(/\/+$/, '')
-const splitList = (value: string) => value.split(',').map(s => s.trim()).filter(Boolean)
+const splitList = (value: string) =>
+    value
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
 
 export function authHeaders(server: ComfyServer): Record<string, string> {
     const c = server.credentials
@@ -296,14 +360,17 @@ export async function probeComfy(server: ComfyServer, timeoutMs = 5000): Promise
     }
     if (response.status === 401 || response.status === 403) throw new Error(`${response.status} ${response.statusText} - wrong or missing token/password`)
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
-    return await response.json() as SystemStatsResponse
+    return (await response.json()) as SystemStatsResponse
 }
 
 /** "NVIDIA GeForce RTX 4090, 18.3 of 24.0 GB free" - ComfyUI names it "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync" */
 export function describeDevices(stats: SystemStatsResponse) {
     const gb = (bytes: number) => (bytes / 1024 ** 3).toFixed(1)
     const name = (device: string) => device.replace(/^cuda:\d+\s*/, '').replace(/\s*:\s*\w+$/, '')
-    return stats.devices.map(d => d.vram_total ? `${name(d.name)}, ${gb(d.vram_free)} of ${gb(d.vram_total)} GB free` : name(d.name)).join(' + ') || 'no devices reported'
+    return (
+        stats.devices.map(d => (d.vram_total ? `${name(d.name)}, ${gb(d.vram_free)} of ${gb(d.vram_total)} GB free` : name(d.name))).join(' + ') ||
+        'no devices reported'
+    )
 }
 
 /** "sk-…xY (48 chars)" - enough to recognize a key, not enough to use it */

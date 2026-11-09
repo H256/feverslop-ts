@@ -1,4 +1,4 @@
-import {WorkflowBuilder as BaseWorkflowBuilder} from "@saintno/comfyui-sdk";
+import {WorkflowBuilder as BaseWorkflowBuilder} from '@saintno/comfyui-sdk'
 
 // The nodes our workflows use with the names of their outputs, in output order - the part of the generated comfy/nodes.ts
 // that matters when the workflows run. comfy/helpers.ts falls back to it when nodes.ts was not generated yet, which takes a
@@ -10,7 +10,7 @@ export const FALLBACK_NODES: Record<string, string[]> = {
     BatchImagesNode: ['IMAGE'],
     CLIPLoader: ['CLIP'],
     CLIPTextEncode: ['CONDITIONING'],
-    CheckpointLoaderSimple: ['MODEL', 'CLIP', 'VAE', 'NAME_STRING'],     // the last one only with a custom node of this name
+    CheckpointLoaderSimple: ['MODEL', 'CLIP', 'VAE', 'NAME_STRING'], // the last one only with a custom node of this name
     ConditioningAverage: ['CONDITIONING'],
     ConditioningZeroOut: ['CONDITIONING'],
     EmptyLatentImage: ['LATENT'],
@@ -65,11 +65,13 @@ export class FallbackWorkflowBuilder extends BaseWorkflowBuilder {
         return new Proxy(this, {
             get: (target, name) => {
                 const outputs = typeof name === 'string' ? FALLBACK_NODES[name] : undefined
-                if (outputs) return (inputs: Record<string, unknown>) => {
-                    const id = target.addNode(name as string, inputs)
-                    return {...Object.fromEntries(outputs.map((output, index) => [output, target.makeRef(id, index)])), __id: id}
-                }
-                if (typeof name === 'string' && /^[A-Z]/.test(name)) throw new Error(`Node ${name}: not known without comfy/nodes.ts - generate it from your ComfyUI server: bun run comfy:types`)
+                if (outputs)
+                    return (inputs: Record<string, unknown>) => {
+                        const id = target.addNode(name as string, inputs)
+                        return {...Object.fromEntries(outputs.map((output, index) => [output, target.makeRef(id, index)])), __id: id}
+                    }
+                if (typeof name === 'string' && /^[A-Z]/.test(name))
+                    throw new Error(`Node ${name}: not known without comfy/nodes.ts - generate it from your ComfyUI server: bun run comfy:types`)
                 return Reflect.get(target, name, target)
             },
         })

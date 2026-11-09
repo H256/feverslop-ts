@@ -1,5 +1,5 @@
-import {renameSync} from "node:fs";
-import {runProcess} from "./process.ts";
+import {renameSync} from 'node:fs'
+import {runProcess} from './process.ts'
 
 // A continuing clip is drawn on its own and comes out with its own exposure: on tides slot-013 -> 014 the new clip started
 // darker and flatter (black 33 -> 29, white 157 -> 151, mean 81 -> 77) - a visible step at a cut that is no cut. The clip is
@@ -13,12 +13,15 @@ export const DARK_RANGE = 30
 /** How far a match stretches or squeezes the luma, at most. */
 export const GAIN_LIMIT = {min: 0.85, max: 1.18}
 
-export type FrameStats = { ylow: number, yhigh: number, uavg: number, vavg: number }
+export type FrameStats = {ylow: number; yhigh: number; uavg: number; vavg: number}
 
 /** The mean of ffmpeg's signalstats over frames `from` to `to` (inclusive) of a video. */
 export async function frameStats(video: string, from: number, to: number): Promise<FrameStats> {
     // metadata=print writes to stderr
-    const proc = Bun.spawn(['ffmpeg', '-v', 'info', '-i', video, '-vf', `select='between(n\\,${from}\\,${to})',signalstats,metadata=print`, '-an', '-f', 'null', '-'], {stdout: 'ignore', stderr: 'pipe'})
+    const proc = Bun.spawn(
+        ['ffmpeg', '-v', 'info', '-i', video, '-vf', `select='between(n\\,${from}\\,${to})',signalstats,metadata=print`, '-an', '-f', 'null', '-'],
+        {stdout: 'ignore', stderr: 'pipe'},
+    )
     const text = await new Response(proc.stderr).text()
     await proc.exited
     const mean = (key: string) => {
@@ -43,17 +46,20 @@ export function matchFilter(ref: FrameStats, cur: FrameStats, strength = 1, enab
     return `lutyuv=y='clip((val-${r(cur.ylow)})*${r(gain)}+${r(black)},16,235)':u='clip(val+${r(to('uavg') - cur.uavg)},16,240)':v='clip(val+${r(to('vavg') - cur.vavg)},16,240)'${enable ? `:enable='${enable}'` : ''}`
 }
 
-export type Span = { id: string, start: number, end: number }
+export type Span = {id: string; start: number; end: number}
 
 /**
  * The signalstats of every clip of a joined video, by its time span in seconds: one ffmpeg pass over every `every`-th frame,
  * the frames within 0.1 s of a cut left out (a frame of the clip before can sit on the boundary).
  */
 export async function clipStats(video: string, spans: Span[], every = 6): Promise<Map<string, FrameStats>> {
-    const proc = Bun.spawn(['ffmpeg', '-v', 'info', '-i', video, '-vf', `select='not(mod(n\\,${every}))',signalstats,metadata=print`, '-an', '-f', 'null', '-'], {stdout: 'ignore', stderr: 'pipe'})
+    const proc = Bun.spawn(
+        ['ffmpeg', '-v', 'info', '-i', video, '-vf', `select='not(mod(n\\,${every}))',signalstats,metadata=print`, '-an', '-f', 'null', '-'],
+        {stdout: 'ignore', stderr: 'pipe'},
+    )
     const text = await new Response(proc.stderr).text()
     await proc.exited
-    const frames: ({ t: number } & Partial<FrameStats>)[] = []
+    const frames: ({t: number} & Partial<FrameStats>)[] = []
     const keys: Record<string, keyof FrameStats> = {YLOW: 'ylow', YHIGH: 'yhigh', UAVG: 'uavg', VAVG: 'vavg'}
     for (const line of text.split('\n')) {
         const time = line.match(/pts_time:([0-9.]+)/)
@@ -88,20 +94,45 @@ export function medianStats(all: FrameStats[]): FrameStats {
  */
 export async function colorMatchFilter(video: string, spans: Span[], strength: number, reference?: string): Promise<string> {
     const stats = await clipStats(video, spans)
-    if (reference && !stats.has(reference)) throw new Error(`finish.colorReference: no clip ${reference} in ${video} - known are ${[...stats.keys()].join(', ')}`)
+    if (reference && !stats.has(reference))
+        throw new Error(`finish.colorReference: no clip ${reference} in ${video} - known are ${[...stats.keys()].join(', ')}`)
     const ref = reference ? stats.get(reference)! : medianStats([...stats.values()])
-    return spans.flatMap(span => {
-        const cur = stats.get(span.id)
-        return cur ? [matchFilter(ref, cur, strength, `between(t,${span.start.toFixed(3)},${span.end.toFixed(3)})`)] : []
-    }).join(',')
+    return spans
+        .flatMap(span => {
+            const cur = stats.get(span.id)
+            return cur ? [matchFilter(ref, cur, strength, `between(t,${span.start.toFixed(3)},${span.end.toFixed(3)})`)] : []
+        })
+        .join(',')
 }
 
 /** Matches `video` as a whole to frames `refFrom`-`refTo` of `ref`, measured on its own first frames; sound copied. */
 export async function matchColors(video: string, ref: string, refFrom: number, refTo: number, frames = 4): Promise<string> {
     const filter = matchFilter(await frameStats(ref, refFrom, refTo), await frameStats(video, 0, frames - 1))
     const partial = video.replace(/\.mp4$/, '.match.mp4')
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', video, '-vf', filter, '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'copy', partial],
-        {errorMessage: err => `ffmpeg could not match the colors of ${video}:\n${err}`})
+    await runProcess(
+        [
+            'ffmpeg',
+            '-y',
+            '-v',
+            'error',
+            '-i',
+            video,
+            '-vf',
+            filter,
+            '-c:v',
+            'libx264',
+            '-preset',
+            'medium',
+            '-crf',
+            '14',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'copy',
+            partial,
+        ],
+        {errorMessage: err => `ffmpeg could not match the colors of ${video}:\n${err}`},
+    )
     renameSync(partial, video)
     return filter
 }

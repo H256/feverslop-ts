@@ -3,8 +3,26 @@
 // pass 1 - the base model without the turbo LoRA, 20 steps res_multistep/simple, at a quarter of the final pixels;
 // the video latent x2 with MinimaxH3LatentUpscaler3D; pass 2 - the base model again, euler/beta, 4 steps, denoise 0.2, with a
 // noise of its own, at the final size (#343).
-import type {NodeRef} from "@saintno/comfyui-sdk";
-import {afterCleanup, refAudios, endGuide, FPS, startImages, type Aspect, dyn, MAX_REFERENCE_IMAGES, pixelSize, type PixelSize, type Resolution, resolution, type VideoWorkflowOptions, widget, withInputs, WorkflowBuilder, type WorkflowResult} from "./helpers.ts";
+import type {NodeRef} from '@saintno/comfyui-sdk'
+import {
+    afterCleanup,
+    refAudios,
+    endGuide,
+    FPS,
+    startImages,
+    type Aspect,
+    dyn,
+    MAX_REFERENCE_IMAGES,
+    pixelSize,
+    type PixelSize,
+    type Resolution,
+    resolution,
+    type VideoWorkflowOptions,
+    widget,
+    withInputs,
+    WorkflowBuilder,
+    type WorkflowResult,
+} from './helpers.ts'
 
 // the final size when the project leaves videoResolution at -1: pass 1 at 0.5 MP as in the recipe
 export const TWO_PASS_DEFAULT = 2
@@ -13,7 +31,7 @@ export const TWO_PASS_DEFAULT = 2
  * The final size is what videoResolution asks for, exactly as every other workflow computes it (pixelSize) - the upscaler
  * is given it as its target. Pass 1 renders half its width and half its height, in multiples of 32.
  */
-export function twoPassSizes(setting: Resolution, aspect: Aspect = '16:9'): { final: PixelSize, first: PixelSize } {
+export function twoPassSizes(setting: Resolution, aspect: Aspect = '16:9'): {final: PixelSize; first: PixelSize} {
     const final = pixelSize(setting, aspect, TWO_PASS_DEFAULT)
     const half = (n: number) => Math.max(32, Math.round(n / 2 / 32) * 32)
     return {final, first: {width: half(final.width), height: half(final.height)}}
@@ -25,7 +43,7 @@ type SoundInputs = 'audios' | 'vocals' | 'song' | 'songStart' | 'duration'
 export type TwoPassOptions = Omit<VideoWorkflowOptions, SoundInputs> & Partial<Pick<VideoWorkflowOptions, SoundInputs>>
 
 // song: the sound of the video - the trimmed song, or the model's own sound when no song went in
-export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO">, size: PixelSize }
+export type TwoPassResult = {images: NodeRef<'IMAGE'>; song: NodeRef<'AUDIO'>; size: PixelSize}
 
 /**
  * What the two passes are made with: the model, and the sampling of each pass. The recipe of #288/#343 is the base model with
@@ -33,10 +51,10 @@ export type TwoPassResult = { images: NodeRef<"IMAGE">, song: NodeRef<"AUDIO">, 
  * shift: the sigma shift of a distilled model (MiniMaxH3SigmaShift), for both passes; the base model runs without one.
  */
 export type TwoPassRecipe = {
-    unet: string,
-    shift?: { video: number, audio: number },
-    first: { sampler: string, scheduler: string, steps: number },
-    second: { sampler: string, scheduler: string, steps: number, denoise: number },
+    unet: string
+    shift?: {video: number; audio: number}
+    first: {sampler: string; scheduler: string; steps: number}
+    second: {sampler: string; scheduler: string; steps: number; denoise: number}
 }
 export const BASE_TWO_PASS: TwoPassRecipe = {
     unet: 'minimax_h3_ref2va_pruned_int8_convrot.safetensors',
@@ -64,11 +82,13 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     const silent = opts.song === undefined
     if (silent && opts.audios?.length) throw new Error(`${name}: audio tracks without the song - a clip has both or no sound going in`)
     if (!silent && (opts.songStart === undefined || opts.duration === undefined)) throw new Error(`${name}: the song without songStart and duration`)
-    const tracks = refAudios(name, opts.audios).map(audio => wf.TrimAudioDuration({
-        audio: wf.LoadAudio({audio: dyn(audio)}).AUDIO,
-        start_index: opts.songStart!,
-        duration: opts.duration!,
-    }))
+    const tracks = refAudios(name, opts.audios).map(audio =>
+        wf.TrimAudioDuration({
+            audio: wf.LoadAudio({audio: dyn(audio)}).AUDIO,
+            start_index: opts.songStart!,
+            duration: opts.duration!,
+        }),
+    )
     if (!silent && !tracks.length) throw new Error(`${name}: opts.audios is empty - lib/render.ts should always provide at least the drums track`)
 
     const prompt = wf.PrimitiveStringMultiline({value: opts.prompt})
@@ -87,11 +107,14 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         audio_vae: audioVae.VAE,
     })
     withInputs(wf, references, {
-        ...Object.fromEntries(opts.pictures.slice(0, MAX_REFERENCE_IMAGES).map((picture, i) =>
-            [`ref_images.ref_image_${i}`, wf.LoadImage({image: dyn(picture)}).IMAGE])),
+        ...Object.fromEntries(
+            opts.pictures.slice(0, MAX_REFERENCE_IMAGES).map((picture, i) => [`ref_images.ref_image_${i}`, wf.LoadImage({image: dyn(picture)}).IMAGE]),
+        ),
         ...Object.fromEntries(tracks.map((track, i) => [`ref_audios.ref_audio_${i}`, track.AUDIO])),
     })
-    const song = silent ? undefined : wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song!)}).AUDIO, start_index: opts.songStart!, duration: opts.duration!})
+    const song = silent
+        ? undefined
+        : wf.TrimAudioDuration({audio: wf.LoadAudio({audio: dyn(opts.song!)}).AUDIO, start_index: opts.songStart!, duration: opts.duration!})
     const startFrame = startImages(wf, opts)
 
     // The guides are keyframes on the latent's own grid (comfy/ldm/minimax/model.py): a pinned frame encoded for pass 1
@@ -101,14 +124,15 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // or more): they guide pass 1 only. Pass 2 changes little (denoise 0.2) and starts from what pass 1 made of them; encoding them
     // again at the full size ran out of memory on the 32 GB Radeon (7 GiB in MiniMaxH3AddGuide, #157, #530). The head that holds the
     // context frames is cut off after the render anyway. A single pinned first frame still guides both passes: it costs little.
-    const guide = (latent: NodeRef<"LATENT">, refine = false) => {
+    const guide = (latent: NodeRef<'LATENT'>, refine = false) => {
         const guided = song
             ? wf.MiniMaxH3AddGuide({positive: references.positive, latent, frame_idx: 0, audio_vae: audioVae.VAE, audio: song.AUDIO}).positive
             : references.positive
         if (refine && opts.endFrame) return guided
-        const started = startFrame && !(refine && opts.startClip)
-            ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
-            : guided
+        const started =
+            startFrame && !(refine && opts.startClip)
+                ? wf.MiniMaxH3AddGuide({positive: guided, latent, frame_idx: 0, vae: videoVae.VAE, image: startFrame}).positive
+                : guided
         return endGuide(wf, started, latent, videoVae.VAE, opts.endFrame)
     }
     const noise = wf.RandomNoise({noise_seed: opts.seed})
@@ -129,7 +153,11 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
     // a preview: what the first pass laid out, at its quarter of the pixels - the same picture a full render would go on from
     if (opts.preview) {
         const laidOut = afterCleanup(wf, first.output, {offload_model: true, offload_cache: false})
-        return {images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE, song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO, size: sizes.first}
+        return {
+            images: wf.VAEDecode({samples: laidOut, vae: videoVae.VAE}).IMAGE,
+            song: song?.AUDIO ?? wf.VAEDecodeAudio({samples: laidOut, vae: audioVae.VAE}).AUDIO,
+            size: sizes.first,
+        }
     }
 
     // x2, to exactly the final size: the upscaler takes the video half of the AV latent only; the audio half goes on as it is.
@@ -148,7 +176,7 @@ export function h3TwoPass(wf: WorkflowBuilder, opts: TwoPassOptions, name: strin
         precision: 'bf16',
     })
     withInputs(wf, upscaled, {'mode.width': sizes.final.width, 'mode.height': sizes.final.height})
-    const large = wf.LTXVConcatAVLatent({video_latent: upscaled.latent as NodeRef<"LATENT">, audio_latent: split.audio_latent}).latent
+    const large = wf.LTXVConcatAVLatent({video_latent: upscaled.latent as NodeRef<'LATENT'>, audio_latent: split.audio_latent}).latent
 
     // pass 2: a short refine of the upscaled latent with the base model - no turbo LoRA, the recipe's shift only. With the turbo
     // LoRA (2 steps, simple) large faces kept a crosshatch on the skin; the base model at euler/beta over 4 steps weakened

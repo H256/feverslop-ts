@@ -10,7 +10,7 @@ import type {Servers} from '../../services/servers'
  * One project while its pages are open: its endpoints, its media roots, the snapshot of /api/project and its runs. Made by
  * ProjectLayout for one (kind, id); another project is another session.
  */
-export function createProjectSession(kind: ProjectKind, id: string, deps: {run: RunDock, servers: Servers}) {
+export function createProjectSession(kind: ProjectKind, id: string, deps: {run: RunDock; servers: Servers}) {
   const root = projectRoot({kind, id})
   const api = projectApi(root)
   const project = shallowRef<EditorProject>()

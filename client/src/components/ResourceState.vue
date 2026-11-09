@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The loading and the failure of a page's data: loading only until there is something, a failure with a way to ask again. */
-defineProps<{loading: boolean, error: string, loaded: boolean}>()
+defineProps<{loading: boolean; error: string; loaded: boolean}>()
 defineEmits<{retry: []}>()
 </script>
 

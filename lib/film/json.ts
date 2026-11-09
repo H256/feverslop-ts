@@ -1,5 +1,5 @@
-import {type AskOptions, askJson} from "../llm.ts";
-import {log} from "../log.ts";
+import {type AskOptions, askJson} from '../llm.ts'
+import {log} from '../log.ts'
 
 /**
  * askJson, asked again when the answer is not valid JSON (a trailing comma, a missing quote - long answers from a local

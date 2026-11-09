@@ -1,5 +1,5 @@
-import {expect, test} from "bun:test";
-import {clipsGoingOn, onlyClips, renderAll} from "./batch.ts";
+import {expect, test} from 'bun:test'
+import {clipsGoingOn, onlyClips, renderAll} from './batch.ts'
 
 test('--only: the clips it names, all without a name, and a name that is no clip stops the run', () => {
     const clips = [{id: 'slot-001'}, {id: 'slot-002'}, {id: 'slot-003'}]

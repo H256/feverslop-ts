@@ -1,12 +1,25 @@
-import {existsSync, rmSync, statSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {basename, join} from "node:path";
-import type {Assignment, Character, InstrumentStems, LyricSection, LyricsTiming, MusicMap, Slot, SlotVocal, Stems, StoryBeat, Timeline, Transcript} from "./project.ts";
-import {refineSections, slotVocals, vocalText} from "./lyrics.ts";
-import {formatTime, round} from "./frames.ts";
-import {log} from "./log.ts";
-import {lastLines, runProcess, SHORT_PROCESS_TIMEOUT_MS} from "./process.ts";
-import {loadWhisperSettings, whisperOptions} from "./settings.ts";
+import {existsSync, rmSync, statSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {basename, join} from 'node:path'
+import type {
+    Assignment,
+    Character,
+    InstrumentStems,
+    LyricSection,
+    LyricsTiming,
+    MusicMap,
+    Slot,
+    SlotVocal,
+    Stems,
+    StoryBeat,
+    Timeline,
+    Transcript,
+} from './project.ts'
+import {refineSections, slotVocals, vocalText} from './lyrics.ts'
+import {formatTime, round} from './frames.ts'
+import {log} from './log.ts'
+import {lastLines, runProcess, SHORT_PROCESS_TIMEOUT_MS} from './process.ts'
+import {loadWhisperSettings, whisperOptions} from './settings.ts'
 
 /**
  * "[Verse 1]\n[Low, gravelly vocals]\nline\nline" -> [{label: 'Verse 1', notes: ['Low, gravelly vocals'], lines: [...]}]
@@ -50,14 +63,35 @@ export function musicMapProblem(value: unknown): string | undefined {
     if (!isFiniteNumber(value.bpm) || !isFiniteNumber(value.durationSec)) return 'bpm and durationSec must be finite numbers'
     if (!Array.isArray(value.downbeats) || !value.downbeats.every(isFiniteNumber)) return 'downbeats must be an array of finite numbers'
     if (!Array.isArray(value.barEnergy) || !value.barEnergy.every(isFiniteNumber)) return 'barEnergy must be an array of finite numbers'
-    if (!Array.isArray(value.sections) || !value.sections.every(section => isRecord(section) && typeof section.label === 'string' && isFiniteNumber(section.start) && isFiniteNumber(section.end) && isFiniteNumber(section.energy))) return 'sections must contain {label, start, end, energy}'
+    if (
+        !Array.isArray(value.sections) ||
+        !value.sections.every(
+            section =>
+                isRecord(section) &&
+                typeof section.label === 'string' &&
+                isFiniteNumber(section.start) &&
+                isFiniteNumber(section.end) &&
+                isFiniteNumber(section.energy),
+        )
+    )
+        return 'sections must contain {label, start, end, energy}'
     return undefined
 }
 
 export function transcriptProblem(value: unknown): string | undefined {
     if (!isRecord(value) || !Array.isArray(value.words)) return 'expected an object with a words array'
-    if (!value.words.every(word => isRecord(word) && typeof word.text === 'string' && isFiniteNumber(word.start) && isFiniteNumber(word.end) && isFiniteNumber(word.probability))) return 'words must contain {text, start, end, probability}'
-    if (value.activity !== undefined && (!Array.isArray(value.activity) || !value.activity.every(range => isRecord(range) && isFiniteNumber(range.start) && isFiniteNumber(range.end)))) return 'activity must contain {start, end} ranges'
+    if (
+        !value.words.every(
+            word =>
+                isRecord(word) && typeof word.text === 'string' && isFiniteNumber(word.start) && isFiniteNumber(word.end) && isFiniteNumber(word.probability),
+        )
+    )
+        return 'words must contain {text, start, end, probability}'
+    if (
+        value.activity !== undefined &&
+        (!Array.isArray(value.activity) || !value.activity.every(range => isRecord(range) && isFiniteNumber(range.start) && isFiniteNumber(range.end)))
+    )
+        return 'activity must contain {start, end} ranges'
     return undefined
 }
 
@@ -65,9 +99,15 @@ export function transcriptProblem(value: unknown): string | undefined {
 const pythonTool = (name: string) => join(import.meta.dir, '..', 'tools', name)
 
 export async function analyzeSong(songFile: string, labels: string[]): Promise<MusicMap> {
-    const stdout = await runProcess(['uv', 'run', '--locked', pythonTool('analyze_song.py'), songFile, JSON.stringify(labels)], {errorMessage: err => `Song analysis failed:\n${err}`})
+    const stdout = await runProcess(['uv', 'run', '--locked', pythonTool('analyze_song.py'), songFile, JSON.stringify(labels)], {
+        errorMessage: err => `Song analysis failed:\n${err}`,
+    })
     let result: unknown
-    try { result = JSON.parse(stdout) } catch (error) { throw new Error(`Song analysis returned invalid JSON: ${(error as Error).message}`) }
+    try {
+        result = JSON.parse(stdout)
+    } catch (error) {
+        throw new Error(`Song analysis returned invalid JSON: ${(error as Error).message}`)
+    }
     const problem = musicMapProblem(result)
     if (problem) throw new Error(`Song analysis returned invalid data: ${problem}`)
     return result as MusicMap
@@ -81,7 +121,7 @@ export async function separateStems(songFile: string, projectDir: string): Promi
     await runVocalsTool(['separate', songFile, join(projectDir, 'stems')], 'Stem separation')
     const instruments = await separateInstrumentStems(songFile, projectDir, ['guitar', 'piano'])
     const names = ['vocals', 'drums', 'bass', 'other'] as const
-    return {...Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as Record<typeof names[number], string>, ...instruments}
+    return {...(Object.fromEntries(names.map(name => [name, `stems/${name}.wav`])) as Record<(typeof names)[number], string>), ...instruments}
 }
 
 // htdemucs_6s: guitar/piano only, on top of the htdemucs_ft stems already on disk (never overwritten - see
@@ -97,7 +137,11 @@ export async function transcribeVocals(vocalsFile: string, language: string, lyr
     const {whisper} = await loadWhisperSettings()
     const stdout = await runVocalsTool(['transcribe', vocalsFile, language, lyricsFile, ...whisperOptions(whisper)], 'Transcription')
     let result: unknown
-    try { result = JSON.parse(stdout) } catch (error) { throw new Error(`Transcription returned invalid JSON: ${(error as Error).message}`) }
+    try {
+        result = JSON.parse(stdout)
+    } catch (error) {
+        throw new Error(`Transcription returned invalid JSON: ${(error as Error).message}`)
+    }
     const problem = transcriptProblem(result)
     if (problem) throw new Error(`Transcription returned invalid data: ${problem}`)
     return result as Transcript
@@ -116,9 +160,12 @@ const ACTIVITY_HOP_SEC = 0.05
 const ACTIVITY_MARGIN_DB = 20
 const ACTIVITY_FLOOR_DB = -50
 
-export async function stemActivity(stemFile: string, bpm: number): Promise<{ start: number, end: number }[]> {
+export async function stemActivity(stemFile: string, bpm: number): Promise<{start: number; end: number}[]> {
     const raw = join(tmpdir(), `activity-${process.pid}-${basename(stemFile)}.f32`)
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', stemFile, '-ac', '1', '-ar', String(ACTIVITY_SAMPLE_RATE), '-f', 'f32le', raw], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed to decode ${stemFile}:\n${err}`})
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', stemFile, '-ac', '1', '-ar', String(ACTIVITY_SAMPLE_RATE), '-f', 'f32le', raw], {
+        timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
+        errorMessage: err => `ffmpeg failed to decode ${stemFile}:\n${err}`,
+    })
     try {
         const samples = new Float32Array(await Bun.file(raw).arrayBuffer())
         return activityRanges(framePower(samples, ACTIVITY_SAMPLE_RATE, ACTIVITY_HOP_SEC), ACTIVITY_HOP_SEC, 240 / bpm)
@@ -144,19 +191,20 @@ export function framePower(samples: Float32Array, sampleRate: number, hopSec: nu
  * (see stemActivity). Gaps up to a bar are bridged (a break of a beat or two is still the same playing), stretches
  * shorter than half a bar are dropped (a single hit or bleed spike). The averaging blurs each edge by up to half a bar.
  */
-export function activityRanges(power: number[], hopSec: number, barSec: number): { start: number, end: number }[] {
+export function activityRanges(power: number[], hopSec: number, barSec: number): {start: number; end: number}[] {
     if (!power.length) return []
     const half = Math.max(1, Math.round(barSec / hopSec / 2))
     const prefix = [0]
     for (const p of power) prefix.push(prefix.at(-1)! + p)
     const level = power.map((_, i) => {
-        const from = Math.max(0, i - half), to = Math.min(power.length, i + half + 1)
+        const from = Math.max(0, i - half),
+            to = Math.min(power.length, i + half + 1)
         return 10 * Math.log10((prefix[to]! - prefix[from]!) / (to - from) + 1e-12)
     })
     const loud = [...level].sort((a, b) => a - b)[Math.floor(0.95 * (level.length - 1))]!
     const threshold = Math.max(loud - ACTIVITY_MARGIN_DB, ACTIVITY_FLOOR_DB)
 
-    const ranges: { start: number, end: number }[] = []
+    const ranges: {start: number; end: number}[] = []
     level.forEach((db, i) => {
         if (db <= threshold) return
         const last = ranges.at(-1)
@@ -176,14 +224,31 @@ async function runVocalsTool(args: string[], what: string) {
 
 // Cuts the clip's part out of the song - it becomes the clip's <Audio 1>
 export async function cutAudio(songFile: string, start: number, end: number, outFile: string) {
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed for ${outFile}:\n${err}`})
+    await runProcess(['ffmpeg', '-y', '-v', 'error', '-ss', String(start), '-to', String(end), '-i', songFile, '-c:a', 'pcm_s16le', outFile], {
+        timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
+        errorMessage: err => `ffmpeg failed for ${outFile}:\n${err}`,
+    })
 }
 
 // Several instrument stems as one track (a mixed <Audio N>, lib/compose.ts mixStem): summed, not averaged - amix would lower each
 // part by the number of inputs, and a separated stem is no louder than its part of the song. Made again only when a stem is newer.
 export async function mixStems(files: string[], outFile: string): Promise<string> {
     if (existsSync(outFile) && files.every(f => statSync(f).mtimeMs <= statSync(outFile).mtimeMs)) return outFile
-    await runProcess(['ffmpeg', '-y', '-v', 'error', ...files.flatMap(f => ['-i', f]), '-filter_complex', `amix=inputs=${files.length}:duration=longest:normalize=0`, '-c:a', 'pcm_s16le', outFile], {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed to mix ${outFile}:\n${err}`})
+    await runProcess(
+        [
+            'ffmpeg',
+            '-y',
+            '-v',
+            'error',
+            ...files.flatMap(f => ['-i', f]),
+            '-filter_complex',
+            `amix=inputs=${files.length}:duration=longest:normalize=0`,
+            '-c:a',
+            'pcm_s16le',
+            outFile,
+        ],
+        {timeoutMs: SHORT_PROCESS_TIMEOUT_MS, errorMessage: err => `ffmpeg failed to mix ${outFile}:\n${err}`},
+    )
     return outFile
 }
 
@@ -205,11 +270,19 @@ const LATE_ONSET_COST = 0.8
  * - the clip length deviating from `barsPerSlot` (small - the usual length stays the usual one).
  * Returns the bar index where each clip starts, or undefined if no split keeps every clip within maxClipSec.
  */
-export function chooseClipStarts(barTimes: number[], sectionStart: number, sectionEnd: number, barsPerSlot: number, maxBars: number, maxClipSec: number, timing: LyricsTiming): number[] | undefined {
+export function chooseClipStarts(
+    barTimes: number[],
+    sectionStart: number,
+    sectionEnd: number,
+    barsPerSlot: number,
+    maxBars: number,
+    maxClipSec: number,
+    timing: LyricsTiming,
+): number[] | undefined {
     const n = barTimes.length
     if (!n) return undefined
     const words = timing.lines.flatMap(l => l.words)
-    const onsets = timing.lines.flatMap(l => l.off || !l.words.length ? [] : [l.words[0]!.start])
+    const onsets = timing.lines.flatMap(l => (l.off || !l.words.length ? [] : [l.words[0]!.start]))
     const margin = 0.05
     const cutCost = (t: number) => {
         const cut = words.filter(w => w.start < t - margin && w.end > t + margin).length
@@ -217,7 +290,7 @@ export function chooseClipStarts(barTimes: number[], sectionStart: number, secti
         if (cut) return cut + late
         return (timing.lines.some(l => l.start < t - margin && l.end > t + margin) ? 0.1 : 0) + late
     }
-    const timeAt = (k: number) => k === 0 ? sectionStart : k === n ? sectionEnd : barTimes[k]!
+    const timeAt = (k: number) => (k === 0 ? sectionStart : k === n ? sectionEnd : barTimes[k]!)
     // best[j]: cheapest way to have clips cover bars 0..j-1, with a boundary before bar j
     const best: number[] = Array(n + 1).fill(Infinity)
     const from: number[] = Array(n + 1).fill(-1)
@@ -227,7 +300,10 @@ export function chooseClipStarts(barTimes: number[], sectionStart: number, secti
             const i = j - len
             if (best[i] === Infinity || timeAt(j) - timeAt(i) > maxClipSec) continue
             const cost = best[i]! + (j < n ? cutCost(timeAt(j)) : 0) + 0.15 * Math.abs(len - barsPerSlot)
-            if (cost < best[j]!) { best[j] = cost; from[j] = i }
+            if (cost < best[j]!) {
+                best[j] = cost
+                from[j] = i
+            }
         }
     }
     if (best[n] === Infinity) return undefined
@@ -251,11 +327,18 @@ const RELEASE_SEC = 0.2
  * of its own. A cut before the voice lands on the downbeat right before it when that is close. Two silent pieces next to
  * each other (the tail of one clip, the lead-in of the next) become one clip when it fits into maxClipSec.
  */
-export function splitAtVocalGaps<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(slots: T[], timing: LyricsTiming, downbeats: number[], gap: number, maxClipSec: number, barSec: number): T[] {
+export function splitAtVocalGaps<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(
+    slots: T[],
+    timing: LyricsTiming,
+    downbeats: number[],
+    gap: number,
+    maxClipSec: number,
+    barSec: number,
+): T[] {
     if (gap <= 0) return slots
     const words = timing.lines.flatMap(l => l.words)
     const piece = (slot: T, start: number, end: number) => ({...slot, start, end, bars: Math.max(1, Math.round((end - start) / barSec))})
-    const pieces: { slot: T, silent: boolean }[] = []
+    const pieces: {slot: T; silent: boolean}[] = []
     for (const slot of slots) {
         const sung = words.filter(w => w.start >= slot.start - 0.05 && w.start < slot.end)
         if (!sung.length) {
@@ -294,11 +377,18 @@ export function splitAtVocalGaps<T extends Pick<Slot, 'start' | 'end' | 'bars'>>
  * (onto the downbeat right before it when that is close) - where the clip before keeps MIN_GAP_CLIP_SEC, the next one stays within
  * maxClipSec and no word is cut. In place. chooseClipStarts avoids most of these already; the ones left are at a section's end.
  */
-export function pullLateOnsets<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(slots: T[], timing: LyricsTiming, downbeats: number[], maxClipSec: number, barSec: number) {
-    const words = timing.lines.flatMap(l => l.off ? [] : l.words)
-    const onsets = timing.lines.flatMap(l => l.off || !l.words.length ? [] : [l.words[0]!.start]).sort((a, b) => a - b)
+export function pullLateOnsets<T extends Pick<Slot, 'start' | 'end' | 'bars'>>(
+    slots: T[],
+    timing: LyricsTiming,
+    downbeats: number[],
+    maxClipSec: number,
+    barSec: number,
+) {
+    const words = timing.lines.flatMap(l => (l.off ? [] : l.words))
+    const onsets = timing.lines.flatMap(l => (l.off || !l.words.length ? [] : [l.words[0]!.start])).sort((a, b) => a - b)
     for (let i = 0; i + 1 < slots.length; i++) {
-        const a = slots[i]!, b = slots[i + 1]!
+        const a = slots[i]!,
+            b = slots[i + 1]!
         if (Math.abs(a.end - b.start) > 0.01) continue
         const onset = onsets.find(s => s >= a.end - LATE_ONSET_SEC && s < a.end - 0.05)
         if (onset === undefined) continue
@@ -318,12 +408,20 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
     const sections = timing ? refineSections(music, lyricSections, timing) : music.sections
 
     sections.forEach((section, sectionIndex) => {
-        const bars = music.downbeats
-            .map((time, index) => ({time, index}))
-            .filter(b => b.time >= section.start - 0.05 && b.time < section.end - 0.05)
-        let groups: typeof bars[] = []
+        const bars = music.downbeats.map((time, index) => ({time, index})).filter(b => b.time >= section.start - 0.05 && b.time < section.end - 0.05)
+        let groups: (typeof bars)[] = []
         // with the lyrics timing the clips are cut where no sung word is cut in two (chooseClipStarts)
-        const starts = timing ? chooseClipStarts(bars.map(b => b.time), section.start, section.end, barsPerSlot, Math.max(1, Math.floor(maxClipSec / barSec)), maxClipSec, timing) : undefined
+        const starts = timing
+            ? chooseClipStarts(
+                  bars.map(b => b.time),
+                  section.start,
+                  section.end,
+                  barsPerSlot,
+                  Math.max(1, Math.floor(maxClipSec / barSec)),
+                  maxClipSec,
+                  timing,
+              )
+            : undefined
         if (starts) groups = starts.map((from, k) => bars.slice(from, starts[k + 1] ?? bars.length))
         // otherwise: the section's opening slot starts at section.start, not at its first bar, so it doesn't lose
         // a pickup/lead-in before the first downbeat - but that lead-in still counts against its time
@@ -339,7 +437,9 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
             // cut it into equal parts by time. Zero length sections (the refined last one at the very end) get none.
             const length = section.end - section.start
             if (length < 1) {
-                log.warn(`section "${section.label}" (${formatTime(section.start, true)} – ${formatTime(section.end, true)}) has no bar of its own and gets no clip - unless it is empty, the video has a gap there. Check the section times (music.sections / lyricsTiming in project.json), then --redo=timeline`)
+                log.warn(
+                    `section "${section.label}" (${formatTime(section.start, true)} – ${formatTime(section.end, true)}) has no bar of its own and gets no clip - unless it is empty, the video has a gap there. Check the section times (music.sections / lyricsTiming in project.json), then --redo=timeline`,
+                )
                 return
             }
             const parts = Math.ceil(length / maxClipSec)
@@ -355,7 +455,7 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
                 lyrics: [] as string[],
             }))
             const lines = lyricSections[sectionIndex]?.lines ?? []
-            lines.forEach((line, i) => sectionSlots[Math.floor(i * sectionSlots.length / lines.length)]!.lyrics.push(line))
+            lines.forEach((line, i) => sectionSlots[Math.floor((i * sectionSlots.length) / lines.length)]!.lyrics.push(line))
             slots.push(...sectionSlots)
             return
         }
@@ -363,7 +463,7 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         // a short leftover is merged into the previous clip if that still fits
         const last = groups.at(-1)!
         const beforeLast = groups.at(-2)
-        if (!starts && beforeLast && last.length < barsPerSlot && (section.end - beforeLast[0]!.time) <= maxClipSec) {
+        if (!starts && beforeLast && last.length < barsPerSlot && section.end - beforeLast[0]!.time <= maxClipSec) {
             groups.splice(-2, 2, [...beforeLast, ...last])
         }
 
@@ -402,8 +502,8 @@ export function buildTimeline(music: MusicMap, lyricSections: LyricSection[], ma
         const split = timing ? splitAtVocalGaps(sized, timing, music.downbeats, vocalGap, maxClipSec, barSec) : sized
         // the fallback without word timing: the section's lines spread evenly over its clips
         const lines = lyricSections[sectionIndex]?.lines ?? []
-        split.forEach(slot => slot.lyrics = [])
-        lines.forEach((line, i) => split[Math.floor(i * split.length / lines.length)]!.lyrics.push(line))
+        split.forEach(slot => (slot.lyrics = []))
+        lines.forEach((line, i) => split[Math.floor((i * split.length) / lines.length)]!.lyrics.push(line))
         slots.push(...split)
     })
     // what the split could not avoid (a section's end is fixed): a line starting in the last second of a clip starts the next one
@@ -436,10 +536,8 @@ export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[]
     if (B > S) throw new Error(`${B} story beats but only ${S} clips - raise the clip count or regenerate fewer beats`)
 
     const totalWeight = beats.reduce((sum, b) => sum + b.weight, 0)
-    const target = beats.map(b => b.weight / totalWeight * S)
-    const slotCost = (beat: StoryBeat, slot: Slot) =>
-        Math.abs(beat.intensity - slot.energy)
-        + (beat.kind === 'hit' && slot.energy < 0.5 ? 0.5 : 0)
+    const target = beats.map(b => (b.weight / totalWeight) * S)
+    const slotCost = (beat: StoryBeat, slot: Slot) => Math.abs(beat.intensity - slot.energy) + (beat.kind === 'hit' && slot.energy < 0.5 ? 0.5 : 0)
 
     // prefix[b][i] = cost of slots 0..i-1 all assigned to beat b
     const prefix = beats.map(beat => {
@@ -448,7 +546,7 @@ export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[]
         return sums
     })
     const runCost = (b: number, from: number, to: number) =>
-        prefix[b]![to]! - prefix[b]![from]! + RUN_LENGTH_WEIGHT * ((to - from - target[b]!) ** 2) / Math.max(1, target[b]!)
+        prefix[b]![to]! - prefix[b]![from]! + (RUN_LENGTH_WEIGHT * (to - from - target[b]!) ** 2) / Math.max(1, target[b]!)
 
     // best[b][i] = cost of assigning beats 0..b-1 to slots 0..i-1
     const best = Array.from({length: B + 1}, () => new Array<number>(S + 1).fill(Infinity))
@@ -475,7 +573,6 @@ export function mapBeatsToSlots(beats: StoryBeat[], slots: Slot[]): Assignment[]
     return assignments
 }
 
-
 /** A beat that is a fight: a big moment (kind "hit") with a crowd of creatures in it - orcs, witches, a pack. */
 export function isFightBeat(beat: StoryBeat, characters: Character[]): boolean {
     return beat.kind === 'hit' && beat.characterIds.some(id => characters.find(c => c.id === id)?.isGroup === true)
@@ -487,7 +584,14 @@ export function isFightBeat(beat: StoryBeat, characters: Character[]): boolean {
  * The ids and indexes of all slots are numbered anew, the mapping follows; lyrics stay with the first piece of a slot,
  * sung lines go to the piece they are sung in (times relative to the piece).
  */
-export function splitFightSlots(slots: Slot[], mapping: Assignment[], beats: StoryBeat[], characters: Character[], music: MusicMap, barsPerPiece = 1): { slots: Slot[], mapping: Assignment[] } {
+export function splitFightSlots(
+    slots: Slot[],
+    mapping: Assignment[],
+    beats: StoryBeat[],
+    characters: Character[],
+    music: MusicMap,
+    barsPerPiece = 1,
+): {slots: Slot[]; mapping: Assignment[]} {
     const fights = new Set(beats.filter(b => isFightBeat(b, characters)).map(b => b.id))
     const out: Slot[] = []
     const outMapping: Assignment[] = []
@@ -508,9 +612,7 @@ export function splitFightSlots(slots: Slot[], mapping: Assignment[], beats: Sto
                 const words = selected.map(w => ({...w, start: round(slot.start + w.start - from), end: round(slot.start + w.end - from)}))
                 if (!words.length) return []
                 const lastIndex = v.words.indexOf(selected.at(-1)!)
-                const trailing = lastIndex + 1 < v.words.length
-                    ? !!v.words[lastIndex + 1]!.joined
-                    : v.text === vocalText(v.words) + '-'
+                const trailing = lastIndex + 1 < v.words.length ? !!v.words[lastIndex + 1]!.joined : v.text === vocalText(v.words) + '-'
                 return [{...v, text: vocalText(words, trailing), start: words[0]!.start, end: words.at(-1)!.end, words}]
             })
             out.push({

@@ -1,8 +1,8 @@
-import {describe, expect, test} from "bun:test";
-import {mkdtempSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import {commandLine, lastRun, type RunRecord, runState} from "./run-record.ts";
+import {describe, expect, test} from 'bun:test'
+import {mkdtempSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {commandLine, lastRun, type RunRecord, runState} from './run-record.ts'
 
 const run = (more: Partial<RunRecord> = {}): RunRecord => ({command: 'bun index.ts x', pid: 1, startedAt: '2026-10-31T00:00:00.000Z', ...more})
 const ended = {endedAt: '2026-10-31T01:00:00.000Z', exitCode: 0}

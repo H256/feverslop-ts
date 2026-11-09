@@ -1,12 +1,15 @@
-import {expect, test} from 'bun:test';
-import {runEvents} from './server.ts';
-import {RunControl} from './runs.ts';
-import type {EditorTarget} from './project.ts';
+import {expect, test} from 'bun:test'
+import {runEvents} from './server.ts'
+import {RunControl} from './runs.ts'
+import type {EditorTarget} from './project.ts'
 
 test('run-events closes on abort and stops polling', async () => {
     let polls = 0
     const runs = {
-        lines: () => { polls++; return {lines: [], next: 0} },
+        lines: () => {
+            polls++
+            return {lines: [], next: 0}
+        },
         current: () => ({running: true}),
     } as unknown as RunControl
     const target = {id: 'test', kind: 'music', dir: '/tmp/test'} as EditorTarget

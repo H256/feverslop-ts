@@ -1,5 +1,5 @@
 /** The user's own picture as the anchor of a reference picture, as the question fills it in: the picture, the prompt kept with it, the description. */
-export type OwnAnchor = {file?: File, prompt: string, how: 'keep' | 'text' | 'describe', description: string}
+export type OwnAnchor = {file?: File; prompt: string; how: 'keep' | 'text' | 'describe'; description: string}
 
 // what the server takes (lib/editor/upload.ts): checked there again, by its first bytes
 export const OWN_ANCHOR_TYPES = 'image/png,image/jpeg,image/webp'

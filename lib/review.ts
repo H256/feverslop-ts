@@ -1,8 +1,8 @@
-import {mkdtempSync, rmSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {join} from "node:path";
-import * as clack from "@clack/prompts";
-import {log, styles} from "./log.ts";
+import {mkdtempSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import * as clack from '@clack/prompts'
+import {log, styles} from './log.ts'
 
 // --review: a step everything later is built on (the story, the cast, the look, the beats - a film's screenplay, cast and
 // look) is shown when it was just generated, and the run waits - accept it, edit it in $EDITOR, generate it again, or stop.
@@ -10,13 +10,19 @@ import {log, styles} from "./log.ts";
 // are not asked about.
 
 // what review needs of a project's store - the music video's ProjectStore and the film's FilmStore
-type Store<D, K extends keyof D> = { readonly file: string, data: D, readonly generated: ReadonlySet<K>, invalidate(name: K): void, save(): Promise<void> }
+type Store<D, K extends keyof D> = {readonly file: string; data: D; readonly generated: ReadonlySet<K>; invalidate(name: K): void; save(): Promise<void>}
 
 /**
  * Runs the step (`run` is the project.step call) and prints it (`show`); with review on and a freshly generated result,
  * asks what to do with it and returns the result that was accepted.
  */
-export async function reviewed<D, S extends keyof D & string, K extends S>(project: Store<D, S>, review: boolean, name: K, run: () => Promise<NonNullable<D[K]>>, show: (value: NonNullable<D[K]>) => void): Promise<NonNullable<D[K]>> {
+export async function reviewed<D, S extends keyof D & string, K extends S>(
+    project: Store<D, S>,
+    review: boolean,
+    name: K,
+    run: () => Promise<NonNullable<D[K]>>,
+    show: (value: NonNullable<D[K]>) => void,
+): Promise<NonNullable<D[K]>> {
     let value = await run()
     show(value)
     if (!review || !project.generated.has(name)) return value
@@ -61,7 +67,7 @@ async function editValue<V>(name: string, value: V): Promise<V | undefined> {
     const asText = typeof value === 'string'
     const file = join(dir, `${name}.${asText ? 'txt' : 'json'}`)
     try {
-        const before = asText ? value as string : JSON.stringify(value, null, 2)
+        const before = asText ? (value as string) : JSON.stringify(value, null, 2)
         await Bun.write(file, before + '\n')
         let editor
         try {
@@ -70,7 +76,7 @@ async function editValue<V>(name: string, value: V): Promise<V | undefined> {
             log.warn(`cannot open ${editorCommand()} (${(e as Error).message}) - set VISUAL or EDITOR; ${name} stays as it was`)
             return undefined
         }
-        if (await editor.exited !== 0) {
+        if ((await editor.exited) !== 0) {
             log.warn(`${editorCommand()} ended with code ${editor.exitCode} - ${name} stays as it was`)
             return undefined
         }

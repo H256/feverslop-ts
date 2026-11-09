@@ -1,11 +1,11 @@
-import {renameSync} from "node:fs";
-import {FPS} from "./frames.ts";
-import {runProcess} from "./process.ts";
+import {renameSync} from 'node:fs'
+import {FPS} from './frames.ts'
+import {runProcess} from './process.ts'
 
 // Rendering part of a clip again (--retake=slot-007:3.2-5.0, or slot-007:shot2): the part is rendered between the frames around it, and
 // joined into the clip with the sound it has. What is decided here needs no server; lib/render.ts sends the job.
 
-export type RetakeAsk = { clip: string, seconds?: [number, number], shot?: number }
+export type RetakeAsk = {clip: string; seconds?: [number, number]; shot?: number}
 
 /** "slot-007:3.2-5.0" or "slot-007:shot2". */
 export function parseRetake(text: string): RetakeAsk {
@@ -22,7 +22,7 @@ const shotStarts = (cuts: number[]) => [0, ...cuts.filter(cut => cut > 0)]
  * The frames [first, end) of the clip's file the part means. Shots are named where the picture cuts: `cuts` are the first frames of the
  * shots, as lib/interpolate.ts finds them - with or without the 0 of the first one. Never frames the file does not have, and never nothing.
  */
-export function retakeFrames(ask: RetakeAsk, fileFrames: number, cuts: number[]): { first: number, end: number } {
+export function retakeFrames(ask: RetakeAsk, fileFrames: number, cuts: number[]): {first: number; end: number} {
     let first: number, end: number
     if (ask.shot !== undefined) {
         const starts = shotStarts(cuts)
@@ -39,16 +39,22 @@ export function retakeFrames(ask: RetakeAsk, fileFrames: number, cuts: number[])
 }
 
 export type RetakePlan = {
-    first: number, end: number,
-    lead: number,           // frames of the clip before the part at the start of the render: the guide they are locked to
-    singleStart: boolean,   // too little before the part for a batch of frames: only the frame right before it
-    frames: number,         // the part's own frames
-    render: number,         // the frames the job renders, in a length the model takes
-    endAt?: number,         // the frame of the render that is guided to the frame after the part - none when the part goes to the end of the file
+    first: number
+    end: number
+    lead: number // frames of the clip before the part at the start of the render: the guide they are locked to
+    singleStart: boolean // too little before the part for a batch of frames: only the frame right before it
+    frames: number // the part's own frames
+    render: number // the frames the job renders, in a length the model takes
+    endAt?: number // the frame of the render that is guided to the frame after the part - none when the part goes to the end of the file
 }
 
 /** How the job is laid out. The extra frames a length the model takes brings are cut off when the part is joined in, after the guide. */
-export function planRetake({first, end}: { first: number, end: number }, fileFrames: number, wantedLead: number, renderFrames: (frames: number) => number): RetakePlan {
+export function planRetake(
+    {first, end}: {first: number; end: number},
+    fileFrames: number,
+    wantedLead: number,
+    renderFrames: (frames: number) => number,
+): RetakePlan {
     // 5 + 17·k frames in a batch, as context frames are; fewer than that before the part: the one frame right before it
     let lead = Math.min(wantedLead, first)
     while (lead > 5 && lead % 17 !== 5) lead--
@@ -68,18 +74,32 @@ export function retakePrompt(prompt: string, shots: number[]): string {
     const at = [...prompt.matchAll(/\[Shot (\d+)\]/g)]
     if (!at.length) return prompt
     const head = prompt.slice(0, at[0]!.index)
-    const kept = at.flatMap((match, n) => shots.includes(Number(match[1])) ? [prompt.slice(match.index, at[n + 1]?.index ?? prompt.length)] : [])
+    const kept = at.flatMap((match, n) => (shots.includes(Number(match[1])) ? [prompt.slice(match.index, at[n + 1]?.index ?? prompt.length)] : []))
     return kept.length ? head + kept.join('') : prompt
 }
 
 /** The numbers of the shots (from 1) a part of the clip touches. */
-export function shotsIn({first, end}: { first: number, end: number }, cuts: number[]): number[] {
+export function shotsIn({first, end}: {first: number; end: number}, cuts: number[]): number[] {
     const starts = shotStarts(cuts)
-    return starts.flatMap((start, n) => first < (starts[n + 1] ?? Infinity) && end > start ? [n + 1] : [])
+    return starts.flatMap((start, n) => (first < (starts[n + 1] ?? Infinity) && end > start ? [n + 1] : []))
 }
 
 /** Puts the part into the clip: the head and the tail of the old file, the new frames between them, the old sound under all of it. Written next to `target` first. */
-export async function spliceVideo({original, rendered, plan, width, height, target}: { original: string, rendered: string, plan: Pick<RetakePlan, 'first' | 'end' | 'lead' | 'frames'>, width: number, height: number, target: string }) {
+export async function spliceVideo({
+    original,
+    rendered,
+    plan,
+    width,
+    height,
+    target,
+}: {
+    original: string
+    rendered: string
+    plan: Pick<RetakePlan, 'first' | 'end' | 'lead' | 'frames'>
+    width: number
+    height: number
+    target: string
+}) {
     const {first, end, lead, frames} = plan
     const format = `setpts=PTS-STARTPTS,scale=${width}:${height},setsar=1,format=yuv420p`
     const pieces = [
@@ -89,9 +109,37 @@ export async function spliceVideo({original, rendered, plan, width, height, targ
     ]
     const labels = `${first > 0 ? '[head]' : ''}[part][tail]`
     const partial = target.replace(/\.mp4$/, '.splice.mp4')
-    await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', original, '-i', rendered,
-        '-filter_complex', `${pieces.join(';')};${labels}concat=n=${first > 0 ? 3 : 2}:v=1:a=0[v]`,
-        '-map', '[v]', '-map', '0:a?', '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-r', String(FPS), partial],
-        {errorMessage: err => `ffmpeg could not join the new part into ${original}:\n${err}`})
+    await runProcess(
+        [
+            'ffmpeg',
+            '-y',
+            '-v',
+            'error',
+            '-i',
+            original,
+            '-i',
+            rendered,
+            '-filter_complex',
+            `${pieces.join(';')};${labels}concat=n=${first > 0 ? 3 : 2}:v=1:a=0[v]`,
+            '-map',
+            '[v]',
+            '-map',
+            '0:a?',
+            '-c:v',
+            'libx264',
+            '-preset',
+            'medium',
+            '-crf',
+            '14',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'copy',
+            '-r',
+            String(FPS),
+            partial,
+        ],
+        {errorMessage: err => `ffmpeg could not join the new part into ${original}:\n${err}`},
+    )
     renameSync(partial, target)
 }

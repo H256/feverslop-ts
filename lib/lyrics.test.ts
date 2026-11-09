@@ -1,6 +1,6 @@
-import {describe, expect, test} from "bun:test";
-import {slotVocals, alignLyrics, keepTogether, lyricsProblems, refineSections, tightenStarts} from "./lyrics.ts";
-import type {LyricSection, LyricsTiming, MusicMap} from "./project.ts";
+import {describe, expect, test} from 'bun:test'
+import {slotVocals, alignLyrics, keepTogether, lyricsProblems, refineSections, tightenStarts} from './lyrics.ts'
+import type {LyricSection, LyricsTiming, MusicMap} from './project.ts'
 
 // 120 bpm: a bar every 2 s
 const music = (sections: [string, number][]): MusicMap => ({
@@ -10,40 +10,89 @@ const music = (sections: [string, number][]): MusicMap => ({
     barEnergy: Array(60).fill(0.5),
     sections: sections.map(([label, start], i) => ({label, start, end: sections[i + 1]?.[1] ?? 120, energy: 0.5})),
 })
-const line = (sectionIndex: number, start: number, end: number, confidence = 1) => ({line: 0, section: '', sectionIndex, text: 'x', start, end, confidence, words: []})
+const line = (sectionIndex: number, start: number, end: number, confidence = 1) => ({
+    line: 0,
+    section: '',
+    sectionIndex,
+    text: 'x',
+    start,
+    end,
+    confidence,
+    words: [],
+})
 const timing = (lines: ReturnType<typeof line>[]) => ({lines}) as unknown as LyricsTiming
 const lyricSections = (labels: string[]): LyricSection[] => labels.map(label => ({label, lines: []}))
-const startOf = (sections: { label: string, start: number }[], label: string) => sections.find(s => s.label === label)!.start
+const startOf = (sections: {label: string; start: number}[], label: string) => sections.find(s => s.label === label)!.start
 
 describe('refineSections', () => {
     test('a section without vocals right after a sung one starts where those vocals end, not at the estimate', () => {
         const labels = ['Intro', 'Chorus', 'Guitar Solo', 'Bridge']
-        const sections = refineSections(music([['Intro', 0], ['Chorus', 10], ['Guitar Solo', 50], ['Bridge', 60]]), lyricSections(labels),
-            timing([line(1, 10.2, 29.1), line(3, 60.1, 70)]))
+        const sections = refineSections(
+            music([
+                ['Intro', 0],
+                ['Chorus', 10],
+                ['Guitar Solo', 50],
+                ['Bridge', 60],
+            ]),
+            lyricSections(labels),
+            timing([line(1, 10.2, 29.1), line(3, 60.1, 70)]),
+        )
         expect(startOf(sections, 'Guitar Solo')).toBe(30)
         expect(startOf(sections, 'Bridge')).toBe(60)
     })
     test('a second section without vocals in a row keeps its estimate', () => {
         const labels = ['Intro', 'Chorus', 'Guitar Solo', 'Interlude', 'Bridge']
-        const sections = refineSections(music([['Intro', 0], ['Chorus', 10], ['Guitar Solo', 40], ['Interlude', 50], ['Bridge', 60]]), lyricSections(labels),
-            timing([line(1, 10.2, 29.1), line(4, 60.1, 70)]))
+        const sections = refineSections(
+            music([
+                ['Intro', 0],
+                ['Chorus', 10],
+                ['Guitar Solo', 40],
+                ['Interlude', 50],
+                ['Bridge', 60],
+            ]),
+            lyricSections(labels),
+            timing([line(1, 10.2, 29.1), line(4, 60.1, 70)]),
+        )
         expect(startOf(sections, 'Guitar Solo')).toBe(30)
         expect(startOf(sections, 'Interlude')).toBe(50)
     })
     test('a sung section whose first line was not heard keeps the estimate, as before', () => {
         const labels = ['Intro', 'Chorus', 'Verse', 'Bridge']
-        const sections = refineSections(music([['Intro', 0], ['Chorus', 10], ['Verse', 40], ['Bridge', 60]]), lyricSections(labels),
-            timing([line(1, 10.2, 29.1), line(2, 33, 50, 0), line(3, 60.1, 70)]))
+        const sections = refineSections(
+            music([
+                ['Intro', 0],
+                ['Chorus', 10],
+                ['Verse', 40],
+                ['Bridge', 60],
+            ]),
+            lyricSections(labels),
+            timing([line(1, 10.2, 29.1), line(2, 33, 50, 0), line(3, 60.1, 70)]),
+        )
         expect(startOf(sections, 'Verse')).toBe(40)
     })
     test('after a last line that was not heard, a section without lyrics keeps the estimate', () => {
         const labels = ['Intro', 'Chorus', 'Guitar Solo', 'Bridge']
-        const sections = refineSections(music([['Intro', 0], ['Chorus', 10], ['Guitar Solo', 40], ['Bridge', 60]]), lyricSections(labels),
-            timing([line(1, 10.2, 20), line(1, 20, 29.1, 0), line(3, 60.1, 70)]))
+        const sections = refineSections(
+            music([
+                ['Intro', 0],
+                ['Chorus', 10],
+                ['Guitar Solo', 40],
+                ['Bridge', 60],
+            ]),
+            lyricSections(labels),
+            timing([line(1, 10.2, 20), line(1, 20, 29.1, 0), line(3, 60.1, 70)]),
+        )
         expect(startOf(sections, 'Guitar Solo')).toBe(40)
     })
     test('the intro starts at 0 and a sung section at its first line', () => {
-        const sections = refineSections(music([['Intro', 0], ['Verse', 7]]), lyricSections(['Intro', 'Verse']), timing([line(1, 8.3, 20)]))
+        const sections = refineSections(
+            music([
+                ['Intro', 0],
+                ['Verse', 7],
+            ]),
+            lyricSections(['Intro', 'Verse']),
+            timing([line(1, 8.3, 20)]),
+        )
         expect(startOf(sections, 'Intro')).toBe(0)
         expect(startOf(sections, 'Verse')).toBe(8)
     })
@@ -53,11 +102,19 @@ describe('keepTogether - the words of a line are sung together', () => {
     const w = (text: string, start: number, end: number, sim = 1) => ({text, start, end, sim})
     test('a first word far before the rest is put right before it, as a guess', () => {
         const r = keepTogether([w('Cold', 108.6, 109.1), w('as', 161.7, 162.6), w('ice', 162.6, 163.3)], 8)
-        expect(r.map(x => [x.text, x.start, x.sim])).toEqual([['Cold', 161.25, 0], ['as', 161.7, 1], ['ice', 162.6, 1]])
+        expect(r.map(x => [x.text, x.start, x.sim])).toEqual([
+            ['Cold', 161.25, 0],
+            ['as', 161.7, 1],
+            ['ice', 162.6, 1],
+        ])
     })
     test('a last word far after the rest is put right after it', () => {
         const r = keepTogether([w('The', 10, 10.4), w('serrated', 10.4, 11), w('scream', 70, 70.5)], 8)
-        expect(r.map(x => [x.text, x.start, x.sim])).toEqual([['The', 10, 1], ['serrated', 10.4, 1], ['scream', 11, 0]])
+        expect(r.map(x => [x.text, x.start, x.sim])).toEqual([
+            ['The', 10, 1],
+            ['serrated', 10.4, 1],
+            ['scream', 11, 0],
+        ])
     })
     test('a held word or a pause shorter than the limit changes nothing', () => {
         const words = [w('Oh', 0, 7.5), w('night', 8, 9), w('falls', 15, 16)]
@@ -71,10 +128,16 @@ describe('keepTogether - the words of a line are sung together', () => {
 
 describe('alignLyrics - a word matched bars away from its line', () => {
     const heard = (text: string, start: number) => ({text, start, end: start + 0.4, probability: 0.9})
-    const sections: LyricSection[] = [{label: 'Chorus', lines: ['Where the gods have bled']}, {label: 'Bridge', lines: ['Cold as ice and deep as time']}]
+    const sections: LyricSection[] = [
+        {label: 'Chorus', lines: ['Where the gods have bled']},
+        {label: 'Bridge', lines: ['Cold as ice and deep as time']},
+    ]
     // "cold" heard right after the chorus too (a backing echo, a hallucination) - the line is sung 50 s later
-    const words = [...'where the gods have bled'.split(' ').map((t, i) => heard(t, 100 + i * 0.5)), heard('cold', 103),
-        ...'as ice and deep as time'.split(' ').map((t, i) => heard(t, 153.4 + i * 0.5))]
+    const words = [
+        ...'where the gods have bled'.split(' ').map((t, i) => heard(t, 100 + i * 0.5)),
+        heard('cold', 103),
+        ...'as ice and deep as time'.split(' ').map((t, i) => heard(t, 153.4 + i * 0.5)),
+    ]
     test('does not set the start of the line - with the bar of the song', () => {
         const line = alignLyrics(sections, words, undefined, undefined, 120).lines[1]!
         expect(line.start).toBeCloseTo(152.95)
@@ -87,34 +150,96 @@ describe('alignLyrics - a word matched bars away from its line', () => {
 
 describe('tightenStarts', () => {
     const line = (n: number, words: [number, number][], more: Partial<LyricsTiming['lines'][number]> = {}) => ({
-        line: n, sectionIndex: 0, section: 'Chorus', text: 'a b', start: words[0]![0], end: words.at(-1)![1], confidence: 1,
-        words: words.map(([start, end], i) => ({text: 'w' + i, start, end})), ...more,
+        line: n,
+        sectionIndex: 0,
+        section: 'Chorus',
+        text: 'a b',
+        start: words[0]![0],
+        end: words.at(-1)![1],
+        confidence: 1,
+        words: words.map(([start, end], i) => ({text: 'w' + i, start, end})),
+        ...more,
     })
     // 100 values a second: silence until 1.4 s, then singing to 3 s, silence again, then singing from 5 s
-    const peaks = Array.from({length: 800}, (_, i) => (i >= 140 && i < 300) || i >= 500 ? 0.6 : 0.004)
+    const peaks = Array.from({length: 800}, (_, i) => ((i >= 140 && i < 300) || i >= 500 ? 0.6 : 0.004))
 
     test('a first word that starts in silence starts where the singing does; the rest of the line stays', () => {
-        const {timing, moved} = tightenStarts({lines: [line(0, [[1, 2], [2, 3]])]}, peaks)
+        const {timing, moved} = tightenStarts(
+            {
+                lines: [
+                    line(0, [
+                        [1, 2],
+                        [2, 3],
+                    ]),
+                ],
+            },
+            peaks,
+        )
         expect(moved).toEqual([{line: 0, by: 0.4}])
-        expect(timing.lines[0]!.words.map(w => [w.start, w.end])).toEqual([[1.4, 2], [2, 3]])
+        expect(timing.lines[0]!.words.map(w => [w.start, w.end])).toEqual([
+            [1.4, 2],
+            [2, 3],
+        ])
         expect(timing.lines[0]!.start).toBe(1.4)
     })
     test('a line that starts on its sound, or was placed by hand, is left alone', () => {
-        const {timing, moved} = tightenStarts({lines: [line(0, [[1.4, 2], [2, 3]]), line(1, [[4, 5], [5, 6]], {byHand: true})]}, peaks)
+        const {timing, moved} = tightenStarts(
+            {
+                lines: [
+                    line(0, [
+                        [1.4, 2],
+                        [2, 3],
+                    ]),
+                    line(
+                        1,
+                        [
+                            [4, 5],
+                            [5, 6],
+                        ],
+                        {byHand: true},
+                    ),
+                ],
+            },
+            peaks,
+        )
         expect(moved).toEqual([])
         expect(timing.lines[1]!.words[0]!.start).toBe(4)
     })
     test('a start never moves past what is left of its word', () => {
-        const {timing} = tightenStarts({lines: [line(0, [[1, 1.5], [1.5, 3]])]}, peaks)
+        const {timing} = tightenStarts(
+            {
+                lines: [
+                    line(0, [
+                        [1, 1.5],
+                        [1.5, 3],
+                    ]),
+                ],
+            },
+            peaks,
+        )
         expect(timing.lines[0]!.words[0]!.end - timing.lines[0]!.words[0]!.start).toBeGreaterThanOrEqual(0.05)
     })
 })
 
-
 describe('slotVocals split source words', () => {
-    const timing: LyricsTiming = {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: 'we rise', start: 3, end: 5.5, confidence: 1, words: [
-        {text: 'w', start: 3, end: 4, anchor: true}, {text: 'e', start: 4, end: 4.5, joined: true, estimated: true}, {text: 'rise', start: 5, end: 5.5},
-    ]}]}
+    const timing: LyricsTiming = {
+        lines: [
+            {
+                line: 0,
+                sectionIndex: 0,
+                section: 'Verse',
+                text: 'we rise',
+                start: 3,
+                end: 5.5,
+                confidence: 1,
+                words: [
+                    {text: 'w', start: 3, end: 4, anchor: true},
+                    {text: 'e', start: 4, end: 4.5, joined: true, estimated: true},
+                    {text: 'rise', start: 5, end: 5.5},
+                ],
+            },
+        ],
+    }
     test('hyphens exist only in clip prompt text, tail begins at zero', () => {
         const before = JSON.stringify(timing)
         const head = slotVocals({start: 0, end: 4}, timing)[0]!
@@ -122,7 +247,7 @@ describe('slotVocals split source words', () => {
         expect(head.text).toBe('w-')
         expect(tail.text).toBe('-e rise')
         expect(tail.start).toBe(0)
-        expect(tail.words[0]).toEqual({text: 'e', start: 0, end: .5, joined: true, estimated: true})
+        expect(tail.words[0]).toEqual({text: 'e', start: 0, end: 0.5, joined: true, estimated: true})
         expect(slotVocals({start: 0, end: 8}, timing)[0]!.text).toBe('we rise')
         expect(JSON.stringify(timing)).toBe(before)
     })
@@ -131,11 +256,27 @@ describe('slotVocals split source words', () => {
 // #738: with known lyrics nothing is lost and nothing added
 describe('alignLyrics - the lines of the lyrics, exactly', () => {
     const heard = (text: string, start: number, end = start + 0.4, probability = 0.9) => ({text, start, end, probability})
-    const sections: LyricSection[] = [{label: 'Verse', lines: ['Die Stadt trägt nasse Narben', 'Die ich in mir verberg']}, {label: 'Chorus', lines: ['Und bleib allein']}]
-    const verse = [heard('die', 10), heard('Stadt', 10.5), heard('trägt', 11), heard('nasse', 11.5), heard('Narben', 12, 13.2),
+    const sections: LyricSection[] = [
+        {label: 'Verse', lines: ['Die Stadt trägt nasse Narben', 'Die ich in mir verberg']},
+        {label: 'Chorus', lines: ['Und bleib allein']},
+    ]
+    const verse = [
+        heard('die', 10),
+        heard('Stadt', 10.5),
+        heard('trägt', 11),
+        heard('nasse', 11.5),
+        heard('Narben', 12, 13.2),
         // whisper heard "Die ich" as one word
-        heard('dich', 13.2, 15.1), heard('in', 15.1), heard('mir', 15.5), heard('verberg', 15.9, 17)]
-    const singing = [{start: 9.9, end: 17.2}, {start: 20, end: 22}, {start: 40, end: 42}]
+        heard('dich', 13.2, 15.1),
+        heard('in', 15.1),
+        heard('mir', 15.5),
+        heard('verberg', 15.9, 17),
+    ]
+    const singing = [
+        {start: 9.9, end: 17.2},
+        {start: 20, end: 22},
+        {start: 40, end: 42},
+    ]
 
     test('a word whisper ran into its neighbour stays, as a guess with its share of it', () => {
         const line = alignLyrics(sections, [...verse, ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5))], undefined, singing).lines[1]!
@@ -145,20 +286,26 @@ describe('alignLyrics - the lines of the lyrics, exactly', () => {
         expect(line.words[0]!.end).toBe(line.words[1]!.start)
     })
     test('a repeat the lyrics do not have is a suggestion, not sung; the same line heard twice on itself is no ad-lib', () => {
-        const chorus = [...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5)), ...'und bleib allein'.split(' ').map((t, i) => heard(t, 40 + i * 0.5))]
+        const chorus = [
+            ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5)),
+            ...'und bleib allein'.split(' ').map((t, i) => heard(t, 40 + i * 0.5)),
+        ]
         const lines = alignLyrics(sections, [...verse, ...chorus], undefined, singing).lines
         const adlibs = lines.filter(l => l.adlib)
         expect(adlibs.map(l => [l.text, l.off])).toEqual([['und bleib allein', true]])
         // heard twice where the line is (an echo of whisper): only the line
-        const twice = [...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5)), ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20.2 + i * 0.5))]
+        const twice = [
+            ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5)),
+            ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20.2 + i * 0.5)),
+        ]
         expect(alignLyrics(sections, [...verse, ...twice], undefined, singing).lines.filter(l => l.adlib)).toEqual([])
     })
     test('what does not match the lyrics is said: a lost word, a missing line, a line not placed', () => {
         const lines = alignLyrics(sections, [...verse, ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5))], undefined, singing).lines
         expect(lyricsProblems({lines}, sections)).toEqual([])
-        const lost = lines.map(l => l.line === 1 ? {...l, words: l.words.slice(1)} : l)
+        const lost = lines.map(l => (l.line === 1 ? {...l, words: l.words.slice(1)} : l))
         expect(lyricsProblems({lines: lost}, sections)).toEqual([{line: 1, text: 'Die ich in mir verberg', problem: 'its words are "ich in mir verberg"'}])
         expect(lyricsProblems({lines: lines.filter(l => l.line !== 2)}, sections).map(p => p.problem)).toEqual(['missing from the timing'])
-        expect(lyricsProblems({lines: lines.map(l => l.line === 0 ? {...l, words: []} : l)}, sections).map(p => p.problem)).toEqual(['not placed'])
+        expect(lyricsProblems({lines: lines.map(l => (l.line === 0 ? {...l, words: []} : l))}, sections).map(p => p.problem)).toEqual(['not placed'])
     })
 })

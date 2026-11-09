@@ -1,4 +1,4 @@
-import {FPS} from "../frames.ts";
+import {FPS} from '../frames.ts'
 
 // The film as an edit decision list (CMX 3600) - every editor (DaVinci Resolve, Premiere, Final Cut via import, ...) reads it: the clips in
 // order on one video track and one audio track, cut exactly as assemble.ts cuts them. A clip that goes on from the last frame of the one before
@@ -12,9 +12,9 @@ const timecode = (frame: number) => {
     return [h, m, s, f].map(n => String(n).padStart(2, '0')).join(':')
 }
 
-export type AssemblyCuts = {used: number[], skipped: number[]}
+export type AssemblyCuts = {used: number[]; skipped: number[]}
 
-export function timelineEdl(title: string, clips: { id: string, frames: number, startsFrom?: string }[], cuts?: AssemblyCuts) {
+export function timelineEdl(title: string, clips: {id: string; frames: number; startsFrom?: string}[], cuts?: AssemblyCuts) {
     const lines = [`TITLE: ${title}`, 'FCM: NON-DROP FRAME', '']
     let record = 0
     clips.forEach((clip, i) => {

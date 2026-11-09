@@ -1,6 +1,6 @@
-import {expect, test} from 'bun:test';
-import {join} from 'node:path';
-import {sandbox, source} from './sandbox.ts';
+import {expect, test} from 'bun:test'
+import {join} from 'node:path'
+import {sandbox, source} from './sandbox.ts'
 
 // The real editor with its built page: bun run test:workspace builds it first.
 test('real editor serves its built page over an empty workspace and tolerates an unavailable render server', async () => {
@@ -12,7 +12,11 @@ test('real editor serves its built page over an empty workspace and tolerates an
         const port = reservation.port!
         reservation.stop(true)
         const child = Bun.spawn([process.execPath, join(source, 'editor.ts'), `--port=${port}`], {
-            cwd, env, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore',
+            cwd,
+            env,
+            stdout: 'pipe',
+            stderr: 'pipe',
+            stdin: 'ignore',
         })
         let output = ''
         const stderr = new Response(child.stderr).text()
@@ -27,9 +31,12 @@ test('real editor serves its built page over an empty workspace and tolerates an
                 }
                 throw new Error(`Editor exited before startup: ${output}\n${await stderr}`)
             })()
-            const base = await Promise.race([ready, new Promise<never>((_, reject) => {
-                timer = setTimeout(() => reject(new Error(`Editor startup timed out: ${output}`)), 10_000)
-            })])
+            const base = await Promise.race([
+                ready,
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error(`Editor startup timed out: ${output}`)), 10_000)
+                }),
+            ])
             clearTimeout(timer)
             // test:workspace has just built the page: the editor takes it as it is
             expect(output).not.toContain('Build')
@@ -51,7 +58,7 @@ test('real editor serves its built page over an empty workspace and tolerates an
             expect(await library.json()).toMatchObject({dir: join(cwd, 'library'), assets: []})
             const servers = await get('/api/servers')
             expect(servers.status).toBe(200)
-            const data = await servers.json() as {servers: unknown[]}
+            const data = (await servers.json()) as {servers: unknown[]}
             expect(data.servers).toHaveLength(1)
             expect(data.servers[0]).toMatchObject({reachable: false, running: 0, pending: 0})
             for (const path of ['/p/music/missing/', '/p/film/missing/', '/api/nothing']) {

@@ -1,12 +1,12 @@
-import {afterAll, beforeAll, describe, expect, test} from "bun:test";
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {dirname, join} from "node:path";
-import {loadProjectConfig} from "../config.ts";
-import type {ClipRequest} from "../compose.ts";
-import {clipFingerprint} from "../render.ts";
-import {previewConfig, readConfig, workflowsByKind, writeConfig} from "./projectconfig.ts";
-import type {EditorTarget} from "./project.ts";
+import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {dirname, join} from 'node:path'
+import {loadProjectConfig} from '../config.ts'
+import type {ClipRequest} from '../compose.ts'
+import {clipFingerprint} from '../render.ts'
+import {previewConfig, readConfig, workflowsByKind, writeConfig} from './projectconfig.ts'
+import type {EditorTarget} from './project.ts'
 
 // The settings of a project: what the Settings page shows, and what a change would do (#576)
 let root: string
@@ -23,7 +23,20 @@ beforeAll(async () => {
     write(join(music().dir, 'config.json'), {singers: ['elias'], videoWorkflow: 'h3-ref2video-2pass', contextFrames: 22})
     write(join(film().dir, 'project.json'), {})
     // one clip rendered from the plan as it is: current - until the settings it is made from change
-    const request: ClipRequest = {id: 'slot-001', index: 1, start: 0, end: 2, duration: 2, frameStart: 0, frames: 48, section: 'Verse', beatId: 'b1', shots: [], assets: {pictures: [], audio: []}, prompt: 'a prompt'} as unknown as ClipRequest
+    const request: ClipRequest = {
+        id: 'slot-001',
+        index: 1,
+        start: 0,
+        end: 2,
+        duration: 2,
+        frameStart: 0,
+        frames: 48,
+        section: 'Verse',
+        beatId: 'b1',
+        shots: [],
+        assets: {pictures: [], audio: []},
+        prompt: 'a prompt',
+    } as unknown as ClipRequest
     write(join(music().dir, 'output/clips/slot-001.json'), request)
     write(join(music().dir, 'videos/slot-001.mp4'), '0123456789')
     write(join(music().dir, 'videos/slot-001.mp4.json'), {fingerprint: clipFingerprint(request, music().dir, await loadProjectConfig(music().dir))})
@@ -40,7 +53,8 @@ describe('what the project has', () => {
         expect(settings.some(s => s.key === 'singers')).toBe(false)
     })
     test('the workflows offered are the ones of that kind, the film its own, and the one the project has is always among them', async () => {
-        const choices = (settings: Awaited<ReturnType<typeof readConfig>>['settings']) => settings.find(s => s.key === 'videoWorkflow')!.choices!.map(c => c.value)
+        const choices = (settings: Awaited<ReturnType<typeof readConfig>>['settings']) =>
+            settings.find(s => s.key === 'videoWorkflow')!.choices!.map(c => c.value)
         const music1 = choices((await readConfig(music())).settings)
         expect(music1).toContain('h3-ref2video-prism-2pass')
         expect(music1).not.toContain('h3-ref2video-film-2pass')
@@ -51,7 +65,7 @@ describe('what the project has', () => {
         write(join(root, 'films', 'own', 'config.json'), {videoWorkflow: 'h3-ref2video-film-beta'})
         expect(workflowsByKind().image).toEqual(expect.arrayContaining(['kroma-image', 'krea2-image']))
     })
-    test('a film has the film\'s settings: no sheet workflow, no pinned first frame', async () => {
+    test("a film has the film's settings: no sheet workflow, no pinned first frame", async () => {
         const keys = (await readConfig(film())).settings.map(s => s.key)
         expect(keys).toContain('qaRetries')
         expect(keys).not.toContain('sequenceWorkflow')
@@ -74,7 +88,12 @@ describe('what a change would do', () => {
         expect((await previewConfig(music(), {singers: ['x']})).problems[0]).toContain('not a setting here')
     })
     test('the keys that change - a value the file has already is no change - and a rendered clip it makes stale', async () => {
-        expect(await previewConfig(music(), {contextFrames: 22})).toMatchObject({problems: [], changed: [], stale: {clips: [], pictures: []}, rendered: {clips: 1, pictures: 0}})
+        expect(await previewConfig(music(), {contextFrames: 22})).toMatchObject({
+            problems: [],
+            changed: [],
+            stale: {clips: [], pictures: []},
+            rendered: {clips: 1, pictures: 0},
+        })
         // not part of what a clip is made from
         expect(await previewConfig(music(), {leakRetries: 1, finalFps: 48})).toMatchObject({changed: ['leakRetries', 'finalFps'], stale: {clips: []}})
         // the workflow and the size are
@@ -98,7 +117,10 @@ describe('writing it', () => {
         expect(await writeConfig(target, {videoAspect: '9:16', seed: null})).toMatchObject({written: true, changed: ['videoAspect', 'seed']})
         expect(configOf(target)).toEqual({singers: ['elias'], videoAspect: '9:16'})
         const before = readFileSync(join(target.dir, 'config.json'), 'utf8')
-        expect(await writeConfig(target, {videoAspect: 'wide'})).toMatchObject({written: false, problems: [expect.stringContaining('videoAspect must be an aspect ratio')]})
+        expect(await writeConfig(target, {videoAspect: 'wide'})).toMatchObject({
+            written: false,
+            problems: [expect.stringContaining('videoAspect must be an aspect ratio')],
+        })
         expect(await writeConfig(target, {videoAspect: '9:16'})).toMatchObject({written: false, changed: []})
         expect(readFileSync(join(target.dir, 'config.json'), 'utf8')).toBe(before)
         expect(existsSync(join(target.dir, 'config.json.tmp'))).toBe(false)

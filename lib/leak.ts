@@ -5,7 +5,7 @@
 // the frames are looked at small - a backdrop is a large flat area, the detail does not matter
 const WIDTH = 96
 const HEIGHT = 54
-const TOP_ROWS = 8          // the band of the picture above the heads, where a studio backdrop shows first
+const TOP_ROWS = 8 // the band of the picture above the heads, where a studio backdrop shows first
 const SAMPLE_FPS = 4
 
 /**
@@ -16,12 +16,15 @@ const SAMPLE_FPS = 4
 export function hasFlatBackdrop(frame: Uint8Array): boolean {
     const values: number[] = []
     let colour = 0
-    for (let y = 0; y < TOP_ROWS; y++) for (let x = 0; x < WIDTH; x++) {
-        const i = (y * WIDTH + x) * 3
-        const r = frame[i]!, g = frame[i + 1]!, b = frame[i + 2]!
-        values.push((r + g + b) / 3)
-        colour += Math.max(r, g, b) - Math.min(r, g, b)
-    }
+    for (let y = 0; y < TOP_ROWS; y++)
+        for (let x = 0; x < WIDTH; x++) {
+            const i = (y * WIDTH + x) * 3
+            const r = frame[i]!,
+                g = frame[i + 1]!,
+                b = frame[i + 2]!
+            values.push((r + g + b) / 3)
+            colour += Math.max(r, g, b) - Math.min(r, g, b)
+        }
     const median = [...values].sort((a, b) => a - b)[values.length >> 1]!
     const near = values.filter(v => Math.abs(v - median) < 14).length / values.length
     return median > 70 && median < 170 && colour / values.length < 30 && near > 0.6
@@ -45,8 +48,8 @@ export function hasBackdropRun(seconds: number[]): boolean {
 export async function backdropSeconds(video: string): Promise<number[]> {
     // raw frames over a pipe: the text helpers in lib/process.ts would decode them
     const proc = Bun.spawn(
-        ["ffmpeg", "-v", "error", "-i", video, "-vf", `fps=${SAMPLE_FPS},scale=${WIDTH}:${HEIGHT}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
-        {stdout: "pipe", stderr: "pipe"},
+        ['ffmpeg', '-v', 'error', '-i', video, '-vf', `fps=${SAMPLE_FPS},scale=${WIDTH}:${HEIGHT}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
+        {stdout: 'pipe', stderr: 'pipe'},
     )
     const [bytes, stderr, code] = await Promise.all([
         new Response(proc.stdout).arrayBuffer().then(b => new Uint8Array(b)),

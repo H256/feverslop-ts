@@ -1,5 +1,5 @@
-import {FPS} from "./frames.ts";
-import {runProcess} from "./process.ts";
+import {FPS} from './frames.ts'
+import {runProcess} from './process.ts'
 
 // Frame interpolation of the rendered clips (issue #291): ComfyUI's own FrameInterpolate (RIFE or FILM) makes more frames
 // per shot - never across a cut, which would morph one shot into the next. Every clip starts on a cut, and the plan says
@@ -25,8 +25,10 @@ const UNPLANNED_CUT_SCORE = 0.4
 
 /** ffmpeg's scene score of every frame of a video, index = frame (frame 0 has none: 0). */
 export async function sceneScores(video: string): Promise<number[]> {
-    const out = await runProcess(['ffmpeg', '-v', 'error', '-i', video, '-vf', "select='gte(scene,0)',metadata=print:key=lavfi.scene_score:file=-", '-an', '-f', 'null', '-'],
-        {errorMessage: err => `ffmpeg could not read the scene scores of ${video}:\n${err}`})
+    const out = await runProcess(
+        ['ffmpeg', '-v', 'error', '-i', video, '-vf', "select='gte(scene,0)',metadata=print:key=lavfi.scene_score:file=-", '-an', '-f', 'null', '-'],
+        {errorMessage: err => `ffmpeg could not read the scene scores of ${video}:\n${err}`},
+    )
     const scores: number[] = []
     let frame = -1
     for (const line of out.split(/\r?\n/)) {
@@ -61,7 +63,7 @@ export function shotCuts(frames: number, shotStarts: number[], scores: number[])
 }
 
 /** The shots of a clip as pieces of its frames, back to back from frame 0 to `frames` - only the frames the final video uses. */
-export function shotPieces(frames: number, cuts: number[]): { start: number, frames: number }[] {
+export function shotPieces(frames: number, cuts: number[]): {start: number; frames: number}[] {
     const starts = [...new Set([0, ...cuts])].filter(f => f >= 0 && f < frames).sort((a, b) => a - b)
     return starts.map((start, i) => ({start, frames: (starts[i + 1] ?? frames) - start}))
 }

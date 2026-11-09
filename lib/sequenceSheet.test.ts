@@ -1,5 +1,5 @@
-import {describe, expect, test} from "bun:test";
-import {characterLookSequencePrompt, characterSequencePrompt, EXPRESSIONS, expressionFor, expressionOf, locationSequencePrompt} from "./sequenceSheet.ts";
+import {describe, expect, test} from 'bun:test'
+import {characterLookSequencePrompt, characterSequencePrompt, EXPRESSIONS, expressionFor, expressionOf, locationSequencePrompt} from './sequenceSheet.ts'
 
 describe('the expression of a character sheet (#378)', () => {
     test('comes from the words: the same in every run, so the fingerprint stays put', () => {
@@ -27,7 +27,8 @@ describe('the expression of a character sheet (#378)', () => {
 
 describe('a location sheet keeps its fixtures', () => {
     test('every view, generic or designed, keeps the number and place of what the first frame has', () => {
-        const keep = 'Every fixture of the first frame - each light source, door, window, piece of furniture and prop - keeps its number, its place and its look in every view that shows it'
+        const keep =
+            'Every fixture of the first frame - each light source, door, window, piece of furniture and prop - keeps its number, its place and its look in every view that shows it'
         expect(locationSequencePrompt('A stage').prompt).toContain(keep)
         expect(locationSequencePrompt('A stage', undefined, ['a', 'b', 'c', 'd']).prompt).toContain(keep)
     })

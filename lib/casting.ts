@@ -7,22 +7,22 @@
 // runs do nothing while entry and files match. A "library:" entry the library does not have stops the run before
 // anything is made - a typo never generates a picture.
 
-import {existsSync, readFileSync, writeFileSync} from "node:fs";
-import {join} from "node:path";
-import {archiveFiles, versionStamp} from "./archive.ts";
-import {type AssetKind, assetPaths, copyAsset, copyPlan} from "./asset-import.ts";
-import {type LibraryAsset, libraryFolder, libraryIds, libraryLayout, libraryRef, readLibraryAsset} from "./library.ts";
-import {log, styles} from "./log.ts";
+import {existsSync, readFileSync, writeFileSync} from 'node:fs'
+import {join} from 'node:path'
+import {archiveFiles, versionStamp} from './archive.ts'
+import {type AssetKind, assetPaths, copyAsset, copyPlan} from './asset-import.ts'
+import {type LibraryAsset, libraryFolder, libraryIds, libraryLayout, libraryRef, readLibraryAsset} from './library.ts'
+import {log, styles} from './log.ts'
 
 export const CASTING_FILE = 'casting.json'
-export type CastingFile = { characters?: Record<string, string>, locations?: Record<string, string> }
+export type CastingFile = {characters?: Record<string, string>; locations?: Record<string, string>}
 // the roles and places of a music video's cast or a film's (its characters that are seen)
-type Cast = { characters: { id: string, name: string, isGroup?: boolean }[], locations: { id: string, name: string }[] }
+type Cast = {characters: {id: string; name: string; isGroup?: boolean}[]; locations: {id: string; name: string}[]}
 
 /** A role or place played by a library asset. */
-export type CastEntry = { kind: AssetKind, id: string, libraryId: string }
+export type CastEntry = {kind: AssetKind; id: string; libraryId: string}
 /** What a copy was made from - kept in project.json, so the same copy is not made again. */
-export type CastingCopies = Record<string, { library: string, fingerprint: string }>
+export type CastingCopies = Record<string, {library: string; fingerprint: string}>
 export const copyKey = (kind: AssetKind, id: string) => `${kind}:${id}`
 
 /** Applies one library-authored text only when it differs, and reports whether a cached value changed. */
@@ -53,11 +53,22 @@ export function writeCastingOnce(projectDir: string, cast: Cast): boolean {
 export function castingAfterCastChange(file: CastingFile, before: Cast, after: Cast): CastingFile | undefined {
     const next: CastingFile = {...file}
     let changed = false
-    for (const [section, kind] of [['characters', 'characters'], ['locations', 'locations']] as const) {
+    for (const [section, kind] of [
+        ['characters', 'characters'],
+        ['locations', 'locations'],
+    ] as const) {
         const entries = {...file[section]}
         const now = new Set(after[kind].map(m => m.id))
-        for (const m of before[kind]) if (!now.has(m.id) && m.id in entries) { delete entries[m.id]; changed = true }
-        for (const m of after[kind]) if (!(m.id in entries) && !before[kind].some(b => b.id === m.id)) { entries[m.id] = `project:${m.id}`; changed = true }
+        for (const m of before[kind])
+            if (!now.has(m.id) && m.id in entries) {
+                delete entries[m.id]
+                changed = true
+            }
+        for (const m of after[kind])
+            if (!(m.id in entries) && !before[kind].some(b => b.id === m.id)) {
+                entries[m.id] = `project:${m.id}`
+                changed = true
+            }
         next[section] = entries
     }
     return changed ? next : undefined
@@ -78,14 +89,19 @@ export function readCastingFile(projectDir: string): CastingFile {
  * nor "library:", a library asset that does not exist); warnings: what runs on as it is (an entry for nobody of the cast,
  * a group as a library asset, characters and places without an entry - they run as "project:").
  */
-export function resolveCasting(file: CastingFile, cast: Cast, libraryHas: (kind: AssetKind, id: string) => boolean): { entries: CastEntry[], errors: string[], warnings: string[] } {
+export function resolveCasting(
+    file: CastingFile,
+    cast: Cast,
+    libraryHas: (kind: AssetKind, id: string) => boolean,
+): {entries: CastEntry[]; errors: string[]; warnings: string[]} {
     const entries: CastEntry[] = []
     const errors: string[] = []
     const warnings: string[] = []
     for (const key of Object.keys(file)) {
-        if (key !== 'characters' && key !== 'locations') warnings.push(`${CASTING_FILE}: unknown top-level key "${key}" - entries belong under characters/locations`)
+        if (key !== 'characters' && key !== 'locations')
+            warnings.push(`${CASTING_FILE}: unknown top-level key "${key}" - entries belong under characters/locations`)
     }
-    const sections: [AssetKind, Record<string, string> | undefined, { id: string, name: string, isGroup?: boolean }[]][] = [
+    const sections: [AssetKind, Record<string, string> | undefined, {id: string; name: string; isGroup?: boolean}[]][] = [
         ['character', file.characters, cast.characters],
         ['location', file.locations, cast.locations],
     ]
@@ -107,7 +123,9 @@ export function resolveCasting(file: CastingFile, cast: Cast, libraryHas: (kind:
                 continue
             }
             if (!libraryHas(kind, libraryId)) {
-                errors.push(`${CASTING_FILE}: ${kind} "${id}" is "library:${libraryId}", but the library has no ${kind} "${libraryId}" (${libraryFolder(kind, libraryId)})`)
+                errors.push(
+                    `${CASTING_FILE}: ${kind} "${id}" is "library:${libraryId}", but the library has no ${kind} "${libraryId}" (${libraryFolder(kind, libraryId)})`,
+                )
                 continue
             }
             if (member.isGroup) {
@@ -123,7 +141,9 @@ export function resolveCasting(file: CastingFile, cast: Cast, libraryHas: (kind:
 /** What a library asset is now: its record and its picture - another fingerprint means another version to copy. */
 export function libraryFingerprint(library: string, kind: AssetKind, libraryId: string): string {
     const folder = join(library, libraryFolder(kind, libraryId))
-    const parts = ['asset.json', 'picture.png', 'sheet/anchor.png'].map(f => existsSync(join(folder, f)) ? Bun.hash(readFileSync(join(folder, f))).toString(16) : '-')
+    const parts = ['asset.json', 'picture.png', 'sheet/anchor.png'].map(f =>
+        existsSync(join(folder, f)) ? Bun.hash(readFileSync(join(folder, f))).toString(16) : '-',
+    )
     return parts.join('.')
 }
 
@@ -131,7 +151,12 @@ export function libraryFingerprint(library: string, kind: AssetKind, libraryId: 
  * Copies every library entry that is not in the project yet, or in another version - the project's own pictures of it
  * go to old/attempts first. Returns the entries copied now and the new record of all copies.
  */
-export function copyCasting(projectDir: string, library: string, entries: CastEntry[], copies: CastingCopies = {}): { copied: CastEntry[], copies: CastingCopies } {
+export function copyCasting(
+    projectDir: string,
+    library: string,
+    entries: CastEntry[],
+    copies: CastingCopies = {},
+): {copied: CastEntry[]; copies: CastingCopies} {
     const next: CastingCopies = {}
     const copied: CastEntry[] = []
     for (const entry of entries) {
@@ -142,7 +167,10 @@ export function copyCasting(projectDir: string, library: string, entries: CastEn
         const plan = copyPlan(library, libraryLayout(entry.kind, entry.libraryId), target)
         const there = plan.length > 0 && plan.every(file => existsSync(join(projectDir, file.to)))
         if (!(was && was.library === entry.libraryId && was.fingerprint === fingerprint && there)) {
-            copyAsset({dir: library, layout: libraryLayout(entry.kind, entry.libraryId), label: `library:${entry.libraryId}`}, {dir: projectDir, layout: assetPaths(entry.kind, entry.id), archiveName: entry.id})
+            copyAsset(
+                {dir: library, layout: libraryLayout(entry.kind, entry.libraryId), label: `library:${entry.libraryId}`},
+                {dir: projectDir, layout: assetPaths(entry.kind, entry.id), archiveName: entry.id},
+            )
             copied.push(entry)
         }
         next[key] = {library: entry.libraryId, fingerprint}
@@ -161,13 +189,27 @@ export const droppedCopies = (copies: CastingCopies, entries: CastEntry[]) =>
  * copies so far; `again`: what the warning of a role that went back to "project:" says makes its texts anew. Returns the
  * library asset of every entry by copyKey, the new record of the copies, and whether anything was copied or put away.
  */
-export async function castFromLibrary({dir, cast, library, copies, again}: {
-    dir: string, cast: Cast, library: string, copies: CastingCopies | undefined, again: (kind: AssetKind) => string,
-}): Promise<{ entries: CastEntry[], assets: Map<string, LibraryAsset>, copies: CastingCopies, changed: boolean }> {
-    if (writeCastingOnce(dir, cast)) log.step('Casting', styles.muted(`${CASTING_FILE} written - every character and place "project:"; "library:<id>" in it takes a library asset instead`))
+export async function castFromLibrary({
+    dir,
+    cast,
+    library,
+    copies,
+    again,
+}: {
+    dir: string
+    cast: Cast
+    library: string
+    copies: CastingCopies | undefined
+    again: (kind: AssetKind) => string
+}): Promise<{entries: CastEntry[]; assets: Map<string, LibraryAsset>; copies: CastingCopies; changed: boolean}> {
+    if (writeCastingOnce(dir, cast))
+        log.step('Casting', styles.muted(`${CASTING_FILE} written - every character and place "project:"; "library:<id>" in it takes a library asset instead`))
     const casting = resolveCasting(readCastingFile(dir), cast, (kind, id) => libraryIds(library, kind).includes(id))
     for (const warning of casting.warnings) log.warn(warning)
-    if (casting.errors.length) throw new Error(`${casting.errors.join('\n')}\nNothing was made - fix ${join(dir, CASTING_FILE)} (or put the asset into the library: bun run export-asset / create-asset)`)
+    if (casting.errors.length)
+        throw new Error(
+            `${casting.errors.join('\n')}\nNothing was made - fix ${join(dir, CASTING_FILE)} (or put the asset into the library: bun run export-asset / create-asset)`,
+        )
     // copyKey -> the library asset that plays it
     const assets = new Map<string, LibraryAsset>()
     for (const entry of casting.entries) assets.set(copyKey(entry.kind, entry.id), (await readLibraryAsset(library, entry.kind, entry.libraryId))!)
@@ -180,6 +222,7 @@ export async function castFromLibrary({dir, cast, library, copies, again}: {
         log.warn(`${id} is "project:" again - the library pictures are put away in old/attempts; ${again(kind)}`)
     }
     const {copied, copies: next} = copyCasting(dir, library, casting.entries, copies)
-    for (const entry of copied) log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
+    for (const entry of copied)
+        log.step('Casting', `${styles.name(entry.id)} ${styles.muted(`← library:${entry.libraryId} - pictures copied, never rendered again`)}`)
     return {entries: casting.entries, assets, copies: next, changed: copied.length > 0 || dropped.length > 0}
 }

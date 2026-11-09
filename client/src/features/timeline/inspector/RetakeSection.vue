@@ -22,12 +22,20 @@ const custom = () => {
   <div class="section">
     <h3>Render a part again</h3>
     <div v-if="clip.shots.length > 1" class="btn-row" style="margin-bottom: 6px">
-      <button v-for="shot in shots" :key="shot.n" class="btn" :title="`${shot.from}s - ${shot.to.toFixed(1)}s`" @click="actions.retake(clip, `shot${shot.n + 1}`, shot.from, shot.to)">Shot {{ shot.n + 1 }}</button>
+      <button
+        v-for="shot in shots"
+        :key="shot.n"
+        class="btn"
+        :title="`${shot.from}s - ${shot.to.toFixed(1)}s`"
+        @click="actions.retake(clip, `shot${shot.n + 1}`, shot.from, shot.to)"
+      >
+        Shot {{ shot.n + 1 }}
+      </button>
     </div>
     <div class="btn-row">
-      <input v-model.number="from" type="number" min="0" :max="seconds" step="0.1" style="width: 76px" aria-label="From second">
+      <input v-model.number="from" type="number" min="0" :max="seconds" step="0.1" style="width: 76px" aria-label="From second" />
       <span class="muted">to</span>
-      <input v-model.number="to" type="number" min="0" :max="seconds" step="0.1" style="width: 76px" aria-label="To second">
+      <input v-model.number="to" type="number" min="0" :max="seconds" step="0.1" style="width: 76px" aria-label="To second" />
       <span class="muted">s</span>
       <button class="btn" @click="custom">Render this part</button>
     </div>

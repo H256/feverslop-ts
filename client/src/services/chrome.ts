@@ -5,7 +5,9 @@ import {defineService} from './service'
 export function createChrome() {
   // counts the changes of the theme: what draws on a canvas draws again in the other colours
   const theme = ref(0)
-  const themeChanged = () => { theme.value++ }
+  const themeChanged = () => {
+    theme.value++
+  }
   const system = matchMedia('(prefers-color-scheme: dark)')
   system.addEventListener('change', themeChanged)
   return {title: ref('Workspace'), theme, themeChanged, dispose: () => system.removeEventListener('change', themeChanged)}

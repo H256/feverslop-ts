@@ -2,19 +2,19 @@
 // for a film): the new picture put in place of the old one, what was built from the old one cleared, the description asked
 // for, and the clips rendered with the old picture named. What a project calls its character, where its words are and what a
 // cancel says stay with each tool.
-import * as p from "@clack/prompts";
-import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from "node:fs";
-import {basename, dirname, join, relative} from "node:path";
-import {visionUrls} from "./describe-picture.ts";
-import {ask} from "./llm.ts";
-import {log} from "./log.ts";
-import {clipRequestsDir} from "./previous-output.ts";
-import {runProcess} from "./process.ts";
-import {characterImageDescriptionPrompt} from "./prompts.ts";
-import {pinnedSidecar} from "./provenance.ts";
-import {pictureAsset} from "./compose.ts";
-import {archiveFiles, versionStamp} from "./archive.ts";
-import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from "./sequenceSheet.ts";
+import * as p from '@clack/prompts'
+import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from 'node:fs'
+import {basename, dirname, join, relative} from 'node:path'
+import {visionUrls} from './describe-picture.ts'
+import {ask} from './llm.ts'
+import {log} from './log.ts'
+import {clipRequestsDir} from './previous-output.ts'
+import {runProcess} from './process.ts'
+import {characterImageDescriptionPrompt} from './prompts.ts'
+import {pinnedSidecar} from './provenance.ts'
+import {pictureAsset} from './compose.ts'
+import {archiveFiles, versionStamp} from './archive.ts'
+import {SHEET_FRAMES, SHEET_VIDEO, sequenceSheetDir, sheetAnchor} from './sequenceSheet.ts'
 
 /** Where the new picture goes: with sequence sheets the anchor the sheet is made from, else the picture the clips use. */
 export const replacedPictureFile = (dir: string, assetId: string, sequenceSheets: boolean) =>
@@ -50,12 +50,20 @@ export function clearSheetOfOldAnchor(dir: string, assetId: string, changes: str
     const seqDir = join(dir, sequenceSheetDir('character', assetId))
     const finalPicture = join(dir, pictureAsset('character', assetId))
     const stale = [
-        finalPicture, `${finalPicture}.json`,
-        join(seqDir, SHEET_VIDEO), join(seqDir, `${SHEET_VIDEO}.json`), join(seqDir, `${SHEET_VIDEO}.pending.json`),
+        finalPicture,
+        `${finalPicture}.json`,
+        join(seqDir, SHEET_VIDEO),
+        join(seqDir, `${SHEET_VIDEO}.json`),
+        join(seqDir, `${SHEET_VIDEO}.pending.json`),
         join(seqDir, SHEET_FRAMES),
     ]
     const removed = stale.filter(existsSync)
-    if (removed.length) archiveFiles(dir, `${assetId}-stale-${versionStamp()}`, removed.map(f => relative(dir, f)))
+    if (removed.length)
+        archiveFiles(
+            dir,
+            `${assetId}-stale-${versionStamp()}`,
+            removed.map(f => relative(dir, f)),
+        )
     if (!removed.length) return false
     log.info(`Cleared ${removed.length} file(s)/folder(s) built from the old anchor`)
     changes.push('the old reference sheet and sequence video were archived')
@@ -66,15 +74,22 @@ export function clearSheetOfOldAnchor(dir: string, assetId: string, changes: str
  * The new description of the character, asked for: from the picture by a vision-capable model (the LLM configured by
  * `configure`), typed, or none - the current one stays. `answer` is the tool's, which knows what a cancel has to say.
  */
-export async function askDescription(picture: string, char: { name: string, role: string }, configure: () => Promise<void>, answer: <T>(value: T) => Exclude<T, symbol>): Promise<string | undefined> {
-    const mode = answer(await p.select({
-        message: 'Update the description used in the clip prompts?',
-        options: [
-            {value: 'vision', label: 'Generate it from the image (vision-capable LLM)', hint: 'recommended'},
-            {value: 'manual', label: 'Type it myself'},
-            {value: 'skip', label: 'Leave the current description unchanged'},
-        ],
-    }))
+export async function askDescription(
+    picture: string,
+    char: {name: string; role: string},
+    configure: () => Promise<void>,
+    answer: <T>(value: T) => Exclude<T, symbol>,
+): Promise<string | undefined> {
+    const mode = answer(
+        await p.select({
+            message: 'Update the description used in the clip prompts?',
+            options: [
+                {value: 'vision', label: 'Generate it from the image (vision-capable LLM)', hint: 'recommended'},
+                {value: 'manual', label: 'Type it myself'},
+                {value: 'skip', label: 'Leave the current description unchanged'},
+            ],
+        }),
+    )
     if (mode === 'skip') return undefined
     if (mode === 'vision') {
         await configure()
@@ -99,10 +114,12 @@ export async function renderedClipsWith(dir: string, pictureId: string): Promise
     const clipsDir = clipRequestsDir(dir)
     if (!existsSync(clipsDir)) return []
     const affected: string[] = []
-    for (const entry of readdirSync(clipsDir).filter(e => e.endsWith('.json')).sort()) {
+    for (const entry of readdirSync(clipsDir)
+        .filter(e => e.endsWith('.json'))
+        .sort()) {
         const clip = await Bun.file(join(clipsDir, entry)).json()
         const clipId = entry.replace(/\.json$/, '')
-        if (clip.assets?.pictures?.some((pic: { id: string }) => pic.id === pictureId) && existsSync(join(dir, 'videos', `${clipId}.mp4`))) affected.push(clipId)
+        if (clip.assets?.pictures?.some((pic: {id: string}) => pic.id === pictureId) && existsSync(join(dir, 'videos', `${clipId}.mp4`))) affected.push(clipId)
     }
     return affected
 }

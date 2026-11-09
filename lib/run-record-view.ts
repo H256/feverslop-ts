@@ -1,5 +1,5 @@
-import {log, styles} from "./log.ts";
-import {commandLine, type RunRecord, runState, startRunRecord} from "./run-record.ts";
+import {log, styles} from './log.ts'
+import {commandLine, type RunRecord, runState, startRunRecord} from './run-record.ts'
 
 /** What is to say about a run that did not simply finish, line by line. */
 export function lastRunLines(run: RunRecord): string[] {
@@ -11,7 +11,10 @@ export function lastRunLines(run: RunRecord): string[] {
         case 'stopped':
             return [`started ${when}, ended without a result - stopped or crashed: ${command}`]
         case 'failed':
-            return [`started ${when}, failed: ${command}`, ...(run.failures?.length ? run.failures : [run.error ?? '']).map(line => `  ${styles.warning(line)}`)]
+            return [
+                `started ${when}, failed: ${command}`,
+                ...(run.failures?.length ? run.failures : [run.error ?? '']).map(line => `  ${styles.warning(line)}`),
+            ]
         case 'finished':
             return []
     }

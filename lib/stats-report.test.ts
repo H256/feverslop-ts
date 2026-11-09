@@ -1,21 +1,40 @@
-import {expect, test} from 'bun:test';
-import {buildReport, parseSince} from './stats-report.ts';
-import {formatRows} from './stats.ts';
-import {formatReport} from './stats-view.ts';
-import type {Timing} from './timings.ts';
+import {expect, test} from 'bun:test'
+import {buildReport, parseSince} from './stats-report.ts'
+import {formatRows} from './stats.ts'
+import {formatReport} from './stats-view.ts'
+import type {Timing} from './timings.ts'
 
 const now = Date.parse('2026-10-21T12:00:00Z')
-const clip = (seconds: number, extra: Partial<Timing> = {}): Timing => ({at: '2026-10-21T10:00:00Z', kind: 'clip', project: 'demo', name: 'h3', seconds, variant: 'v1', gpu: 'A', frames: 121, pixels: 1000000, ...extra})
+const clip = (seconds: number, extra: Partial<Timing> = {}): Timing => ({
+    at: '2026-10-21T10:00:00Z',
+    kind: 'clip',
+    project: 'demo',
+    name: 'h3',
+    seconds,
+    variant: 'v1',
+    gpu: 'A',
+    frames: 121,
+    pixels: 1000000,
+    ...extra,
+})
 
 test('inclusive warm p90 retains the slow tail; benchmark metrics remain separate', () => {
-    const report = buildReport([90, 100, 105, 110, 1000].map(s => clip(s)), {})
+    const report = buildReport(
+        [90, 100, 105, 110, 1000].map(s => clip(s)),
+        {},
+    )
     expect(report.renders[0]).toMatchObject({n: 4, warmN: 5, median: 102.5, outliers: 1})
     expect(report.renders[0]!.warmP90).toBeCloseTo(644)
     expect(report.summary.successful).toBe(5)
 })
 
 test('filters apply to overview, token totals and every table', () => {
-    const timings = [clip(10), clip(20, {project: 'other'}), clip(1, {at: '2026-10-01T00:00:00Z'}), clip(2, {kind: 'llm', promptTokens: 100, completionTokens: 10})]
+    const timings = [
+        clip(10),
+        clip(20, {project: 'other'}),
+        clip(1, {at: '2026-10-01T00:00:00Z'}),
+        clip(2, {kind: 'llm', promptTokens: 100, completionTokens: 10}),
+    ]
     const report = buildReport(timings, {kind: 'clip', project: 'demo', since: now - 86400000})
     expect(report.summary.measurements).toBe(1)
     expect(report.llm).toEqual([])
@@ -32,9 +51,16 @@ test('costs cover only complete reported usage, retain currencies and do not dou
         clip(1, {kind: 'llm', name: 'n', promptTokens: 0, completionTokens: 0}),
         clip(1, {kind: 'llm', name: 'm', outcome: 'retry', promptTokens: 100, completionTokens: 20}),
     ]
-    const report = buildReport(timings, {}, {m: {inputPerMillion: 1, outputPerMillion: 2, currency: 'EUR'}, n: {inputPerMillion: 1, outputPerMillion: 1, currency: 'USD'}})
+    const report = buildReport(
+        timings,
+        {},
+        {m: {inputPerMillion: 1, outputPerMillion: 2, currency: 'EUR'}, n: {inputPerMillion: 1, outputPerMillion: 1, currency: 'USD'}},
+    )
     expect(report.summary.usage).toMatchObject({calls: 5, complete: 3, partial: 1, missing: 1, prompt: 250, completion: 40, reasoning: 10})
-    expect(report.summary.costs).toEqual([{currency: 'EUR', amount: 0.00028, calls: 2}, {currency: 'USD', amount: 0, calls: 1}])
+    expect(report.summary.costs).toEqual([
+        {currency: 'EUR', amount: 0.00028, calls: 2},
+        {currency: 'USD', amount: 0, calls: 1},
+    ])
 })
 
 test('baseline is selected before top/sort; mixed workloads get no misleading percentage', () => {
@@ -63,14 +89,24 @@ test('stats rows fit a narrow terminal and retain named latency metrics', () => 
 })
 
 test('the whole report fits narrow windows including detail tables', () => {
-    const report = buildReport([clip(42, {gpu: 'A very long GPU name'}), clip(1, {kind: 'llm', name: 'long-model-name', promptTokens: 10, completionTokens: 5})], {})
+    const report = buildReport(
+        [clip(42, {gpu: 'A very long GPU name'}), clip(1, {kind: 'llm', name: 'long-model-name', promptTokens: 10, completionTokens: 5})],
+        {},
+    )
     for (const width of [20, 42, 80, 120]) {
-        expect(formatReport(report, {width, details: true}).split('\n').every(line => Bun.stringWidth(line) <= width)).toBe(true)
+        expect(
+            formatReport(report, {width, details: true})
+                .split('\n')
+                .every(line => Bun.stringWidth(line) <= width),
+        ).toBe(true)
     }
 })
 
 test('automatic baselines skip cold-only groups and unknown workloads are not compared', () => {
-    const report = buildReport([clip(400, {gpu: 'A', cold: true}), clip(100, {gpu: 'B'}), clip(50, {gpu: 'C'}), clip(20, {gpu: 'D', pixels: undefined})], {dimensions: ['gpu'], compare: true})
+    const report = buildReport([clip(400, {gpu: 'A', cold: true}), clip(100, {gpu: 'B'}), clip(50, {gpu: 'C'}), clip(20, {gpu: 'D', pixels: undefined})], {
+        dimensions: ['gpu'],
+        compare: true,
+    })
     expect(report.renders.find(r => r.key === 'C')).toMatchObject({baseline: 'B', changePercent: -50})
     expect(report.renders.find(r => r.key === 'D')?.changePercent).toBeUndefined()
 })

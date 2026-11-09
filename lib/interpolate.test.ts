@@ -1,5 +1,5 @@
-import {describe, expect, test} from "bun:test";
-import {multiplierFor, shotCuts, shotPieces} from "./interpolate.ts";
+import {describe, expect, test} from 'bun:test'
+import {multiplierFor, shotCuts, shotPieces} from './interpolate.ts'
 
 const scores = (frames: number, hits: Record<number, number>) => Array.from({length: frames}, (_, i) => hits[i] ?? 0.01)
 
@@ -20,7 +20,10 @@ describe('shotCuts - the cuts as the picture has them, the plan only says where 
 
 describe('shotPieces', () => {
     test('the cuts give pieces back to back over the frames the final video uses', () => {
-        expect(shotPieces(192, [0, 91])).toEqual([{start: 0, frames: 91}, {start: 91, frames: 101}])
+        expect(shotPieces(192, [0, 91])).toEqual([
+            {start: 0, frames: 91},
+            {start: 91, frames: 101},
+        ])
         expect(shotPieces(100, [])).toEqual([{start: 0, frames: 100}])
     })
 })

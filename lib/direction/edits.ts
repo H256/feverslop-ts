@@ -7,15 +7,17 @@ import type {DirectionEdit, DirectionShot, DirectionSize} from '../../shared/dir
 /** The framing words a shot size is written with - the size is what the code knows, the framing what the prompt says. */
 export const SIZE_FRAMING: Record<DirectionSize, string> = {wide: 'wide shot', medium: 'medium shot', close: 'close-up', extreme: 'extreme close-up'}
 
-export type EditResult = { data?: Record<string, unknown>, issue?: string, mentions?: boolean }
+export type EditResult = {data?: Record<string, unknown>; issue?: string; mentions?: boolean}
 
 type Person = Record<string, unknown>
 
 /** Whoever a shot cannot lose: who sings or plays in it, and in a film shot with dialogue everyone in it (the lines are theirs). */
 export function keptIn(data: Record<string, unknown>): string[] {
     const people = (data.people ?? {}) as Record<string, Person>
-    const performing = Object.entries(people).filter(([, p]) => p.singing === true || p.playing === true).map(([id]) => id)
-    const speaking = Array.isArray(data.lines) && data.lines.length ? (data.characters ?? []) as string[] : []
+    const performing = Object.entries(people)
+        .filter(([, p]) => p.singing === true || p.playing === true)
+        .map(([id]) => id)
+    const speaking = Array.isArray(data.lines) && data.lines.length ? ((data.characters ?? []) as string[]) : []
     return [...new Set([...performing, ...speaking])]
 }
 
@@ -46,7 +48,7 @@ export function applyEdit(data: Record<string, unknown>, edit: DirectionEdit, na
         const characters = (data.characters ?? []) as string[]
         if (!characters.includes(id)) return {}
         if (keptIn(data).includes(id)) return {issue: `${nameOf(id)} ${film ? 'speaks' : 'sings or plays'} in this shot and stays in it`}
-        const people = {...(data.people ?? {}) as Record<string, Person>}
+        const people = {...((data.people ?? {}) as Record<string, Person>)}
         delete people[id]
         const next: Record<string, unknown> = {...data, characters: characters.filter(c => c !== id), ...(data.people ? {people} : {})}
         if (next.hands === id) delete next.hands
@@ -64,11 +66,17 @@ export function applyEdit(data: Record<string, unknown>, edit: DirectionEdit, na
 export function inScope(edit: DirectionEdit, shot: DirectionShot): boolean {
     const scope = edit.scope
     switch (scope.kind) {
-        case 'global': return true
-        case 'character': return shot.characters.includes(scope.id)
-        case 'shot': return shot.id === scope.id
-        case 'beat': case 'scene': return shot.groupId === scope.id
-        case 'time': return shot.start !== undefined && shot.end !== undefined && shot.start < scope.end && shot.end > scope.start
+        case 'global':
+            return true
+        case 'character':
+            return shot.characters.includes(scope.id)
+        case 'shot':
+            return shot.id === scope.id
+        case 'beat':
+        case 'scene':
+            return shot.groupId === scope.id
+        case 'time':
+            return shot.start !== undefined && shot.end !== undefined && shot.start < scope.end && shot.end > scope.start
     }
 }
 
@@ -85,7 +93,9 @@ export function describeEdit(edit: DirectionEdit, nameOf: (id: string) => string
  */
 export function directionNotes(edits: DirectionEdit[], groups: string[], nameOf: (id: string) => string): Record<string, string[]> {
     const notes: Record<string, string[]> = {}
-    const add = (group: string, note: string) => { (notes[group] ??= []).push(note) }
+    const add = (group: string, note: string) => {
+        ;(notes[group] ??= []).push(note)
+    }
     for (const edit of edits) {
         const what = describeEdit(edit, nameOf)
         const scope = edit.scope

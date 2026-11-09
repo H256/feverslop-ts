@@ -4,11 +4,26 @@ import {project, stubProject} from './fixtures'
 import type {DirectionView} from '../../../shared/direction'
 
 let editor: Awaited<ReturnType<typeof startEditor>>
-test.beforeAll(async () => { editor = await startEditor() })
-test.afterAll(async () => { await editor?.stop() })
+test.beforeAll(async () => {
+  editor = await startEditor()
+})
+test.afterAll(async () => {
+  await editor?.stop()
+})
 
 function view(): DirectionView {
-  return {rules: [], edits: [], editIssues: [], shots: [{id: 'b1:shot1', groupId: 'b1', characters: ['ann'], start: 0, end: 4, data: {action: 'Ann turns right'}}], characters: [{id: 'ann', name: 'Ann'}], groups: [{id: 'b1', label: 'Ann arrives'}], unresolved: [], versions: [], pending: false, restored: false}
+  return {
+    rules: [],
+    edits: [],
+    editIssues: [],
+    shots: [{id: 'b1:shot1', groupId: 'b1', characters: ['ann'], start: 0, end: 4, data: {action: 'Ann turns right'}}],
+    characters: [{id: 'ann', name: 'Ann'}],
+    groups: [{id: 'b1', label: 'Ann arrives'}],
+    unresolved: [],
+    versions: [],
+    pending: false,
+    restored: false,
+  }
 }
 
 test('direction: save a scoped instruction, edit it, and run the CLI preview', async ({page}) => {
@@ -39,10 +54,19 @@ test('direction: proposal conflicts block take, drop remains available', async (
   await stubProject(page)
   const state = view()
   state.rules = [{id: 'r', text: 'Turn left', scope: {kind: 'global'}}]
-  state.proposal = {id: 'p', sourceFingerprint: 'source', rulesFingerprint: 'rules', changes: [{shotId: 'b1:shot1', before: {action: 'Ann turns right'}, after: {action: 'Ann turns left'}}], conflicts: ['Next shot starts facing the wrong way.']}
+  state.proposal = {
+    id: 'p',
+    sourceFingerprint: 'source',
+    rulesFingerprint: 'rules',
+    changes: [{shotId: 'b1:shot1', before: {action: 'Ann turns right'}, after: {action: 'Ann turns left'}}],
+    conflicts: ['Next shot starts facing the wrong way.'],
+  }
   let dropped = false
   await page.route('**/api/direction**', async route => {
-    if (route.request().url().endsWith('/drop')) { dropped = true; delete state.proposal }
+    if (route.request().url().endsWith('/drop')) {
+      dropped = true
+      delete state.proposal
+    }
     await route.fulfill({json: state})
   })
   await page.goto(`${editor.base}/p/music/demo/direction`)
@@ -54,10 +78,41 @@ test('direction: proposal conflicts block take, drop remains available', async (
 })
 
 test('direction in the timeline: the cast lane, the shot dialog, a person taken out of the shot by code', async ({page}) => {
-  const shot = {label: '[Shot 1]', at: 0, framing: 'wide', camera: 'static', subjects: ['ann'], people: [], directionId: 'b1:shot1', cast: [{id: 'ann', name: 'Ann', does: ['sings' as const]}, {id: 'bob', name: 'Bob', does: []}]}
+  const shot = {
+    label: '[Shot 1]',
+    at: 0,
+    framing: 'wide',
+    camera: 'static',
+    subjects: ['ann'],
+    people: [],
+    directionId: 'b1:shot1',
+    cast: [
+      {id: 'ann', name: 'Ann', does: ['sings' as const]},
+      {id: 'bob', name: 'Bob', does: []},
+    ],
+  }
   const posted = await stubProject(page, 'music', {clips: project.clips.map(c => ({...c, shots: [shot]}))})
-  let state: DirectionView = {...view(), characters: [{id: 'ann', name: 'Ann'}, {id: 'bob', name: 'Bob'}],
-    shots: [{id: 'b1:shot1', groupId: 'b1', characters: ['ann', 'bob'], start: 0, end: 5, data: {action: '{Ann} sings while {Bob} leans on the bar', framing: 'wide shot', people: {ann: {singing: true, state: 'stands at the bar'}, bob: {state: 'leans on the bar'}}}}]}
+  let state: DirectionView = {
+    ...view(),
+    characters: [
+      {id: 'ann', name: 'Ann'},
+      {id: 'bob', name: 'Bob'},
+    ],
+    shots: [
+      {
+        id: 'b1:shot1',
+        groupId: 'b1',
+        characters: ['ann', 'bob'],
+        start: 0,
+        end: 5,
+        data: {
+          action: '{Ann} sings while {Bob} leans on the bar',
+          framing: 'wide shot',
+          people: {ann: {singing: true, state: 'stands at the bar'}, bob: {state: 'leans on the bar'}},
+        },
+      },
+    ],
+  }
   await page.route('**/api/direction', route => route.fulfill({json: state}))
   await page.route('**/api/direction/edits', async route => {
     state = {...state, edits: route.request().postDataJSON().edits}

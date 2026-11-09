@@ -1,5 +1,5 @@
-import {describe, expect, test} from "bun:test";
-import {GAIN_LIMIT, matchFilter} from "./colormatch.ts";
+import {describe, expect, test} from 'bun:test'
+import {GAIN_LIMIT, matchFilter} from './colormatch.ts'
 
 describe('matchFilter - a continuing clip matched to the clip before', () => {
     test('stretches the luma from its own black and white to those of the clip before, shifts the chroma (tides slot-013 -> 014)', () => {

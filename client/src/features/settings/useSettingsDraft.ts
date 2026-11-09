@@ -19,8 +19,12 @@ export function useSettingsDraft(settings: Ref<SettingView[]>) {
   const dirty = computed(() => Object.keys(changes.value).length > 0)
   const isChanged = (key: string) => key in changes.value
   /** The default, as a change: saved, it takes the key out of config.json. */
-  const toDefault = (setting: SettingView) => { draft[setting.key] = setting.default }
-  const undo = (setting: SettingView) => { draft[setting.key] = base.value.find(s => s.key === setting.key)!.value }
+  const toDefault = (setting: SettingView) => {
+    draft[setting.key] = setting.default
+  }
+  const undo = (setting: SettingView) => {
+    draft[setting.key] = base.value.find(s => s.key === setting.key)!.value
+  }
   const isDefault = (setting: SettingView) => same(draft[setting.key], setting.default)
   return {draft, changes, dirty, isChanged, isDefault, toDefault, undo, reset, base}
 }

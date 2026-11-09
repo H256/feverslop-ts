@@ -48,7 +48,7 @@ const saveLooks = toasts.guard(async () => {
     title: 'Save the looks?',
     lines: [
       `${edits.pending.value}.`,
-      'What is written from a changed text is written again for that character or place only - a changed look: its description; a place\'s look: its description, background and floor plan. Everyone else keeps their texts. The next plan run does it: the language model only.',
+      "What is written from a changed text is written again for that character or place only - a changed look: its description; a place's look: its description, background and floor plan. Everyone else keeps their texts. The next plan run does it: the language model only.",
     ],
     warnings: [
       goes.length && `What is planned from the looks goes: ${listSteps(goes)}.`,
@@ -64,11 +64,13 @@ const saveLooks = toasts.guard(async () => {
   })
   if (!result.changed) return toasts.show('Nothing changed')
   // the texts to write are written by the next plan run - right away, if wanted, stopping after the look
-  const now = result.remade.length > 0 && await ask({
-    title: 'Write them now?',
-    lines: [...result.remade, 'A plan run writes these and stops after the look. The language model only.'],
-    confirm: 'Write them now',
-  })
+  const now =
+    result.remade.length > 0 &&
+    (await ask({
+      title: 'Write them now?',
+      lines: [...result.remade, 'A plan run writes these and stops after the look. The language model only.'],
+      confirm: 'Write them now',
+    }))
   if (now) await start({type: 'plan', until: 'look'})
 })
 </script>
@@ -84,15 +86,21 @@ const saveLooks = toasts.guard(async () => {
           <PageBar title="The look of the whole" />
           <p class="muted">Format, style, palette and camera language - every look below is written from it.</p>
           <textarea v-model="brief.text.value" class="prose" rows="6" aria-label="The look of the whole" />
-          <div class="btn-row" style="margin-top: 6px"><button class="btn" :disabled="!brief.dirty.value" @click="saveBrief">Save the look of the whole</button></div>
+          <div class="btn-row" style="margin-top: 6px">
+            <button class="btn" :disabled="!brief.dirty.value" @click="saveBrief">Save the look of the whole</button>
+          </div>
         </div>
         <div class="section btn-row">
           <button class="btn primary" :disabled="!edits.dirty.value" @click="saveLooks">Save</button>
           <span class="muted">{{ edits.pending.value }}</span>
           <span class="muted">Change a text by hand, or tick "Write anew" for the language model to write it again.</span>
         </div>
-        <div v-if="look.characters.length" class="section"><PageBar title="Characters" /><LookElementCard v-for="element in look.characters" :key="element.id" :element="element" :edits="edits" /></div>
-        <div v-if="look.locations.length" class="section"><PageBar title="Places" /><LookElementCard v-for="element in look.locations" :key="element.id" :element="element" :edits="edits" /></div>
+        <div v-if="look.characters.length" class="section">
+          <PageBar title="Characters" /><LookElementCard v-for="element in look.characters" :key="element.id" :element="element" :edits="edits" />
+        </div>
+        <div v-if="look.locations.length" class="section">
+          <PageBar title="Places" /><LookElementCard v-for="element in look.locations" :key="element.id" :element="element" :edits="edits" />
+        </div>
       </template>
     </template>
   </div>

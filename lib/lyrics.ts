@@ -1,31 +1,31 @@
-import type {LyricSection, LyricsTiming, MusicMap, MusicSection, Slot, SlotVocal, TimedLine, TimedWord, TranscriptWord} from "./project.ts";
+import type {LyricSection, LyricsTiming, MusicMap, MusicSection, Slot, SlotVocal, TimedLine, TimedWord, TranscriptWord} from './project.ts'
 
-export type ActivityRange = { start: number, end: number }
-import {EARLY_FROM, leadOf} from "../shared/timing-fit.ts";
-import {frameAt, round, secondsAt} from "./frames.ts";
+export type ActivityRange = {start: number; end: number}
+import {EARLY_FROM, leadOf} from '../shared/timing-fit.ts'
+import {frameAt, round, secondsAt} from './frames.ts'
 
 // Aligns the known lyrics to Whisper's transcript of the vocals stem - plain code, deterministic.
 
-const MATCH_SIMILARITY = 0.7    // words match from this normalized Levenshtein similarity on
-const SKIP_LYRIC = -0.4         // a lyric word Whisper didn't hear
-const SKIP_HEARD = -0.3         // a word Whisper heard that isn't in the lyrics (ad-lib, hallucination)
-const TYPICAL_WORD_SEC = 0.45   // length of a word that has to be interpolated
-const SECTION_SLACK_SEC = 8     // how far a matched word may lie outside its estimated section without a penalty
-const LOOP_WORDS = 3            // this many words in a row on (nearly) one timestamp are a whisper repeat-loop, not singing
+const MATCH_SIMILARITY = 0.7 // words match from this normalized Levenshtein similarity on
+const SKIP_LYRIC = -0.4 // a lyric word Whisper didn't hear
+const SKIP_HEARD = -0.3 // a word Whisper heard that isn't in the lyrics (ad-lib, hallucination)
+const TYPICAL_WORD_SEC = 0.45 // length of a word that has to be interpolated
+const SECTION_SLACK_SEC = 8 // how far a matched word may lie outside its estimated section without a penalty
+const LOOP_WORDS = 3 // this many words in a row on (nearly) one timestamp are a whisper repeat-loop, not singing
 const LOOP_SPREAD_SEC = 0.1
-const ADLIB_GAP_SEC = 1.2       // heard words further apart than this belong to different ad-lib lines
+const ADLIB_GAP_SEC = 1.2 // heard words further apart than this belong to different ad-lib lines
 const ADLIB_MIN_WORDS = 2
-const ADLIB_MIN_ACTIVE = 0.5    // share of an ad-lib line that has to lie inside vocal activity
-const ADLIB_SURE = 0.7          // ... or whisper is this sure of the words (quiet backing vocals stay under the activity threshold)
+const ADLIB_MIN_ACTIVE = 0.5 // share of an ad-lib line that has to lie inside vocal activity
+const ADLIB_SURE = 0.7 // ... or whisper is this sure of the words (quiet backing vocals stay under the activity threshold)
 const ADLIB_MIN_WORD_PROBABILITY = 0.3
-const GUESS_MIN_ACTIVE = 0.4    // share of a guessed (never heard) word that has to lie inside vocal activity - else nobody sings it
+const GUESS_MIN_ACTIVE = 0.4 // share of a guessed (never heard) word that has to lie inside vocal activity - else nobody sings it
 const ADLIB_REPLACES_BELOW = 0.5 // a lyric line heard less than this, with an ad-lib of its words on it, takes the ad-lib's times
-const SAME_LINE_WITHIN = 1      // seconds: an ad-lib with the words of a lyric line this close is that line heard twice
-export const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
-const LINE_GAP_BARS = 4         // more silence than this between two words of one line: one of them was matched somewhere else
-                                // (largest real gap inside a line over the projects folder: 3.55 bars, the wrong ones 4.2 to 30)
+const SAME_LINE_WITHIN = 1 // seconds: an ad-lib with the words of a lyric line this close is that line heard twice
+export const MIN_WORD_SEC = 0.05 // shorter than this is a word without a real position - nobody can lip-sync it
+const LINE_GAP_BARS = 4 // more silence than this between two words of one line: one of them was matched somewhere else
+// (largest real gap inside a line over the projects folder: 3.55 bars, the wrong ones 4.2 to 30)
 
-export type SungLine = { line: number, sectionIndex: number, section: string, text: string, words: string[] }
+export type SungLine = {line: number; sectionIndex: number; section: string; text: string; words: string[]}
 
 /**
  * The sung lines of the lyrics, numbered in song order - lines that are only a performance note like
@@ -35,7 +35,10 @@ export function sungLines(lyricSections: LyricSection[]): SungLine[] {
     const lines: SungLine[] = []
     lyricSections.forEach((section, sectionIndex) => {
         for (const raw of section.lines) {
-            const text = raw.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
+            const text = raw
+                .replace(/\([^)]*\)/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
             const words = text.split(' ').filter(w => normalizeWord(w))
             if (words.length) lines.push({line: lines.length, sectionIndex, section: section.label, text, words})
         }
@@ -45,7 +48,11 @@ export function sungLines(lyricSections: LyricSection[]): SungLine[] {
 
 // "Dragon's," -> "dragons", "Über" -> "uber"
 export function normalizeWord(word: string) {
-    return word.toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '')
+    return word
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/\p{M}/gu, '')
+        .replace(/[^\p{L}\p{N}]/gu, '')
 }
 
 // 1 - Levenshtein distance / length of the longer word
@@ -72,10 +79,18 @@ export function similarity(a: string, b: string) {
  * `sections` (the estimate from the audio) is optional and only breaks ties - e.g. which of three identical
  * choruses a heard chorus belongs to. `bpm` gives the bar for keepTogether.
  */
-export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord[], sections?: MusicSection[], activity?: ActivityRange[], bpm?: number): LyricsTiming {
+export function alignLyrics(
+    lyricSections: LyricSection[],
+    heard: TranscriptWord[],
+    sections?: MusicSection[],
+    activity?: ActivityRange[],
+    bpm?: number,
+): LyricsTiming {
     const lines = sungLines(lyricSections)
     const lyric = lines.flatMap(line => line.words.map(text => ({text, norm: normalizeWord(text), line: line.line, sectionIndex: line.sectionIndex})))
-    const transcript = clampToActivity(dropLoops(heard), activity).map(w => ({...w, norm: normalizeWord(w.text)})).filter(w => w.norm)
+    const transcript = clampToActivity(dropLoops(heard), activity)
+        .map(w => ({...w, norm: normalizeWord(w.text)}))
+        .filter(w => w.norm)
     const n = lyric.length
     const m = transcript.length
     if (n === 0) return {lines: []}
@@ -122,29 +137,34 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
     }
     // a line whose only matches are short words ("the", "in") most likely matched stray words - trust none of them
     for (const line of lines) {
-        const own = lyric.flatMap((w, i) => w.line === line.line && matchOf[i] !== undefined ? [i] : [])
+        const own = lyric.flatMap((w, i) => (w.line === line.line && matchOf[i] !== undefined ? [i] : []))
         if (own.every(i => lyric[i]!.norm.length <= 3)) for (const i of own) matchOf[i] = undefined
     }
 
-    const timed: (TimedWord & { sim: number })[] = lyric.map((word, i) => {
+    const timed: (TimedWord & {sim: number})[] = lyric.map((word, i) => {
         const j = matchOf[i]
         return j === undefined
             ? {text: word.text, start: NaN, end: NaN, sim: 0}
             : {text: word.text, start: transcript[j]!.start, end: transcript[j]!.end, sim: similarity(word.norm, transcript[j]!.norm)}
     })
-    if (timed.every(w => w.sim === 0)) throw new Error('None of the lyrics were found in the transcript - is lyricsLanguage right, and are there vocals in the song?')
-    interpolate(timed, lyric.map(w => w.sectionIndex), activity)
+    if (timed.every(w => w.sim === 0))
+        throw new Error('None of the lyrics were found in the transcript - is lyricsLanguage right, and are there vocals in the song?')
+    interpolate(
+        timed,
+        lyric.map(w => w.sectionIndex),
+        activity,
+    )
 
     // a word whisper never heard was placed by guesswork: where the vocal stem is silent it is marked estimated - it stays in its
     // line (#738: with known lyrics no word is lost - "Die ich in mir verberg" lost its "Die" here), and the Timing page shows it to check
-    const sungAt = (w: { start: number, end: number }) => {
+    const sungAt = (w: {start: number; end: number}) => {
         if (!activity?.length) return true
         const covered = activity.reduce((sum, r) => sum + Math.max(0, Math.min(w.end, r.end) - Math.max(w.start, r.start)), 0)
         return w.end > w.start && covered >= GUESS_MIN_ACTIVE * (w.end - w.start)
     }
     let k = 0
     const timedLines: TimedLine[] = lines.map(line => {
-        const words = keepTogether(timed.slice(k, k += line.words.length), bpm ? LINE_GAP_BARS * 240 / bpm : Infinity)
+        const words = keepTogether(timed.slice(k, (k += line.words.length)), bpm ? (LINE_GAP_BARS * 240) / bpm : Infinity)
         return {
             line: line.line,
             sectionIndex: line.sectionIndex,
@@ -158,7 +178,11 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
     })
 
     const matched = new Set(matchOf.filter(j => j !== undefined))
-    const heardAdlibs = adlibLines(transcript.flatMap((w, j) => matched.has(j) ? [] : [w]), new Set(lyric.map(w => w.norm)), activity)
+    const heardAdlibs = adlibLines(
+        transcript.flatMap((w, j) => (matched.has(j) ? [] : [w])),
+        new Set(lyric.map(w => w.norm)),
+        activity,
+    )
     if (!heardAdlibs.length) return {lines: timedLines}
 
     // An ad-lib with the words of a lyric line that lies where the ad-lib is, is that line heard twice: no ad-lib - else the line was
@@ -196,7 +220,7 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
  * most heard words (the first on a tie); the words of the other parts are put right before or after it, as guesses
  * (sim 0) - the vocal activity then decides whether they are sung there, like any word that was not heard.
  */
-export function keepTogether<W extends { start: number, end: number, sim: number }>(words: W[], maxGap: number): W[] {
+export function keepTogether<W extends {start: number; end: number; sim: number}>(words: W[], maxGap: number): W[] {
     const parts: W[][] = [[]]
     words.forEach((w, i) => {
         if (i > 0 && w.start - words[i - 1]!.end > maxGap) parts.push([])
@@ -204,14 +228,24 @@ export function keepTogether<W extends { start: number, end: number, sim: number
     })
     if (parts.length === 1) return words
     const heardIn = (part: W[]) => part.filter(w => w.sim > 0).length
-    const kept = parts.reduce((best, part) => heardIn(part) > heardIn(best) ? part : best)
+    const kept = parts.reduce((best, part) => (heardIn(part) > heardIn(best) ? part : best))
     const at = parts.indexOf(kept)
     const before = parts.slice(0, at).flat()
     const after = parts.slice(at + 1).flat()
     return [
-        ...before.map((w, i) => ({...w, sim: 0, start: round(kept[0]!.start - (before.length - i) * TYPICAL_WORD_SEC), end: round(kept[0]!.start - (before.length - i - 1) * TYPICAL_WORD_SEC)})),
+        ...before.map((w, i) => ({
+            ...w,
+            sim: 0,
+            start: round(kept[0]!.start - (before.length - i) * TYPICAL_WORD_SEC),
+            end: round(kept[0]!.start - (before.length - i - 1) * TYPICAL_WORD_SEC),
+        })),
         ...kept,
-        ...after.map((w, i) => ({...w, sim: 0, start: round(kept.at(-1)!.end + i * TYPICAL_WORD_SEC), end: round(kept.at(-1)!.end + (i + 1) * TYPICAL_WORD_SEC)})),
+        ...after.map((w, i) => ({
+            ...w,
+            sim: 0,
+            start: round(kept.at(-1)!.end + i * TYPICAL_WORD_SEC),
+            end: round(kept.at(-1)!.end + (i + 1) * TYPICAL_WORD_SEC),
+        })),
     ]
 }
 
@@ -247,13 +281,19 @@ const wordsOf = (text: string) => text.split(/\s+/).map(normalizeWord).filter(Bo
 const activeShare = (start: number, end: number, activity: ActivityRange[]) =>
     end > start ? activity.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0) / (end - start) : 0
 /** How far apart two stretches are, 0 when they overlap. */
-const apart = (a: { start: number, end: number }, b: { start: number, end: number }) => Math.max(0, a.start - b.end, b.start - a.end)
+const apart = (a: {start: number; end: number}, b: {start: number; end: number}) => Math.max(0, a.start - b.end, b.start - a.end)
 
 /** The lyric line an ad-lib is: the same words (similar enough), at most SAME_LINE_WITHIN seconds away - the nearest. */
 function sameLine(lines: TimedLine[], adlib: TimedLine): TimedLine | undefined {
     const words = wordsOf(adlib.text).join(' ')
     return lines
-        .filter(line => !line.adlib && line.words.length > 0 && similarity(wordsOf(line.text).join(' '), words) >= MATCH_SIMILARITY && apart(line, adlib) <= SAME_LINE_WITHIN)
+        .filter(
+            line =>
+                !line.adlib &&
+                line.words.length > 0 &&
+                similarity(wordsOf(line.text).join(' '), words) >= MATCH_SIMILARITY &&
+                apart(line, adlib) <= SAME_LINE_WITHIN,
+        )
         .sort((a, b) => apart(a, adlib) - apart(b, adlib))[0]
 }
 
@@ -265,20 +305,37 @@ function roomFor(words: TimedWord[]): TimedWord[] {
     const out = words.map(w => ({...w}))
     out.forEach((w, n) => {
         if (!w.estimated || w.end - w.start >= MIN_WORD_SEC) return
-        const next = out[n + 1], before = out[n - 1]
-        const giver = next && !next.estimated && next.end - next.start >= 2 * MIN_WORD_SEC ? next : before && !before.estimated && before.end - before.start >= 2 * MIN_WORD_SEC ? before : undefined
+        const next = out[n + 1],
+            before = out[n - 1]
+        const giver =
+            next && !next.estimated && next.end - next.start >= 2 * MIN_WORD_SEC
+                ? next
+                : before && !before.estimated && before.end - before.start >= 2 * MIN_WORD_SEC
+                  ? before
+                  : undefined
         if (!giver) return
-        const share = Math.max(MIN_WORD_SEC, Math.min((giver.end - giver.start) - MIN_WORD_SEC, (giver.end - giver.start) * w.text.length / (w.text.length + giver.text.length)))
-        if (giver === next) { w.start = giver.start; w.end = round(giver.start + share); giver.start = w.end }
-        else { w.end = giver.end; w.start = round(giver.end - share); giver.end = w.start }
+        const share = Math.max(
+            MIN_WORD_SEC,
+            Math.min(giver.end - giver.start - MIN_WORD_SEC, ((giver.end - giver.start) * w.text.length) / (w.text.length + giver.text.length)),
+        )
+        if (giver === next) {
+            w.start = giver.start
+            w.end = round(giver.start + share)
+            giver.start = w.end
+        } else {
+            w.end = giver.end
+            w.start = round(giver.end - share)
+            giver.end = w.start
+        }
     })
     return out
 }
 
 /** `count` word times from the words heard: one to one when the counts agree, else the span shared out evenly. */
-function spreadOver(heard: TimedWord[], count: number): { start: number, end: number }[] {
+function spreadOver(heard: TimedWord[], count: number): {start: number; end: number}[] {
     if (heard.length === count) return heard.map(w => ({start: w.start, end: w.end}))
-    const start = heard[0]!.start, step = (heard.at(-1)!.end - start) / count
+    const start = heard[0]!.start,
+        step = (heard.at(-1)!.end - start) / count
     return Array.from({length: count}, (_, n) => ({start: round(start + n * step), end: round(start + (n + 1) * step)}))
 }
 
@@ -287,15 +344,21 @@ function spreadOver(heard: TimedWord[], count: number): { start: number, end: nu
  * lyrics.txt is there once, placed, with its own words; an ad-lib is fine (a suggestion until taken). The pipeline and the Timing
  * page say these - the code does not guess a fix.
  */
-export function lyricsProblems(timing: LyricsTiming, lyricSections: LyricSection[]): { line: number, text: string, problem: string }[] {
-    const problems: { line: number, text: string, problem: string }[] = []
+export function lyricsProblems(timing: LyricsTiming, lyricSections: LyricSection[]): {line: number; text: string; problem: string}[] {
+    const problems: {line: number; text: string; problem: string}[] = []
     for (const expected of sungLines(lyricSections)) {
         const found = timing.lines.filter(l => !l.adlib && l.line === expected.line)
-        if (!found.length) { problems.push({line: expected.line, text: expected.text, problem: 'missing from the timing'}); continue }
+        if (!found.length) {
+            problems.push({line: expected.line, text: expected.text, problem: 'missing from the timing'})
+            continue
+        }
         if (found.length > 1) problems.push({line: expected.line, text: expected.text, problem: `there ${found.length} times`})
         const line = found[0]!
         if (line.off) continue
-        if (!line.words.length) { problems.push({line: expected.line, text: expected.text, problem: 'not placed'}); continue }
+        if (!line.words.length) {
+            problems.push({line: expected.line, text: expected.text, problem: 'not placed'})
+            continue
+        }
         const sung = line.words.map(w => normalizeWord(w.text)).join(' ')
         const written = expected.words.map(normalizeWord).join(' ')
         // words split at a cut (joined) are one word of the lyrics
@@ -310,34 +373,40 @@ export function lyricsProblems(timing: LyricsTiming, lyricSections: LyricSection
  * They are real singing when they sound like the song's own words and sit in vocal activity (whisper's other
  * inventions like "AAAAAAAA" fail the first test), so they become lines of their own that the singer lip-syncs.
  */
-function adlibLines(unmatched: (TranscriptWord & { norm: string })[], vocabulary: Set<string>, activity?: ActivityRange[]): TimedLine[] {
-    const real = unmatched.filter(w => w.end > w.start && w.probability >= ADLIB_MIN_WORD_PROBABILITY && [...vocabulary].some(v => similarity(v, w.norm) >= MATCH_SIMILARITY))
+function adlibLines(unmatched: (TranscriptWord & {norm: string})[], vocabulary: Set<string>, activity?: ActivityRange[]): TimedLine[] {
+    const real = unmatched.filter(
+        w => w.end > w.start && w.probability >= ADLIB_MIN_WORD_PROBABILITY && [...vocabulary].some(v => similarity(v, w.norm) >= MATCH_SIMILARITY),
+    )
     const groups: (typeof real)[] = []
     for (const word of real) {
         const group = groups.at(-1)
         if (group && word.start - group.at(-1)!.end <= ADLIB_GAP_SEC) group.push(word)
         else groups.push([word])
     }
-    return groups.filter(g => g.length >= ADLIB_MIN_WORDS).flatMap(group => {
-        const start = group[0]!.start
-        const end = group.at(-1)!.end
-        const sure = group.length >= 3 && group.reduce((sum, w) => sum + w.probability, 0) / group.length >= ADLIB_SURE
-        if (activity?.length && !sure) {
-            const active = activity.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0)
-            if (active / (end - start) < ADLIB_MIN_ACTIVE) return []
-        }
-        return [{
-            line: -1,
-            sectionIndex: -1,
-            section: '',
-            text: group.map(w => w.text).join(' '),
-            start,
-            end,
-            words: group.map(({text, start, end}) => ({text, start, end})),
-            confidence: round(group.reduce((sum, w) => sum + w.probability, 0) / group.length),
-            adlib: true,
-        }]
-    })
+    return groups
+        .filter(g => g.length >= ADLIB_MIN_WORDS)
+        .flatMap(group => {
+            const start = group[0]!.start
+            const end = group.at(-1)!.end
+            const sure = group.length >= 3 && group.reduce((sum, w) => sum + w.probability, 0) / group.length >= ADLIB_SURE
+            if (activity?.length && !sure) {
+                const active = activity.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0)
+                if (active / (end - start) < ADLIB_MIN_ACTIVE) return []
+            }
+            return [
+                {
+                    line: -1,
+                    sectionIndex: -1,
+                    section: '',
+                    text: group.map(w => w.text).join(' '),
+                    start,
+                    end,
+                    words: group.map(({text, start, end}) => ({text, start, end})),
+                    confidence: round(group.reduce((sum, w) => sum + w.probability, 0) / group.length),
+                    adlib: true,
+                },
+            ]
+        })
 }
 
 /**
@@ -380,16 +449,14 @@ function interpolate(words: TimedWord[], sectionOf: number[], activity?: Activit
 // gap can straddle several separate sung/screamed bursts, and packing every word into just the loudest one
 // (the old behaviour) silently ignored the rest. Falls back to undefined (blind spread) when the real overlap
 // is too thin to place `count` words in without stacking them on top of each other.
-function spreadOverActivity(lo: number, hi: number, count: number, activity: ActivityRange[]): { start: number, end: number }[] | undefined {
-    const segments = activity
-        .map(r => ({start: Math.max(lo, r.start), end: Math.min(hi, r.end)}))
-        .filter(r => r.end > r.start)
+function spreadOverActivity(lo: number, hi: number, count: number, activity: ActivityRange[]): {start: number; end: number}[] | undefined {
+    const segments = activity.map(r => ({start: Math.max(lo, r.start), end: Math.min(hi, r.end)})).filter(r => r.end > r.start)
     const total = segments.reduce((sum, s) => sum + (s.end - s.start), 0)
     if (!segments.length || total < count * 0.15) return undefined
 
     // words per segment, proportional to its share of the covered duration - largest fractional remainder
     // first, so the per-segment counts always add up to exactly `count`
-    const raw = segments.map(s => count * (s.end - s.start) / total)
+    const raw = segments.map(s => (count * (s.end - s.start)) / total)
     const counts = raw.map(Math.floor)
     let remaining = count - counts.reduce((a, b) => a + b, 0)
     for (const [, i] of raw.map((r, i) => [r - counts[i]!, i] as const).sort((a, b) => b[0] - a[0])) {
@@ -398,7 +465,7 @@ function spreadOverActivity(lo: number, hi: number, count: number, activity: Act
         remaining--
     }
 
-    const words: { start: number, end: number }[] = []
+    const words: {start: number; end: number}[] = []
     segments.forEach((seg, i) => {
         const n = counts[i]!
         if (!n) return
@@ -462,7 +529,10 @@ export function refineSections(music: MusicMap, lyricSections: LyricSection[], t
     return estimated.map((section, i) => {
         const start = starts[i]!
         const end = starts[i + 1] ?? music.durationSec
-        const energies = downbeats.map((t, b) => ({t, e: music.barEnergy[b] ?? 0})).filter(b => b.t >= start - 0.05 && b.t < end - 0.05).map(b => b.e)
+        const energies = downbeats
+            .map((t, b) => ({t, e: music.barEnergy[b] ?? 0}))
+            .filter(b => b.t >= start - 0.05 && b.t < end - 0.05)
+            .map(b => b.e)
         return {
             label: section.label,
             start: round(start),
@@ -478,8 +548,8 @@ export function refineSections(music: MusicMap, lyricSections: LyricSection[], t
  * silence, once for real). Measured on the loudness of the vocals stem (`peaks`, shared/timing-fit.ts) and not on the transcript: a
  * start moves only later, never past what is left of the word, and a line placed by hand stays. `moved` says what changed, by line.
  */
-export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: LyricsTiming, moved: {line: number, by: number}[]} {
-    const moved: {line: number, by: number}[] = []
+export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: LyricsTiming; moved: {line: number; by: number}[]} {
+    const moved: {line: number; by: number}[] = []
     const lines = timing.lines.map(line => {
         const first = line.words[0]
         if (line.byHand || !first) return line
@@ -498,7 +568,7 @@ export function tightenStarts(timing: LyricsTiming, peaks: number[]): {timing: L
  * (lib/frames.ts), times are relative to the clip's first frame.
  */
 /** The timing without the lines left out on the Timing page (`off`): what is sung. */
-export const sungOnly = (timing: LyricsTiming): LyricsTiming => timing.lines.some(l => l.off) ? {...timing, lines: timing.lines.filter(l => !l.off)} : timing
+export const sungOnly = (timing: LyricsTiming): LyricsTiming => (timing.lines.some(l => l.off) ? {...timing, lines: timing.lines.filter(l => !l.off)} : timing)
 
 /** Reassemble source parts; hyphens describe only fragments at the edges of a clip. */
 export function vocalText(words: TimedWord[], trailing = false, leading = !!words[0]?.joined): string {
@@ -515,9 +585,7 @@ export function slotVocals(slot: Pick<Slot, 'start' | 'end'>, timing: LyricsTimi
         const selected = line.words.filter(w => w.end - w.start >= MIN_WORD_SEC && frameAt(w.start) >= first && frameAt(w.start) < last)
         const words = selected.map(relative)
         const trailing = !!line.words[line.words.indexOf(selected.at(-1)!) + 1]?.joined
-        return words.length
-            ? [{line: line.line, text: vocalText(words, trailing), start: words[0]!.start, end: words.at(-1)!.end, words}]
-            : []
+        return words.length ? [{line: line.line, text: vocalText(words, trailing), start: words[0]!.start, end: words.at(-1)!.end, words}] : []
     })
 }
 

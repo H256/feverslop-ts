@@ -1,47 +1,76 @@
-import {boundedMemo} from "./memo.ts";
-import {existsSync, mkdtempSync, statSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
-import {extname, isAbsolute, join, relative, resolve, sep} from "node:path";
-import {clipVersions} from "../archive.ts";
-import {peaks, readFineWaveform} from "../waveform.ts";
-export {peaks};
-import type {ClipRequest} from "../compose.ts";
-import {loadProjectConfig} from "../config.ts";
-import {libraryDir, libraryIdPattern} from "../library.ts";
-import {listProjects, projectDir, projectExists, validProjectId} from "../project-setup.ts";
-import {clipEstimate, clipFailureRisks, pictureEstimate, readClipRequests} from "../render-state.ts";
-import {configureLlm, picturesReadable} from "../llm.ts";
-import {loadSettings} from "../settings.ts";
-import {filmStatus, projectStatus} from "../status.ts";
-import {readTimings} from "../timings.ts";
-import {loadFilmConfig} from "../film/config.ts";
-import {filmRenderConfig} from "../film/pictures.ts";
-import {filmDir, filmExists, filmIds} from "../film/setup.ts";
-import {readCasting, readLibrary, writeCastingEntry} from "./library.ts";
-import {clipRequestId, type EditorKind, type EditorOverride, type EditorTarget, readEditorFreshness, readEditorProject, readListing, waveformSource} from "./project.ts";
-import {picturesFile, readReferences} from "./references.ts";
-import {readSinging, type SingingChange, writeSinging} from "./singing.ts";
-import {pickVersion, writeOverride} from "./choices.ts";
-import {type CastChange, castingRedo, dropStoryProposal, type LookChange, readBook, readCast, readLook, stageOf, writeCast, writeLook, writeStory, writeStoryForCast} from "./preproduction.ts";
-import {readTiming, type TimingChange, writeTiming} from "./timing.ts";
-import {type ConfigChange, previewConfig, readConfig, writeConfig} from "./projectconfig.ts";
-import {runProgress} from "./progress.ts";
-import {type RunAction, RunControl} from "./runs.ts";
-import {readServers, urlsOfChoice} from "./servers.ts";
-import {checkUploadSize, takePictureUpload} from "./upload.ts";
-import {readPictureJobs} from "../render-state.ts";
-import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts';
-import type {ProjectStatus} from '../../shared/workspace.ts';
-import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts';
-import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts';
+import {boundedMemo} from './memo.ts'
+import {existsSync, mkdtempSync, statSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {extname, isAbsolute, join, relative, resolve, sep} from 'node:path'
+import {clipVersions} from '../archive.ts'
+import {peaks, readFineWaveform} from '../waveform.ts'
+export {peaks}
+import type {ClipRequest} from '../compose.ts'
+import {loadProjectConfig} from '../config.ts'
+import {libraryDir, libraryIdPattern} from '../library.ts'
+import {listProjects, projectDir, projectExists, validProjectId} from '../project-setup.ts'
+import {clipEstimate, clipFailureRisks, pictureEstimate, readClipRequests} from '../render-state.ts'
+import {configureLlm, picturesReadable} from '../llm.ts'
+import {loadSettings} from '../settings.ts'
+import {filmStatus, projectStatus} from '../status.ts'
+import {readTimings} from '../timings.ts'
+import {loadFilmConfig} from '../film/config.ts'
+import {filmRenderConfig} from '../film/pictures.ts'
+import {filmDir, filmExists, filmIds} from '../film/setup.ts'
+import {readCasting, readLibrary, writeCastingEntry} from './library.ts'
+import {
+    clipRequestId,
+    type EditorKind,
+    type EditorOverride,
+    type EditorTarget,
+    readEditorFreshness,
+    readEditorProject,
+    readListing,
+    waveformSource,
+} from './project.ts'
+import {picturesFile, readReferences} from './references.ts'
+import {readSinging, type SingingChange, writeSinging} from './singing.ts'
+import {pickVersion, writeOverride} from './choices.ts'
+import {
+    type CastChange,
+    castingRedo,
+    dropStoryProposal,
+    type LookChange,
+    readBook,
+    readCast,
+    readLook,
+    stageOf,
+    writeCast,
+    writeLook,
+    writeStory,
+    writeStoryForCast,
+} from './preproduction.ts'
+import {readTiming, type TimingChange, writeTiming} from './timing.ts'
+import {type ConfigChange, previewConfig, readConfig, writeConfig} from './projectconfig.ts'
+import {runProgress} from './progress.ts'
+import {type RunAction, RunControl} from './runs.ts'
+import {readServers, urlsOfChoice} from './servers.ts'
+import {checkUploadSize, takePictureUpload} from './upload.ts'
+import {readPictureJobs} from '../render-state.ts'
+import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
+import type {ProjectStatus} from '../../shared/workspace.ts'
+import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
+import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts'
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
 
 // only what the page plays and shows - not project.json, the logs or the settings, whatever a path says
 const MEDIA_TYPES: Record<string, string> = {
-    '.mp4': 'video/mp4', '.webm': 'video/webm', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
-    '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.flac': 'audio/flac',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.wav': 'audio/wav',
+    '.mp3': 'audio/mpeg',
+    '.flac': 'audio/flac',
 }
 
 /** The file a /media/ path means, inside the folder - undefined for anything else. */
@@ -55,7 +84,7 @@ export function mediaFile(dir: string, path: string): string | undefined {
 }
 
 /** bytes=a-b, bytes=a- or bytes=-n of a file of `size` bytes: first and last byte - undefined when it cannot be served. */
-export function byteRange(header: string, size: number): { first: number, last: number } | undefined {
+export function byteRange(header: string, size: number): {first: number; last: number} | undefined {
     const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim())
     if (!match || (!match[1] && !match[2]) || size === 0) return undefined
     const first = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]))
@@ -95,9 +124,13 @@ const WAVEFORM_BUCKETS = 4000
 const WAVEFORM_RATE = 4000
 
 async function readWaveform(file: string): Promise<number[] | undefined> {
-    const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(WAVEFORM_RATE), '-f', 's16le', '-'], {stdout: 'pipe', stderr: 'ignore', stdin: 'ignore'})
+    const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(WAVEFORM_RATE), '-f', 's16le', '-'], {
+        stdout: 'pipe',
+        stderr: 'ignore',
+        stdin: 'ignore',
+    })
     const bytes = await new Response(proc.stdout).arrayBuffer()
-    if (await proc.exited !== 0) return undefined
+    if ((await proc.exited) !== 0) return undefined
     return peaks(new Int16Array(bytes, 0, Math.floor(bytes.byteLength / 2)), WAVEFORM_BUCKETS)
 }
 
@@ -106,9 +139,12 @@ const THUMBNAILS_AT_ONCE = 4
 
 /** A picture made small: forty 2 MP pictures on one timeline are more than a browser wants to paint at once. */
 async function makeThumbnail(file: string, width: number): Promise<Uint8Array | undefined> {
-    const proc = Bun.spawn(['ffmpeg', '-v', 'error', '-i', file, '-vf', `scale=${width}:-2`, '-frames:v', '1', '-c:v', 'mjpeg', '-q:v', '4', '-f', 'image2pipe', '-'], {stdout: 'pipe', stderr: 'ignore', stdin: 'ignore'})
+    const proc = Bun.spawn(
+        ['ffmpeg', '-v', 'error', '-i', file, '-vf', `scale=${width}:-2`, '-frames:v', '1', '-c:v', 'mjpeg', '-q:v', '4', '-f', 'image2pipe', '-'],
+        {stdout: 'pipe', stderr: 'ignore', stdin: 'ignore'},
+    )
     const bytes = new Uint8Array(await new Response(proc.stdout).arrayBuffer())
-    return await proc.exited === 0 && bytes.length ? bytes : undefined
+    return (await proc.exited) === 0 && bytes.length ? bytes : undefined
 }
 
 /** Runs what it is given, a few at a time. */
@@ -128,7 +164,7 @@ function limiter(atOnce: number) {
 }
 
 const json = (value: unknown, status = 200) => Response.json(value, {status, headers: {'Cache-Control': 'no-store'}})
-const message = (e: unknown) => e instanceof Error ? e.message : String(e)
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 // a run can be writing a file just as it is read: the page keeps what it has and asks again
 const failure = (e: unknown) => json({error: message(e)}, 503)
 const refused = (e: unknown) => json({error: message(e)}, 409)
@@ -157,16 +193,37 @@ const allTargets = (): EditorTarget[] => [
     ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
 ]
 
-const RENDER_ACTIONS = new Set<RunAction['type']>(['clips', 'final', 'plan', 'retake', 'repeat', 'next', 'leak-scan', 'export-asset', 'export-song', 'add-view', 'refinish', 'look-pictures', 'adapt-story', 'label', 'intro', 'credits'])
+const RENDER_ACTIONS = new Set<RunAction['type']>([
+    'clips',
+    'final',
+    'plan',
+    'retake',
+    'repeat',
+    'next',
+    'leak-scan',
+    'export-asset',
+    'export-song',
+    'add-view',
+    'refinish',
+    'look-pictures',
+    'adapt-story',
+    'label',
+    'intro',
+    'credits',
+])
 /** A music video planned up to the look: a picture is rendered there and then, the shots are not planned for it (#540). */
 const atLook = (target: EditorTarget) => target.kind === 'music' && stageOf(target) === 'look'
 
 /** What rendering these clips is expected to cost: the time, what can go wrong, and that a fixed seed gives the same clip. */
 async function estimateClips(target: EditorTarget, ids: string[]) {
-    const requests = await readClipRequests<ClipRequest & { frames: number }>(target.dir)
+    const requests = await readClipRequests<ClipRequest & {frames: number}>(target.dir)
     const clips = requests.filter(c => ids.includes(c.id))
     const projectConfig = target.kind === 'film' ? filmRenderConfig(await loadFilmConfig(target.dir)) : await loadProjectConfig(target.dir)
-    const settings = await loadSettings(target.kind === 'film' ? {projectModel: (await loadFilmConfig(target.dir)).llm.model} : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model})
+    const settings = await loadSettings(
+        target.kind === 'film'
+            ? {projectModel: (await loadFilmConfig(target.dir)).llm.model}
+            : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model},
+    )
     const servers = settings.comfy.map(s => s.name)
     return {
         estimate: stripColors(await clipEstimate(clips, projectConfig, servers)),
@@ -187,8 +244,21 @@ async function picturesReadableFor(target: EditorTarget) {
 
 async function estimatePictures(target: EditorTarget, count: number) {
     const projectConfig = target.kind === 'film' ? filmRenderConfig(await loadFilmConfig(target.dir)) : await loadProjectConfig(target.dir)
-    const settings = await loadSettings(target.kind === 'film' ? {projectModel: (await loadFilmConfig(target.dir)).llm.model} : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model})
-    return {estimate: stripColors(await pictureEstimate(count, projectConfig, settings.comfy.map(s => s.name))), fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined}
+    const settings = await loadSettings(
+        target.kind === 'film'
+            ? {projectModel: (await loadFilmConfig(target.dir)).llm.model}
+            : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model},
+    )
+    return {
+        estimate: stripColors(
+            await pictureEstimate(
+                count,
+                projectConfig,
+                settings.comfy.map(s => s.name),
+            ),
+        ),
+        fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined,
+    }
 }
 
 /**
@@ -256,13 +326,15 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
         const bytes = await thumbnailOf(key, () => oneByOne(() => makeThumbnail(file, width)).catch(() => undefined))
         // ffmpeg could not make one: the picture itself will do
         if (!bytes) return serveMedia(file, request, url.searchParams.has('v'))
-        return new Response(bytes, {headers: {'Content-Type': 'image/jpeg', 'Cache-Control': url.searchParams.has('v') ? 'private, max-age=86400, immutable' : 'no-cache'}})
+        return new Response(bytes, {
+            headers: {'Content-Type': 'image/jpeg', 'Cache-Control': url.searchParams.has('v') ? 'private, max-age=86400, immutable' : 'no-cache'},
+        })
     }
 
     const projectApi = async (target: EditorTarget, rest: string[], request: Request, url: URL): Promise<Response> => {
         const [what, id, action] = rest
         const post = request.method === 'POST'
-        const body = async <T>() => await request.json() as T
+        const body = async <T>() => (await request.json()) as T
 
         if (!post) {
             try {
@@ -272,7 +344,8 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     const status = await (target.kind === 'film' ? filmStatus(target.id) : projectStatus(target.id))
                     const {render, next, steps, changed} = status
                     return json({
-                        steps, changed,
+                        steps,
+                        changed,
                         pictures: {total: render.pictures.length, missing: render.missingPictures.length, stale: render.stalePictures.length},
                         clips: {total: render.clips.length, missing: render.missingClips.length, stale: render.staleClips.length},
                         final: render.finalState,
@@ -284,28 +357,42 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     const file = source && mediaFile(target.dir, source)
                     if (!file) return json({peaks: null})
                     const key = `${file}:${statSync(file).mtimeMs}`
-                    return json({peaks: await waveform(key, () => readWaveform(file).catch(() => undefined)) ?? null})
+                    return json({peaks: (await waveform(key, () => readWaveform(file).catch(() => undefined))) ?? null})
                 }
                 if (what === 'progress') {
                     const current = runs.current(target)
                     if (!current?.running) return json({progress: null})
-                    const requests = await readClipRequests<{ id: string }>(target.dir)
-                    return json({progress: runProgress(target.dir, current.command, current.startedAt ? Date.parse(current.startedAt) : 0, requests.map(clip => clip.id)) ?? null})
+                    const requests = await readClipRequests<{id: string}>(target.dir)
+                    return json({
+                        progress:
+                            runProgress(
+                                target.dir,
+                                current.command,
+                                current.startedAt ? Date.parse(current.startedAt) : 0,
+                                requests.map(clip => clip.id),
+                            ) ?? null,
+                    })
                 }
                 if (what === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
                 if (what === 'versions' && id) {
                     const current = await clipRequestId(target, id)
-                    return json({versions: clipVersions(target.dir, id).map(version => ({...version, v: Math.round(version.made), fromThisPlan: version.fingerprint === undefined ? undefined : version.fingerprint === current}))})
+                    return json({
+                        versions: clipVersions(target.dir, id).map(version => ({
+                            ...version,
+                            v: Math.round(version.made),
+                            fromThisPlan: version.fingerprint === undefined ? undefined : version.fingerprint === current,
+                        })),
+                    })
                 }
                 if (what === 'references') return json({references: await readReferences(target)})
-                if (what === 'singing') return json({singing: target.kind === 'music' ? await readSinging(target) ?? null : null})
-                if (what === 'timing') return json({timing: target.kind === 'music' ? await readTiming(target) ?? null : null})
+                if (what === 'singing') return json({singing: target.kind === 'music' ? ((await readSinging(target)) ?? null) : null})
+                if (what === 'timing') return json({timing: target.kind === 'music' ? ((await readTiming(target)) ?? null) : null})
                 if (what === 'timing-wave') {
                     const audio = target.kind === 'music' ? (await readTiming(target))?.audio : undefined
                     const file = audio && mediaFile(target.dir, audio.file)
                     if (!file) return json({peaks: null})
                     const key = `fine:${file}:${statSync(file).mtimeMs}`
-                    return json({peaks: await waveform(key, () => readFineWaveform(file, 100).catch(() => undefined)) ?? null})
+                    return json({peaks: (await waveform(key, () => readFineWaveform(file, 100).catch(() => undefined))) ?? null})
                 }
                 if (what === 'casting') {
                     const project = await readEditorProject(target)
@@ -327,8 +414,9 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
         try {
             const started = (run: unknown) => json({run})
             if (what === 'run') {
-                const {action: wanted, servers} = await body<{ action: RunAction, servers?: string[] }>()
-                if (!wanted || !RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures' && wanted.type !== 'direction') return refused(new Error('no such action'))
+                const {action: wanted, servers} = await body<{action: RunAction; servers?: string[]}>()
+                if (!wanted || (!RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures' && wanted.type !== 'direction'))
+                    return refused(new Error('no such action'))
                 // a prompt or a picture comes in through its own route below, never as a path from the page
                 if (wanted.type === 'pictures') {
                     delete wanted.promptFile
@@ -349,12 +437,12 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 return notFound()
             }
             if (what === 'estimate') {
-                const asked = await body<{ clips?: string[], pictures?: number }>()
+                const asked = await body<{clips?: string[]; pictures?: number}>()
                 return json(asked.clips ? await estimateClips(target, asked.clips) : await estimatePictures(target, asked.pictures ?? 1))
             }
-            if (what === 'versions' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{ version: string }>()).version))
+            if (what === 'versions' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{version: string}>()).version))
             if (what === 'references' && id && action === 'rerender') {
-                const {newAnchor, prompt, servers} = await body<{ newAnchor?: boolean, prompt?: string, servers?: string[] }>()
+                const {newAnchor, prompt, servers} = await body<{newAnchor?: boolean; prompt?: string; servers?: string[]}>()
                 const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
                 if (!job) return refused(new Error(`no picture ${id}`))
                 const urls = await urlsOfChoice(servers)
@@ -362,7 +450,9 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 const folder = prompt !== undefined && prompt.trim() !== job.prompt.trim() ? mkdtempSync(join(tmpdir(), 'workspace-prompt-')) : undefined
                 const promptFile = folder && join(folder, `${id}.txt`)
                 if (promptFile) writeFileSync(promptFile, prompt!)
-                return started(runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile, look: atLook(target)}, urls, folder ? [folder] : []))
+                return started(
+                    runs.start(target, {type: 'pictures', ids: [id], again: true, newAnchor, promptFile, look: atLook(target)}, urls, folder ? [folder] : []),
+                )
             }
             // the user's own picture as the anchor, uploaded: checked (lib/editor/upload.ts), kept for the run only, then put in by the CLI
             if (what === 'references' && id && action === 'own-anchor') {
@@ -384,30 +474,38 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     const descriptionFile = description ? await upload.text('description', description) : undefined
                     const servers = form.get('servers')
                     const urls = await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined)
-                    return started(runs.start(target, {type: 'pictures', ids: [id], again: true, anchorFile: upload.file, promptFile, descriptionFile, describe, look: atLook(target)}, urls, [upload.folder]))
+                    return started(
+                        runs.start(
+                            target,
+                            {type: 'pictures', ids: [id], again: true, anchorFile: upload.file, promptFile, descriptionFile, describe, look: atLook(target)},
+                            urls,
+                            [upload.folder],
+                        ),
+                    )
                 } catch (e) {
                     upload.drop()
                     throw e
                 }
             }
-            if (what === 'references' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{ version: string }>()).version))
+            if (what === 'references' && id && action === 'pick') return json(await pickVersion(target, id, (await body<{version: string}>()).version))
             if (what === 'casting') {
-                const {kind, id: role, value} = await body<{ kind: 'character' | 'location', id: string, value: string }>()
+                const {kind, id: role, value} = await body<{kind: 'character' | 'location'; id: string; value: string}>()
                 await writeCastingEntry(target, kind, role, value)
                 return json({written: true})
             }
             if (what === 'singing') return json(await writeSinging(target, await body<SingingChange>()))
             if (what === 'cast') return json(await writeCast(target, await body<CastChange>()))
-            if (what === 'book' && id === 'for-cast') return json(await writeStoryForCast(target, await body<{ proposal?: boolean, renamed?: { from: string, to: string }[] }>()))
+            if (what === 'book' && id === 'for-cast')
+                return json(await writeStoryForCast(target, await body<{proposal?: boolean; renamed?: {from: string; to: string}[]}>()))
             if (what === 'book' && id === 'drop-proposal') {
                 dropStoryProposal(target)
                 return json({dropped: true})
             }
-            if (what === 'book') return json(await writeStory(target, (await body<{ text?: unknown }>()).text))
+            if (what === 'book') return json(await writeStory(target, (await body<{text?: unknown}>()).text))
             if (what === 'look') return json(await writeLook(target, await body<LookChange>()))
             // what a change would do, asked before it is made - or the change itself
             if (what === 'config') {
-                const {change, dryRun} = await body<{ change?: ConfigChange, dryRun?: boolean }>()
+                const {change, dryRun} = await body<{change?: ConfigChange; dryRun?: boolean}>()
                 if (!change || typeof change !== 'object' || Array.isArray(change)) return refused(new Error('change must be an object like {"seed": 7}'))
                 return json(dryRun ? await previewConfig(target, change) : await writeConfig(target, change))
             }
@@ -440,7 +538,8 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             const picture = form.get('anchor')
             const kind = form.get('kind')
             const id = String(form.get('id') ?? '')
-            if (!(picture instanceof File) || (kind !== 'character' && kind !== 'location') || !libraryIdPattern.test(id)) return refused(new Error('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes'))
+            if (!(picture instanceof File) || (kind !== 'character' && kind !== 'location') || !libraryIdPattern.test(id))
+                return refused(new Error('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes'))
             // checked as every upload is, and kept for the run only (lib/editor/upload.ts)
             let upload: Awaited<ReturnType<typeof takePictureUpload>>
             try {
@@ -456,7 +555,15 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             try {
                 const servers = form.get('servers')
                 const urls = await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined)
-                return json({run: runs.startTool(target, 'tools/create-asset.ts', [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')], urls, [upload.folder])})
+                return json({
+                    run: runs.startTool(
+                        target,
+                        'tools/create-asset.ts',
+                        [kind, id, `--anchor=${anchor}`, ...optional('name'), ...optional('role'), ...optional('description')],
+                        urls,
+                        [upload.folder],
+                    ),
+                })
             } catch (e) {
                 upload.drop()
                 return refused(e)
@@ -477,13 +584,18 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             if (parts[0] === 'workspace-assets') return post ? notFound() : serveClient(request, parts.slice(1).join('/'))
             if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page(request)
             if (parts[0] === 'api') {
-                if (parts[1] === 'projects' && !post) return json({projects: allTargets().flatMap(target => {
-                    try {
-                        return [readListing(target)]
-                    } catch {
-                        return []
-                    }
-                }).sort((a, b) => b.changed - a.changed)})
+                if (parts[1] === 'projects' && !post)
+                    return json({
+                        projects: allTargets()
+                            .flatMap(target => {
+                                try {
+                                    return [readListing(target)]
+                                } catch {
+                                    return []
+                                }
+                            })
+                            .sort((a, b) => b.changed - a.changed),
+                    })
                 if (parts[1] === 'servers' && !post) return json({servers: await readServers()})
                 if (parts[1] === 'library') return libraryApi(parts.slice(2), request, url)
                 return notFound()
@@ -505,7 +617,8 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'settings'].includes(area))) return notFound()
+                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'settings'].includes(area)))
+                    return notFound()
                 return post ? notFound() : page(request)
             }
         } catch (e) {

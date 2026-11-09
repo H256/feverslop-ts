@@ -6,7 +6,7 @@ export function boundedMemo<V>(max: number): (key: string, make: () => V) => V {
     return (key, make) => {
         if (entries.has(key)) {
             const value = entries.get(key)!
-            entries.delete(key)        // the Map keeps insertion order: re-inserting makes it the newest
+            entries.delete(key) // the Map keeps insertion order: re-inserting makes it the newest
             entries.set(key, value)
             return value
         }

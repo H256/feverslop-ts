@@ -1,18 +1,32 @@
-import {cli} from '../lib/cli.ts';
-import {log} from '../lib/log.ts';
+import {cli} from '../lib/cli.ts'
+import {log} from '../lib/log.ts'
 // Sets up the LLM server, the ComfyUI servers and the transcription - writes the global settings file (see the README, section "Setup").
 // usage: bun run setup [llm | llm-model | vision | comfy | whisper | show]
-import * as p from "@clack/prompts";
-import {existsSync} from "node:fs";
-import {listModels, takesPictures} from "../lib/llm.ts";
-import {styles} from "../lib/log.ts";
-import {answer as wizardAnswer} from "../lib/wizard.ts";
+import * as p from '@clack/prompts'
+import {existsSync} from 'node:fs'
+import {listModels, takesPictures} from '../lib/llm.ts'
+import {styles} from '../lib/log.ts'
+import {answer as wizardAnswer} from '../lib/wizard.ts'
 import {
-    type ComfyEntry, type ComfyServer, defaultComfy, describeDevices, loadSettings, loadWhisperSettings, maskSecret, normalizeUrl,
-    parseComfyEntries, probeComfy, readSettingsFile, saveSettings, type SettingsFile, settingsPath, type Source, whisperProblem, type WhisperSettings,
-} from "../lib/settings.ts";
+    type ComfyEntry,
+    type ComfyServer,
+    defaultComfy,
+    describeDevices,
+    loadSettings,
+    loadWhisperSettings,
+    maskSecret,
+    normalizeUrl,
+    parseComfyEntries,
+    probeComfy,
+    readSettingsFile,
+    saveSettings,
+    type SettingsFile,
+    settingsPath,
+    type Source,
+    whisperProblem,
+    type WhisperSettings,
+} from '../lib/settings.ts'
 cli('setup')
-
 
 const commands = {
     all: 'everything below but whisper, in order',
@@ -25,7 +39,11 @@ const commands = {
 }
 const command = (Bun.argv[2] ?? 'all') as keyof typeof commands
 if (!(command in commands)) {
-    log.error(`usage: bun run setup [${Object.keys(commands).filter(c => c !== 'all').join(' | ')}]\n`)
+    log.error(
+        `usage: bun run setup [${Object.keys(commands)
+            .filter(c => c !== 'all')
+            .join(' | ')}]\n`,
+    )
     for (const [name, what] of Object.entries(commands)) log.error(`  ${(name === 'all' ? '(none)' : name).padEnd(10)} ${what}`)
     process.exit(1)
 }
@@ -85,26 +103,36 @@ async function selectModel(ids: string[], current?: string) {
         log.warn('The server lists no models - load one, then run: bun run setup llm-model')
         return undefined
     }
-    return answer(await p.select({
-        message: 'Model',
-        options: ids.map(id => ({value: id, ...(id === current ? {hint: 'current'} : {})})),
-        initialValue: ids.includes(current ?? '') ? current : ids[0],
-        maxItems: 12,
-    }))
+    return answer(
+        await p.select({
+            message: 'Model',
+            options: ids.map(id => ({value: id, ...(id === current ? {hint: 'current'} : {})})),
+            initialValue: ids.includes(current ?? '') ? current : ids[0],
+            maxItems: 12,
+        }),
+    )
 }
 
 async function setupLlm() {
     log.info('LLM server - any OpenAI-compatible server with the Responses API')
-    const url = normalizeUrl(answer(await p.text({
-        message: 'URL (with /v1)',
-        placeholder: 'http://localhost:8080/v1',
-        initialValue: file.llm?.url ?? '',
-        validate: validateUrl,
-    })), 'URL')
+    const url = normalizeUrl(
+        answer(
+            await p.text({
+                message: 'URL (with /v1)',
+                placeholder: 'http://localhost:8080/v1',
+                initialValue: file.llm?.url ?? '',
+                validate: validateUrl,
+            }),
+        ),
+        'URL',
+    )
     const current = file.llm?.apiKey
-    const typed = answer(await p.password({
-        message: current ? `API key - empty keeps ${maskSecret(current)}, "-" removes it` : 'API key - empty if the server needs none',
-    })) ?? ''
+    const typed =
+        answer(
+            await p.password({
+                message: current ? `API key - empty keeps ${maskSecret(current)}, "-" removes it` : 'API key - empty if the server needs none',
+            }),
+        ) ?? ''
     const apiKey = typed === '-' ? undefined : typed || current
 
     const ids = await fetchModels(url, apiKey)
@@ -114,7 +142,13 @@ async function setupLlm() {
     } else if (!answer(await p.confirm({message: 'The server does not answer - save anyway?', initialValue: false}))) {
         return log.info('LLM settings unchanged')
     }
-    file.llm = {url, ...(apiKey ? {apiKey} : {}), ...(model ? {model} : {}), ...(file.llm?.parallel ? {parallel: file.llm.parallel} : {}), ...(file.llm?.vision ? {vision: file.llm.vision} : {})}
+    file.llm = {
+        url,
+        ...(apiKey ? {apiKey} : {}),
+        ...(model ? {model} : {}),
+        ...(file.llm?.parallel ? {parallel: file.llm.parallel} : {}),
+        ...(file.llm?.vision ? {vision: file.llm.vision} : {}),
+    }
     await save('the LLM server')
 }
 
@@ -136,19 +170,22 @@ async function setupModel() {
 
 async function setupVision() {
     log.info('Vision model - describes pictures (replace-character, import-asset, create-asset); for a text server without a vision projector')
-    if (process.env.FEVERSLOP_VISION_URL || process.env.FEVERSLOP_VISION_MODEL) log.warn('FEVERSLOP_VISION_URL / FEVERSLOP_VISION_MODEL is set - it overrides what is saved here')
+    if (process.env.FEVERSLOP_VISION_URL || process.env.FEVERSLOP_VISION_MODEL)
+        log.warn('FEVERSLOP_VISION_URL / FEVERSLOP_VISION_MODEL is set - it overrides what is saved here')
     // the effective text server - it may come from an env var
     const {llm} = await loadSettings()
     const current = file.llm?.vision
-    const where = answer(await p.select({
-        message: 'Pictures are described by',
-        options: [
-            {value: 'text', label: 'The text model', hint: llm.model ?? 'the server\'s only model'},
-            ...(llm.url ? [{value: 'same', label: 'Another model on the text server', hint: llm.url}] : []),
-            {value: 'other', label: 'A model on another server'},
-        ],
-        initialValue: current?.url ? 'other' : current?.model && llm.url ? 'same' : 'text',
-    }))
+    const where = answer(
+        await p.select({
+            message: 'Pictures are described by',
+            options: [
+                {value: 'text', label: 'The text model', hint: llm.model ?? "the server's only model"},
+                ...(llm.url ? [{value: 'same', label: 'Another model on the text server', hint: llm.url}] : []),
+                {value: 'other', label: 'A model on another server'},
+            ],
+            initialValue: current?.url ? 'other' : current?.model && llm.url ? 'same' : 'text',
+        }),
+    )
     if (where === 'text') {
         if (file.llm?.vision) {
             delete file.llm.vision
@@ -161,15 +198,25 @@ async function setupVision() {
     let url = llm.url!
     let apiKey = llm.apiKey
     if (where === 'other') {
-        url = normalizeUrl(answer(await p.text({
-            message: 'URL (with /v1)',
-            placeholder: 'http://localhost:8081/v1',
-            initialValue: current?.url ?? '',
-            validate: validateUrl,
-        })), 'URL')
-        const typed = answer(await p.password({
-            message: current?.apiKey ? `API key - empty keeps ${maskSecret(current.apiKey)}, "-" removes it` : 'API key - empty if the server needs none',
-        })) ?? ''
+        url = normalizeUrl(
+            answer(
+                await p.text({
+                    message: 'URL (with /v1)',
+                    placeholder: 'http://localhost:8081/v1',
+                    initialValue: current?.url ?? '',
+                    validate: validateUrl,
+                }),
+            ),
+            'URL',
+        )
+        const typed =
+            answer(
+                await p.password({
+                    message: current?.apiKey
+                        ? `API key - empty keeps ${maskSecret(current.apiKey)}, "-" removes it`
+                        : 'API key - empty if the server needs none',
+                }),
+            ) ?? ''
         apiKey = typed === '-' ? undefined : typed || current?.apiKey
     }
     const ids = await fetchModels(url, apiKey)
@@ -201,23 +248,27 @@ async function setupComfy() {
         const servers = entries.length ? parseComfyEntries(entries, 'comfy') : []
         await showComfyStatus(servers)
 
-        const action = answer(await p.select({
-            message: 'ComfyUI servers',
-            options: [
-                {value: 'add', label: 'Add a server'},
-                ...(servers.length ? [{value: 'remove', label: 'Remove a server'}] : []),
-                {value: 'test', label: 'Test again'},
-                {value: 'done', label: 'Done'},
-            ],
-            initialValue: servers.length ? 'done' : 'add',
-        }))
+        const action = answer(
+            await p.select({
+                message: 'ComfyUI servers',
+                options: [
+                    {value: 'add', label: 'Add a server'},
+                    ...(servers.length ? [{value: 'remove', label: 'Remove a server'}] : []),
+                    {value: 'test', label: 'Test again'},
+                    {value: 'done', label: 'Done'},
+                ],
+                initialValue: servers.length ? 'done' : 'add',
+            }),
+        )
         if (action === 'done') return
         if (action === 'add') await addComfy(entries)
         if (action === 'remove') {
-            const index = answer(await p.select({
-                message: 'Remove which server?',
-                options: servers.map((s, i) => ({value: i, label: s.name, hint: s.url})),
-            }))
+            const index = answer(
+                await p.select({
+                    message: 'Remove which server?',
+                    options: servers.map((s, i) => ({value: i, label: s.name, hint: s.url})),
+                }),
+            )
             entries.splice(index, 1)
             if (entries.length) file.comfy = entries
             else delete file.comfy
@@ -241,31 +292,41 @@ async function showComfyStatus(servers: ComfyServer[]) {
 }
 
 async function addComfy(entries: ComfyEntry[]) {
-    const url = normalizeUrl(answer(await p.text({
-        message: 'URL',
-        placeholder: defaultComfy,
-        validate: validateUrl,
-    })), 'URL')
+    const url = normalizeUrl(
+        answer(
+            await p.text({
+                message: 'URL',
+                placeholder: defaultComfy,
+                validate: validateUrl,
+            }),
+        ),
+        'URL',
+    )
     const host = new URL(url).host
-    const name = answer(await p.text({
-        message: 'Name - shown in the log and used in the client id',
-        placeholder: host,
-        defaultValue: host,
-        validate: value => !value || /^[\w.:-]+$/.test(value) ? undefined : 'only letters, digits, ".", ":", "_" and "-"',
-    })) || host
-    const auth = answer(await p.select({
-        message: 'Authentication',
-        options: [
-            {value: 'none', label: 'None'},
-            {value: 'token', label: 'Bearer token'},
-            {value: 'basic', label: 'Username and password'},
-        ],
-    }))
+    const name =
+        answer(
+            await p.text({
+                message: 'Name - shown in the log and used in the client id',
+                placeholder: host,
+                defaultValue: host,
+                validate: value => (!value || /^[\w.:-]+$/.test(value) ? undefined : 'only letters, digits, ".", ":", "_" and "-"'),
+            }),
+        ) || host
+    const auth = answer(
+        await p.select({
+            message: 'Authentication',
+            options: [
+                {value: 'none', label: 'None'},
+                {value: 'token', label: 'Bearer token'},
+                {value: 'basic', label: 'Username and password'},
+            ],
+        }),
+    )
     const entry: Exclude<ComfyEntry, string> = {url, ...(name !== host ? {name} : {})}
-    if (auth === 'token') entry.token = answer(await p.password({message: 'Token', validate: v => v ? undefined : 'required'}))
+    if (auth === 'token') entry.token = answer(await p.password({message: 'Token', validate: v => (v ? undefined : 'required')}))
     if (auth === 'basic') {
-        entry.username = answer(await p.text({message: 'Username', validate: v => v ? undefined : 'required'}))
-        entry.password = answer(await p.password({message: 'Password', validate: v => v ? undefined : 'required'}))
+        entry.username = answer(await p.text({message: 'Username', validate: v => (v ? undefined : 'required')}))
+        entry.password = answer(await p.password({message: 'Password', validate: v => (v ? undefined : 'required')}))
     }
 
     const [server] = parseComfyEntries([entry], 'new server')
@@ -284,10 +345,18 @@ async function addComfy(entries: ComfyEntry[]) {
 }
 
 // the presets - the first two are tools/vocals.py's own defaults on a GPU and on a CPU
-const whisperPresets: Record<string, { label: string, hint: string, settings?: WhisperSettings }> = {
+const whisperPresets: Record<string, {label: string; hint: string; settings?: WhisperSettings}> = {
     auto: {label: 'By device', hint: 'GPU: large-v3, 5 beams - CPU: large-v3-turbo, 2 beams'},
-    full: {label: 'Best', hint: 'large-v3, 5 beams, temperatures 0-1 - a GPU, or a lot of patience', settings: {model: 'large-v3', beamSize: 5, temperatures: [0, 0.2, 0.4, 0.6, 0.8, 1]}},
-    fast: {label: 'Fast', hint: 'large-v3-turbo, 2 beams, temperatures 0, 0.4, 0.8', settings: {model: 'large-v3-turbo', beamSize: 2, temperatures: [0, 0.4, 0.8]}},
+    full: {
+        label: 'Best',
+        hint: 'large-v3, 5 beams, temperatures 0-1 - a GPU, or a lot of patience',
+        settings: {model: 'large-v3', beamSize: 5, temperatures: [0, 0.2, 0.4, 0.6, 0.8, 1]},
+    },
+    fast: {
+        label: 'Fast',
+        hint: 'large-v3-turbo, 2 beams, temperatures 0, 0.4, 0.8',
+        settings: {model: 'large-v3-turbo', beamSize: 2, temperatures: [0, 0.4, 0.8]},
+    },
     custom: {label: 'Custom', hint: 'model, beams and temperatures of your own'},
 }
 
@@ -296,11 +365,13 @@ async function setupWhisper() {
     if (Object.keys(process.env).some(key => key.startsWith('FEVERSLOP_WHISPER_'))) log.warn('FEVERSLOP_WHISPER_* is set - it overrides what is saved here')
     const current = file.whisper
     const matching = Object.entries(whisperPresets).find(([, preset]) => preset.settings && JSON.stringify(preset.settings) === JSON.stringify(current))?.[0]
-    const choice = answer(await p.select({
-        message: 'Settings',
-        options: Object.entries(whisperPresets).map(([value, {label, hint}]) => ({value, label, hint})),
-        initialValue: !current ? 'auto' : matching ?? 'custom',
-    }))
+    const choice = answer(
+        await p.select({
+            message: 'Settings',
+            options: Object.entries(whisperPresets).map(([value, {label, hint}]) => ({value, label, hint})),
+            initialValue: !current ? 'auto' : (matching ?? 'custom'),
+        }),
+    )
     if (choice === 'auto') {
         if (!current) return log.info('Transcription settings unchanged')
         delete file.whisper
@@ -308,17 +379,32 @@ async function setupWhisper() {
     }
     let whisper = whisperPresets[choice]!.settings
     if (!whisper) {
-        const model = answer(await p.text({message: 'Model', placeholder: 'large-v3-turbo', initialValue: current?.model ?? '', validate: v => v?.trim() ? undefined : 'required'})).trim()
-        const beamSize = Number(answer(await p.text({
-            message: 'Beams - 1 is greedy and fastest',
-            initialValue: String(current?.beamSize ?? 2),
-            validate: v => whisperProblem({beamSize: Number(v)}),
-        })))
-        const temperatures = answer(await p.text({
-            message: 'Temperatures, comma-separated - a failed window is decoded again at each one',
-            initialValue: (current?.temperatures ?? [0, 0.4, 0.8]).join(', '),
-            validate: v => whisperProblem({temperatures: (v ?? '').split(',').map(Number)}),
-        })).split(',').map(Number)
+        const model = answer(
+            await p.text({
+                message: 'Model',
+                placeholder: 'large-v3-turbo',
+                initialValue: current?.model ?? '',
+                validate: v => (v?.trim() ? undefined : 'required'),
+            }),
+        ).trim()
+        const beamSize = Number(
+            answer(
+                await p.text({
+                    message: 'Beams - 1 is greedy and fastest',
+                    initialValue: String(current?.beamSize ?? 2),
+                    validate: v => whisperProblem({beamSize: Number(v)}),
+                }),
+            ),
+        )
+        const temperatures = answer(
+            await p.text({
+                message: 'Temperatures, comma-separated - a failed window is decoded again at each one',
+                initialValue: (current?.temperatures ?? [0, 0.4, 0.8]).join(', '),
+                validate: v => whisperProblem({temperatures: (v ?? '').split(',').map(Number)}),
+            }),
+        )
+            .split(',')
+            .map(Number)
         whisper = {model, beamSize, temperatures}
     }
     file.whisper = whisper
@@ -333,26 +419,32 @@ async function show() {
     log.info('LLM')
     log.info(`  url      ${llm.url ?? styles.muted('not set')} ${source(sources.llmUrl)}`)
     log.info(`  api key  ${llm.apiKey ? maskSecret(llm.apiKey) : styles.muted('none')} ${source(sources.llmApiKey)}`)
-    log.info(`  model    ${llm.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.llmModel)}`)
+    log.info(`  model    ${llm.model ?? styles.muted("not set - the server's only model")} ${source(sources.llmModel)}`)
     log.info(`  parallel ${llm.parallel} ${styles.muted(llm.parallel > 1 ? 'calls at once' : 'call at a time')} ${source(sources.llmParallel)}`)
     log.info('\nVision (describing pictures)')
     if (!llm.vision) log.info(`  ${styles.muted('the text model')}`)
     else {
         log.info(`  url      ${llm.vision.url ?? styles.muted('the text server')} ${source(sources.visionUrl)}`)
         log.info(`  api key  ${llm.vision.apiKey ? maskSecret(llm.vision.apiKey) : styles.muted('none')} ${source(sources.visionApiKey)}`)
-        log.info(`  model    ${llm.vision.model ?? styles.muted('not set - the server\'s only model')} ${source(sources.visionModel)}`)
+        log.info(`  model    ${llm.vision.model ?? styles.muted("not set - the server's only model")} ${source(sources.visionModel)}`)
     }
     log.info(`\nComfyUI ${source(sources.comfy)}`)
     for (const server of comfy) {
-        const auth = server.credentials?.type === 'bearer_token' ? ` token ${maskSecret(server.credentials.token)}`
-            : server.credentials?.type === 'basic' ? ` user ${server.credentials.username}, password ${maskSecret(server.credentials.password)}` : ''
+        const auth =
+            server.credentials?.type === 'bearer_token'
+                ? ` token ${maskSecret(server.credentials.token)}`
+                : server.credentials?.type === 'basic'
+                  ? ` user ${server.credentials.username}, password ${maskSecret(server.credentials.password)}`
+                  : ''
         log.info(`  ${server.name.padEnd(20)} ${server.url}${styles.muted(auth)}`)
     }
     const {whisper, sources: whisperSources} = await loadWhisperSettings()
     log.info('\nTranscription (whisper)')
     log.info(`  model        ${whisper.model ?? styles.muted('by device: large-v3 on a GPU, large-v3-turbo on a CPU')} ${source(whisperSources.model)}`)
     log.info(`  beams        ${whisper.beamSize ?? styles.muted('by device: 5 on a GPU, 2 on a CPU')} ${source(whisperSources.beamSize)}`)
-    log.info(`  temperatures ${whisper.temperatures?.join(', ') ?? styles.muted('by device: 0-1 in steps of 0.2 on a GPU, 0, 0.4, 0.8 on a CPU')} ${source(whisperSources.temperatures)}`)
+    log.info(
+        `  temperatures ${whisper.temperatures?.join(', ') ?? styles.muted('by device: 0-1 in steps of 0.2 on a GPU, 0, 0.4, 0.8 on a CPU')} ${source(whisperSources.temperatures)}`,
+    )
     log.info(styles.muted('\nOverrides, lowest first: settings file → project config.json ("llm": {"model": …}) → env vars → flags'))
 }
 

@@ -1,4 +1,4 @@
-import slugify from "slugify";
+import slugify from 'slugify'
 
 /** The longest id a name gives: ids become folder names, and a path longer than the file system allows (ENAMETOOLONG) breaks the run. */
 export const MAX_ID_LENGTH = 48

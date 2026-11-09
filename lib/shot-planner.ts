@@ -1,10 +1,10 @@
-import type {Assignment, BeatShots, Blocking, Character,Location, LocationLayout, MusicMap, Slot, StoryBeat} from "./project.ts";
-import {handsOf} from "./project.ts";
-import {type BeatSinging, isContinuous} from "./compose.ts";
-import type {ProjectConfig} from "./config.ts";
-import type {AskOptions} from "./llm.ts";
-import {formatTime} from "./frames.ts";
-import {MAX_FOREGROUND, SHOT_ROOM} from "./shot-plan.ts";
+import type {Assignment, BeatShots, Blocking, Character, Location, LocationLayout, MusicMap, Slot, StoryBeat} from './project.ts'
+import {handsOf} from './project.ts'
+import {type BeatSinging, isContinuous} from './compose.ts'
+import type {ProjectConfig} from './config.ts'
+import type {AskOptions} from './llm.ts'
+import {formatTime} from './frames.ts'
+import {MAX_FOREGROUND, SHOT_ROOM} from './shot-plan.ts'
 
 // a limit of lib/shot-plan.ts as the prompt says it
 const inWords = (n: number) => ['none', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? String(n)
@@ -108,30 +108,30 @@ hands: no`
 
 /** What the planner knows of the whole song - the same for every call of a run. */
 export type PlanContext = {
-    characters: Character[],
+    characters: Character[]
     // the director's edits per beat (lib/direction/edits.ts directionNotes): what a plan made again keeps to - only there when set
-    direction?: Record<string, string[]>,
+    direction?: Record<string, string[]>
     // what the reference pictures show - the planner stages in the place of the picture, with the people of the pictures
-    locations: Location[],
-    characterDescriptions: Record<string, string>,
-    locationDescriptions: Record<string, string>,
+    locations: Location[]
+    characterDescriptions: Record<string, string>
+    locationDescriptions: Record<string, string>
     // the fixed floor plan of each place (step locationLayouts) - none in a project planned before it
-    locationLayouts?: Record<string, LocationLayout>,
-    continuity: ProjectConfig['continuity'],
-    slots: Slot[],
-    mapping: Assignment[],
-    shotCounts: Record<string, number>,
-    beatProps?: Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]>,
-    beatSinging: Record<string, BeatSinging>,
+    locationLayouts?: Record<string, LocationLayout>
+    continuity: ProjectConfig['continuity']
+    slots: Slot[]
+    mapping: Assignment[]
+    shotCounts: Record<string, number>
+    beatProps?: Record<string, {characterId: string; prop: string; activePerShot: boolean[]}[]>
+    beatSinging: Record<string, BeatSinging>
     // the film look (step lookBrief: style.txt word for word, then the look the LLM made of it) - its shot sizes and camera
     // language are what the framing follows. Without it "Nachtnahaufnahmen" in style.txt came out as medium shots (#333)
-    filmLook?: string,
+    filmLook?: string
 }
 
 // one planner call writes at most a few shots of one beat: the answer is short, in lines and not in JSON, so that a broken
 // bracket or a quote in a sentence costs a few shots at most, not a beat. With the beat's blocking (blockingPrompt) the
 // staging and where everybody starts and ends are fixed, and the call writes only shots
-export type Chunk = { from: number, to: number, total: number, written: unknown[], staging?: string, blocking?: Blocking }
+export type Chunk = {from: number; to: number; total: number; written: unknown[]; staging?: string; blocking?: Blocking}
 
 const blockingInstructions = `You are a music video director who blocks a story beat before its shots are planned: the floor plan of the place, where everybody is when the beat starts and where when it is over. Answer only in the line format.
 
@@ -153,15 +153,21 @@ end: <Name> | <where they are and what they do and hold when the beat is over>
 (one "end:" line for every character of the beat)`
 
 // a prop that stands in a place (a drum kit) is used there and never carried along - said with the prop wherever it is listed
-export const castProp = (c: Character, locations: Location[]) => c.propCarried === false
-    ? `${c.prop} (stands in ${locations.find(l => l.id === c.propPlace)?.name ?? 'the place where it is used'} and is used there${c.propInHand ? `, with ${c.propInHand} in the ${handsOf(c)}` : ''}${c.propInHand || handsOf(c) === 'hands' ? '' : `, with the ${handsOf(c)}`} - never carried)`
-    : `${c.prop!}${handsOf(c) === 'hands' ? '' : ` (held and used with the ${handsOf(c)})`}`
+export const castProp = (c: Character, locations: Location[]) =>
+    c.propCarried === false
+        ? `${c.prop} (stands in ${locations.find(l => l.id === c.propPlace)?.name ?? 'the place where it is used'} and is used there${c.propInHand ? `, with ${c.propInHand} in the ${handsOf(c)}` : ''}${c.propInHand || handsOf(c) === 'hands' ? '' : `, with the ${handsOf(c)}`} - never carried)`
+        : `${c.prop!}${handsOf(c) === 'hands' ? '' : ` (held and used with the ${handsOf(c)})`}`
 
 /**
  * The blocking of one beat - a short call, made beat after beat: each starts where the one before ends (`before`). The
  * shots of all beats can then be planned at once, every beat from its own fixed blocking.
  */
-export function blockingPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping}: PlanContext, beat: StoryBeat, before: { beatId: string, staging?: string, ends: Record<string, string> } | undefined, after: StoryBeat | undefined): AskOptions {
+export function blockingPrompt(
+    {characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping}: PlanContext,
+    beat: StoryBeat,
+    before: {beatId: string; staging?: string; ends: Record<string, string>} | undefined,
+    after: StoryBeat | undefined,
+): AskOptions {
     return {
         reasoning: 'low',
         // even at low the thinking alone takes ~2500 words - 4096 cut off nearly every beat and cost a second call
@@ -170,20 +176,54 @@ export function blockingPrompt({characters: cast, locations, characterDescriptio
 cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
 place (as its reference picture shows it): ${JSON.stringify({name: locations.find(l => l.id === beat.locationId)?.name ?? beat.locationId, description: locationDescriptions[beat.locationId] ?? '', ...(locationLayouts?.[beat.locationId]?.layout ? {layout: locationLayouts[beat.locationId]!.layout} : {})})}
 looks (as their reference pictures show them): ${JSON.stringify(Object.fromEntries(beat.characterIds.map(id => [cast.find(c => c.id === id)?.name ?? id, characterDescriptions[id] ?? ''])))}
-${before ? `The beat right before it ("${before.beatId}") ends like this - this beat starts from it unless it opens a new scene: ${JSON.stringify({staging: before.staging, ends: before.ends})}
-` : 'This is the first beat of the video.\n'}${after ? `For orientation only - the beat after it: ${after.summary}
-` : ''}the beat to block:
+${
+    before
+        ? `The beat right before it ("${before.beatId}") ends like this - this beat starts from it unless it opens a new scene: ${JSON.stringify({staging: before.staging, ends: before.ends})}
+`
+        : 'This is the first beat of the video.\n'
+}${
+            after
+                ? `For orientation only - the beat after it: ${after.summary}
+`
+                : ''
+        }the beat to block:
 ${JSON.stringify({
-            id: beat.id, summary: beat.summary, moments: beat.moments, kind: beat.kind, characterIds: beat.characterIds, locationId: beat.locationId,
-            ...(isContinuous(beat, continuity) ? {continuous: true} : {}),
-            ...(beat.groupSize && Object.keys(beat.groupSize).length ? {groupSize: beat.groupSize} : {}),
-            ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === beat.id) ? {micro: true} : {}),
-        })}`,
+    id: beat.id,
+    summary: beat.summary,
+    moments: beat.moments,
+    kind: beat.kind,
+    characterIds: beat.characterIds,
+    locationId: beat.locationId,
+    ...(isContinuous(beat, continuity) ? {continuous: true} : {}),
+    ...(beat.groupSize && Object.keys(beat.groupSize).length ? {groupSize: beat.groupSize} : {}),
+    ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === beat.id) ? {micro: true} : {}),
+})}`,
         instructions: blockingInstructions,
     }
 }
 
-export function planPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook, direction}: PlanContext, block: StoryBeat[], finished: { beat: StoryBeat, plan: BeatShots } | undefined, after: StoryBeat | undefined, problems: string[], chunk: Chunk): AskOptions {
+export function planPrompt(
+    {
+        characters: cast,
+        locations,
+        characterDescriptions,
+        locationDescriptions,
+        locationLayouts,
+        continuity,
+        slots: clipSlots,
+        mapping,
+        shotCounts,
+        beatProps,
+        beatSinging,
+        filmLook,
+        direction,
+    }: PlanContext,
+    block: StoryBeat[],
+    finished: {beat: StoryBeat; plan: BeatShots} | undefined,
+    after: StoryBeat | undefined,
+    problems: string[],
+    chunk: Chunk,
+): AskOptions {
     const nameOf = (id: string) => cast.find(c => c.id === id)?.name ?? id
     // per shot of the beat, who is heard singing and whose instrument is heard - right in the shot, not as flag lists of the
     // whole beat next to it: the planner wrote a guitar "resting on his thigh" with every flag of the beat true
@@ -201,33 +241,62 @@ export function planPrompt({characters: cast, locations, characterDescriptions, 
         reasoning: 'medium',
         // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
         maxTokens: 16384,
-        input: `${filmLook ? `film look (the director's style - the shot sizes, the camera and the light of the shots follow it): ${filmLook}
-` : ''}castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.id, castProp(c, locations)])))}
+        input: `${
+            filmLook
+                ? `film look (the director's style - the shot sizes, the camera and the light of the shots follow it): ${filmLook}
+`
+                : ''
+        }castProps: ${JSON.stringify(Object.fromEntries(cast.filter(c => c.prop).map(c => [c.id, castProp(c, locations)])))}
 cast: ${JSON.stringify(cast.map(c => ({id: c.id, name: c.name, ...(c.isGroup ? {group: true} : {})})))}
-${chunk.from > 0 ? `Already written for this beat (do not write it again): ${JSON.stringify({staging: chunk.staging, shots: chunk.written})}
-` : ''}${finished ? `Already written - the staging and the end of the beat "${finished.beat.id}", which comes right before the first beat below (do not write it again): ${JSON.stringify({staging: finished.plan.staging, ends: finished.plan.ends, lastShot: finished.plan.shots.at(-1)})}
+${
+    chunk.from > 0
+        ? `Already written for this beat (do not write it again): ${JSON.stringify({staging: chunk.staging, shots: chunk.written})}
+`
+        : ''
+}${
+            finished
+                ? `Already written - the staging and the end of the beat "${finished.beat.id}", which comes right before the first beat below (do not write it again): ${JSON.stringify({staging: finished.plan.staging, ends: finished.plan.ends, lastShot: finished.plan.shots.at(-1)})}
 The first beat below follows directly after it: start from where it ends - where everyone stands, what they hold - unless it opens a new scene.
-` : ''}${after ? `For orientation only - the beat after the last beat below ("${after.id}"): ${after.summary}
+`
+                : ''
+        }${
+            after
+                ? `For orientation only - the beat after the last beat below ("${after.id}"): ${after.summary}
 Let the last shot of the last beat below lead toward it, and write nothing for it.
-` : ''}place (as its reference picture shows it): ${JSON.stringify(Object.fromEntries([...new Set(block.map(b => b.locationId))].map(id => [id, {name: locations.find(l => l.id === id)?.name ?? id, description: locationDescriptions[id] ?? '', ...(locationLayouts?.[id]?.layout ? {layout: locationLayouts[id]!.layout} : {})}])))}
+`
+                : ''
+        }place (as its reference picture shows it): ${JSON.stringify(Object.fromEntries([...new Set(block.map(b => b.locationId))].map(id => [id, {name: locations.find(l => l.id === id)?.name ?? id, description: locationDescriptions[id] ?? '', ...(locationLayouts?.[id]?.layout ? {layout: locationLayouts[id]!.layout} : {})}])))}
 looks (as their reference pictures show them): ${JSON.stringify(Object.fromEntries([...new Set(block.flatMap(b => b.characterIds))].map(id => [cast.find(c => c.id === id)?.name ?? id, characterDescriptions[id] ?? ''])))}
 beats (write shots only for these):
-${JSON.stringify(block.map(b => ({
-            id: b.id, summary: b.summary, moments: b.moments, kind: b.kind, characterIds: b.characterIds, locationId: b.locationId,
-            ...(isContinuous(b, continuity) ? {continuous: true} : {}),
-            ...(b.groupSize && Object.keys(b.groupSize).length ? {groupSize: b.groupSize} : {}),
-            ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === b.id) ? {micro: true} : {}),
-            shotsNeeded: shotCounts[b.id] ?? 1,
-            ...(musicOf(b) ? {music: musicOf(b)} : {}),
-            // fixed by the director: whatever else the beat says, every shot keeps to it
-            ...(direction?.[b.id]?.length ? {director: direction[b.id]} : {}),
-        })))}
+${JSON.stringify(
+    block.map(b => ({
+        id: b.id,
+        summary: b.summary,
+        moments: b.moments,
+        kind: b.kind,
+        characterIds: b.characterIds,
+        locationId: b.locationId,
+        ...(isContinuous(b, continuity) ? {continuous: true} : {}),
+        ...(b.groupSize && Object.keys(b.groupSize).length ? {groupSize: b.groupSize} : {}),
+        ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === b.id) ? {micro: true} : {}),
+        shotsNeeded: shotCounts[b.id] ?? 1,
+        ...(musicOf(b) ? {music: musicOf(b)} : {}),
+        // fixed by the director: whatever else the beat says, every shot keeps to it
+        ...(direction?.[b.id]?.length ? {director: direction[b.id]} : {}),
+    })),
+)}
 ${block.some(b => direction?.[b.id]?.length) ? 'Beats with "director" entries: the director fixed them - every shot keeps to them, whatever the summary or the moments say.\n' : ''}
-${chunk.blocking ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(chunk.blocking)}
+${
+    chunk.blocking
+        ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(chunk.blocking)}
 
-` : ''}This call writes ${chunk.from > 0 || chunk.to < chunk.total ? `ONLY shots ${chunk.from + 1} to ${chunk.to} of the ${chunk.total} that the beat needs ("shotsNeeded")` : `all ${chunk.total} shots of the beat`}.${chunk.blocking
-            ? ` The staging and where everybody starts and ends are fixed in the blocking above: write no STAGING line and no ENDS block. ${chunk.from === 0 ? 'The first shot starts where the blocking starts them' : 'Continue from the last of the shots above'}${chunk.to === chunk.total ? ', and the last shot of the beat leaves everybody where the blocking ends them' : ''}.`
-            : `${chunk.from === 0 ? ' Write the STAGING line first.' : ' The staging and the shots before them are given above - continue from the last of them, without a STAGING line.'}${chunk.to === chunk.total ? ' This call writes the last shot of the beat: end with the ENDS block.' : ' It does not write the last shot of the beat: no ENDS block.'}`}${problems.length ? `\n\nYour last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}` : ''}`,
+`
+        : ''
+}This call writes ${chunk.from > 0 || chunk.to < chunk.total ? `ONLY shots ${chunk.from + 1} to ${chunk.to} of the ${chunk.total} that the beat needs ("shotsNeeded")` : `all ${chunk.total} shots of the beat`}.${
+            chunk.blocking
+                ? ` The staging and where everybody starts and ends are fixed in the blocking above: write no STAGING line and no ENDS block. ${chunk.from === 0 ? 'The first shot starts where the blocking starts them' : 'Continue from the last of the shots above'}${chunk.to === chunk.total ? ', and the last shot of the beat leaves everybody where the blocking ends them' : ''}.`
+                : `${chunk.from === 0 ? ' Write the STAGING line first.' : ' The staging and the shots before them are given above - continue from the last of them, without a STAGING line.'}${chunk.to === chunk.total ? ' This call writes the last shot of the beat: end with the ENDS block.' : ' It does not write the last shot of the beat: no ENDS block.'}`
+        }${problems.length ? `\n\nYour last answer had these problems - fix them:\n${problems.map(p => `- ${p}`).join('\n')}` : ''}`,
         instructions: planInstructions,
     }
 }
@@ -237,9 +306,9 @@ ${chunk.blocking ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(
  * shots), a call whose shots have no problem keeps its first answer, the others are asked with their own problems; a
  * problem of the whole beat (its shot count) asks every call again - the shots after it would no longer line up.
  */
-export function plannerCalls(total: number, perCall: number, again?: { issues: { shot?: number, message: string }[], previousShots: number }) {
+export function plannerCalls(total: number, perCall: number, again?: {issues: {shot?: number; message: string}[]; previousShots: number}) {
     const askAll = !again || again.issues.some(i => i.shot === undefined)
-    const calls: { from: number, to: number, keep: boolean, problems: string[] }[] = []
+    const calls: {from: number; to: number; keep: boolean; problems: string[]}[] = []
     for (let from = 0; from < total; from += perCall) {
         const to = Math.min(total, from + perCall)
         const problems = (again?.issues ?? []).filter(i => i.shot === undefined || (i.shot >= from && i.shot < to)).map(i => i.message)
@@ -249,7 +318,7 @@ export function plannerCalls(total: number, perCall: number, again?: { issues: {
 }
 
 /** Whose instrument is heard when: a character with a stem-bound prop and the active ranges of that stem. */
-export type Player = { name: string, prop: string, ranges: { start: number, end: number }[] }
+export type Player = {name: string; prop: string; ranges: {start: number; end: number}[]}
 
 /**
  * The song in `count` equal stretches, one per line: the time, how loud the music is there (the mean bar energy, 0 = the
@@ -259,13 +328,15 @@ export type Player = { name: string, prop: string, ranges: { start: number, end:
 export function musicStretches(music: Pick<MusicMap, 'durationSec' | 'downbeats' | 'barEnergy'>, count: number, players: Player[] = []): string[] {
     const n = Math.max(1, count)
     return Array.from({length: n}, (_, i) => {
-        const start = i * music.durationSec / n
-        const end = (i + 1) * music.durationSec / n
-        const bars = music.downbeats.flatMap((t, k) => t >= start && t < end && music.barEnergy[k] !== undefined ? [music.barEnergy[k]!] : [])
+        const start = (i * music.durationSec) / n
+        const end = ((i + 1) * music.durationSec) / n
+        const bars = music.downbeats.flatMap((t, k) => (t >= start && t < end && music.barEnergy[k] !== undefined ? [music.barEnergy[k]!] : []))
         // a stretch shorter than a bar: the bar it lies in
         const nearest = music.downbeats.findLastIndex(t => t <= start)
-        const energy = bars.length ? bars.reduce((sum, e) => sum + e, 0) / bars.length : music.barEnergy[Math.max(0, nearest)] ?? 0
-        const heard = players.filter(p => p.ranges.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0) > (end - start) / 2)
+        const energy = bars.length ? bars.reduce((sum, e) => sum + e, 0) / bars.length : (music.barEnergy[Math.max(0, nearest)] ?? 0)
+        const heard = players.filter(
+            p => p.ranges.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0) > (end - start) / 2,
+        )
         return `${formatTime(start)}-${formatTime(end)} loudness ${energy.toFixed(2)}${players.length ? ` · heard: ${heard.length ? heard.map(p => `${p.name}'s ${p.prop}`).join(', ') : 'none of the instruments'}` : ''}`
     })
 }
@@ -275,8 +346,24 @@ export function musicStretches(music: Pick<MusicMap, 'durationSec' | 'downbeats'
  * lip-synced (empty in clip mode). `stretches`: the song's loudness and instruments along the way (musicStretches) - the
  * story's ups and downs follow it. Every character is written as {Name} (lib/refs.ts).
  */
-export function beatsPrompt({durationSec, beatCount, characters, locations, lyrics, story, performance, stretches = []}: {
-    durationSec: number, beatCount: number, characters: Character[], locations: Location[], lyrics: string, story: string, performance: string, stretches?: string[],
+export function beatsPrompt({
+    durationSec,
+    beatCount,
+    characters,
+    locations,
+    lyrics,
+    story,
+    performance,
+    stretches = [],
+}: {
+    durationSec: number
+    beatCount: number
+    characters: Character[]
+    locations: Location[]
+    lyrics: string
+    story: string
+    performance: string
+    stretches?: string[]
 }): AskOptions {
     return {
         reasoning: 'medium',
@@ -288,11 +375,15 @@ The beats have no timing yet - they are stretched onto the song later, so descri
 
 The song is ${Math.round(durationSec)} seconds long. The story is spread evenly over that time, in order from the first second to the last - the song sections do not matter for the beats, a beat does not belong to a verse or a chorus.
 Aim for about ${beatCount} beats that follow the story from start to end, each one with new action - a beat never repeats what an earlier beat already showed.
-${stretches.length ? `
+${
+    stretches.length
+        ? `
 The music along the way, in ${stretches.length} equal stretches - beat n falls about where stretch n is:
 ${stretches.join('\n')}
-The story's ups and downs follow the music: a beat's "intensity" is about the loudness where it falls, its climax goes where the music is loudest, and calm moments only where the music is quiet. The story winds down only where the music does - while the music is still loud near the end, the last beats are a last surge, not an aftermath.${stretches.some(s => s.includes(' · heard: ')) ? ' Whoever\'s instrument is heard in a stretch plays it there: nobody lowers, rests, sets down or silences an instrument that is still heard.' : ''}
-` : ''}
+The story's ups and downs follow the music: a beat's "intensity" is about the loudness where it falls, its climax goes where the music is loudest, and calm moments only where the music is quiet. The story winds down only where the music does - while the music is still loud near the end, the last beats are a last surge, not an aftermath.${stretches.some(s => s.includes(' · heard: ')) ? " Whoever's instrument is heard in a stretch plays it there: nobody lowers, rests, sets down or silences an instrument that is still heard." : ''}
+`
+        : ''
+}
 For every beat give:
 Every character in "summary", "moments" and the facts of "stateAfter" is written as their "name" in braces, the whole name exactly as in the character list below - {Thorin Oakenshield}, {Orcs}, never a short form like {Thorin} - also a group character acting as one of its members, and never a generic stand-in ("the orc", "an old woman") for someone of the list: the braces bind the sentence to that character's reference picture.
 - "summary": what visibly happens, 1-3 sentences, present tense, every character as {Name} ("{Kara} lights the torch").
@@ -326,24 +417,41 @@ ${story}`,
         instructions: 'You are a music video director who breaks stories into visual story beats. Answer only with JSON.',
         // the ids can only be ones of the cast - the server keeps the answer to them
         schema: {
-            type: 'object', additionalProperties: false, required: ['beats'],
-            properties: {beats: {type: 'array', minItems: 1, items: {
-                type: 'object', additionalProperties: false,
-                required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
-                properties: {
-                    summary: {type: 'string'},
-                    moments: {type: 'array', items: {type: 'string'}},
-                    locationId: {enum: locations.map(l => l.id)},
-                    characterIds: {type: 'array', items: {enum: characters.map(c => c.id)}},
-                    intensity: {type: 'number'},
-                    weight: {type: 'integer'},
-                    kind: {enum: ['establish', 'build', 'hit', 'release']},
-                    continuous: {type: 'boolean'},
-                    stateAfter: {type: 'array', items: {type: 'object', additionalProperties: false, required: ['fact', 'place'], properties: {fact: {type: 'string'}, place: {type: 'boolean'}}}},
-                    entrance: {type: 'boolean'},
-                    ...(characters.some(c => c.isGroup) ? {groupSize: {type: 'object', additionalProperties: {type: 'integer'}}} : {}),
+            type: 'object',
+            additionalProperties: false,
+            required: ['beats'],
+            properties: {
+                beats: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
+                        properties: {
+                            summary: {type: 'string'},
+                            moments: {type: 'array', items: {type: 'string'}},
+                            locationId: {enum: locations.map(l => l.id)},
+                            characterIds: {type: 'array', items: {enum: characters.map(c => c.id)}},
+                            intensity: {type: 'number'},
+                            weight: {type: 'integer'},
+                            kind: {enum: ['establish', 'build', 'hit', 'release']},
+                            continuous: {type: 'boolean'},
+                            stateAfter: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    additionalProperties: false,
+                                    required: ['fact', 'place'],
+                                    properties: {fact: {type: 'string'}, place: {type: 'boolean'}},
+                                },
+                            },
+                            entrance: {type: 'boolean'},
+                            ...(characters.some(c => c.isGroup) ? {groupSize: {type: 'object', additionalProperties: {type: 'integer'}}} : {}),
+                        },
+                    },
                 },
-            }}},
+            },
         },
     }
 }

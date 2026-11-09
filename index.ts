@@ -1,67 +1,112 @@
-import {cli} from './lib/cli.ts';
-import {toSlug} from "./lib/slug.ts";
-import {existsSync} from "node:fs";
-import {parseArgs} from "node:util";
-import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from "./lib/log.ts";
-import {keepTimingsIn, readTimings, recordTiming, runTimings} from "./lib/timings.ts";
-import {ask, askJson, type AskOptions, configureLlm, llmMap} from "./lib/llm.ts";
-import {mkdirSync, readdirSync, rmSync} from "node:fs";
-import {join} from "node:path";
-import {LOCATION_VIEWS} from "./lib/sequenceSheet.ts";
-import {type BeatShots, type Blocking, type Character, type Fact, type Location, type LocationLayout, ProjectStore, type PropStem, type Singing, STEP_NAMES, type StepName, type StoryBeat} from "./lib/project.ts";
-import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
-import {finishOf} from "./lib/finish.ts";
-import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
-import {applyDirectionOverlay, directionPlanNotes} from './lib/direction/service.ts';
-import {directionViewCache} from './lib/direction/views.ts';
-import {lockProject} from "./lib/lock.ts";
-import {beginRun} from "./lib/run-record-view.ts";
-import {analyzeSong, buildTimeline, cutAudio, mapBeatsToSlots, mixStems, separateInstrumentStems, splitFightSlots, separateStems, stemActivity, transcribeVocals} from "./lib/music.ts";
-import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from "./lib/shot-plan.ts";
-import {playingCases, playingIssues} from "./lib/playing-check.ts";
-import {resolveUnknownTokens} from "./lib/refs.ts";
-import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from "./lib/shot-planner.ts";
-import {boundaryFrameAsset, buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from "./lib/compose.ts";
-import {parseRetake} from "./lib/retake.ts";
-import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from "./lib/own-picture.ts";
-import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
-import {languageName, loadProjectConfig} from "./lib/config.ts";
-import {alignLyrics, lowConfidence, lyricsProblems, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
-import {readFineWaveform} from "./lib/waveform.ts";
-import {MISSING_WORD_LEAD, RATE, voiceLead} from "./shared/timing-fit.ts";
-import {projectLyricSections} from "./lib/music.ts";
-import {archiveFiles, versionStamp} from "./lib/archive.ts";
-import {assembleFinal, previewSources, formatSlotRanges} from "./lib/assemble.ts";
-import {freshness} from "./lib/provenance.ts";
-import {clipRequestsDir, clipRequestsIn, PREVIOUS, requestChanges, startOutput} from "./lib/previous-output.ts";
-import {writeGallery} from "./lib/gallery.ts";
-import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from "./lib/timeline-export.ts";
-import {FPS, formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from "./lib/frames.ts";
-import {loadSettings} from "./lib/settings.ts";
-import {MAX_REFERENCE_IMAGES} from "./comfy/helpers.ts";
-import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from "./lib/styles.ts";
-import {listProjects, projectExists, validProjectId} from "./lib/project-setup.ts";
-import * as clack from "@clack/prompts";
-import {pictureProp, propMissing} from "./lib/prop-check.ts";
-import {projectInputs, songFileOf, stepUsed, readInputFile} from "./lib/inputs.ts";
-import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from "./lib/render-state.ts";
-import {reviewed} from "./lib/review.ts";
-import {parseUntil, stopAfter} from "./lib/stages.ts";
-import {applyLibraryText, CASTING_FILE, castFromLibrary, copyKey} from "./lib/casting.ts";
-import {type LibraryAsset, libraryDir} from "./lib/library.ts";
-import {type AssetKind} from "./lib/asset-import.ts";
-import {redoAfter, unplannedBeats} from "./lib/project.ts";
-import {handsOf} from "./lib/project.ts";
+import {cli} from './lib/cli.ts'
+import {toSlug} from './lib/slug.ts'
+import {existsSync} from 'node:fs'
+import {parseArgs} from 'node:util'
+import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
+import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
+import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
+import {mkdirSync, readdirSync, rmSync} from 'node:fs'
+import {join} from 'node:path'
+import {LOCATION_VIEWS} from './lib/sequenceSheet.ts'
 import {
-    castPrompt, voiceRules, characterDescriptionPrompt, characterLookPrompt, propInUsePrompt, characterVariantLookPrompt, locationAnchorPrompt, locationDescriptionPrompt, locationLayoutPrompt,
-    locationLookPrompt, lookBriefPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt,
-} from "./lib/prompts.ts";
+    type BeatShots,
+    type Blocking,
+    type Character,
+    type Fact,
+    type Location,
+    type LocationLayout,
+    ProjectStore,
+    type PropStem,
+    type Singing,
+    STEP_NAMES,
+    type StepName,
+    type StoryBeat,
+} from './lib/project.ts'
+import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
+import {finishOf} from './lib/finish.ts'
+import {finishCopy, interpolateClips} from './lib/final-pass.ts'
+import {applyDirectionOverlay, directionPlanNotes} from './lib/direction/service.ts'
+import {directionViewCache} from './lib/direction/views.ts'
+import {lockProject} from './lib/lock.ts'
+import {beginRun} from './lib/run-record-view.ts'
+import {
+    analyzeSong,
+    buildTimeline,
+    cutAudio,
+    mapBeatsToSlots,
+    mixStems,
+    separateInstrumentStems,
+    splitFightSlots,
+    separateStems,
+    stemActivity,
+    transcribeVocals,
+} from './lib/music.ts'
+import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from './lib/shot-plan.ts'
+import {playingCases, playingIssues} from './lib/playing-check.ts'
+import {resolveUnknownTokens} from './lib/refs.ts'
+import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from './lib/shot-planner.ts'
+import {
+    boundaryFrameAsset,
+    buildClipRequests,
+    computeMemberCounts,
+    countShotsPerBeat,
+    groupMemberId,
+    pictureAsset,
+    propActivityPerBeat,
+    singingPerBeat,
+} from './lib/compose.ts'
+import {parseRetake} from './lib/retake.ts'
+import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-picture.ts'
+import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
+import {languageName, loadProjectConfig} from './lib/config.ts'
+import {alignLyrics, lowConfidence, lyricsProblems, sungLines, sungOnly, tightenStarts} from './lib/lyrics.ts'
+import {readFineWaveform} from './lib/waveform.ts'
+import {MISSING_WORD_LEAD, RATE, voiceLead} from './shared/timing-fit.ts'
+import {projectLyricSections} from './lib/music.ts'
+import {archiveFiles, versionStamp} from './lib/archive.ts'
+import {assembleFinal, previewSources, formatSlotRanges} from './lib/assemble.ts'
+import {freshness} from './lib/provenance.ts'
+import {clipRequestsDir, clipRequestsIn, PREVIOUS, requestChanges, startOutput} from './lib/previous-output.ts'
+import {writeGallery} from './lib/gallery.ts'
+import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from './lib/timeline-export.ts'
+import {FPS, formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from './lib/frames.ts'
+import {loadSettings} from './lib/settings.ts'
+import {MAX_REFERENCE_IMAGES} from './comfy/helpers.ts'
+import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from './lib/styles.ts'
+import {listProjects, projectExists, validProjectId} from './lib/project-setup.ts'
+import * as clack from '@clack/prompts'
+import {pictureProp, propMissing} from './lib/prop-check.ts'
+import {projectInputs, songFileOf, stepUsed, readInputFile} from './lib/inputs.ts'
+import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from './lib/render-state.ts'
+import {reviewed} from './lib/review.ts'
+import {parseUntil, stopAfter} from './lib/stages.ts'
+import {applyLibraryText, CASTING_FILE, castFromLibrary, copyKey} from './lib/casting.ts'
+import {type LibraryAsset, libraryDir} from './lib/library.ts'
+import {type AssetKind} from './lib/asset-import.ts'
+import {redoAfter, unplannedBeats} from './lib/project.ts'
+import {handsOf} from './lib/project.ts'
+import {
+    castPrompt,
+    voiceRules,
+    characterDescriptionPrompt,
+    characterLookPrompt,
+    propInUsePrompt,
+    characterVariantLookPrompt,
+    locationAnchorPrompt,
+    locationDescriptionPrompt,
+    locationLayoutPrompt,
+    locationLookPrompt,
+    lookBriefPrompt,
+    songLyricsPrompt,
+    songStylePrompt,
+    storyPrompt,
+    styleShortlistPrompt,
+    summaryPrompt,
+} from './lib/prompts.ts'
 cli('plan')
-
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
 // as one of these) gets the same tidy red box as a bad --flag, instead of Bun's raw stack-trace dump
-
 
 // bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002]
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
@@ -118,7 +163,12 @@ const {values: args, positionals} = (() => {
 })()
 setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
 // --render=all is images, videos and the final video, in that order - "song" is never part of "all", it has to be asked for
-const render = new Set(args.render.split(',').filter(Boolean).flatMap(r => r === 'all' ? ['images', 'videos', 'final'] : [r]))
+const render = new Set(
+    args.render
+        .split(',')
+        .filter(Boolean)
+        .flatMap(r => (r === 'all' ? ['images', 'videos', 'final'] : [r])),
+)
 const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
 if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use song, images, videos, final or all`, usage)
 // --refresh=pictures,clips renders what was made from another request than the plan has now (lib/provenance.ts) again
@@ -126,21 +176,28 @@ const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
 const unknownRefresh = [...refreshKinds].filter(k => k !== 'pictures' && k !== 'clips')
 if (unknownRefresh.length) log.usageError(`--refresh: unknown "${unknownRefresh.join(', ')}" - use pictures, clips`, usage)
 // --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
-if (args.again && !render.has('videos') && !render.has('images')) log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
+if (args.again && !render.has('videos') && !render.has('images'))
+    log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
 // --preview: cheap renders into previews/ that never replace a clip (config.json "preview"), or the video of the whole thing made of them
 if (args.preview && !render.has('videos') && !render.has('final')) log.usageError('--preview goes with --render=videos or --render=final', usage)
-if (args.preview && render.has('videos') && render.has('final')) log.usageError('--preview: first the previews (--render=videos), then their video (--render=final)', usage)
+if (args.preview && render.has('videos') && render.has('final'))
+    log.usageError('--preview: first the previews (--render=videos), then their video (--render=final)', usage)
 if (args.retake && render.size) log.usageError('--retake is a run of its own: it renders one part of one clip', usage)
-const retake = args.retake ? (() => {
-    try {
-        return parseRetake(args.retake)
-    } catch (e) {
-        return log.usageError((e as Error).message, usage)
-    }
-})() : undefined
-if ((args['new-anchor'] || args['picture-prompt'] || args['picture-anchor']) && !(args.again && render.has('images'))) log.usageError('--new-anchor, --picture-prompt and --picture-anchor go with --render=images --only=... --again', usage)
-if ((args['picture-description'] || args['describe-picture']) && !args['picture-anchor']) log.usageError('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture', usage)
-if (args['picture-description'] && args['describe-picture']) log.usageError('--picture-description or --describe-picture: the description given by hand, or read from the picture', usage)
+const retake = args.retake
+    ? (() => {
+          try {
+              return parseRetake(args.retake)
+          } catch (e) {
+              return log.usageError((e as Error).message, usage)
+          }
+      })()
+    : undefined
+if ((args['new-anchor'] || args['picture-prompt'] || args['picture-anchor']) && !(args.again && render.has('images')))
+    log.usageError('--new-anchor, --picture-prompt and --picture-anchor go with --render=images --only=... --again', usage)
+if ((args['picture-description'] || args['describe-picture']) && !args['picture-anchor'])
+    log.usageError('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture', usage)
+if (args['picture-description'] && args['describe-picture'])
+    log.usageError('--picture-description or --describe-picture: the description given by hand, or read from the picture', usage)
 if (args['picture-anchor'] && args.only.split(',').filter(Boolean).length !== 1) log.usageError('--picture-anchor goes with one picture in --only', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
@@ -151,21 +208,40 @@ const until = (() => {
         return log.usageError((e as Error).message, usage)
     }
 })()
-if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run'])) log.usageError('--until plans up to a stage and stops - it goes with no --render (but --render=images with --until=look), --retake, --gallery, --export or --dry-run', usage)
+if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run']))
+    log.usageError(
+        '--until plans up to a stage and stops - it goes with no --render (but --render=images with --until=look), --retake, --gallery, --export or --dry-run',
+        usage,
+    )
 // the pictures of the cast and the places are there once the look is: rendered before the shots are planned (#540)
-if (until && render.has('images') && until !== 'look') log.usageError('--until with --render=images is --until=look: the pictures are made from the look', usage)
-const exportFormats = [...new Set(args.export.split(',').filter(Boolean).flatMap(f => f === 'all' ? [...EXPORT_FORMATS] : [f]))]
+if (until && render.has('images') && until !== 'look')
+    log.usageError('--until with --render=images is --until=look: the pictures are made from the look', usage)
+const exportFormats = [
+    ...new Set(
+        args.export
+            .split(',')
+            .filter(Boolean)
+            .flatMap(f => (f === 'all' ? [...EXPORT_FORMATS] : [f])),
+    ),
+]
 const unknownFormats = exportFormats.filter(f => !(EXPORT_FORMATS as readonly string[]).includes(f))
 if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.join(', ')}" - use ${EXPORT_FORMATS.join(', ')} or all`, usage)
 const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
 const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
 // without an id: the projects to pick from in a terminal, else the list of them in the usage error
-const projectId = positionals[0] ?? await pickProject()
-if (!validProjectId(projectId)) log.usageError(`"${projectId}" is not a project id - lowercase letters, digits and "-" only (it is the folder name in projects/ and part of the ComfyUI client id)`, usage)
+const projectId = positionals[0] ?? (await pickProject())
+if (!validProjectId(projectId))
+    log.usageError(
+        `"${projectId}" is not a project id - lowercase letters, digits and "-" only (it is the folder name in projects/ and part of the ComfyUI client id)`,
+        usage,
+    )
 if (!projectExists(projectId)) {
     const existing = listProjects()
-    log.usageError(`No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`, usage)
+    log.usageError(
+        `No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`,
+        usage,
+    )
 }
 const project = new ProjectStore(projectId)
 // before the load: a run that writes works from the state it read, so no other run may save in between
@@ -181,7 +257,14 @@ if (!args.gallery && !args['dry-run']) {
 if (args.gallery) {
     if (!existsSync(project.dir)) throw new Error(`No project "${project.id}" in projects/`)
     const {file, counts} = await writeGallery(project.dir, project.id, project.data)
-    log.step('Gallery', `${file} ${styles.muted(Object.entries(counts).map(([tab, n]) => `${tab}: ${n}`).join(' · '))}`)
+    log.step(
+        'Gallery',
+        `${file} ${styles.muted(
+            Object.entries(counts)
+                .map(([tab, n]) => `${tab}: ${n}`)
+                .join(' · '),
+        )}`,
+    )
     process.exit(0)
 }
 // a dry run only says what would be redone (see dryRun below)
@@ -224,9 +307,12 @@ if (args['picture-anchor'] && !args['dry-run']) {
 // where a setting comes from: (settings), (project), (env), (flag), (default)
 const from = (source: string) => styles.muted(`(${source === 'file' ? 'settings' : source})`)
 // the model itself is checked on the first LLM call - a fully cached project needs no server
-log.step('LLM', settings.llm.url
-    ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
-    : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'))
+log.step(
+    'LLM',
+    settings.llm.url
+        ? `${settings.llm.url} ${from(settings.sources.llmUrl)} · ${settings.llm.model ? `${styles.name(settings.llm.model)} ${from(settings.sources.llmModel)}` : styles.muted('the only model on the server')}`
+        : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'),
+)
 if (args['dry-run']) {
     await dryRun()
     process.exit(0)
@@ -246,8 +332,12 @@ if (render.has('song')) {
     // A hand-edit (or a deletion) of idea.txt/music-style.txt/lyrics.txt or a new singerVoice since the last run needs a
     // new style this run already - read-only, so the fingerprints it compares against are only recorded once, by the main
     // syncInputs() call further down, once this run's final lyrics.txt content is known.
-    if (inputChangedSinceLastRun('idea.txt', idea) || inputChangedSinceLastRun('music-style.txt', musicStyleInput) || inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong)
-        || inputChangedSinceLastRun('singerVoice', config.singerVoice)) {
+    if (
+        inputChangedSinceLastRun('idea.txt', idea) ||
+        inputChangedSinceLastRun('music-style.txt', musicStyleInput) ||
+        inputChangedSinceLastRun('lyrics.txt', lyricsBeforeSong) ||
+        inputChangedSinceLastRun('singerVoice', config.singerVoice)
+    ) {
         project.invalidate('songStyle')
     }
 
@@ -265,7 +355,9 @@ if (render.has('song')) {
 
     // STYLE - redone whenever the lyrics or music-style.txt changed since the style currently cached was written
     const styleWasCached = project.data.songStyle !== undefined
-    const songStyle = await project.step('songStyle', '1a · WRITING THE MUSICAL STYLE', () => ask(songStylePrompt(songLyrics, musicStyleInput, language, config.singerVoice)))
+    const songStyle = await project.step('songStyle', '1a · WRITING THE MUSICAL STYLE', () =>
+        ask(songStylePrompt(songLyrics, musicStyleInput, language, config.singerVoice)),
+    )
     log.box('Style', songStyle)
     if (!existsSync(project.input('music-style.txt'))) await Bun.write(project.input('music-style.txt'), songStyle)
 
@@ -299,7 +391,7 @@ if (!style && project.data.lookBrief === undefined) {
     let candidates: FilmStyle[] = []
     if (storyText) {
         try {
-            const shortlist = await askJson<{ styles: string[] }>(styleShortlistPrompt(storyText, shuffledStyles(), 5))
+            const shortlist = await askJson<{styles: string[]}>(styleShortlistPrompt(storyText, shuffledStyles(), 5))
             candidates = stylesById(shortlist.styles)
         } catch (e) {
             log.step('Style', styles.muted(`no shortlist from the LLM (${e instanceof Error ? e.message : e}) - picking from the whole list`))
@@ -308,17 +400,27 @@ if (!style && project.data.lookBrief === undefined) {
     const picked = pickStyle(candidates.length ? candidates : undefined)
     style = picked.text
     await Bun.write(project.input('style.txt'), style)
-    log.step('Picked style', `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`)
+    log.step(
+        'Picked style',
+        `${styles.name(picked.name)} ${styles.muted(`${candidates.length ? `- one of: ${candidates.map(c => c.name).join(', ')} ` : ''}- written to input/style.txt, edit or replace it to change the look`)}`,
+    )
 }
-const lyricSections = projectLyricSections(lyrics, project.data.music?.sections.map(s => s.label))
+const lyricSections = projectLyricSections(
+    lyrics,
+    project.data.music?.sections.map(s => s.label),
+)
 log.step('Lyrics', lyrics ? styles.muted(`${lyricSections.length} sections: ${lyricSections.map(s => s.label).join(' · ')}`) : styles.muted('(none)'))
 log.step('Story idea', storyIdea || styles.muted('(none)'))
 log.step('Style', style || styles.muted('(none - the look is designed from the story)'))
 log.step('Max clip length', `${maxClipSec}s`)
-log.step('Mode', config.singers.length
-    ? `performance - ${config.singers[0] === 'auto' ? 'the LLM picks the singer' : `${config.singers.join(', ')} sing${config.singers.length > 1 ? '' : 's'}`} (${language})`
-    : `clip - the song is the soundtrack${config.alignLyrics ? ', lyrics aligned' : ''} ${styles.muted('(set "singers" in config.json to let characters sing)')}`)
-if (config.alignLyrics && sungLines(lyricSections).length === 0) throw new Error('Aligning the lyrics needs sung lines in input/lyrics.txt - without lyrics, remove "singers" from config.json (clip mode)')
+log.step(
+    'Mode',
+    config.singers.length
+        ? `performance - ${config.singers[0] === 'auto' ? 'the LLM picks the singer' : `${config.singers.join(', ')} sing${config.singers.length > 1 ? '' : 's'}`} (${language})`
+        : `clip - the song is the soundtrack${config.alignLyrics ? ', lyrics aligned' : ''} ${styles.muted('(set "singers" in config.json to let characters sing)')}`,
+)
+if (config.alignLyrics && sungLines(lyricSections).length === 0)
+    throw new Error('Aligning the lyrics needs sung lines in input/lyrics.txt - without lyrics, remove "singers" from config.json (clip mode)')
 if (!lyrics && !storyIdea) throw new Error('Neither lyrics nor a story idea given - add input/lyrics.txt or input/story-idea.txt')
 
 // an edited input redoes the steps built on it - the inputs and the steps they redo are listed in lib/inputs.ts
@@ -328,66 +430,117 @@ if (project.data.music && lyricSections.length && project.data.music.sections.ma
     project.invalidate('music')
 }
 if (project.data.stems && Object.values(project.data.stems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('stems')
-if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file)))) project.invalidate('instrumentStems')
+if (project.data.instrumentStems && Object.values(project.data.instrumentStems).some(file => !existsSync(join(project.dir, file))))
+    project.invalidate('instrumentStems')
 
 ////////// ANALYZE THE SONG
-if (!existsSync(songFile)) throw new Error(`No song found at ${project.input('song.wav')}, ${project.input('song.mp3')} or ${project.input('song.flac')}${idea || lyrics ? ` - run with --render=song to generate one from input/${idea ? 'idea.txt' : 'lyrics.txt'}` : ''}`)
+if (!existsSync(songFile))
+    throw new Error(
+        `No song found at ${project.input('song.wav')}, ${project.input('song.mp3')} or ${project.input('song.flac')}${idea || lyrics ? ` - run with --render=song to generate one from input/${idea ? 'idea.txt' : 'lyrics.txt'}` : ''}`,
+    )
 const music = await project.step('music', '2 · ANALYZING THE SONG', async () => {
     log.step('Analyzing', styles.muted(`${songFile} - beats, bars and ${lyricSections.length} sections`))
-    return analyzeSong(songFile, lyricSections.map(s => s.label))
+    return analyzeSong(
+        songFile,
+        lyricSections.map(s => s.label),
+    )
 })
 log.step('Tempo', `${music.bpm} BPM, ${music.downbeats.length} bars, ${Math.round(music.durationSec)}s`)
 for (const s of music.sections) {
     log.line(`   ${energyBar(s.energy)} ${styles.muted(`${formatTime(s.start)} – ${formatTime(s.end)}`)} ${styles.name(s.label)}`)
 }
-log.step('Sections', styles.muted(config.alignLyrics
-    ? 'estimated from audio - refined from the lyrics timing when the song is cut into clips'
-    : `estimated from audio - fix them by hand in ${project.file} if they are off, then --redo=timeline`))
+log.step(
+    'Sections',
+    styles.muted(
+        config.alignLyrics
+            ? 'estimated from audio - refined from the lyrics timing when the song is cut into clips'
+            : `estimated from audio - fix them by hand in ${project.file} if they are off, then --redo=timeline`,
+    ),
+)
 
 ////////// ALIGNING THE LYRICS - only when someone sings, or with "alignLyrics": true
-const stems = config.alignLyrics ? await project.step('stems', '2a · SEPARATING THE STEMS', async () => {
-    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_ft, then guitar and piano with htdemucs_6s - the first run downloads the models`))
-    return separateStems(songFile, project.dir)
-}) : undefined
+const stems = config.alignLyrics
+    ? await project.step('stems', '2a · SEPARATING THE STEMS', async () => {
+          log.step(
+              'Separating',
+              styles.muted(`${songFile} with demucs htdemucs_ft, then guitar and piano with htdemucs_6s - the first run downloads the models`),
+          )
+          return separateStems(songFile, project.dir)
+      })
+    : undefined
 if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
 
-const transcript = stems ? await project.step('transcript', '2b · TRANSCRIBING THE VOCALS', async () => {
-    log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
-    return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
-}) : undefined
+const transcript = stems
+    ? await project.step('transcript', '2b · TRANSCRIBING THE VOCALS', async () => {
+          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
+          return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
+      })
+    : undefined
 if (transcript) {
-    log.step('Heard', styles.muted(`${transcript.words.length} words: ${transcript.words.slice(0, 12).map(w => w.text).join(' ')} …`))
+    log.step(
+        'Heard',
+        styles.muted(
+            `${transcript.words.length} words: ${transcript.words
+                .slice(0, 12)
+                .map(w => w.text)
+                .join(' ')} …`,
+        ),
+    )
     if (transcript.activity) log.step('Vocal activity', styles.muted(`${transcript.activity.length} range(s) from RMS energy, independent of whisper`))
 }
 
-const alignedTiming = transcript ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => {
-    const aligned = alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity, music.bpm)
-    // the first word of a line starts where the singing does: its sound is measured on the vocals stem, not read from the transcript
-    const loudness = await readFineWaveform(join(project.dir, stems!.vocals), 100).catch(() => undefined)
-    if (!loudness) return aligned
-    const {timing, moved} = tightenStarts(aligned, loudness)
-    if (moved.length) log.step('Starts', styles.muted(`${moved.length} line(s) began in silence and start where the singing does (longest: ${Math.max(...moved.map(m => m.by)).toFixed(1)} s)`))
-    return timing
-}) : undefined
+const alignedTiming = transcript
+    ? await project.step('lyricsTiming', '2c · ALIGNING THE LYRICS', async () => {
+          const aligned = alignLyrics(lyricSections, transcript.words, music.sections, transcript.activity, music.bpm)
+          // the first word of a line starts where the singing does: its sound is measured on the vocals stem, not read from the transcript
+          const loudness = await readFineWaveform(join(project.dir, stems!.vocals), 100).catch(() => undefined)
+          if (!loudness) return aligned
+          const {timing, moved} = tightenStarts(aligned, loudness)
+          if (moved.length)
+              log.step(
+                  'Starts',
+                  styles.muted(
+                      `${moved.length} line(s) began in silence and start where the singing does (longest: ${Math.max(...moved.map(m => m.by)).toFixed(1)} s)`,
+                  ),
+              )
+          return timing
+      })
+    : undefined
 // a line left out on the Timing page (heard, but not sung - or not sung there) is not sung anywhere from here on
 const lyricsTiming = alignedTiming && sungOnly(alignedTiming)
 if (lyricsTiming) {
     for (const line of lyricsTiming.lines) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))
-        log.line(`   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`)
+        log.line(
+            `   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`,
+        )
     }
     // with known lyrics nothing is lost and nothing added (#738): every line once, placed, with its own words
-    for (const p of lyricsProblems(alignedTiming!, lyricSections)) log.warn(`line ${p.line + 1} "${p.text}": ${p.problem} - check it on the Timing page (bun run timing ${projectId})`)
+    for (const p of lyricsProblems(alignedTiming!, lyricSections))
+        log.warn(`line ${p.line + 1} "${p.text}": ${p.problem} - check it on the Timing page (bun run timing ${projectId})`)
     const suggested = alignedTiming!.lines.filter(l => l.adlib && l.off)
-    if (suggested.length) log.step('Ad-libs', styles.muted(`${suggested.length} line(s) heard that lyrics.txt does not have - not sung until taken: ${suggested.map(l => `${l.line + 1} "${l.text}"`).join(', ')} (bun run timing ${projectId} --on=N)`))
+    if (suggested.length)
+        log.step(
+            'Ad-libs',
+            styles.muted(
+                `${suggested.length} line(s) heard that lyrics.txt does not have - not sung until taken: ${suggested.map(l => `${l.line + 1} "${l.text}"`).join(', ')} (bun run timing ${projectId} --on=N)`,
+            ),
+        )
     const unsure = lowConfidence(lyricsTiming)
-    if (unsure.length) log.warn(`${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them on the workspace's Timing page (bun run editor), or fix lyricsTiming in ${project.file} by hand, then --redo=timeline`)
+    if (unsure.length)
+        log.warn(
+            `${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them on the workspace's Timing page (bun run editor), or fix lyricsTiming in ${project.file} by hand, then --redo=timeline`,
+        )
 }
 
 ////////// CRAFT A STORY FOR THE LYRICS
-const storyBase = await reviewed(project, args.review, 'story',
+const storyBase = await reviewed(
+    project,
+    args.review,
+    'story',
     () => project.step('story', '3 · CRAFTING THE STORY', () => ask(storyPrompt(lyrics, storyIdea, config.singerVoice))),
-    story => log.box('Story', story))
+    story => log.box('Story', story),
+)
 if (storyBase === 'NO STORY') throw new Error('Neither lyrics nor a story idea given')
 
 ////////// SUMMARIZE THE STORY
@@ -396,51 +549,73 @@ log.box('Summary', storySummary)
 stopAfter(until, 'story', project.file, `bun index.ts ${projectId}`)
 
 ////////// EXTRACT LOCATIONS AND CHARACTERS
-const cast = await reviewed(project, args.review, 'cast', () => project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
-    const extracted = await askJson<{ characters: (Omit<Character, 'id' | 'propCarried'> & { propStem?: string, propCarried?: boolean })[], locations: Omit<Location, 'id'>[] }>(castPrompt(storyBase, config.singerVoice))
-    const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
-    const takenCharacters = new Set<string>()
-    const takenLocations = new Set<string>()
-    const uniqueId = (base: string, taken: Set<string>) => {
-        let id = base
-        for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
-        taken.add(id)
-        return id
-    }
-    const locations = extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)}))
-    // the place a prop stands in, by the name the answer gives it - the only place when there is just one
-    const placeOf = (name: string | undefined) => locations.find(l => l.name === name || l.id === toId(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
-    return {
-        // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
-        characters: extracted.characters.map(c => ({
-            id: uniqueId(toId(c.name), takenCharacters), name: c.name, role: c.role,
-            ...(c.isGroup === true ? {isGroup: true} : {}),
-            ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
-            // only when it is not hands - a project planned before keeps hands for everybody
-            ...(c.hands?.trim() && c.hands.trim().toLowerCase() !== 'hands' ? {hands: c.hands.trim()} : {}),
-            ...(c.prop ? {prop: c.prop} : {}),
-            ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
-            ...(c.prop && c.propCarried === false ? {
-                propCarried: false as const,
-                ...(c.propInHand ? {propInHand: c.propInHand} : {}),
-                ...(placeOf(c.propPlace) ? {propPlace: placeOf(c.propPlace)} : {}),
-            } : {}),
-        })),
-        locations,
-    }
-}), cast => {
-    log.step('Characters', styles.muted(`(${cast.characters.length})`))
-    for (const c of cast.characters) log.line(`   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}${c.propCarried === false ? ` - stands in ${c.propPlace ?? '?'}${c.propInHand ? `, in hand: ${c.propInHand}` : ''}` : ''}`) : ''}`)
-    log.step('Locations', styles.muted(`(${cast.locations.length})`))
-    for (const l of cast.locations) log.line(`   ${styles.name(l.id)}`)
-})
+const cast = await reviewed(
+    project,
+    args.review,
+    'cast',
+    () =>
+        project.step('cast', '5 · EXTRACTING CHARACTERS & LOCATIONS', async () => {
+            const extracted = await askJson<{
+                characters: (Omit<Character, 'id' | 'propCarried'> & {propStem?: string; propCarried?: boolean})[]
+                locations: Omit<Location, 'id'>[]
+            }>(castPrompt(storyBase, config.singerVoice))
+            const stemNames = new Set(['drums', 'bass', 'other', 'guitar', 'piano'])
+            const takenCharacters = new Set<string>()
+            const takenLocations = new Set<string>()
+            const uniqueId = (base: string, taken: Set<string>) => {
+                let id = base
+                for (let n = 2; taken.has(id); n++) id = `${base}-${n}`
+                taken.add(id)
+                return id
+            }
+            const locations = extracted.locations.map(l => ({...l, id: uniqueId(toId(l.name), takenLocations)}))
+            // the place a prop stands in, by the name the answer gives it - the only place when there is just one
+            const placeOf = (name: string | undefined) =>
+                locations.find(l => l.name === name || l.id === toId(name ?? ''))?.id ?? (locations.length === 1 ? locations[0]!.id : undefined)
+            return {
+                // "A B" and "A-B" give the same slug: a second one gets its own id instead of overwriting the first one's look
+                characters: extracted.characters.map(c => ({
+                    id: uniqueId(toId(c.name), takenCharacters),
+                    name: c.name,
+                    role: c.role,
+                    ...(c.isGroup === true ? {isGroup: true} : {}),
+                    ...(c.isGroup === true && c.alike === true ? {alike: true} : {}),
+                    // only when it is not hands - a project planned before keeps hands for everybody
+                    ...(c.hands?.trim() && c.hands.trim().toLowerCase() !== 'hands' ? {hands: c.hands.trim()} : {}),
+                    ...(c.prop ? {prop: c.prop} : {}),
+                    ...(c.prop && c.propStem && stemNames.has(c.propStem) ? {propStem: c.propStem as PropStem} : {}),
+                    ...(c.prop && c.propCarried === false
+                        ? {
+                              propCarried: false as const,
+                              ...(c.propInHand ? {propInHand: c.propInHand} : {}),
+                              ...(placeOf(c.propPlace) ? {propPlace: placeOf(c.propPlace)} : {}),
+                          }
+                        : {}),
+                })),
+                locations,
+            }
+        }),
+    cast => {
+        log.step('Characters', styles.muted(`(${cast.characters.length})`))
+        for (const c of cast.characters)
+            log.line(
+                `   ${styles.name(c.id)} ${styles.muted('—')} ${c.role}${c.prop ? styles.muted(` · ${c.prop}${c.propStem ? ` (${c.propStem})` : ''}${c.propCarried === false ? ` - stands in ${c.propPlace ?? '?'}${c.propInHand ? `, in hand: ${c.propInHand}` : ''}` : ''}`) : ''}`,
+            )
+        log.step('Locations', styles.muted(`(${cast.locations.length})`))
+        for (const l of cast.locations) log.line(`   ${styles.name(l.id)}`)
+    },
+)
 
 ////////// CASTING - who plays each role and which picture each place has: the project's own or a library asset
 // (casting.json, written once here and then only read - lib/casting.ts). A library asset is copied into the project, so
 // the project stays complete without the library; its texts stand in for the look and description steps below.
 const casting = await castFromLibrary({
-    dir: project.dir, cast, library: await libraryDir(), copies: project.data.castingCopies,
-    again: kind => `its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`,
+    dir: project.dir,
+    cast,
+    library: await libraryDir(),
+    copies: project.data.castingCopies,
+    again: kind =>
+        `its look and description were the library's: bun index.ts ${projectId} --redo=${kind === 'character' ? 'characterLooks' : 'locationLooks'} makes them anew`,
 })
 const castLibrary = casting.assets
 const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id))
@@ -452,7 +627,8 @@ const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id
     for (const entry of casting.entries.filter(e => e.kind === 'character')) {
         const role = cast.characters.find(c => c.id === entry.id)!
         const shown = pictureProp(role)
-        if (shown && propMissing(casted('character', entry.id)!.description, shown)) log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
+        if (shown && propMissing(casted('character', entry.id)!.description, shown))
+            log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
     }
 }
 // the steps below that a library asset stands in for: its texts replace theirs, also in a step kept from an earlier run
@@ -473,10 +649,13 @@ const neededInstrumentStems = neededStems.filter((s): s is 'guitar' | 'piano' =>
 
 // guitar/piano come with the stems since every song is separated into six - a project separated before has only the four
 // htdemucs_ft ones, and a second, narrower htdemucs_6s pass gets just those two, on top of (never overwriting) the others
-const instrumentStems = stems && neededInstrumentStems.length && neededInstrumentStems.some(name => !stems[name]) ? await project.step('instrumentStems', '5a · SEPARATING GUITAR/PIANO', async () => {
-    log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_6s (${neededInstrumentStems.join(', ')} only)`))
-    return separateInstrumentStems(songFile, project.dir, neededInstrumentStems)
-}) : undefined
+const instrumentStems =
+    stems && neededInstrumentStems.length && neededInstrumentStems.some(name => !stems[name])
+        ? await project.step('instrumentStems', '5a · SEPARATING GUITAR/PIANO', async () => {
+              log.step('Separating', styles.muted(`${songFile} with demucs htdemucs_6s (${neededInstrumentStems.join(', ')} only)`))
+              return separateInstrumentStems(songFile, project.dir, neededInstrumentStems)
+          })
+        : undefined
 if (instrumentStems) log.step('Stems', styles.muted(Object.values(instrumentStems).join(' · ')))
 
 const allStems = {...stems, ...instrumentStems}
@@ -486,18 +665,29 @@ const stemFiles: Record<string, string> = {
     ...Object.fromEntries(Object.entries(allStems).map(([stem, file]) => [stem, join(project.dir, file)])),
     song: songFile,
 }
-const propActivity = stems && neededStems.length ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
-    const result: NonNullable<typeof project.data.propActivity> = {}
-    for (const stemName of neededStems) {
-        const stemFile = allStems[stemName]
-        if (!stemFile) continue
-        log.step('Analyzing', styles.muted(stemFile))
-        result[stemName] = await stemActivity(join(project.dir, stemFile), music.bpm)
-    }
-    return result
-}) : undefined
-if (propActivity) for (const [stemName, ranges] of Object.entries(propActivity)) log.step('Activity', styles.muted(`${stemName}: ${ranges!.length} range(s), ${ranges!.reduce((sum, r) => sum + r.end - r.start, 0).toFixed(0)} s active`))
-else if (neededStems.length) log.warn(`${neededStems.length} character(s) have an audible instrument prop, but stems weren't separated (set "alignLyrics": true in config.json) - instruments will be shown playing throughout`)
+const propActivity =
+    stems && neededStems.length
+        ? await project.step('propActivity', '5c · DETECTING INSTRUMENT ACTIVITY', async () => {
+              const result: NonNullable<typeof project.data.propActivity> = {}
+              for (const stemName of neededStems) {
+                  const stemFile = allStems[stemName]
+                  if (!stemFile) continue
+                  log.step('Analyzing', styles.muted(stemFile))
+                  result[stemName] = await stemActivity(join(project.dir, stemFile), music.bpm)
+              }
+              return result
+          })
+        : undefined
+if (propActivity)
+    for (const [stemName, ranges] of Object.entries(propActivity))
+        log.step(
+            'Activity',
+            styles.muted(`${stemName}: ${ranges!.length} range(s), ${ranges!.reduce((sum, r) => sum + r.end - r.start, 0).toFixed(0)} s active`),
+        )
+else if (neededStems.length)
+    log.warn(
+        `${neededStems.length} character(s) have an audible instrument prop, but stems weren't separated (set "alignLyrics": true in config.json) - instruments will be shown playing throughout`,
+    )
 
 ////////// CHOOSING THE SINGERS - performance mode only
 const singing = config.singers.length ? await project.step('singing', '5b · CHOOSING THE SINGERS', () => chooseSingers(config.singers)) : undefined
@@ -505,16 +695,28 @@ if (singing) {
     const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
     log.step('Singers', singing.singers.map(id => styles.name(nameOf(id))).join(', '))
     if (singing.singers.length > 1) {
-        for (const line of singing.lines) log.line(`   ${styles.muted(line.singers.map(nameOf).join(line.parts ? ' / ' : ' + ').padEnd(24))} ${line.text}`)
+        for (const line of singing.lines)
+            log.line(
+                `   ${styles.muted(
+                    line.singers
+                        .map(nameOf)
+                        .join(line.parts ? ' / ' : ' + ')
+                        .padEnd(24),
+                )} ${line.text}`,
+            )
     }
 }
 
 stopAfter(until, 'cast', project.file, `bun index.ts ${projectId}`)
 
 /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
-const lookBrief = await reviewed(project, args.review, 'lookBrief',
+const lookBrief = await reviewed(
+    project,
+    args.review,
+    'lookBrief',
     () => project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary))),
-    look => log.box('Look brief', look))
+    look => log.box('Look brief', look),
+)
 
 ////////// CRAFTING CHARACTER LOOKS
 // The video model keeps the pose of the reference picture: a prop the picture shows at rest is never used in a clip, whatever
@@ -524,12 +726,18 @@ async function lookWithPropInUse(char: Character, options: AskOptions): Promise<
     const look = await ask(options)
     const prop = pictureProp(char)
     if (!prop) return look
-    const first = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(look, prop, handsOf(char))).catch(() => undefined)
+    const first = await askJson<{inUse: boolean; why: string}>(propInUsePrompt(look, prop, handsOf(char))).catch(() => undefined)
     if (!first || first.inUse) return look
     log.warn(`${char.id}: the look shows the ${prop} not in use (${first.why}) - asking once more`)
-    const again = await ask({...options, input: `${options.input}\n\nThe last look you wrote shows the ${prop} not in use: ${first.why} Show it held in the position it has while it is used, with each of the ${handsOf(char)} where it is at work on it.`})
-    const second = await askJson<{ inUse: boolean, why: string }>(propInUsePrompt(again, prop, handsOf(char))).catch(() => undefined)
-    if (second && !second.inUse) log.warn(`${char.id}: the look still shows the ${prop} not in use (${second.why}) - the clips will keep that pose; edit the look in ${project.file} by hand, then --redo=characterLooks`)
+    const again = await ask({
+        ...options,
+        input: `${options.input}\n\nThe last look you wrote shows the ${prop} not in use: ${first.why} Show it held in the position it has while it is used, with each of the ${handsOf(char)} where it is at work on it.`,
+    })
+    const second = await askJson<{inUse: boolean; why: string}>(propInUsePrompt(again, prop, handsOf(char))).catch(() => undefined)
+    if (second && !second.inUse)
+        log.warn(
+            `${char.id}: the look still shows the ${prop} not in use (${second.why}) - the clips will keep that pose; edit the look in ${project.file} by hand, then --redo=characterLooks`,
+        )
     return again
 }
 
@@ -553,7 +761,8 @@ for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
 // a prop the look does not name is not in the reference picture - the clips would show the model's own idea of it
 for (const c of cast.characters) {
     const shown = pictureProp(c)
-    if (shown && !casted('character', c.id) && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown)) log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
+    if (shown && !casted('character', c.id) && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown))
+        log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
 }
 
 ////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
@@ -578,9 +787,13 @@ const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATIO
         log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
         const fromLibrary = casted('location', location.id)
         if (fromLibrary) return fromLibrary.description
-        const options = locationLookPrompt(lookBrief, storySummary, location.name,
-            [...new Set(cast.characters.flatMap(c => c.prop && c.propCarried !== false ? [c.prop] : []))],
-            [...new Set(cast.characters.flatMap(c => c.prop && c.propCarried === false && c.propPlace === location.id ? [c.prop] : []))])
+        const options = locationLookPrompt(
+            lookBrief,
+            storySummary,
+            location.name,
+            [...new Set(cast.characters.flatMap(c => (c.prop && c.propCarried !== false ? [c.prop] : [])))],
+            [...new Set(cast.characters.flatMap(c => (c.prop && c.propCarried === false && c.propPlace === location.id ? [c.prop] : [])))],
+        )
         return project.each('locationLooks', location.id, options, () => ask(options))
     })
     return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
@@ -625,12 +838,16 @@ const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT 
         const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
         // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
         // staging, as before - a broken answer for one place does not stop the run
-        let answer: { layout?: unknown, views?: unknown[] } | undefined
+        let answer: {layout?: unknown; views?: unknown[]} | undefined
         for (let attempt = 1; attempt <= 2 && !answer; attempt++) {
-            answer = await project.each('locationLayouts', location.id, options, () => askJson<{ layout?: unknown, views?: unknown[] }>(options)).catch((e: unknown) => {
-                log.warn(`${location.id}: the layout is unusable (${e instanceof Error ? e.message : e})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`)
-                return undefined
-            })
+            answer = await project
+                .each('locationLayouts', location.id, options, () => askJson<{layout?: unknown; views?: unknown[]}>(options))
+                .catch((e: unknown) => {
+                    log.warn(
+                        `${location.id}: the layout is unusable (${e instanceof Error ? e.message : e})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`,
+                    )
+                    return undefined
+                })
         }
         return answer && {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
     })
@@ -645,8 +862,14 @@ if (castChanged.size) {
     await project.save()
     // a changed casting.json after the plan was made: what was made from the old texts is named, not redone (it costs)
     // every step a library asset stands in for counts as changed: redoing one of them would only ask the LLM for what the library gives
-    const redo = redoAfter(['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions', 'locationAnchors', 'locationLayouts'], project.data)
-    if (redo.length) log.warn(`${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${projectId} --redo=${redo.join(',')}`)
+    const redo = redoAfter(
+        ['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions', 'locationAnchors', 'locationLayouts'],
+        project.data,
+    )
+    if (redo.length)
+        log.warn(
+            `${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${projectId} --redo=${redo.join(',')}`,
+        )
 }
 for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
 
@@ -654,11 +877,19 @@ for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${
  * The pictures the requests expect, with the Krea 2 prompt to generate each one - a group character (memberCounts[c.id] > 1)
  * gets one job per member instead of one shared job, see groupMemberId. Before the beats nobody counts as a group of several.
  */
-function pictureJobs(memberCounts: Record<string, number>, lookVariants: Record<string, string[]>, descriptionVariants: Record<string, string[]>): PictureJob[] {
+function pictureJobs(
+    memberCounts: Record<string, number>,
+    lookVariants: Record<string, string[]>,
+    descriptionVariants: Record<string, string[]>,
+): PictureJob[] {
     return [
         ...cast.locations.map(l => ({
-            kind: 'location' as const, id: l.id, file: pictureAsset('location', l.id), name: l.name,
-            prompt: locationLooks[l.id] ?? '', description: locationDescriptions[l.id] ?? '',
+            kind: 'location' as const,
+            id: l.id,
+            file: pictureAsset('location', l.id),
+            name: l.name,
+            prompt: locationLooks[l.id] ?? '',
+            description: locationDescriptions[l.id] ?? '',
         })),
         ...cast.characters.flatMap(c => {
             const count = memberCounts[c.id] ?? 1
@@ -667,8 +898,12 @@ function pictureJobs(memberCounts: Record<string, number>, lookVariants: Record<
             return Array.from({length: count}, (_, i) => {
                 const id = count > 1 ? groupMemberId(c.id, i) : c.id
                 return {
-                    kind: 'character' as const, id, file: pictureAsset('character', id), name: c.name,
-                    prompt: looks[i] ?? looks[0] ?? '', description: descriptions[i] ?? descriptions[0] ?? '',
+                    kind: 'character' as const,
+                    id,
+                    file: pictureAsset('character', id),
+                    name: c.name,
+                    prompt: looks[i] ?? looks[0] ?? '',
+                    description: descriptions[i] ?? descriptions[0] ?? '',
                 }
             })
         }),
@@ -687,13 +922,28 @@ async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
     if (args.again && (only.size === 0 || pictures.some(p => only.has(p.id)))) {
         warnFixedSeed(config.seed)
         // a new anchor for an edited prompt - but the user's own anchor stays, its prompt is a note (lib/own-picture.ts)
-        const newAnchor = (picture: PictureJob) => args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, project.dir, config.sequenceSheets))
-        for (const picture of chosen) log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, newAnchor(picture))}`)}`)
+        const newAnchor = (picture: PictureJob) =>
+            args['new-anchor'] || !!args['picture-anchor'] || (edited !== undefined && !hasOwnAnchor(picture, project.dir, config.sequenceSheets))
+        for (const picture of chosen)
+            log.step('Again', `${picture.id} ${styles.muted(`- the old one is in ${putAwayPicture(picture, project.dir, config, newAnchor(picture))}`)}`)
     }
-    if (args['picture-anchor']) log.step('Own', `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, project.dir, config.sequenceSheets, args['picture-anchor'])}`)}`)
+    if (args['picture-anchor'])
+        log.step(
+            'Own',
+            `${chosen[0]!.id} ${styles.muted(`- your picture is ${await installOwnPicture(chosen[0]!, project.dir, config.sequenceSheets, args['picture-anchor'])}`)}`,
+        )
     const todoPictures = chosen.filter(p => !existsSync(join(project.dir, p.file)))
-    log.step('Estimate', styles.muted(await pictureEstimate(todoPictures.length, config, settings.comfy.map(server => server.name))))
-    await renderAll(chosen, picture => config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture))
+    log.step(
+        'Estimate',
+        styles.muted(
+            await pictureEstimate(
+                todoPictures.length,
+                config,
+                settings.comfy.map(server => server.name),
+            ),
+        ),
+    )
+    await renderAll(chosen, picture => (config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)))
     if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
 }
 
@@ -714,7 +964,8 @@ if (until === 'look') {
         log.section('8e · RENDERING THE CAST AND THE PLACES')
         log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
         await renderPictures(renderer, lookPictures)
-    } else log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
+    } else
+        log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
 }
 stopAfter(until, 'look', project.file, `bun index.ts ${projectId}`)
 
@@ -723,66 +974,107 @@ stopAfter(until, 'look', project.file, `bun index.ts ${projectId}`)
 const beatCount = Math.max(6, Math.round(music.durationSec / 15))
 // where the last sung word ends - the singer is on screen until then
 const vocalsEnd = Math.max(0, ...(lyricsTiming?.lines.flatMap(l => l.words.map(w => w.end)) ?? []))
-const beats = await reviewed(project, args.review, 'beats', () => project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
-    // what the beats must do so the singers can be lip-synced - the singers are on screen until the last sung word
-    const performance = `${singing ? performanceRules(singing) : ''}
-${singing && vocalsEnd ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
-` : ''}`
-    // the music along the way - loudness and whose instrument is heard - so the story's curve follows the song's
-    const players = cast.characters.flatMap(c => c.prop && c.propStem && propActivity?.[c.propStem] ? [{name: c.name, prop: c.prop, ranges: propActivity[c.propStem]!}] : [])
-    const stretches = musicStretches(music, beatCount, players)
-    const extracted = await askJson<{ beats: Omit<StoryBeat, 'id' | 'order'>[] }>(beatsPrompt({durationSec: music.durationSec, beatCount, characters: cast.characters, locations: cast.locations, lyrics, story: storyBase, performance, stretches}))
+const beats = await reviewed(
+    project,
+    args.review,
+    'beats',
+    () =>
+        project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
+            // what the beats must do so the singers can be lip-synced - the singers are on screen until the last sung word
+            const performance = `${singing ? performanceRules(singing) : ''}
+${
+    singing && vocalsEnd
+        ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
+`
+        : ''
+}`
+            // the music along the way - loudness and whose instrument is heard - so the story's curve follows the song's
+            const players = cast.characters.flatMap(c =>
+                c.prop && c.propStem && propActivity?.[c.propStem] ? [{name: c.name, prop: c.prop, ranges: propActivity[c.propStem]!}] : [],
+            )
+            const stretches = musicStretches(music, beatCount, players)
+            const extracted = await askJson<{beats: Omit<StoryBeat, 'id' | 'order'>[]}>(
+                beatsPrompt({
+                    durationSec: music.durationSec,
+                    beatCount,
+                    characters: cast.characters,
+                    locations: cast.locations,
+                    lyrics,
+                    story: storyBase,
+                    performance,
+                    stretches,
+                }),
+            )
 
-    const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
-    const characterIds = new Set(cast.characters.map(c => c.id))
-    const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
-    const locationIds = cast.locations.map(l => l.id)
-    const built = extracted.beats.map((beat, i) => {
-        if (!locationIds.includes(beat.locationId)) {
-            log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
+            const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
+            const characterIds = new Set(cast.characters.map(c => c.id))
+            const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
+            const locationIds = cast.locations.map(l => l.id)
+            const built = extracted.beats.map((beat, i) => {
+                if (!locationIds.includes(beat.locationId)) {
+                    log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
+                }
+                const beatCharacterIds = (Array.isArray(beat.characterIds) ? beat.characterIds : []).filter(id => characterIds.has(id))
+                const summary = String(beat.summary ?? '')
+                const groupSize = Object.fromEntries(
+                    Object.entries(beat.groupSize ?? {})
+                        .filter(([id]) => groupIds.has(id) && beatCharacterIds.includes(id))
+                        .map(([id, count]) => [id, Math.min(20, Math.max(1, Math.round(Number(count)) || 1))]),
+                )
+                return {
+                    ...beat,
+                    // written with {Name} tokens (lib/refs.ts) - a beat from before them has plain names
+                    tokens: true,
+                    kind: BEAT_KINDS.includes(beat.kind) ? beat.kind : ('build' as const),
+                    summary,
+                    id: `beat-${String(i + 1).padStart(2, '0')}`,
+                    order: i + 1,
+                    locationId: locationIds.includes(beat.locationId) ? beat.locationId : locationIds[0]!,
+                    characterIds: beatCharacterIds,
+                    moments: Array.isArray(beat.moments) && beat.moments.length ? beat.moments.map(String) : [summary],
+                    intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
+                    weight: Math.max(1, Number(beat.weight) || 1),
+                    continuous: beat.continuous === true,
+                    entrance: beat.entrance === true,
+                    // each fact with whether it is one of the place; a plain string (the model forgot the object) is read as written
+                    stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : [])
+                        .map((f: unknown): Fact =>
+                            f && typeof f === 'object'
+                                ? {fact: String((f as Record<string, unknown>).fact ?? ''), place: (f as Record<string, unknown>).place === true}
+                                : {fact: String(f), place: false},
+                        )
+                        .filter(f => f.fact.trim()),
+                    ...(Object.keys(groupSize).length ? {groupSize} : {}),
+                }
+            })
+            // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
+            const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(f => f.fact)])
+            const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
+            if (Object.keys(mapped).length)
+                log.step(
+                    'Names',
+                    Object.entries(mapped)
+                        .map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`)
+                        .join(', '),
+                )
+            let next = 0
+            return built.map(b => ({
+                ...b,
+                summary: fixed[next++]!,
+                moments: b.moments.map(() => fixed[next++]!),
+                stateAfter: b.stateAfter.map(f => ({...f, fact: fixed[next++]!})),
+            }))
+        }),
+    beats => {
+        for (const beat of beats) {
+            log.line(
+                `   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`,
+            )
+            log.line(`      ${beat.summary}`)
+            for (const moment of beat.moments) log.line(styles.muted(`        · ${moment}`))
         }
-        const beatCharacterIds = (Array.isArray(beat.characterIds) ? beat.characterIds : []).filter(id => characterIds.has(id))
-        const summary = String(beat.summary ?? '')
-        const groupSize = Object.fromEntries(
-            Object.entries(beat.groupSize ?? {})
-                .filter(([id]) => groupIds.has(id) && beatCharacterIds.includes(id))
-                .map(([id, count]) => [id, Math.min(20, Math.max(1, Math.round(Number(count)) || 1))]),
-        )
-        return {
-            ...beat,
-            // written with {Name} tokens (lib/refs.ts) - a beat from before them has plain names
-            tokens: true,
-            kind: BEAT_KINDS.includes(beat.kind) ? beat.kind : 'build' as const,
-            summary,
-            id: `beat-${String(i + 1).padStart(2, '0')}`,
-            order: i + 1,
-            locationId: locationIds.includes(beat.locationId) ? beat.locationId : locationIds[0]!,
-            characterIds: beatCharacterIds,
-            moments: Array.isArray(beat.moments) && beat.moments.length ? beat.moments.map(String) : [summary],
-            intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
-            weight: Math.max(1, Number(beat.weight) || 1),
-            continuous: beat.continuous === true,
-            entrance: beat.entrance === true,
-            // each fact with whether it is one of the place; a plain string (the model forgot the object) is read as written
-            stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : []).map((f: unknown): Fact => f && typeof f === 'object'
-                ? {fact: String((f as Record<string, unknown>).fact ?? ''), place: (f as Record<string, unknown>).place === true}
-                : {fact: String(f), place: false}).filter(f => f.fact.trim()),
-            ...(Object.keys(groupSize).length ? {groupSize} : {}),
-        }
-    })
-    // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
-    const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(f => f.fact)])
-    const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
-    if (Object.keys(mapped).length) log.step('Names', Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', '))
-    let next = 0
-    return built.map(b => ({...b, summary: fixed[next++]!, moments: b.moments.map(() => fixed[next++]!), stateAfter: b.stateAfter.map(f => ({...f, fact: fixed[next++]!}))}))
-}), beats => {
-    for (const beat of beats) {
-        log.line(`   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`)
-        log.line(`      ${beat.summary}`)
-        for (const moment of beat.moments) log.line(styles.muted(`        · ${moment}`))
-    }
-})
+    },
+)
 
 ////////// GENERATING GROUP MEMBER VARIANT LOOKS
 // group characters (cast.characters[].isGroup) that ever show more than one individual on screen at once (beats
@@ -803,7 +1095,10 @@ const characterLookVariants = await project.step('characterLookVariants', '9c ·
         }
         variants[char.id] = looks
         const shown = pictureProp(char)
-        if (shown) looks.forEach((look, i) => { if (propMissing(look, shown)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${shown}"`) })
+        if (shown)
+            looks.forEach((look, i) => {
+                if (propMissing(look, shown)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${shown}"`)
+            })
     }
     return variants
 })
@@ -819,10 +1114,10 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
         log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
         descriptions[id] = [
             characterDescriptions[id] ?? '',
-            ...await llmMap(looks.slice(1), (look, i) => {
+            ...(await llmMap(looks.slice(1), (look, i) => {
                 const options = characterDescriptionPrompt(look)
                 return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
-            }),
+            })),
         ]
     }
     return descriptions
@@ -831,13 +1126,20 @@ const characterDescriptionVariants = await project.step('characterDescriptionVar
 ////////// CUTTING THE SONG INTO CLIPS
 // switched alignLyrics on or off since the timeline was built
 if (project.data.timeline && (project.data.timeline.aligned ?? false) !== Boolean(lyricsTiming)) project.invalidate('timeline')
-const timeline = await project.step('timeline', '10 · CUTTING THE SONG INTO CLIPS', async () => buildTimeline(music, lyricSections, maxClipSec, lyricsTiming, config.vocalGap))
-log.step('Clips', `${timeline.slots.length} clips of ${timeline.barsPerSlot} bars (${(timeline.barsPerSlot * 240 / music.bpm).toFixed(1)}s) - max ${timeline.maxClipSec}s`)
+const timeline = await project.step('timeline', '10 · CUTTING THE SONG INTO CLIPS', async () =>
+    buildTimeline(music, lyricSections, maxClipSec, lyricsTiming, config.vocalGap),
+)
+log.step(
+    'Clips',
+    `${timeline.slots.length} clips of ${timeline.barsPerSlot} bars (${((timeline.barsPerSlot * 240) / music.bpm).toFixed(1)}s) - max ${timeline.maxClipSec}s`,
+)
 if (timeline.aligned) {
     log.step('Sections', styles.muted('from the lyrics timing (estimate from the audio in brackets)'))
     timeline.sections.forEach((s, i) => {
         const estimate = music.sections[i]
-        log.line(`   ${styles.name(s.label.padEnd(12))} ${formatTime(s.start, true)} – ${formatTime(s.end, true)} ${styles.muted(estimate ? `(${formatTime(estimate.start, true)} – ${formatTime(estimate.end, true)})` : '')}`)
+        log.line(
+            `   ${styles.name(s.label.padEnd(12))} ${formatTime(s.start, true)} – ${formatTime(s.end, true)} ${styles.muted(estimate ? `(${formatTime(estimate.start, true)} – ${formatTime(estimate.end, true)})` : '')}`,
+        )
     })
     log.step('Sung in clips', `${timeline.slots.filter(s => s.vocals?.length).length} of ${timeline.slots.length}`)
 }
@@ -850,12 +1152,19 @@ const {slots: clipSlots, mapping} = config.fightClips
     : {slots: timeline.slots, mapping: storyMapping}
 if (config.fightClips && clipSlots.length !== timeline.slots.length) {
     const fightBeats = new Set(clipSlots.filter(s => s.micro).map(s => mapping[s.index]!.beatId))
-    log.step('Fight clips', styles.muted(`${clipSlots.length} clips instead of ${timeline.slots.length}: the fight beats ${[...fightBeats].join(', ')} are cut into one-bar pieces`))
+    log.step(
+        'Fight clips',
+        styles.muted(
+            `${clipSlots.length} clips instead of ${timeline.slots.length}: the fight beats ${[...fightBeats].join(', ')} are cut into one-bar pieces`,
+        ),
+    )
 }
 const beatById = new Map(beats.map(b => [b.id, b]))
 for (const slot of clipSlots) {
     const beat = beatById.get(mapping[slot.index]!.beatId)!
-    log.line(`   ${styles.muted(`${formatTime(slot.start)}`)} ${slot.section.padEnd(12)} ${energyBar(slot.energy)} ${styles.name(beat.id)} ${styles.muted(energyBar(beat.intensity))}`)
+    log.line(
+        `   ${styles.muted(`${formatTime(slot.start)}`)} ${slot.section.padEnd(12)} ${energyBar(slot.energy)} ${styles.name(beat.id)} ${styles.muted(energyBar(beat.intensity))}`,
+    )
 }
 
 ////////// REFINING THE MOMENTS TO ONE PER SHOT
@@ -869,11 +1178,13 @@ const beatSinging = singingPerBeat({slots: clipSlots, mapping, beats, singing, l
 // of the one before - and then the shots of every beat are written from its blocking, the beats at once (steps 11a and 11b).
 // a beat whose answer stayed unusable has no plan and plays on its beat moments: the next run plans just those beats
 // again, the ones already planned stay as they are
-const plannedBefore = args['legacy-moments'] ? undefined : (() => {
-    const before = project.data.shotMoments
-    if (!before || beats.every(b => before[b.id] !== undefined)) return undefined
-    return Object.fromEntries(Object.entries(before).filter(([, plan]) => !Array.isArray(plan))) as Record<string, BeatShots>
-})()
+const plannedBefore = args['legacy-moments']
+    ? undefined
+    : (() => {
+          const before = project.data.shotMoments
+          if (!before || beats.every(b => before[b.id] !== undefined)) return undefined
+          return Object.fromEntries(Object.entries(before).filter(([, plan]) => !Array.isArray(plan))) as Record<string, BeatShots>
+      })()
 // the views of the place per shot of the beats that stay planned: step 11c asks only for the others
 let viewsKept: Record<string, number[]> | undefined
 if (plannedBefore) {
@@ -889,196 +1200,295 @@ if (plannedBefore) {
 const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
 // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
 const directionNotes = directionPlanNotes({id: project.id, dir: project.dir, kind: 'music'}, project.data)
-const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook: lookBrief, ...(Object.keys(directionNotes).length ? {direction: directionNotes} : {})}
+const planContext: PlanContext = {
+    characters: cast.characters,
+    locations: cast.locations,
+    characterDescriptions,
+    locationDescriptions,
+    locationLayouts,
+    continuity: config.continuity,
+    slots: clipSlots,
+    mapping,
+    shotCounts,
+    beatProps,
+    beatSinging,
+    filmLook: lookBrief,
+    ...(Object.keys(directionNotes).length ? {direction: directionNotes} : {}),
+}
 // The blocking, beat after beat - short calls: the floor plan, where everybody starts and ends. Each beat starts where the
 // one before it ends, so this is the only part that has to go in order. A step of its own: --redo=shotMoments plans the shots
 // again on the same floor plans. A beat whose blocking stays unusable has no entry and plans its staging and ends itself.
 // Made only when the shots are planned - shots planned before this step existed stay without one
-const blockings = args['legacy-moments'] || project.data.shotMoments !== undefined ? undefined : await project.step('blocking', '11a · BLOCKING THE BEATS', async () => {
-    const blockings: Record<string, Blocking> = {}
-    for (const [i, beat] of beats.entries()) {
-        const prev = beats[i - 1]
-        const before = prev && blockings[prev.id] ? {beatId: prev.id, staging: blockings[prev.id]!.staging, ends: blockings[prev.id]!.ends} : undefined
-        log.step(`Blocking ${i + 1}/${beats.length}`, styles.name(beat.id))
-        for (let attempt = 1; attempt <= 2 && !blockings[beat.id]; attempt++) {
-            const answer = parseShotLines(await ask({...blockingPrompt(planContext, beat, before, beats[i + 1]), label: `${beat.id} · blocking`}))
-            const texts = [answer.staging ?? '', ...Object.values(answer.starts), ...Object.values(answer.ends)]
-            const {texts: fixed} = await resolveUnknownTokens(texts, cast.characters)
-            let next = 0
-            const blocking: Blocking = {
-                staging: fixed[next++]!,
-                starts: Object.fromEntries(Object.keys(answer.starts).map(who => [who, fixed[next++]!])),
-                ends: Object.fromEntries(Object.keys(answer.ends).map(who => [who, fixed[next++]!])),
-            }
-            // a beat without people (a place alone) has nobody to start or end anywhere
-            const complete = blocking.staging && (!beat.characterIds.length || Object.keys(blocking.ends).length)
-            if (complete) blockings[beat.id] = blocking
-            else log.warn(`${beat.id}: the blocking has no ${blocking.staging ? 'ends' : 'staging'}${attempt < 2 ? ' - asking again' : ' - the shot planning writes them itself'}`)
-        }
-    }
-    return blockings
-})
-const shotMoments = args['legacy-moments'] ? undefined : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
-    type Beat = (typeof beats)[number]
-    const MOMENT_SHOTS_PER_CALL = 4
-    // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.
-    // A call without a single shot in its answer is asked once more; the beat is then short of those shots (a missing
-    // shot repeats the last one, see readBeatPlan) instead of falling back to its beat moments as a whole.
-    // Asked again (`before`: the first answer and what was wrong with it), only the calls whose shots have a problem are
-    // made again, each with its own problems; the other calls keep their first answer. A problem of the whole beat (its
-    // shot count) asks every call again - the shots of the calls after it would no longer line up.
-    type RawBeat = { staging?: string, ends?: Record<string, string>, shots: Record<string, unknown>[] }
-    const askBlock = async (block: Beat[], finished: { beat: Beat, plan: BeatShots } | undefined, after: Beat | undefined, before?: { moments: Record<string, RawBeat>, issues: Record<string, Issue[]> }, blocking?: Blocking) => {
-        const moments: Record<string, RawBeat> = {}
-        for (const beat of block) {
-            const total = shotCounts[beat.id] ?? 1
-            const raw: RawBeat = {shots: []}
-            const previous = before?.moments[beat.id]
-            const calls = plannerCalls(total, MOMENT_SHOTS_PER_CALL, previous ? {issues: before!.issues[beat.id] ?? [], previousShots: previous.shots.length} : undefined)
-            for (const {from, to, keep, problems: own} of calls) {
-                if (keep) {
-                    if (from === 0) raw.staging = blocking?.staging ?? previous!.staging
-                    raw.shots.push(...previous!.shots.slice(from, to))
-                    if (to === total) raw.ends = blocking?.ends ?? previous!.ends
-                    continue
-                }
-                let chunk: ReturnType<typeof parseShotLines> | undefined
-                // the beats run at once - the label says which beat and which shots a line of the log is about
-                const label = `${beat.id} · shots ${from + 1}-${to} of ${total}`
-                for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
-                    log.step('Shots', styles.name(label))
-                    const parsed = parseShotLines(await ask({...planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {from, to, total, written: raw.shots, staging: raw.staging, blocking}), label}))
-                    if (parsed.shots.length) chunk = parsed
-                    else log.warn(`${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`)
-                }
-                if (!chunk) break
-                // with a blocking, the staging and the ends are the blocking's
-                if (from === 0) raw.staging = blocking?.staging ?? chunk.staging
-                raw.shots.push(...chunk.shots.slice(0, to - from))
-                if (to === total) raw.ends = blocking?.ends ?? chunk.ends
-            }
-            // tokens of nobody of the cast ({Aldric} for "Aldric Thorne") are mapped by one short call - cheaper than asking the
-            // planner again, and nothing reads the words
-            const slots: { get: () => unknown, set: (v: string) => void }[] = [
-                {get: () => raw.staging, set: (v: string) => raw.staging = v},
-                ...Object.keys(raw.ends ?? {}).map(who => ({get: () => raw.ends![who], set: (v: string) => raw.ends![who] = v})),
-                ...raw.shots.flatMap(shot => [
-                    ...['action', 'view', 'camera', 'rest'].map(key => ({get: () => shot[key], set: (v: string) => shot[key] = v})),
-                    ...Object.values((shot.people ?? {}) as Record<string, Record<string, unknown>>).flatMap(person =>
-                        ['state', 'frame', 'motion'].map(key => ({get: () => person[key], set: (v: string) => person[key] = v}))),
-                ]),
-            ].filter(slot => typeof slot.get() === 'string')
-            const {texts: fixed, mapped} = await resolveUnknownTokens(slots.map(slot => slot.get() as string), cast.characters)
-            if (Object.keys(mapped).length) {
-                log.line(styles.muted(`        · ${beat.id}, names: ${Object.entries(mapped).map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`).join(', ')}`))
-                slots.forEach((slot, n) => slot.set(fixed[n]!))
-            }
-            moments[beat.id] = raw
-        }
-        return {moments}
-    }
+const blockings =
+    args['legacy-moments'] || project.data.shotMoments !== undefined
+        ? undefined
+        : await project.step('blocking', '11a · BLOCKING THE BEATS', async () => {
+              const blockings: Record<string, Blocking> = {}
+              for (const [i, beat] of beats.entries()) {
+                  const prev = beats[i - 1]
+                  const before =
+                      prev && blockings[prev.id] ? {beatId: prev.id, staging: blockings[prev.id]!.staging, ends: blockings[prev.id]!.ends} : undefined
+                  log.step(`Blocking ${i + 1}/${beats.length}`, styles.name(beat.id))
+                  for (let attempt = 1; attempt <= 2 && !blockings[beat.id]; attempt++) {
+                      const answer = parseShotLines(await ask({...blockingPrompt(planContext, beat, before, beats[i + 1]), label: `${beat.id} · blocking`}))
+                      const texts = [answer.staging ?? '', ...Object.values(answer.starts), ...Object.values(answer.ends)]
+                      const {texts: fixed} = await resolveUnknownTokens(texts, cast.characters)
+                      let next = 0
+                      const blocking: Blocking = {
+                          staging: fixed[next++]!,
+                          starts: Object.fromEntries(Object.keys(answer.starts).map(who => [who, fixed[next++]!])),
+                          ends: Object.fromEntries(Object.keys(answer.ends).map(who => [who, fixed[next++]!])),
+                      }
+                      // a beat without people (a place alone) has nobody to start or end anywhere
+                      const complete = blocking.staging && (!beat.characterIds.length || Object.keys(blocking.ends).length)
+                      if (complete) blockings[beat.id] = blocking
+                      else
+                          log.warn(
+                              `${beat.id}: the blocking has no ${blocking.staging ? 'ends' : 'staging'}${attempt < 2 ? ' - asking again' : ' - the shot planning writes them itself'}`,
+                          )
+                  }
+              }
+              return blockings
+          })
+const shotMoments = args['legacy-moments']
+    ? undefined
+    : await project.step('shotMoments', '11b · REFINING MOMENTS PER SHOT', async () => {
+          type Beat = (typeof beats)[number]
+          const MOMENT_SHOTS_PER_CALL = 4
+          // the shots of a beat, MOMENT_SHOTS_PER_CALL at a time: each call sees the staging and the shots written so far.
+          // A call without a single shot in its answer is asked once more; the beat is then short of those shots (a missing
+          // shot repeats the last one, see readBeatPlan) instead of falling back to its beat moments as a whole.
+          // Asked again (`before`: the first answer and what was wrong with it), only the calls whose shots have a problem are
+          // made again, each with its own problems; the other calls keep their first answer. A problem of the whole beat (its
+          // shot count) asks every call again - the shots of the calls after it would no longer line up.
+          type RawBeat = {staging?: string; ends?: Record<string, string>; shots: Record<string, unknown>[]}
+          const askBlock = async (
+              block: Beat[],
+              finished: {beat: Beat; plan: BeatShots} | undefined,
+              after: Beat | undefined,
+              before?: {moments: Record<string, RawBeat>; issues: Record<string, Issue[]>},
+              blocking?: Blocking,
+          ) => {
+              const moments: Record<string, RawBeat> = {}
+              for (const beat of block) {
+                  const total = shotCounts[beat.id] ?? 1
+                  const raw: RawBeat = {shots: []}
+                  const previous = before?.moments[beat.id]
+                  const calls = plannerCalls(
+                      total,
+                      MOMENT_SHOTS_PER_CALL,
+                      previous ? {issues: before!.issues[beat.id] ?? [], previousShots: previous.shots.length} : undefined,
+                  )
+                  for (const {from, to, keep, problems: own} of calls) {
+                      if (keep) {
+                          if (from === 0) raw.staging = blocking?.staging ?? previous!.staging
+                          raw.shots.push(...previous!.shots.slice(from, to))
+                          if (to === total) raw.ends = blocking?.ends ?? previous!.ends
+                          continue
+                      }
+                      let chunk: ReturnType<typeof parseShotLines> | undefined
+                      // the beats run at once - the label says which beat and which shots a line of the log is about
+                      const label = `${beat.id} · shots ${from + 1}-${to} of ${total}`
+                      for (let attempt = 1; attempt <= 2 && !chunk; attempt++) {
+                          log.step('Shots', styles.name(label))
+                          const parsed = parseShotLines(
+                              await ask({
+                                  ...planPrompt(planContext, [beat], from === 0 ? finished : undefined, after, own, {
+                                      from,
+                                      to,
+                                      total,
+                                      written: raw.shots,
+                                      staging: raw.staging,
+                                      blocking,
+                                  }),
+                                  label,
+                              }),
+                          )
+                          if (parsed.shots.length) chunk = parsed
+                          else
+                              log.warn(
+                                  `${beat.id}, shots ${from + 1}-${to}: no shot in the answer${attempt < 2 ? ' - asking again' : ' - the beat is short of them'}`,
+                              )
+                      }
+                      if (!chunk) break
+                      // with a blocking, the staging and the ends are the blocking's
+                      if (from === 0) raw.staging = blocking?.staging ?? chunk.staging
+                      raw.shots.push(...chunk.shots.slice(0, to - from))
+                      if (to === total) raw.ends = blocking?.ends ?? chunk.ends
+                  }
+                  // tokens of nobody of the cast ({Aldric} for "Aldric Thorne") are mapped by one short call - cheaper than asking the
+                  // planner again, and nothing reads the words
+                  const slots: {get: () => unknown; set: (v: string) => void}[] = [
+                      {get: () => raw.staging, set: (v: string) => (raw.staging = v)},
+                      ...Object.keys(raw.ends ?? {}).map(who => ({get: () => raw.ends![who], set: (v: string) => (raw.ends![who] = v)})),
+                      ...raw.shots.flatMap(shot => [
+                          ...['action', 'view', 'camera', 'rest'].map(key => ({get: () => shot[key], set: (v: string) => (shot[key] = v)})),
+                          ...Object.values((shot.people ?? {}) as Record<string, Record<string, unknown>>).flatMap(person =>
+                              ['state', 'frame', 'motion'].map(key => ({get: () => person[key], set: (v: string) => (person[key] = v)})),
+                          ),
+                      ]),
+                  ].filter(slot => typeof slot.get() === 'string')
+                  const {texts: fixed, mapped} = await resolveUnknownTokens(
+                      slots.map(slot => slot.get() as string),
+                      cast.characters,
+                  )
+                  if (Object.keys(mapped).length) {
+                      log.line(
+                          styles.muted(
+                              `        · ${beat.id}, names: ${Object.entries(mapped)
+                                  .map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`)
+                                  .join(', ')}`,
+                          ),
+                      )
+                      slots.forEach((slot, n) => slot.set(fixed[n]!))
+                  }
+                  moments[beat.id] = raw
+              }
+              return {moments}
+          }
 
-    const result: Record<string, BeatShots> = {...plannedBefore}
-    // the step runs only when the blocking step above ran or was cached
-    const blocked = blockings ?? {}
+          const result: Record<string, BeatShots> = {...plannedBefore}
+          // the step runs only when the blocking step above ran or was cached
+          const blocked = blockings ?? {}
 
-    // The shots of every beat, from its own blocking (step 11a) - the beats do not wait for each other: as many at once as
-    // llm.parallel allows. Each beat's plan is kept in project.json the moment it is there: a run stopped after beat 11 of
-    // 14 lost all eleven (#340). Its key is the first question the planner gets for the beat - the beat, its blocking, the
-    // handover, the film look, its music, the cast and the place - so a beat built on anything else is planned again. After
-    // a stop, a run without --redo goes on from the kept beats; --redo=shotMoments drops them.
-    const planBeat = async (beat: Beat) => {
-        const blocking = blocked[beat.id]
-        const after = beats[beats.indexOf(beat) + 1]
-        // without a blocking the beat goes on from the plan of the beat before, if that one is already there
-        const prev = beats[beats.indexOf(beat) - 1]
-        const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
-        const total = shotCounts[beat.id] ?? 1
-        const {instructions, input} = planPrompt(planContext, [beat], handover, after, [], {from: 0, to: Math.min(total, MOMENT_SHOTS_PER_CALL), total, written: [], blocking})
-        const plan = await project.eachFound('shotMoments', beat.id, {instructions, input}, () => planShots(beat, blocking, after, handover))
-        if (plan) result[beat.id] = plan // a beat without a plan falls back to the legacy spread
-    }
-    const planShots = async (beat: Beat, blocking: Blocking | undefined, after: Beat | undefined, handover: { beat: Beat, plan: BeatShots } | undefined): Promise<BeatShots | undefined> => {
-        const block = [beat]
-        // what can be counted is read by the code; whether a heard player's hand phrase plays at all is read by one short
-        // call per beat (lib/playing-check.ts) - its "no" is a problem of that shot like the others
-        const read = (answer: Awaited<ReturnType<typeof askBlock>>) => Promise.all(block.map(async beat => {
-            const read = readBeatPlan(answer.moments?.[beat.id], beat, cast.characters, shotCounts[beat.id] ?? 1, beatSinging[beat.id], beatProps?.[beat.id])
-            const idle = read ? await playingIssues(playingCases(read.plan.shots, beatProps?.[beat.id], cast.characters)).catch((e: unknown) => {
-                log.warn(`${beat.id}: the check of the hand phrases failed (${e instanceof Error ? e.message : e}) - they stay unchecked`)
-                return []
-            }) : []
-            if (read) for (const issue of idle) {
-                read.issues.push(issue)
-                read.problems.push(issue.message)
-            }
-            return {beat, read}
-        }))
-        // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
-        // legacy spread (a warning says so) instead of the run failing after the beats that worked
-        let first: Awaited<ReturnType<typeof read>> | undefined
-        let firstAnswer: Awaited<ReturnType<typeof askBlock>> | undefined
-        for (let attempt = 1; attempt <= 3 && !first; attempt++) {
-            try {
-                firstAnswer = await askBlock(block, handover, after, undefined, blocking)
-                first = await read(firstAnswer)
-            } catch (e) {
-                log.warn(`the answer for ${beat.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`)
-            }
-        }
-        if (!first) return undefined
-        let reads = first
-        // what can be counted (a name that is not in the cast, a singing shot without a singer, a shot that names someone it does not show) is asked once more
-        const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
-        if (problems.length) {
-            log.warn(`${problems.length} problem(s) in the staged shots of ${beat.id} - asking once more`)
-            for (const p of problems) log.line(styles.muted(`        · ${p}`))
-            const issues = Object.fromEntries(reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]))
-            const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}, blocking).then(read, (e: unknown) => {
-                log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
-                return reads
-            })
-            reads = reads.map((r, n) => again[n]!.read && (!r.read || again[n]!.read!.problems.length <= r.read.problems.length) ? again[n]! : r)
-            for (const r of reads) for (const p of r.read?.problems ?? []) log.warn(`${r.beat.id}, ${p}`)
-        }
-        // what the code repaired or only noted costs no further call - a line in the log, nothing else
-        for (const r of reads) for (const note of r.read?.notes ?? []) log.line(styles.muted(`        · ${r.beat.id}, ${note}`))
-        return reads[0]?.read?.plan
-    }
-    // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
-    await llmMap(beats.filter(b => !result[b.id] && blocked[b.id]), planBeat)
-    for (const beat of beats.filter(b => !result[b.id] && !blocked[b.id])) await planBeat(beat)
-    // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
-    // the prompt says - those moments get one rewrite
-    // the planner flags them itself ("risky") - no word list decides what counts
-    const risky = Object.entries(result).flatMap(([beatId, plan]) => plan.shots.flatMap((shot, j) => shot.risky ? [{beatId, j, moment: shot.action}] : []))
-    if (risky.length) {
-        log.warn(`${risky.length} shot moment(s) the planner flagged (blank face, stand-in object, readable text) - rewriting them`)
-        const rewritten = await askJson<{ moments: string[] }>({
-            input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead. Every name in braces ({Kara}) stays exactly as it is, in its braces.
+          // The shots of every beat, from its own blocking (step 11a) - the beats do not wait for each other: as many at once as
+          // llm.parallel allows. Each beat's plan is kept in project.json the moment it is there: a run stopped after beat 11 of
+          // 14 lost all eleven (#340). Its key is the first question the planner gets for the beat - the beat, its blocking, the
+          // handover, the film look, its music, the cast and the place - so a beat built on anything else is planned again. After
+          // a stop, a run without --redo goes on from the kept beats; --redo=shotMoments drops them.
+          const planBeat = async (beat: Beat) => {
+              const blocking = blocked[beat.id]
+              const after = beats[beats.indexOf(beat) + 1]
+              // without a blocking the beat goes on from the plan of the beat before, if that one is already there
+              const prev = beats[beats.indexOf(beat) - 1]
+              const handover = !blocking && prev && result[prev.id] ? {beat: prev, plan: result[prev.id]!} : undefined
+              const total = shotCounts[beat.id] ?? 1
+              const {instructions, input} = planPrompt(planContext, [beat], handover, after, [], {
+                  from: 0,
+                  to: Math.min(total, MOMENT_SHOTS_PER_CALL),
+                  total,
+                  written: [],
+                  blocking,
+              })
+              const plan = await project.eachFound('shotMoments', beat.id, {instructions, input}, () => planShots(beat, blocking, after, handover))
+              if (plan) result[beat.id] = plan // a beat without a plan falls back to the legacy spread
+          }
+          const planShots = async (
+              beat: Beat,
+              blocking: Blocking | undefined,
+              after: Beat | undefined,
+              handover: {beat: Beat; plan: BeatShots} | undefined,
+          ): Promise<BeatShots | undefined> => {
+              const block = [beat]
+              // what can be counted is read by the code; whether a heard player's hand phrase plays at all is read by one short
+              // call per beat (lib/playing-check.ts) - its "no" is a problem of that shot like the others
+              const read = (answer: Awaited<ReturnType<typeof askBlock>>) =>
+                  Promise.all(
+                      block.map(async beat => {
+                          const read = readBeatPlan(
+                              answer.moments?.[beat.id],
+                              beat,
+                              cast.characters,
+                              shotCounts[beat.id] ?? 1,
+                              beatSinging[beat.id],
+                              beatProps?.[beat.id],
+                          )
+                          const idle = read
+                              ? await playingIssues(playingCases(read.plan.shots, beatProps?.[beat.id], cast.characters)).catch((e: unknown) => {
+                                    log.warn(`${beat.id}: the check of the hand phrases failed (${e instanceof Error ? e.message : e}) - they stay unchecked`)
+                                    return []
+                                })
+                              : []
+                          if (read)
+                              for (const issue of idle) {
+                                  read.issues.push(issue)
+                                  read.problems.push(issue.message)
+                              }
+                          return {beat, read}
+                      }),
+                  )
+              // a long answer now and then cannot be read at all: asked again, twice at most, then the beat falls back to the
+              // legacy spread (a warning says so) instead of the run failing after the beats that worked
+              let first: Awaited<ReturnType<typeof read>> | undefined
+              let firstAnswer: Awaited<ReturnType<typeof askBlock>> | undefined
+              for (let attempt = 1; attempt <= 3 && !first; attempt++) {
+                  try {
+                      firstAnswer = await askBlock(block, handover, after, undefined, blocking)
+                      first = await read(firstAnswer)
+                  } catch (e) {
+                      log.warn(
+                          `the answer for ${beat.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`,
+                      )
+                  }
+              }
+              if (!first) return undefined
+              let reads = first
+              // what can be counted (a name that is not in the cast, a singing shot without a singer, a shot that names someone it does not show) is asked once more
+              const problems = reads.flatMap(r => (r.read?.problems ?? []).map(p => `${r.beat.id}, ${p}`))
+              if (problems.length) {
+                  log.warn(`${problems.length} problem(s) in the staged shots of ${beat.id} - asking once more`)
+                  for (const p of problems) log.line(styles.muted(`        · ${p}`))
+                  const issues = Object.fromEntries(
+                      reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]),
+                  )
+                  const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}, blocking).then(read, (e: unknown) => {
+                      log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
+                      return reads
+                  })
+                  reads = reads.map((r, n) => (again[n]!.read && (!r.read || again[n]!.read!.problems.length <= r.read.problems.length) ? again[n]! : r))
+                  for (const r of reads) for (const p of r.read?.problems ?? []) log.warn(`${r.beat.id}, ${p}`)
+              }
+              // what the code repaired or only noted costs no further call - a line in the log, nothing else
+              for (const r of reads) for (const note of r.read?.notes ?? []) log.line(styles.muted(`        · ${r.beat.id}, ${note}`))
+              return reads[0]?.read?.plan
+          }
+          // the beats with a blocking at once; one without goes on from the plan before it, so those wait for theirs
+          await llmMap(
+              beats.filter(b => !result[b.id] && blocked[b.id]),
+              planBeat,
+          )
+          for (const beat of beats.filter(b => !result[b.id] && !blocked[b.id])) await planBeat(beat)
+          // the model keeps writing a blank oval for a photograph's missing face or a "blade-shaped object" for a name, whatever
+          // the prompt says - those moments get one rewrite
+          // the planner flags them itself ("risky") - no word list decides what counts
+          const risky = Object.entries(result).flatMap(([beatId, plan]) =>
+              plan.shots.flatMap((shot, j) => (shot.risky ? [{beatId, j, moment: shot.action}] : [])),
+          )
+          if (risky.length) {
+              log.warn(`${risky.length} shot moment(s) the planner flagged (blank face, stand-in object, readable text) - rewriting them`)
+              const rewritten = await askJson<{moments: string[]}>({
+                  input: `Rewrite each of these music video shot descriptions so that it follows the rules below. Keep everything else exactly as it is: the same people, place, camera, action, emotions and singing - only remove what breaks a rule, by leaving it out or by showing the real action instead. Every name in braces ({Kara}) stays exactly as it is, in its braces.
 ${filmableRules}
 Answer only with JSON: {"moments": ["rewritten 1", "rewritten 2", ...]} - exactly ${risky.length} entries, in the same order.
 ---
 ${JSON.stringify(risky.map(r => r.moment))}`,
-            instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
-            schema: {type: 'object', additionalProperties: false, required: ['moments'], properties: {moments: {type: 'array', minItems: risky.length, maxItems: risky.length, items: {type: 'string'}}}},
-        })
-        if (rewritten.moments?.length === risky.length) risky.forEach((r, k) => {
-            const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
-            result[r.beatId]!.shots[r.j] = {...shot, action: String(rewritten.moments[k])}
-        })
-        else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
+                  instructions: 'You are a music video director who corrects shot descriptions. Answer only with JSON.',
+                  schema: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['moments'],
+                      properties: {moments: {type: 'array', minItems: risky.length, maxItems: risky.length, items: {type: 'string'}}},
+                  },
+              })
+              if (rewritten.moments?.length === risky.length)
+                  risky.forEach((r, k) => {
+                      const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
+                      result[r.beatId]!.shots[r.j] = {...shot, action: String(rewritten.moments[k])}
+                  })
+              else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
+          }
+          return result
+      })
+if (shotMoments)
+    for (const beat of beats) {
+        const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
+        if (!plan) continue
+        log.line(`   ${styles.name(beat.id)} ${styles.muted(`${plan.shots.length} shots`)}`)
+        if (plan.staging) log.line(styles.muted(`        staging: ${plan.staging}`))
+        const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
+        for (const shot of plan.shots)
+            log.line(styles.muted(`        · ${shot.characters?.length ? `[${shot.characters.map(nameOf).join(', ')}] ` : ''}${shot.action}`))
     }
-    return result
-})
-if (shotMoments) for (const beat of beats) {
-    const plan = shotMoments[beat.id] && asBeatShots(shotMoments[beat.id]!)
-    if (!plan) continue
-    log.line(`   ${styles.name(beat.id)} ${styles.muted(`${plan.shots.length} shots`)}`)
-    if (plan.staging) log.line(styles.muted(`        staging: ${plan.staging}`))
-    const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
-    for (const shot of plan.shots) log.line(styles.muted(`        · ${shot.characters?.length ? `[${shot.characters.map(nameOf).join(', ')}] ` : ''}${shot.action}`))
-}
 
 ////////// CHOOSING THE VIEW OF THE PLACE - only with "locationView": "auto"
 // The views are the frames the location sheets were composed of: without sequence sheets there are none and the picture is the plain one
@@ -1091,16 +1501,19 @@ const directedMoments = directedPlan.shotMoments
 const viewCache = directionViewCache(shotMoments, directedMoments, project.data.shotViews ?? viewsKept, project.data.shotViewPlans)
 const viewsBefore = viewCache.kept
 if (viewCache.invalidated) delete project.data.shotViews
-if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length)) delete project.data.shotViews
-const shotViews = shotMoments && locationView === 'auto' ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
-    // the beats don't depend on each other here - asked at once, up to llm.parallel
-    const answers = await llmMap(beats, async (beat): Promise<number[] | undefined> => {
-        const plan = directedMoments?.[beat.id] && asBeatShots(directedMoments[beat.id]!)
-        if (!plan) return undefined
-        const kept = viewsBefore?.[beat.id]
-        if (kept?.length === plan.shots.length) return kept
-        const answer = await askJson<{ views: unknown[] }>({
-            input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
+if (viewsBefore && shotMoments && beats.some(b => shotMoments[b.id] && viewsBefore[b.id]?.length !== asBeatShots(shotMoments[b.id]!).shots.length))
+    delete project.data.shotViews
+const shotViews =
+    shotMoments && locationView === 'auto'
+        ? await project.step('shotViews', '11c · CHOOSING THE VIEW OF THE PLACE PER SHOT', async () => {
+              // the beats don't depend on each other here - asked at once, up to llm.parallel
+              const answers = await llmMap(beats, async (beat): Promise<number[] | undefined> => {
+                  const plan = directedMoments?.[beat.id] && asBeatShots(directedMoments[beat.id]!)
+                  if (!plan) return undefined
+                  const kept = viewsBefore?.[beat.id]
+                  if (kept?.length === plan.shots.length) return kept
+                  const answer = await askJson<{views: unknown[]}>({
+                      input: `A place is shown to the video model as a reference with five views of it. For every shot below choose the view the shot is in: the one that shows the part of the place the camera of the shot looks at, from the side it stands on. Different shots may be in different views; a shot that moves to another side of the place is in the view it starts in.
 views (number: what it shows):
 ${LOCATION_VIEWS.map((v, n) => `${n}: ${v}${locationLayouts[beat.locationId]?.views[n] ? ` - ${locationLayouts[beat.locationId]!.views[n]}` : ''}`).join('\n')}
 
@@ -1109,30 +1522,43 @@ shots:
 ${JSON.stringify(plan.shots.map((s, n) => ({shot: n, framing: s.framing, camera: s.camera, view: s.view, action: s.action})))}
 
 Answer only with JSON: {"views": [one number from 0 to ${LOCATION_VIEWS.length - 1} per shot, in order]} - exactly ${plan.shots.length} numbers.`,
-            instructions: 'You are a music video director who chooses the view of a place for each shot. Answer only with JSON.',
-            // a few numbers per beat: 18.6 min of thinking for the 14 beats of tides-of-eternal-flame, 27 s without it, the
-            // picks differing only where the camera of a shot sits between two views
-            reasoning: 'none',
-            schema: {type: 'object', additionalProperties: false, required: ['views'], properties: {views: {type: 'array', minItems: plan.shots.length, maxItems: plan.shots.length, items: {type: 'integer', minimum: 0, maximum: LOCATION_VIEWS.length - 1}}}},
-        }).catch((e: unknown) => {
-            log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
-            return undefined
-        })
-        // not stored: the beat is asked again on the next run instead of keeping the first view for good
-        if (!answer) return undefined
-        const views = plan.shots.map((_, n) => {
-            const v = Number(answer?.views?.[n])
-            return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
-        })
-        log.line(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
-        return views
-    })
-    const result: Record<string, number[]> = {}
-    beats.forEach((beat, i) => {
-        if (answers[i]) result[beat.id] = answers[i]
-    })
-    return result
-}) : undefined
+                      instructions: 'You are a music video director who chooses the view of a place for each shot. Answer only with JSON.',
+                      // a few numbers per beat: 18.6 min of thinking for the 14 beats of tides-of-eternal-flame, 27 s without it, the
+                      // picks differing only where the camera of a shot sits between two views
+                      reasoning: 'none',
+                      schema: {
+                          type: 'object',
+                          additionalProperties: false,
+                          required: ['views'],
+                          properties: {
+                              views: {
+                                  type: 'array',
+                                  minItems: plan.shots.length,
+                                  maxItems: plan.shots.length,
+                                  items: {type: 'integer', minimum: 0, maximum: LOCATION_VIEWS.length - 1},
+                              },
+                          },
+                      },
+                  }).catch((e: unknown) => {
+                      log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
+                      return undefined
+                  })
+                  // not stored: the beat is asked again on the next run instead of keeping the first view for good
+                  if (!answer) return undefined
+                  const views = plan.shots.map((_, n) => {
+                      const v = Number(answer?.views?.[n])
+                      return Number.isInteger(v) && v >= 0 && v < LOCATION_VIEWS.length ? v : 0
+                  })
+                  log.line(`   ${styles.name(beat.id)} ${styles.muted(`views ${views.join(', ')}`)}`)
+                  return views
+              })
+              const result: Record<string, number[]> = {}
+              beats.forEach((beat, i) => {
+                  if (answers[i]) result[beat.id] = answers[i]
+              })
+              return result
+          })
+        : undefined
 
 if (shotViews) {
     project.data.shotViewPlans = viewCache.keys
@@ -1150,7 +1576,10 @@ if (vocalPeaks && lyricsTiming) {
         const lead = voiceLead(line.words, vocalPeaks, lyricsTiming.lines[n - 1]?.end ?? 0)
         return lead >= MISSING_WORD_LEAD ? [`"${line.text}" (${lead.toFixed(1)} s)`] : []
     })
-    if (early.length) log.warn(`${early.length} line(s) are heard before their first word - a word may be missing in their timing: ${early.join(', ')}. Check them on the workspace's Timing page`)
+    if (early.length)
+        log.warn(
+            `${early.length} line(s) are heard before their first word - a word may be missing in their timing: ${early.join(', ')}. Check them on the workspace's Timing page`,
+        )
 }
 const clips = buildClipRequests({
     slots: clipSlots,
@@ -1181,7 +1610,10 @@ const clips = buildClipRequests({
 
 // more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them
 for (const clip of clips) {
-    if (clip.dropped?.length) log.warn(`${clip.id}: no reference picture left for ${clip.dropped.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')} - the workflow takes ${MAX_REFERENCE_IMAGES} pictures`)
+    if (clip.dropped?.length)
+        log.warn(
+            `${clip.id}: no reference picture left for ${clip.dropped.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')} - the workflow takes ${MAX_REFERENCE_IMAGES} pictures`,
+        )
 }
 
 const outputDir = join(project.dir, 'output')
@@ -1213,25 +1645,32 @@ for (const clip of clips) {
 const pictures = pictureJobs(memberCounts, characterLookVariants, characterDescriptionVariants)
 await Bun.write(join(outputDir, 'assets.json'), JSON.stringify(pictures, null, 2))
 
-await Bun.write(join(outputDir, 'timeline.json'), JSON.stringify({
-    song: songFile,
-    bpm: music.bpm,
-    durationSec: music.durationSec,
-    maxClipSec: timeline.maxClipSec,
-    barsPerClip: timeline.barsPerSlot,
-    beats,
-    clips: clips.map(c => ({
-        id: c.id,
-        start: c.start,
-        end: c.end,
-        duration: c.duration,
-        section: c.section,
-        beatId: c.beatId,
-        shots: c.shots.length,
-        ...(c.vocals ? {vocals: c.vocals} : {}),
-        request: `clips/${c.id}.json`,
-    })),
-}, null, 2))
+await Bun.write(
+    join(outputDir, 'timeline.json'),
+    JSON.stringify(
+        {
+            song: songFile,
+            bpm: music.bpm,
+            durationSec: music.durationSec,
+            maxClipSec: timeline.maxClipSec,
+            barsPerClip: timeline.barsPerSlot,
+            beats,
+            clips: clips.map(c => ({
+                id: c.id,
+                start: c.start,
+                end: c.end,
+                duration: c.duration,
+                section: c.section,
+                beatId: c.beatId,
+                shots: c.shots.length,
+                ...(c.vocals ? {vocals: c.vocals} : {}),
+                request: `clips/${c.id}.json`,
+            })),
+        },
+        null,
+        2,
+    ),
+)
 
 // the prompts are in output/clips/ and in the log file - the terminal shows them with --show=clips (or -v)
 hideDetails(!showsDetails('clips'))
@@ -1245,12 +1684,21 @@ if (changes) {
     const {changed, added, gone} = changes
     if (!changed.length && !added.length && !gone.length) log.step('Changes', styles.muted('every request is the same as in the run before'))
     else {
-        log.step('Changes', [
-            changed.length ? `${changed.length} changed: ${formatSlotRanges(changed)}` : '',
-            added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
-            gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
-        ].filter(Boolean).join(' · '))
-        if (changed[0]) log.step('Compare', styles.muted(`diff ${join(clipRequestsIn(join(outputDir, PREVIOUS)), `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`))
+        log.step(
+            'Changes',
+            [
+                changed.length ? `${changed.length} changed: ${formatSlotRanges(changed)}` : '',
+                added.length ? `${added.length} new: ${formatSlotRanges(added)}` : '',
+                gone.length ? `${gone.length} gone: ${formatSlotRanges(gone)}` : '',
+            ]
+                .filter(Boolean)
+                .join(' · '),
+        )
+        if (changed[0])
+            log.step(
+                'Compare',
+                styles.muted(`diff ${join(clipRequestsIn(join(outputDir, PREVIOUS)), `${changed[0]}.json`)} ${join(outputDir, 'clips', `${changed[0]}.json`)}`),
+            )
     }
 }
 
@@ -1260,7 +1708,12 @@ if (render.has('images') || render.has('videos') || retake) {
     using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
     renderer.refresh = refreshKinds
     log.section('13 · RENDERING WITH COMFYUI')
-    log.step('Config', styles.muted(`seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})${config.sequenceSheets ? `, sequence sheets (${config.sequenceWorkflow})` : ''}`))
+    log.step(
+        'Config',
+        styles.muted(
+            `seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})${config.sequenceSheets ? `, sequence sheets (${config.sequenceWorkflow})` : ''}`,
+        ),
+    )
     log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
 
     if (retake) {
@@ -1281,9 +1734,18 @@ if (render.has('images') || render.has('videos') || retake) {
             warnFixedSeed(config.seed)
             const stamp = versionStamp()
             for (const clip of selected) {
-                const keep = archiveFiles(project.dir, `${clip.id}${args.preview ? '-preview' : ''}-${stamp}`, args.preview
-                    ? [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]
-                    : [join('videos', `${clip.id}.mp4`), join('videos', `${clip.id}.mp4.json`), boundaryFrameAsset(clip.id, 'ff'), boundaryFrameAsset(clip.id, 'lf')])
+                const keep = archiveFiles(
+                    project.dir,
+                    `${clip.id}${args.preview ? '-preview' : ''}-${stamp}`,
+                    args.preview
+                        ? [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]
+                        : [
+                              join('videos', `${clip.id}.mp4`),
+                              join('videos', `${clip.id}.mp4.json`),
+                              boundaryFrameAsset(clip.id, 'ff'),
+                              boundaryFrameAsset(clip.id, 'lf'),
+                          ],
+                )
                 log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
                 recordTiming({kind: 'clip', name: config.videoWorkflow, seconds: 0, outcome: 'again', reason: 'again'})
             }
@@ -1292,15 +1754,35 @@ if (render.has('images') || render.has('videos') || retake) {
         }
         const clipFolder = args.preview ? 'previews' : 'videos'
         const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, clipFolder, `${c.id}.mp4`)))
-        log.step('Estimate', styles.muted(await clipEstimate(todoClips, config, settings.comfy.map(server => server.name))))
-        for (const risk of clipFailureRisks(readTimings(), todoClips, config.videoWorkflow, settings.comfy.map(server => server.name))) log.warn(risk)
+        log.step(
+            'Estimate',
+            styles.muted(
+                await clipEstimate(
+                    todoClips,
+                    config,
+                    settings.comfy.map(server => server.name),
+                ),
+            ),
+        )
+        for (const risk of clipFailureRisks(
+            readTimings(),
+            todoClips,
+            config.videoWorkflow,
+            settings.comfy.map(server => server.name),
+        ))
+            log.warn(risk)
         // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
         // each chain next to the others
         // the jobs an earlier run left queued on a server get it before any new clip does (#335) - the head of each chain
         // asks for a server at once; a later clip of a chain waits for the one before it and holds nothing
         const chains = clipChains(selected)
-        const videoOf = (c: { id: string }) => join(project.dir, clipFolder, `${c.id}.mp4`)
-        await renderer.announceResumes(chains.map(chain => chain[0]!).filter(c => todoClips.includes(c)).map(videoOf))
+        const videoOf = (c: {id: string}) => join(project.dir, clipFolder, `${c.id}.mp4`)
+        await renderer.announceResumes(
+            chains
+                .map(chain => chain[0]!)
+                .filter(c => todoClips.includes(c))
+                .map(videoOf),
+        )
         await renderAll(chains, async chain => {
             try {
                 for (const clip of chain) await renderer.renderClip(clip, stemFiles, args.preview)
@@ -1317,7 +1799,14 @@ if (render.has('final') && args.preview) {
     // a quick look at cut, timing and continuity: from the previews, without the finish or another frame rate, and never the final video
     log.section('14 · THE PREVIEW VIDEO')
     const target = join(project.dir, `${project.id}-preview.mp4`)
-    const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target, sources: await previewSources(project.dir, clips)})
+    const result = await assembleFinal({
+        clips,
+        projectDir: project.dir,
+        songFile,
+        songAudio: config.songAudio,
+        target,
+        sources: await previewSources(project.dir, clips),
+    })
     log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
 } else if (render.has('final')) {
     log.section('14 · ASSEMBLING THE FINAL VIDEO')
@@ -1343,8 +1832,18 @@ if (render.has('final') && args.preview) {
         using smoother = new Renderer(project.id, project.dir, config, settings.comfy)
         const {files, multiplier} = await interpolateClips(smoother, clips, config.interpolationModel, config.finalFps)
         const smooth = join(project.dir, `${project.id}-${config.finalFps}fps.mp4`)
-        const more = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target: smooth, interpolated: {files, multiplier, fps: config.finalFps}})
-        log.step('Saved', `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`)
+        const more = await assembleFinal({
+            clips,
+            projectDir: project.dir,
+            songFile,
+            songAudio: config.songAudio,
+            target: smooth,
+            interpolated: {files, multiplier, fps: config.finalFps},
+        })
+        log.step(
+            'Saved',
+            `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`,
+        )
         if (finishing) await finishCopy(smooth, finishing, spans)
     }
 }
@@ -1352,7 +1851,14 @@ if (render.has('final') && args.preview) {
 ////////// EXPORTING THE TIMELINE FOR A VIDEO EDITOR
 if (exportFormats.length) {
     log.section('15 · EXPORTING THE TIMELINE')
-    const written = await exportTimelines({formats: exportFormats as ExportFormat[], clips, projectDir: project.dir, projectName: project.id, songFile, songAudio: config.songAudio})
+    const written = await exportTimelines({
+        formats: exportFormats as ExportFormat[],
+        clips,
+        projectDir: project.dir,
+        projectName: project.id,
+        songFile,
+        songAudio: config.songAudio,
+    })
     for (const [format, file] of Object.entries(written)) log.step(format === 'mlt' ? 'Shotcut / Kdenlive' : 'OpenShot', file)
 }
 
@@ -1363,13 +1869,19 @@ log.step('Requests', clipRequestsIn(outputDir))
 log.step('Audio', join(outputDir, 'audio'))
 log.step('Pictures needed', `${pictures.length} - see ${join(outputDir, 'assets.json')}`)
 // what this run did: the steps it generated, its LLM calls and renders, its warnings
-log.step('Generated', project.generated.size ? [...project.generated].map(styles.name).join(', ') : styles.muted('nothing - every step was taken from project.json'))
+log.step(
+    'Generated',
+    project.generated.size ? [...project.generated].map(styles.name).join(', ') : styles.muted('nothing - every step was taken from project.json'),
+)
 const measured = runTimings()
 const llmCalls = measured.filter(t => t.kind === 'llm')
 if (llmCalls.length) {
     const tokens = llmCalls.reduce((sum, t) => sum + (t.completionTokens ?? 0), 0)
     const retried = llmCalls.filter(t => t.outcome).length
-    log.step('LLM', `${llmCalls.length} call(s), ${formatDuration(llmCalls.reduce((sum, t) => sum + t.seconds, 0) * 1000)}${tokens ? `, ${tokens} tokens written` : ''}${retried ? styles.muted(` · ${retried} cut off, empty or failed and asked again`) : ''}`)
+    log.step(
+        'LLM',
+        `${llmCalls.length} call(s), ${formatDuration(llmCalls.reduce((sum, t) => sum + t.seconds, 0) * 1000)}${tokens ? `, ${tokens} tokens written` : ''}${retried ? styles.muted(` · ${retried} cut off, empty or failed and asked again`) : ''}`,
+    )
 }
 for (const kind of ['picture', 'clip', 'song'] as const) {
     const renders = measured.filter(t => t.kind === kind && !t.outcome)
@@ -1380,7 +1892,8 @@ const warned = new Map<string, number>()
 for (const message of runWarnings()) warned.set(message, (warned.get(message) ?? 0) + 1)
 if (warned.size) {
     log.step('Warnings', `${runWarnings().length}${warned.size > 8 ? styles.muted(` - the first 8 of ${warned.size} different ones, all in the log`) : ''}`)
-    for (const [message, count] of [...warned].slice(0, 8)) log.line(styles.warning(`   ${count > 1 ? `${count}× ` : ''}${message.length > 160 ? `${message.slice(0, 157)}…` : message}`))
+    for (const [message, count] of [...warned].slice(0, 8))
+        log.line(styles.warning(`   ${count > 1 ? `${count}× ` : ''}${message.length > 160 ? `${message.slice(0, 157)}…` : message}`))
 }
 log.step('Log', runLogFile() ?? '')
 
@@ -1391,9 +1904,15 @@ log.step('Log', runLogFile() ?? '')
  */
 async function dryRun() {
     const changed = project.changedInputs(await projectInputs(project.dir, config))
-    const lostStems = (['stems', 'instrumentStems'] as const).filter(step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))))
-    const labels = projectLyricSections(await readInput('lyrics.txt'), project.data.music?.sections.map(s => s.label)).map(s => s.label)
-    const sectionsChanged = project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
+    const lostStems = (['stems', 'instrumentStems'] as const).filter(
+        step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))),
+    )
+    const labels = projectLyricSections(
+        await readInput('lyrics.txt'),
+        project.data.music?.sections.map(s => s.label),
+    ).map(s => s.label)
+    const sectionsChanged =
+        project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
     const reasons: [string, StepName[]][] = [
         ...(redoSteps.length ? [['--redo', redoSteps] as [string, StepName[]]] : []),
         ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
@@ -1419,16 +1938,28 @@ async function dryRun() {
     if (redone.length || missing.length) log.warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
     if (render.has('images')) {
         const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-        log.step('Pictures', state.missingPictures.length ? `${await pictureEstimate(state.missingPictures.length, config, servers)}${stale}` : styles.muted('all rendered'))
+        log.step(
+            'Pictures',
+            state.missingPictures.length ? `${await pictureEstimate(state.missingPictures.length, config, servers)}${stale}` : styles.muted('all rendered'),
+        )
     }
     if (render.has('videos')) {
         const only = new Set(args.only.split(',').filter(Boolean))
         const selected = onlyClips(state.clips, only)
         const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
         for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) log.warn(risk)
-        log.step('Clips', todo.length ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+        log.step(
+            'Clips',
+            todo.length
+                ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}`
+                : styles.muted('all rendered'),
+        )
     }
-    if (render.has('final')) log.step('Final video', state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'))
+    if (render.has('final'))
+        log.step(
+            'Final video',
+            state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'),
+        )
 }
 
 /**
@@ -1443,7 +1974,7 @@ async function chooseSingers(wanted: string[]): Promise<Singing> {
     let singers: string[]
 
     if (wanted[0] === 'auto') {
-        const picked = await askJson<{ singers: string[] }>({
+        const picked = await askJson<{singers: string[]}>({
             input: `Pick the singers of this music video from the cast: the characters who sing the lyrics on screen.
 Pick the lead first, and prefer an individual character for it: the one whose story the song tells, or who calls the lines out. A group character (e.g. "Miners") sings as well when the lyrics have group parts ("we", a chorus, a shouted refrain, lines the others answer) - then pick the lead and the group both, so that the verses can be the lead's and the refrains the group's. Pick the group alone only if the whole song is clearly sung by the group as one voice and nobody in it leads. A party made of individual characters (a crew or band of named members) is no group entry: its refrains are sung by the lead together with up to two of its members, the ones with the most to do in the story - the rest of the party stays on screen. Several individual singers only if the lyrics clearly are a dialogue or duet between different characters. Three singers at most. Characters that fight, hunt or threaten the singers do not sing.
 ${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": ["<character id>"]}
@@ -1455,17 +1986,23 @@ ${lyrics}
 story summary:
 ${storySummary}`,
             instructions: 'You are a music video director who casts the singers of a performance video. Answer only with JSON.',
-            schema: {type: 'object', additionalProperties: false, required: ['singers'], properties: {singers: {type: 'array', minItems: 1, maxItems: 3, items: {enum: characters.map(c => c.id)}}}},
+            schema: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['singers'],
+                properties: {singers: {type: 'array', minItems: 1, maxItems: 3, items: {enum: characters.map(c => c.id)}}},
+            },
         })
         singers = known(picked.singers)
-        if (!singers.length) throw new Error(`The LLM picked no singer from the cast (${JSON.stringify(picked.singers)}) - run again, or name the singers in config.json`)
+        if (!singers.length)
+            throw new Error(`The LLM picked no singer from the cast (${JSON.stringify(picked.singers)}) - run again, or name the singers in config.json`)
     } else {
         // a name the cast does not carry letter for letter (config.json in the song's language, the cast in English: "schamanin" / "Shamaness")
         // is asked once: the LLM knows which character is meant, code does not guess
         const unmatched = wanted.filter(name => !findCharacter(characters, name))
         const resolved = new Map<string, string>()
         if (unmatched.length) {
-            const mapped = await askJson<{ singers: { name: string, id: string | null }[] }>({
+            const mapped = await askJson<{singers: {name: string; id: string | null}[]}>({
                 input: `config.json names these singers of a music video, but not all of them are spelled like the characters of the cast (another language, a nickname, an epithet). For every name say which character of the cast it means - or null if none does.
 Mind the grammatical gender of the name (German "Schamanin" is the woman, "Schamane" the man) and take the character of that gender, even if another character has the more similar spelling.
 ${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": [{"name": "<name as given>", "id": "<character id or null>"}]}
@@ -1475,29 +2012,48 @@ cast: ${castList}
 story summary:
 ${storySummary}`,
                 instructions: 'You match names to the characters of a cast. Answer only with JSON.',
-                schema: {type: 'object', additionalProperties: false, required: ['singers'], properties: {singers: {type: 'array', items: {
-                    type: 'object', additionalProperties: false, required: ['name', 'id'],
-                    properties: {name: {enum: unmatched}, id: {enum: [...characters.map(c => c.id), null]}},
-                }}}},
+                schema: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['singers'],
+                    properties: {
+                        singers: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                additionalProperties: false,
+                                required: ['name', 'id'],
+                                properties: {name: {enum: unmatched}, id: {enum: [...characters.map(c => c.id), null]}},
+                            },
+                        },
+                    },
+                },
             })
             for (const m of mapped.singers ?? []) {
                 const [id] = known([m.id])
                 if (id) resolved.set(m.name, id)
             }
         }
-        singers = [...new Set(wanted.flatMap(name => {
-            const character = findCharacter(characters, name)
-            const id = character?.id ?? resolved.get(name)
-            if (!id) log.warn(`singers: "${name}" is not in the cast - ignored`)
-            else if (!character) log.step('Singers', `"${name}" is ${id}`)
-            return id ? [id] : []
-        }))]
+        singers = [
+            ...new Set(
+                wanted.flatMap(name => {
+                    const character = findCharacter(characters, name)
+                    const id = character?.id ?? resolved.get(name)
+                    if (!id) log.warn(`singers: "${name}" is not in the cast - ignored`)
+                    else if (!character) log.step('Singers', `"${name}" is ${id}`)
+                    return id ? [id] : []
+                }),
+            ),
+        ]
 
-        if (!singers.length) throw new Error(`singers: none of ${wanted.join(', ')} is in the cast. The characters are: ${characters.map(c => `${c.name} (${c.id})`).join(', ')}`)
+        if (!singers.length)
+            throw new Error(
+                `singers: none of ${wanted.join(', ')} is in the cast. The characters are: ${characters.map(c => `${c.name} (${c.id})`).join(', ')}`,
+            )
     }
     if (singers.length === 1) return {singers, lines: lines.map(l => ({line: l.line, text: l.text, singers}))}
 
-    const assigned = await askJson<{ lines: { line: number, singers: string[] }[] }>({
+    const assigned = await askJson<{lines: {line: number; singers: string[]}[]}>({
         reasoning: 'medium',
         // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
         maxTokens: Math.max(16384, lines.length * 100),
@@ -1512,10 +2068,22 @@ lines: ${JSON.stringify(lines.map(l => ({line: l.line, section: l.section, text:
 story summary:
 ${storySummary}`,
         instructions: 'You are a music video director who splits a song between its singers. Answer only with JSON.',
-        schema: {type: 'object', additionalProperties: false, required: ['lines'], properties: {lines: {type: 'array', items: {
-            type: 'object', additionalProperties: false, required: ['line', 'singers'],
-            properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
-        }}}},
+        schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['lines'],
+            properties: {
+                lines: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['line', 'singers'],
+                        properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
+                    },
+                },
+            },
+        },
     })
     // a model that loops repeats a singer in a line ("lyra, kaelen, lyra, ...") - each sings it once; uniqueItems is not
     // in the schema, the server's grammar compiler refuses it (llama.cpp/vLLM: "Unimplemented keys")
@@ -1529,8 +2097,7 @@ ${storySummary}`,
 function findCharacter(characters: Character[], name: string) {
     const slug = toId(name)
     const tokens = (id: string) => id.split('-').map(t => t.replace(/s$/, ''))
-    return characters.find(c => c.id === slug || toId(c.name) === slug)
-        ?? characters.find(c => tokens(slug).every(t => tokens(c.id).includes(t)))
+    return characters.find(c => c.id === slug || toId(c.name) === slug) ?? characters.find(c => tokens(slug).every(t => tokens(c.id).includes(t)))
 }
 
 // what the story beats must do so the singers can be lip-synced

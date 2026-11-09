@@ -7,7 +7,7 @@ const {project, session, actions} = useTimeline()
 const key = `dismissed:${session.kind}/${session.id}`
 const dismissed = ref(sessionStorage.getItem(key))
 const last = computed(() => project.value.lastRun)
-const said = computed(() => last.value && (last.value.state === 'failed' || last.value.state === 'stopped') ? last.value.explained : [])
+const said = computed(() => (last.value && (last.value.state === 'failed' || last.value.state === 'stopped') ? last.value.explained : []))
 const shown = computed(() => said.value.length > 0 && dismissed.value !== last.value?.startedAt)
 const dismiss = () => {
   if (!last.value) return

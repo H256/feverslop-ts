@@ -8,11 +8,12 @@ const server = {name: 'gpu', url: 'http://gpu:8188', credentials: {type: 'bearer
 
 // a ComfyUI that answers /queue with these jobs and records what it is told
 function comfy(running: string[], pending: string[]) {
-    const calls: { path: string, body?: unknown, auth?: string | null }[] = []
+    const calls: {path: string; body?: unknown; auth?: string | null}[] = []
     const fetcher = (async (url: string, init?: RequestInit) => {
         const path = new URL(url).pathname
         calls.push({path, body: init?.body ? JSON.parse(String(init.body)) : undefined, auth: new Headers(init?.headers).get('Authorization')})
-        if (path === '/queue' && !init?.body) return Response.json({queue_running: running.map((id, n) => [n, id]), queue_pending: pending.map((id, n) => [n, id])})
+        if (path === '/queue' && !init?.body)
+            return Response.json({queue_running: running.map((id, n) => [n, id]), queue_pending: pending.map((id, n) => [n, id])})
         return new Response('{}')
     }) as unknown as typeof fetch
     return {calls, fetcher}
@@ -35,14 +36,18 @@ describe('cancelling our own job on its server', () => {
         expect(calls.map(c => c.path)).toEqual(['/queue'])
     })
     test('a server that does not answer', async () => {
-        const fetcher = (async () => { throw new Error('down') }) as unknown as typeof fetch
+        const fetcher = (async () => {
+            throw new Error('down')
+        }) as unknown as typeof fetch
         expect(await cancelJob(server, 'ours', fetcher)).toBe('unreachable')
     })
 })
 
 describe('the jobs of a run', () => {
     let dir = ''
-    afterEach(() => { if (dir) rmSync(dir, {recursive: true, force: true}) })
+    afterEach(() => {
+        if (dir) rmSync(dir, {recursive: true, force: true})
+    })
     const pending = (file: string, job: object) => {
         mkdirSync(join(dir, file, '..'), {recursive: true})
         writeFileSync(join(dir, file), JSON.stringify({server: {name: 'gpu', url: 'http://gpu:8188'}, ...job}))
@@ -67,7 +72,9 @@ describe('the jobs of a run', () => {
         const {fetcher} = comfy([], ['ours'])
         const [a, b] = await jobsQueuedSince(dir, 0, [server])
         await cancelJobs([a!], fetcher)
-        await cancelJobs([b!], (async () => { throw new Error('down') }) as unknown as typeof fetch)
+        await cancelJobs([b!], (async () => {
+            throw new Error('down')
+        }) as unknown as typeof fetch)
         expect(existsSync(join(dir, 'a.mp4.pending.json'))).toBe(false)
         expect(existsSync(join(dir, 'b.mp4.pending.json'))).toBe(true)
     })

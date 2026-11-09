@@ -1,5 +1,5 @@
-import {describe, expect, test} from "bun:test";
-import {countWords, formatDuration, formatRate, suffix} from "./log.ts";
+import {describe, expect, test} from 'bun:test'
+import {countWords, formatDuration, formatRate, suffix} from './log.ts'
 
 describe('formatDuration', () => {
     test('seconds with one decimal under a minute', () => {

@@ -1,5 +1,5 @@
-import {describe, expect, test} from "bun:test";
-import {CONTEXT_SETTLE, FPS, MAX_CLIP_SEC, maxClipFor} from "./frames.ts";
+import {describe, expect, test} from 'bun:test'
+import {CONTEXT_SETTLE, FPS, MAX_CLIP_SEC, maxClipFor} from './frames.ts'
 
 describe('maxClipFor', () => {
     const max = MAX_CLIP_SEC

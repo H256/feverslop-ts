@@ -23,10 +23,15 @@ const servers = ServersService.provide(createServers())
 const run = RunService.provide(createRunDock(toasts))
 void servers.refresh()
 usePolling(servers.refresh, 10_000, {onFocus: false})
-onScopeDispose(() => { run.dispose(); toasts.dispose(); chrome.dispose() })
+onScopeDispose(() => {
+  run.dispose()
+  toasts.dispose()
+  chrome.dispose()
+})
 
 // another project is another page: nothing of the one before goes on in it. Filters, hashes and its own pages are not
-const pageKey = (route: RouteLocationNormalizedLoaded) => route.params.id ? `p:${String(route.params.kind)}/${String(route.params.id)}` : String(route.matched[0]?.path ?? route.path)
+const pageKey = (route: RouteLocationNormalizedLoaded) =>
+  route.params.id ? `p:${String(route.params.kind)}/${String(route.params.id)}` : String(route.matched[0]?.path ?? route.path)
 </script>
 
 <template>

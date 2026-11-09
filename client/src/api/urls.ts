@@ -1,10 +1,10 @@
 import type {ProjectKind} from '../../../shared/workspace'
 
 /** Where a project, or the library, serves its files from. */
-export type MediaRoots = {media: string, thumb: string}
-export type MediaRef = {file: string, v?: number}
+export type MediaRoots = {media: string; thumb: string}
+export type MediaRef = {file: string; v?: number}
 
-export const projectRoot = (project: {kind: ProjectKind, id: string}) => `/p/${project.kind}/${encodeURIComponent(project.id)}`
+export const projectRoot = (project: {kind: ProjectKind; id: string}) => `/p/${project.kind}/${encodeURIComponent(project.id)}`
 export const rootsOf = (root: string): MediaRoots => ({media: `${root}/media`, thumb: `${root}/thumb`})
 export const LIBRARY_ROOTS: MediaRoots = {media: '/library/media', thumb: '/library/thumb'}
 

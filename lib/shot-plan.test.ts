@@ -1,5 +1,5 @@
-import {describe, expect, test} from "bun:test";
-import {asBeatShots, parseShotLines, readBeatPlan} from "./shot-plan.ts";
+import {describe, expect, test} from 'bun:test'
+import {asBeatShots, parseShotLines, readBeatPlan} from './shot-plan.ts'
 
 describe('the blocking answer', () => {
     test('staging, starts and ends', () => {
@@ -7,7 +7,7 @@ describe('the blocking answer', () => {
         expect(parsed).toEqual({staging: 'A hall, the door on the left.', starts: {Runa: 'stands at the door'}, ends: {Runa: 'sits by the fire'}, shots: []})
     })
 })
-import type {Character, StoryBeat} from "./project.ts";
+import type {Character, StoryBeat} from './project.ts'
 
 const cael: Character = {id: 'cael', name: 'Cael', role: 'singer'}
 const maren: Character = {id: 'maren', name: 'Maren', role: 'miner'}
@@ -15,9 +15,23 @@ const beat = {id: 'b1', characterIds: ['cael', 'maren']} as StoryBeat
 
 describe('readBeatPlan', () => {
     test('resolves names to ids, takes the staging and the ends, pads to the shots needed and asks again', () => {
-        const r = readBeatPlan({staging: 'the shaft on the left', ends: {Cael: 'stands at the shaft'}, shots: [
-            {action: 'Cael lifts the hammer', characters: ['Cael', 'Maren'], people: {Cael: {state: 'stands', frame: 'left', motion: 'stays'}}, hold: true},
-        ]}, beat, [cael, maren], 2)!
+        const r = readBeatPlan(
+            {
+                staging: 'the shaft on the left',
+                ends: {Cael: 'stands at the shaft'},
+                shots: [
+                    {
+                        action: 'Cael lifts the hammer',
+                        characters: ['Cael', 'Maren'],
+                        people: {Cael: {state: 'stands', frame: 'left', motion: 'stays'}},
+                        hold: true,
+                    },
+                ],
+            },
+            beat,
+            [cael, maren],
+            2,
+        )!
         // a count that does not fit is padded, and the planner is asked again
         expect(r.problems).toEqual(['shot count: needed 2, got 1'])
         expect(r.plan.shots).toHaveLength(2)
@@ -26,7 +40,10 @@ describe('readBeatPlan', () => {
         expect(r.plan.ends).toEqual({cael: 'stands at the shaft'})
     })
     test('asks again for an unknown name, a stranger in the text and a singing shot without a singer', () => {
-        const r = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael', 'Nobody']}]}, beat, [cael, maren], 1, {singerIds: ['cael'], singingPerShot: [true]})!
+        const r = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael', 'Nobody']}]}, beat, [cael, maren], 1, {
+            singerIds: ['cael'],
+            singingPerShot: [true],
+        })!
         expect(r.problems.length).toBe(2)
         // who the text is about is read from its tokens - a plain name is plain text
         const q = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael']}]}, beat, [cael, maren], 1)!
@@ -45,18 +62,25 @@ describe('readBeatPlan', () => {
         expect(r.plan.tokens).toBe(true)
     })
     test('a problem knows its shot; the shot count is a problem of the whole beat', () => {
-        const r = readBeatPlan({shots: [{action: 'Cael sings', characters: ['Cael']}, {action: 'x', characters: ['Nobody']}]}, beat, [cael, maren], 3)!
-        expect(r.issues).toEqual([
-            {shot: 1, message: 'shot 2: "Nobody" is not one of the characters'},
-            {message: 'shot count: needed 3, got 2'},
-        ])
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {action: 'Cael sings', characters: ['Cael']},
+                    {action: 'x', characters: ['Nobody']},
+                ],
+            },
+            beat,
+            [cael, maren],
+            3,
+        )!
+        expect(r.issues).toEqual([{shot: 1, message: 'shot 2: "Nobody" is not one of the characters'}, {message: 'shot count: needed 3, got 2'}])
     })
     test('an old plan of actions stays usable', () => {
         expect(asBeatShots(['a', 'b']).shots.map(s => s.action)).toEqual(['a', 'b'])
     })
 })
 
-describe('hands - a shot of a player\'s hands on the instrument', () => {
+describe("hands - a shot of a player's hands on the instrument", () => {
     const cast: Character[] = [
         {id: 'lead', name: 'Lead', role: 'singer'},
         {id: 'gtr', name: 'Gtr', role: 'guitarist', prop: 'guitar', propStem: 'guitar'},
@@ -64,20 +88,43 @@ describe('hands - a shot of a player\'s hands on the instrument', () => {
     const beat = {id: 'b1', characterIds: ['lead', 'gtr']} as StoryBeat
     const props = [{characterId: 'gtr', prop: 'guitar', activePerShot: [true, false]}]
     test('is read from its line, "no" is none', () => {
-        const parsed = parseShotLines('SHOT 1\nframing: close\ncharacters: Gtr\naction: {Gtr} plays.\nhands: Gtr\nSHOT 2\nframing: wide\ncharacters: Gtr\naction: {Gtr} plays.\nhands: no')
+        const parsed = parseShotLines(
+            'SHOT 1\nframing: close\ncharacters: Gtr\naction: {Gtr} plays.\nhands: Gtr\nSHOT 2\nframing: wide\ncharacters: Gtr\naction: {Gtr} plays.\nhands: no',
+        )
         expect(parsed.shots.map(s => s.hands)).toEqual(['Gtr', undefined])
     })
     test('names the player alone, while the instrument is heard - a singer of the line need not be in it', () => {
-        const shot = {action: '{Gtr} picks a fast run.', characters: ['Gtr'], hands: 'Gtr', people: {Gtr: {state: 'at the front', motion: 'leans in', playing: 'picks a fast run'}}}
-        const r = readBeatPlan({shots: [shot, {action: '{Lead} sings.', characters: ['Lead']}]}, beat, cast, 2, {singerIds: ['lead'], singingPerShot: [true, true]}, props)!
+        const shot = {
+            action: '{Gtr} picks a fast run.',
+            characters: ['Gtr'],
+            hands: 'Gtr',
+            people: {Gtr: {state: 'at the front', motion: 'leans in', playing: 'picks a fast run'}},
+        }
+        const r = readBeatPlan(
+            {shots: [shot, {action: '{Lead} sings.', characters: ['Lead']}]},
+            beat,
+            cast,
+            2,
+            {singerIds: ['lead'], singingPerShot: [true, true]},
+            props,
+        )!
         expect(r.problems).toEqual([])
         expect(r.plan.shots[0]!.hands).toBe('gtr')
     })
     test('someone without an instrument, an instrument not heard, or more people in it are asked again', () => {
-        const r = readBeatPlan({shots: [
-            {action: '{Lead} waits.', characters: ['Lead'], hands: 'Lead'},
-            {action: '{Gtr} plays.', characters: ['Gtr', 'Lead'], hands: 'Gtr'},
-        ]}, beat, cast, 2, undefined, props)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {action: '{Lead} waits.', characters: ['Lead'], hands: 'Lead'},
+                    {action: '{Gtr} plays.', characters: ['Gtr', 'Lead'], hands: 'Gtr'},
+                ],
+            },
+            beat,
+            cast,
+            2,
+            undefined,
+            props,
+        )!
         expect(r.problems.some(p => p.includes('Lead plays no instrument of the song'))).toBe(true)
         expect(r.problems.some(p => p.includes("Gtr's guitar is not heard in this shot"))).toBe(true)
         expect(r.problems.some(p => p.includes('a shot of the hands has Gtr alone in "characters"'))).toBe(true)
@@ -86,13 +133,21 @@ describe('hands - a shot of a player\'s hands on the instrument', () => {
 
 describe('readBeatPlan - checks that ask again and checks that only note', () => {
     const names = ['Anna', 'Bea', 'Cora', 'Dina', 'Edda', 'Fay']
-    const cast: Character[] = [...names.map(name => ({id: name.toLowerCase(), name, role: 'x'})), {id: 'orcs', name: 'Orcs', role: 'crowd', isGroup: true, alike: true}]
+    const cast: Character[] = [
+        ...names.map(name => ({id: name.toLowerCase(), name, role: 'x'})),
+        {id: 'orcs', name: 'Orcs', role: 'crowd', isGroup: true, alike: true},
+    ]
     const beat = {id: 'b2', characterIds: cast.map(c => c.id)} as StoryBeat
     const same = (n: string) => ({state: `stands at place ${n}`, motion: 'drives the hammer down in an overhead arc'})
     const own = (n: number) => ({state: `stands at place ${n}`, motion: `does move number ${n}`})
 
     test('three people with the same motion are a chorus line and are asked again', () => {
-        const r = readBeatPlan({shots: [{action: 'They strike', characters: ['Anna', 'Bea', 'Cora'], people: {Anna: same('1'), Bea: same('2'), Cora: same('3')}}]}, beat, cast, 1)!
+        const r = readBeatPlan(
+            {shots: [{action: 'They strike', characters: ['Anna', 'Bea', 'Cora'], people: {Anna: same('1'), Bea: same('2'), Cora: same('3')}}]},
+            beat,
+            cast,
+            1,
+        )!
         expect(r.problems).toHaveLength(1)
         expect(r.problems[0]).toContain('Anna, Bea, Cora')
     })
@@ -102,25 +157,59 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.notes[0]).toContain('Anna, Bea')
     })
     test('different motions, and a crowd entry next to a person, are fine', () => {
-        const r = readBeatPlan({shots: [{action: 'They strike', characters: ['Anna', 'Bea', 'Orcs'], people: {Anna: own(1), Bea: own(2), Orcs: {state: 'press in', motion: 'the first lunges, two hang back'}}}]}, beat, cast, 1)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {
+                        action: 'They strike',
+                        characters: ['Anna', 'Bea', 'Orcs'],
+                        people: {Anna: own(1), Bea: own(2), Orcs: {state: 'press in', motion: 'the first lunges, two hang back'}},
+                    },
+                ],
+            },
+            beat,
+            cast,
+            1,
+        )!
         expect(r.problems).toEqual([])
         expect(r.notes).toEqual([])
     })
     test('three people and one of them with an entry but no motion: a note, no further call', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna and Bea clear the way', characters: ['Anna', 'Bea', 'Cora'], people: {Anna: own(1), Bea: own(2), Cora: {state: 'stands at the back'}}}]}, beat, cast, 1)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {
+                        action: 'Anna and Bea clear the way',
+                        characters: ['Anna', 'Bea', 'Cora'],
+                        people: {Anna: own(1), Bea: own(2), Cora: {state: 'stands at the back'}},
+                    },
+                ],
+            },
+            beat,
+            cast,
+            1,
+        )!
         expect(r.problems).toEqual([])
         expect(r.notes).toHaveLength(1)
         expect(r.notes[0]).toContain('Cora has no motion in a shot of 3 people')
     })
     test('two people and one of them without motion: not a note, the check is for three or more', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna speaks, Bea listens', characters: ['Anna', 'Bea'], people: {Anna: own(1), Bea: {state: 'stands at the back'}}}]}, beat, cast, 1)!
+        const r = readBeatPlan(
+            {shots: [{action: 'Anna speaks, Bea listens', characters: ['Anna', 'Bea'], people: {Anna: own(1), Bea: {state: 'stands at the back'}}}]},
+            beat,
+            cast,
+            1,
+        )!
         expect(r.problems).toEqual([])
         expect(r.notes).toEqual([])
     })
     test('more than four own entries are cut to four by the code: singers first, then the order of the action', () => {
         const people: Record<string, Record<string, string>> = Object.fromEntries(names.map((n, i) => [n, own(i)]))
         people.Dina = {...people.Dina, singing: 'yes'}
-        const r = readBeatPlan({shots: [{action: '{Fay} leads, then {Edda} follows', characters: names, framing: 'wide shot', people}]}, beat, cast, 1, {singerIds: ['dina'], singingPerShot: [true]})!
+        const r = readBeatPlan({shots: [{action: '{Fay} leads, then {Edda} follows', characters: names, framing: 'wide shot', people}]}, beat, cast, 1, {
+            singerIds: ['dina'],
+            singingPerShot: [true],
+        })!
         expect(r.problems).toEqual([])
         expect(Object.keys(r.plan.shots[0]!.people!).sort()).toEqual(['dina', 'edda', 'fay', 'anna'].sort())
         expect(r.plan.shots[0]!.characters).toHaveLength(6)
@@ -132,12 +221,32 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.notes[0]).toContain('5 people')
     })
     test('somebody who does not sing is marked as singing by the planner: asked again', () => {
-        const r = readBeatPlan({shots: [{action: 'They march', characters: ['Anna', 'Bea'], people: {Anna: {state: 'leads', motion: 'marches on', singing: 'yes'}, Bea: {state: 'follows', motion: 'falls back', singing: 'yes'}}}]}, beat, cast, 1, {singerIds: ['anna', 'bea'], singingPerShot: [true], singersPerShot: [['anna']]})!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {
+                        action: 'They march',
+                        characters: ['Anna', 'Bea'],
+                        people: {Anna: {state: 'leads', motion: 'marches on', singing: 'yes'}, Bea: {state: 'follows', motion: 'falls back', singing: 'yes'}},
+                    },
+                ],
+            },
+            beat,
+            cast,
+            1,
+            {singerIds: ['anna', 'bea'], singingPerShot: [true], singersPerShot: [['anna']]},
+        )!
         expect(r.problems).toHaveLength(1)
         expect(r.problems[0]).toContain('Bea is marked singing, but Anna sings in this shot')
     })
     test('a singer of the shot marked as not singing is asked again', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna leads', characters: ['Anna'], people: {Anna: {state: 'leads', motion: 'marches', singing: 'no'}}}]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true], singersPerShot: [['anna']]})!
+        const r = readBeatPlan(
+            {shots: [{action: 'Anna leads', characters: ['Anna'], people: {Anna: {state: 'leads', motion: 'marches', singing: 'no'}}}]},
+            beat,
+            cast,
+            1,
+            {singerIds: ['anna'], singingPerShot: [true], singersPerShot: [['anna']]},
+        )!
         expect(r.problems[0]).toContain('Anna sings in this shot - singing: yes')
     })
     test('an instrument that is heard is played, one that is not heard is not', () => {
@@ -163,14 +272,24 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         expect(r.plan.shots[1]!.people!.anna!.plays).toBe('strums the chords hard')
     })
     test('a framing that cannot hold its people is asked again - close two, medium three, wide any', () => {
-        const shot = (size: string, n: number) => ({action: 'They play', size, characters: names.slice(0, n), people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)]))})
+        const shot = (size: string, n: number) => ({
+            action: 'They play',
+            size,
+            characters: names.slice(0, n),
+            people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)])),
+        })
         const r = readBeatPlan({shots: [shot('close', 3), shot('medium', 4), shot('medium', 3), shot('wide', 4)]}, beat, cast, 4)!
         expect(r.issues.map(i => i.shot)).toEqual([0, 1])
         expect(r.problems[0]).toContain('shot 1: 3 people (Anna, Bea, Cora) in a close shot, which holds at most 2')
         expect(r.problems[1]).toContain('in a medium shot, which holds at most 3')
     })
     test('an extreme close-up holds one person - two in it are asked again, one is fine (#339)', () => {
-        const shot = (size: string, n: number) => ({action: 'They play', size, characters: names.slice(0, n), people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)]))})
+        const shot = (size: string, n: number) => ({
+            action: 'They play',
+            size,
+            characters: names.slice(0, n),
+            people: Object.fromEntries(names.slice(0, n).map((name, k) => [name, own(k)])),
+        })
         const r = readBeatPlan({shots: [shot('extreme', 2), shot('extreme', 1)]}, beat, cast, 2)!
         expect(r.issues.map(i => i.shot)).toEqual([0])
         expect(r.problems[0]).toContain('shot 1: 2 people (Anna, Bea) in an extreme close-up, which holds at most 1')
@@ -180,15 +299,36 @@ describe('readBeatPlan - checks that ask again and checks that only note', () =>
         // a guitar solo: nobody sings, guitar, bass and drums are heard - the singer of the band is the one to go
         const props = ['bea', 'cora', 'dina'].map(id => ({characterId: id, prop: 'drum', activePerShot: [true, true]}))
         const four = ['Anna', 'Bea', 'Cora', 'Dina']
-        const shot = (size: string, action: string) => ({action, size, characters: four, people: Object.fromEntries(four.map((name, k) => [name, {...own(k), playing: name === 'Anna' ? 'no' : 'hits it hard'}]))})
-        const solo = readBeatPlan({shots: [shot('medium', '{Anna} sways next to {Cora}'), shot('close', '{Dina} drives the beat, {Bea} answers')]}, beat, cast, 2, undefined, props)!
-        expect(solo.problems[0]).toContain('the shot is about Bea, Cora, Dina: take Anna out of its "characters" and "people" and do not name them in its "action" or "rest"')
+        const shot = (size: string, action: string) => ({
+            action,
+            size,
+            characters: four,
+            people: Object.fromEntries(four.map((name, k) => [name, {...own(k), playing: name === 'Anna' ? 'no' : 'hits it hard'}])),
+        })
+        const solo = readBeatPlan(
+            {shots: [shot('medium', '{Anna} sways next to {Cora}'), shot('close', '{Dina} drives the beat, {Bea} answers')]},
+            beat,
+            cast,
+            2,
+            undefined,
+            props,
+        )!
+        expect(solo.problems[0]).toContain(
+            'the shot is about Bea, Cora, Dina: take Anna out of its "characters" and "people" and do not name them in its "action" or "rest"',
+        )
         expect(solo.problems[0]).not.toContain('wide shot')
         // two heard players have to go from a close shot: a wide shot is offered too
         expect(solo.problems[1]).toContain('the shot is about Bea, Dina: take Anna, Cora out')
         expect(solo.problems[1]).toContain('or make it a wide shot, since Cora is heard in it')
         // a line is sung: the singer stays, whatever the action names first
-        const sung = readBeatPlan({shots: [shot('close', '{Dina} drums, {Bea} plays')]}, beat, cast, 1, {singerIds: ['anna'], singingPerShot: [true]}, props.map(p => ({...p, activePerShot: [false]})))!
+        const sung = readBeatPlan(
+            {shots: [shot('close', '{Dina} drums, {Bea} plays')]},
+            beat,
+            cast,
+            1,
+            {singerIds: ['anna'], singingPerShot: [true]},
+            props.map(p => ({...p, activePerShot: [false]})),
+        )!
         expect(sung.problems.find(p => p.includes('holds at most'))).toContain('the shot is about Anna, Dina: take Bea, Cora out')
     })
 })
@@ -197,29 +337,73 @@ describe('readBeatPlan - no word lists', () => {
     const a: Character = {id: 'a', name: 'Anna', role: 'x'}
     const beat = {id: 'b8', characterIds: ['a']} as StoryBeat
     test('a compass word in the text is not read by code - the prompt asks for directions as the picture shows them', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna turns to face the orc to the north', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing south', motion: 'steps eastward'}}}]}, beat, [a], 1)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {
+                        action: 'Anna turns to face the orc to the north',
+                        characters: ['Anna'],
+                        people: {Anna: {state: 'stands', frame: 'facing south', motion: 'steps eastward'}},
+                    },
+                ],
+            },
+            beat,
+            [a],
+            1,
+        )!
         expect(r.problems).toEqual([])
         expect(r.notes).toEqual([])
     })
     test("the planner's size and risky flag are read, a size that is not one of the three is dropped", () => {
-        const r = readBeatPlan({shots: [{action: 'Anna walks', characters: ['Anna'], size: 'Wide', risky: 'yes'}, {action: 'Anna stops', characters: ['Anna'], size: 'huge', risky: 'no'}]}, beat, [a], 2)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {action: 'Anna walks', characters: ['Anna'], size: 'Wide', risky: 'yes'},
+                    {action: 'Anna stops', characters: ['Anna'], size: 'huge', risky: 'no'},
+                ],
+            },
+            beat,
+            [a],
+            2,
+        )!
         expect(r.plan.shots[0]).toMatchObject({size: 'wide', risky: true})
         expect(r.plan.shots[1]!.size).toBeUndefined()
         expect(r.plan.shots[1]!.risky).toBeUndefined()
     })
     test('a person marked as singing in a shot where nobody sings is asked again', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna waits', characters: ['Anna'], people: {Anna: {state: 'stands', motion: 'sways', singing: 'yes'}}}]}, beat, [a], 1, {singerIds: [], singingPerShot: [false]})!
+        const r = readBeatPlan(
+            {shots: [{action: 'Anna waits', characters: ['Anna'], people: {Anna: {state: 'stands', motion: 'sways', singing: 'yes'}}}]},
+            beat,
+            [a],
+            1,
+            {singerIds: [], singingPerShot: [false]},
+        )!
         expect(r.problems.some(p => p.includes('but nobody sings in this shot'))).toBe(true)
         expect(r.plan.shots[0]!.people!.a!.singing).toBe(true)
     })
     test('the line format carries size, risky and singing', () => {
-        const parsed = parseShotLines('SHOT 1\nframing: wide shot\nsize: wide\nrisky: yes\ncharacters: Anna\naction: x\nperson: Anna | state: s | frame: f | motion: m | playing: yes | singing: yes')
+        const parsed = parseShotLines(
+            'SHOT 1\nframing: wide shot\nsize: wide\nrisky: yes\ncharacters: Anna\naction: x\nperson: Anna | state: s | frame: f | motion: m | playing: yes | singing: yes',
+        )
         expect(parsed.shots[0]).toMatchObject({size: 'wide', risky: true})
         expect((parsed.shots[0]!.people as Record<string, Record<string, string>>).Anna!.singing).toBe('yes')
         expect((parsed.shots[0]!.people as Record<string, Record<string, string>>).Anna!.playing).toBe('yes')
     })
     test('directions as the picture shows them are fine', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna turns to the orc on the right of the frame', characters: ['Anna'], people: {Anna: {state: 'stands', frame: 'facing the orc', motion: 'steps toward the camera'}}}]}, beat, [a], 1)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {
+                        action: 'Anna turns to the orc on the right of the frame',
+                        characters: ['Anna'],
+                        people: {Anna: {state: 'stands', frame: 'facing the orc', motion: 'steps toward the camera'}},
+                    },
+                ],
+            },
+            beat,
+            [a],
+            1,
+        )!
         expect(r.notes).toEqual([])
     })
 })
@@ -229,7 +413,21 @@ describe('readBeatPlan - the rest of a shot', () => {
     const b: Character = {id: 'b', name: 'Bea', role: 'x'}
     const beat = {id: 'b9', characterIds: ['a', 'b']} as StoryBeat
     test('what the others do is read and kept with the shot', () => {
-        const r = readBeatPlan({shots: [{action: 'Anna strikes', characters: ['Anna', 'Bea'], people: {Anna: {motion: 'strikes'}}, rest: ' Bea parries an orc and answers with the haft. '}]}, beat, [a, b], 1)!
+        const r = readBeatPlan(
+            {
+                shots: [
+                    {
+                        action: 'Anna strikes',
+                        characters: ['Anna', 'Bea'],
+                        people: {Anna: {motion: 'strikes'}},
+                        rest: ' Bea parries an orc and answers with the haft. ',
+                    },
+                ],
+            },
+            beat,
+            [a, b],
+            1,
+        )!
         expect(r.plan.shots[0]!.rest).toBe('Bea parries an orc and answers with the haft.')
         expect(r.problems).toEqual([])
     })

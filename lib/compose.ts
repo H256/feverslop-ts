@@ -1,14 +1,28 @@
-import {escapeRegExp} from "./shot-plan.ts";
-import {asBeatShots} from "./shot-plan.ts";
-import {readTokens, replaceTokens} from "./refs.ts";
-import {splitAtCuts, splitBySinger} from "./singing-parts.ts";
-import type {Assignment, BeatShots, Character, Location, LyricsTiming, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
-import {handsOf} from "./project.ts";
-import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
-import {MISSING_WORD_LEAD, voiceLead} from "../shared/timing-fit.ts";
-import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
-import type {ProjectConfig} from "./config.ts";
-import {sequenceSheetDir, sheetFrame} from "./sequenceSheet.ts";
+import {escapeRegExp} from './shot-plan.ts'
+import {asBeatShots} from './shot-plan.ts'
+import {readTokens, replaceTokens} from './refs.ts'
+import {splitAtCuts, splitBySinger} from './singing-parts.ts'
+import type {
+    Assignment,
+    BeatShots,
+    Character,
+    Location,
+    LyricsTiming,
+    MusicMap,
+    PropActivity,
+    PropStem,
+    ShotPlan,
+    Singing,
+    Slot,
+    StoryBeat,
+    TimedWord,
+} from './project.ts'
+import {handsOf} from './project.ts'
+import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from './frames.ts'
+import {MISSING_WORD_LEAD, voiceLead} from '../shared/timing-fit.ts'
+import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from '../comfy/helpers.ts'
+import type {ProjectConfig} from './config.ts'
+import {sequenceSheetDir, sheetFrame} from './sequenceSheet.ts'
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
 // Format: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
@@ -59,78 +73,77 @@ export type MixStem = `mix-${string}`
 export const mixStem = (stems: PropStem[]): MixStem => `mix-${[...stems].sort().join('-')}`
 
 export type ClipRequest = {
-    id: string,
-    index: number,
-    start: number,              // position in the song, seconds
-    end: number,
-    duration: number,
-    frameStart: number,         // position on the song's frame grid (lib/frames.ts)
-    frames: number,             // frames this clip contributes to the final video
-    section: string,
-    beatId: string,
+    id: string
+    index: number
+    start: number // position in the song, seconds
+    end: number
+    duration: number
+    frameStart: number // position on the song's frame grid (lib/frames.ts)
+    frames: number // frames this clip contributes to the final video
+    section: string
+    beatId: string
     // the clip goes on from the last frame of this clip (`<Picture N>` below, kind 'frame'): it can only be rendered after it
-    startsFrom?: string,
+    startsFrom?: string
     // characters of the clip's beat or shots that got no picture: more people than the workflow takes reference pictures
-    dropped?: string[],
-    shots: { label: string, at: number, framing: string, camera: string, subjects: string[] }[],
+    dropped?: string[]
+    shots: {label: string; at: number; framing: string; camera: string; subjects: string[]}[]
     // performance mode: what is sung on screen and by whom, times relative to the clip start
-    vocals?: { at: number, end: number, line: number, text: string, singers: { id: string, subject: string, speaker: string }[] }[],
+    vocals?: {at: number; end: number; line: number; text: string; singers: {id: string; subject: string; speaker: string}[]}[]
     assets: {
         // kind, id, name and description: what the prompt says about the picture - for debugging
-        pictures: { label: string, file: string, subject: string, kind: 'character' | 'location' | 'frame', id: string, name: string, description: string }[],
+        pictures: {label: string; file: string; subject: string; kind: 'character' | 'location' | 'frame'; id: string; name: string; description: string}[]
         // stem: which isolated stem this track was cut from (always set - see the Track comment below) -
         // 'song' is the whole, unseparated song, used as the cut/blocking anchor when stems aren't available
         // mix: the stems a mixed track (stem "mix-...") is made of
-        audio: { label: string, file: string, songStart: number, songEnd: number, stem?: 'vocals' | PropStem | 'song' | MixStem, mix?: PropStem[] }[],
-    },
-    prompt: string,
+        audio: {label: string; file: string; songStart: number; songEnd: number; stem?: 'vocals' | PropStem | 'song' | MixStem; mix?: PropStem[]}[]
+    }
+    prompt: string
 }
 
 export type Input = {
-    slots: Slot[],
-    mapping: Assignment[],
-    beats: StoryBeat[],
-    characters: Character[],
-    locations: Location[],
-    characterDescriptions: Record<string, string>,   // not the image prompts - those describe the reference picture
+    slots: Slot[]
+    mapping: Assignment[]
+    beats: StoryBeat[]
+    characters: Character[]
+    locations: Location[]
+    characterDescriptions: Record<string, string> // not the image prompts - those describe the reference picture
     // group characters only (memberCounts[id] > 1, see computeMemberCounts): one description per member, matching
     // characterLookVariants - a shot referencing member N's picture must also use member N's own description, or
     // the clip prompt describes a different-looking member than the one in the picture it's bound to
-    characterDescriptionVariants?: Record<string, string[]>,
-    locationDescriptions: Record<string, string>,
+    characterDescriptionVariants?: Record<string, string[]>
+    locationDescriptions: Record<string, string>
     // per place the fixed features behind the people of every shot (step locationAnchors) - none: no background sentence
-    locationAnchors?: Record<string, string>,
+    locationAnchors?: Record<string, string>
     // per place its floor plan without people (step locationLayouts): the layout of a clip that does not open its beat
-    locationLayouts?: Record<string, { layout: string }>,
-    lookBrief: string,
-    music: MusicMap,
-    language: string,           // for <d>[...], e.g. "English"
-    singing?: Singing,          // performance mode
-    lyricsTiming?: LyricsTiming,    // the words' times: where a singer changes within a line (singing.lines[].parts)
-    vocalPeaks?: number[],          // the loudness of the vocals stem, 100 values a second (readFineWaveform): singing heard before a line's first word
+    locationLayouts?: Record<string, {layout: string}>
+    lookBrief: string
+    music: MusicMap
+    language: string // for <d>[...], e.g. "English"
+    singing?: Singing // performance mode
+    lyricsTiming?: LyricsTiming // the words' times: where a singer changes within a line (singing.lines[].parts)
+    vocalPeaks?: number[] // the loudness of the vocals stem, 100 values a second (readFineWaveform): singing heard before a line's first word
     // beatId -> the staged shots of the beat (step 11b: action, who is in the picture, where they stand) - replaces the
     // beat.moments spread when given. A plan from before the staging is a list of actions and works without the staging
-    shotMoments?: Record<string, BeatShots | string[]>,
-    propActivity?: PropActivity,
+    shotMoments?: Record<string, BeatShots | string[]>
+    propActivity?: PropActivity
     // whether the song's stems were actually separated (config.alignLyrics) - when false, no drums/vocals/prop
     // stem is available and every clip's anchor track falls back to the whole, unseparated song instead
-    stemsAvailable: boolean,
-    continuity?: ProjectConfig['continuity'],   // default 'auto'
+    stemsAvailable: boolean
+    continuity?: ProjectConfig['continuity'] // default 'auto'
     // config.pinStartFrame: a continuing clip gets the last frame of the clip before it as its pinned first frame
     // (the render passes it to the workflow separately) - it is then not one of the reference pictures
-    pinStartFrame?: boolean,
+    pinStartFrame?: boolean
     // config.contextFrames: a continuing clip starts on that many last frames of the clip before - its video is that much
     // longer at the head, so every time in the prompt moves by it
-    contextFrames?: number,
+    contextFrames?: number
     // config.locationView: a clip's place picture is one view of the location's sheet (0-4): this one for every clip, or
     // with "auto" the one the shot planning chose for the first shot of the clip (shotViews); -1 or none = the sheet
-    locationView?: number | 'auto',
-    shotViews?: Record<string, number[]>,
+    locationView?: number | 'auto'
+    shotViews?: Record<string, number[]>
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
-export const isContinuous = (beat: StoryBeat, mode: ProjectConfig['continuity'] = 'auto') =>
-    mode === 'always' || (mode === 'auto' && beat.continuous === true)
+export const isContinuous = (beat: StoryBeat, mode: ProjectConfig['continuity'] = 'auto') => mode === 'always' || (mode === 'auto' && beat.continuous === true)
 
 // Framings per beat kind, used in order for the shots of a clip
 const framings: Record<StoryBeat['kind'], string[]> = {
@@ -145,9 +158,24 @@ const singingFramings = ['medium shot', 'medium close-up', 'close-up']
 // One camera move per shot, faster with more musical energy. Even "low" energy always keeps a slow, visible drift -
 // a genuinely locked-off static frame reads as a still photo, not a shot, on anything longer than a second or two
 const cameraMoves = {
-    low: ['the camera dollies in slowly over the whole shot', 'the camera creeps almost imperceptibly closer', 'the camera cranes up slowly', 'the camera drifts sideways at a slow, even pace'],
-    mid: ['the camera pushes in steadily', 'the camera tracks sideways at walking pace', 'the camera tilts up at a moderate speed', 'the camera arcs slowly around the subjects'],
-    high: ['the handheld camera pushes in fast', 'the camera tracks quickly alongside the action', 'the camera cranes down fast toward the subjects', 'the camera arcs quickly around the subjects'],
+    low: [
+        'the camera dollies in slowly over the whole shot',
+        'the camera creeps almost imperceptibly closer',
+        'the camera cranes up slowly',
+        'the camera drifts sideways at a slow, even pace',
+    ],
+    mid: [
+        'the camera pushes in steadily',
+        'the camera tracks sideways at walking pace',
+        'the camera tilts up at a moderate speed',
+        'the camera arcs slowly around the subjects',
+    ],
+    high: [
+        'the handheld camera pushes in fast',
+        'the camera tracks quickly alongside the action',
+        'the camera cranes down fast toward the subjects',
+        'the camera arcs quickly around the subjects',
+    ],
 }
 
 // one distinct label per cast member sharing a shot, front-to-back then left-to-right - covers up to
@@ -156,9 +184,14 @@ const cameraMoves = {
 // shot, which reads as "these two are the same/interchangeable" and lets the model conflate them - e.g. a
 // named combatant and an unrelated background character rendered as if fighting each other.
 export const positions = [
-    'in the front on the left', 'in the front, center', 'in the front on the right',
-    'a step behind them on the left', 'a step behind them, center', 'a step behind them on the right',
-    'further back on the left', 'further back on the right',
+    'in the front on the left',
+    'in the front, center',
+    'in the front on the right',
+    'a step behind them on the left',
+    'a step behind them, center',
+    'a step behind them on the right',
+    'further back on the left',
+    'further back on the right',
 ]
 
 // C: how many castSubjects share a non-establishing shot - mostly a solo face or a two-character interaction,
@@ -228,15 +261,15 @@ export function countShotsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' |
 // Approximate real-time [start, end) window per shot of a beat, in shot order - shots are assumed evenly spread
 // across their slot's duration. buildClip refines the exact cut points later (avoiding mid-word cuts etc.), but
 // this coarse split is already enough to check a shot against detected stem activity before shot timing is final.
-function shotWindowsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Record<string, { start: number, end: number }[]> {
+function shotWindowsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Record<string, {start: number; end: number}[]> {
     const beatById = new Map(beats.map(b => [b.id, b]))
-    const windows: Record<string, { start: number, end: number }[]> = {}
+    const windows: Record<string, {start: number; end: number}[]> = {}
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
         windows[beat.id] = scene.flatMap((slot, k) => {
             const shotCount = shotCountFor(slot, beat, k === 0)
             return Array.from({length: shotCount}, (_, j) => ({
-                start: round(slot.start + (slot.end - slot.start) * j / shotCount),
-                end: round(slot.start + (slot.end - slot.start) * (j + 1) / shotCount),
+                start: round(slot.start + ((slot.end - slot.start) * j) / shotCount),
+                end: round(slot.start + ((slot.end - slot.start) * (j + 1)) / shotCount),
             }))
         })
     }
@@ -248,7 +281,7 @@ function shotWindowsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapp
 // tens of milliseconds near its edge shouldn't flip it to active, but a real, short riff or hit inside an
 // otherwise longer shot (which fails a >50%-of-duration bar) should.
 const MIN_ACTIVE_SEC = 0.3
-function isActive(window: { start: number, end: number }, ranges: { start: number, end: number }[]): boolean {
+function isActive(window: {start: number; end: number}, ranges: {start: number; end: number}[]): boolean {
     const duration = window.end - window.start
     if (duration <= 0) return false
     const overlap = ranges.reduce((sum, r) => sum + Math.max(0, Math.min(window.end, r.end) - Math.max(window.start, r.start)), 0)
@@ -261,7 +294,7 @@ function isActive(window: { start: number, end: number }, ranges: { start: numbe
  * second must not be said to go on "through the whole shot" - and neither must one heard only at the start and the end
  * of a shot with a pause between (tides 2:42: 0.3 s, three seconds of silence, 0.4 s).
  */
-export function activeSpans(window: { start: number, end: number }, ranges: { start: number, end: number }[]): { start: number, end: number }[] | undefined {
+export function activeSpans(window: {start: number; end: number}, ranges: {start: number; end: number}[]): {start: number; end: number}[] | undefined {
     const inside = ranges
         .map(r => ({start: Math.max(window.start, r.start), end: Math.min(window.end, r.end)}))
         .filter(r => r.end > r.start)
@@ -278,11 +311,10 @@ export function activeSpans(window: { start: number, end: number }, ranges: { st
 export function propActivityPerBeat(
     {slots, mapping, beats, characters}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'characters'>,
     activity: PropActivity,
-): Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]> {
+): Record<string, {characterId: string; prop: string; activePerShot: boolean[]}[]> {
     const windows = shotWindowsPerBeat({slots, mapping, beats})
-    const propped = characters.filter((c): c is Character & { prop: string, propStem: PropStem } =>
-        Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
-    const result: Record<string, { characterId: string, prop: string, activePerShot: boolean[] }[]> = {}
+    const propped = characters.filter((c): c is Character & {prop: string; propStem: PropStem} => Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
+    const result: Record<string, {characterId: string; prop: string; activePerShot: boolean[]}[]> = {}
     for (const beat of beats) {
         const onScreen = propped.filter(c => beat.characterIds.includes(c.id))
         if (!onScreen.length) continue
@@ -303,10 +335,14 @@ export function propActivityPerBeat(
 // Beats without singers on screen never appear here.
 // singersPerShot: who of them sings in each shot - the singers of the lines sung in it (singing.lines). The beat's singers
 // alone let the planner give a verse of the lead to the whole band ("they belt the final phrases in tight harmony").
-export type BeatSinging = { singerIds: string[], singingPerShot: boolean[], singersPerShot: string[][] }
-export function singingPerBeat(
-    {slots, mapping, beats, singing, lyricsTiming}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing' | 'lyricsTiming'>,
-): Record<string, BeatSinging> {
+export type BeatSinging = {singerIds: string[]; singingPerShot: boolean[]; singersPerShot: string[][]}
+export function singingPerBeat({
+    slots,
+    mapping,
+    beats,
+    singing,
+    lyricsTiming,
+}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing' | 'lyricsTiming'>): Record<string, BeatSinging> {
     if (!singing) return {}
     const windows = shotWindowsPerBeat({slots, mapping, beats})
     const slotById = new Map(slots.map(s => [s.id, s]))
@@ -315,19 +351,38 @@ export function singingPerBeat(
         const singerIds = singing.singers.filter(id => beat.characterIds.includes(id))
         if (!singerIds.length) continue
         // a line whose singer changes in it is as many pieces, each with its own singers (lib/singing-parts.ts)
-        const sung = mapping.filter(m => m.beatId === beat.id).flatMap(m => {
-            const slot = slotById.get(m.slotId)
-            return (slot?.vocals ?? []).flatMap(v => splitBySinger(v, slot!.start, singing.lines.find(l => l.line === v.line), lyricsTiming, singerIds)).map(piece => ({
-                start: slot!.start + piece.start,
-                end: slot!.start + piece.end,
-                singers: piece.singers,
-            }))
-        })
+        const sung = mapping
+            .filter(m => m.beatId === beat.id)
+            .flatMap(m => {
+                const slot = slotById.get(m.slotId)
+                return (slot?.vocals ?? [])
+                    .flatMap(v =>
+                        splitBySinger(
+                            v,
+                            slot!.start,
+                            singing.lines.find(l => l.line === v.line),
+                            lyricsTiming,
+                            singerIds,
+                        ),
+                    )
+                    .map(piece => ({
+                        start: slot!.start + piece.start,
+                        end: slot!.start + piece.end,
+                        singers: piece.singers,
+                    }))
+            })
         const beatWindows = windows[beat.id] ?? []
         result[beat.id] = {
             singerIds,
             singingPerShot: beatWindows.map(w => isActive(w, sung)),
-            singersPerShot: beatWindows.map(w => singerIds.filter(id => isActive(w, sung.filter(s => s.singers.includes(id))))),
+            singersPerShot: beatWindows.map(w =>
+                singerIds.filter(id =>
+                    isActive(
+                        w,
+                        sung.filter(s => s.singers.includes(id)),
+                    ),
+                ),
+            ),
         }
     }
     return result
@@ -340,16 +395,15 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     // tokens. Beats and plans from before the tokens (no "tokens" mark) name characters in plain words - only for those the
     // names are still looked for in the text, until the project plans them again (--redo=beats)
     const beatTokens = beats.length > 0 && beats.every(b => b.tokens === true)
-    const legacyNames = (c: { name: string, id: string }) => new RegExp(`\\b(?:${escapeRegExp(c.name)}|${escapeRegExp(c.id)})\\b`, 'gi')
-    const idsIn = (text: string, tokens: boolean) => tokens
-        ? readTokens(text, characters).ids
-        : characters.filter(c => new RegExp(legacyNames(c).source, 'i').test(text)).map(c => c.id)
+    const legacyNames = (c: {name: string; id: string}) => new RegExp(`\\b(?:${escapeRegExp(c.name)}|${escapeRegExp(c.id)})\\b`, 'gi')
+    const idsIn = (text: string, tokens: boolean) =>
+        tokens ? readTokens(text, characters).ids : characters.filter(c => new RegExp(legacyNames(c).source, 'i').test(text)).map(c => c.id)
     // >1 only for a group character (Character.isGroup) - which member image a given clip's subject resolves to
     const memberCounts = computeMemberCounts(beats, characters)
     const requests: ClipRequest[] = []
     // continuity facts in story order, with the beat and place they came from - see continuityFor
     // place: whether the fact is one of the place (undefined: a beat from before the facts said so), ids: whom it names
-    const stateSoFar: { fact: string, beatId: string, locationId: string, place?: boolean, ids: string[] }[] = []
+    const stateSoFar: {fact: string; beatId: string; locationId: string; place?: boolean; ids: string[]}[] = []
     // C + D: blocking and camera state, carried across every shot of the whole song (not reset per clip or beat)
     let blockingCursor = 0
     let lastCamera: string | undefined
@@ -369,15 +423,38 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const opensScene = k === 0
             const shotCount = shotCountFor(slot, beat, opensScene)
             const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
-            const view = typeof input.locationView === 'number' ? input.locationView : input.locationView === 'auto' ? input.shotViews?.[beat.id]?.[shotCursor] : undefined
+            const view =
+                typeof input.locationView === 'number'
+                    ? input.locationView
+                    : input.locationView === 'auto'
+                      ? input.shotViews?.[beat.id]?.[shotCursor]
+                      : undefined
             shotCursor += shotCount
             // a clip of a continuous beat starts on the last frame of the clip before it
             const startsFrom = k > 0 && isContinuous(beat, input.continuity) ? scene[k - 1]!.id : undefined
-            requests.push(buildClip(slot, beat, spread(moments, k, scene.length), flatSlice, continuityFor(beat, shown), opensScene, startsFrom, input, staged?.staging, view, staged?.tokens === true))
+            requests.push(
+                buildClip(
+                    slot,
+                    beat,
+                    spread(moments, k, scene.length),
+                    flatSlice,
+                    continuityFor(beat, shown),
+                    opensScene,
+                    startsFrom,
+                    input,
+                    staged?.staging,
+                    view,
+                    staged?.tokens === true,
+                ),
+            )
         })
-        stateSoFar.push(...beat.stateAfter.map(fact => typeof fact === 'string'
-            ? {fact, beatId: beat.id, locationId: beat.locationId, ids: []}
-            : {fact: fact.fact, beatId: beat.id, locationId: beat.locationId, place: fact.place, ids: idsIn(fact.fact, true)}))
+        stateSoFar.push(
+            ...beat.stateAfter.map(fact =>
+                typeof fact === 'string'
+                    ? {fact, beatId: beat.id, locationId: beat.locationId, ids: []}
+                    : {fact: fact.fact, beatId: beat.id, locationId: beat.locationId, place: fact.place, ids: idsIn(fact.fact, true)},
+            ),
+        )
     }
     return requests
 
@@ -389,24 +466,60 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     // beats prompt and filmableRules already say that a mirror shows the plain reflection of the room and is never a fact of it
     function continuityFor(beat: StoryBeat, shown: string[]) {
         const previous = beats[beats.findIndex(b => b.id === beat.id) - 1]
-        return [...new Set(stateSoFar
-            .filter(s => s.place === undefined
-                ? s.locationId === beat.locationId || s.beatId === previous?.id
-                : s.place || !s.ids.length ? s.locationId === beat.locationId : s.ids.some(id => shown.includes(id)))
-            .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
+        return [
+            ...new Set(
+                stateSoFar
+                    .filter(s =>
+                        s.place === undefined
+                            ? s.locationId === beat.locationId || s.beatId === previous?.id
+                            : s.place || !s.ids.length
+                              ? s.locationId === beat.locationId
+                              : s.ids.some(id => shown.includes(id)),
+                    )
+                    .map(s => s.fact),
+            ),
+        ].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, locationLayouts, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
+    function buildClip(
+        slot: Slot,
+        beat: StoryBeat,
+        moments: string[],
+        flatShotMoments: ShotPlan[] | undefined,
+        state: string[],
+        opensScene: boolean,
+        startsFrom: string | undefined,
+        {
+            characters,
+            locations,
+            characterDescriptions,
+            characterDescriptionVariants,
+            locationDescriptions,
+            locationAnchors,
+            locationLayouts,
+            lookBrief,
+            language,
+            singing,
+            propActivity,
+            stemsAvailable,
+            pinStartFrame,
+            contextFrames,
+        }: Input,
+        staging?: string,
+        locationView?: number,
+        planTokens = false,
+    ): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s) - split where a singer changes within a line
         const lineOf = new Map(singing?.lines.map(l => [l.line, l]))
-        const performed = singing && slot.vocals
-            ? slot.vocals
-                .flatMap(v => splitBySinger(v, slot.start, lineOf.get(v.line), input.lyricsTiming, singing.singers))
-                .map(({singers, ...v}) => ({...v, singerIds: singers.filter(id => characters.some(c => c.id === id))}))
-                .filter(v => v.singerIds.length)
-            : []
+        const performed =
+            singing && slot.vocals
+                ? slot.vocals
+                      .flatMap(v => splitBySinger(v, slot.start, lineOf.get(v.line), input.lyricsTiming, singing.singers))
+                      .map(({singers, ...v}) => ({...v, singerIds: singers.filter(id => characters.some(c => c.id === id))}))
+                      .filter(v => v.singerIds.length)
+                : []
         // the singers are always on screen, first, in the order they sing - even if the beat forgot them
         const singerIds = [...new Set(performed.flatMap(v => v.singerIds))]
         // a piece of a fight clip has only the people of its own shot as references: fewer pictures, nobody to strike by mistake
@@ -417,7 +530,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // the same goes for the layout of the place and the continuity facts: "Runa and Floki sit at the fire" with no picture
         // for them drew two more copies of the singer. A character the text names is in the clip, with its picture
         const namedIds = shotIds ? [] : [...new Set([...idsIn(staging ?? '', planTokens), ...state.flatMap(fact => idsIn(fact, beatTokens))])]
-        const wanted = [...singerIds, ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id)))]
+        const wanted = [
+            ...singerIds,
+            ...[...beat.characterIds, ...plannedIds, ...namedIds].filter(id => !singerIds.includes(id) && (!shotIds || shotIds.size === 0 || shotIds.has(id))),
+        ]
             .filter((id, n, all) => all.indexOf(id) === n)
             .map(id => characters.find(c => c.id === id))
             .filter(c => c !== undefined)
@@ -434,21 +550,42 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         function buildSubjects() {
             const base = [
                 ...(location ? [{label: '<Subject 1>', name: location.name, kind: 'location' as const, id: location.id}] : []),
-                ...cast.map(c => ({label: '', name: c.name, kind: 'character' as const, id: c.id, role: c.role, prop: c.prop, propStem: c.propStem, isGroup: c.isGroup, alike: c.alike, hands: handsOf(c),
+                ...cast.map(c => ({
+                    label: '',
+                    name: c.name,
+                    kind: 'character' as const,
+                    id: c.id,
+                    role: c.role,
+                    prop: c.prop,
+                    propStem: c.propStem,
+                    isGroup: c.isGroup,
+                    alike: c.alike,
+                    hands: handsOf(c),
                     // a prop that stands in a place (a drum kit) is not in the picture: the picture shows the player standing
                     // with what they hold of it - a model given only that drew the player twice, at the kit and standing (#327)
-                    stationary: c.propCarried === false && c.prop ? c.prop : undefined})),
+                    stationary: c.propCarried === false && c.prop ? c.prop : undefined,
+                })),
             ].map((s, n) => {
-                const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
+                const members = s.kind === 'character' ? (memberCounts[s.id] ?? 1) : 1
                 const variant = members > 1 ? slot.index % members : 0
                 const pictureId = members > 1 ? groupMemberId(s.id, variant) : s.id
-                const description = s.kind === 'location'
-                    ? locationDescriptions[s.id] ?? ''
-                    : characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? ''
+                const description =
+                    s.kind === 'location'
+                        ? (locationDescriptions[s.id] ?? '')
+                        : (characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? '')
                 // how many of a group the beat shows together (Beat.groupSize) - stated in the subject definition so the
                 // video model does not pick the number itself (it drew six of "the other five")
                 const count = s.kind === 'character' && s.isGroup ? beat.groupSize?.[s.id] : undefined
-                return {...s, label: `<Subject ${n + 1}>`, picture: `<Picture ${n + 1}>`, pictureId, description, count, companions: [] as string[], companionOf: undefined as string | undefined}
+                return {
+                    ...s,
+                    label: `<Subject ${n + 1}>`,
+                    picture: `<Picture ${n + 1}>`,
+                    pictureId,
+                    description,
+                    count,
+                    companions: [] as string[],
+                    companionOf: undefined as string | undefined,
+                }
             })
             // A group the beat shows several of at once (Beat.groupSize > 1) gets more of its member pictures, each a subject of
             // its own next to the group's: with one picture for all of them, two of the group in one frame came out as the same
@@ -457,15 +594,20 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             let free = MAX_REFERENCE_IMAGES - base.length - (startsFrom && !pinStartFrame ? 1 : 0)
             const companions: typeof base = []
             for (const s of base) {
-                const members = s.kind === 'character' ? memberCounts[s.id] ?? 1 : 1
+                const members = s.kind === 'character' ? (memberCounts[s.id] ?? 1) : 1
                 if (s.kind !== 'character' || !s.isGroup || s.alike || !s.count || s.count < 2 || members < 2) continue
                 const first = slot.index % members
                 for (let m = 1; m < Math.min(s.count, members) && free > 0; m++, free--) {
                     const n = base.length + companions.length + 1
                     const variant = (first + m) % members
                     companions.push({
-                        ...s, label: `<Subject ${n}>`, picture: `<Picture ${n}>`, pictureId: groupMemberId(s.id, variant),
-                        description: characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? '', companions: [], companionOf: s.label,
+                        ...s,
+                        label: `<Subject ${n}>`,
+                        picture: `<Picture ${n}>`,
+                        pictureId: groupMemberId(s.id, variant),
+                        description: characterDescriptionVariants?.[s.id]?.[variant] ?? characterDescriptions[s.id] ?? '',
+                        companions: [],
+                        companionOf: s.label,
                     })
                     s.companions.push(`<Subject ${n}>`)
                 }
@@ -477,7 +619,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // speaker ids (S1), (S2), ... in the order the singers first sing in this clip
             const singerSubjects = singerIds.map(id => castSubjects.find(s => s.id === id)).filter(s => s !== undefined)
             const speakerOf = (id: string) => `(S${singerIds.indexOf(id) + 1})`
-            const voice = (s: { id: string, label: string }) => `${s.label} ${speakerOf(s.id)}`
+            const voice = (s: {id: string; label: string}) => `${s.label} ${speakerOf(s.id)}`
             const vocals = performed.map(v => ({...v, singers: singerSubjects.filter(s => v.singerIds.includes(s.id))})).filter(v => v.singers.length)
             const performing = vocals.length > 0
             const voices = joinAnd(singerSubjects.map(voice))
@@ -497,12 +639,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // reasoning), but the prompt has to say in words where inside it the singing actually happens, or the
         // model reads an open-ended vocal reference as the singer performing for the whole clip.
         // Padded slightly so the on/offset word isn't clipped, clamped back into the clip's own span.
-        const vocalsWindow = performing ? (() => {
-            const pad = 0.2
-            const from = slot.start + Math.min(...vocals.map(v => v.start))
-            const to = slot.start + Math.max(...vocals.map(v => v.end))
-            return {start: round(Math.max(slot.start, from - pad)), end: round(Math.min(slot.end, to + pad))}
-        })() : undefined
+        const vocalsWindow = performing
+            ? (() => {
+                  const pad = 0.2
+                  const from = slot.start + Math.min(...vocals.map(v => v.start))
+                  const to = slot.start + Math.max(...vocals.map(v => v.end))
+                  return {start: round(Math.max(slot.start, from - pad)), end: round(Math.min(slot.end, to + pad))}
+              })()
+            : undefined
 
         // Same idea as vocalsWindow, for an instrument track: a clip-wide "partially_copy" claim outweighs the
         // per-shot idle notes below when the instrument is only active in some of this clip's shots (e.g. a
@@ -514,7 +658,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const pad = 0.2
             const ranges = (propActivity?.[stem] ?? []).map(r => ({start: r.start - pad, end: r.end + pad}))
             return activeSpans({start: slot.start, end: slot.end}, ranges)
-                ?.reduce<{ start: number, end: number }[]>((all, r) => {
+                ?.reduce<{start: number; end: number}[]>((all, r) => {
                     const last = all.at(-1)
                     if (last && r.start <= last.end) last.end = Math.max(last.end, r.end)
                     else all.push({...r})
@@ -523,9 +667,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 .map(r => ({start: round(r.start), end: round(r.end)}))
         }
         // "from 02:40.287 to 02:42.650 and from 02:46.450 to 02:48.229", and the same as "02:40.287-02:42.650 and 02:46.450-02:48.229"
-        const spanText = (spans: { start: number, end: number }[]) => spans.map(r => `from ${formatTimestamp(r.start)} to ${formatTimestamp(r.end)}`).join(' and ')
-        const spanRanges = (spans: { start: number, end: number }[]) => spans.map(r => `${formatTimestamp(r.start)}-${formatTimestamp(r.end)}`).join(' and ')
-        const stillText = (spans: { start: number, end: number }[]) => spans.length > 1 ? 'between and outside these spans' : 'outside that span'
+        const spanText = (spans: {start: number; end: number}[]) =>
+            spans.map(r => `from ${formatTimestamp(r.start)} to ${formatTimestamp(r.end)}`).join(' and ')
+        const spanRanges = (spans: {start: number; end: number}[]) => spans.map(r => `${formatTimestamp(r.start)}-${formatTimestamp(r.end)}`).join(' and ')
+        const stillText = (spans: {start: number; end: number}[]) => (spans.length > 1 ? 'between and outside these spans' : 'outside that span')
 
         // Multi-track audio: one <Audio N> per stem actually audible on screen, cut to the clip's full length
         // (never a narrower window - a short snippet has no clear position inside an 8.5s latent unless it
@@ -542,8 +687,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // drums-first measurably desynced lip movement from the vocals track even though the vocals audio
         // itself was untouched; putting the performance-driving track at <Audio 1> fixed it.
         // parts: a track mixed of several stems (stem "mix-..."), with who plays which of them
-        type Part = { stem: PropStem, subjects: typeof castSubjects }
-        type Track = { label: string, stem: 'drums' | PropStem | 'vocals' | 'song' | MixStem, subjects: typeof castSubjects, parts?: Part[] }
+        type Part = {stem: PropStem; subjects: typeof castSubjects}
+        type Track = {label: string; stem: 'drums' | PropStem | 'vocals' | 'song' | MixStem; subjects: typeof castSubjects; parts?: Part[]}
         const clipActive = (stem: PropStem) => (propActivity?.[stem] ?? []).some(r => r.end > slot.start && r.start < slot.end)
         const propGroups = new Map<PropStem, typeof castSubjects>()
         // a player no shot of the clip shows is heard off camera: their track drives nobody's hands (a "performance
@@ -577,7 +722,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             ? {label: '', stem: 'drums' as const, subjects: clipActive('drums') ? (propGroups.get('drums') ?? []) : []}
             : {label: '', stem: 'song' as const, subjects: []}
         const tracks = [...performanceTracks.slice(0, MAX_REF_AUDIOS - (anchorKept ? 1 : 0)), ...(anchorKept ? [anchorTrackDef] : [])]
-        tracks.forEach((t, n) => t.label = `<Audio ${n + 1}>`)
+        tracks.forEach((t, n) => (t.label = `<Audio ${n + 1}>`))
         const anchorTrack = tracks.find(t => t.stem === 'drums' || t.stem === 'song')
         const vocalsTrack = performing ? tracks.find(t => t.stem === 'vocals') : undefined
 
@@ -592,26 +737,38 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // a character of the clip becomes its <Subject N>, anybody else their plain name: from the {Name} tokens of the text,
         // or - in a beat or plan from before them - from the name or id ("Der Mann", "der-mann") written in it
-        const withLabels = (text: string, tokens: boolean) => tokens
-            ? replaceTokens(text, characters, c => castSubjects.find(s => s.id === c.id)?.label ?? c.name)
-            : castSubjects.reduce((t, s) => t.replace(legacyNames(s), s.label), text)
+        const withLabels = (text: string, tokens: boolean) =>
+            tokens
+                ? replaceTokens(text, characters, c => castSubjects.find(s => s.id === c.id)?.label ?? c.name)
+                : castSubjects.reduce((t, s) => t.replace(legacyNames(s), s.label), text)
 
         // with vocals, a cut never falls into a sung word
         const cuts = avoidWords(
-            Array.from({length: shotCount}, (_, j) => j === 0 ? 0 : round((bars[Math.floor(j * slot.bars / shotCount)] ?? slot.start + (slot.end - slot.start) * j / shotCount) - slot.start)),
-            vocals.flatMap(v => v.words), 120 / music.bpm, duration)
+            Array.from({length: shotCount}, (_, j) =>
+                j === 0 ? 0 : round((bars[Math.floor((j * slot.bars) / shotCount)] ?? slot.start + ((slot.end - slot.start) * j) / shotCount) - slot.start),
+            ),
+            vocals.flatMap(v => v.words),
+            120 / music.bpm,
+            duration,
+        )
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
         // each shot sings the words heard in it: a line crossing a cut is split there
         // `heard`: where its singing is heard - before its first word when the sound runs into it (a word the timing lost, #738),
         // never back into the cut or the words sung before it; the timing itself stays as it is
-        const shotVocals = vocals.flatMap(v => splitAtCuts(v, cuts)).map((v, _, all) => {
-            const cut = cuts.findLast(c => c <= v.start) ?? 0
-            const before = Math.max(cut, ...all.filter(o => o !== v && o.start < v.start).map(o => o.end))
-            const lead = input.vocalPeaks
-                ? voiceLead(v.words.map(w => ({start: slot.start + w.start, end: slot.start + w.end})), input.vocalPeaks, slot.start + before)
-                : 0
-            return {...v, heard: lead >= MISSING_WORD_LEAD ? round(v.start - lead) : v.start}
-        })
+        const shotVocals = vocals
+            .flatMap(v => splitAtCuts(v, cuts))
+            .map((v, _, all) => {
+                const cut = cuts.findLast(c => c <= v.start) ?? 0
+                const before = Math.max(cut, ...all.filter(o => o !== v && o.start < v.start).map(o => o.end))
+                const lead = input.vocalPeaks
+                    ? voiceLead(
+                          v.words.map(w => ({start: slot.start + w.start, end: slot.start + w.end})),
+                          input.vocalPeaks,
+                          slot.start + before,
+                      )
+                    : 0
+                return {...v, heard: lead >= MISSING_WORD_LEAD ? round(v.start - lead) : v.start}
+            })
 
         function buildShots() {
             let singingShots = 0
@@ -631,21 +788,50 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // a shot of a player's hands on the instrument (plan.hands): that player alone - the face is out of the frame,
                 // so the singer of the line is not pulled in
                 const player = plan?.hands ? castSubjects.find(s => s.id === plan.hands && s.prop) : undefined
-                const focus = player ? [player] : planned?.length
-                    ? [...new Set([...singersInShot, ...planned])]
-                    : opensScene && j === 0
+                const focus = player
+                    ? [player]
+                    : planned?.length
+                      ? [...new Set([...singersInShot, ...planned])]
+                      : opensScene && j === 0
                         ? [...new Set([...singersInShot, ...castSubjects])]
                         : pickFocus(castSubjects, singersInShot, blockingCursor++, named)
                 // a shot with a line start frames the singer, with a calmer camera
                 // a clip that goes on from the last frame of the one before has no cut at its start: the camera move and the
                 // framing of that frame go on too, or the picture is seamless and the motion reverses (dolly in -> crane up)
                 const goesOn = j === 0 && startsFrom !== undefined && lastCamera !== undefined && lastFraming !== undefined
-                const framing = player ? `extreme close-up of the ${player.hands}` : goesOn ? lastFraming! : plan?.framing ? plan.framing : starting.length ? singingFramings[singingShots++ % singingFramings.length]! : framings[beat.kind][j % 4]!
+                const framing = player
+                    ? `extreme close-up of the ${player.hands}`
+                    : goesOn
+                      ? lastFraming!
+                      : plan?.framing
+                        ? plan.framing
+                        : starting.length
+                          ? singingFramings[singingShots++ % singingFramings.length]!
+                          : framings[beat.kind][j % 4]!
                 const cameraLevel = starting.length ? (energyLevel === 'high' ? 'mid' : 'low') : energyLevel
-                const camera = goesOn ? lastCamera! : plan?.hold ? 'the camera is held still, locked off' : plan?.camera ? withLabels(plan.camera, planTokens) : nextCamera(cameraLevel, cameraCursor, lastCamera)
+                const camera = goesOn
+                    ? lastCamera!
+                    : plan?.hold
+                      ? 'the camera is held still, locked off'
+                      : plan?.camera
+                        ? withLabels(plan.camera, planTokens)
+                        : nextCamera(cameraLevel, cameraCursor, lastCamera)
                 lastCamera = camera
                 lastFraming = framing
-                return {label: `[Shot ${j + 1}]`, at, framing, camera, plan, hands: player, subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.flatMap(s => [s.label, ...s.companions])], focus, singers: singersInShot, moment, starting, continuing}
+                return {
+                    label: `[Shot ${j + 1}]`,
+                    at,
+                    framing,
+                    camera,
+                    plan,
+                    hands: player,
+                    subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.flatMap(s => [s.label, ...s.companions])],
+                    focus,
+                    singers: singersInShot,
+                    moment,
+                    starting,
+                    continuing,
+                }
             })
         }
 
@@ -653,10 +839,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // clip mode: the lyrics are a cue in <Audio 1> - with timing in the shot they're sung in, else spread evenly
         const sung = slot.lyrics.filter(l => !l.startsWith('('))
-        const cueLines = (j: number) => slot.vocals
-            ? slot.vocals.filter(v => inShot(j, v.start)).map(v => v.text)
-            : sung.filter((_, n) => Math.floor(n * shots.length / sung.length) === j)
-        const sings = (v: typeof vocals[number] & { continues?: boolean }) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${v.continues && !v.text.endsWith('-') ? normalizeLyric(v.text).replace(/\.$/, '') : normalizeLyric(v.text)}</d>`
+        const cueLines = (j: number) =>
+            slot.vocals
+                ? slot.vocals.filter(v => inShot(j, v.start)).map(v => v.text)
+                : sung.filter((_, n) => Math.floor((n * shots.length) / sung.length) === j)
+        const sings = (v: (typeof vocals)[number] & {continues?: boolean}) =>
+            `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${v.continues && !v.text.endsWith('-') ? normalizeLyric(v.text).replace(/\.$/, '') : normalizeLyric(v.text)}</d>`
 
         // "not playing" / "hands off it" reads as a negation to the video model, which tends to render the
         // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
@@ -669,7 +857,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const idlePropPoses: Partial<Record<PropStem, Pose[]>> = {
             drums: [
                 (prop, hands) => `sits at the ${prop}, ${hands} resting on the heads, motionless`,
-                (prop) => `stands behind the ${prop}, sticks resting on it, still`,
+                prop => `stands behind the ${prop}, sticks resting on it, still`,
                 (prop, hands) => `keeps still at the ${prop}, ${hands} quiet on the rims`,
             ],
             piano: [
@@ -699,13 +887,19 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         const plays = people?.[s.id]?.plays?.replace(/[.\s]+$/, '')
                         // heard for part of the shot only: when, in the clip's own time, and held still before or after
                         const spans = activeSpans({start, end}, propActivity[s.propStem!]!)
-                        const when = spans ? spans.map(span => `from ${clipTime(span.start - slot.start)} to ${clipTime(span.end - slot.start)}`).join(' and ') : 'through the whole shot'
-                        const still = !spans ? ''
-                            : spans.length > 1 ? ` - in between and outside these times the ${s.prop} is held still`
-                            : ` - ${spans[0]!.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still`
-                        return [plays
-                            ? `${s.label}, ${s.name}, plays the ${s.prop} ${when}: ${withLabels(plays, planTokens)}${still}.`
-                            : `${s.label}, ${s.name}, ${spans ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`]
+                        const when = spans
+                            ? spans.map(span => `from ${clipTime(span.start - slot.start)} to ${clipTime(span.end - slot.start)}`).join(' and ')
+                            : 'through the whole shot'
+                        const still = !spans
+                            ? ''
+                            : spans.length > 1
+                              ? ` - in between and outside these times the ${s.prop} is held still`
+                              : ` - ${spans[0]!.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still`
+                        return [
+                            plays
+                                ? `${s.label}, ${s.name}, plays the ${s.prop} ${when}: ${withLabels(plays, planTokens)}${still}.`
+                                : `${s.label}, ${s.name}, ${spans ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`,
+                        ]
                     }
                     if (moment.includes(s.label)) return []
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
@@ -740,34 +934,40 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
-                const where = (still: boolean) => locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, the ${locationSubject.name}` : ''
+                const where = (still: boolean) => (locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, the ${locationSubject.name}` : '')
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
                 // fill the frame, where the playing is easiest to keep in time with its track
                 const opening = shot.hands
                     ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the ${shot.hands.hands} of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. ${shot.hands.hands === 'hands' ? 'The hand that strikes, picks or strums, the hand that holds, frets or presses,' : `The ${shot.hands.hands} - what strikes, picks or strums and what holds, frets or presses -`} and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
                     : j === 0
-                    ? onSinger
-                        ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-                        : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-                    // repeats the location on every cut, not just the first shot - otherwise a shot with no location
-                    // callout tends to fall back to the character reference pictures' plain grey background
-                    : `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                      ? onSinger
+                          ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                          : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                      : // repeats the location on every cut, not just the first shot - otherwise a shot with no location
+                        // callout tends to fall back to the character reference pictures' plain grey background
+                        `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                 const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
                 // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
                 // plan keeps the fixed positions
                 const stagedPeople = shot.plan?.people
                 // the other members of a group the frame shows several of (see buildSubjects), right next to it
-                const together = (s: typeof shot.focus[number]) => s.companions.length
-                    ? `, with ${joinAnd(s.companions)} beside ${s.companions.length > 1 ? 'them' : 'it'} - ${s.companions.length > 1 ? `${s.companions.length} more` : 'another one'} of the ${s.name}, each the one in their own picture`
-                    : ''
-                const personInFrame = (s: typeof shot.focus[number], n: number) => `${personAlone(s, n)}${together(s)}`
-                const personAlone = (s: typeof shot.focus[number], n: number) => {
+                const together = (s: (typeof shot.focus)[number]) =>
+                    s.companions.length
+                        ? `, with ${joinAnd(s.companions)} beside ${s.companions.length > 1 ? 'them' : 'it'} - ${s.companions.length > 1 ? `${s.companions.length} more` : 'another one'} of the ${s.name}, each the one in their own picture`
+                        : ''
+                const personInFrame = (s: (typeof shot.focus)[number], n: number) => `${personAlone(s, n)}${together(s)}`
+                const personAlone = (s: (typeof shot.focus)[number], n: number) => {
                     const p = stagedPeople?.[s.id]
                     const face = shot.singers.includes(s) ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
                     if (!p) return `${s.label}, ${s.name}, in the frame${face}`
-                    return `${s.label}, ${s.name}, ${[p.state, p.frame, p.motion].filter(Boolean).map(t => withLabels(t!, planTokens)).join('; ') || 'in the frame'}${face}`
+                    return `${s.label}, ${s.name}, ${
+                        [p.state, p.frame, p.motion]
+                            .filter(Boolean)
+                            .map(t => withLabels(t!, planTokens))
+                            .join('; ') || 'in the frame'
+                    }${face}`
                 }
                 // who is in the frame without a line of their own is busy with the event too, each in their own way - never
                 // standing by: the video model otherwise lets them wait in their reference pose while the shot's two or
@@ -777,21 +977,29 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, busy with something of their own`}.`
                     : ''
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
-                const holdClause = shot.plan?.hold ? ' The framing stays the same from the first frame to the last: the same size of the faces, everyone keeps their distance to the camera, and the camera stays locked in place.' : ''
+                const holdClause = shot.plan?.hold
+                    ? ' The framing stays the same from the first frame to the last: the same size of the faces, everyone keeps their distance to the camera, and the camera stays locked in place.'
+                    : ''
                 // A close-up of one person says that nobody else is in it: the model fills the empty background of a close-up with people -
                 // a stranger, or the same person again (epa-streikt-261104, slot-003). Only what the planner classed as close, never a wide shot,
                 // where the others of the scene may stand behind; a group character's companions are in the frame by design
                 const alone = shot.focus.length === 1 && !shot.focus[0]!.companions.length && (shot.plan?.size === 'close' || shot.plan?.size === 'extreme')
                 const behind = locationAnchor
-                    ? alone ? ` Behind ${shot.focus[0]!.label}, out of focus: ${locationAnchor}; no other person is in the frame.` : ` Behind them: ${locationAnchor}.`
-                    : alone ? ' No other person is in the frame.' : ''
+                    ? alone
+                        ? ` Behind ${shot.focus[0]!.label}, out of focus: ${locationAnchor}; no other person is in the frame.`
+                        : ` Behind them: ${locationAnchor}.`
+                    : alone
+                      ? ' No other person is in the frame.'
+                      : ''
                 const inFrame = shot.focus.length
                     ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {
                     const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
-                    const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
+                    const keepsSinging = continuingSingers.length
+                        ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.`
+                        : ''
                     // a singer whose first words come later in the shot: the time before them said in words - the model otherwise
                     // starts the lip-sync with the shot (schwarzer-flur slot-018: a quick flutter of the lips at its start). Only the
                     // lip-sync is held back, the face stays free to show the moment (a laugh, a shout)
@@ -799,16 +1007,30 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         .filter(s => !continuingSingers.includes(s))
                         .map(s => ({s, from: Math.min(...shot.starting.filter(v => v.singers.includes(s)).map(v => v.heard))}))
                         .filter(({from}) => from - shot.at >= LATE_ONSET_SEC)
-                        .map(({s, from}) => ` Until ${clipTime(from)}, ${voice(s)} does not sing yet: no lip-sync to ${vocalsTrack?.label ?? 'the vocals'} before then.`)
+                        .map(
+                            ({s, from}) =>
+                                ` Until ${clipTime(from)}, ${voice(s)} does not sing yet: no lip-sync to ${vocalsTrack?.label ?? 'the vocals'} before then.`,
+                        )
                         .join('')
                     // "From 00:02.300 to 00:03.700, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>": the span, not
                     // just the onset - with only the onset the model placed the words anywhere after it
-                    const lines = shot.starting.map((v, n) => ` From ${clipTime(v.heard)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
+                    const lines = shot.starting
+                        .map(
+                            (v, n) =>
+                                ` From ${clipTime(v.heard)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`,
+                        )
+                        .join('')
                     // a long held note: the mouth flaps open and shut on it unless told to hold one shape
                     const shotEnd = cuts[j + 1] ?? duration
-                    const held = [...shot.continuing, ...shot.starting].flatMap(v => v.words
-                        .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
-                        .map(w => ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, the mouth staying open in it for the whole note, only the jaw and the throat moving slightly.`))
+                    const held = [...shot.continuing, ...shot.starting]
+                        .flatMap(v =>
+                            v.words
+                                .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
+                                .map(
+                                    w =>
+                                        ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, the mouth staying open in it for the whole note, only the jaw and the throat moving slightly.`,
+                                ),
+                        )
                         .join('')
                     return `${opening}${fromFrame}${inFrame}${keepsSinging}${notYet}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
                 }
@@ -823,40 +1045,55 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const shotTexts = buildShotTexts()
 
         function buildPromptText() {
-            const appearsIn = (label: string) => shots.filter(s => s.subjects.includes(label)).map(s => s.label).join(', ')
+            const appearsIn = (label: string) =>
+                shots
+                    .filter(s => s.subjects.includes(label))
+                    .map(s => s.label)
+                    .join(', ')
             const songPosition = `${formatTimestamp(slot.start)} to ${formatTimestamp(slot.end)} of the song`
             const seconds = String(Math.round(duration * 10) / 10)
-            const stemName: Record<Exclude<Track['stem'], MixStem>, string> = {drums: 'drum', vocals: 'vocal', bass: 'bass', guitar: 'guitar', piano: 'piano', other: 'instrumental', song: 'full mix'}
+            const stemName: Record<Exclude<Track['stem'], MixStem>, string> = {
+                drums: 'drum',
+                vocals: 'vocal',
+                bass: 'bass',
+                guitar: 'guitar',
+                piano: 'piano',
+                other: 'instrumental',
+                song: 'full mix',
+            }
             // a mixed track: who plays which of its stems, and in which span of the song
             const playersOf = (p: Part) => joinAnd(p.subjects.map(s => s.label))
-            const partSpans = (parts: Part[]) => parts.flatMap(p => {
-                const spans = instrumentSpans(p.stem)
-                return spans ? [`${playersOf(p)} ${spanText(spans)}`] : []
-            })
+            const partSpans = (parts: Part[]) =>
+                parts.flatMap(p => {
+                    const spans = instrumentSpans(p.stem)
+                    return spans ? [`${playersOf(p)} ${spanText(spans)}`] : []
+                })
             // the drummer's own spans, as for any other player - the drum track is there for the cuts in any case
-            const drumSpans = (t: Track) => t.subjects.length ? instrumentSpans('drums') : undefined
+            const drumSpans = (t: Track) => (t.subjects.length ? instrumentSpans('drums') : undefined)
             // beat.summary is written once for the whole scene and often describes how it opens (a character
             // arriving, emerging, appearing) - correct for the first clip of the scene, but repeating it verbatim
             // in later clips of the same scene tells the model everyone re-enters/re-appears each time, which
             // reads as the subjects vanishing and popping back in mid-scene. Only the opening clip gets it as-is.
             // a piece of a fight clip tells what ITS shot does: the beat's summary names everybody ("seven hammers against a
             // dozen orcs"), and the video model fills the people it has no picture for with copies of the ones it has
-            const sceneClause = slot.micro && flatShotMoments?.[0]?.action
-                ? withLabels(flatShotMoments[0].action, planTokens)
-                : opensScene
-                ? withLabels(beat.summary, beatTokens)
-                : !startsFrom
-                ? `The scene goes on at the same time and place, after a cut: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.`
-                : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${lead ? ` Its first ${lead.toFixed(2)} seconds are the end of the previous clip, given as its frames: the picture, the people and their movement go on from them in one continuous take, and [Shot 1] continues from there.` : ''}${framePicture ? ` The video begins on ${framePicture} and goes on from it in one continuous take.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take.' : ''}`
+            const sceneClause =
+                slot.micro && flatShotMoments?.[0]?.action
+                    ? withLabels(flatShotMoments[0].action, planTokens)
+                    : opensScene
+                      ? withLabels(beat.summary, beatTokens)
+                      : !startsFrom
+                        ? `The scene goes on at the same time and place, after a cut: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.`
+                        : `The scene continues directly from the previous clip, at the same time and place: ${castSubjects.length ? `${joinAnd(castSubjects.map(s => s.label))} ${castSubjects.length > 1 ? 'are' : 'is'}` : 'everything is'} already present and mid-action${locationSubject ? ` in ${locationSubject.label}` : ''} from the very first frame.${lead ? ` Its first ${lead.toFixed(2)} seconds are the end of the previous clip, given as its frames: the picture, the people and their movement go on from them in one continuous take, and [Shot 1] continues from there.` : ''}${framePicture ? ` The video begins on ${framePicture} and goes on from it in one continuous take.` : pinnedFrame ? ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take.' : ''}`
             // reference-to-video models default to fading/popping subjects in over the first second unless told
             // otherwise. beat.summary is free to describe a genuine entrance (a rider appears on the horizon, a
             // ghost materializes) when the story calls for it - but most opening clips just start a new beat/shot
             // in the same ongoing performance, with no entrance word in the summary, and still need telling that
             // frame 1 already shows everyone. Continuation clips (sceneClause above) already say this explicitly.
             // beat.entrance is the planner's own reading of the summary (a beat of an older project has none: everybody is there)
-            const alreadyPresentNote = opensScene && beat.entrance !== true
-                ? 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
-                : undefined
+            const alreadyPresentNote =
+                opensScene && beat.entrance !== true
+                    ? 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
+                    : undefined
 
             // beat.summary is free story text and often describes the whole scene as an ongoing performance
             // ("the musicians are already playing") for flavor - true only for whoever's stem is actually
@@ -865,89 +1102,133 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // does this correction apply - affirmative phrasing throughout, same as idlePropPoses above.
             const idleAtOpen = opensScene
                 ? castSubjects
-                    .filter(s => s.propStem && s.prop && propActivity?.[s.propStem]?.length && !isActive({start: slot.start, end: slot.end}, propActivity[s.propStem]!))
-                    .map(s => `${s.label} ${(idlePropPoses[s.propStem!] ?? idlePropPosesDefault)[0]!(s.prop!, s.hands)}`)
+                      .filter(
+                          s =>
+                              s.propStem &&
+                              s.prop &&
+                              propActivity?.[s.propStem]?.length &&
+                              !isActive({start: slot.start, end: slot.end}, propActivity[s.propStem]!),
+                      )
+                      .map(s => `${s.label} ${(idlePropPoses[s.propStem!] ?? idlePropPosesDefault)[0]!(s.prop!, s.hands)}`)
                 : []
             const sceneClauseFull = sceneClause + (idleAtOpen.length ? ` ${joinAnd(idleAtOpen)}.` : '')
 
             // subject_definitions line per track: what it is and, for an instrument/vocal track, who it drives
-            const trackDefinition = (t: Track) => t.stem === 'drums'
-                ? (() => {
-                    const spans = drumSpans(t)
-                    return `${t.label} is the isolated drum layer of the ${slot.section} section (${songPosition})${t.subjects.length ? `, the performance reference for ${joinAnd(t.subjects.map(s => s.label))}'s drumming` : ''} - used to time the cuts and blocking to the beat${t.subjects.length ? ' as well' : ''}${spans ? `; ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} ${spanText(spans)} of the song, ${stillText(spans)} the drums are held still` : ''}.`
-                })()
-                : t.stem === 'song'
-                    ? `${t.label} is the ${slot.section} section (${songPosition}) of the song's full mix - used to time the cuts and blocking to the beat.`
-                    : t.stem === 'vocals'
-                        ? `${t.label} is the isolated lead vocal of the ${slot.section} section (${songPosition}), the voice-timbre reference for ${voices} - but ${voices} only actually sings from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song; outside that span within ${t.label}, keep lips closed and still.`
-                        : t.parts ? (() => {
-                            const spans = partSpans(t.parts)
-                            return `${t.label} is the ${joinAnd(t.parts.map(p => stemName[p.stem]))} layers of the ${slot.section} section (${songPosition}), mixed into one track: the performance reference for ${joinAnd(t.parts.map(p => `${playersOf(p)} (the ${stemName[p.stem]})`))}${spans.length ? ` - but each only actually plays within their own spans of the song: ${spans.join('; ')}; outside them, that one keeps the instrument still` : ''}.`
-                        })() : (() => {
-                            const spans = instrumentSpans(t.stem as PropStem)
-                            return `${t.label} is the isolated ${stemName[t.stem as PropStem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${spans ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} ${spanText(spans)} of the song; ${stillText(spans)} within ${t.label}, keep the instrument still` : ''}.`
-                        })()
-            // retention_analysis line per track
-            const trackRetention = (t: Track) => t.stem === 'drums'
-                ? t.subjects.length
+            const trackDefinition = (t: Track) =>
+                t.stem === 'drums'
                     ? (() => {
-                        const spans = drumSpans(t)
-                        return `${t.label}: partially_copy - its rhythm and hits drive the drumming motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the drums still` : ''}; it also grounds the cut and blocking timing for the whole scene.`
-                    })()
-                    : `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene.`
-                : t.stem === 'song'
-                    ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene.`
-                    : t.stem === 'vocals'
+                          const spans = drumSpans(t)
+                          return `${t.label} is the isolated drum layer of the ${slot.section} section (${songPosition})${t.subjects.length ? `, the performance reference for ${joinAnd(t.subjects.map(s => s.label))}'s drumming` : ''} - used to time the cuts and blocking to the beat${t.subjects.length ? ' as well' : ''}${spans ? `; ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} ${spanText(spans)} of the song, ${stillText(spans)} the drums are held still` : ''}.`
+                      })()
+                    : t.stem === 'song'
+                      ? `${t.label} is the ${slot.section} section (${songPosition}) of the song's full mix - used to time the cuts and blocking to the beat.`
+                      : t.stem === 'vocals'
+                        ? `${t.label} is the isolated lead vocal of the ${slot.section} section (${songPosition}), the voice-timbre reference for ${voices} - but ${voices} only actually sings from ${formatTimestamp(vocalsWindow!.start)} to ${formatTimestamp(vocalsWindow!.end)} of the song; outside that span within ${t.label}, keep lips closed and still.`
+                        : t.parts
+                          ? (() => {
+                                const spans = partSpans(t.parts)
+                                return `${t.label} is the ${joinAnd(t.parts.map(p => stemName[p.stem]))} layers of the ${slot.section} section (${songPosition}), mixed into one track: the performance reference for ${joinAnd(t.parts.map(p => `${playersOf(p)} (the ${stemName[p.stem]})`))}${spans.length ? ` - but each only actually plays within their own spans of the song: ${spans.join('; ')}; outside them, that one keeps the instrument still` : ''}.`
+                            })()
+                          : (() => {
+                                const spans = instrumentSpans(t.stem as PropStem)
+                                return `${t.label} is the isolated ${stemName[t.stem as PropStem]} layer of the ${slot.section} section (${songPosition}), the performance reference for ${joinAnd(t.subjects.map(s => s.label))}${spans ? ` - but ${joinAnd(t.subjects.map(s => s.label))} only actually play${t.subjects.length > 1 ? '' : 's'} ${spanText(spans)} of the song; ${stillText(spans)} within ${t.label}, keep the instrument still` : ''}.`
+                            })()
+            // retention_analysis line per track
+            const trackRetention = (t: Track) =>
+                t.stem === 'drums'
+                    ? t.subjects.length
+                        ? (() => {
+                              const spans = drumSpans(t)
+                              return `${t.label}: partially_copy - its rhythm and hits drive the drumming motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the drums still` : ''}; it also grounds the cut and blocking timing for the whole scene.`
+                          })()
+                        : `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene.`
+                    : t.stem === 'song'
+                      ? `${t.label}: weak_reference - only grounds the cut and blocking timing for the whole scene.`
+                      : t.stem === 'vocals'
                         ? `${t.label}: partially_copy - its timbre and phrasing drive the lip movements of ${voices}, confined to ${formatTimestamp(vocalsWindow!.start)}-${formatTimestamp(vocalsWindow!.end)}; elsewhere in the clip ${voices} keeps lips closed and still.`
-                        : t.parts ? `${t.label}: partially_copy - ${t.parts.map(p => `its ${stemName[p.stem]} drives the instrument motion of ${playersOf(p)}`).join(', ')}${partSpans(t.parts).length ? ', each confined to their own span' : ''}.`
-                        : (() => {
-                            const spans = instrumentSpans(t.stem as PropStem)
-                            return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
-                        })()
+                        : t.parts
+                          ? `${t.label}: partially_copy - ${t.parts.map(p => `its ${stemName[p.stem]} drives the instrument motion of ${playersOf(p)}`).join(', ')}${partSpans(t.parts).length ? ', each confined to their own span' : ''}.`
+                          : (() => {
+                                const spans = instrumentSpans(t.stem as PropStem)
+                                return `${t.label}: partially_copy - its timbre and playing pattern drive the instrument motion of ${joinAnd(t.subjects.map(s => s.label))}${spans ? `, confined to ${spanRanges(spans)}; ${stillText(spans)} ${joinAnd(t.subjects.map(s => s.label))} keeps the instrument still` : ''}.`
+                            })()
 
             return [
                 'subject_definitions:',
-                ...subjects.map(s => s.kind === 'location'
-                    ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
-                    : s.companionOf
-                        ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                    : s.isGroup && s.companions.length
-                        ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                    // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
-                    // appearance - a subject definition that says a character "plays" something reads as a
-                    // standing trait to the video model, and it keeps them miming that action even in shots
-                    // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
-                    : s.isGroup
-                        // several individuals, not one: a group is never described as a single person
-                        ? `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                        : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}${s.kind === 'character' && s.stationary ? ` In the video ${s.label} is only ever at the ${s.stationary}, where it stands, to ${s.propStem ? 'play' : 'use'} it - one person, never also a standing figure like the one in ${s.picture}.` : ''}`.trim()),
-                ...(framePicture ? [`${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd([locationSubject, ...castSubjects].filter(s => s !== undefined).map(s => s.label))}.`] : []),
+                ...subjects.map(s =>
+                    s.kind === 'location'
+                        ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+                        : s.companionOf
+                          ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                          : s.isGroup && s.companions.length
+                            ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                            : // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
+                              // appearance - a subject definition that says a character "plays" something reads as a
+                              // standing trait to the video model, and it keeps them miming that action even in shots
+                              // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
+                              s.isGroup
+                              ? // several individuals, not one: a group is never described as a single person
+                                `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                              : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}${s.kind === 'character' && s.stationary ? ` In the video ${s.label} is only ever at the ${s.stationary}, where it stands, to ${s.propStem ? 'play' : 'use'} it - one person, never also a standing figure like the one in ${s.picture}.` : ''}`.trim(),
+                ),
+                ...(framePicture
+                    ? [
+                          `${framePicture} is the first frame of [Shot 1], the last frame of the previous clip, showing the scene at the moment that clip ends: ${joinAnd([locationSubject, ...castSubjects].filter(s => s !== undefined).map(s => s.label))}.`,
+                      ]
+                    : []),
                 ...tracks.map(trackDefinition),
                 '',
                 'summary:',
                 `[reference generation${framePicture ? ' + keyframe completion' : ''} + audio reuse${performing ? ' + audio reference' : ''}] The target video is ${seconds.startsWith('8') || seconds.startsWith('11') ? 'an' : 'a'} ${seconds}-second music-video clip${locationSubject ? ` set in ${locationSubject.label}` : ''}${castSubjects.length ? ` with ${joinAnd(castSubjects.map(s => s.label))}` : ''}: ${sceneClauseFull}${vocalsTrack ? ` ${voices} ${singerSubjects.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced to the vocals of ${vocalsTrack.label}.` : ''} It is cut in ${shots.length} shot${shots.length > 1 ? 's' : ''} on the downbeats of ${anchorTrack ? anchorTrack.label : 'the music'}.`,
                 '',
                 'retention_analysis:',
-                ...subjects.map(s => `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${s.kind === 'location'
-                    ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
-                    : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded${s.stationary ? `, and so is its standing pose - ${s.name} is only at the ${s.stationary}` : ''}, but expression is free to follow the shot's action.`}`),
-                ...(framePicture ? [`${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`] : []),
+                ...subjects.map(
+                    s =>
+                        `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${
+                            s.kind === 'location'
+                                ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
+                                : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded${s.stationary ? `, and so is its standing pose - ${s.name} is only at the ${s.stationary}` : ''}, but expression is free to follow the shot's action.`
+                        }`,
+                ),
+                ...(framePicture
+                    ? [
+                          `${framePicture} ([Shot 1] first frame): fully_preserved - the composition, camera position, lighting and the positions of everyone in it are kept at the start; the action then goes on from it.`,
+                      ]
+                    : []),
                 // the guide: no (Sx) in retention_analysis
                 ...tracks.map(trackRetention),
                 '',
                 'detailed_description:',
                 styleOpening(lookBrief),
-                ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
+                ...(locationSubject
+                    ? [
+                          `The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`,
+                      ]
+                    : []),
                 // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
-                ...(locationSubject && castSubjects.length ? [`The whole picture is ${locationSubject.label}: every figure stands inside it, at the positions described below, surrounded by the place itself.`] : []),
+                ...(locationSubject && castSubjects.length
+                    ? [
+                          `The whole picture is ${locationSubject.label}: every figure stands inside it, at the positions described below, surrounded by the place itself.`,
+                      ]
+                    : []),
                 // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not.
                 // It is where everyone is when the beat begins - said as a floor plan, not a shot: read as one, the model opened the clip
                 // on it, a wide shot of the singer walking down the corridor before [Shot 1] at the window (#740). A later clip of the beat
                 // gets the place's floor plan without people: by then they are where its shots put them.
-                ...(staging && !slot.micro ? [layoutLine(opensScene, withLabels(staging, planTokens), location && locationLayouts?.[location.id]?.layout)] : []),
+                ...(staging && !slot.micro
+                    ? [layoutLine(opensScene, withLabels(staging, planTokens), location && locationLayouts?.[location.id]?.layout)]
+                    : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 // a fact that names somebody without a picture in this piece of a fight is left out
-                ...(state.length ? [`Continuity from earlier scenes: ${state.filter(f => !slot.micro || idsIn(f, beatTokens).every(id => cast.some(c => c.id === id))).map(f => withLabels(f, beatTokens)).join('; ')}.`] : []).filter(line => !(slot.micro && line.endsWith(': .'))),
+                ...(state.length
+                    ? [
+                          `Continuity from earlier scenes: ${state
+                              .filter(f => !slot.micro || idsIn(f, beatTokens).every(id => cast.some(c => c.id === id)))
+                              .map(f => withLabels(f, beatTokens))
+                              .join('; ')}.`,
+                      ]
+                    : []
+                ).filter(line => !(slot.micro && line.endsWith(': .'))),
                 ...shotTexts,
                 '',
                 'overall_soundscape:',
@@ -975,24 +1256,56 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             ...(startsFrom ? {startsFrom} : {}),
             ...(dropped.length ? {dropped} : {}),
             shots: shots.map(({focus, singers, moment, starting, continuing, ...shot}) => shot),
-            ...(performing ? {
-                vocals: vocals.map(v => ({
-                    at: v.start,
-                    end: v.end,
-                    line: v.line,
-                    text: v.text,
-                    singers: v.singers.map(s => ({id: s.id, subject: s.label, speaker: speakerOf(s.id)})),
-                })),
-            } : {}),
+            ...(performing
+                ? {
+                      vocals: vocals.map(v => ({
+                          at: v.start,
+                          end: v.end,
+                          line: v.line,
+                          text: v.text,
+                          singers: v.singers.map(s => ({id: s.id, subject: s.label, speaker: speakerOf(s.id)})),
+                      })),
+                  }
+                : {}),
             assets: {
                 // pictureId was resolved once in buildSubjects, together with the description bound to it - see the
                 // comment there for why they have to be resolved as one pair, not separately
                 pictures: [
-                    ...subjects.map(s => ({label: s.picture, file: s.kind === 'location' && locationView !== undefined && locationView >= 0 ? locationViewAsset(s.pictureId, locationView) : pictureAsset(s.kind, s.pictureId), subject: s.label, kind: s.kind, id: s.id, name: s.name, description: s.description})),
-                    ...(startsFrom ? [{label: `<Picture ${subjects.length + 1}>`, file: boundaryFrameAsset(startsFrom, 'lf'), subject: '', kind: 'frame' as const, id: startsFrom, name: `last frame of ${startsFrom}`, description: ''}] : []),
+                    ...subjects.map(s => ({
+                        label: s.picture,
+                        file:
+                            s.kind === 'location' && locationView !== undefined && locationView >= 0
+                                ? locationViewAsset(s.pictureId, locationView)
+                                : pictureAsset(s.kind, s.pictureId),
+                        subject: s.label,
+                        kind: s.kind,
+                        id: s.id,
+                        name: s.name,
+                        description: s.description,
+                    })),
+                    ...(startsFrom
+                        ? [
+                              {
+                                  label: `<Picture ${subjects.length + 1}>`,
+                                  file: boundaryFrameAsset(startsFrom, 'lf'),
+                                  subject: '',
+                                  kind: 'frame' as const,
+                                  id: startsFrom,
+                                  name: `last frame of ${startsFrom}`,
+                                  description: '',
+                              },
+                          ]
+                        : []),
                 ],
                 // one whole-clip-length file per track, cut from that stem alone - see the Track comment above
-                audio: tracks.map(t => ({label: t.label, file: trackAsset(slot.id, t.stem), songStart: slot.start, songEnd: slot.end, stem: t.stem, ...(t.parts ? {mix: t.parts.map(p => p.stem)} : {})})),
+                audio: tracks.map(t => ({
+                    label: t.label,
+                    file: trackAsset(slot.id, t.stem),
+                    songStart: slot.start,
+                    songEnd: slot.end,
+                    stem: t.stem,
+                    ...(t.parts ? {mix: t.parts.map(p => p.stem)} : {}),
+                })),
             },
             prompt,
         }
@@ -1018,7 +1331,7 @@ function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, durati
         const upper = (moved[j + 1] ?? duration) - 0.5
         if (lower >= upper) continue // neighbouring cuts are too close together to leave room for a move
         const options = [before, after].filter(o => Math.abs(o - t) <= maxShift && o > lower && o < upper)
-        if (options.length) moved[j] = round(options.reduce((a, b) => Math.abs(a - t) <= Math.abs(b - t) ? a : b))
+        if (options.length) moved[j] = round(options.reduce((a, b) => (Math.abs(a - t) <= Math.abs(b - t) ? a : b)))
     }
     return moved
 }
@@ -1042,21 +1355,29 @@ function styleOpening(lookBrief: string) {
 }
 
 function splitSentences(text: string) {
-    return text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean)
+    return text
+        .split(/(?<=[.!?])\s+/)
+        .map(s => s.trim())
+        .filter(Boolean)
 }
 
 // items k of n: spreads a list evenly, repeating the nearest item if there are fewer items than parts
 function spread<T>(items: T[], k: number, n: number): T[] {
     if (items.length === 0) return []
-    const from = Math.floor(k * items.length / n)
-    const to = Math.floor((k + 1) * items.length / n)
+    const from = Math.floor((k * items.length) / n)
+    const to = Math.floor(((k + 1) * items.length) / n)
     return to > from ? items.slice(from, to) : [items[Math.min(from, items.length - 1)]!]
 }
 
 // Basic punctuation; a continuation fragment keeps its open hyphen instead of a full stop.
 function normalizeLyric(line: string) {
-    const clean = line.replace(/\.{2,}|…/g, '.').replace(/[~*]+/g, '').replace(/([!?.,])\1+/g, '$1').trim().replace(/[,;:]+$/, '')
+    const clean = line
+        .replace(/\.{2,}|…/g, '.')
+        .replace(/[~*]+/g, '')
+        .replace(/([!?.,])\1+/g, '$1')
+        .trim()
+        .replace(/[,;:]+$/, '')
     return /[.?!-]$/.test(clean) ? clean : `${clean}.`
 }
 
-export const joinAnd = (items: string[]) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('')
+export const joinAnd = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join(''))

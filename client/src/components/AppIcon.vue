@@ -9,11 +9,14 @@ const ICONS = {
   muted: {d: ['M4 9v6h4l5 4V5L8 9z'], filled: false},
   copy: {d: ['M9 11a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z', 'M5 15V6a2 2 0 0 1 2-2h9'], filled: false},
   system: {d: ['M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M8 21h8M12 17v4'], filled: false},
-  light: {d: ['M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'], filled: false},
+  light: {
+    d: ['M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'],
+    filled: false,
+  },
   dark: {d: ['M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z'], filled: false},
 } as const
 export type IconName = keyof typeof ICONS
-const props = defineProps<{name: IconName, size?: number}>()
+const props = defineProps<{name: IconName; size?: number}>()
 </script>
 
 <template>

@@ -1,9 +1,8 @@
-import {escapeRegExp} from "../shot-plan.ts";
-import type {FilmCharacter} from "./types.ts";
+import {escapeRegExp} from '../shot-plan.ts'
+import type {FilmCharacter} from './types.ts'
 
 // A character the text of a clip names without giving the video model their picture is drawn from the name alone - a stranger.
 // Matching is on the names the cast itself holds (name and every cue the script uses), nothing else.
-
 
 const namesOf = (character: FilmCharacter) => [...new Set([character.name, ...character.aliases].map(n => n.trim()).filter(n => n.length > 1))]
 
@@ -17,7 +16,8 @@ export function withoutSentencesNaming(text: string, characters: FilmCharacter[]
     return [...new Intl.Segmenter(undefined, {granularity: 'sentence'}).segment(text)]
         .map(s => s.segment)
         .filter(sentence => !characters.some(c => mentions(sentence, c)))
-        .join('').trim()
+        .join('')
+        .trim()
 }
 
 /**
@@ -25,7 +25,14 @@ export function withoutSentencesNaming(text: string, characters: FilmCharacter[]
  * A character the script has not brought in yet is not in the picture - the planner (who also reads the look brief, where everyone stands) puts the
  * cast into an establishing shot of an empty place. Matching is on the names the cast holds, nothing else.
  */
-export function namedByScene(scenes: { elements: ({ type: 'action', text: string } | { type: 'dialogue', speaker: string, text: string })[] }[], characters: FilmCharacter[], index: number) {
-    const text = scenes.slice(0, index + 1).flatMap(scene => scene.elements.map(e => e.type === 'action' ? e.text : `${e.speaker}. ${e.text}`)).join(' ')
+export function namedByScene(
+    scenes: {elements: ({type: 'action'; text: string} | {type: 'dialogue'; speaker: string; text: string})[]}[],
+    characters: FilmCharacter[],
+    index: number,
+) {
+    const text = scenes
+        .slice(0, index + 1)
+        .flatMap(scene => scene.elements.map(e => (e.type === 'action' ? e.text : `${e.speaker}. ${e.text}`)))
+        .join(' ')
     return new Set(characters.filter(c => mentions(text, c)).map(c => c.id))
 }
