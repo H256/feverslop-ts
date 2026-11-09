@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
-import type {DirectionRule, DirectionScope} from '../../../../shared/direction'
+import {RouterLink} from 'vue-router'
+import type {DirectionEdit, DirectionRule, DirectionScope, DirectionSize} from '../../../../shared/direction'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
@@ -10,7 +11,7 @@ import {useToasts} from '../../services/toasts'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 
-const {api, project, busy, start} = useProject()
+const {api, project, busy, start, root} = useProject()
 const {data: view, loading, error, reload, refresh} = usePageData(signal => api.direction(signal))
 const route = useRoute()
 const toasts = useToasts()
@@ -60,12 +61,29 @@ const rebind = (rule: DirectionRule) => change(async () => {
   await api.saveDirection((view.value?.rules ?? []).map(r => { if (r.id !== rule.id) return r; const {binding, ...next} = r; return next }))
 })
 const preview = toasts.guard(() => start({type: 'direction'}))
-const take = () => change(async () => { await api.takeDirection(); toasts.show('Changes taken. Update clip prompts before rendering.') })
+// taken or restored: the clip prompts are built again at once - the planning run, nothing is rendered
+const take = () => change(async () => { await api.takeDirection(); await start({type: 'plan'}); toasts.show('Changes taken. The clip prompts are built again; render the affected clips on the timeline.') })
 const drop = () => change(() => api.dropDirection())
 const restore = (id: string) => change(async () => {
-  if (await ask({title: 'Restore this plan version?', lines: ['Accepted shot edits are replaced by this version. Instructions remain saved; rendered videos remain available. Update clip prompts afterwards.'], confirm: 'Restore plan'})) await api.restoreDirection(id)
+  if (await ask({title: 'Restore this plan version?', lines: ['Accepted shot edits are replaced by this version. Instructions remain saved; rendered videos remain available. The clip prompts are built again.'], confirm: 'Restore plan'})) { await api.restoreDirection(id); await start({type: 'plan'}) }
 })
 const plan = toasts.guard(() => start({type: 'plan'}))
+
+// direct edits over several shots (#735): a person out of the picture, or the shot size - no language model, the prompts built again
+const editScopeKind = ref<'global' | 'character' | 'beat' | 'scene' | 'time'>('character')
+const editScopeId = ref('')
+const editFrom = ref(0), editTo = ref(10)
+const editKind = ref<'remove' | 'size'>('remove')
+const editWho = ref('')
+const editSize = ref<DirectionSize>('medium')
+const editScope = computed<DirectionScope>(() => editScopeKind.value === 'global' ? {kind: 'global'} : editScopeKind.value === 'time' ? {kind: 'time', start: Number(editFrom.value), end: Number(editTo.value)} : {kind: editScopeKind.value, id: editScopeId.value})
+const editInvalid = computed(() => (editKind.value === 'remove' && !editWho.value) || (['character', 'beat', 'scene'].includes(editScopeKind.value) && !editScopeId.value) || (editScopeKind.value === 'time' && !(Number(editTo.value) > Number(editFrom.value))))
+const saveEdits = (edits: DirectionEdit[]) => change(async () => { await api.saveDirectionEdits(edits); await start({type: 'plan'}) })
+const addEdit = () => saveEdits([...(view.value?.edits ?? []), {id: crypto.randomUUID(), scope: editScope.value, ...(editKind.value === 'remove' ? {remove: editWho.value} : {size: editSize.value})}])
+const unedit = (e: DirectionEdit) => saveEdits((view.value?.edits ?? []).filter(x => x.id !== e.id))
+const describeEdit = (e: DirectionEdit) => e.remove ? `${name(e.remove)} is not in the picture` : `the shot is ${e.size}`
+/** A shot's place on the timeline, its dialog opened there. */
+const inTimeline = (shotId: string) => ({path: `${root}/`, query: {direct: shotId}})
 const scopeText = (s: DirectionScope) => s.kind === 'global' ? 'Whole project' : s.kind === 'time' ? `${s.start}–${s.end} s` : `${s.kind}: ${s.id}`
 const name = (id: string) => view.value?.characters.find(c => c.id === id)?.name ?? id
 const ruleIssue = (id: string) => view.value?.unresolved.find(r => r.ruleId === id)?.message
@@ -82,7 +100,7 @@ function describe(data: Record<string, unknown>): string {
 <template>
   <div class="scrollpage view">
     <PageBar title="Direction" />
-    <p class="muted">Tune movement, performance and framing in an existing plan. Preview first; story, cast, sound and cut timing stay.</p>
+    <p class="muted">Tune movement, performance and framing in an existing plan; story, cast, sound and cut timing stay. For one shot, use <b>Direct this shot</b> in the timeline's Shots panel, or click the shot on a cast lane. Here are the instructions and edits for several shots, and the plan versions.</p>
     <ResourceState :loading="loading" :error="error" :loaded="!!view" @retry="reload" />
     <template v-if="view">
       <p v-if="!view.shots.length" class="note">Plan the shots first. You can save instructions now and preview them once shots exist.</p>
@@ -104,11 +122,30 @@ function describe(data: Record<string, unknown>): string {
       <section class="section"><h2>Saved instructions</h2>
         <p v-if="!view.rules.length" class="muted">No instructions yet.</p>
         <article v-for="rule in view.rules" :key="rule.id" class="direction-rule">
-          <b>{{ scopeText(rule.scope) }}{{ rule.characterId ? ` · ${name(rule.characterId)}` : '' }}</b><p class="prose">{{ rule.text }}</p>
+          <b>{{ scopeText(rule.scope) }}{{ rule.characterId ? ` · ${name(rule.characterId)}` : '' }}</b> <RouterLink v-if="rule.scope.kind === 'shot'" class="link" :to="inTimeline(rule.scope.id)">open in the timeline</RouterLink><p class="prose">{{ rule.text }}</p>
           <p v-if="ruleIssue(rule.id)" class="warn">{{ ruleIssue(rule.id) }}</p>
           <div class="btn-row"><button class="btn" :disabled="blocked || dirty" @click="edit(rule)">Edit instruction</button><button class="btn" :disabled="blocked" @click="remove(rule)">Remove instruction</button><button v-if="rule.binding && ruleIssue(rule.id)" class="btn" :disabled="blocked" @click="rebind(rule)">Review current binding</button></div>
         </article>
         <div class="btn-row"><button class="btn primary" :disabled="blocked || dirty || !view.rules.length || !view.shots.length || !!view.unresolved.length" @click="preview">Preview changes</button><span class="muted">The language model only. Nothing is rendered.</span></div>
+      </section>
+      <section class="section"><h2>Direct edits</h2>
+        <p class="muted">Changed by the code, without the language model, and kept when the shots are planned again. Whoever sings, plays or speaks in a shot stays in it.</p>
+        <article v-for="e in view.edits" :key="e.id" class="direction-rule">
+          <b>{{ scopeText(e.scope) }}</b> <RouterLink v-if="e.scope.kind === 'shot'" class="link" :to="inTimeline(e.scope.id)">open in the timeline</RouterLink>
+          <p class="prose">{{ describeEdit(e) }}</p>
+          <p v-for="(issue, n) in view.editIssues.filter(i => i.editId === e.id)" :key="n" class="warn">{{ issue.shotId ? `${issue.shotId}: ` : '' }}{{ issue.message }}</p>
+          <div class="btn-row"><button class="btn" :disabled="blocked" @click="unedit(e)">Undo edit</button></div>
+        </article>
+        <fieldset :disabled="blocked" class="direction-form">
+          <label>Applies to<select v-model="editScopeKind" @change="editScopeId = ''"><option value="global">Whole project</option><option value="character">Every shot with a character</option><option :value="film ? 'scene' : 'beat'">{{ film ? 'Scene' : 'Beat' }}</option><option v-if="!film" value="time">Song time range</option></select></label>
+          <label v-if="editScopeKind === 'character'">With<select v-model="editScopeId"><option value="" disabled>Choose character</option><option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+          <label v-if="editScopeKind === 'beat' || editScopeKind === 'scene'">{{ film ? 'Scene' : 'Beat' }}<select v-model="editScopeId"><option value="" disabled>Choose {{ film ? 'scene' : 'beat' }}</option><option v-for="g in view.groups" :key="g.id" :value="g.id">{{ g.id }} · {{ g.label }}</option></select></label>
+          <template v-if="editScopeKind === 'time'"><label>From (seconds)<input v-model.number="editFrom" type="number" min="0" step="0.1"></label><label>To (seconds)<input v-model.number="editTo" type="number" min="0" step="0.1"></label></template>
+          <label>Edit<select v-model="editKind"><option value="remove">Take a person out of the picture</option><option value="size">Set the shot size</option></select></label>
+          <label v-if="editKind === 'remove'">Person<select v-model="editWho"><option value="" disabled>Choose character</option><option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+          <label v-else>Size<select v-model="editSize"><option v-for="s in ['wide', 'medium', 'close', 'extreme']" :key="s" :value="s">{{ s }}</option></select></label>
+          <div class="btn-row"><button class="btn primary" :disabled="editInvalid" @click="addEdit">Add edit and build the prompts</button></div>
+        </fieldset>
       </section>
       <section v-if="view.proposal" class="section"><h2>Proposed changes</h2>
         <p v-if="view.proposalStale" class="warn">This proposal belongs to an older plan or set of instructions. Preview again before taking it.</p>
@@ -118,11 +155,13 @@ function describe(data: Record<string, unknown>): string {
         <article v-for="change in view.proposal.changes" :key="change.shotId" class="direction-change"><h3>{{ change.shotId }}</h3><div class="comparison"><div><b>Before</b><pre>{{ describe(change.before) }}</pre></div><div><b>After</b><pre>{{ describe(change.after) }}</pre></div></div></article>
         <div class="btn-row"><button class="btn primary" :disabled="blocked || dirty || view.proposalStale || !!view.proposal.conflicts.length || !!view.unresolved.length" @click="take">Take changes</button><button class="btn" :disabled="blocked" @click="drop">Drop proposal</button></div>
       </section>
-      <section v-if="view.activeVersion" class="section"><h2>Accepted plan</h2><p>Update clip prompts after taking or restoring changes. Then render affected clips on the timeline; previous videos remain available.</p><button class="btn" :disabled="blocked || view.pending" @click="plan">Update clip prompts</button></section>
+      <section v-if="view.activeVersion" class="section"><h2>Accepted plan</h2><p>Taking or restoring changes builds the clip prompts again. Then render the affected clips on the timeline; previous videos remain available.</p><button class="btn" :disabled="blocked || view.pending" @click="plan">Build the clip prompts again</button></section>
       <details v-if="view.versions.length" class="section"><summary>Plan versions ({{ view.versions.length }})</summary><div v-for="version in [...view.versions].reverse()" :key="version.id" class="direction-rule"><span>{{ version.id.startsWith('baseline-') ? 'Original plan' : new Date(version.createdAt).toLocaleString() }} · {{ version.changes.length }} shot edits{{ version.id === view.activeVersion ? ' · current' : '' }}</span><button class="btn" :disabled="blocked || version.id === view.activeVersion" @click="restore(version.id)">Restore plan</button></div></details>
       <details class="section"><summary>CLI</summary><pre>{{ command }} --json
-{{ command }} --preview
-{{ command }} --take
+{{ command }} --show=SHOT
+{{ command }} --add="..." --scope=shot:SHOT --preview --take
+{{ command }} --without=CHARACTER --scope=beat:BEAT
+{{ command }} --size=close --scope=shot:SHOT
 {{ command }} --drop</pre></details>
     </template>
   </div>

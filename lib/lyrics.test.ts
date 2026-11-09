@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {slotVocals, alignLyrics, keepTogether, refineSections, tightenStarts} from "./lyrics.ts";
+import {slotVocals, alignLyrics, keepTogether, lyricsProblems, refineSections, tightenStarts} from "./lyrics.ts";
 import type {LyricSection, LyricsTiming, MusicMap} from "./project.ts";
 
 // 120 bpm: a bar every 2 s
@@ -125,5 +125,40 @@ describe('slotVocals split source words', () => {
         expect(tail.words[0]).toEqual({text: 'e', start: 0, end: .5, joined: true, estimated: true})
         expect(slotVocals({start: 0, end: 8}, timing)[0]!.text).toBe('we rise')
         expect(JSON.stringify(timing)).toBe(before)
+    })
+})
+
+// #738: with known lyrics nothing is lost and nothing added
+describe('alignLyrics - the lines of the lyrics, exactly', () => {
+    const heard = (text: string, start: number, end = start + 0.4, probability = 0.9) => ({text, start, end, probability})
+    const sections: LyricSection[] = [{label: 'Verse', lines: ['Die Stadt trägt nasse Narben', 'Die ich in mir verberg']}, {label: 'Chorus', lines: ['Und bleib allein']}]
+    const verse = [heard('die', 10), heard('Stadt', 10.5), heard('trägt', 11), heard('nasse', 11.5), heard('Narben', 12, 13.2),
+        // whisper heard "Die ich" as one word
+        heard('dich', 13.2, 15.1), heard('in', 15.1), heard('mir', 15.5), heard('verberg', 15.9, 17)]
+    const singing = [{start: 9.9, end: 17.2}, {start: 20, end: 22}, {start: 40, end: 42}]
+
+    test('a word whisper ran into its neighbour stays, as a guess with its share of it', () => {
+        const line = alignLyrics(sections, [...verse, ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5))], undefined, singing).lines[1]!
+        expect(line.words.map(w => w.text)).toEqual(['Die', 'ich', 'in', 'mir', 'verberg'])
+        expect(line.words[0]).toMatchObject({estimated: true})
+        expect(line.words[0]!.end - line.words[0]!.start).toBeGreaterThan(0.3)
+        expect(line.words[0]!.end).toBe(line.words[1]!.start)
+    })
+    test('a repeat the lyrics do not have is a suggestion, not sung; the same line heard twice on itself is no ad-lib', () => {
+        const chorus = [...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5)), ...'und bleib allein'.split(' ').map((t, i) => heard(t, 40 + i * 0.5))]
+        const lines = alignLyrics(sections, [...verse, ...chorus], undefined, singing).lines
+        const adlibs = lines.filter(l => l.adlib)
+        expect(adlibs.map(l => [l.text, l.off])).toEqual([['und bleib allein', true]])
+        // heard twice where the line is (an echo of whisper): only the line
+        const twice = [...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5)), ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20.2 + i * 0.5))]
+        expect(alignLyrics(sections, [...verse, ...twice], undefined, singing).lines.filter(l => l.adlib)).toEqual([])
+    })
+    test('what does not match the lyrics is said: a lost word, a missing line, a line not placed', () => {
+        const lines = alignLyrics(sections, [...verse, ...'und bleib allein'.split(' ').map((t, i) => heard(t, 20 + i * 0.5))], undefined, singing).lines
+        expect(lyricsProblems({lines}, sections)).toEqual([])
+        const lost = lines.map(l => l.line === 1 ? {...l, words: l.words.slice(1)} : l)
+        expect(lyricsProblems({lines: lost}, sections)).toEqual([{line: 1, text: 'Die ich in mir verberg', problem: 'its words are "ich in mir verberg"'}])
+        expect(lyricsProblems({lines: lines.filter(l => l.line !== 2)}, sections).map(p => p.problem)).toEqual(['missing from the timing'])
+        expect(lyricsProblems({lines: lines.map(l => l.line === 0 ? {...l, words: []} : l)}, sections).map(p => p.problem)).toEqual(['not placed'])
     })
 })

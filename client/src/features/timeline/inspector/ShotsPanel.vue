@@ -5,7 +5,7 @@ import {useTimeline} from '../context'
 
 /** The beat or scene of the clip, its shots, and what is sung or said in it. Who sings a line is changed on a page of its own. */
 defineProps<{clip: EditorClip}>()
-const {project, session} = useTimeline()
+const {project, session, direct} = useTimeline()
 </script>
 
 <template>
@@ -18,7 +18,7 @@ const {project, session} = useTimeline()
     <h3>Shots</h3>
     <article v-for="shot in clip.shots" :key="shot.label" class="shot">
       <header><span>{{ shot.label.replace(/^\[|\]$/g, '') }}</span><span class="num">{{ shot.at }}s</span></header>
-      <RouterLink v-if="shot.directionId" class="link" :to="{path: `${session.root}/direction`, query: {shot: shot.directionId}}">Direct this shot</RouterLink>
+      <button v-if="shot.directionId" class="btn" title="Who is in it and what each of them does - take someone out, set the size, or tell the language model what to change" @click="direct(shot.directionId)">Direct this shot</button>
       <p class="how">{{ [shot.framing, shot.camera].filter(Boolean).join(' · ') }}</p>
       <p v-if="shot.action">{{ shot.action }}</p>
       <div v-for="person in shot.people" :key="person.name" class="person"><b>{{ person.name }}</b> {{ person.text }}</div>

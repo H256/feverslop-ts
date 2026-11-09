@@ -4,7 +4,7 @@ import type {
   SingingResult, SingingView, StoryForCast, StoryResult, TimingChange, TimingResult, TimingView,
 } from '../../../shared/workspace'
 import {getJson, HttpError, postForm, postJson} from './http'
-import type {DirectionRule, DirectionView} from '../../../shared/direction'
+import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
 
 const id = (value: string) => encodeURIComponent(value)
 
@@ -41,6 +41,7 @@ export function projectApi(root: string) {
     book: (signal?: AbortSignal) => get<BookView>('book', signal),
     direction: (signal?: AbortSignal) => get<DirectionView>('direction', signal),
     saveDirection: (rules: DirectionRule[]) => post<DirectionView>('direction', {rules}),
+    saveDirectionEdits: (edits: DirectionEdit[]) => post<DirectionView>('direction/edits', {edits}),
     takeDirection: () => post<DirectionView>('direction/take', {}),
     dropDirection: () => post<DirectionView>('direction/drop', {}),
     restoreDirection: (version: string) => post<DirectionView>('direction/restore', {version}),

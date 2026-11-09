@@ -12,10 +12,30 @@ bun run direction demo --add="Mara dances occasionally in suitable instrumental 
 bun run direction demo --preview
 bun run direction demo --json
 bun run direction demo --take
-bun index.ts demo
+
+# The same in one call: save, preview, take.
+bun run direction demo --add="Mara dances in place" --scope=shot:b3:shot2 --preview --take
+
+# Who is in a shot and what each of them does, as the plan has it now.
+bun run direction demo --show=b3:shot2
 ```
 
-Saving a rule does not render or change the accepted performance. Preview asks the LLM; taking accepts the reviewed changes. Run the normal pipeline afterwards to rebuild requests, then render stale clips in the workspace or select clips with `--render=videos --only=...`. Old renders remain available.
+Saving a rule does not render or change the accepted performance. Preview asks the LLM; taking accepts the reviewed changes and builds the clip prompts again (the normal planning run, `bun index.ts demo` or `bun film.ts demo`; `--no-rebuild` leaves that out). Then render stale clips in the workspace or select clips with `--render=videos --only=...`. Old renders remain available.
+
+## Direct edits
+
+Some choices need no language model: take a person out of a shot, or set its size. They change the plan directly and build the clip prompts again at once.
+
+```powershell
+bun run direction demo --without=kael --scope=shot:b3:shot2
+bun run direction demo --without=kael --scope=beat:b3
+bun run direction demo --size=close --scope=shot:b3:shot2   # wide, medium, close or extreme
+bun run direction demo --unedit=<edit-id>
+```
+
+An edit applies to every shot its scope selects, like a rule. Whoever sings or plays in a shot - in a film, whoever speaks in it - is not taken out of it; the edit says so and leaves them. When the shot's words still name the person taken out ("{Kael} looks on"), the edit lists it and the next `--preview` gets a rule to write the shot without them: the code decides who is in the picture, the language model only rewrites the words.
+
+Edits are kept apart from the plan. When the shots are planned again, the planner is told about them ("in shot 2, Kael is not in the picture") and the code enforces them on the new plan as well. An edit for a beat, a scene, a character, a time range or the project keeps applying; an edit for one shot waits to be bound again, like a shot rule, since a new plan has other shots.
 
 Use `--film` for a film and `bun film.ts demo` for its normal planning run. Song time ranges belong to music projects only.
 
@@ -77,7 +97,9 @@ Removing an instruction removes the requirement; it is not an undo of an accepte
 
 ## Workspace
 
-Open **Direction** in a project's navigation, or enter from a shot in the timeline. Choose the scope, optionally choose a character, and write the instruction. Existing rules can be edited or removed. Ask for a preview, compare before and after, resolve any conflicts or missing bindings, then take or drop the proposal. The page also offers saved plan versions and a separate request rebuild.
+**Direct this shot** in the timeline's Shots panel opens one shot in a dialog: who is in it and what each of them does (start, in frame, movement, and whether they sing, play or speak). There you set the shot size or take a person out of the shot (direct edits, the clip prompts are built again at once), write an instruction for the shot or for one person in it, and **Propose** - saved and asked in one step. The proposal shows only the fields that change, before and after; **Take and build the prompts** takes it and builds the clip prompts again.
+
+For rules and direct edits over several shots, open **Direction** in a project's navigation. Its **Direct edits** section takes a person out of every shot of a beat, a scene, a time range or every shot with a character, or sets their size, and builds the clip prompts again; a rule or edit for one shot links to its dialog on the timeline (`?direct=SHOT`). Taking or restoring a proposal there builds the clip prompts again as well. Choose the scope, optionally choose a character, and write the instruction. Existing rules can be edited or removed. Ask for a preview, compare before and after, resolve any conflicts or missing bindings, then take or drop the proposal. The page also offers saved plan versions and a separate request rebuild.
 
 The workspace calls the same direction operations as the CLI and starts the CLI for the LLM preview. Project locks prevent concurrent CLI and workspace writes. No direction action starts GPU rendering.
 

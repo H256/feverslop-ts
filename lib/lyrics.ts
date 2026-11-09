@@ -19,7 +19,8 @@ const ADLIB_MIN_ACTIVE = 0.5    // share of an ad-lib line that has to lie insid
 const ADLIB_SURE = 0.7          // ... or whisper is this sure of the words (quiet backing vocals stay under the activity threshold)
 const ADLIB_MIN_WORD_PROBABILITY = 0.3
 const GUESS_MIN_ACTIVE = 0.4    // share of a guessed (never heard) word that has to lie inside vocal activity - else nobody sings it
-const ADLIB_REPLACES_BELOW = 0.5 // a lyric line that was mostly not heard gives way to ad-libs sung over it
+const ADLIB_REPLACES_BELOW = 0.5 // a lyric line heard less than this, with an ad-lib of its words on it, takes the ad-lib's times
+const SAME_LINE_WITHIN = 1      // seconds: an ad-lib with the words of a lyric line this close is that line heard twice
 export const MIN_WORD_SEC = 0.05       // shorter than this is a word without a real position - nobody can lip-sync it
 const LINE_GAP_BARS = 4         // more silence than this between two words of one line: one of them was matched somewhere else
                                 // (largest real gap inside a line over the projects folder: 3.55 bars, the wrong ones 4.2 to 30)
@@ -134,8 +135,8 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
     if (timed.every(w => w.sim === 0)) throw new Error('None of the lyrics were found in the transcript - is lyricsLanguage right, and are there vocals in the song?')
     interpolate(timed, lyric.map(w => w.sectionIndex), activity)
 
-    // a word whisper never heard was placed by guesswork: where the vocal stem is silent nobody sings it, and a mouth
-    // moving without sound is worse than a missing word
+    // a word whisper never heard was placed by guesswork: where the vocal stem is silent it is marked estimated - it stays in its
+    // line (#738: with known lyrics no word is lost - "Die ich in mir verberg" lost its "Die" here), and the Timing page shows it to check
     const sungAt = (w: { start: number, end: number }) => {
         if (!activity?.length) return true
         const covered = activity.reduce((sum, r) => sum + Math.max(0, Math.min(w.end, r.end) - Math.max(w.start, r.start)), 0)
@@ -151,26 +152,39 @@ export function alignLyrics(lyricSections: LyricSection[], heard: TranscriptWord
             text: line.text,
             start: words[0]!.start,
             end: words.at(-1)!.end,
-            words: words.filter(w => w.sim > 0 || sungAt(w)).map(({text, start, end}) => ({text, start, end})),
+            words: roomFor(words.map(w => ({text: w.text, start: w.start, end: w.end, ...(w.sim > 0 || sungAt(w) ? {} : {estimated: true})}))),
             confidence: round(words.reduce((sum, w) => sum + w.sim, 0) / words.length),
         }
     })
 
     const matched = new Set(matchOf.filter(j => j !== undefined))
-    const adlibs = adlibLines(transcript.flatMap((w, j) => matched.has(j) ? [] : [w]), new Set(lyric.map(w => w.norm)), activity)
-    if (!adlibs.length) return {lines: timedLines}
+    const heardAdlibs = adlibLines(transcript.flatMap((w, j) => matched.has(j) ? [] : [w]), new Set(lyric.map(w => w.norm)), activity)
+    if (!heardAdlibs.length) return {lines: timedLines}
 
-    // a lyric line that was mostly not heard, with ad-libs sung where its words were guessed, is a wrong guess - it
-    // keeps no words (two lines can't be sung at once)
-    const overlapsAdlib = (line: TimedLine) => adlibs.some(a => Math.min(line.end, a.end) - Math.max(line.start, a.start) > 0.15 || (line.end <= line.start && line.start >= a.start && line.start <= a.end))
-    for (const line of timedLines) if (line.confidence < ADLIB_REPLACES_BELOW && overlapsAdlib(line)) line.words = []
+    // An ad-lib with the words of a lyric line that lies where the ad-lib is, is that line heard twice: no ad-lib - else the line was
+    // there twice (#738: the outro's "Und bleib allein", once as the line and once as an ad-lib on top of it). Where the line was barely
+    // heard or lies outside the singing, it takes the ad-lib's times. An ad-lib further away is a repeat the lyrics do not have.
+    const adlibs = heardAdlibs.filter(adlib => {
+        const line = sameLine(timedLines, adlib)
+        if (!line) return true
+        const silent = line.words.length > 0 && !!activity?.length && activeShare(line.start, line.end, activity) < ADLIB_MIN_ACTIVE
+        if (!silent && line.confidence >= ADLIB_REPLACES_BELOW) return false
+        const times = spreadOver(adlib.words, line.words.length)
+        line.words = line.words.map((w, n) => ({text: w.text, start: times[n]!.start, end: times[n]!.end}))
+        line.start = line.words[0]!.start
+        line.end = line.words.at(-1)!.end
+        line.confidence = adlib.confidence
+        return false
+    })
 
-    // each ad-lib line goes right behind the heard lyric line before it, numbered after the lyric lines
+    // each ad-lib line goes right behind the heard lyric line before it, numbered after the lyric lines. It is not in lyrics.txt:
+    // a suggestion, not sung until it is taken on the Timing page (bun run timing --on) - a song may repeat a line the lyrics have
+    // once, and whisper may hear what nobody sings. The lyric lines stay as they are.
     const out = [...timedLines]
     adlibs.forEach((adlib, n) => {
         const before = out.findLastIndex(l => l.confidence > 0 && l.words.length > 0 && l.start <= adlib.start)
         const anchor = out[before] ?? out[0]!
-        out.splice(before + 1, 0, {...adlib, line: lines.length + n, sectionIndex: anchor.sectionIndex, section: anchor.section})
+        out.splice(before + 1, 0, {...adlib, line: lines.length + n, sectionIndex: anchor.sectionIndex, section: anchor.section, off: true})
     })
     return {lines: out}
 }
@@ -226,6 +240,69 @@ export function clampToActivity(words: TranscriptWord[], activity?: ActivityRang
         const range = activity.find(r => w.start >= r.start - 0.15 && w.start < r.end)
         return range && w.end > range.end + 0.3 ? {...w, end: Math.max(w.start + MIN_WORD_SEC, range.end)} : w
     })
+}
+
+const wordsOf = (text: string) => text.split(/\s+/).map(normalizeWord).filter(Boolean)
+/** The share of a stretch that lies inside vocal activity. */
+const activeShare = (start: number, end: number, activity: ActivityRange[]) =>
+    end > start ? activity.reduce((sum, r) => sum + Math.max(0, Math.min(end, r.end) - Math.max(start, r.start)), 0) / (end - start) : 0
+/** How far apart two stretches are, 0 when they overlap. */
+const apart = (a: { start: number, end: number }, b: { start: number, end: number }) => Math.max(0, a.start - b.end, b.start - a.end)
+
+/** The lyric line an ad-lib is: the same words (similar enough), at most SAME_LINE_WITHIN seconds away - the nearest. */
+function sameLine(lines: TimedLine[], adlib: TimedLine): TimedLine | undefined {
+    const words = wordsOf(adlib.text).join(' ')
+    return lines
+        .filter(line => !line.adlib && line.words.length > 0 && similarity(wordsOf(line.text).join(' '), words) >= MATCH_SIMILARITY && apart(line, adlib) <= SAME_LINE_WITHIN)
+        .sort((a, b) => apart(a, adlib) - apart(b, adlib))[0]
+}
+
+/**
+ * A guessed word with no length gets its share of the heard word next to it, by letters - whisper heard two words as one ("Die ich"
+ * as "dich", 1.9 s): the guess stood at its start with nothing left. A word of no length is sung in no clip.
+ */
+function roomFor(words: TimedWord[]): TimedWord[] {
+    const out = words.map(w => ({...w}))
+    out.forEach((w, n) => {
+        if (!w.estimated || w.end - w.start >= MIN_WORD_SEC) return
+        const next = out[n + 1], before = out[n - 1]
+        const giver = next && !next.estimated && next.end - next.start >= 2 * MIN_WORD_SEC ? next : before && !before.estimated && before.end - before.start >= 2 * MIN_WORD_SEC ? before : undefined
+        if (!giver) return
+        const share = Math.max(MIN_WORD_SEC, Math.min((giver.end - giver.start) - MIN_WORD_SEC, (giver.end - giver.start) * w.text.length / (w.text.length + giver.text.length)))
+        if (giver === next) { w.start = giver.start; w.end = round(giver.start + share); giver.start = w.end }
+        else { w.end = giver.end; w.start = round(giver.end - share); giver.end = w.start }
+    })
+    return out
+}
+
+/** `count` word times from the words heard: one to one when the counts agree, else the span shared out evenly. */
+function spreadOver(heard: TimedWord[], count: number): { start: number, end: number }[] {
+    if (heard.length === count) return heard.map(w => ({start: w.start, end: w.end}))
+    const start = heard[0]!.start, step = (heard.at(-1)!.end - start) / count
+    return Array.from({length: count}, (_, n) => ({start: round(start + n * step), end: round(start + (n + 1) * step)}))
+}
+
+/**
+ * What is wrong with the timing against the lyrics (#738): with known lyrics nothing is lost and nothing added. Every line of
+ * lyrics.txt is there once, placed, with its own words; an ad-lib is fine (a suggestion until taken). The pipeline and the Timing
+ * page say these - the code does not guess a fix.
+ */
+export function lyricsProblems(timing: LyricsTiming, lyricSections: LyricSection[]): { line: number, text: string, problem: string }[] {
+    const problems: { line: number, text: string, problem: string }[] = []
+    for (const expected of sungLines(lyricSections)) {
+        const found = timing.lines.filter(l => !l.adlib && l.line === expected.line)
+        if (!found.length) { problems.push({line: expected.line, text: expected.text, problem: 'missing from the timing'}); continue }
+        if (found.length > 1) problems.push({line: expected.line, text: expected.text, problem: `there ${found.length} times`})
+        const line = found[0]!
+        if (line.off) continue
+        if (!line.words.length) { problems.push({line: expected.line, text: expected.text, problem: 'not placed'}); continue }
+        const sung = line.words.map(w => normalizeWord(w.text)).join(' ')
+        const written = expected.words.map(normalizeWord).join(' ')
+        // words split at a cut (joined) are one word of the lyrics
+        if (sung !== written && vocalText(line.words).split(/\s+/).map(normalizeWord).join(' ') !== written)
+            problems.push({line: expected.line, text: expected.text, problem: `its words are "${vocalText(line.words)}"`})
+    }
+    return problems
 }
 
 /**

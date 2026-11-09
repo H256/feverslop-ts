@@ -49,3 +49,33 @@ export function leadOf(words: {start: number, end: number}[], peaks: number[]): 
   while (at < end && sound[at - from] !== true) at++
   return (at - start) / RATE
 }
+
+/** A gap in the sound shorter than this (0.15 s) still belongs to the same singing: a consonant, a breath between two words. */
+/**
+ * Singing heard at least this long before a line's first word is a word the timing lost, not the onset of the word itself: lines placed
+ * by hand on schwarzer-flur have 0.3 to 0.4 s of a soft onset ("Sch-") before their first word, the line that lost "Die" 0.6 s. Shorter
+ * leads are left as the timing has them.
+ */
+export const MISSING_WORD_LEAD = 0.5
+const GAP_BINS = 15
+
+/**
+ * How long before the first word of a line its singing is already heard, in seconds - 0 where nothing is: the sound running into the
+ * first word without a real pause, looked for back to `notBefore` (seconds of the song, e.g. the cut or the end of the line before). The
+ * sign of a word the timing lost (#738: "Die ich in mir verberg" timed from "ich" on, sung from 0.7 s before it) - so a shot does not
+ * forbid the lip-sync while the words are already heard. The timing itself is left as it is.
+ */
+export function voiceLead(words: {start: number, end: number}[], peaks: number[], notBefore: number): number {
+  if (!words.length || !peaks.length) return 0
+  const bin = (t: number) => Math.max(0, Math.min(peaks.length, Math.round(t * RATE)))
+  const first = words[0]!
+  const from = bin(Math.max(notBefore, first.start - AROUND))
+  const start = bin(first.start)
+  if (start <= from) return 0
+  const sound = soundIn(peaks, from, bin(words.at(-1)!.end))
+  let at = start, silent = 0
+  for (let k = start - 1; k >= from; k--) {
+    if (sound[k - from]) { at = k; silent = 0 } else if (++silent > GAP_BINS) break
+  }
+  return (start - at) / RATE
+}

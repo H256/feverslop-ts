@@ -1,10 +1,11 @@
 import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
 import {readTokens, replaceTokens} from "./refs.ts";
-import {splitBySinger} from "./singing-parts.ts";
+import {splitAtCuts, splitBySinger} from "./singing-parts.ts";
 import type {Assignment, BeatShots, Character, Location, LyricsTiming, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {handsOf} from "./project.ts";
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
+import {MISSING_WORD_LEAD, voiceLead} from "../shared/timing-fit.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
 import {sequenceSheetDir, sheetFrame} from "./sequenceSheet.ts";
@@ -43,6 +44,8 @@ export function computeMemberCounts(beats: StoryBeat[], characters: Character[])
 // the first (ff) and last (lf) frame a rendered clip contributes to the final video - for extending clips later (fflf2va)
 // a sung word at least this long is a held note (see the shot texts)
 export const HELD_NOTE_SEC = 1
+// a singer's first words at least this long after the cut: the shot says that they do not sing before them
+export const LATE_ONSET_SEC = 0.5
 
 export const boundaryFrameAsset = (clipId: string, which: 'ff' | 'lf') => `assets/clips/${clipId}_${which}.png`
 // one file per stem per clip, e.g. output/audio/slot-006.guitar.wav - a clip can have anywhere from 1 to
@@ -97,11 +100,14 @@ export type Input = {
     locationDescriptions: Record<string, string>,
     // per place the fixed features behind the people of every shot (step locationAnchors) - none: no background sentence
     locationAnchors?: Record<string, string>,
+    // per place its floor plan without people (step locationLayouts): the layout of a clip that does not open its beat
+    locationLayouts?: Record<string, { layout: string }>,
     lookBrief: string,
     music: MusicMap,
     language: string,           // for <d>[...], e.g. "English"
     singing?: Singing,          // performance mode
     lyricsTiming?: LyricsTiming,    // the words' times: where a singer changes within a line (singing.lines[].parts)
+    vocalPeaks?: number[],          // the loudness of the vocals stem, 100 values a second (readFineWaveform): singing heard before a line's first word
     // beatId -> the staged shots of the beat (step 11b: action, who is in the picture, where they stand) - replaces the
     // beat.moments spread when given. A plan from before the staging is a list of actions and works without the staging
     shotMoments?: Record<string, BeatShots | string[]>,
@@ -390,7 +396,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             .map(s => s.fact))].slice(-MAX_CONTINUITY_FACTS)
     }
 
-    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
+    function buildClip(slot: Slot, beat: StoryBeat, moments: string[], flatShotMoments: ShotPlan[] | undefined, state: string[], opensScene: boolean, startsFrom: string | undefined, {characters, locations, characterDescriptions, characterDescriptionVariants, locationDescriptions, locationAnchors, locationLayouts, lookBrief, language, singing, propActivity, stemsAvailable, pinStartFrame, contextFrames}: Input, staging?: string, locationView?: number, planTokens = false): ClipRequest {
         const location = locations.find(l => l.id === beat.locationId)
 
         // performance mode: the parts of lines sung in this clip, each with its singer(s) - split where a singer changes within a line
@@ -595,6 +601,17 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             Array.from({length: shotCount}, (_, j) => j === 0 ? 0 : round((bars[Math.floor(j * slot.bars / shotCount)] ?? slot.start + (slot.end - slot.start) * j / shotCount) - slot.start)),
             vocals.flatMap(v => v.words), 120 / music.bpm, duration)
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
+        // each shot sings the words heard in it: a line crossing a cut is split there
+        // `heard`: where its singing is heard - before its first word when the sound runs into it (a word the timing lost, #738),
+        // never back into the cut or the words sung before it; the timing itself stays as it is
+        const shotVocals = vocals.flatMap(v => splitAtCuts(v, cuts)).map((v, _, all) => {
+            const cut = cuts.findLast(c => c <= v.start) ?? 0
+            const before = Math.max(cut, ...all.filter(o => o !== v && o.start < v.start).map(o => o.end))
+            const lead = input.vocalPeaks
+                ? voiceLead(v.words.map(w => ({start: slot.start + w.start, end: slot.start + w.end})), input.vocalPeaks, slot.start + before)
+                : 0
+            return {...v, heard: lead >= MISSING_WORD_LEAD ? round(v.start - lead) : v.start}
+        })
 
         function buildShots() {
             let singingShots = 0
@@ -605,8 +622,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
                 const firstNamed = idsIn(written.text, written.tokens)[0]
                 const named = castSubjects.find(s => s.id === firstNamed)
-                const starting = vocals.filter(v => inShot(j, v.start))
-                const continuing = vocals.filter(v => v.start < at && v.end > at)
+                const starting = shotVocals.filter(v => inShot(j, v.start))
+                const continuing = shotVocals.filter(v => v.start < at && v.end > at)
                 // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
                 const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
                 // staged by the planner: who is in the picture is its call, the singers of this shot are kept in
@@ -639,7 +656,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const cueLines = (j: number) => slot.vocals
             ? slot.vocals.filter(v => inShot(j, v.start)).map(v => v.text)
             : sung.filter((_, n) => Math.floor(n * shots.length / sung.length) === j)
-        const sings = (v: typeof vocals[number]) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${normalizeLyric(v.text)}</d>`
+        const sings = (v: typeof vocals[number] & { continues?: boolean }) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${v.continues && !v.text.endsWith('-') ? normalizeLyric(v.text).replace(/\.$/, '') : normalizeLyric(v.text)}</d>`
 
         // "not playing" / "hands off it" reads as a negation to the video model, which tends to render the
         // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
@@ -775,15 +792,25 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 if (performing) {
                     const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
-                    // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
-                    const lines = shot.starting.map((v, n) => ` At ${clipTime(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
+                    // a singer whose first words come later in the shot: the time before them said in words - the model otherwise
+                    // starts the lip-sync with the shot (schwarzer-flur slot-018: a quick flutter of the lips at its start). Only the
+                    // lip-sync is held back, the face stays free to show the moment (a laugh, a shout)
+                    const notYet = [...new Set(shot.starting.flatMap(v => v.singers))]
+                        .filter(s => !continuingSingers.includes(s))
+                        .map(s => ({s, from: Math.min(...shot.starting.filter(v => v.singers.includes(s)).map(v => v.heard))}))
+                        .filter(({from}) => from - shot.at >= LATE_ONSET_SEC)
+                        .map(({s, from}) => ` Until ${clipTime(from)}, ${voice(s)} does not sing yet: no lip-sync to ${vocalsTrack?.label ?? 'the vocals'} before then.`)
+                        .join('')
+                    // "From 00:02.300 to 00:03.700, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>": the span, not
+                    // just the onset - with only the onset the model placed the words anywhere after it
+                    const lines = shot.starting.map((v, n) => ` From ${clipTime(v.heard)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
                     // a long held note: the mouth flaps open and shut on it unless told to hold one shape
                     const shotEnd = cuts[j + 1] ?? duration
                     const held = [...shot.continuing, ...shot.starting].flatMap(v => v.words
                         .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
                         .map(w => ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, the mouth staying open in it for the whole note, only the jaw and the throat moving slightly.`))
                         .join('')
-                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
+                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${notYet}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
@@ -913,8 +940,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...(locationSubject ? [`The place stays as it is in ${locationSubject.label}: its features and props keep their place and shape, unless the action below changes them.`] : []),
                 // a reference picture is identity only - without this a shot can come out as the pictures lined up on their own grey backdrop
                 ...(locationSubject && castSubjects.length ? [`The whole picture is ${locationSubject.label}: every figure stands inside it, at the positions described below, surrounded by the place itself.`] : []),
-                // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not
-                ...(staging && !slot.micro ? [`Layout of the place: ${withLabels(staging, planTokens)}`] : []),
+                // not in a piece of a fight clip: the layout is the whole beat's and names everybody, pictures or not.
+                // It is where everyone is when the beat begins - said as a floor plan, not a shot: read as one, the model opened the clip
+                // on it, a wide shot of the singer walking down the corridor before [Shot 1] at the window (#740). A later clip of the beat
+                // gets the place's floor plan without people: by then they are where its shots put them.
+                ...(staging && !slot.micro ? [layoutLine(opensScene, withLabels(staging, planTokens), location && locationLayouts?.[location.id]?.layout)] : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
                 // a fact that names somebody without a picture in this piece of a fight is left out
                 ...(state.length ? [`Continuity from earlier scenes: ${state.filter(f => !slot.micro || idsIn(f, beatTokens).every(id => cast.some(c => c.id === id))).map(f => withLabels(f, beatTokens)).join('; ')}.`] : []).filter(line => !(slot.micro && line.endsWith(': .'))),
@@ -991,6 +1021,13 @@ function avoidWords(cuts: number[], words: TimedWord[], maxShift: number, durati
         if (options.length) moved[j] = round(options.reduce((a, b) => Math.abs(a - t) <= Math.abs(b - t) ? a : b))
     }
     return moved
+}
+
+/** The layout sentence of a clip (see buildClip): the beat's staging where it opens, else the place's own floor plan. */
+export function layoutLine(opensScene: boolean, staging: string, placeLayout: string | undefined) {
+    if (opensScene) return `Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: ${staging}`
+    if (placeLayout) return `Layout of the place - a floor plan, not a shot of its own: ${placeLayout}`
+    return `Layout of the place as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them: ${staging}`
 }
 
 // "The smiths raise ..." reads on after "while" as "the smiths raise ..." - names and labels keep their case

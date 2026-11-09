@@ -16,7 +16,7 @@ export function musicShots(data: Project, options: Partial<ProjectConfig> = {}):
         const clips = buildClipRequests({
             ...timeline, beats: data.beats, characters: data.cast.characters, locations: data.cast.locations,
             characterDescriptions: data.characterDescriptions ?? {}, characterDescriptionVariants: data.characterDescriptionVariants,
-            locationDescriptions: data.locationDescriptions ?? {}, locationAnchors: data.locationAnchors,
+            locationDescriptions: data.locationDescriptions ?? {}, locationAnchors: data.locationAnchors, locationLayouts: data.locationLayouts,
             lookBrief: data.lookBrief ?? '', music: data.music, language: languageName(config.lyricsLanguage) ?? config.lyricsLanguage,
             singing: data.singing, lyricsTiming: data.lyricsTiming, shotMoments: data.shotMoments,
             propActivity: data.propActivity, stemsAvailable: !!data.stems, continuity: config.continuity,
