@@ -234,28 +234,42 @@ export function useClipActions(timeline: Timeline) {
     marked.clear()
   }
   /**
-   * People brought into these beats (#765): of the cast, or new ones joining it, with what they do there as a direction rule. The
-   * beats lose their shots and are planned by the next plan run - asked for right after, the language model only.
+   * Who is in the marked clips (#765, #767): people of the cast or new ones joining it come in, others go out, with what they do
+   * there as a direction rule. All clips of a beat count as the beat; some of them only, and the planner is told per shot who is
+   * in it. The beats of the clips lose their shots and are planned by the next plan run - asked for right after, the language
+   * model only.
    */
-  async function bringPeople(beatIds: string[]) {
-    const beats = (project.value.beats ?? []).filter(b => beatIds.includes(b.id))
+  async function bringPeople(clipIds: string[]) {
+    const beats = (project.value.beats ?? []).filter(b => b.clips.some(id => clipIds.includes(id)))
     if (!beats.length) return
+    const partial = beats.some(b => !b.clips.every(id => clipIds.includes(id)))
     const {cast} = await api.cast()
     const characters = cast?.characters ?? []
-    const draft = reactive<BeatCastDraft>({characters: [], join: [{name: '', role: ''}], note: ''})
+    const draft = reactive<BeatCastDraft>({characters: [], join: [{name: '', role: ''}], without: [], note: ''})
     let result: BeatCastResult | undefined
+    const ids = characters.map(c => c.id)
     const yes = await ask({
-      title: `Bring people into ${beats.map(b => b.id).join(', ')}`,
+      title: `Who is in ${plural(clipIds.length, 'clip')} of ${beats.map(b => b.id).join(', ')}`,
       lines: [
         'Characters of the cast, or new ones who join it. Each new person is a character of their own: their look is written and their picture rendered, everyone else keeps theirs.',
+        partial
+          ? 'Only some clips of a beat are marked: the beat gets the people, and the planner is told for each of its shots who is in it and who is not.'
+          : '',
         `${beats.length === 1 ? 'This beat loses its shots and is' : `These ${beats.length} beats lose their shots and are`} planned again by the next plan run, with the people and the words below; the other beats keep their shots. Nothing is rendered here.`,
       ],
-      body: () => h(BeatCastForm, {draft, cast: characters, inAll: characters.map(c => c.id).filter(id => beats.every(b => b.characters.includes(id)))}),
-      confirm: 'Bring them in',
+      body: () =>
+        h(BeatCastForm, {
+          draft,
+          cast: characters,
+          inAll: ids.filter(id => beats.every(b => b.characters.includes(id))),
+          inSome: ids.filter(id => beats.some(b => b.characters.includes(id))),
+        }),
+      confirm: 'Save',
       submit: async () => {
         result = await api.saveBeatCast({
-          beats: beats.map(b => b.id),
+          clips: clipIds,
           characters: draft.characters,
+          without: draft.without,
           join: draft.join.filter(j => j.name.trim() || j.role.trim()),
           note: draft.note,
         })
@@ -264,11 +278,14 @@ export function useClipActions(timeline: Timeline) {
     if (!yes || !result) return
     marked.clear()
     const done = result
+    const who = (list: {character: string}[]) => [...new Set(list.map(a => a.character))].join(', ')
     const now = await ask({
       title: `Plan ${done.beats.join(', ')} now?`,
       lines: [
         done.joined.length && `${done.joined.join(', ')} joined the cast: the plan run writes their look and description.`,
-        `${plural(done.beats.length, 'beat')} planned again, with ${done.added.length ? [...new Set(done.added.map(a => a.character))].join(', ') : 'the people they had'}${done.rules ? ' and the note as a direction rule' : ''}. The language model only, no GPU.`,
+        done.added.length && `In: ${who(done.added)}.`,
+        done.removed?.length && `Out: ${who(done.removed)}.`,
+        `${plural(done.beats.length, 'beat')} planned again${done.rules ? `, with ${plural(done.rules, 'direction rule')} on who is where` : ''}. The language model only, no GPU.`,
         `Afterwards: ${done.joined.length ? 'the pictures of whoever joined on References, then ' : ''}"Render stale" for the clips of these beats.`,
       ],
       confirm: 'Plan now',

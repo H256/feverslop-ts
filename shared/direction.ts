@@ -20,6 +20,9 @@ export type DirectionRule = {
     binding?: string
     // for the planner only (#765): kept to when the shots of its scope are planned again, never previewed or reviewed
     planned?: boolean
+    // who is or is not in the beat or shot of its scope (#767) - written with the text by "people in shots"; a newer one for the same
+    // person on the same beat or shot replaces it
+    presence?: {characters: string[]; in: boolean}
 }
 export type DirectionSize = 'wide' | 'medium' | 'close' | 'extreme'
 /**

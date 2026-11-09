@@ -258,6 +258,25 @@ export function countShotsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' |
     return counts
 }
 
+/**
+ * The shots of each clip, numbered within its beat as the planner numbers them (shotsNeeded, "music"): a clip with cuts has
+ * several (#767). In story order, per beat.
+ */
+export function shotsOfClips({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Map<string, {clip: string; shots: number[]}[]> {
+    const beatById = new Map(beats.map(b => [b.id, b]))
+    const out = new Map<string, {clip: string; shots: number[]}[]>()
+    for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
+        const clips = out.get(beat.id) ?? []
+        let next = clips.reduce((n, c) => n + c.shots.length, 0)
+        scene.forEach((slot, k) => {
+            const count = shotCountFor(slot, beat, k === 0)
+            clips.push({clip: slot.id, shots: Array.from({length: count}, () => ++next)})
+        })
+        out.set(beat.id, clips)
+    }
+    return out
+}
+
 // Approximate real-time [start, end) window per shot of a beat, in shot order - shots are assumed evenly spread
 // across their slot's duration. buildClip refines the exact cut points later (avoiding mid-word cuts etc.), but
 // this coarse split is already enough to check a shot against detected stem activity before shot timing is final.

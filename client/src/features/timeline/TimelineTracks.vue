@@ -151,6 +151,22 @@ function pickBeat(event: MouseEvent, clips: string[]) {
   const all = clips.every(id => marked.has(id))
   for (const id of clips) all && (event.ctrlKey || event.metaKey) ? marked.delete(id) : marked.add(id)
 }
+// The sections or scenes (#767): a click marks the clips in it, Shift+click the clips of every section of that name (all the
+// choruses), Ctrl+click adds them or takes them out - for "People…" on the chorus clips only, say. A clip counts where its middle is
+type Group = {id: string; label: string; start: number; end: number}
+const clipsOf = (groups: Group[]) =>
+  project.value.clips.filter(c => groups.some(g => (c.start + c.end) / 2 >= g.start && (c.start + c.end) / 2 < g.end)).map(c => c.id)
+function pickSection(event: MouseEvent, group: Group) {
+  const groups = event.shiftKey ? project.value.groups.filter(g => g.label === group.label) : [group]
+  const ids = clipsOf(groups)
+  if (!(event.ctrlKey || event.metaKey)) marked.clear()
+  const all = ids.every(id => marked.has(id))
+  for (const id of ids) all && (event.ctrlKey || event.metaKey) ? marked.delete(id) : marked.add(id)
+}
+const sectionMarked = (group: Group) => {
+  const ids = clipsOf([group])
+  return ids.length > 0 && ids.every(id => marked.has(id))
+}
 const beatTitle = (beat: {id: string; label: string; planned: boolean; clips: string[]}) =>
   `${beat.id}${beat.label ? `: ${beat.label}` : ''}\n${beat.planned ? '' : 'No shot plan yet: the next plan run plans it.\n'}${plural(beat.clips.length, 'clip')} - click: mark them · Ctrl+click: add or take them out`
 
@@ -246,9 +262,11 @@ const hidePeek = () => {
             <div
               v-for="group in project.groups"
               :key="group.id"
-              class="group"
-              :title="group.label"
+              :class="['group', {marked: sectionMarked(group)}]"
+              :title="`${group.label} - click: mark its clips · Shift+click: of every ${group.label} · Ctrl+click: add or take them out`"
               :style="{'--s': group.start, '--d': group.end - group.start, '--h': hues.get(group.label)}"
+              @pointerdown.stop
+              @click="pickSection($event, group)"
             >
               {{ group.label }}
             </div>

@@ -94,6 +94,9 @@ function validateRule(r: DirectionRule) {
     if (r.characterId !== undefined && (typeof r.characterId !== 'string' || !r.characterId)) throw Error('invalid characterId')
     if (r.binding !== undefined && typeof r.binding !== 'string') throw Error('invalid binding')
     if (r.planned !== undefined && typeof r.planned !== 'boolean') throw Error('invalid planned')
+    const p = r.presence
+    if (p !== undefined && (!p || typeof p.in !== 'boolean' || !Array.isArray(p.characters) || p.characters.some(c => typeof c !== 'string' || !c)))
+        throw Error('invalid presence')
 }
 function validateEdit(e: DirectionEdit) {
     if (!e || typeof e.id !== 'string' || !e.id.trim()) throw Error('edit requires id')
@@ -164,7 +167,8 @@ export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, 
     const s = state(t)
     const notes = directionNotes(s.edits ?? [], groupIds(t, d), nameIn(d))
     // the director's own words too, for the beats or scenes they are about: a plan made again keeps to them from the start
-    // (#765) - a rule on a shot or a stretch of time stays with the preview, which rewrites the shots that are there
+    // (#765) - a rule on a stretch of time, or a reviewed one on a shot, stays with the preview, which rewrites the shots that are
+    // there; a planned one on a shot of a music video (#767) is a note of its beat for that shot, which the planner numbers the same
     const add = (group: string, note: string) => {
         ;(notes[group] ??= []).push(note)
     }
@@ -173,7 +177,9 @@ export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, 
         const text = r.text.trim()
         const about = r.characterId ? `for ${nameOf(r.characterId)}: ${text}` : text
         const sc = r.scope
-        if (sc.kind === 'beat' || sc.kind === 'scene') add(sc.id, about)
+        const shot = sc.kind === 'shot' && r.planned && t.kind === 'music' ? /^(.+):shot([1-9]\d*)$/.exec(sc.id) : null
+        if (shot) add(shot[1]!, `shot ${shot[2]}: ${about}`)
+        else if (sc.kind === 'beat' || sc.kind === 'scene') add(sc.id, about)
         else if (sc.kind === 'global') for (const group of groupIds(t, d)) add(group, about)
         else if (sc.kind === 'character') {
             const groups = t.kind === 'film' ? groupIds(t, d) : ((d as Project).beats ?? []).filter(b => b.characterIds.includes(sc.id)).map(b => b.id)

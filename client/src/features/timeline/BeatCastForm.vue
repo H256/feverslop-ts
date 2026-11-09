@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import FormField from '../../components/FormField.vue'
 
-export type BeatCastDraft = {characters: string[]; join: {name: string; role: string}[]; note: string}
+export type BeatCastDraft = {characters: string[]; join: {name: string; role: string}[]; without: string[]; note: string}
 
-/** Who comes into the marked beats (#765): people of the cast, new ones joining it, and what they do there. */
-const props = defineProps<{draft: BeatCastDraft; cast: {id: string; name: string; role?: string}[]; inAll: string[]}>()
+/**
+ * Who is in the marked clips (#765, #767): people of the cast, new ones joining it, who goes out of them, and what they do there.
+ * `inAll`: in every beat of the clips already - checked again, the planner is told they are in exactly these clips. `inSome`: in
+ * at least one of them - only they can go out.
+ */
+const props = defineProps<{draft: BeatCastDraft; cast: {id: string; name: string; role?: string}[]; inAll: string[]; inSome: string[]}>()
 const addRow = () => props.draft.join.push({name: '', role: ''})
 const dropRow = (n: number) => props.draft.join.splice(n, 1)
 </script>
 
 <template>
   <div class="beat-cast">
-    <FormField v-if="cast.length" label="From the cast">
+    <FormField v-if="cast.length" label="In these clips">
       <div class="who">
         <label v-for="c in cast" :key="c.id" :title="c.role">
-          <input v-model="draft.characters" type="checkbox" :value="c.id" :disabled="inAll.includes(c.id)" />
+          <input v-model="draft.characters" type="checkbox" :value="c.id" :disabled="draft.without.includes(c.id)" />
           {{ c.name }}<span v-if="inAll.includes(c.id)" class="muted"> - in these beats already</span>
         </label>
       </div>
@@ -31,7 +35,15 @@ const dropRow = (n: number) => props.draft.join.splice(n, 1)
       </div>
       <button type="button" class="btn" @click="addRow">Another person</button>
     </FormField>
-    <FormField label="What they do there - a direction rule on these beats, the planner keeps to it">
+    <FormField v-if="inSome.length" label="Not in these clips - taken out, whatever the beat's story says">
+      <div class="who">
+        <label v-for="c in cast.filter(c => inSome.includes(c.id))" :key="c.id">
+          <input v-model="draft.without" type="checkbox" :value="c.id" :disabled="draft.characters.includes(c.id)" />
+          {{ c.name }}
+        </label>
+      </div>
+    </FormField>
+    <FormField label="What they do there - a direction rule on these clips, the planner keeps to it">
       <textarea
         v-model="draft.note"
         rows="4"

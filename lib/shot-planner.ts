@@ -285,7 +285,7 @@ ${JSON.stringify(
         ...(direction?.[b.id]?.length ? {director: direction[b.id]} : {}),
     })),
 )}
-${block.some(b => direction?.[b.id]?.length) ? 'Beats with "director" entries: the director fixed them - every shot keeps to them, whatever the summary or the moments say.\n' : ''}
+${block.some(b => direction?.[b.id]?.length) ? 'Beats with "director" entries: the director fixed them - every shot keeps to them, whatever the summary or the moments say. An entry starting "shot N:" is about the N-th shot of that beat only (as "music" numbers them); who it puts in or out of that shot is in "characters" of exactly that shot, or not.\n' : ''}
 ${
     chunk.blocking
         ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(chunk.blocking)}
