@@ -44,19 +44,31 @@ const media = (dir: string, file: string) => (existsSync(join(dir, file)) ? {fil
 const readJson = <T>(file: string): T | undefined => (existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as T) : undefined)
 
 type VideoInfo = Awaited<ReturnType<typeof probeVideo>>
-type Sidecar = {workflow?: string; size?: string; seed?: number; renderedFrames?: number}
-const videoOf = (dir: string, id: string): EditorClip['video'] => {
+type Sidecar = {workflow?: string; size?: string; seed?: number; renderedFrames?: number; frameStart?: number}
+/**
+ * The rendered video of a clip. `frameStart`: where the clip starts in the song now - a video rendered from another frame was made
+ * for another part of the song (the timeline was cut again) and gets `moved`, the seconds it is off (#769): played here, its lips
+ * do not match the song.
+ */
+const videoOf = (dir: string, id: string, frameStart?: number): EditorClip['video'] => {
     const file = `videos/${id}.mp4`
     const found = media(dir, file)
     if (!found) return undefined
-    const {workflow, size, seed, renderedFrames} = (() => {
+    const {
+        workflow,
+        size,
+        seed,
+        renderedFrames,
+        frameStart: renderedFrom,
+    } = (() => {
         try {
             return readJson<Sidecar>(join(dir, `${file}.json`)) ?? {}
         } catch {
             return {} // a run is just writing it
         }
     })()
-    return {...found, workflow, size, seed, renderedFrames}
+    const moved = frameStart !== undefined && typeof renderedFrom === 'number' && renderedFrom !== frameStart ? round(secondsAt(renderedFrom - frameStart)) : 0
+    return {...found, workflow, size, seed, renderedFrames, ...(moved ? {moved} : {})}
 }
 
 const pictureOf =
@@ -356,7 +368,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
             pictures: clip.assets.pictures.map(pictureOf(dir)),
             audio: clip.assets.audio.map(a => ({label: a.label, stem: a.stem, songStart: a.songStart, songEnd: a.songEnd})),
             dropped: clip.dropped ?? [],
-            video: videoOf(dir, clip.id),
+            video: videoOf(dir, clip.id, clip.frameStart),
             firstFrame: media(dir, boundaryFrameAsset(clip.id, 'ff')),
             lastFrame: media(dir, boundaryFrameAsset(clip.id, 'lf')),
             marks: marksOf(dir, clip, run, scan),

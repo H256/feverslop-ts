@@ -94,7 +94,8 @@ export type EditorClip = {
     pictures: EditorPicture[]
     audio: {label: string; stem?: string; songStart: number; songEnd: number}[]
     dropped: string[]
-    video?: {file: string; v: number; workflow?: string; size?: string; seed?: number; renderedFrames?: number}
+    // moved (#769): rendered for another part of the song - the seconds it is off, later (+) or earlier (-) in the song
+    video?: {file: string; v: number; workflow?: string; size?: string; seed?: number; renderedFrames?: number; moved?: number}
     firstFrame?: Media
     lastFrame?: Media
     marks: EditorMark[]

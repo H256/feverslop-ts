@@ -4,7 +4,7 @@ import type {ClipProgress, EditorClip} from '../../../../shared/workspace'
 import {thumbUrl, type MediaRoots} from '../../api/urls'
 import {plural} from '../../lib/format'
 import {TERMS} from '../../lib/terms'
-import {STATE_CHIPS, standIn, type ClipState} from './clips'
+import {STATE_CHIPS, movedText, standIn, type ClipState} from './clips'
 
 /** A clip on the timeline: its picture, its shots as ticks, what it is now, and what a run does to it. */
 const props = defineProps<{
@@ -28,7 +28,7 @@ const label = computed(
   <button
     :class="['clip', state, {selected, flagged, marked, [`p-${progress}`]: progress}]"
     :data-id="clip.id"
-    :title="clip.marks.map(m => m.text).join('\n')"
+    :title="[movedText(clip), ...clip.marks.map(m => m.text)].filter(Boolean).join('\n')"
     :style="{'--s': clip.start, '--d': seconds}"
     :aria-label="label"
     @click="$emit('pick', $event)"
@@ -38,6 +38,7 @@ const label = computed(
     <span class="tag">{{ clip.id.replace(/^\D+/, '') }}</span>
     <span v-if="clip.startsFrom" class="goes" :title="`Goes on from ${clip.startsFrom}. ${TERMS['Goes on']}`" />
     <span v-if="clip.marks.length" class="flag" />
+    <span v-if="clip.video?.moved" class="moved">{{ clip.video.moved > 0 ? '+' : '' }}{{ clip.video.moved.toFixed(1) }}s</span>
     <span v-if="clip.preview" class="has-preview" :title="clip.preview.approximate ? 'Has an approximate preview' : 'Has a preview'">P</span>
     <span v-if="marked" class="ticked">✓</span>
     <span v-if="progress" class="progress">{{ progress }}</span>
