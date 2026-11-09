@@ -1,4 +1,5 @@
 import {type ComfyServer, loadSettings} from "../settings.ts";
+import {authOf} from '../comfy-cancel.ts';
 import type {EditorServer} from '../../shared/workspace.ts';
 export type {EditorServer} from '../../shared/workspace.ts';
 
@@ -9,12 +10,6 @@ export type {EditorServer} from '../../shared/workspace.ts';
 const ASK_MS = 2500
 const KEPT_MS = 3000
 
-const authOf = (server: ComfyServer): Record<string, string> => {
-    const credentials = server.credentials as { type?: string, token?: string, username?: string, password?: string } | undefined
-    if (credentials?.token) return {Authorization: `Bearer ${credentials.token}`}
-    if (credentials?.username) return {Authorization: `Basic ${btoa(`${credentials.username}:${credentials.password ?? ''}`)}`}
-    return {}
-}
 
 const ask = async <T>(server: ComfyServer, path: string, fetcher: typeof fetch): Promise<T> => {
     const response = await fetcher(`${server.url}${path}`, {signal: AbortSignal.timeout(ASK_MS), headers: authOf(server)})
