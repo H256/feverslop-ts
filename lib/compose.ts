@@ -934,13 +934,16 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
+                // a close shot of people opens on them, in the place: "an extreme close-up of <the place>" showed the whole place with
+                // the person standing in it and laid the close face over that picture (#756, ab734 slot-017)
+                const closeOnPerson = shot.focus.length > 0 && (shot.plan?.size === 'close' || shot.plan?.size === 'extreme')
                 const where = (still: boolean) => (locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, the ${locationSubject.name}` : '')
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
                 // fill the frame, where the playing is easiest to keep in time with its track
                 const opening = shot.hands
                     ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the ${shot.hands.hands} of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. ${shot.hands.hands === 'hands' ? 'The hand that strikes, picks or strums, the hand that holds, frets or presses,' : `The ${shot.hands.hands} - what strikes, picks or strums and what holds, frets or presses -`} and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
                     : j === 0
-                      ? onSinger
+                      ? onSinger || closeOnPerson
                           ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                           : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
                       : // repeats the location on every cut, not just the first shot - otherwise a shot with no location
