@@ -182,6 +182,17 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain('Seven hammers swing')
         expect(clip.prompt).toContain('Layout of the place')
     })
+    // #755: the intro of a beat whose summary has them sing - nobody sings in the clip, so its first shot opens it
+    test('a clip nobody sings in opens on its first shot, not on a summary that has them sing', () => {
+        const clip = buildClipRequests({...input(false), singing: {singers: ['greta'], lines: []}})[0]!
+        expect(clip.prompt).not.toContain('Seven hammers')
+        expect(clip.prompt).toContain(
+            '2-second music-video clip set in <Subject 1> with <Subject 2>, <Subject 3>, <Subject 4> and <Subject 5>: <Subject 2> drives her hammer into the <Subject 5>.',
+        )
+        expect(clip.prompt).toContain('Layout of the place')
+        expect(clip.prompt).toContain('keeps their lips together and still, silent.')
+        expect(clip.prompt).not.toContain('eyes and brows')
+    })
 })
 
 describe('the background of the place', () => {
