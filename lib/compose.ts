@@ -43,6 +43,8 @@ export function computeMemberCounts(beats: StoryBeat[], characters: Character[])
 // the first (ff) and last (lf) frame a rendered clip contributes to the final video - for extending clips later (fflf2va)
 // a sung word at least this long is a held note (see the shot texts)
 export const HELD_NOTE_SEC = 1
+// a singer's first words at least this long after the cut: the shot says that they do not sing before them
+export const LATE_ONSET_SEC = 0.5
 
 export const boundaryFrameAsset = (clipId: string, which: 'ff' | 'lf') => `assets/clips/${clipId}_${which}.png`
 // one file per stem per clip, e.g. output/audio/slot-006.guitar.wav - a clip can have anywhere from 1 to
@@ -777,6 +779,15 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 if (performing) {
                     const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
+                    // a singer whose first words come later in the shot: the time before them said in words - the model otherwise
+                    // starts the lip-sync with the shot (schwarzer-flur slot-018: a quick flutter of the lips at its start). Only the
+                    // lip-sync is held back, the face stays free to show the moment (a laugh, a shout)
+                    const notYet = [...new Set(shot.starting.flatMap(v => v.singers))]
+                        .filter(s => !continuingSingers.includes(s))
+                        .map(s => ({s, from: Math.min(...shot.starting.filter(v => v.singers.includes(s)).map(v => v.start))}))
+                        .filter(({from}) => from - shot.at >= LATE_ONSET_SEC)
+                        .map(({s, from}) => ` Until ${clipTime(from)}, ${voice(s)} does not sing yet: no lip-sync to ${vocalsTrack?.label ?? 'the vocals'} before then.`)
+                        .join('')
                     // "From 00:02.300 to 00:03.700, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>": the span, not
                     // just the onset - with only the onset the model placed the words anywhere after it
                     const lines = shot.starting.map((v, n) => ` From ${clipTime(v.start)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
@@ -786,7 +797,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         .filter(w => w.end - w.start >= HELD_NOTE_SEC && w.start < shotEnd && w.end > shot.at)
                         .map(w => ` From ${clipTime(Math.max(w.start, shot.at))} to ${clipTime(Math.min(w.end, shotEnd))}, ${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'hold' : 'holds'} the long note of "${w.text.replace(/[^\p{L}\p{N}]+$/u, '')}": one open vowel shape held, the mouth staying open in it for the whole note, only the jaw and the throat moving slightly.`))
                         .join('')
-                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
+                    return `${opening}${fromFrame}${inFrame}${keepsSinging}${notYet}${lines || ` ${moment}`}${held}${silentClause}${othersClause}${propClause}`.trim()
                 }
                 const lines = cueLines(j)
                 const lyrics = lines.length
