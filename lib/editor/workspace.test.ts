@@ -319,9 +319,9 @@ describe('a run', () => {
         runs.start(project, {type: 'plan'})
         expect(() => runs.start(project, {type: 'plan'})).toThrow('a run is going on')
         await until(() => runs.lines(project, 0).lines.includes('started'))
-        expect(runs.stop(project)).toBe(true)
+        expect(await runs.stop(project, [])).toBe(true)
         await until(() => runs.current(project)?.running === false)
-        expect(runs.stop(project)).toBe(false)
+        expect(await runs.stop(project, [])).toBe(false)
     })
     test('what it is given for the run alone goes when it has ended, or when it is not started', async () => {
         script('index.ts', `process.exit(0)`)
