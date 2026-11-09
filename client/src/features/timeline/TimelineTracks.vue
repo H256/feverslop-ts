@@ -2,7 +2,7 @@
 import {computed, onMounted, onScopeDispose, ref, watch, watchEffect} from 'vue'
 import type {EditorClip} from '../../../../shared/workspace'
 import {usePointerDrag} from '../../composables/usePointerDrag'
-import {clamp} from '../../lib/format'
+import {clamp, plural} from '../../lib/format'
 import {hueAt} from '../../lib/terms'
 import {ChromeService} from '../../services/chrome'
 import {drawRuler, drawWave} from './canvas'
@@ -143,6 +143,45 @@ const castLanes = computed(() => {
   }
   return [...lanes.values()]
 })
+// The beats (#761): which beat a clip belongs to. A click marks the clips of the beat (Ctrl+click: adds them), and the legend
+// then offers to plan their shots again (#762). A beat without a shot plan is planned by the next plan run anyway.
+const beats = computed(() => project.value.beats ?? [])
+function pickBeat(event: MouseEvent, clips: string[]) {
+  if (!(event.ctrlKey || event.metaKey || event.shiftKey)) marked.clear()
+  const all = clips.every(id => marked.has(id))
+  for (const id of clips) all && (event.ctrlKey || event.metaKey) ? marked.delete(id) : marked.add(id)
+}
+const beatTitle = (beat: {id: string; label: string; planned: boolean; clips: string[]}) =>
+  `${beat.id}${beat.label ? `: ${beat.label}` : ''}\n${beat.planned ? '' : 'No shot plan yet: the next plan run plans it.\n'}${plural(beat.clips.length, 'clip')} - click: mark them · Ctrl+click: add or take them out`
+
+// how tall the clips are: dragged at the top edge of the timeline, kept per viewer
+const HEIGHT_KEY = 'timeline.clipHeight'
+const readHeight = () => {
+  try {
+    return Number(localStorage.getItem(HEIGHT_KEY)) || 96
+  } catch {
+    return 96
+  }
+}
+const clipHeight = ref(clamp(readHeight(), 56, 240))
+const resizeDrag = usePointerDrag()
+function resize(event: PointerEvent) {
+  const from = event.clientY
+  const before = clipHeight.value
+  resizeDrag(
+    e => {
+      clipHeight.value = clamp(before + from - e.clientY, 56, 240)
+    },
+    () => {
+      try {
+        localStorage.setItem(HEIGHT_KEY, String(clipHeight.value))
+      } catch {
+        // no storage: the height holds for this page only
+      }
+    },
+  )
+}
+
 const spoken = computed(() =>
   project.value.clips.flatMap(clip =>
     clip.lines.map((line, n) => ({
@@ -171,7 +210,8 @@ const hidePeek = () => {
 </script>
 
 <template>
-  <section class="timeline" aria-label="Timeline">
+  <section class="timeline" aria-label="Timeline" :style="{'--clip-h': `${clipHeight}px`}">
+    <div class="tl-resize" title="Drag to make the timeline taller or lower" @pointerdown.prevent="resize" />
     <div class="tbar">
       <TimelineLegend />
       <div class="spacer" />
@@ -193,6 +233,7 @@ const hidePeek = () => {
       <div class="labels" aria-hidden="true">
         <div class="lane-ruler" />
         <div class="lane-groups">{{ film ? 'Scenes' : 'Sections' }}</div>
+        <div v-if="beats.length" class="lane-beats">Beats</div>
         <div class="lane-wave">{{ peaks ? (project.song ? 'Song' : 'Sound') : '' }}</div>
         <div class="lane-clips">Clips</div>
         <div class="lane-lines">{{ film ? 'Lines' : 'Sung' }}</div>
@@ -211,6 +252,19 @@ const hidePeek = () => {
             >
               {{ group.label }}
             </div>
+          </div>
+          <div v-if="beats.length" class="lane lane-beats" @pointerdown="scrub">
+            <button
+              v-for="beat in beats"
+              :key="beat.id"
+              :class="['beat', {unplanned: !beat.planned, marked: beat.clips.every(id => marked.has(id))}]"
+              :title="beatTitle(beat)"
+              :style="{'--s': beat.start, '--d': beat.end - beat.start}"
+              @pointerdown.stop
+              @click="pickBeat($event, beat.clips)"
+            >
+              <b>{{ beat.id.replace(/^beat-0*/, '') }}</b> {{ beat.label }}
+            </button>
           </div>
           <div class="lane lane-wave" @pointerdown="scrub"><canvas ref="wave" /></div>
           <div :class="['lane lane-clips', {dimmed: onlyFlagged}]" @pointermove="hover" @pointerleave="hidePeek">

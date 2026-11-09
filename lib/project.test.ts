@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {projectFormatRedo, type Project, ProjectStore} from './project.ts'
+import {dropBeatPlans, projectFormatRedo, type Project, ProjectStore} from './project.ts'
 import type {ProjectConfig} from './config.ts'
 import {projectInputs, stepUsed} from './inputs.ts'
 
@@ -78,5 +78,17 @@ describe('the blocking, a step of its own before the shots', () => {
         await project.step('blocking', 'blocking', async () => ({}))
         expect(project.data.shotMoments).toEqual(planned.shotMoments)
         expect(project.data.shotViews).toEqual(planned.shotViews)
+    })
+})
+
+describe('the shots of chosen beats planned again (#762)', () => {
+    test('their plans and kept answers go, the other beats stay', () => {
+        const data = {
+            shotMoments: {'beat-01': {shots: []}, 'beat-02': {shots: []}},
+            partials: {shotMoments: {'beat-02': {fingerprint: 'x', value: 1}, 'beat-03': {fingerprint: 'y', value: 2}}},
+        } as unknown as Pick<Project, 'shotMoments' | 'partials'>
+        expect(dropBeatPlans(data, ['beat-02', 'beat-03'])).toEqual(['beat-02'])
+        expect(Object.keys(data.shotMoments!)).toEqual(['beat-01'])
+        expect(data.partials!.shotMoments).toEqual({})
     })
 })

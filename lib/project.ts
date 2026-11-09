@@ -282,6 +282,22 @@ export function unplannedBeats(data: Pick<Project, 'beats' | 'shotMoments'>): st
 }
 
 /**
+ * Drops the shot plans of these beats (and a kept answer of a stopped run for them): the next plan run plans just these
+ * again, on the floor plans they have, and the other beats stay (#762). Returns the beats that had a plan.
+ */
+export function dropBeatPlans(data: Pick<Project, 'shotMoments' | 'partials'>, beatIds: Iterable<string>): string[] {
+    const dropped: string[] = []
+    for (const beatId of beatIds) {
+        if (data.shotMoments?.[beatId] !== undefined) {
+            delete data.shotMoments[beatId]
+            dropped.push(beatId)
+        }
+        delete data.partials?.shotMoments?.[beatId]
+    }
+    return dropped
+}
+
+/**
  * The --redo for data changed by hand (an imported picture's texts): the steps with a result that read one of `changed`,
  * without those another of them redoes anyway. The changed steps themselves are never in it - redoing one would ask the
  * language model again and overwrite what was put there.

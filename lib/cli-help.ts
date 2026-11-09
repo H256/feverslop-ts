@@ -60,6 +60,7 @@ export const commandHelp: Record<string, Help> = {
     plan: {
         options: [
             ['--redo=STEP,STEP', redo],
+            ['--beats=beat-05,beat-07', 'With --redo=shotMoments: plan only the shots of these beats again; the other beats and their clips stay'],
             ['--render=song,images,videos,final|all', 'Also render: the song, the pictures, the clips, the final video. all = images, videos, final'],
             ...rendering,
             ...planning,

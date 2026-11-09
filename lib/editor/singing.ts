@@ -4,7 +4,7 @@ import {isAbsolute, join, relative, resolve} from 'node:path'
 import {assetPaths} from '../asset-import.ts'
 import type {ClipRequest} from '../compose.ts'
 import {withProjectLock} from '../lock.ts'
-import type {Project, Singing} from '../project.ts'
+import {dropBeatPlans, type Project, type Singing} from '../project.ts'
 import {normalizeParts, singersOfParts, type SingingPart} from '../singing-parts.ts'
 import {readClipRequests} from '../render-state.ts'
 import type {EditorTarget} from './project.ts'
@@ -146,13 +146,9 @@ export function applySinging(data: Project, change: SingingChange, requests: Req
             result.added.push(...missing.map(character => ({beat: beatId, character})))
             if (data.blocking?.[beatId]) delete data.blocking[beatId]
         }
-        if (data.shotMoments?.[beatId] !== undefined) {
-            delete data.shotMoments[beatId]
-            result.replanned.push(beatId)
-        }
+        // a kept answer of a stopped run is asked differently now anyway: it goes too, so that nothing old comes back
+        result.replanned.push(...dropBeatPlans(data, [beatId]))
     }
-    // a kept answer of a stopped run is asked differently now anyway: it goes, so that nothing old comes back
-    for (const beatId of result.replanned) delete data.partials?.shotMoments?.[beatId]
     const changedSingers = [...result.newSingers, ...result.formerSingers]
     const stale = new Set([...requests.filter(c => beats.has(c.beatId)).map(c => c.id), ...changedSingers.flatMap(id => clipsWith(requests, id))])
     result.staleClips = requests.map(c => c.id).filter(id => stale.has(id))

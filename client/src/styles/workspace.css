@@ -712,6 +712,7 @@ select.source {
 
 /* timeline */
 .timeline {
+  position: relative;
   background: var(--surface);
   border-top: 1px solid var(--line);
   min-width: 0;
@@ -792,17 +793,20 @@ select.source {
 .lane-groups {
   height: 22px;
 }
+.lane-beats {
+  height: 24px;
+}
 .lane-wave {
-  height: 40px;
+  height: 44px;
 }
 .lane-clips {
-  height: 72px;
+  height: var(--clip-h, 96px);
 }
 .lane-lines {
-  height: 20px;
+  height: 22px;
 }
 .lane-cast {
-  height: 12px;
+  height: 15px;
 }
 .labels .lane-cast {
   font-size: 10px;
@@ -810,7 +814,56 @@ select.source {
   white-space: nowrap;
   text-overflow: ellipsis;
   display: block;
-  line-height: 12px;
+  line-height: 15px;
+}
+.tl-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+  z-index: 3;
+}
+.tl-resize:hover {
+  background: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.beat {
+  position: absolute;
+  left: calc(var(--s) * var(--pps) * 1px);
+  width: calc(var(--d) * var(--pps) * 1px);
+  top: 2px;
+  bottom: 2px;
+  border: 0;
+  border-right: 1px solid var(--surface);
+  border-radius: 4px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 20px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--raised);
+  color: var(--muted);
+  cursor: pointer;
+}
+.beat b {
+  color: var(--text);
+  font-weight: 600;
+}
+.beat:hover {
+  color: var(--text);
+}
+.beat.unplanned {
+  background: transparent;
+  outline: 1px dashed var(--stale);
+  outline-offset: -2px;
+}
+.beat.marked {
+  background: color-mix(in oklab, var(--accent) 30%, var(--raised));
+  color: var(--text);
 }
 .cast {
   position: absolute;

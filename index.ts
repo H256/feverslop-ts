@@ -83,7 +83,7 @@ import {parseUntil, stopAfter} from './lib/stages.ts'
 import {applyLibraryText, CASTING_FILE, castFromLibrary, copyKey} from './lib/casting.ts'
 import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
-import {redoAfter, unplannedBeats} from './lib/project.ts'
+import {dropBeatPlans, redoAfter, unplannedBeats} from './lib/project.ts'
 import {handsOf} from './lib/project.ts'
 import {
     castPrompt,
@@ -112,7 +112,7 @@ cli('plan')
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview] [--retake=slot-007:3.2-5.0]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -122,6 +122,7 @@ const {values: args, positionals} = (() => {
             allowPositionals: true,
             options: {
                 redo: {type: 'string', default: ''},
+                beats: {type: 'string', default: ''},
                 render: {type: 'string', default: ''},
                 only: {type: 'string', default: ''},
                 again: {type: 'boolean', default: false},
@@ -229,6 +230,11 @@ if (unknownFormats.length) log.usageError(`--export: unknown "${unknownFormats.j
 const redoSteps = args.redo.split(',').filter(Boolean) as StepName[]
 const unknownRedo = redoSteps.filter(s => !(STEP_NAMES as string[]).includes(s))
 if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join(', ')}" - use ${STEP_NAMES.join(', ')}`, usage)
+// --beats=beat-05,beat-07 with --redo=shotMoments: only these beats are planned again, on the floor plans they have; the
+// shots of the others (and the clips rendered from them) stay (#762)
+const replanBeats = [...new Set(args.beats.split(',').filter(Boolean))]
+if (replanBeats.length && !redoSteps.includes('shotMoments'))
+    log.usageError('--beats goes with --redo=shotMoments: it names the beats whose shots are planned again', usage)
 // without an id: the projects to pick from in a terminal, else the list of them in the usage error
 const projectId = positionals[0] ?? (await pickProject())
 if (!validProjectId(projectId))
@@ -268,7 +274,26 @@ if (args.gallery) {
     process.exit(0)
 }
 // a dry run only says what would be redone (see dryRun below)
-if (!args['dry-run']) for (const step of redoSteps) project.invalidate(step)
+if (replanBeats.length) {
+    const known = new Set((project.data.beats ?? []).map(b => b.id))
+    const unknown = replanBeats.filter(id => !known.has(id))
+    if (unknown.length)
+        log.usageError(
+            known.size
+                ? `--beats: no beat "${unknown.join(', ')}" - the beats are ${[...known].join(', ')}`
+                : '--beats: the project has no beats yet - plan it first',
+            usage,
+        )
+}
+// the steps named, but with --beats not shotMoments as a whole: just the shot plans of those beats go
+const redoWhole = replanBeats.length ? redoSteps.filter(step => step !== 'shotMoments') : redoSteps
+if (!args['dry-run']) {
+    for (const step of redoWhole) project.invalidate(step)
+    if (replanBeats.length && project.data.shotMoments) {
+        dropBeatPlans(project.data, replanBeats)
+        log.step('Redo', `${styles.name('shotMoments')} ${styles.muted(`of ${replanBeats.join(', ')}`)}`)
+    }
+}
 
 const toId = toSlug
 const readInput = (name: string) => readInputFile(project.input(name))
@@ -1914,7 +1939,7 @@ async function dryRun() {
     const sectionsChanged =
         project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
     const reasons: [string, StepName[]][] = [
-        ...(redoSteps.length ? [['--redo', redoSteps] as [string, StepName[]]] : []),
+        ...(redoWhole.length ? [['--redo', redoWhole] as [string, StepName[]]] : []),
         ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
         ...lostStems.map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
         ...(sectionsChanged ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
@@ -1928,8 +1953,13 @@ async function dryRun() {
     log.section('DRY RUN - nothing is done')
     for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
     log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
-    const unplanned = redone.includes('shotMoments') ? [] : unplannedBeats(project.data)
-    if (unplanned.length) log.step('Planned again', `${unplanned.map(styles.name).join(', ')} ${styles.muted('- no shot plan yet, the other beats stay')}`)
+    const unplanned = redone.includes('shotMoments') ? [] : [...new Set([...replanBeats, ...unplannedBeats(project.data)])]
+    if (unplanned.length) {
+        const why = replanBeats.length ? '- named by --beats or without a shot plan yet' : '- no shot plan yet'
+        log.step('Planned again', `${unplanned.map(styles.name).join(', ')} ${styles.muted(`${why}, the other beats stay`)}`)
+        const stale = (project.data.mapping ?? []).filter(m => unplanned.includes(m.beatId)).map(m => m.slotId)
+        if (stale.length) log.step('Stale after', `${formatSlotRanges(stale)} ${styles.muted('- render them again with --render=videos --refresh=clips')}`)
+    }
     if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
 
     if (!render.has('images') && !render.has('videos') && !render.has('final')) return
