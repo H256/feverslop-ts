@@ -8,6 +8,7 @@ import CompareDialog from './CompareDialog.vue'
 import {TimelineService, timelineContext} from './context'
 import FailBar from './FailBar.vue'
 import HelpDialog from './HelpDialog.vue'
+import ShotDirector from '../direction/ShotDirector.vue'
 import ClipInspector from './inspector/ClipInspector.vue'
 import PlayerMonitor from './PlayerMonitor.vue'
 import SummaryChips from './SummaryChips.vue'
@@ -96,4 +97,5 @@ const closeHelp = () => { timeline.helpOpen.value = false }
   </div>
   <CompareDialog v-if="timeline.compared.value" :key="timeline.compared.value.version.video" :compared="timeline.compared.value" @close="closeCompare" />
   <HelpDialog v-if="timeline.helpOpen.value" @close="closeHelp" />
+  <ShotDirector v-if="timeline.directing.value" :key="timeline.directing.value" :shot-id="timeline.directing.value" @close="timeline.directing.value = undefined" />
 </template>
