@@ -187,7 +187,7 @@ Am Ende bleiben genau die mit `R` gemerkten Clips markiert, und die Seite fragt,
 
 ![Laufender Render mit Leiste am Seitenende](images/workspace/run.jpg)
 
-Am unteren Rand steht, was gerade läuft und wie viele Clips fertig sind. **Log** zeigt die Ausgabe der CLI, **Stop** beendet den Lauf. Fertige Dateien bleiben, und Jobs, die schon auf einem Server liegen, nimmt der nächste Lauf wieder auf.
+Am unteren Rand steht, was gerade läuft und wie viele Clips fertig sind. **Log** zeigt die Ausgabe der CLI, **Stop** beendet den Lauf. Fertige Dateien bleiben. Die Jobs, auf die der Lauf gewartet hat - Bilder, Sheets und Clips -, werden auf ihren Servern abgebrochen: aus der Warteschlange genommen, oder angehalten, wenn es gerade der eigene Job ist (nie der eines anderen). Der Server ist damit sofort frei, und der nächste Lauf rendert sie neu. So wirkt auch Ctrl+C im Terminal. Nur wenn ein Lauf abstürzt oder der Rechner einschläft, laufen seine Jobs weiter, und der nächste Lauf nimmt sie wieder auf.
 
 **Wenn etwas schiefgeht:** Bei bekannten Fehlern steht über der Timeline in Klartext, was passiert ist und was zu tun ist, daneben **Repeat**. Andere Fehler zeigt das **Log**. Der häufigste Fall ist `out of memory`: Dann nimmst du einen anderen Server oder renderst kürzer oder kleiner, statt denselben Job noch einmal zu schicken.
 
