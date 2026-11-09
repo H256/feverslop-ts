@@ -104,6 +104,8 @@ export type EditorClip = {
     refined: {variant: string; file: string; v: number; size?: string; seed?: number; denoise?: number}[] // larger versions of it (bun run refinish)
 }
 export type EditorGroup = {id: string; label: string; start: number; end: number}
+// a beat of a music video along the timeline (#761): planned - its shots have a plan; without one the next plan run plans them
+export type EditorBeat = {id: string; label: string; start: number; end: number; planned: boolean; clips: string[]}
 export type EditorFinal = {file: string; v: number; label: string; state: FinalState; preview: boolean; width?: number; height?: number; fps?: number}
 export type EditorProject = {
     id: string
@@ -114,6 +116,7 @@ export type EditorProject = {
     bpm?: number
     song?: Media // what plays under the whole video: only when the final video has it too
     groups: EditorGroup[]
+    beats?: EditorBeat[] // a music video's beats; a film has none
     clips: EditorClip[]
     pictures: {id: string; kind: string; name: string; file: string; exists: boolean; v?: number}[]
     final: {state: FinalState; file?: string; v?: number}
@@ -373,7 +376,7 @@ export type RunRequest =
     | {type: 'look-pictures'}
     | {type: 'adapt-story'; add?: {name: string; role: string}[]; remove?: string[]} // add, remove: a film's roles (#589)
     | {type: 'final'; preview?: boolean}
-    | {type: 'plan'; until?: string; redo?: string[]}
+    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]} // beats: a music video's beats whose shots are planned again (#762)
     | {type: 'retake'; clip: string; range: string}
     | {type: 'repeat'; command: string}
     | {type: 'next'; command: string}

@@ -45,7 +45,8 @@ const pipeline = (kind: EditorKind) => (kind === 'film' ? 'film.ts' : 'index.ts'
 // what a command of the last run or of `status` may hold to be started from the page: rendering, nothing that asks in the terminal, no keys.
 // Which servers a run goes to is chosen again on the page, so what the command said about them is left out
 const SERVERS_FLAG = /^--comfy=/
-const ALLOWED_FLAGS = /^--(render=[a-z,]+|only=[a-z0-9,-]+|again|new-anchor|refresh=[a-z,]+|strict|preview|retake=[a-z0-9:.,-]+|until=[a-z]+|redo=[a-zA-Z,]+)$/
+const ALLOWED_FLAGS =
+    /^--(render=[a-z,]+|only=[a-z0-9,-]+|beats=[a-z0-9,-]+|again|new-anchor|refresh=[a-z,]+|strict|preview|retake=[a-z0-9:.,-]+|until=[a-z]+|redo=[a-zA-Z,]+)$/
 
 /** A command line as `status` or the last run give it, when it is one the page may start: its options. */
 export function allowedOptions(kind: EditorKind, id: string, command: string): string[] | undefined {
@@ -115,7 +116,17 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (!Array.isArray(redo) || redo.some(step => typeof step !== 'string' || !steps.includes(step)))
                 throw new Error(`no such steps: ${JSON.stringify(redo)}`)
             if (action.until !== undefined && !(UNTIL_STAGES as readonly string[]).includes(action.until)) throw new Error(`no such stage: ${action.until}`)
-            return run(...(redo.length ? [`--redo=${redo.join(',')}`] : []), ...(action.until ? [`--until=${action.until}`] : []))
+            // the shots of these beats planned again, the others stay (#762)
+            const beats = action.beats ?? []
+            if (!Array.isArray(beats) || beats.some(b => typeof b !== 'string' || !PICTURE_ID.test(b)))
+                throw new Error(`no such beats: ${JSON.stringify(beats)}`)
+            if (beats.length && kind !== 'music') throw new Error('beats are planned again in a music video; a film plans scenes again')
+            const redoSteps = beats.length && !redo.includes('shotMoments') ? [...redo, 'shotMoments'] : redo
+            return run(
+                ...(redoSteps.length ? [`--redo=${redoSteps.join(',')}`] : []),
+                ...(beats.length ? [`--beats=${beats.join(',')}`] : []),
+                ...(action.until ? [`--until=${action.until}`] : []),
+            )
         }
         case 'retake':
             if (!CLIP_ID.test(action.clip) || !/^(\d+(\.\d+)?-\d+(\.\d+)?|shot\d+)$/.test(action.range))

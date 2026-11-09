@@ -211,6 +211,27 @@ export function useClipActions(timeline: Timeline) {
     const yes = await ask({title: next.why, lines: [next.command, next.estimate], confirm: 'Run it', render: true})
     if (yes) await start({type: 'next', command: next.command})
   }
+  /** The shots of these beats planned again with the planner as it is now (#762): the language model only, their clips go stale. */
+  async function replanBeats(beatIds: string[]) {
+    const all = project.value.beats ?? []
+    const beats = all.filter(b => beatIds.includes(b.id))
+    if (!beats.length) return
+    const clips = beats.flatMap(b => b.clips)
+    const yes = await ask({
+      title: `Plan the shots of ${plural(beats.length, 'beat')} again?`,
+      lines: [
+        beats.map(b => b.id).join(', '),
+        'The language model only, no GPU: new shots on the floor plans these beats have, with the planner as it is now. The other beats keep their shots.',
+        `${plural(clips.length, 'clip')} go stale (${clips.join(', ')}). Render them afterwards with "Render stale"; the old versions stay selectable.`,
+        'Edits made on the Direction page are applied to the new shots too.',
+      ],
+      warnings: [beats.length === all.length && 'These are all the beats: every clip of the video goes stale.'],
+      confirm: 'Plan them again',
+    })
+    if (!yes) return
+    await start({type: 'plan', beats: beats.map(b => b.id)})
+    marked.clear()
+  }
   const plain = (action: RunRequest) => start(action)
   const plan = () => start({type: 'plan'})
 
@@ -227,6 +248,7 @@ export function useClipActions(timeline: Timeline) {
   return {
     renderAgain: guarded(renderAgain),
     renderMarked: guarded(renderMarked),
+    replanBeats: guarded(replanBeats),
     preview: guarded(preview),
     retake: guarded(retake),
     refinish: guarded(refinish),

@@ -113,6 +113,16 @@ describe('a plan run from the page', () => {
         expect(() => runCommand(music, {type: 'plan', redo: ['story --render=all']})).toThrow('no such steps')
         expect(() => runCommand(music, {type: 'plan', until: 'plan'})).toThrow('no such stage')
     })
+
+    test('the shots of chosen beats planned again (#762)', () => {
+        expect(runCommand(music, {type: 'plan', beats: ['beat-05', 'beat-07']})).toEqual({
+            script: 'index.ts',
+            args: ['demo', '--redo=shotMoments', '--beats=beat-05,beat-07'],
+        })
+        expect(runCommand(music, {type: 'plan', redo: ['shotMoments'], beats: ['beat-05']}).args).toEqual(['demo', '--redo=shotMoments', '--beats=beat-05'])
+        expect(() => runCommand(music, {type: 'plan', beats: ['beat-05 --render=all']})).toThrow('no such beats')
+        expect(() => runCommand(film, {type: 'plan', beats: ['beat-05']})).toThrow('a film plans scenes again')
+    })
 })
 
 describe('casting.json changed after the plan - what Plan now plans again', () => {

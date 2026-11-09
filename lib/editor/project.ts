@@ -270,6 +270,30 @@ function songFileOf(dir: string, song: string | undefined) {
     return inside.startsWith('..') || isAbsolute(inside) ? undefined : media(dir, inside)
 }
 
+/** The beats along the timeline (#761): the runs of clips of one beat, its summary, whether its shots are planned. */
+function beatsOf(clips: EditorClip[], requests: ClipRequest[], data: Project, plain: (text: string) => string): EditorBeat[] {
+    const beats: EditorBeat[] = []
+    clips.forEach((clip, i) => {
+        const id = requests[i]!.beatId
+        const last = beats.at(-1)
+        if (last?.id === id) {
+            last.end = clip.end
+            last.clips.push(clip.id)
+            return
+        }
+        const summary = data.beats?.find(b => b.id === id)?.summary
+        beats.push({
+            id,
+            label: summary ? plain(summary) : '',
+            start: clip.start,
+            end: clip.end,
+            planned: data.shotMoments?.[id] !== undefined,
+            clips: [clip.id],
+        })
+    })
+    return beats
+}
+
 async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const requests = await readClipRequests<ClipRequest>(dir)
     const data = applyDirectionOverlay({id, dir, kind: 'music'}, readJson<Project>(join(dir, 'project.json')) ?? {}, {allowPending: true})
@@ -350,6 +374,7 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
         // with "songAudio": false the final video has the clips' own sound, and so has this
         ...(config.songAudio ? {song: songFileOf(dir, timeline.song)} : {}),
         groups: groupsOf(clips, group => group),
+        beats: beatsOf(clips, requests, data, plain),
         clips: withNext(clips),
         pictures: picturesOf(dir, await readPictureJobs(join(dir, 'output', 'assets.json'))),
         final: finalOf(dir, id, requests),
@@ -567,6 +592,7 @@ import type {
     EditorViews,
     EditorOverride,
     EditorClip,
+    EditorBeat,
     EditorGroup,
     EditorProject,
     EditorFinal,

@@ -6,7 +6,7 @@ import {splitBySinger} from '../singing-parts.ts'
 import {withProjectLock} from '../lock.ts'
 import {alignLyrics, lyricsProblems, MIN_WORD_SEC, normalizeWord, slotVocals, tightenStarts} from '../lyrics.ts'
 import {projectLyricSections} from '../music.ts'
-import type {LyricsTiming, Project, TimedLine} from '../project.ts'
+import {dropBeatPlans, type LyricsTiming, type Project, type TimedLine} from '../project.ts'
 import {readFineWaveform} from '../waveform.ts'
 import {readClipRequests} from '../render-state.ts'
 import type {EditorTarget} from './project.ts'
@@ -327,12 +327,7 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
     }
     const beatOfSlot = new Map((data.mapping ?? []).map(m => [m.slotId, m.beatId]))
     const beats = new Set(result.slots.map(id => beatOfSlot.get(id)).filter(b => b !== undefined))
-    for (const beatId of beats) {
-        if (data.shotMoments?.[beatId] === undefined) continue
-        delete data.shotMoments[beatId]
-        delete data.partials?.shotMoments?.[beatId]
-        result.replanned.push(beatId)
-    }
+    result.replanned.push(...dropBeatPlans(data, beats))
     result.staleClips = requests.filter(c => beats.has(c.beatId)).map(c => c.id)
     // a cut inside a moved word: the word is sung half in one clip, half in the next
     const cutTimes = slots.slice(1).map(s => s.start)

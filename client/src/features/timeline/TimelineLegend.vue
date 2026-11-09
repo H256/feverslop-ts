@@ -28,6 +28,8 @@ const hasFinal = computed(() => project.value.finals.some(f => !f.preview))
 const allClips = () => actions.preview(clips.value, `all ${clips.value.length} clips`)
 const previewMarked = () => actions.preview(markedClips.value, plural(markedClips.value.length, 'clip'))
 const reviewNow = () => review.start(reviewList(project.value, marked, fresh.value))
+// the beats of the marked clips (#762): their shots can be planned again
+const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.clips.some(id => marked.has(id))).map(b => b.id))
 </script>
 
 <template>
@@ -49,6 +51,13 @@ const reviewNow = () => review.start(reviewList(project.value, marked, fresh.val
       <span class="num">{{ marked.size }} marked</span>
       <button @click="actions.renderMarked()">Render marked</button>
       <button @click="previewMarked">Preview marked</button>
+      <button
+        v-if="markedBeats.length"
+        :title="`Plan the shots of ${markedBeats.join(', ')} again with the planner as it is now - the language model only; their clips go stale`"
+        @click="actions.replanBeats(markedBeats)"
+      >
+        Plan {{ markedBeats.length > 1 ? `${markedBeats.length} beats` : markedBeats[0] }} again
+      </button>
       <button @click="marked.clear()">Clear</button>
     </template>
     <button
