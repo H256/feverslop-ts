@@ -339,7 +339,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 }
                 return started(runs.start(target, wanted, await urlsOfChoice(servers)))
             }
-            if (what === 'stop') return json({stopped: runs.stop(target)})
+            if (what === 'stop') return json({stopped: await runs.stop(target)})
             if (what === 'direction') {
                 if (!id) return json(await setDirectionRules(target, await body<{rules: DirectionRule[]}>()))
                 if (id === 'take') return json(await takeDirection(target))
