@@ -33,7 +33,9 @@ export type EditorServer = {name: string, reachable: boolean, running: number, p
 
 ////////// A PROJECT
 export type EditorPerson = {name: string, text: string}
-export type EditorShot = {label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[], directionId?: string}
+// who is in the picture of a shot (its plan's characters) and whether they sing, play or speak in it - the timeline's cast lanes
+export type EditorCast = {id: string, name: string, does: ('sings' | 'plays' | 'speaks')[]}
+export type EditorShot = {label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[], directionId?: string, cast?: EditorCast[]}
 // a sung or spoken line: seconds from the clip's start
 export type EditorLine = {at: number, end?: number, text: string, who: string, line?: number}
 export type EditorPicture = {id: string, label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number}
