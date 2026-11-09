@@ -45,6 +45,8 @@ onMounted(() => {
 })
 // the clip at the playhead is in the address, and a clip put into the address (a link, back, forward) is gone to
 watch(playback.clip, clip => { if (clip && route.hash !== `#${clip.id}`) void router.replace({hash: `#${clip.id}`}) })
+// a link that directs a shot (?direct=b3:shot2, from the Direction page) opens its dialog
+watch(() => route.query.direct, id => { if (typeof id === 'string' && id) timeline.directing.value = id }, {immediate: true})
 watch(() => route.hash, () => {
   const clip = linked()
   if (clip && clip.id !== playback.clip.value?.id) playback.seek(clip.start)
@@ -83,6 +85,8 @@ addEventListener('keydown', key)
 onScopeDispose(() => removeEventListener('keydown', key))
 const closeCompare = () => { timeline.compared.value = undefined }
 const closeHelp = () => { timeline.helpOpen.value = false }
+// closed: a link that opened it (?direct=) is left, so it opens the dialog again when followed again
+const closeDirector = () => { timeline.directing.value = undefined; if (route.query.direct) void router.replace({query: {}, hash: route.hash}) }
 </script>
 
 <template>
@@ -97,5 +101,5 @@ const closeHelp = () => { timeline.helpOpen.value = false }
   </div>
   <CompareDialog v-if="timeline.compared.value" :key="timeline.compared.value.version.video" :compared="timeline.compared.value" @close="closeCompare" />
   <HelpDialog v-if="timeline.helpOpen.value" @close="closeHelp" />
-  <ShotDirector v-if="timeline.directing.value" :key="timeline.directing.value" :shot-id="timeline.directing.value" @close="timeline.directing.value = undefined" />
+  <ShotDirector v-if="timeline.directing.value" :key="timeline.directing.value" :shot-id="timeline.directing.value" @close="closeDirector" />
 </template>

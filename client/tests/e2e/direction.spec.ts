@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test'
 import {startEditor} from './editor'
-import {stubProject} from './fixtures'
+import {project, stubProject} from './fixtures'
 import type {DirectionView} from '../../../shared/direction'
 
 let editor: Awaited<ReturnType<typeof startEditor>>
@@ -51,4 +51,30 @@ test('direction: proposal conflicts block take, drop remains available', async (
   await expect(page.getByRole('button', {name: 'Take changes', exact: true})).toBeDisabled()
   await page.getByRole('button', {name: 'Drop proposal', exact: true}).click()
   await expect.poll(() => dropped).toBe(true)
+})
+
+test('direction in the timeline: the cast lane, the shot dialog, a person taken out of the shot by code', async ({page}) => {
+  const shot = {label: '[Shot 1]', at: 0, framing: 'wide', camera: 'static', subjects: ['ann'], people: [], directionId: 'b1:shot1', cast: [{id: 'ann', name: 'Ann', does: ['sings' as const]}, {id: 'bob', name: 'Bob', does: []}]}
+  const posted = await stubProject(page, 'music', {clips: project.clips.map(c => ({...c, shots: [shot]}))})
+  let state: DirectionView = {...view(), characters: [{id: 'ann', name: 'Ann'}, {id: 'bob', name: 'Bob'}],
+    shots: [{id: 'b1:shot1', groupId: 'b1', characters: ['ann', 'bob'], start: 0, end: 5, data: {action: '{Ann} sings while {Bob} leans on the bar', framing: 'wide shot', people: {ann: {singing: true, state: 'stands at the bar'}, bob: {state: 'leans on the bar'}}}}]}
+  await page.route('**/api/direction', route => route.fulfill({json: state}))
+  await page.route('**/api/direction/edits', async route => {
+    state = {...state, edits: route.request().postDataJSON().edits}
+    await route.fulfill({json: state})
+  })
+  await page.goto(`${editor.base}/p/music/demo/`)
+  // the cast lane: one per character, a click directs the shot under it
+  await expect(page.locator('.labels .lane-cast', {hasText: 'Ann'})).toBeVisible()
+  await page.locator('.lane.lane-cast .cast.sings').first().click()
+  const dialog = page.getByRole('dialog', {name: 'Direct this shot'})
+  await expect(dialog.getByRole('heading', {name: 'b1:shot1'})).toBeVisible()
+  // tokens shown as names; whoever sings stays in the shot
+  await expect(dialog.getByText('Ann sings while Bob leans on the bar')).toBeVisible()
+  const takeOut = dialog.getByRole('button', {name: 'Take out of the shot'})
+  await expect(takeOut.first()).toBeDisabled()
+  await takeOut.nth(1).click()
+  await expect.poll(() => state.edits.map(e => [e.remove, e.scope])).toEqual([['bob', {kind: 'shot', id: 'b1:shot1'}]])
+  // the clip prompts are built again at once
+  await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'plan'}})
 })
