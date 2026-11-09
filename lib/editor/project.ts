@@ -6,12 +6,12 @@ import {boundaryFrameAsset, type ClipRequest} from '../compose.ts'
 import {loadProjectConfig, type ProjectConfig} from '../config.ts'
 import {FPS, secondsAt, round} from '../frames.ts'
 import type {Project} from '../project.ts'
-import {type Freshness, freshness} from '../provenance.ts'
+import {freshness} from '../provenance.ts'
 import {plainText} from '../refs.ts'
 import {clipFingerprint, pictureFingerprint, type PictureJob} from '../render.ts'
-import {type FinalState, finalStateOf, readClipRequests, readPictureJobs} from '../render-state.ts'
-import {lastRun, type RunState, runState} from '../run-record.ts'
-import {explainFailure, type Explained} from './progress.ts'
+import {finalStateOf, readClipRequests, readPictureJobs} from '../render-state.ts'
+import {lastRun, runState} from '../run-record.ts'
+import {explainFailure} from './progress.ts'
 import {asBeatShots} from '../shot-plan.ts'
 import type {FilmClipRequest} from '../film/compose.ts'
 import {loadFilmConfig, type LoadedFilmConfig} from '../film/config.ts'
@@ -20,7 +20,7 @@ import {filmClipFingerprint, filmClipFreshness, filmClipSpans} from '../film/ren
 import type {FilmProject} from '../film/types.ts'
 import {speakingSeconds, splitLongShot} from '../film/coverage.ts'
 import {withExtraViews} from '../film/views.ts'
-import {filmStage, musicStage, nextStage, type PlanStage} from '../stages.ts'
+import {filmStage, musicStage, nextStage} from '../stages.ts'
 import {clipRequestFile, clipRequestsDir} from '../previous-output.ts'
 import {INTRO_EXTENSIONS, MARKER_PRESETS, POSTWORK_DEFAULTS} from '../postwork/config.ts'
 import {loadPostwork} from '../postwork/store.ts'
@@ -562,9 +562,6 @@ export function projectGroup(id: string): string {
 export type {ProjectListing as EditorListing} from '../../shared/workspace.ts'
 import type {ProjectListing as EditorListing} from '../../shared/workspace.ts'
 import type {
-    EditorPerson,
-    EditorShot,
-    EditorLine,
     EditorPicture,
     EditorMark,
     EditorViews,

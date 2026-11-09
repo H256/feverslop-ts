@@ -186,7 +186,7 @@ describe('the model behind an alias', () => {
             expect(bodies[0]).not.toHaveProperty('reasoning')
         } finally {
             configureLlm({url: `http://localhost:${server.port}/v1`})
-            strata.stop(true)
+            void strata.stop(true)
         }
     })
 })

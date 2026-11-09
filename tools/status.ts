@@ -3,7 +3,6 @@ import {cli} from '../lib/cli.ts'
 // pictures and clips are rendered, missing or stale, and the command that comes next. Read-only - no lock, no LLM, no
 // ComfyUI; the render estimate comes from the measured timings. --film: the same for a film in films/.
 // usage: bun run status <project-id> [--json] [--film]
-import {join} from 'node:path'
 import {parseArgs} from 'node:util'
 import {log, styles} from '../lib/log.ts'
 import {listProjects, projectExists} from '../lib/project-setup.ts'

@@ -29,18 +29,7 @@ import {
 import {adaptScreenplayPrompt} from '../film/prompts.ts'
 import type {AskOptions} from '../llm.ts'
 import type {EditorKind, EditorTarget} from './project.ts'
-import type {
-    CastingRedo,
-    CastMember,
-    CastView,
-    CastChange,
-    CastResult,
-    BookView,
-    LookElement,
-    LookView,
-    LookChange,
-    LookResult,
-} from '../../shared/workspace.ts'
+import type {CastingRedo, CastView, CastChange, CastResult, BookView, LookElement, LookView, LookChange, LookResult} from '../../shared/workspace.ts'
 export type {
     CastingRedo,
     CastMember,

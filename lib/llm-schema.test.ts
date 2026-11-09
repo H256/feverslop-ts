@@ -59,7 +59,7 @@ beforeAll(() => {
     })
 })
 afterAll(() => {
-    server.stop(true)
+    void server.stop(true)
     configureLlm({})
 })
 

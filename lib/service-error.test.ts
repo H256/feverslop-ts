@@ -15,7 +15,7 @@ beforeAll(() => {
     })
 })
 afterAll(() => {
-    server.stop(true)
+    void server.stop(true)
 })
 
 test('a server error names the LLM server and keeps the error itself', async () => {

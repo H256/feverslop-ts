@@ -321,6 +321,9 @@ export async function fetchAndDisplayResponse(
                         )
                     case 'error':
                         throw new Error(event.message)
+                    // the other events of the stream (audio, tool calls, output items) say nothing a text answer needs
+                    default:
+                        break
                 }
             }
     } catch (e) {

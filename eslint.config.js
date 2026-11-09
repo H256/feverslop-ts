@@ -52,9 +52,30 @@ export default tseslint.config(
             // a union member a switch misses (the 'size' source that broke the client build, #733)
             '@typescript-eslint/no-floating-promises': 'error',
             '@typescript-eslint/no-misused-promises': 'error',
-            '@typescript-eslint/switch-exhaustiveness-check': 'error',
-            '@typescript-eslint/consistent-type-imports': 'error',
-            '@typescript-eslint/no-unused-vars': ['error', {argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_'}],
+            // a switch with a default branch has decided what the other cases do
+            '@typescript-eslint/switch-exhaustiveness-check': ['error', {considerDefaultExhaustiveForUnions: true}],
+            // typeof import(...) names the type of a workflow loaded at run time (loadWorkflow) - there is nothing to import
+            '@typescript-eslint/consistent-type-imports': ['error', {disallowTypeAnnotations: false}],
+            // ({focus, ...shot}) => shot leaves fields out on purpose
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_', ignoreRestSiblings: true},
+            ],
+            // a ternary or && as a statement (toggle a set member, play or stop) is how the code is written
+            '@typescript-eslint/no-unused-expressions': ['error', {allowTernary: true, allowShortCircuit: true}],
+            // let {seed, size} where only seed changes
+            'prefer-const': ['error', {destructuring: 'all'}],
+            // a caught error is thrown on as it came
+            '@typescript-eslint/only-throw-error': ['error', {allowThrowingUnknown: true}],
+            '@typescript-eslint/ban-ts-comment': ['error', {'ts-ignore': 'allow-with-description'}],
+            // async marks a function that returns a promise by contract (a handler, a stub) - an await in it is not the point
+            '@typescript-eslint/require-await': 'off',
+            // the forms edit a reactive draft object their page owns, on purpose (CastMemberForm, CreditsForm, ...)
+            'vue/no-mutating-props': 'off',
+            // it calls assertions unnecessary that tsc needs (its fix broke the typecheck: 'music' as EditorKind, the OpenAI delta)
+            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+            // -1 | number says what -1 means
+            '@typescript-eslint/no-redundant-type-constituents': 'off',
             eqeqeq: ['error', 'smart'],
             // noUncheckedIndexedAccess: x[i]! is deliberate
             '@typescript-eslint/no-non-null-assertion': 'off',
@@ -64,12 +85,28 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-argument': 'warn',
             '@typescript-eslint/no-unsafe-call': 'warn',
             '@typescript-eslint/no-unsafe-return': 'warn',
-            '@typescript-eslint/restrict-template-expressions': ['error', {allowNumber: true, allowBoolean: true}],
+            // String(x) and template strings of unknown values checked before (LLM answers, JSON, form fields) - told, not an error
+            '@typescript-eslint/restrict-template-expressions': ['warn', {allowNumber: true, allowBoolean: true}],
+            '@typescript-eslint/no-base-to-string': 'warn',
             '@typescript-eslint/unbound-method': 'off',
             // candidates after the rollout
             '@typescript-eslint/no-unnecessary-condition': 'off',
             '@typescript-eslint/prefer-nullish-coalescing': 'off',
         },
+    },
+    {
+        // bun:test types expect().rejects without a promise; tests may use any and assert what they build
+        files: ['**/*.test.ts', 'client/tests/**/*.ts', 'tests/**/*.ts'],
+        rules: {
+            '@typescript-eslint/await-thenable': 'off',
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+        },
+    },
+    {
+        // the node types are generated from a server (comfy/nodes.ts, not in git): without them the workflow helpers are any
+        files: ['comfy/**/*.ts'],
+        rules: {'@typescript-eslint/no-explicit-any': 'off'},
     },
     prettier,
 )

@@ -122,7 +122,7 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
             }
             if (writeError) {
                 rmSync(lockFile, {force: true})
-                throw writeError
+                throw writeError instanceof Error ? writeError : new Error(String(writeError))
             }
             acquired = true
         }

@@ -34,8 +34,7 @@ export function laplacianEnergy({data, width, height}: Gray): number {
     }
     const n = (2 * WINDOW + 1) ** 2
     let laplace = 0,
-        contrast = 0,
-        count = 0
+        contrast = 0
     for (let y = WINDOW + 1; y < height - WINDOW - 1; y++) {
         for (let x = WINDOW + 1; x < width - WINDOW - 1; x++) {
             const i = y * width + x
@@ -47,7 +46,6 @@ export function laplacianEnergy({data, width, height}: Gray): number {
             const s = sum[y1 * stride + x1]! - sum[y0 * stride + x1]! - sum[y1 * stride + x0]! + sum[y0 * stride + x0]!
             const s2 = sq[y1 * stride + x1]! - sq[y0 * stride + x1]! - sq[y1 * stride + x0]! + sq[y0 * stride + x0]!
             contrast += Math.sqrt(Math.max(0, s2 / n - (s / n) ** 2))
-            count++
         }
     }
     return contrast > 0 ? laplace / contrast : 0

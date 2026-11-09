@@ -5,7 +5,7 @@ import {parseArgs} from 'node:util'
 import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
-import {mkdirSync, readdirSync, rmSync} from 'node:fs'
+import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
 import {LOCATION_VIEWS} from './lib/sequenceSheet.ts'
 import {

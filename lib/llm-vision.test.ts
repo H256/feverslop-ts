@@ -59,8 +59,8 @@ beforeAll(() => {
     visionServer = serve(visionFake)
 })
 afterAll(() => {
-    textServer.stop(true)
-    visionServer.stop(true)
+    void textServer.stop(true)
+    void visionServer.stop(true)
     configureLlm({})
 })
 afterEach(() => {

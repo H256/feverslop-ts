@@ -356,7 +356,7 @@ export class RunControl {
         }
         followLines(proc.stdout as ReadableStream<Uint8Array>, add).catch(() => {})
         followLines(proc.stderr as ReadableStream<Uint8Array>, add).catch(() => {})
-        proc.exited
+        void proc.exited
             .then(code => {
                 own.info.running = false
                 own.info.code = code

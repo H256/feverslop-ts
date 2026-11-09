@@ -259,7 +259,7 @@ export function creditsFilter(plan: CreditsPlan, inputs: {marker?: number; sound
         n += lines.length
         // the block in the middle of the picture, a little above it
         const centred = linesFilter(lines, h, `(h-${block.height})/2-h*0.05`, n - lines.length)
-        let video = `${card(seconds)},${centred.filter}`
+        const video = `${card(seconds)},${centred.filter}`
         if (plan.opening.marker && inputs.marker !== undefined) {
             const size = Math.max(2, Math.round((h * 0.06) / 2) * 2)
             parts.push(`[${inputs.marker}:v]scale=-2:${size}:flags=lanczos,format=rgba[ocm]`)
