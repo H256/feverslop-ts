@@ -29,7 +29,7 @@ beforeAll(() => {
     write(join(music(), 'output/assets.json'), [{kind: 'location', id: 'hall', name: 'The hall', file: 'assets/locations/hall.png', prompt: 'a hall', description: 'a hall'}])
     write(join(music(), 'input/song.wav'), 'RIFF')
     write(join(music(), 'assets/locations/hall.png'), 'png')
-    write(join(music(), 'project.json'), {beats: [{id: 'b1', summary: 'a beat', characterIds: [], kind: 'x', intensity: 1, locationId: 'hall', stateAfter: []}], shotMoments: {b1: {staging: 'the staging', shots: [{action: 'first'}, {action: 'second'}, {action: 'third'}]}}})
+    write(join(music(), 'project.json'), {beats: [{id: 'b1', summary: 'a beat', characterIds: [], kind: 'x', intensity: 1, locationId: 'hall', stateAfter: []}], shotMoments: {b1: {staging: 'the staging', shots: [{action: 'first', characters: ['ann', 'bob'], people: {ann: {singing: true}, bob: {plays: 'strums'}}}, {action: 'second'}, {action: 'third'}]}}, cast: {characters: [{id: 'ann', name: 'Ann'}, {id: 'bob', name: 'Bob'}], locations: []}})
     write(join(music(), 'videos/slot-001.mp4'), '0123456789')
     write(join(music(), 'videos/slot-001.mp4.json'), {workflow: 'wf', seed: 7, renderedFrames: 56, size: '1x1', fingerprint: 'not the request'})
     write(join(music(), 'project.secret'), 'no')
@@ -49,6 +49,9 @@ describe('reading a project', () => {
         expect(project).toMatchObject({kind: 'music', seconds: 10, bpm: 120, song: {file: 'input/song.wav'}, command: 'bun index.ts music'})
         expect(project.clips.map(c => [c.id, c.start, c.end])).toEqual([['slot-001', 0, 2], ['slot-002', 2, 4], ['slot-003', 4, 6]])
         expect(project.clips.map(c => c.shots[0]!.action)).toEqual(['first', 'second', 'third'])
+        // the cast lanes: who is in the picture of a shot, and what they do there
+        expect(project.clips[0]!.shots[0]!.cast).toEqual([{id: 'ann', name: 'Ann', does: ['sings']}, {id: 'bob', name: 'Bob', does: ['plays']}])
+        expect(project.clips[1]!.shots[0]!.cast).toEqual([])
         expect(project.clips[0]).toMatchObject({next: 'slot-002', video: {file: 'videos/slot-001.mp4', workflow: 'wf', seed: 7}, lines: [{text: 'sung', who: 'Ann'}], context: {text: 'a beat', staging: 'the staging'}})
         expect(project.clips[0]!.pictures[0]).toMatchObject({file: 'assets/locations/hall.png', exists: true})
         expect(project.clips[1]).toMatchObject({startsFrom: 'slot-001'})

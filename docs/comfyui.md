@@ -550,14 +550,20 @@ WebSocket at all. The WebSocket only feeds the progress shown on the status line
 how many jobs are queued ahead). If the connection drops - ComfyUI sends nothing while it loads a large model, or the
 network hiccups - the status line says so, the SDK reconnects, and the job simply keeps going on the server.
 
-**Jobs survive a stopped FeverSlop TS.**
+**Jobs survive a crashed FeverSlop TS - a deliberate stop cancels them.**
 When a job is queued, its id is written to `<file>.pending.json` next to the file it will produce (e.g.
-`videos/slot-007.mp4.pending.json`). If FeverSlop TS stops while ComfyUI is still rendering - Ctrl+C, a crash, the PC
-going to sleep - the job keeps running on the server, and the next run with `--render` attaches to it instead of
+`videos/slot-007.mp4.pending.json`). If FeverSlop TS ends while ComfyUI is still rendering - a crash, the PC going to sleep,
+the network gone - the job keeps running on the server, and the next run with `--render` attaches to it instead of
 rendering again: it waits for it if it's still running, or downloads the result right away if it finished in the
 meantime. Its seed is kept. Only if the server no longer knows the job (e.g. ComfyUI was restarted, which clears its
 queue and history) is it rendered again. Downloads go to a temporary `.download` file first, so an interrupted
 download never looks like a finished clip.
+
+A stop you mean is different: **Ctrl+C** in the terminal and **Stop** on the workspace page cancel the jobs the run is waiting
+for - pictures, sheets and clips alike - and delete their `.pending.json`, so the server is free and the next run renders them
+again. A job waiting in the queue is taken out of it; the running one is interrupted only when it is the run's own job, never
+somebody else's on the same server. A server that does not answer keeps the job's `.pending.json` - the job may still run
+there, and the next run attaches to it. Press Ctrl+C a second time to end at once and leave the jobs running.
 
 **`comfy/nodes.ts` is large.**
 It has a method and a few types for every installed node (several MB, depending on the server's nodes). It's generated - never edit
@@ -606,9 +612,9 @@ folders on the server when a project is done.
 
 **Rendering runs one job per server at a time.**
 With one server, pictures and clips are rendered one after another; with several, in parallel - see
-[Several servers](#several-servers). A render can be stopped with Ctrl+C at any time; finished files are kept, running
-jobs are picked up again by the next run (see above). To really cancel a job, cancel it in the ComfyUI queue of its
-server (named in its `.pending.json`) and delete the `.pending.json`.
+[Several servers](#several-servers). A render can be stopped with Ctrl+C at any time; finished files are kept, and the jobs
+it was waiting for are cancelled on their servers (see above). After a crash they keep running and the next run takes
+them up.
 
 **All servers need the same models and nodes.**
 A job can land on any server, and `comfy/nodes.ts` - which the workflows are checked against - is generated from the

@@ -16,6 +16,19 @@ export type DirectionRule = {
     characterId?: string;
     binding?: string;
 };
+export type DirectionSize = 'wide' | 'medium' | 'close' | 'extreme';
+/**
+ * A choice made in the plan itself, without the language model (#735): `remove` takes a character out of the picture, `size` sets the
+ * shot size - one of them. Applied by code to every shot the scope selects, also after the shots are planned again; a shot scope is
+ * bound to the shot it was chosen for like a rule.
+ */
+export type DirectionEdit = {
+    id: string;
+    scope: DirectionScope;
+    remove?: string;
+    size?: DirectionSize;
+    binding?: string;
+};
 export type DirectionShot = {
     id: string;
     groupId: string;
@@ -41,6 +54,14 @@ export type DirectionVersion = DirectionProposal & {
 };
 export type DirectionView = {
     rules: DirectionRule[];
+    edits: DirectionEdit[];
+    /** What an edit could not do, or left for the language model: a shot whose texts still name a person taken out of it. */
+    editIssues: {
+        editId: string;
+        shotId?: string;
+        message: string;
+        mentions?: boolean;
+    }[];
     shots: DirectionShot[];
     characters: {
         id: string;

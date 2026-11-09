@@ -78,6 +78,18 @@ const setOff = toasts.guard((line: TimingView['lines'][number], off: boolean) =>
   ].filter(Boolean).join(' ')
 }))
 
+// back to the automatic timing (#738): the line as the alignment makes it from the kept transcript - a correction that was wrong
+const reset = toasts.guard((lines: TimingView['lines']) => saving.during(async () => {
+  if (lines.length > 1 && !await ask({title: `Set ${plural(lines.length, 'line')} back to the automatic timing?`, lines: ['Every line placed by hand goes back to where the alignment puts it. Whisper does not run again.'], confirm: 'Set them back'})) return
+  const result = await api.saveTiming({lines: lines.map(l => ({line: l.line, reset: true}))})
+  await props.refresh()
+  saved.value = [
+    lines.length === 1 ? `"${lines[0]!.text}" is back at the automatic timing.` : `${plural(result.changed.length, 'line')} back at the automatic timing.`,
+    result.replanned.length && `${result.replanned.join(', ')} ${result.replanned.length > 1 ? 'are' : 'is'} planned with the next plan run.`,
+  ].filter(Boolean).join(' ')
+}))
+const byHand = computed(() => props.view.lines.filter(l => l.byHand))
+
 const FILTERS = computed(() => [
   {value: 'all', label: 'All lines'},
   {value: 'estimated', label: `Estimated (${props.view.lines.filter(l => l.estimated).length})`},
@@ -151,7 +163,9 @@ onMounted(() => {
             <span class="muted num">{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span>
             <span v-if="draft.unchecked(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess">estimated</span>
             <span v-if="draft.isChanged(draft.line.value)" class="chip" style="color: var(--accent)">moved</span>
-            <span v-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
+            <span v-if="draft.line.value.adlib" class="chip stale" title="Heard by the transcription, but not in lyrics.txt - a repeat the song has, or something heard that nobody sings. Not sung until taken">ad-lib</span>
+            <span v-else-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
+            <span v-if="draft.line.value.problem" class="chip bad" :title="`Against lyrics.txt: ${draft.line.value.problem}`">{{ draft.line.value.problem }}</span>
             <span v-if="lead >= EARLY_FROM" class="chip stale" title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it.">starts {{ lead.toFixed(1) }} s early</span>
             <span v-if="outdated.has(draft.line.value.line)" class="chip stale" :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`">prompt old</span>
           </template>
@@ -161,7 +175,9 @@ onMounted(() => {
           <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
           <button class="btn" @click="nextKind('cut')">Next cut</button>
           <button v-if="problems.length" class="btn" :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`" @click="nextProblem()">Next problem ({{ problems.length }})</button>
-          <button v-if="draft.line.value" class="btn" :disabled="draft.edits.value.size > 0" :title="draft.edits.value.size ? 'Save the moved lines first' : draft.line.value.off ? 'The line is sung again: the clips it falls into sing it' : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'" @click="setOff(draft.line.value, !draft.line.value.off)">{{ draft.line.value.off ? 'Sing it again' : 'Leave the line out' }}</button>
+          <button v-if="draft.line.value" class="btn" :disabled="draft.edits.value.size > 0" :title="draft.edits.value.size ? 'Save the moved lines first' : draft.line.value.off ? 'The line is sung again: the clips it falls into sing it' : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'" @click="setOff(draft.line.value, !draft.line.value.off)">{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}</button>
+          <button v-if="draft.line.value?.byHand" class="btn" :disabled="draft.edits.value.size > 0" :title="draft.edits.value.size ? 'Save the moved lines first' : 'Where the alignment puts it, worked out again from the transcript - your placement goes'" @click="reset([draft.line.value])">Back to automatic</button>
+          <button v-if="byHand.length > 1" class="btn" :disabled="draft.edits.value.size > 0" :title="`All ${byHand.length} lines placed by hand back to the automatic timing`" @click="reset(byHand)">All back to automatic</button>
           <button v-if="draft.line.value && draft.isChanged(draft.line.value)" class="btn" title="Back to the saved times" @click="draft.resetLine(draft.line.value)">Reset line</button>
           <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
           <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
