@@ -1,4 +1,6 @@
 import type {
+  BeatCastChange,
+  BeatCastResult,
   BookView,
   CastChange,
   ConfigChange,
@@ -92,6 +94,7 @@ export function projectApi(root: string) {
     setCasting: (body: {kind: 'character' | 'location'; id: string; value: string}) => post<{written: true}>('casting', body),
     saveSinging: (change: SingingChange) => post<SingingResult>('singing', change),
     saveCast: (change: CastChange) => post<CastResult>('cast', change),
+    saveBeatCast: (change: BeatCastChange) => post<BeatCastResult>('beat-cast', change),
     storyForCast: (body: StoryForCast) => post<StoryResult>('book/for-cast', body),
     dropStoryProposal: () => post<{dropped: true}>('book/drop-proposal', {}),
     saveStory: (text: string) => post<StoryResult>('book', {text}),

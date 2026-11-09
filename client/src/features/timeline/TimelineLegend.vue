@@ -58,6 +58,13 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       >
         Plan {{ markedBeats.length > 1 ? `${markedBeats.length} beats` : markedBeats[0] }} again
       </button>
+      <button
+        v-if="markedBeats.length && project.kind === 'music'"
+        :title="`Bring people into ${markedBeats.join(', ')}: of the cast or new ones, with what they do there - the beats are planned again`"
+        @click="actions.bringPeople(markedBeats)"
+      >
+        Add people…
+      </button>
       <button @click="marked.clear()">Clear</button>
     </template>
     <button

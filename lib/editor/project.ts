@@ -281,14 +281,15 @@ function beatsOf(clips: EditorClip[], requests: ClipRequest[], data: Project, pl
             last.clips.push(clip.id)
             return
         }
-        const summary = data.beats?.find(b => b.id === id)?.summary
+        const beat = data.beats?.find(b => b.id === id)
         beats.push({
             id,
-            label: summary ? plain(summary) : '',
+            label: beat?.summary ? plain(beat.summary) : '',
             start: clip.start,
             end: clip.end,
             planned: data.shotMoments?.[id] !== undefined,
             clips: [clip.id],
+            characters: beat?.characterIds ?? [],
         })
     })
     return beats

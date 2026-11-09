@@ -369,6 +369,25 @@ export function applyCast(kind: EditorKind, data: Data, change: CastChange): Cas
     return {changed: true, dropped, remade, added, removed, renamed}
 }
 
+/**
+ * New characters join a planned music video (#765): only their own looks and descriptions are written by the next plan run -
+ * the story, the beats, the timeline and every shot stay. Who they are in a beat is said with addToBeats (lib/editor/beat-cast.ts).
+ */
+export function applyCastJoin(data: Project, join: {name: string; role: string}[]): {joined: string[]; remade: string[]} {
+    if (!data.cast) throw new Error('no cast yet - plan up to the cast first')
+    if (!Array.isArray(join) || !join.length) return {joined: [], remade: []}
+    const before = data.cast
+    const keep = before.characters.map(c => ({...c, id: c.id, name: c.name, role: c.role ?? ''}))
+    const next = musicCast(before, {characters: [...keep, ...join.map(j => ({name: j.name, role: j.role}))], locations: before.locations})
+    const joined = next.characters.filter(c => !before.characters.some(o => o.id === c.id)).map(c => c.id)
+    data.cast = next
+    const steps = Object.entries(ELEMENT_STEPS.music)
+        .filter(([, step]) => step.kind === 'character')
+        .map(([step]) => step)
+    const remade = remakeElements('music', data, steps, joined)
+    return {joined, remade}
+}
+
 export const readCast = (target: EditorTarget): CastView | undefined => castView(target.kind, dataOf(target))
 
 export async function writeCast(target: EditorTarget, change: CastChange): Promise<CastResult> {

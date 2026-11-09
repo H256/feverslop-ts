@@ -1228,11 +1228,13 @@ if (plannedBefore) {
     const missing = beats.filter(b => !plannedBefore[b.id]).map(b => b.id)
     log.step('Planning again', styles.muted(`${missing.join(', ')} - no plan of their own yet, the other ${beats.length - missing.length} stay`))
     delete project.data.shotMoments
-    // the beats planned now have no view yet - the views of the others stay (see shotViews). Kept aside, not in the step:
-    // 11c read them from the step after this had deleted it, and asked every beat again
+    // the beats planned now have no view yet - the views of the others stay (see shotViews), in project.json too: a run that
+    // stops before step 11c (a failure, Ctrl+C) keeps them for the next one, which then asks only for the beats planned now
     const views = project.data.shotViews
-    if (views) viewsKept = Object.fromEntries(Object.entries(views).filter(([beatId]) => plannedBefore[beatId]))
-    delete project.data.shotViews
+    if (views) {
+        viewsKept = Object.fromEntries(Object.entries(views).filter(([beatId]) => plannedBefore[beatId]))
+        project.data.shotViews = viewsKept
+    }
 }
 const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
 // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)

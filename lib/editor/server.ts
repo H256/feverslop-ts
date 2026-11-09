@@ -30,6 +30,8 @@ import {
 } from './project.ts'
 import {picturesFile, readReferences} from './references.ts'
 import {readSinging, type SingingChange, writeSinging} from './singing.ts'
+import {writeBeatCast} from './beat-cast.ts'
+import type {BeatCastChange} from '../../shared/workspace.ts'
 import {pickVersion, writeOverride} from './choices.ts'
 import {
     type CastChange,
@@ -495,6 +497,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             }
             if (what === 'singing') return json(await writeSinging(target, await body<SingingChange>()))
             if (what === 'cast') return json(await writeCast(target, await body<CastChange>()))
+            if (what === 'beat-cast') return json(await writeBeatCast(target, await body<BeatCastChange>()))
             if (what === 'book' && id === 'for-cast')
                 return json(await writeStoryForCast(target, await body<{proposal?: boolean; renamed?: {from: string; to: string}[]}>()))
             if (what === 'book' && id === 'drop-proposal') {

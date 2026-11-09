@@ -38,6 +38,8 @@ const {values: a, positionals} = parseArgs({
         unedit: {type: 'string'},
         show: {type: 'string'},
         'no-rebuild': {type: 'boolean'},
+        with: {type: 'string'},
+        join: {type: 'string', multiple: true},
     },
 })
 if (positionals.length !== 1) throw Error('give exactly one project id')
@@ -48,7 +50,15 @@ if (typeof target === 'string') throw Error(target)
 const changes = [a.add, a.edit, a.remove, a.set, a.without, a.size, a.unedit].filter(v => v !== undefined)
 if (changes.length > 1) throw Error('choose one change: --add, --edit, --remove, --set, --without, --size or --unedit')
 if ((a.drop || a.restore) && (changes.length || a.preview || a.take)) throw Error('--drop and --restore go alone')
-if ((a.scope !== undefined || a.character !== undefined) && a.add === undefined && !a.edit && a.without === undefined && a.size === undefined)
+if (
+    (a.scope !== undefined || a.character !== undefined) &&
+    a.add === undefined &&
+    !a.edit &&
+    a.without === undefined &&
+    a.size === undefined &&
+    a.with === undefined &&
+    !a.join?.length
+)
     throw Error('--scope goes with --add, --edit, --without or --size; --character with --add or --edit')
 if (a.character !== undefined && (a.without !== undefined || a.size !== undefined))
     throw Error('--character goes with --add or --edit; --without names the character itself')
@@ -64,6 +74,35 @@ function scope(value: string): DirectionScope {
     }
     if (['character', 'beat', 'scene', 'shot'].includes(kind)) return {kind: kind as 'character' | 'beat' | 'scene' | 'shot', id}
     throw Error('scope: global, character:ID, beat:ID, scene:ID, shot:ID or time:START-END')
+}
+// people brought into beats (#765): characters of the cast (--with) and new ones joining it (--join="Name: who they are"), with
+// --add as what they do there - the beats' floor plans and shots go, the next plan run plans just those beats again
+if (a.with !== undefined || a.join?.length) {
+    if (target.kind !== 'music') throw Error('--with and --join are for a music video; a film has its script')
+    if (!a.scope?.startsWith('beat:')) throw Error('--with and --join need --scope=beat:ID[,ID] - the beats they come into')
+    if (a.edit || a.remove || a.set || a.without !== undefined || a.size !== undefined || a.unedit !== undefined || a.preview || a.take)
+        throw Error('--with and --join go with --scope and --add (what they do there) only')
+    const join = (a.join ?? []).map(j => {
+        const colon = j.indexOf(':')
+        if (colon < 1) throw Error('--join takes "Name: who they are and what they look like"')
+        return {name: j.slice(0, colon).trim(), role: j.slice(colon + 1).trim()}
+    })
+    const {writeBeatCast} = await import('../lib/editor/beat-cast.ts')
+    const result = await writeBeatCast(target, {
+        beats: a.scope.slice('beat:'.length).split(',').filter(Boolean),
+        characters: (a.with ?? '').split(',').filter(Boolean),
+        join,
+        ...(a.add !== undefined ? {note: a.add} : {}),
+    })
+    if (result.joined.length)
+        console.log(`Joined the cast: ${result.joined.join(', ')} - their look and description are written by the next plan run, everyone else keeps theirs`)
+    for (const {beat, character} of result.added) console.log(`${character} is in ${beat}`)
+    if (result.rules) console.log(`The note is a direction rule on ${result.beats.join(', ')}: the planner keeps to it`)
+    console.log(`Planned again by the next plan run: ${result.beats.join(', ')} - the other beats keep their shots`)
+    console.log(`Next: bun index.ts ${target.id}   (the language model: ${result.joined.length ? 'the new looks and ' : ''}these beats)`)
+    if (result.joined.length) console.log(`Then: bun index.ts ${target.id} --render=images   (the pictures of whoever joined)`)
+    console.log(`Then: bun index.ts ${target.id} --render=videos --refresh=clips   (the clips of these beats)`)
+    process.exit(0)
 }
 // a direct edit: no language model, applied by code to the shots of its scope - and the prompts are built again right away
 let rebuild = false
