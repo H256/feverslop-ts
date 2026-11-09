@@ -5,6 +5,7 @@ import {splitAtCuts, splitBySinger} from "./singing-parts.ts";
 import type {Assignment, BeatShots, Character, Location, LyricsTiming, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {handsOf} from "./project.ts";
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
+import {MISSING_WORD_LEAD, voiceLead} from "../shared/timing-fit.ts";
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from "../comfy/helpers.ts";
 import type {ProjectConfig} from "./config.ts";
 import {sequenceSheetDir, sheetFrame} from "./sequenceSheet.ts";
@@ -104,6 +105,7 @@ export type Input = {
     language: string,           // for <d>[...], e.g. "English"
     singing?: Singing,          // performance mode
     lyricsTiming?: LyricsTiming,    // the words' times: where a singer changes within a line (singing.lines[].parts)
+    vocalPeaks?: number[],          // the loudness of the vocals stem, 100 values a second (readFineWaveform): singing heard before a line's first word
     // beatId -> the staged shots of the beat (step 11b: action, who is in the picture, where they stand) - replaces the
     // beat.moments spread when given. A plan from before the staging is a list of actions and works without the staging
     shotMoments?: Record<string, BeatShots | string[]>,
@@ -598,7 +600,16 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             vocals.flatMap(v => v.words), 120 / music.bpm, duration)
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
         // each shot sings the words heard in it: a line crossing a cut is split there
-        const shotVocals = vocals.flatMap(v => splitAtCuts(v, cuts))
+        // `heard`: where its singing is heard - before its first word when the sound runs into it (a word the timing lost, #738),
+        // never back into the cut or the words sung before it; the timing itself stays as it is
+        const shotVocals = vocals.flatMap(v => splitAtCuts(v, cuts)).map((v, _, all) => {
+            const cut = cuts.findLast(c => c <= v.start) ?? 0
+            const before = Math.max(cut, ...all.filter(o => o !== v && o.start < v.start).map(o => o.end))
+            const lead = input.vocalPeaks
+                ? voiceLead(v.words.map(w => ({start: slot.start + w.start, end: slot.start + w.end})), input.vocalPeaks, slot.start + before)
+                : 0
+            return {...v, heard: lead >= MISSING_WORD_LEAD ? round(v.start - lead) : v.start}
+        })
 
         function buildShots() {
             let singingShots = 0
@@ -784,13 +795,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // lip-sync is held back, the face stays free to show the moment (a laugh, a shout)
                     const notYet = [...new Set(shot.starting.flatMap(v => v.singers))]
                         .filter(s => !continuingSingers.includes(s))
-                        .map(s => ({s, from: Math.min(...shot.starting.filter(v => v.singers.includes(s)).map(v => v.start))}))
+                        .map(s => ({s, from: Math.min(...shot.starting.filter(v => v.singers.includes(s)).map(v => v.heard))}))
                         .filter(({from}) => from - shot.at >= LATE_ONSET_SEC)
                         .map(({s, from}) => ` Until ${clipTime(from)}, ${voice(s)} does not sing yet: no lip-sync to ${vocalsTrack?.label ?? 'the vocals'} before then.`)
                         .join('')
                     // "From 00:02.300 to 00:03.700, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>": the span, not
                     // just the onset - with only the onset the model placed the words anywhere after it
-                    const lines = shot.starting.map((v, n) => ` From ${clipTime(v.start)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
+                    const lines = shot.starting.map((v, n) => ` From ${clipTime(v.heard)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
                     // a long held note: the mouth flaps open and shut on it unless told to hold one shape
                     const shotEnd = cuts[j + 1] ?? duration
                     const held = [...shot.continuing, ...shot.starting].flatMap(v => v.words
