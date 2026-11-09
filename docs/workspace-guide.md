@@ -20,9 +20,21 @@ Drei Dinge gelten überall:
 
 ## Regie nachträglich ändern
 
-Auf **Direction** bearbeitest du Bewegung, Spiel und Bildausschnitt eines bereits geplanten Projekts. Story, Cast, Referenzbilder, Ton und Schnittzeiten bleiben bestehen. Du musst die Regie nicht beim Anlegen des Projekts festlegen.
+Bewegung, Spiel und Bildausschnitt eines bereits geplanten Projekts änderst du nachträglich. Story, Cast, Referenzbilder, Ton und Schnittzeiten bleiben bestehen. Du musst die Regie nicht beim Anlegen des Projekts festlegen.
 
-1. **Direction** öffnen oder in der Timeline unter **Shots → Direct this shot** einsteigen.
+### Einen Shot direkt in der Timeline führen
+
+In der Timeline unter **Shots → Direct this shot** öffnet sich der Shot in einem Dialog: Bildausschnitt, Kamera, Handlung und darunter jede Person im Bild mit dem, was sie tut (**Start**, **In frame**, **Movement**) und ob sie singt, spielt oder spricht.
+
+- **Shot size** (wide, medium, close, extreme) und **Take out of the shot** ändern den Plan direkt, ohne Sprachmodell. Die Clip-Prompts werden danach gleich neu gebaut. Wer im Shot singt, spielt oder spricht, kann nicht herausgenommen werden. Nennt der Text des Shots die herausgenommene Person noch, zeigt der Dialog das an; **Rewrite the words** lässt das Sprachmodell den Text ohne sie schreiben. **Undo** nimmt eine direkte Änderung zurück.
+- Unter **Instructions** schreibst du eine Anweisung für den ganzen Shot oder, über **Instruction for …**, für eine Person darin. **Propose** speichert sie und fragt das Sprachmodell in einem Schritt. **Proposed** zeigt danach nur die geänderten Felder, vorher und nachher.
+- **Take and build the prompts** übernimmt den Vorschlag und baut die Clip-Prompts neu. Danach den Clip auf der Timeline rendern. **Drop** verwirft den Vorschlag.
+
+Direkte Änderungen überstehen eine Neuplanung: Der Planer bekommt sie als Vorgabe, und der Code setzt sie auch im neuen Plan durch. Eine Änderung für einen einzelnen Shot muss nach einer Neuplanung neu zugeordnet werden, weil der neue Plan andere Shots hat.
+
+### Anweisungen für mehrere Shots
+
+1. **Direction** in der Projektnavigation öffnen.
 2. Unter **Scope** Projekt, Charakter, Beat/Szene, einen Songzeitbereich oder einen Shot wählen. **Only for character** schränkt den Bereich zusätzlich ein.
 3. Unter **Instruction** beispielsweise „Kael dreht sich zu seiner linken Seite, bis sein Rücken zur Kamera zeigt“ oder „Nahaufnahme der Greifhand beim Gitarrensolo“ eingeben. **Save instruction** speichert deinen Originaltext.
 4. **Preview changes** startet den CLI-Aufruf an das Sprachmodell. **Before / After** zeigt die vorgeschlagenen Änderungen einschließlich Pose und Bewegung. Gleichrangige widersprüchliche Vorgaben oder Anschlussprobleme verhindern die Übernahme: Anweisungen korrigieren oder den Bereich erweitern und neu vorschlagen lassen.

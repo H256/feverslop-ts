@@ -97,7 +97,9 @@ Removing an instruction removes the requirement; it is not an undo of an accepte
 
 ## Workspace
 
-Open **Direction** in a project's navigation, or enter from a shot in the timeline. Choose the scope, optionally choose a character, and write the instruction. Existing rules can be edited or removed. Ask for a preview, compare before and after, resolve any conflicts or missing bindings, then take or drop the proposal. The page also offers saved plan versions and a separate request rebuild.
+**Direct this shot** in the timeline's Shots panel opens one shot in a dialog: who is in it and what each of them does (start, in frame, movement, and whether they sing, play or speak). There you set the shot size or take a person out of the shot (direct edits, the clip prompts are built again at once), write an instruction for the shot or for one person in it, and **Propose** - saved and asked in one step. The proposal shows only the fields that change, before and after; **Take and build the prompts** takes it and builds the clip prompts again.
+
+For rules over several shots, open **Direction** in a project's navigation. Choose the scope, optionally choose a character, and write the instruction. Existing rules can be edited or removed. Ask for a preview, compare before and after, resolve any conflicts or missing bindings, then take or drop the proposal. The page also offers saved plan versions and a separate request rebuild.
 
 The workspace calls the same direction operations as the CLI and starts the CLI for the LLM preview. Project locks prevent concurrent CLI and workspace writes. No direction action starts GPU rendering.
 
