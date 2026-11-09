@@ -3,7 +3,16 @@ import {TERMS} from '../../lib/terms'
 
 /** What a clip is now: not rendered, made from the plan as it is, from another plan, or left alone - or not known yet. */
 export type ClipState = 'missing' | 'stale' | 'current' | 'pinned' | 'unknown'
-export const stateOf = (clip: EditorClip, fresh: EditorFreshness): ClipState => (!clip.video ? 'missing' : (fresh.clips[clip.id] ?? 'unknown'))
+// a video rendered for another part of the song (#769) is stale whatever its prompt: its lips are made for other words
+export const stateOf = (clip: EditorClip, fresh: EditorFreshness): ClipState =>
+  !clip.video ? 'missing' : clip.video.moved ? 'stale' : (fresh.clips[clip.id] ?? 'unknown')
+/** "rendered 1.8 s later in the song" - for a clip whose video belongs to another part of the song (#769). */
+export const movedText = (clip: EditorClip) => {
+  const moved = clip.video?.moved
+  return moved
+    ? `Rendered for another part of the song, ${Math.abs(moved).toFixed(1)} s ${moved > 0 ? 'later' : 'earlier'} - the timeline was cut again, its lips do not match here: render it again`
+    : ''
+}
 /** A clip to look at: not rendered, stale, or with a mark of a check. */
 export const flagged = (clip: EditorClip, fresh: EditorFreshness) => !clip.video || stateOf(clip, fresh) === 'stale' || clip.marks.length > 0
 export const clipAt = (project: EditorProject, t: number) => project.clips.find(c => t >= c.start && t < c.end)

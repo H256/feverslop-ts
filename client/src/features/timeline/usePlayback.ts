@@ -271,9 +271,11 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
       ? whole.state === 'older'
         ? 'Older than its clips'
         : ''
-      : c && !preview && stateOf(c, fresh.value) === 'stale'
-        ? 'Stale: made from another plan'
-        : ''
+      : c && !preview && c.video?.moved
+        ? `Off by ${c.video.moved > 0 ? '+' : ''}${c.video.moved.toFixed(1)} s: rendered for another part of the song`
+        : c && !preview && stateOf(c, fresh.value) === 'stale'
+          ? 'Stale: made from another plan'
+          : ''
     return {
       text: size ? [size, fps].filter(Boolean).join(' · ') : '',
       title: whole

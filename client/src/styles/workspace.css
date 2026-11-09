@@ -1079,6 +1079,17 @@ select.source {
   border-radius: 3px;
   padding: 0 3px;
 }
+.clip .moved {
+  position: absolute;
+  z-index: 1;
+  left: 3px;
+  bottom: 3px;
+  font: 10px var(--mono);
+  color: #fff;
+  background: var(--danger);
+  border-radius: 3px;
+  padding: 0 3px;
+}
 .dimmed .clip:not(.flagged) {
   opacity: 0.25;
 }
