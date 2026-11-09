@@ -1,6 +1,11 @@
 import {closeSync, existsSync, openSync, readdirSync, readSync, rmSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {lockHolder, verifiedLockHolder} from "../lock.ts";
+import {cancelJobs, jobsQueuedSince} from "../comfy-cancel.ts";
+import {type ComfyServer, loadSettings} from "../settings.ts";
+
+// how long a stopped run gets to cancel its own jobs before what is left of them is cancelled from here
+const STOP_WAIT_MS = 10_000
 import {lastRun, runState} from "../run-record.ts";
 import type {EditorKind, EditorTarget} from "./project.ts";
 import {STEP_NAMES} from "../project.ts";
@@ -324,17 +329,29 @@ export class RunControl {
         return seen.lines
     }
 
-    /** Stops the run of this project. Finished outputs stay, jobs on a server are picked up by the next run. */
-    stop(target: EditorTarget): boolean {
+    /**
+     * Stops the run of this project and cancels the ComfyUI jobs it queued or took up (#736) - a stop is meant: the jobs would keep
+     * the servers busy. Finished outputs stay. A process that gets a signal cancels its own jobs (lib/cli.ts); on Windows it is ended
+     * at once, so whatever is still pending of this run is cancelled here, once the process is gone or has had its time.
+     */
+    async stop(target: EditorTarget, servers?: Pick<ComfyServer, 'name' | 'url' | 'credentials'>[]): Promise<boolean> {
         const own = this.own.get(this.key(target))
+        let started: number
+        let ended: Promise<unknown>
         if (own?.info.running) {
+            started = Date.parse(own.info.startedAt)
             own.proc.kill()
-            return true
+            ended = own.proc.exited
+        } else {
+            const holder = lockHolder(target.dir)
+            if (!holder) return false
+            if (verifiedLockHolder(target.dir) !== holder) throw new Error('Cannot verify the process identity of this lock; stop the run in its original terminal')
+            started = Date.parse(lastRun(target.dir)?.startedAt ?? '')
+            process.kill(holder)
+            ended = (async () => { while (lockHolder(target.dir) === holder) await Bun.sleep(200) })()
         }
-        const holder = lockHolder(target.dir)
-        if (!holder) return false
-        if (verifiedLockHolder(target.dir) !== holder) throw new Error('Cannot verify the process identity of this lock; stop the run in its original terminal')
-        process.kill(holder)
+        await Promise.race([ended, Bun.sleep(STOP_WAIT_MS)])
+        if (Number.isFinite(started)) await cancelJobs(await jobsQueuedSince(target.dir, started, servers ?? (await loadSettings()).comfy))
         return true
     }
 }
