@@ -1,7 +1,7 @@
 import {escapeRegExp} from "./shot-plan.ts";
 import {asBeatShots} from "./shot-plan.ts";
 import {readTokens, replaceTokens} from "./refs.ts";
-import {splitBySinger} from "./singing-parts.ts";
+import {splitAtCuts, splitBySinger} from "./singing-parts.ts";
 import type {Assignment, BeatShots, Character, Location, LyricsTiming, MusicMap, PropActivity, PropStem, ShotPlan, Singing, Slot, StoryBeat, TimedWord} from "./project.ts";
 import {handsOf} from "./project.ts";
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from "./frames.ts";
@@ -595,6 +595,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             Array.from({length: shotCount}, (_, j) => j === 0 ? 0 : round((bars[Math.floor(j * slot.bars / shotCount)] ?? slot.start + (slot.end - slot.start) * j / shotCount) - slot.start)),
             vocals.flatMap(v => v.words), 120 / music.bpm, duration)
         const inShot = (j: number, t: number) => t >= cuts[j]! && (j === cuts.length - 1 || t < cuts[j + 1]!)
+        // each shot sings the words heard in it: a line crossing a cut is split there
+        const shotVocals = vocals.flatMap(v => splitAtCuts(v, cuts))
 
         function buildShots() {
             let singingShots = 0
@@ -605,8 +607,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // the beat's establishing shot shows everyone, later shots vary the blocking (see pickFocus)
                 const firstNamed = idsIn(written.text, written.tokens)[0]
                 const named = castSubjects.find(s => s.id === firstNamed)
-                const starting = vocals.filter(v => inShot(j, v.start))
-                const continuing = vocals.filter(v => v.start < at && v.end > at)
+                const starting = shotVocals.filter(v => inShot(j, v.start))
+                const continuing = shotVocals.filter(v => v.start < at && v.end > at)
                 // while someone sings, they always stay in frame - the establishing shot still shows everyone, singers first
                 const singersInShot = [...new Set([...continuing, ...starting].flatMap(v => v.singers))]
                 // staged by the planner: who is in the picture is its call, the singers of this shot are kept in
@@ -639,7 +641,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const cueLines = (j: number) => slot.vocals
             ? slot.vocals.filter(v => inShot(j, v.start)).map(v => v.text)
             : sung.filter((_, n) => Math.floor(n * shots.length / sung.length) === j)
-        const sings = (v: typeof vocals[number]) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${normalizeLyric(v.text)}</d>`
+        const sings = (v: typeof vocals[number] & { continues?: boolean }) => `${joinAnd(v.singers.map(voice))} ${v.singers.length > 1 ? 'sing' : 'sings'} <d>[${language}] ${v.continues && !v.text.endsWith('-') ? normalizeLyric(v.text).replace(/\.$/, '') : normalizeLyric(v.text)}</d>`
 
         // "not playing" / "hands off it" reads as a negation to the video model, which tends to render the
         // negated action anyway (it renders "holding", not "not holding") - a concrete, affirmative hand/prop
@@ -775,8 +777,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 if (performing) {
                     const continuingSingers = [...new Set(shot.continuing.flatMap(v => v.singers))]
                     const keepsSinging = continuingSingers.length ? ` ${joinAnd(continuingSingers.map(voice))} ${continuingSingers.length > 1 ? 'keep' : 'keeps'} singing.` : ''
-                    // "At 00:02.300, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>"
-                    const lines = shot.starting.map((v, n) => ` At ${clipTime(v.start)}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
+                    // "From 00:02.300 to 00:03.700, <Subject 2> (S1) sings <d>[English] ...</d> while <the story moment>": the span, not
+                    // just the onset - with only the onset the model placed the words anywhere after it
+                    const lines = shot.starting.map((v, n) => ` From ${clipTime(v.start)} to ${clipTime(Math.min(v.end, duration))}, ${sings(v)}${n === 0 ? ` while ${continueWith(moment)}` : '.'}`).join('')
                     // a long held note: the mouth flaps open and shut on it unless told to hold one shape
                     const shotEnd = cuts[j + 1] ?? duration
                     const held = [...shot.continuing, ...shot.starting].flatMap(v => v.words
