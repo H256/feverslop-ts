@@ -2,6 +2,43 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.8.1 – reliable recovery, safer assets, and bounded workspace caches
+
+_2026-11-09_
+
+This maintenance release collects the fixes merged since v0.8.0 on November 8–9, including the repository audit follow-up.
+
+### Rendering and recovery
+
+- Recover interrupted renders, publish completed media atomically, and sweep stale partial artifacts while holding the project lock (#673, #709).
+- Preserve replaced character sheets, generated songs, migrated film clips and refinish outputs in the archive; film migration now holds the project lock (#723).
+- Remove temporary retake guides after use and retain only recent project run logs (#712, #713).
+- List and restore size-rejected takes correctly, including their label in the versions panel (#673, #733).
+- Share the single-pass H3 graph across workflow variants, and reject workflow names that escape the workflows directory (#721, #725).
+
+### Assets, planning, and film
+
+- Prevent concurrent creation from overwriting the same library asset; lock project writes from asset tools (#718, #719).
+- Recognize complete sheet-only library assets without repeatedly copying and archiving them (#724).
+- Exercise the production asset-copy path in tests and share comparison of library-authored texts (#730).
+- Save changed film library texts and report the steps to redo, including derived character states and coverage (#731).
+- Validate cached film steps and Python analysis/transcription output before use; reject incomplete song section analysis and handle a first downbeat at zero (#700, #701, #726, #728).
+- Correct cache invalidation and film export timing; redo singer choices when the story summary changes (#671, #722).
+- Record project format versions with a registry of affected steps for future cache-shape migrations (#732).
+
+### Workspace, settings, and tools
+
+- Bound waveform, thumbnail and media-probe caches; follow completed run logs without repeatedly reading their entire contents (#705, #706).
+- Harden run identity, cancellation and legacy timing migration; rotate default timing history into monthly files with 24 months of retention (#672, #729).
+- Honor a vision-specific API key when sharing the text endpoint; cover settings layering and Comfy parsing (#717, #720).
+- Lock both Python helper environments, align their supported Python range and launch helpers by absolute path (#704, #727).
+- Honor explicit project/film IDs during initialization and list custom workflows in the workflow picker (#694, #698).
+- Make review editing work on Windows and handle a missing editor; explain cancellation after an asset copy has already happened (#693, #699).
+- Report missing graph links during Comfy workflow conversion instead of crashing (#695).
+- Expand regression coverage for composed prompts, process failures, gender checks and event-stream cancellation; require checks before release publication (#707, #708, #710, #711, #715, #716).
+- Update documentation for clip duration, texture chains and Kroma output sizes (#691, #697, #703).
+
+
 ## v0.8.0 – faster timing correction, editable direction, and finishing tools
 
 _2026-11-08_
