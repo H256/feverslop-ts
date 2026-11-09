@@ -53,10 +53,20 @@
     "refinish": "bun tools/refinish.ts",
     "label": "bun tools/label.ts",
     "intro": "bun tools/intro.ts",
-    "credits": "bun tools/credits.ts"
+    "credits": "bun tools/credits.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "eslint": "10.14.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-vue": "10.12.0",
+    "prettier": "3.9.10",
+    "typescript-eslint": "8.72.1",
+    "vue-eslint-parser": "10.4.2"
   },
   "peerDependencies": {
     "typescript": "^5"
