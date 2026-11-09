@@ -1,4 +1,4 @@
-import {closeSync, existsSync, openSync, readFileSync, rmSync, writeSync} from 'node:fs'
+import {closeSync, openSync, readFileSync, rmSync, writeSync} from 'node:fs'
 import {join} from 'node:path'
 import {sweepPartials} from './partial-cleanup.ts'
 import {ownProcessIdentity, processAlive, processIdentity, sameProcess} from './process-identity.ts'

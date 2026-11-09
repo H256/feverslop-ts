@@ -1,6 +1,6 @@
 import {expect, test} from 'bun:test'
 import {runEvents} from './server.ts'
-import {RunControl} from './runs.ts'
+import type {RunControl} from './runs.ts'
 import type {EditorTarget} from './project.ts'
 
 test('run-events closes on abort and stops polling', async () => {

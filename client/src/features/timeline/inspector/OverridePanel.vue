@@ -16,7 +16,7 @@ const override = computed((): Required<EditorOverride> => ({
 const save = (next: Partial<EditorOverride> | null) => {
   if (next === null) return actions.saveOverride(props.clip, null)
   const {placeView, ...rest} = {...override.value, ...next}
-  actions.saveOverride(props.clip, {...rest, ...(placeView ? {placeView} : {})})
+  void actions.saveOverride(props.clip, {...rest, ...(placeView ? {placeView} : {})})
 }
 const chosen = computed(() => override.value.placeView || props.clip.views?.chosen)
 const people = computed(() => props.clip.pictures.filter(p => p.kind !== 'frame'))
@@ -25,7 +25,7 @@ const move = (id: string, direction: number) => {
   const at = order.indexOf(id)
   order.splice(at, 1)
   order.splice(clamp(at + direction, 0, order.length), 0, id)
-  save({order})
+  void save({order})
 }
 </script>
 

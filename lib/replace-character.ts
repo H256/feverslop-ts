@@ -3,7 +3,7 @@
 // for, and the clips rendered with the old picture named. What a project calls its character, where its words are and what a
 // cancel says stay with each tool.
 import * as p from '@clack/prompts'
-import {existsSync, mkdirSync, readdirSync, renameSync, rmSync} from 'node:fs'
+import {existsSync, mkdirSync, readdirSync, renameSync} from 'node:fs'
 import {basename, dirname, join, relative} from 'node:path'
 import {visionUrls} from './describe-picture.ts'
 import {ask} from './llm.ts'

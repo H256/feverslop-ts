@@ -12,7 +12,6 @@ import type {
   ClipVersionView,
   EditorFreshness,
   EditorOverride,
-  EditorProject,
   EditorReference,
   Estimate,
   LookChange,

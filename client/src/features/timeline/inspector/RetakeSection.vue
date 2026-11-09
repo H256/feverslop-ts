@@ -14,7 +14,7 @@ const to = ref(Number(Math.min(2, seconds.value).toFixed(1)))
 const shots = computed(() => props.clip.shots.map((shot, n) => ({n, from: shot.at, to: props.clip.shots[n + 1]?.at ?? seconds.value})))
 const custom = () => {
   if (!(to.value > from.value)) return fail(new Error('the end of the part has to be after its start'))
-  actions.retake(props.clip, `${from.value}-${to.value}`, from.value, to.value)
+  void actions.retake(props.clip, `${from.value}-${to.value}`, from.value, to.value)
 }
 </script>
 

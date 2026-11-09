@@ -8,7 +8,7 @@ import type {Project, Singing} from '../project.ts'
 import {normalizeParts, singersOfParts, type SingingPart} from '../singing-parts.ts'
 import {readClipRequests} from '../render-state.ts'
 import type {EditorTarget} from './project.ts'
-import type {SingingLine, SingingCharacter, SingingView, SingingChange, SingingResult} from '../../shared/workspace.ts'
+import type {SingingView, SingingChange, SingingResult} from '../../shared/workspace.ts'
 export type {SingingLine, SingingCharacter, SingingView, SingingChange, SingingResult} from '../../shared/workspace.ts'
 
 // Who sings which line, as the workspace shows and changes it. The pipeline asks the language model once (step `singing`);

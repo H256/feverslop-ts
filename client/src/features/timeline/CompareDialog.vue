@@ -22,7 +22,7 @@ const close = () => modal.value?.close()
 const pick = () => {
   const {clip, version} = props.compared
   close()
-  if (version.id) actions.pickVersion(clip, {...version, id: version.id})
+  if (version.id) void actions.pickVersion(clip, {...version, id: version.id})
 }
 const right = () =>
   props.compared.refined ?? `${dateOf(props.compared.version.made)}${props.compared.version.seed !== undefined ? ` · seed ${props.compared.version.seed}` : ''}`

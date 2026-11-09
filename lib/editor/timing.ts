@@ -10,7 +10,7 @@ import type {LyricsTiming, Project, TimedLine} from '../project.ts'
 import {readFineWaveform} from '../waveform.ts'
 import {readClipRequests} from '../render-state.ts'
 import type {EditorTarget} from './project.ts'
-import type {TimingWord, TimingLine, TimingView, TimingChange, TimingResult} from '../../shared/workspace.ts'
+import type {TimingView, TimingChange, TimingResult} from '../../shared/workspace.ts'
 export type {TimingWord, TimingLine, TimingView, TimingChange, TimingResult} from '../../shared/workspace.ts'
 
 // When the lyrics are sung, as the workspace shows and changes it: lyricsTiming in project.json, from the alignment with the

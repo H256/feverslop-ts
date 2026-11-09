@@ -40,7 +40,7 @@ try {
     const code = await proc.exited
     if (code !== 0) process.exit(code)
 } finally {
-    proxy.stop(true)
+    void proxy.stop(true)
 }
 
 const code = await Bun.file(file).text()

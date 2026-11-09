@@ -64,7 +64,7 @@ test('HTTP submit/download is atomic; a failed download resumes without resubmis
         expect(existsSync(`${target}.pending.json`)).toBe(false)
         expect(runTimings().at(-1)?.outcome).toBe('resumed')
     } finally {
-        server.stop(true)
+        void server.stop(true)
         rmSync(dir, {recursive: true, force: true})
     }
 })
@@ -100,7 +100,7 @@ test('a resume-probe connection blip falls through to protected recovery (#666)'
         expect(readFileSync(target, 'utf8')).toBe('resumed image')
         expect(runTimings().at(-1)?.outcome).toBe('resumed')
     } finally {
-        server.stop(true)
+        void server.stop(true)
         rmSync(dir, {recursive: true, force: true})
     }
 })

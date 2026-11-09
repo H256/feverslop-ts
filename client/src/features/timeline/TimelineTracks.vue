@@ -199,7 +199,7 @@ const hidePeek = () => {
         <div v-for="lane in castOpen ? castLanes : []" :key="lane.id" class="lane-cast" :title="lane.name">{{ lane.name }}</div>
       </div>
       <div ref="scroller" class="scroll" @scroll.passive="left = scroller!.scrollLeft" @wheel="wheel">
-        <div class="track" ref="track" :style="{'--seconds': project.seconds, '--pps': pps}">
+        <div ref="track" class="track" :style="{'--seconds': project.seconds, '--pps': pps}">
           <div class="lane lane-ruler" @pointerdown="scrub"><canvas ref="ruler" /></div>
           <div class="lane lane-groups" @pointerdown="scrub">
             <div

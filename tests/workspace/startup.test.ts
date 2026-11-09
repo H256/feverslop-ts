@@ -10,7 +10,7 @@ test('real editor serves its built page over an empty workspace and tolerates an
         env.FEVERSLOP_COMFY = unavailable.url.origin
         const reservation = Bun.serve({hostname: '127.0.0.1', port: 0, fetch: () => new Response()})
         const port = reservation.port!
-        reservation.stop(true)
+        void reservation.stop(true)
         const child = Bun.spawn([process.execPath, join(source, 'editor.ts'), `--port=${port}`], {
             cwd,
             env,
@@ -69,7 +69,7 @@ test('real editor serves its built page over an empty workspace and tolerates an
             child.kill()
             await child.exited
             await stderr
-            unavailable.stop(true)
+            void unavailable.stop(true)
         }
     })
 }, 45_000)

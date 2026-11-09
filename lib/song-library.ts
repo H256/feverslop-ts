@@ -13,7 +13,8 @@ import {basename, extname, join} from 'node:path'
 import type {ProjectConfig} from './config.ts'
 import {projectInputs, songFileOf} from './inputs.ts'
 import {writeJsonFile} from './json-file.ts'
-import {fingerprintOf, type Project, ProjectStore, STEP_NAMES, type StepName, type Stems} from './project.ts'
+import type {ProjectStore} from './project.ts'
+import {fingerprintOf, type Project, STEP_NAMES, type StepName, type Stems} from './project.ts'
 
 /** The steps that are the song's own - built on nothing but the audio, the lyrics and their language. */
 export const SONG_STEPS = ['music', 'stems', 'transcript', 'lyricsTiming'] as const satisfies readonly StepName[]

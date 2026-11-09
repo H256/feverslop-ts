@@ -40,9 +40,9 @@ test('damaged lines are skipped when reading', () => {
     expect(readTimings()).toHaveLength(1)
 })
 
-test('the per-project file of the first format is moved into the central one, not lost', () => {
+test('the per-project file of the first format is moved into the central one, not lost', async () => {
     const project = join(dir, 'projects', 'old')
-    Bun.write(
+    await Bun.write(
         join(project, 'timings.jsonl'),
         '{"at":"2026-10-16T10:00:00.000Z","kind":"clip","name":"wan","seconds":90,"resolution":720,"frames":97}\n{"at":"2026-10-16T11:00:00.000Z","kind":"llm","name":"m","seconds":4,"tokensPerSecond":30}\n',
     )
