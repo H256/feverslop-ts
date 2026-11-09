@@ -109,6 +109,10 @@ pipeline shares the music video's render, workflow and finishing code: a changed
 rendered clips of existing projects that turn stale. Never update them (`bun test --update-snapshots`) to make a test
 pass - only for a change the PR means and names. The ffmpeg part needs ffmpeg on the PATH and is skipped without it.
 
+### Lint and format
+
+`bun run lint` checks the CLI and the client with ESLint (`eslint.config.js`, type-aware: `typescript-eslint` recommendedTypeChecked, `eslint-plugin-vue`); `bun run lint:fix` fixes what it can. `bun run format` formats with Prettier (`.prettierrc.json`: 4 spaces, 2 in `client/`, no semicolons, single quotes, 160 columns), `bun run format:check` only says what it would change. There is no CI gate: run both before a PR. Rules that find real bugs here are errors - `no-floating-promises` (a forgotten `await`), `no-misused-promises`, `switch-exhaustiveness-check`; `any` from JSON and ComfyUI answers is a warning for now.
+
 ## Docs
 
 The workspace page is the Vue client in `client/`, with dependencies, typechecks and build output of its own.

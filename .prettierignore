@@ -1,0 +1,11 @@
+node_modules
+dist
+client/public
+lib/editor/public
+comfy/nodes.ts
+projects
+films
+library
+coverage
+bun.lock
+*.md
