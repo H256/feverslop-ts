@@ -25,6 +25,7 @@ import {type ComfyServer, probeComfy} from "./settings.ts";
 import {runProcess} from "./process.ts";
 import {produceMedia} from './media-file.ts';
 import {clipRequestRef} from "./previous-output.ts";
+import {trackJob, untrackJob} from "./comfy-cancel.ts";
 
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
 const DEFAULT_SONG_DURATION = 360
@@ -1129,9 +1130,10 @@ export class Renderer implements Disposable {
     }
 
     /**
-     * Renders one file, resumable: a queued job is recorded in `<target>.pending.json`. If feverslop-ts stops while
-     * ComfyUI is still rendering (Ctrl+C, crash, sleep), the next run attaches to that job - or downloads its result
-     * if it finished in the meantime - instead of rendering again. Returns the meta of the job that made the file.
+     * Renders one file, resumable: a queued job is recorded in `<target>.pending.json`. If feverslop-ts ends while
+     * ComfyUI is still rendering (crash, sleep), the next run attaches to that job - or downloads its result if it
+     * finished in the meantime - instead of rendering again. A deliberate stop (Ctrl+C, the workspace's Stop) cancels it
+     * instead (lib/comfy-cancel.ts). Returns the meta of the job that made the file.
      */
     protected async render<M>(what: RenderWhat, target: string, extension: string | string[], prepare: () => Promise<{ result: WorkflowResult, uploads: { from: string, to: string }[], meta: M }>): Promise<M> {
         const label = what.label
@@ -1183,6 +1185,8 @@ export class Renderer implements Disposable {
             let resume = false
             try {
                 pending = await this.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
+                // a deliberate stop (Ctrl+C, the workspace's stop button) cancels it on its server - lib/comfy-cancel.ts
+                trackJob({label, server, promptId: pending.promptId, pendingFile})
                 await this.downloadResult(label, target, extension, server, pending, trace)
                 return pending.meta
             } catch (e) {
@@ -1203,6 +1207,7 @@ export class Renderer implements Disposable {
                 }
                 if (!again) throw nameService(failure, `${label} on ${server.name} (${server.url})`, label)
             } finally {
+                untrackJob(pendingFile)
                 this.release(server)
                 this.renderMs.set(target, (this.renderMs.get(target) ?? 0) + Date.now() - started)
                 await this.keepRender(what, server, pending, trace, started, failure)
@@ -1263,7 +1268,11 @@ export class Renderer implements Disposable {
             const state = await this.jobState(server, pending.promptId)
             if (resumesJob(state)) {
                 log.step('Resuming', `${styles.name(label)} ${styles.muted(`@${server.name}, job ${pending.promptId}, queued at ${formatClock(pending.queuedAt)}, ${state}`)}`)
-                return pending
+                // taken up by this run: a stop of this run from outside cancels it too (jobsQueuedSince)
+                const attached = {...pending, attachedAt: Date.now()}
+                await Bun.write(`${pendingFile}.partial`, JSON.stringify(attached, null, 2))
+                renameSync(`${pendingFile}.partial`, pendingFile)
+                return attached
             }
             log.warn(`${label}: the job queued at ${formatClock(pending.queuedAt)} ${state === 'failed' ? `failed on ${server.name}` : `is no longer on ${server.name}`} - rendering again`)
         }
@@ -1406,6 +1415,7 @@ type PendingJob<M> = {
     nodes: Record<string, string>,            // node id -> class_type, for the progress display
     meta: M,
     queuedAt: number,
+    attachedAt?: number,                      // when a later run took the job up again (lib/comfy-cancel.ts jobsQueuedSince)
     variant?: string,                         // the id of the graph's knobs and what the graph says (lib/graph.ts) - for the statistics
     setup?: GraphSetup,
     cold?: boolean,                           // the first job on that server with these models

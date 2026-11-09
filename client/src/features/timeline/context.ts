@@ -41,6 +41,8 @@ export function timelineContext(timeline: Timeline, actions: ClipActions, review
     /** Old and new side by side. */
     compare: (what: Compared) => { timeline.compared.value = what },
     showHelp: () => { timeline.helpOpen.value = true },
+    /** A shot directed in the dialog over the page. */
+    direct: (shotId: string) => { timeline.directing.value = shotId },
     actions, review,
   }
 }

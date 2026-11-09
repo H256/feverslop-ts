@@ -690,8 +690,9 @@ The full guide, with the options every workflow gets, the helpers and a checklis
 - **Some connections aren't in the types:** node outputs into widgets, autogrow inputs like `ref_images.ref_image_0`,
   and widgets that depend on another widget. The helpers `widget()` and `withInputs()` cover them.
 - **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped
-  connection changes nothing. If FeverSlop TS stops while ComfyUI is still rendering (Ctrl+C, crash, sleep), the next
-  run picks the job up again via `<file>.pending.json` instead of rendering it twice.
+  connection changes nothing. If FeverSlop TS ends while ComfyUI is still rendering (a crash, sleep), the next
+  run picks the job up again via `<file>.pending.json` instead of rendering it twice. A deliberate stop - Ctrl+C, Stop on
+  the workspace page - cancels the run's jobs on their servers instead (see docs/comfyui.md).
 - **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full-length
   slot renders 226 frames (about 9.4 s); the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
   strict - the rounding adds up to 16 frames (0.67 s).

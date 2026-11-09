@@ -2,7 +2,7 @@ import { test, expect, afterEach } from 'bun:test';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readDirection, setDirectionRules, previewDirection, takeDirection, dropDirection, restoreDirection, applyDirectionOverlay } from './service.ts';
+import { readDirection, setDirectionRules, setDirectionEdits, directionPlanNotes, previewDirection, takeDirection, dropDirection, restoreDirection, applyDirectionOverlay } from './service.ts';
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
@@ -189,4 +189,57 @@ test('direction windows use actual downbeat cuts, not evenly divided estimates',
     await setDirectionRules(target, { rules: [{ id: 'r', text: 'left', scope: { kind: 'time', start: 3.2, end: 3.8 } }] });
     await previewDirection(target, async (o) => answer(JSON.parse(o.input)));
     expect(readDirection(target).proposal!.changes.map(c => c.shotId)).toEqual(['s1:shot2']);
+});
+
+// direct edits (#735): applied by code, no language model, kept through a new plan
+const twoPeople = (target: { dir: string }, data: any) => {
+    data.shotMoments.s1.shots[1] = { action: '{B} waits while {A} looks on', characters: ['a', 'b'], people: { a: { state: 'stands' }, b: { state: 'sits' } } };
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data));
+};
+test('a person taken out of a shot by code; whoever performs in it stays; the words that still name them go to the preview', async () => {
+    const { target, data } = fixture();
+    twoPeople(target, data);
+    await setDirectionEdits(target, { edits: [{ id: 'e', scope: { kind: 'shot', id: 's1:shot2' }, remove: 'a' }, { id: 'f', scope: { kind: 'shot', id: 's1:shot1' }, remove: 'a' }] });
+    const view = readDirection(target);
+    const shot = view.shots.find(s => s.id === 's1:shot2')!;
+    expect(shot.data.characters).toEqual(['b']);
+    expect(Object.keys(shot.data.people as object)).toEqual(['b']);
+    // shot 1 has a line of A: A stays
+    expect(view.shots[0]!.data.characters).toEqual(['a']);
+    expect(view.editIssues.map(i => [i.editId, i.shotId, !!i.mentions])).toEqual([['f', 's1:shot1', false], ['e', 's1:shot2', true]]);
+    // no rules - not waiting for a review; the pipeline gets the edit at once
+    expect(view.pending).toBe(false);
+    expect(applyDirectionOverlay(target, data).shotMoments!.s1!.shots[1]!.characters).toEqual(['b']);
+    // the preview gets a rule for the words, on the shot without A - the model cannot bring A back
+    let asked: any;
+    await previewDirection(target, async (o) => { asked = JSON.parse(o.input); return { changes: [{ shotId: 's1:shot2', after: { ...asked.selected[0].data, action: '{B} waits alone' } }], conflicts: [] }; });
+    expect(asked.selected.map((s: any) => s.id)).toEqual(['s1:shot2']);
+    expect(asked.rules[0].text).toContain('A is no longer in this shot');
+    await takeDirection(target);
+    expect(readDirection(target).editIssues.filter(i => i.mentions)).toEqual([]);
+    expect(applyDirectionOverlay(target, data).shotMoments!.s1!.shots[1]!.action).toBe('{B} waits alone');
+});
+test('a size set by code: framing and size in music, framing in a film', async () => {
+    const music = fixture();
+    await setDirectionEdits(music.target, { edits: [{ id: 'z', scope: { kind: 'beat', id: 's1' }, size: 'close' }] });
+    expect(readDirection(music.target).shots.map(s => [s.data.framing, s.data.size])).toEqual([['close-up', 'close'], ['close-up', 'close']]);
+    const film = fixture('film');
+    await setDirectionEdits(film.target, { edits: [{ id: 'z', scope: { kind: 'shot', id: 's1:shot2' }, size: 'wide' }] });
+    expect(readDirection(film.target).shots[1]!.data).toMatchObject({ framing: 'wide shot' });
+    expect(readDirection(film.target).shots[1]!.data.size).toBeUndefined();
+    await expect(setDirectionEdits(film.target, { edits: [{ id: 'y', scope: { kind: 'beat', id: 's1' }, size: 'wide' }] })).rejects.toThrow('scene');
+    await expect(setDirectionEdits(film.target, { edits: [{ id: 'y', scope: { kind: 'global' }, remove: 'nobody' }] })).rejects.toThrow('no character');
+});
+test('a new plan: a beat edit applies to its new shots, a shot edit waits to be bound again; the planner is told', async () => {
+    const { target, data } = fixture();
+    twoPeople(target, data);
+    await setDirectionEdits(target, { edits: [{ id: 'beat', scope: { kind: 'beat', id: 's1' }, remove: 'b' }, { id: 'shot', scope: { kind: 'shot', id: 's1:shot2' }, size: 'wide' }] });
+    expect(directionPlanNotes(target, data)).toEqual({ s1: ['in every shot, B is not in the picture', 'in shot 2, the shot is a wide shot'] });
+    // planned again: other shots
+    data.shotMoments.s1.shots = [{ action: 'run', characters: ['a', 'b'], people: { a: {}, b: {} } }, { action: 'stop', characters: ['b'] }];
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data));
+    const view = readDirection(target);
+    expect(view.shots.map(s => s.data.characters)).toEqual([['a'], []]);
+    expect(view.shots[1]!.data.framing).toBeUndefined();
+    expect(view.editIssues.map(i => i.editId)).toContain('shot');
 });

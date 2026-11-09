@@ -1,4 +1,5 @@
 import {helpDetails} from "./cli-help.ts";
+import {activeJobs, cancelJobs} from './comfy-cancel.ts';
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts';
 
 // Shared options are consumed before each tool's own parser. Never inspect values after `--`.
@@ -20,7 +21,7 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     timing: {args: '<project-id> [--json | --set=timing.json]', description: 'Print when each sung line is, or move its words. The beats of the clips a moved line is in are planned again.', json: true},
     versions: {args: '<project-id> <clip-id|picture-id> [--film] [--pick=<version>]', description: 'List the older versions of a clip or picture, or make one the current version again.'},
     override: {args: '<film-id> <clip-id> [--view=<n>] [--order=<picture>,...] [--without=<picture>,...] [--clear]', description: 'The own view of its place and choice of references of a film clip, from the next plan run on.'},
-    direction: {args: '<project-id> [--film] [--json | --set=FILE | --add=TEXT --scope=SCOPE [--character=ID] | --edit=ID --text=TEXT | --remove=ID | --preview | --take | --drop | --restore=VERSION]', description: 'Edit scoped performance intent and review structured shot proposals without rendering.', json: true},
+    direction: {args: '<project-id> [--film] [--json | --set=FILE | --add=TEXT --scope=SCOPE [--character=ID] | --edit=ID --text=TEXT | --remove=ID | --without=CHARACTER --scope=SCOPE | --size=wide|medium|close|extreme --scope=SCOPE | --unedit=ID] [--preview] [--take] [--no-rebuild] [--drop | --restore=VERSION] [--show=SHOT]', description: 'Direct a planned project: scoped instructions turned into shot edits by the LLM, or direct edits (a person out of a shot, its size); taking them builds the clip prompts again. Nothing is rendered.', json: true},
     casting: {args: '<project-id> [--film] [--set=character:<id>=library:<asset>]...', description: 'Print casting.json and what the next plan run takes over, with the --redo it needs; change entries.'},
     'import-asset': {args: '<project-id> [asset-id] [--from=project[:id]|library:id]', description: 'Import a character or location into a project.'},
     'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character or location to the shared library.'},
@@ -49,6 +50,22 @@ const commands: Record<string, {args: string, description: string, json?: boolea
     'comfy:convert': {args: '<workflow-api.json> <name> --kind=image|video|audio|sequence [--force] [--comfy=URL]', description: 'Convert a ComfyUI API workflow into TypeScript.'},
 }
 
+// A deliberate stop - Ctrl+C, or the workspace's stop on a system that sends a signal - cancels the ComfyUI jobs the run waits for
+// (#736): they would otherwise keep the server busy and the next run behind them. A second Ctrl+C ends at once. A crash leaves them
+// running for the next run to attach to.
+let stopping = false
+async function stopRun(why: string) {
+    if (stopping) process.exit(130)
+    stopping = true
+    const jobs = activeJobs()
+    log.cancel(jobs.length ? `${why} - cancelling ${jobs.length} ComfyUI job(s), Ctrl+C again to leave them` : why)
+    for (const {job, outcome} of await cancelJobs(jobs)) {
+        if (outcome === 'unreachable') log.warn(`${job.label}: ${job.server.name} did not answer - the job may still run there, the next run attaches to it`)
+        else log.step('Cancelled', `${styles.name(job.label)} ${styles.muted(`@${job.server.name}, ${outcome === 'gone' ? 'already done' : outcome}`)}`)
+    }
+    process.exit(130)
+}
+
 export function cli(command: string) {
     const spec = commands[command]!
     const invocation = command === 'plan' ? 'bun index.ts' : `bun run ${command}`
@@ -75,6 +92,8 @@ export function cli(command: string) {
     setOutput({verbose: process.env.FEVERSLOP_VERBOSE === '1'})
     process.on('unhandledRejection', failRun)
     process.on('uncaughtException', failRun)
+    process.on('SIGINT', () => void stopRun('Ctrl+C'))
+    process.on('SIGTERM', () => void stopRun('Stopped'))
     if (spec.banner || options.includes('--banner')) printBanner(typeof spec.banner === 'string' ? spec.banner : undefined)
     const context = filtered[0] && !filtered[0].startsWith('-') ? filtered[0] : ''
     const mode = filtered.find(a => /^--(render|dry-run|gallery|apply)(=|$)/.test(a))

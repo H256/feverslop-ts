@@ -84,3 +84,29 @@ export function splitBySinger<V extends { start: number, end: number, text: stri
     close()
     return pieces
 }
+
+/**
+ * A sung piece split at the clip's cuts (`cuts` in the piece's own time base, the first at 0): one piece per shot it
+ * reaches, each with the words that start in that shot. A line crossing a cut was otherwise sung as a whole in the shot it
+ * starts in - the video model crammed all of it in before the cut and closed the mouth after it, while the line went on.
+ * Every piece but the last `continues`: the line goes on in the next shot, so its text gets no full stop.
+ */
+export function splitAtCuts<V extends { start: number, end: number, text: string, words: TimedWord[] }>(vocal: V, cuts: number[]): (V & { continues?: boolean })[] {
+    if (vocal.words.length < 2) return [vocal]
+    const shotOf = (t: number) => cuts.filter(c => c <= t).length
+    const pieces: (V & { continues?: boolean })[] = []
+    let words: TimedWord[] = []
+    const close = () => {
+        if (!words.length) return
+        const last = words.at(-1) === vocal.words.at(-1)
+        const trailing = last ? vocal.text.endsWith('-') : !!vocal.words[vocal.words.indexOf(words.at(-1)!) + 1]?.joined
+        pieces.push({...vocal, text: vocalText(words, trailing), start: words[0]!.start, end: words.at(-1)!.end, words, ...(last ? {} : {continues: true})})
+        words = []
+    }
+    for (const w of vocal.words) {
+        if (words.length && shotOf(w.start) !== shotOf(words[0]!.start)) close()
+        words.push(w)
+    }
+    close()
+    return pieces.length > 1 ? pieces : [vocal]
+}
