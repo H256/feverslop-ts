@@ -1145,6 +1145,7 @@ const clips = buildClipRequests({
     characterDescriptionVariants,
     locationDescriptions,
     locationAnchors,
+    locationLayouts,
     lookBrief,
     music,
     language,

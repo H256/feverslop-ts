@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test";
-import {buildClipRequests, type Input, singingPerBeat} from "./compose.ts";
+import {buildClipRequests, type Input, layoutLine, singingPerBeat} from "./compose.ts";
 import type {Character, StoryBeat} from "./project.ts";
 import {slotVocals} from './lyrics.ts';
 
@@ -245,7 +245,7 @@ describe('{Name} tokens', () => {
     test('a character the layout names by token is in the clip with its picture', () => {
         const clip = buildClipRequests(input('{Shaman} drums.', '{Runa} sits by the fire pit.'))[0]!
         expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
-        expect(clip.prompt).toContain('Layout of the place: <Subject 3> sits by the fire pit.')
+        expect(clip.prompt).toContain('Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: <Subject 3> sits by the fire pit.')
     })
     test('a token that is nobody of the cast is left as its word, without braces', () => {
         const clip = buildClipRequests(input('{Shaman} nods to {the stranger}.'))[0]!
@@ -312,5 +312,16 @@ describe('singingPerBeat', () => {
         expect(shots.at(-1)).toEqual(['ben'])
         // without the word times the whole line is sung by both, in every shot
         expect(singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing}).b1!.singersPerShot.at(-1)).toEqual(['ann', 'ben'])
+    })
+})
+
+// #740: the layout is a floor plan, never a shot of its own - read as one, the clip opened on it before [Shot 1]
+describe('the layout of the place', () => {
+    test('where the scene opens: the staging, as where everyone is then, and the clip opens on [Shot 1]', () => {
+        expect(layoutLine(true, 'Elias walks down the corridor.', 'A long corridor.')).toBe('Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: Elias walks down the corridor.')
+    })
+    test('a later clip of the scene: the floor plan of the place without people - or the staging said to be from before', () => {
+        expect(layoutLine(false, 'Elias walks down the corridor.', 'A long corridor.')).toBe('Layout of the place - a floor plan, not a shot of its own: A long corridor.')
+        expect(layoutLine(false, 'Elias walks down the corridor.', undefined)).toContain('as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them')
     })
 })
