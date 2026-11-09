@@ -87,24 +87,28 @@ Compatible instructions combine. A specific instruction replaces contradictory g
 
 The LLM sees existing shots and relevant context. It must align action, movement, camera and pose and report continuity conflicts instead of quietly changing an unrelated scene. No-thinking editing reduces unnecessary reasoning for local changes; actual latency depends on the model and amount of affected context. A structurally valid plan still cannot guarantee that a video model executes every motion exactly.
 
-## People into beats (music video)
+## Who is in which beats and clips (music video)
 
 The plan has who is in each beat. To bring someone in - a character of the cast, or a new one who joins it - name the beats and, with `--add`, what they do there:
 
 ```powershell
 bun run direction demo --join="Mara: a dancer in her twenties, long black hair, a dark red velvet dress" --join="Lene: a dancer in her thirties, short silver-blond hair, a black lace dress" --scope=beat:beat-07,beat-16 --add="Mara and Lene dance a slow, stately waltz in the candlelit room behind Elias, never touching him; he sings at the front."
 bun run direction demo --with=lene --scope=beat:beat-11 --add="Lene dances alone by the window."
+bun run direction demo --with=mara,lene --clips=slot-024,slot-025,slot-026 --add="They dance behind Elias, each on her own."
+bun run direction demo --out=mara,lene --scope=beat:beat-13
 bun index.ts demo                       # the new looks, and these beats planned again (the language model only)
 bun index.ts demo --render=images       # the pictures of whoever joined
 bun index.ts demo --render=videos --refresh=clips
 ```
 
 - `--join` adds a person of their own to the cast, with a picture of their own - several `--join` for several. Only their look and description are written by the next plan run; the story, the beats, the timeline, everyone else's look and every other beat's shots stay. (`bun run cast --set` changes the cast as a whole and drops the plan built on it.)
-- `--with` brings characters of the cast into the beats.
-- The beats lose their floor plan and shots; the next plan run plans just them again, with the people they have now. The note is saved as a rule on each beat, and the planner keeps to it.
-- In the workspace: mark the beats on the timeline (a click on a beat in the Beats lane), then **Add people…**.
+- `--with` brings characters of the cast into the beats, `--out` takes them out - also when the beats step wrote them in. Out of a whole beat they leave its cast, and the planner is told no shot shows them, whatever the beat's story says.
+- Beats do not line up with the song: a beat can run from the chorus into a solo. `--clips` instead of `--scope` is about those clips only: the beat gets the people, and the planner is told for each of its shots who is in it - in the marked clips they are, in the beat's other clips a newcomer is not. Marked clips that make up a whole beat count as the beat.
+- Every change leaves rules on who is where, also without `--add`: a character in a beat whose story does not name them is left out of every shot otherwise. A newer one replaces an older one for the same person on the same beat or clip.
+- The beats lose their floor plan and shots; the next plan run plans just them again, with the people they have now. The note is saved as a rule on each beat or clip, and the planner keeps to it.
+- In the workspace: mark clips on the timeline, then **People…**. A click on a beat in the Beats lane marks its clips; a click on a section marks the clips in it, Shift+click those of every section of that name (all choruses), Ctrl+click adds or takes them out.
 
-Rules on a beat or scene, a character or the whole video always reach the planner when shots are planned again - not only the preview. A rule saved for a beat that has no shots yet holds for the shots it is planned with.
+Rules on a beat or scene, a character or the whole video always reach the planner when shots are planned again - not only the preview; so do the rules on clips written by **People…**. A rule saved for a beat that has no shots yet holds for the shots it is planned with.
 
 ## Replanning and versions
 

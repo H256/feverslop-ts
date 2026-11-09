@@ -1,9 +1,24 @@
 import type {Project} from '../project.ts'
-import {buildClipRequests} from '../compose.ts'
+import {buildClipRequests, shotsOfClips} from '../compose.ts'
 import {defaults, languageName, type ProjectConfig} from '../config.ts'
 import {splitFightSlots} from '../music.ts'
 import {asBeatShots} from '../shot-plan.ts'
 import type {DirectionShot} from '../../shared/direction.ts'
+
+/**
+ * The clips of each beat in order, with the numbers of their shots in the beat (#767): a clip with cuts has several, so shot n of
+ * a beat (`beat-07:shot2`, as musicShots names them and the planner numbers them) is not its n-th clip. From the timeline and the
+ * mapping, as the plan run counts them - also for a beat without a shot plan.
+ */
+export function beatClips(data: Project, options: Partial<ProjectConfig> = {}): Map<string, {clip: string; shots: number[]}[]> {
+    if (!data.timeline || !data.mapping || !data.beats) return new Map()
+    const config = {...defaults, ...options}
+    const {slots, mapping} =
+        config.fightClips && data.music && data.cast
+            ? splitFightSlots(data.timeline.slots, data.mapping, data.beats, data.cast.characters, data.music)
+            : {slots: data.timeline.slots, mapping: data.mapping}
+    return shotsOfClips({slots, mapping, beats: data.beats})
+}
 
 /** Actual song ranges, including downbeats, word-safe cuts and fight splits. No IO or generation. */
 export function musicShots(data: Project, options: Partial<ProjectConfig> = {}): DirectionShot[] {

@@ -60,10 +60,10 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       </button>
       <button
         v-if="markedBeats.length && project.kind === 'music'"
-        :title="`Bring people into ${markedBeats.join(', ')}: of the cast or new ones, with what they do there - the beats are planned again`"
-        @click="actions.bringPeople(markedBeats)"
+        :title="`Who is in the marked clips: people of the cast or new ones come in, others go out, with what they do there - ${markedBeats.join(', ')} are planned again`"
+        @click="actions.bringPeople([...marked])"
       >
-        Add people…
+        People…
       </button>
       <button @click="marked.clear()">Clear</button>
     </template>

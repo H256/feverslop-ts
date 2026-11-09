@@ -361,3 +361,14 @@ test('a rule for the planner only needs no review: a plan run is not held up by 
     await setDirectionRules(target, {rules: [{id: 'r', text: 'Slowly.', scope: {kind: 'global'}}]})
     expect(readDirection(target).pending).toBe(true)
 })
+test('a planned rule on a shot reaches the planner as a note of its beat for that shot (#767)', async () => {
+    const {target, data} = fixture()
+    await setDirectionRules(target, {
+        rules: [
+            {id: 'in', text: 'B is in this shot.', scope: {kind: 'shot', id: 's1:shot2'}, planned: true, presence: {characters: ['b'], in: true}},
+            {id: 'out', text: 'B is not in this shot.', scope: {kind: 'shot', id: 's1:shot1'}, planned: true, presence: {characters: ['b'], in: false}},
+        ],
+    })
+    expect(directionPlanNotes(target, data)).toEqual({s1: ['shot 2: B is in this shot.', 'shot 1: B is not in this shot.']})
+    expect(readDirection(target).pending).toBe(false)
+})

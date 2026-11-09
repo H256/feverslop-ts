@@ -40,6 +40,8 @@ const {values: a, positionals} = parseArgs({
         'no-rebuild': {type: 'boolean'},
         with: {type: 'string'},
         join: {type: 'string', multiple: true},
+        out: {type: 'string'},
+        clips: {type: 'string'},
     },
 })
 if (positionals.length !== 1) throw Error('give exactly one project id')
@@ -57,6 +59,7 @@ if (
     a.without === undefined &&
     a.size === undefined &&
     a.with === undefined &&
+    a.out === undefined &&
     !a.join?.length
 )
     throw Error('--scope goes with --add, --edit, --without or --size; --character with --add or --edit')
@@ -75,13 +78,16 @@ function scope(value: string): DirectionScope {
     if (['character', 'beat', 'scene', 'shot'].includes(kind)) return {kind: kind as 'character' | 'beat' | 'scene' | 'shot', id}
     throw Error('scope: global, character:ID, beat:ID, scene:ID, shot:ID or time:START-END')
 }
-// people brought into beats (#765): characters of the cast (--with) and new ones joining it (--join="Name: who they are"), with
-// --add as what they do there - the beats' floor plans and shots go, the next plan run plans just those beats again
-if (a.with !== undefined || a.join?.length) {
-    if (target.kind !== 'music') throw Error('--with and --join are for a music video; a film has its script')
-    if (!a.scope?.startsWith('beat:')) throw Error('--with and --join need --scope=beat:ID[,ID] - the beats they come into')
+// who is in which beats or clips (#765, #767): characters of the cast (--with) and new ones joining it (--join="Name: who they
+// are") come in, characters go out (--out), with --add as what they do there - of whole beats (--scope=beat:ID[,ID]) or of some
+// clips only (--clips=slot-024,slot-025). The floor plans and shots of those beats go, the next plan run plans just them again
+if (a.with !== undefined || a.join?.length || a.out !== undefined) {
+    if (target.kind !== 'music') throw Error('--with, --out and --join are for a music video; a film has its script')
+    if (!a.scope?.startsWith('beat:') && !a.clips)
+        throw Error('--with, --out and --join need --scope=beat:ID[,ID] or --clips=ID[,ID] - the beats or clips they are about')
+    if (a.scope !== undefined && !a.scope.startsWith('beat:')) throw Error('--with, --out and --join take --scope=beat:ID[,ID] only')
     if (a.edit || a.remove || a.set || a.without !== undefined || a.size !== undefined || a.unedit !== undefined || a.preview || a.take)
-        throw Error('--with and --join go with --scope and --add (what they do there) only')
+        throw Error('--with, --out and --join go with --scope or --clips and --add (what they do there) only')
     const join = (a.join ?? []).map(j => {
         const colon = j.indexOf(':')
         if (colon < 1) throw Error('--join takes "Name: who they are and what they look like"')
@@ -89,15 +95,19 @@ if (a.with !== undefined || a.join?.length) {
     })
     const {writeBeatCast} = await import('../lib/editor/beat-cast.ts')
     const result = await writeBeatCast(target, {
-        beats: a.scope.slice('beat:'.length).split(',').filter(Boolean),
+        beats: (a.scope ?? '').slice('beat:'.length).split(',').filter(Boolean),
+        clips: (a.clips ?? '').split(',').filter(Boolean),
         characters: (a.with ?? '').split(',').filter(Boolean),
+        without: (a.out ?? '').split(',').filter(Boolean),
         join,
         ...(a.add !== undefined ? {note: a.add} : {}),
     })
     if (result.joined.length)
         console.log(`Joined the cast: ${result.joined.join(', ')} - their look and description are written by the next plan run, everyone else keeps theirs`)
     for (const {beat, character} of result.added) console.log(`${character} is in ${beat}`)
-    if (result.rules) console.log(`The note is a direction rule on ${result.beats.join(', ')}: the planner keeps to it`)
+    for (const {beat, character} of result.removed ?? []) console.log(`${character} is out of ${beat}`)
+    if (result.shots) console.log(`Only the clips ${a.clips} of their beats (shots ${result.shots.join(', ')}) - a newcomer is told to stay out of the others`)
+    if (result.rules) console.log(`${result.rules} direction rule(s) for the planner: who is in which shots${a.add ? ', and the note' : ''}`)
     console.log(`Planned again by the next plan run: ${result.beats.join(', ')} - the other beats keep their shots`)
     console.log(`Next: bun index.ts ${target.id}   (the language model: ${result.joined.length ? 'the new looks and ' : ''}these beats)`)
     if (result.joined.length) console.log(`Then: bun index.ts ${target.id} --render=images   (the pictures of whoever joined)`)
