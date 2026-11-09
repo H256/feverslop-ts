@@ -32,7 +32,7 @@ const EMPTY: Record<LineFilter, string> = {
   early: 'No first word starts before its singing.',
   old: 'Every clip has the times of the lines it sings.',
 }
-const stateOf = (line: TimingLine) => line.off ? 'left out' : line.unplaced && !props.draft.isChanged(line) ? 'not found' : props.draft.unchecked(line) ? 'estimated' : props.draft.isChanged(line) ? 'moved' : line.byHand ? 'by hand' : ''
+const stateOf = (line: TimingLine) => line.adlib ? (line.off ? 'ad-lib' : 'ad-lib, sung') : line.problem ? 'check' : line.off ? 'left out' : line.unplaced && !props.draft.isChanged(line) ? 'not found' : props.draft.unchecked(line) ? 'estimated' : props.draft.isChanged(line) ? 'moved' : line.byHand ? 'by hand' : ''
 </script>
 
 <template>
@@ -42,7 +42,7 @@ const stateOf = (line: TimingLine) => line.off ? 'left out' : line.unplaced && !
       <span class="muted">{{ line.section }}</span>
       <span :style="line.off ? {textDecoration: 'line-through', color: 'var(--muted)'} : undefined">{{ line.text }}</span>
       <span>
-        <span v-if="stateOf(line)" :class="['chip', {stale: stateOf(line) === 'estimated' || stateOf(line) === 'not found', bad: stateOf(line) === 'left out'}]" :title="stateOf(line) === 'not found' ? 'The alignment found this line sung nowhere: its words are only laid out where it stands in the lyrics - listen and drag them where it is sung' : undefined" :style="stateOf(line) === 'moved' ? {color: 'var(--accent)'} : undefined">{{ stateOf(line) }}</span>
+        <span v-if="stateOf(line)" :class="['chip', {stale: ['estimated', 'not found', 'ad-lib'].includes(stateOf(line)), bad: stateOf(line) === 'left out' || stateOf(line) === 'check'}]" :title="stateOf(line) === 'not found' ? 'The alignment found this line sung nowhere: its words are only laid out where it stands in the lyrics - listen and drag them where it is sung' : stateOf(line).startsWith('ad-lib') ? 'Heard, but not in lyrics.txt - a suggestion, sung once taken' : line.problem" :style="stateOf(line) === 'moved' ? {color: 'var(--accent)'} : undefined">{{ stateOf(line) }}</span>
         <span v-if="early(line)" class="chip stale" title="The first word starts before the singing does: its box covers silence">early {{ leads.get(line.line)!.toFixed(1) }} s</span>
         <span v-if="outdated.has(line.line)" class="chip stale" :title="`The prompt of ${outdated.get(line.line)!.join(', ')} still has this line at its old times: plan again`">prompt old</span>
         <span v-if="draft.crossing(line).length" class="chip bad" title="A clip cut falls into a word">cut</span>

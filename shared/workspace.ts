@@ -33,7 +33,9 @@ export type EditorServer = {name: string, reachable: boolean, running: number, p
 
 ////////// A PROJECT
 export type EditorPerson = {name: string, text: string}
-export type EditorShot = {label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[], directionId?: string}
+// who is in the picture of a shot (its plan's characters) and whether they sing, play or speak in it - the timeline's cast lanes
+export type EditorCast = {id: string, name: string, does: ('sings' | 'plays' | 'speaks')[]}
+export type EditorShot = {label: string, at: number, framing: string, camera: string, subjects: string[], action?: string, people: EditorPerson[], directionId?: string, cast?: EditorCast[]}
 // a sung or spoken line: seconds from the clip's start
 export type EditorLine = {at: number, end?: number, text: string, who: string, line?: number}
 export type EditorPicture = {id: string, label: string, file: string, kind: string, name: string, subject: string, description: string, exists: boolean, v?: number}
@@ -271,6 +273,8 @@ export type TimingLine = {
   words: TimingWord[],
   estimated: boolean,         // the times are a guess: barely found in the transcript
   byHand: boolean,            // placed on this page
+  adlib?: boolean,            // not in lyrics.txt: heard by the transcription - a suggestion, sung once taken (off: false)
+  problem?: string,           // what is wrong against lyrics.txt: missing words, not placed, there twice (#738)
   unplaced?: boolean,         // found sung nowhere: its words are only laid out at its place in the lyrics, to be dragged where it is sung
   off?: boolean,              // left out: heard, but not sung - no clip sings it
   beats: string[],            // the beats of the clips it is sung in
@@ -286,7 +290,8 @@ export type TimingView = {
   audio?: Media,              // the vocals stem, else the song
 }
 // words: the line's words moved; off: the line left out (true) or sung again (false) - one of the two, or both
-export type TimingChange = {lines: {line: number, words?: (Pick<TimingWord, 'start' | 'end'> & Partial<Omit<TimingWord, 'start' | 'end'>>)[], off?: boolean}[]}
+// reset: the line as the automatic alignment has it, worked out again from the transcript - what was placed by hand goes
+export type TimingChange = {lines: {line: number, words?: (Pick<TimingWord, 'start' | 'end'> & Partial<Omit<TimingWord, 'start' | 'end'>>)[], off?: boolean, reset?: boolean}[]}
 export type TimingResult = {
   changed: number[],          // the lines that moved
   slots: string[],            // the clips of the cut whose vocals changed

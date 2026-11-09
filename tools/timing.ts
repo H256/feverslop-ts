@@ -2,10 +2,12 @@ import {cli} from '../lib/cli.ts';
 // When each sung line and word of a music video is, as the workspace's Timing page moves them on the vocals - CLI first (#549).
 // Without an option every line is printed with its start and end; --json gives the words in the form --set takes back. A moved
 // line changes the clips it is sung in; their beats lose their shot plan, the next plan run plans just those again.
-// usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12]
+// usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all]
 // --off: lines left out - heard, but not sung (a misheard ad-lib on top of a line): no clip sings them. --on sings them again.
 // --tighten: the first word of each line that starts in silence starts where the singing does (the lines placed by hand stay) - a project
 // aligned before that was part of the alignment gets it here, and a run of --redo=lyricsTiming has it by itself.
+// --reset: lines placed by hand go back to the automatic timing, worked out again from the kept transcript (whisper does not run
+// again) - a correction that was wrong. An ad-lib (heard, not in lyrics.txt) is a suggestion: --on=N sings it, --off=N leaves it.
 import {existsSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {parseArgs} from "node:util";
@@ -18,10 +20,10 @@ import {commandTarget} from "../lib/editor/preproduction.ts";
 import {readTiming, type TimingChange, writeTiming} from "../lib/editor/timing.ts";
 cli('timing')
 
-const usage = 'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12]'
+const usage = 'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all]'
 const {values: args, positionals} = (() => {
     try {
-        return parseArgs({args: Bun.argv.slice(2), allowPositionals: true, options: {json: {type: 'boolean', default: false}, set: {type: 'string'}, tighten: {type: 'boolean', default: false}, off: {type: 'string'}, on: {type: 'string'}}})
+        return parseArgs({args: Bun.argv.slice(2), allowPositionals: true, options: {json: {type: 'boolean', default: false}, set: {type: 'string'}, tighten: {type: 'boolean', default: false}, off: {type: 'string'}, on: {type: 'string'}, reset: {type: 'string'}}})
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
@@ -33,7 +35,7 @@ const view = await readTiming(t)
 if (!view) log.usageError(`${t.id} has no timed lyrics - they come with "alignLyrics" (or singers) and the stems: bun index.ts ${t.id} --until=story`, usage)
 const timing = view!
 
-if ([args.tighten, args.set !== undefined, args.off !== undefined || args.on !== undefined].filter(Boolean).length > 1) log.usageError('--tighten, --set and --off/--on do not go together', usage)
+if ([args.tighten, args.set !== undefined, args.off !== undefined || args.on !== undefined, args.reset !== undefined].filter(Boolean).length > 1) log.usageError('--tighten, --set, --off/--on and --reset do not go together', usage)
 let change: TimingChange | undefined
 // the line numbers as listed (from 1)
 const numbers = (value: string | undefined, flag: string) => (value ?? '').split(',').filter(Boolean).map(n => {
@@ -41,7 +43,12 @@ const numbers = (value: string | undefined, flag: string) => (value ?? '').split
     if (!timing.lines.some(l => l.line === line)) log.usageError(`--${flag}: no line ${n.trim()} - bun run timing ${t.id} lists them`, usage)
     return line
 })
-if (args.off !== undefined || args.on !== undefined) {
+if (args.reset !== undefined) {
+    // all: every line placed by hand
+    const lines = args.reset === 'all' ? timing.lines.filter(l => l.byHand).map(l => l.line) : numbers(args.reset, 'reset')
+    if (!lines.length) log.success('no line is placed by hand - nothing to set back')
+    else change = {lines: lines.map(line => ({line, reset: true}))}
+} else if (args.off !== undefined || args.on !== undefined) {
     change = {lines: [...numbers(args.off, 'off').map(line => ({line, off: true})), ...numbers(args.on, 'on').map(line => ({line, off: false}))]}
 } else if (args.tighten) {
     const loudness = timing.audio ? await readFineWaveform(join(t.dir, timing.audio.file), 100).catch(() => undefined) : undefined
@@ -81,7 +88,9 @@ if (change) {
     for (const l of timing.lines) {
         if (l.section !== section) log.info(styles.muted(`\n[${section = l.section}]`))
         const start = l.words[0]?.start ?? 0, end = l.words.at(-1)?.end ?? start
-        log.info(`${String(l.line + 1).padStart(4)}  ${formatTime(start, true)} – ${formatTime(end, true)}  ${l.text}${l.unplaced ? styles.muted('  (not found: laid out here, move it where it is sung)') : l.estimated ? styles.muted('  (a guess: barely heard)') : ''}${l.byHand ? styles.muted('  (by hand)') : ''}${l.off ? styles.warning('  (left out - not sung)') : ''}`)
+        log.info(`${String(l.line + 1).padStart(4)}  ${formatTime(start, true)} – ${formatTime(end, true)}  ${l.text}${l.unplaced ? styles.muted('  (not found: laid out here, move it where it is sung)') : l.estimated ? styles.muted('  (a guess: barely heard)') : ''}${l.byHand ? styles.muted('  (by hand)') : ''}${l.adlib ? styles.warning(`  (heard, not in the lyrics${l.off ? ` - not sung, --on=${l.line + 1} sings it` : ''})`) : l.off ? styles.warning('  (left out - not sung)') : ''}${l.problem ? styles.warning(`  (${l.problem})`) : ''}`)
     }
+    const problems = timing.lines.filter(l => l.problem)
+    if (problems.length) log.warn(`${problems.length} line(s) do not match lyrics.txt - move or check them on the Timing page; --reset=N sets a line placed by hand back to the automatic timing`)
     log.next(`bun run timing ${t.id} --json > timing.json   (move the words' start and end, "off": true leaves a line out, then --set=timing.json)`)
 }

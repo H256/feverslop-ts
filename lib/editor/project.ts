@@ -267,6 +267,10 @@ async function musicProject({id, dir}: EditorTarget): Promise<EditorProject> {
                     ...(planned ? {directionId: `${clip.beatId}:shot${offset + n + 1}`} : {}),
                     action: planned?.action && plain(planned.action),
                     people: Object.entries(planned?.people ?? {}).map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
+                    ...(planned ? {cast: (planned.characters ?? Object.keys(planned.people ?? {})).map(id => {
+                        const p = planned.people?.[id]
+                        return {id, name: nameOf(id), does: [...(p?.singing ? ['sings' as const] : []), ...(p?.playing || p?.plays ? ['plays' as const] : [])]}
+                    })} : {}),
                 }
             }),
             lines: (clip.vocals ?? []).map(v => ({at: v.at, end: v.end, text: v.text, who: v.singers.map(s => s.subject).join(', '), line: v.line})),
@@ -327,6 +331,16 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
     const directionScenes = filmDirectionScenes(data, requests)
     const characters = data.cast?.characters ?? []
     const nameOf = (characterId: string) => characters.find(c => c.id === characterId)?.name ?? characterId
+    // whose lines a film shot speaks: its lines index the dialogue of the scene, and the cue is a name or an alias of the cast
+    const speakersOf = (scene: {elements: {type: string, speaker?: string}[]} | undefined, lines: number[]) => {
+        const dialogue = scene?.elements.filter(e => e.type === 'dialogue') ?? []
+        const key = (name: string) => name.trim().toLowerCase()
+        return new Set(lines.flatMap(n => {
+            const cue = dialogue[n]?.speaker
+            const who = cue === undefined ? undefined : characters.find(c => [c.name, ...(c.aliases ?? [])].some(a => key(a) === key(cue)))
+            return who ? [who.id] : []
+        }))
+    }
     const sceneOf = (sceneId: string) => data.screenplay?.scenes.find(s => s.id === sceneId)
     const sceneLabel = (sceneId: string) => {
         const scene = sceneOf(sceneId)
@@ -377,6 +391,7 @@ async function filmProject({id, dir}: EditorTarget): Promise<EditorProject> {
                     ...(planned && directionScenes.has(clip.sceneId) ? {directionId: `${clip.sceneId}:shot${offset + n + 1}`} : {}),
                     action: fit?.action ?? planned?.action,
                     people: people.map(([person, p]) => ({name: nameOf(person), text: [p.state, p.frame, p.motion].filter(Boolean).join(' · ')})),
+                    ...(planned ? {cast: planned.characters.map(id => ({id, name: nameOf(id), does: speakersOf(scene, planned.lines).has(id) ? ['speaks' as const] : []}))} : {}),
                 }
             }),
             // a line only knows the start of its shot: it lasts until the next one, or to the end of the clip

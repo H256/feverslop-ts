@@ -12,7 +12,7 @@ import {type BeatShots, type Blocking, type Character, type Fact, type Location,
 import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
-import {applyDirectionOverlay} from './lib/direction/service.ts';
+import {applyDirectionOverlay, directionPlanNotes} from './lib/direction/service.ts';
 import {directionViewCache} from './lib/direction/views.ts';
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
@@ -26,8 +26,9 @@ import {parseRetake} from "./lib/retake.ts";
 import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from "./lib/own-picture.ts";
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from "./lib/render.ts";
 import {languageName, loadProjectConfig} from "./lib/config.ts";
-import {alignLyrics, lowConfidence, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
+import {alignLyrics, lowConfidence, lyricsProblems, sungLines, sungOnly, tightenStarts} from "./lib/lyrics.ts";
 import {readFineWaveform} from "./lib/waveform.ts";
+import {MISSING_WORD_LEAD, RATE, voiceLead} from "./shared/timing-fit.ts";
 import {projectLyricSections} from "./lib/music.ts";
 import {archiveFiles, versionStamp} from "./lib/archive.ts";
 import {assembleFinal, previewSources, formatSlotRanges} from "./lib/assemble.ts";
@@ -375,6 +376,10 @@ if (lyricsTiming) {
         const confidence = line.confidence < 0.5 ? styles.warning(line.confidence.toFixed(2)) : styles.muted(line.confidence.toFixed(2))
         log.line(`   ${styles.muted(`${formatTime(line.start, true)} – ${formatTime(line.end, true)}`)} ${confidence} ${styles.name(line.section.padEnd(12))} ${line.text}`)
     }
+    // with known lyrics nothing is lost and nothing added (#738): every line once, placed, with its own words
+    for (const p of lyricsProblems(alignedTiming!, lyricSections)) log.warn(`line ${p.line + 1} "${p.text}": ${p.problem} - check it on the Timing page (bun run timing ${projectId})`)
+    const suggested = alignedTiming!.lines.filter(l => l.adlib && l.off)
+    if (suggested.length) log.step('Ad-libs', styles.muted(`${suggested.length} line(s) heard that lyrics.txt does not have - not sung until taken: ${suggested.map(l => `${l.line + 1} "${l.text}"`).join(', ')} (bun run timing ${projectId} --on=N)`))
     const unsure = lowConfidence(lyricsTiming)
     if (unsure.length) log.warn(`${unsure.length} line(s) barely found in the transcript - their times are interpolated. Check them on the workspace's Timing page (bun run editor), or fix lyricsTiming in ${project.file} by hand, then --redo=timeline`)
 }
@@ -882,7 +887,9 @@ if (plannedBefore) {
     delete project.data.shotViews
 }
 const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
-const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook: lookBrief}
+// the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
+const directionNotes = directionPlanNotes({id: project.id, dir: project.dir, kind: 'music'}, project.data)
+const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook: lookBrief, ...(Object.keys(directionNotes).length ? {direction: directionNotes} : {})}
 // The blocking, beat after beat - short calls: the floor plan, where everybody starts and ends. Each beat starts where the
 // one before it ends, so this is the only part that has to go in order. A step of its own: --redo=shotMoments plans the shots
 // again on the same floor plans. A beat whose blocking stays unusable has no entry and plans its staging and ends itself.
@@ -1135,6 +1142,16 @@ if (shotViews) {
 ////////// BUILDING THE MINIMAX H3 REQUESTS
 // Deterministic from the data above, so it is rebuilt on every run instead of being cached
 log.section('12 · BUILDING THE MINIMAX H3 REQUESTS')
+// the vocals stem's loudness: a shot does not forbid the lip-sync where its singing is already heard (lib/compose.ts, voiceLead)
+const vocalPeaks = stems && singing ? await readFineWaveform(join(project.dir, stems.vocals), RATE).catch(() => undefined) : undefined
+// singing heard well before a line's first word: the clips follow the sound, but the timing most likely lost a word there (#738)
+if (vocalPeaks && lyricsTiming) {
+    const early = lyricsTiming.lines.flatMap((line, n) => {
+        const lead = voiceLead(line.words, vocalPeaks, lyricsTiming.lines[n - 1]?.end ?? 0)
+        return lead >= MISSING_WORD_LEAD ? [`"${line.text}" (${lead.toFixed(1)} s)`] : []
+    })
+    if (early.length) log.warn(`${early.length} line(s) are heard before their first word - a word may be missing in their timing: ${early.join(', ')}. Check them on the workspace's Timing page`)
+}
 const clips = buildClipRequests({
     slots: clipSlots,
     mapping,
@@ -1151,6 +1168,7 @@ const clips = buildClipRequests({
     language,
     singing,
     lyricsTiming,
+    vocalPeaks,
     shotMoments: args['legacy-moments'] ? undefined : directedPlan.shotMoments,
     propActivity,
     stemsAvailable: Boolean(stems),

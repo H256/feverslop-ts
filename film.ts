@@ -35,7 +35,7 @@ import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from "./lib/batc
 import type {AssetKind} from "./lib/asset-import.ts";
 import {applyLibraryText, castFromLibrary, copyKey} from "./lib/casting.ts";
 import {libraryDir} from "./lib/library.ts";
-import {applyDirectionOverlay} from './lib/direction/service.ts';
+import {applyDirectionOverlay, directionPlanNotes} from './lib/direction/service.ts';
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
 import {shotlistMarkdown} from "./lib/film/shotlist.ts";
@@ -511,6 +511,8 @@ const totalWeight = screenplay.scenes.reduce((sum, s) => sum + sceneWeight(s), 0
 const budgeted = config.targetDuration > 0 && (mode === 'idea' || config.targetDurationSet)
 const budgetOf = (scene: (typeof screenplay.scenes)[number]) => budgeted ? Math.max(4, Math.round(config.targetDuration * sceneWeight(scene) / totalWeight)) : undefined
 if (budgeted) log.step('Planned length', `${config.targetDuration}s ${styles.muted('- every scene gets its share of it')}`)
+// the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
+const directionNotes = directionPlanNotes({id: film.id, dir: film.dir, kind: 'film'}, film.data)
 const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async () => {
     const result: SceneCoverage[] = []
     // what the scene before ended with, by the names of the cast - the shots of this scene start from it where the scene goes on
@@ -534,7 +536,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         const planScene = async () => {
             let problems: string[] = []
             for (let attempt = 0; ; attempt++) {
-                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id], i + 1, props))
+                const raw = await askJson<RawCoverage>(coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), problems, handover(i), locationViews[location.id], i + 1, props, directionNotes[scene.id]))
                 try {
                     // the first time what the script checks find is a reason to ask again, the second time it is only noted
                     const {coverage: planned, notes} = toCoverage(raw, scene, cast, attempt === 0, namedByScene(screenplay.scenes, cast.characters, i), i + 1, props)
@@ -550,7 +552,7 @@ const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async ()
         }
         // kept as soon as it is planned: a failure on a later scene does not cost the scenes before it. What it was asked
         // (the first prompt, with the hand-over of the scene before) decides whether it is asked again
-        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id], i + 1, props)
+        const firstAsk = coveragePrompt(scene, location, cast.characters, languageName(brief.language) ?? brief.language, lookBrief, budgetOf(scene), maxShotsFor(scene), [], handover(i), locationViews[location.id], i + 1, props, directionNotes[scene.id])
         result.push(await film.each('coverage', scene.id, firstAsk, planScene))
     }
     return result

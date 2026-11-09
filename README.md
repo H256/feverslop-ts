@@ -46,7 +46,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run look <id> [--film]` | print the look of the whole and of every character and place; `--json` / `--set=look.json` change texts, `--again=<id>` have one written anew |
 | `bun run casting <id> [--film]` | casting.json, what the next plan run takes over and the `--redo` it needs; `--set=character:<id>=library:<asset>` |
 | `bun run singers <id>` | who sings which line; `--line=12:mara,ben`, or `--json` / `--set=singers.json` (a singer change within a line as `parts`) |
-| `bun run timing <id>` | when each sung line is; `--json` / `--set=timing.json` moves its words, `--tighten` starts the lines that begin in silence where the singing does |
+| `bun run timing <id>` | when each sung line is; `--json` / `--set=timing.json` moves its words, `--tighten` starts the lines that begin in silence where the singing does, `--reset=N,M|all` sets lines placed by hand back to the automatic timing, `--on=N` sings an ad-lib (heard, not in lyrics.txt - a suggestion until then); lines that do not match lyrics.txt are said |
 | `bun run direction <id> [--film]` | tune an existing performance: saved instructions, scoped to character/scene/shot or song time, LLM `--preview`, `--take` / `--drop`, plan versions; [direction guide](docs/direction.md) |
 | `bun run versions <id> <clip-or-picture> [--film]` | the older versions put away; `--pick=<version>` makes one the current one again |
 | `bun run config <id> [--film]` | the render settings of a project (`config.json`): printed, or changed with `--set=videoWorkflow=h3-ref2video-prism-2pass` (more than once), `--unset=seed` takes one back to its default; says which rendered clips and pictures a change makes stale |
@@ -690,8 +690,9 @@ The full guide, with the options every workflow gets, the helpers and a checklis
 - **Some connections aren't in the types:** node outputs into widgets, autogrow inputs like `ref_images.ref_image_0`,
   and widgets that depend on another widget. The helpers `widget()` and `withInputs()` cover them.
 - **Hour-long renders are fine.** There's no time limit; completion is read from the server's history, so a dropped
-  connection changes nothing. If FeverSlop TS stops while ComfyUI is still rendering (Ctrl+C, crash, sleep), the next
-  run picks the job up again via `<file>.pending.json` instead of rendering it twice.
+  connection changes nothing. If FeverSlop TS ends while ComfyUI is still rendering (a crash, sleep), the next
+  run picks the job up again via `<file>.pending.json` instead of rendering it twice. A deliberate stop - Ctrl+C, Stop on
+  the workspace page - cancels the run's jobs on their servers instead (see docs/comfyui.md).
 - **Clips are rendered slightly longer than their slot.** The H3 node only renders 5 + 17·k frames, so a full-length
   slot renders 226 frames (about 9.4 s); the extra frames are cut off in the final video. Lower `MAX_CLIP_SEC` if your hardware limit is
   strict - the rounding adds up to 16 frames (0.67 s).

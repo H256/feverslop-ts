@@ -32,8 +32,8 @@ import {checkUploadSize, takePictureUpload} from "./upload.ts";
 import {readPictureJobs} from "../render-state.ts";
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts';
 import type {ProjectStatus} from '../../shared/workspace.ts';
-import type {DirectionRule} from '../../shared/direction.ts';
-import {readDirection, setDirectionRules, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts';
+import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts';
+import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts';
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -339,9 +339,10 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 }
                 return started(runs.start(target, wanted, await urlsOfChoice(servers)))
             }
-            if (what === 'stop') return json({stopped: runs.stop(target)})
+            if (what === 'stop') return json({stopped: await runs.stop(target)})
             if (what === 'direction') {
                 if (!id) return json(await setDirectionRules(target, await body<{rules: DirectionRule[]}>()))
+                if (id === 'edits') return json(await setDirectionEdits(target, await body<{edits: DirectionEdit[]}>()))
                 if (id === 'take') return json(await takeDirection(target))
                 if (id === 'drop') return json(await dropDirection(target))
                 if (id === 'restore') return json(await restoreDirection(target, (await body<{version: string}>()).version))

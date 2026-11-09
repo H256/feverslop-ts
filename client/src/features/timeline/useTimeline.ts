@@ -32,6 +32,8 @@ export function createTimeline() {
   const versions = shallowRef<{clip: string, list: ClipVersionView[]}>()
   const compared = shallowRef<Compared>()
   const helpOpen = ref(false)
+  // the shot being directed (its direction id), in the dialog over the page
+  const directing = ref<string>()
   const peek = shallowRef<Peek>()
 
   const loadFreshness = async () => { fresh.value = await api.freshness() }
@@ -138,7 +140,7 @@ export function createTimeline() {
 
   const dispose = () => { clearInterval(progressTimer); run.detail.value = '' }
   return {
-    session, project, fresh, status, peaks, progress, playback, tab, marked, markedClips, onlyFlagged, versions, compared, helpOpen, peek,
+    session, project, fresh, status, peaks, progress, playback, tab, marked, markedClips, onlyFlagged, versions, compared, helpOpen, directing, peek,
     loadAround, chooseSource, pickSource, forgetSource, holdSource, clickClip, isFlagged, markFlagged, markState, stepFlagged, loadVersions, dispose,
   }
 }

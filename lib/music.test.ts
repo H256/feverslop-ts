@@ -1,6 +1,6 @@
 import {splitBySinger} from './singing-parts.ts';
 import {describe, expect, test} from "bun:test";
-import {activityRanges, buildTimeline, chooseClipStarts, splitAtVocalGaps, framePower, isFightBeat, musicMapProblem, parseLyricSections, projectLyricSections, splitFightSlots, transcriptProblem} from "./music.ts";
+import {activityRanges, buildTimeline, chooseClipStarts, pullLateOnsets, splitAtVocalGaps, framePower, isFightBeat, musicMapProblem, parseLyricSections, projectLyricSections, splitFightSlots, transcriptProblem} from "./music.ts";
 import type {Character, LyricsTiming, MusicMap, Slot, StoryBeat} from "./project.ts";
 
 const word = (text: string, start: number, end: number) => ({text, start, end})
@@ -196,5 +196,35 @@ describe('parseLyricSections', () => {
         expect(projectLyricSections(lyrics, perTag).map(s => s.label)).toEqual(perTag)
         expect(projectLyricSections(lyrics, undefined).map(s => s.label)).toEqual(sections)
         expect(projectLyricSections(lyrics, sections).map(s => s.label)).toEqual(sections)
+    })
+})
+
+// #739: a line that starts in the last second of a clip is not sung there
+describe('a line starting at the end of a clip', () => {
+    const lines = (...starts: [number, number][]) => ({lines: starts.map(([start, end], n) => ({line: n, section: 's', sectionIndex: 0, text: 'x y', start, end, confidence: 1, words: [word('x', start, start + 0.4), word('y', start + 0.5, end)]}))}) as unknown as LyricsTiming
+    test('the split takes another bar boundary when there is one', () => {
+        // bars every 2 s; a line starts at 7.4 - 0.6 s before the boundary at 8
+        const starts = chooseClipStarts([0, 2, 4, 6, 8, 10, 12, 14], 0, 16, 4, 4, 9.3, lines([1, 3], [7.4, 9.5]))!
+        expect(starts).not.toContain(4)
+    })
+    test('at a boundary the split cannot move, the next clip starts just before the line - on a downbeat close before it', () => {
+        const slots = [{start: 0, end: 8, bars: 4}, {start: 8, end: 14, bars: 3}]
+        pullLateOnsets(slots, lines([7.4, 9.5]), [0, 2, 4, 6, 7.3, 8], 9.3, 2)
+        expect(slots.map(s => [s.start, s.end])).toEqual([[0, 7.3], [7.3, 14]])
+        // no downbeat close: just before the word
+        const plain = [{start: 0, end: 8, bars: 4}, {start: 8, end: 14, bars: 3}]
+        pullLateOnsets(plain, lines([7.4, 9.5]), [0, 2, 4, 6, 8], 9.3, 2)
+        expect(plain[0]!.end).toBeCloseTo(7.3)
+    })
+    test('not when the clip before would be too short, the next one too long, or a word would be cut', () => {
+        const short = [{start: 0, end: 1.5, bars: 1}, {start: 1.5, end: 8, bars: 3}]
+        pullLateOnsets(short, lines([0.8, 3]), [0, 2], 9.3, 2)
+        expect(short[0]!.end).toBe(1.5)
+        const long = [{start: 0, end: 8, bars: 4}, {start: 8, end: 17, bars: 4}]
+        pullLateOnsets(long, lines([7.4, 9.5]), [0, 8], 9.3, 2)
+        expect(long[0]!.end).toBe(8)
+        const cut = [{start: 0, end: 8, bars: 4}, {start: 8, end: 14, bars: 3}]
+        pullLateOnsets(cut, {lines: [...lines([7.4, 9.5]).lines, {line: 9, section: 's', sectionIndex: 0, text: 'z', start: 6.5, end: 7.6, confidence: 1, words: [word('z', 6.5, 7.6)]}]} as unknown as LyricsTiming, [0, 8], 9.3, 2)
+        expect(cut[0]!.end).toBe(8)
     })
 })
