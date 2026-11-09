@@ -109,6 +109,8 @@ hands: no`
 /** What the planner knows of the whole song - the same for every call of a run. */
 export type PlanContext = {
     characters: Character[],
+    // the director's edits per beat (lib/direction/edits.ts directionNotes): what a plan made again keeps to - only there when set
+    direction?: Record<string, string[]>,
     // what the reference pictures show - the planner stages in the place of the picture, with the people of the pictures
     locations: Location[],
     characterDescriptions: Record<string, string>,
@@ -181,7 +183,7 @@ ${JSON.stringify({
     }
 }
 
-export function planPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook}: PlanContext, block: StoryBeat[], finished: { beat: StoryBeat, plan: BeatShots } | undefined, after: StoryBeat | undefined, problems: string[], chunk: Chunk): AskOptions {
+export function planPrompt({characters: cast, locations, characterDescriptions, locationDescriptions, locationLayouts, continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook, direction}: PlanContext, block: StoryBeat[], finished: { beat: StoryBeat, plan: BeatShots } | undefined, after: StoryBeat | undefined, problems: string[], chunk: Chunk): AskOptions {
     const nameOf = (id: string) => cast.find(c => c.id === id)?.name ?? id
     // per shot of the beat, who is heard singing and whose instrument is heard - right in the shot, not as flag lists of the
     // whole beat next to it: the planner wrote a guitar "resting on his thigh" with every flag of the beat true
@@ -217,8 +219,10 @@ ${JSON.stringify(block.map(b => ({
             ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === b.id) ? {micro: true} : {}),
             shotsNeeded: shotCounts[b.id] ?? 1,
             ...(musicOf(b) ? {music: musicOf(b)} : {}),
+            // fixed by the director: whatever else the beat says, every shot keeps to it
+            ...(direction?.[b.id]?.length ? {director: direction[b.id]} : {}),
         })))}
-
+${block.some(b => direction?.[b.id]?.length) ? 'Beats with "director" entries: the director fixed them - every shot keeps to them, whatever the summary or the moments say.\n' : ''}
 ${chunk.blocking ? `Blocking of this beat - fixed, keep to it: ${JSON.stringify(chunk.blocking)}
 
 ` : ''}This call writes ${chunk.from > 0 || chunk.to < chunk.total ? `ONLY shots ${chunk.from + 1} to ${chunk.to} of the ${chunk.total} that the beat needs ("shotsNeeded")` : `all ${chunk.total} shots of the beat`}.${chunk.blocking

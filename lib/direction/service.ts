@@ -6,7 +6,8 @@ import { writeJsonFile } from '../json-file.ts';
 import type { Project } from '../project.ts';
 import type { FilmProject } from '../film/types.ts';
 import type { AskOptions } from '../llm.ts';
-import type { DirectionRule, DirectionShot, DirectionView, DirectionProposal, DirectionVersion, DirectionChange } from '../../shared/direction.ts';
+import type { DirectionRule, DirectionShot, DirectionView, DirectionProposal, DirectionVersion, DirectionChange, DirectionEdit } from '../../shared/direction.ts';
+import { applyEdit, describeEdit, directionNotes, inScope } from './edits.ts';
 import { musicShots, putMusicShot, musicContext } from './music.ts';
 import { filmShots, putFilmShot, filmContext } from './film.ts';
 import {directionPrompt} from './prompt.ts';
@@ -19,6 +20,7 @@ type Data = Project | FilmProject;
 type State = {
     schema: 1;
     rules: DirectionRule[];
+    edits?: DirectionEdit[];
     proposal?: DirectionProposal;
     versions: DirectionVersion[];
     activeVersion?: string;
@@ -43,6 +45,9 @@ function state(t: DirectionTarget): State {
     if (s.schema !== 1 || !Array.isArray(s.rules) || !Array.isArray(s.versions))
         throw Error('invalid direction.json');
     s.rules.forEach(validateRule);
+    if (s.edits !== undefined && !Array.isArray(s.edits))
+        throw Error('invalid direction edits');
+    (s.edits ?? []).forEach(validateEdit);
     for (const p of [...s.versions, ...(s.proposal ? [s.proposal] : [])]) {
         if (!p || typeof p.id !== 'string' || typeof p.sourceFingerprint !== 'string' || typeof p.rulesFingerprint !== 'string' || !Array.isArray(p.changes) || !Array.isArray(p.conflicts) || p.conflicts.some(c => typeof c !== 'string'))
             throw Error('invalid saved direction proposal/version');
@@ -87,6 +92,62 @@ function validateRule(r: DirectionRule) {
     if (r.binding !== undefined && typeof r.binding !== 'string')
         throw Error('invalid binding');
 }
+function validateEdit(e: DirectionEdit) {
+    if (!e || typeof e.id !== 'string' || !e.id.trim())
+        throw Error('edit requires id');
+    validateRule({ id: e.id, text: 'edit', scope: e.scope });
+    if ((e.remove === undefined) === (e.size === undefined))
+        throw Error('an edit either removes a character or sets the size');
+    if (e.remove !== undefined && (typeof e.remove !== 'string' || !e.remove))
+        throw Error('invalid character to remove');
+    if (e.size !== undefined && !['wide', 'medium', 'close', 'extreme'].includes(e.size))
+        throw Error('invalid size: wide, medium, close or extreme');
+    if (e.binding !== undefined && typeof e.binding !== 'string')
+        throw Error('invalid binding');
+}
+const nameIn = (d: Data) => (id: string) => d.cast?.characters.find(c => c.id === id)?.name ?? id;
+const groupIds = (t: DirectionTarget, d: Data) => t.kind === 'film' ? ((d as FilmProject).screenplay?.scenes ?? []).map(g => g.id) : ((d as Project).beats ?? []).map(g => g.id);
+/** A shot edit is bound to the shot it was chosen for: after a new plan it waits for an explicit rebind, like a rule. */
+const editBinding = (t: DirectionTarget, d: Data, e: DirectionEdit) => e.scope.kind === 'shot' ? binding(t, d, { id: e.id, text: 'edit', scope: e.scope }) : undefined;
+type EditIssue = DirectionView['editIssues'][number];
+/** The edits on a copy of the plan - in their order, after the accepted version. `issues` collects what they could not do. */
+function withEdits(t: DirectionTarget, source: Data, copy: Data, s: State, issues: EditIssue[] = []) {
+    const edits = s.edits ?? [];
+    if (!edits.length) return copy;
+    const nameOf = nameIn(source);
+    const bound = edits.filter(e => {
+        if (e.binding === undefined || e.binding === editBinding(t, source, e)) return true;
+        issues.push({ editId: e.id, message: 'Source shot changed; explicitly rebind or remove this edit.' });
+        return false;
+    });
+    for (const shot of shots(t, copy)) {
+        let data = shot.data, changed = false;
+        for (const e of bound.filter(e => inScope(e, shot))) {
+            const result = applyEdit(data, e, nameOf, t.kind === 'film');
+            if (result.issue) issues.push({ editId: e.id, shotId: shot.id, message: result.issue });
+            if (result.mentions) issues.push({ editId: e.id, shotId: shot.id, mentions: true, message: `The shot's text still names ${nameOf(e.remove!)} - a preview rewrites it.` });
+            if (result.data) { data = result.data; changed = true; }
+        }
+        if (changed) put(t, copy, shot.id, data);
+    }
+    return copy;
+}
+/** The rules the preview gets for the words an edit left: a person taken out of a shot whose texts still name them. */
+function editRules(t: DirectionTarget, d: Data, s: State): DirectionRule[] {
+    const issues: EditIssue[] = [];
+    withEdits(t, d, overlay(t, d, { ...s, edits: [] }), s, issues);
+    const nameOf = nameIn(d);
+    return issues.filter(i => i.mentions && i.shotId).map(i => {
+        const name = nameOf((s.edits ?? []).find(e => e.id === i.editId)!.remove!);
+        return { id: `edit:${i.editId}:${i.shotId}`, text: `${name} is no longer in this shot: write it without ${name} - nobody in it is ${name}, looks at, speaks to or touches ${name}.`, scope: { kind: 'shot', id: i.shotId! } };
+    });
+}
+/** The edits as notes for the planner, per beat or scene (lib/shot-planner.ts, the film's coverage): what a new plan keeps to. */
+export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, string[]> {
+    if (!existsSync(file(t))) return {};
+    return directionNotes(state(t).edits ?? [], groupIds(t, d), nameIn(d));
+}
+export { describeEdit };
 function matches(r: DirectionRule, s: DirectionShot) {
     if (r.characterId && !s.characters.includes(r.characterId))
         return false;
@@ -112,10 +173,10 @@ function binding(t: DirectionTarget, d: Data, r: DirectionRule): string | undefi
 }
 function unresolved(t: DirectionTarget, d: Data, s: State) { return s.rules.flatMap(r => r.binding !== undefined && r.binding !== binding(t, d, r) ? [{ ruleId: r.id, message: 'Source scene/shot changed; explicitly rebind or remove this rule.' }] : !shots(t, d).some(sh => matches(r, sh)) ? [{ ruleId: r.id, message: 'Scope selects no existing shots.' }] : []); }
 function applied(t: DirectionTarget, d: Data, s: State) { const v = s.versions.find(v => v.id === s.activeVersion); return v?.sourceFingerprint === fingerprint(t, d) ? v : undefined; }
-function overlay(t: DirectionTarget, d: Data, s: State) {
+function overlay(t: DirectionTarget, d: Data, s: State, issues?: EditIssue[]) {
     const copy = structuredClone(d);
     const changes = applied(t, d, s)?.changes ?? [];
-    if (!changes.length) return copy;
+    if (!changes.length) return withEdits(t, d, copy, s, issues);
     const original = new Map(shots(t, d).map(shot => [shot.id, shot]));
     for (const c of changes) {
         const before = original.get(c.shotId);
@@ -123,14 +184,16 @@ function overlay(t: DirectionTarget, d: Data, s: State) {
         validateAfter(before.data, c.after);
         put(t, copy, c.shotId, c.after);
     }
-    return copy;
+    return withEdits(t, d, copy, s, issues);
 }
 export function readDirection(t: DirectionTarget): DirectionView {
     const d = source(t), s = state(t);
     const cast = d.cast;
     const accepted = applied(t, d, s);
+    const editIssues: EditIssue[] = [];
+    const planned = overlay(t, d, s, editIssues);
     return {
-        rules: s.rules, shots: shots(t, overlay(t, d, s)),
+        rules: s.rules, edits: s.edits ?? [], editIssues, shots: shots(t, planned),
         characters: cast?.characters.map(c => ({id: c.id, name: c.name})) ?? [],
         groups: t.kind === 'film'
             ? ((d as FilmProject).screenplay?.scenes ?? []).map(g => ({id: g.id, label: g.location ?? g.id}))
@@ -141,6 +204,32 @@ export function readDirection(t: DirectionTarget): DirectionView {
         restored: !!s.restored,
         proposalStale: !!s.proposal && (s.proposal.sourceFingerprint !== fingerprint(t, d) || s.proposal.rulesFingerprint !== hash(s.rules)),
     };
+}
+/** Saves the edits (the whole list): a shot edit is bound to its current shot unless it keeps the binding it has. */
+export async function setDirectionEdits(t: DirectionTarget, input: {
+    edits: DirectionEdit[];
+}) {
+    return locked(t, () => {
+        if (!input || !Array.isArray(input.edits))
+            throw Error('expected {edits: [...]}');
+        const d = source(t), s = state(t);
+        const ids = new Set<string>();
+        s.edits = input.edits.map(e => {
+            validateEdit(e);
+            if (ids.has(e.id)) throw Error('duplicate edit id');
+            ids.add(e.id);
+            if (t.kind === 'film' && (e.scope.kind === 'time' || e.scope.kind === 'beat')) throw Error('film uses scene scopes, not beat/time');
+            if (t.kind === 'music' && e.scope.kind === 'scene') throw Error('music uses beat scope');
+            if (e.remove && !d.cast?.characters.some(c => c.id === e.remove)) throw Error(`no character ${e.remove}`);
+            const bound = editBinding(t, d, e);
+            if (bound === 'missing') throw Error(`no shot ${(e.scope as { id: string }).id}`);
+            return { ...e, ...(bound !== undefined ? { binding: e.binding ?? bound } : {}) };
+        });
+        // a proposal was made from the shots as they were
+        delete s.proposal;
+        save(t, s);
+        return readDirection(t);
+    });
 }
 export async function setDirectionRules(t: DirectionTarget, input: {
     rules: DirectionRule[];
@@ -219,7 +308,9 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
         if (unresolved(t, d, s).length)
             throw Error('unresolved rules need explicit rebinding');
         const current = shots(t, overlay(t, d, s));
-        const selected = current.filter(sh => s.rules.some(r => matches(r, sh)));
+        // the rules, and for a person an edit took out of a shot whose words still name them, a rule to write it without them
+        const rules = [...s.rules, ...editRules(t, d, s)];
+        const selected = current.filter(sh => rules.some(r => matches(r, sh)));
         if (!selected.length)
             throw Error('no selected shots; restore a version to undo edits');
         const run = ask ?? (await import('../llm.ts')).askJson;
@@ -228,8 +319,8 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
                 const raw = await run(directionPrompt({
-                    rules: s.rules,
-                    selected: selected.map(shot => ({...shot, ruleIds: s.rules.filter(rule => matches(rule, shot)).map(rule => rule.id)})),
+                    rules,
+                    selected: selected.map(shot => ({...shot, ruleIds: rules.filter(rule => matches(rule, shot)).map(rule => rule.id)})),
                     context: localContext(t, d, selected),
                     neighbors: current.filter((sh, i) => selected.some(s => s.id === current[i - 1]?.id || s.id === current[i + 1]?.id) && !selected.some(s => s.id === sh.id)),
                     previousError: failure,

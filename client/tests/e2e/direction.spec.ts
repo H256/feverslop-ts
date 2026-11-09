@@ -8,7 +8,7 @@ test.beforeAll(async () => { editor = await startEditor() })
 test.afterAll(async () => { await editor?.stop() })
 
 function view(): DirectionView {
-  return {rules: [], shots: [{id: 'b1:shot1', groupId: 'b1', characters: ['ann'], start: 0, end: 4, data: {action: 'Ann turns right'}}], characters: [{id: 'ann', name: 'Ann'}], groups: [{id: 'b1', label: 'Ann arrives'}], unresolved: [], versions: [], pending: false, restored: false}
+  return {rules: [], edits: [], editIssues: [], shots: [{id: 'b1:shot1', groupId: 'b1', characters: ['ann'], start: 0, end: 4, data: {action: 'Ann turns right'}}], characters: [{id: 'ann', name: 'Ann'}], groups: [{id: 'b1', label: 'Ann arrives'}], unresolved: [], versions: [], pending: false, restored: false}
 }
 
 test('direction: save a scoped instruction, edit it, and run the CLI preview', async ({page}) => {
