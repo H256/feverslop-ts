@@ -19,7 +19,7 @@ watch(() => [props.clip, list.value === undefined] as const, ([clip, missing]) =
   failed.value = false
   if (missing) loadVersions(clip).catch(cause => { failed.value = true; fail(cause) })
 }, {immediate: true})
-const SOURCES = {again: 'rendered again', stale: 'from an older plan', leak: 'had a grey backdrop'} as const
+const SOURCES: Record<ClipVersionView['source'], string> = {again: 'rendered again', stale: 'from an older plan', leak: 'had a grey backdrop', size: 'came out at the wrong size'}
 const about = (version: ClipVersionView) => joined([SOURCES[version.source], version.seed !== undefined && `seed ${version.seed}`, version.size])
 const compare = (version: ClipVersionView) => compareWith({clip: props.clip, version})
 const frameOf = (version: ClipVersionView) => version.firstFrame ? {file: version.firstFrame} : undefined
