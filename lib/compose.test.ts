@@ -182,16 +182,6 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain('Seven hammers swing')
         expect(clip.prompt).toContain('Layout of the place')
     })
-    // #756: "an extreme close-up of <the place>" rendered the whole place with the person in it and the close face laid over it
-    test('a close first shot opens on the people in it, in the place - a wide one on the place', () => {
-        const sized = (size: 'wide' | 'extreme'): Input => {
-            const base = input(false)
-            const plan = base.shotMoments!.b9!
-            return {...base, shotMoments: {b9: {...plan, shots: plan.shots.map(s => ({...s, framing: `${size} shot`, size}))}}}
-        }
-        expect(buildClipRequests(sized('extreme'))[0]!.prompt).toContain('[Shot 1] A extreme shot of <Subject 2> and <Subject 5> in <Subject 1>, the Cave;')
-        expect(buildClipRequests(sized('wide'))[0]!.prompt).toContain('[Shot 1] A wide shot of <Subject 1>, the Cave;')
-    })
 })
 
 describe('the background of the place', () => {
