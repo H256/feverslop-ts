@@ -12,7 +12,7 @@ import {type BeatShots, type Blocking, type Character, type Fact, type Location,
 import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from "./lib/batch.ts";
 import {finishOf} from "./lib/finish.ts";
 import {finishCopy, interpolateClips} from "./lib/final-pass.ts";
-import {applyDirectionOverlay} from './lib/direction/service.ts';
+import {applyDirectionOverlay, directionPlanNotes} from './lib/direction/service.ts';
 import {directionViewCache} from './lib/direction/views.ts';
 import {lockProject} from "./lib/lock.ts";
 import {beginRun} from "./lib/run-record-view.ts";
@@ -882,7 +882,9 @@ if (plannedBefore) {
     delete project.data.shotViews
 }
 const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
-const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook: lookBrief}
+// the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
+const directionNotes = directionPlanNotes({id: project.id, dir: project.dir, kind: 'music'}, project.data)
+const planContext: PlanContext = {characters: cast.characters, locations: cast.locations, characterDescriptions, locationDescriptions, locationLayouts, continuity: config.continuity, slots: clipSlots, mapping, shotCounts, beatProps, beatSinging, filmLook: lookBrief, ...(Object.keys(directionNotes).length ? {direction: directionNotes} : {})}
 // The blocking, beat after beat - short calls: the floor plan, where everybody starts and ends. Each beat starts where the
 // one before it ends, so this is the only part that has to go in order. A step of its own: --redo=shotMoments plans the shots
 // again on the same floor plans. A beat whose blocking stays unusable has no entry and plans its staging and ends itself.
