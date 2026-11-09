@@ -38,7 +38,9 @@ Direkte Änderungen überstehen eine Neuplanung: Der Planer bekommt sie als Vorg
 2. Unter **Scope** Projekt, Charakter, Beat/Szene, einen Songzeitbereich oder einen Shot wählen. **Only for character** schränkt den Bereich zusätzlich ein.
 3. Unter **Instruction** beispielsweise „Kael dreht sich zu seiner linken Seite, bis sein Rücken zur Kamera zeigt“ oder „Nahaufnahme der Greifhand beim Gitarrensolo“ eingeben. **Save instruction** speichert deinen Originaltext.
 4. **Preview changes** startet den CLI-Aufruf an das Sprachmodell. **Before / After** zeigt die vorgeschlagenen Änderungen einschließlich Pose und Bewegung. Gleichrangige widersprüchliche Vorgaben oder Anschlussprobleme verhindern die Übernahme: Anweisungen korrigieren oder den Bereich erweitern und neu vorschlagen lassen.
-5. **Take changes** übernimmt den Vorschlag; **Drop proposal** verwirft ihn. Danach **Update clip prompts** ausführen und auf der Timeline die betroffenen veralteten Clips rendern. Die Regieaktionen selbst rendern nichts.
+5. **Take changes** übernimmt den Vorschlag und baut die Clip-Prompts gleich neu; **Drop proposal** verwirft ihn. Danach auf der Timeline die betroffenen veralteten Clips rendern. Die Regieaktionen selbst rendern nichts.
+
+Unter **Direct edits** legst du direkte Änderungen für mehrere Shots an, ohne Sprachmodell: eine Person aus allen Shots eines Beats, einer Szene, eines Zeitbereichs oder aller Shots mit einer bestimmten Figur nehmen, oder dort die Einstellungsgröße setzen. **Add edit and build the prompts** speichert sie und baut die Clip-Prompts neu, **Undo edit** nimmt sie zurück. Bei einer Anweisung oder Änderung für einen einzelnen Shot öffnet **open in the timeline** den Shot im Regie-Dialog.
 
 Nach einer kompletten Neuplanung bleiben die Anweisungen gespeichert. Eine Szene oder ein Shot mit derselben Nummer kann aber etwas anderes zeigen: geänderte Zuordnungen werden deshalb gemeldet. Mit **Edit instruction** eine passende Auswahl treffen oder nach Prüfung mit **Review current binding** ausdrücklich neu zuordnen. Ein Zeitbereich betrifft alle sich damit überschneidenden ganzen Shots; er erzeugt keine zusätzlichen Schnitte.
 
