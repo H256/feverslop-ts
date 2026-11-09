@@ -921,10 +921,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const propClause = propNote(shot.focus, slot.start + shot.at, slot.start + (cuts[j + 1] ?? duration), moment, j, shot.plan?.people)
                 // a singer in frame while nobody sings (an instrumental stretch, or between lines) gets a concrete mouth
                 // position, same reasoning as the idle prop poses - the story text may still say they "cry out". Only the
-                // lip-sync is ruled out, not the emotion: eyes, brows and posture stay free to follow the shot
+                // lip-sync is ruled out, not the emotion: the retention line keeps expression free. The clause names no face (#755):
+                // "the face showing ..." turned a singer seen from behind to the lens, and walking away face first is walking backwards
                 const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
                 const silentClause = silentSingers.length
-                    ? ` ${silentSingers.length > 1 ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`)) : `${silentSingers[0]!.label}, ${silentSingers[0]!.name},`} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent, the face showing the emotion of the moment through the eyes and brows.`
+                    ? ` ${silentSingers.length > 1 ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`)) : `${silentSingers[0]!.label}, ${silentSingers[0]!.name},`} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent.`
                     : ''
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
@@ -1076,8 +1077,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // reads as the subjects vanishing and popping back in mid-scene. Only the opening clip gets it as-is.
             // a piece of a fight clip tells what ITS shot does: the beat's summary names everybody ("seven hammers against a
             // dozen orcs"), and the video model fills the people it has no picture for with copies of the ones it has
+            // a clip nobody sings in does not open on a beat summary that has someone sing (#755): the intro of a verse beat got
+            // "sings while walking forward", and the model turned the walker seen from behind to the lens - its first shot says it instead
+            const silentOpening = opensScene && !vocals.length && castSubjects.some(s => singing?.singers.includes(s.id))
             const sceneClause =
-                slot.micro && flatShotMoments?.[0]?.action
+                (slot.micro || silentOpening) && flatShotMoments?.[0]?.action
                     ? withLabels(flatShotMoments[0].action, planTokens)
                     : opensScene
                       ? withLabels(beat.summary, beatTokens)
