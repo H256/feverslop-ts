@@ -25,7 +25,7 @@ import {
 import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import {finishOf} from './lib/finish.ts'
 import {finishCopy, interpolateClips} from './lib/final-pass.ts'
-import {applyDirectionOverlay, directionPlanNotes} from './lib/direction/service.ts'
+import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, dropStaleEdits} from './lib/direction/service.ts'
 import {directionViewCache} from './lib/direction/views.ts'
 import {lockProject} from './lib/lock.ts'
 import {beginRun} from './lib/run-record-view.ts'
@@ -459,6 +459,15 @@ log.step(
 if (config.alignLyrics && sungLines(lyricSections).length === 0)
     throw new Error('Aligning the lyrics needs sung lines in input/lyrics.txt - without lyrics, remove "singers" from config.json (clip mode)')
 if (!lyrics && !storyIdea) throw new Error('Neither lyrics nor a story idea given - add input/lyrics.txt or input/story-idea.txt')
+// a run that renders clips stops for direction not taken yet - at the start, not after the planning (#801): the clips would be
+// rendered without it. A run that only plans builds the prompts without it and says so
+if (render.has('videos') && project.data.shotMoments) {
+    const open = directionNotTaken({id: project.id, dir: project.dir, kind: 'music'}, project.data)
+    if (open.length)
+        throw new Error(
+            `Direction needs review before clips are rendered: preview and take ${open.length === 1 ? 'this instruction' : `these ${open.length} instructions`} on the Direction page (bun run direction ${project.id} --preview, then --take), or remove ${open.length === 1 ? 'it' : 'them'}:\n${open.map(line => `  - ${line}`).join('\n')}`,
+        )
+}
 
 // an edited input redoes the steps built on it - the inputs and the steps they redo are listed in lib/inputs.ts
 await project.syncInputs(await projectInputs(project.dir, config))
@@ -1535,7 +1544,17 @@ const locationView = config.sequenceSheets ? config.locationView : -1
 // The place's reference sheet shows it from five sides; a clip gets one of them as its picture. The planner knows where
 // the camera of a shot stands, so it chooses - the views change from scene to scene instead of one fixed background.
 // a beat without an entry (its answer failed, or it had no plan then) is asked again on the next run, the others stay
-const directedPlan = applyDirectionOverlay({id: project.id, dir: project.dir, kind: 'music'}, project.data)
+// what the direction cannot apply does not stop the run (#801): edits made for shots planned again since are gone with those shots,
+// and instructions not taken yet are left out of the prompts - both said. Only a run that renders clips stops for instructions
+// not taken: it would render them without (it stops at the start already, see directionGate)
+const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
+for (const dropped of dropStaleEdits(directionTarget, project.data)) log.warn(`direction: dropped an edit made for a shot planned again since - ${dropped}`)
+const notTaken = render.has('videos') ? [] : directionNotTaken(directionTarget, project.data)
+if (notTaken.length)
+    log.warn(
+        `direction: the clip prompts are built without ${notTaken.length === 1 ? 'this instruction' : `these ${notTaken.length} instructions`} - preview and take them on the Direction page (bun run direction ${project.id} --preview):\n${notTaken.map(line => `  - ${line}`).join('\n')}`,
+    )
+const directedPlan = applyDirectionOverlay(directionTarget, project.data, {allowPending: !render.has('videos')})
 const directedMoments = directedPlan.shotMoments
 const viewCache = directionViewCache(shotMoments, directedMoments, project.data.shotViews ?? viewsKept, project.data.shotViewPlans)
 const viewsBefore = viewCache.kept

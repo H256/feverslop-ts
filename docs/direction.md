@@ -118,11 +118,13 @@ Rules on a beat or scene, a character or the whole video always reach the planne
 
 Broad intent survives regenerated shots. When the source plan changes, review a fresh proposal before rendering from it. Scene and shot bindings include the source they were chosen from: a reused ID is not permission to apply an old instruction to a different scene. Missing or changed bindings are reported for explicit reassignment.
 
-After the shots were planned again (a changed setting, a beat planned again), a run stops with "Direction needs review" before it builds a clip, and names each rule to rebind or remove: its scope, the start of its words and why. `bun run status` names them too, and its next step is `bun run direction demo --preview`. Do this, in this order:
+After the shots were planned again (a changed setting, a beat planned again), what was made for the old shots is handled like this:
 
-1. Rebind or remove the named rules: `--edit=<rule-id> --scope=shot:b3:shot2` binds a rule to the shot as it is now, `--remove=<rule-id>` drops it. In the workspace this is the **Direction** page: the rule has a warning and **Review current binding**. A failed run's bar and the **Next** chip on the timeline lead there.
-2. **Preview**, then **Take**.
-3. Run again, then render the stale clips. After a new plan that is every clip: render a few marked ones to check first. The **Next** chip asks before it renders most of the video.
+- **Direct edits** made for a shot that has been planned again cannot apply any more: the new plan has shots of its own. The plan run drops them and says so in its log. On the Direction page, leftovers like these are in **Left over from the old plan**, cleared with one click.
+- **Instructions** not previewed and taken yet do not stop a run that only plans: the clip prompts are built without them, and the run names them. Preview and take them when you want them in. A run that renders clips stops for them **at its start**, before any planning, since it would render without them.
+- An instruction for a shot planned again shows under the leftovers: **Keep for the new shot** applies it to the shot as it is now, **Clear** drops it. One that selects no shot at all is **To decide**: edit it for a shot that is there, or remove it.
+
+Then render: after a new plan that is nearly every clip, so render a few marked ones first. The **Next** chip asks before it renders most of the video. `bun run status` names what is not taken yet.
 
 Rules that went to the planner (people put in or taken out with **People…**) need no review.
 
