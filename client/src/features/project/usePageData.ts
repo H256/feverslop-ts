@@ -1,4 +1,5 @@
 import {watch} from 'vue'
+import {usePolling} from '../../composables/usePolling'
 import {useResource} from '../../composables/useResource'
 import {errorText} from '../../lib/format'
 import {useRunDock} from '../../services/run'
@@ -9,12 +10,19 @@ import {useProject} from './session'
  * The data of one page of a project, read when the page opens and again when a run ends - and after a change made on the page: then
  * the project's snapshot is read again too, since what the page changed shows elsewhere. A page that has its data shows it on; a later
  * reading that fails is said, not hidden behind it.
+ *
+ * `live`: read again every few seconds while a run goes on - a page of pictures shows each one as soon as it is rendered, not when the
+ * whole run is done. What is typed on the page stays: a draft follows the data only while it is unchanged.
  */
-export function usePageData<T>(load: (signal: AbortSignal) => Promise<T>) {
+const LIVE_MS = 5000
+
+export function usePageData<T>(load: (signal: AbortSignal) => Promise<T>, {live = false} = {}) {
   const session = useProject()
   const toasts = useToasts()
   const resource = useResource(load)
-  useRunDock().onEnd(() => {
+  const dock = useRunDock()
+  if (live) usePolling(async () => (dock.running() ? resource.reload() : undefined), LIVE_MS, {onFocus: false})
+  dock.onEnd(() => {
     void resource.reload()
   })
   watch(resource.error, error => {
