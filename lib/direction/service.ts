@@ -7,7 +7,7 @@ import type {Project} from '../project.ts'
 import type {FilmProject} from '../film/types.ts'
 import type {AskOptions} from '../llm.ts'
 import type {DirectionRule, DirectionShot, DirectionView, DirectionProposal, DirectionVersion, DirectionChange, DirectionEdit} from '../../shared/direction.ts'
-import {applyEdit, describeEdit, directionNotes, inScope, namesIn} from './edits.ts'
+import {applyEdit, describeEdit, directionNotes, inScope, namesIn, written} from './edits.ts'
 import {musicShots, putMusicShot, musicContext} from './music.ts'
 import {filmShots, putFilmShot, filmContext} from './film.ts'
 import {directionPrompt} from './prompt.ts'
@@ -101,8 +101,11 @@ function validateRule(r: DirectionRule) {
 function validateEdit(e: DirectionEdit) {
     if (!e || typeof e.id !== 'string' || !e.id.trim()) throw Error('edit requires id')
     validateRule({id: e.id, text: 'edit', scope: e.scope})
-    if ((e.remove === undefined) === (e.size === undefined)) throw Error('an edit either removes a character or sets the size')
+    if ([e.remove, e.add, e.size].filter(v => v !== undefined).length !== 1) throw Error('an edit removes a character, adds one or sets the size')
     if (e.remove !== undefined && (typeof e.remove !== 'string' || !e.remove)) throw Error('invalid character to remove')
+    if (e.add !== undefined && (typeof e.add !== 'string' || !e.add)) throw Error('invalid character to add')
+    // into one shot only: a beat or clips get people with --with (the beat planned again), which stages them with everyone
+    if (e.add !== undefined && e.scope.kind !== 'shot') throw Error('a character is added to one shot (scope shot:ID); for beats or clips use --with')
     if (e.size !== undefined && !['wide', 'medium', 'close', 'extreme'].includes(e.size)) throw Error('invalid size: wide, medium, close or extreme')
     if (e.binding !== undefined && typeof e.binding !== 'string') throw Error('invalid binding')
 }
@@ -126,23 +129,34 @@ function withEdits(t: DirectionTarget, source: Data, copy: Data, s: State, issue
     for (const shot of shots(t, copy)) {
         let data = shot.data,
             changed = false
-        const named: DirectionEdit[] = []
+        const named: DirectionEdit[] = [],
+            added: DirectionEdit[] = []
         for (const e of bound.filter(e => inScope(e, shot))) {
             const result = applyEdit(data, e, nameOf, t.kind === 'film')
             if (result.issue) issues.push({editId: e.id, shotId: shot.id, message: result.issue})
             if (result.mentions) named.push(e)
+            if (result.unwritten) added.push(e)
             if (result.data) {
                 data = result.data
                 changed = true
             }
         }
         // asked once all of them are out: words that named somebody only in the part of another one taken out are gone with it
-        for (const e of named.filter(e => namesIn(data, nameOf(e.remove!))))
+        for (const e of named.filter(e => !((data.characters ?? []) as string[]).includes(e.remove!) && namesIn(data, nameOf(e.remove!))))
             issues.push({
                 editId: e.id,
                 shotId: shot.id,
                 mentions: true,
                 message: `The shot's text still names ${nameOf(e.remove!)} - a preview rewrites it.`,
+            })
+        // brought in, and not taken out again by a later edit: until they have a place in the shot, a preview writes it
+        const people = data.people as Record<string, Record<string, unknown>> | undefined
+        for (const e of added.filter(e => ((data.characters ?? []) as string[]).includes(e.add!) && (!people || !written(people[e.add!]))))
+            issues.push({
+                editId: e.id,
+                shotId: shot.id,
+                mentions: true,
+                message: `${nameOf(e.add!)} is in the shot with nothing to do yet - a preview writes where they are and what they do.`,
             })
         if (changed) put(t, copy, shot.id, data)
     }
@@ -155,13 +169,16 @@ function editRules(t: DirectionTarget, d: Data, s: State): DirectionRule[] {
     const nameOf = nameIn(d)
     const joinAnd = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : (items[0] ?? ''))
     // one rule a shot, however many were taken out of it: the model writes the shot once, without all of them
-    const out = new Map<string, string[]>()
+    const out = new Map<string, string[]>(),
+        into = new Map<string, string[]>()
     for (const i of issues.filter(i => i.mentions && i.shotId)) {
-        const name = nameOf((s.edits ?? []).find(e => e.id === i.editId)!.remove!)
-        const names = out.get(i.shotId!) ?? []
-        if (!names.includes(name)) out.set(i.shotId!, [...names, name])
+        const e = (s.edits ?? []).find(e => e.id === i.editId)!
+        const map = e.add ? into : out
+        const name = nameOf(e.add ?? e.remove!)
+        const names = map.get(i.shotId!) ?? []
+        if (!names.includes(name)) map.set(i.shotId!, [...names, name])
     }
-    return [...out].map(([shotId, names]) => {
+    const without = [...out].map(([shotId, names]): DirectionRule => {
         const who = joinAnd(names)
         const them = names.length > 1 ? 'them' : who
         return {
@@ -170,6 +187,18 @@ function editRules(t: DirectionTarget, d: Data, s: State): DirectionRule[] {
             scope: {kind: 'shot', id: shotId},
         }
     })
+    // brought in by the director (#792): already among the shot's characters, with an empty entry in people - the words are the model's
+    const within = [...into].map(([shotId, names]): DirectionRule => {
+        const who = joinAnd(names)
+        const many = names.length > 1
+        const them = many ? 'them' : who
+        return {
+            id: `edit-add:${shotId}`,
+            text: `${who} ${many ? 'are' : 'is'} now in this shot: write ${them} into it, at the place of this shot - in people, where ${many ? 'each one is' : 'they are'} at the start (state), where in the frame (frame) and how ${many ? 'each one moves' : 'they move'} (motion), and in the action. ${many ? 'They do' : `${who} does`} not sing; keep what the others do as far as it goes.`,
+            scope: {kind: 'shot', id: shotId},
+        }
+    })
+    return [...without, ...within]
 }
 /** The edits as notes for the planner, per beat or scene (lib/shot-planner.ts, the film's coverage): what a new plan keeps to. */
 export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, string[]> {
@@ -271,7 +300,7 @@ function overlay(t: DirectionTarget, d: Data, s: State, issues?: EditIssue[]) {
     for (const c of changes) {
         const before = original.get(c.shotId)
         if (!before) throw Error('invalid saved direction shot')
-        validateAfter(before.data, c.after)
+        validateAfter(before.data, c.after, broughtInto(s, c.shotId))
         put(t, copy, c.shotId, c.after)
     }
     return withEdits(t, d, copy, s, issues)
@@ -313,6 +342,17 @@ export async function setDirectionEdits(
         if (!input || !Array.isArray(input.edits)) throw Error('expected {edits: [...]}')
         const d = source(t),
             s = state(t)
+        // a person brought in whose place in the shot was taken is in the accepted plan now: undoing the edit cannot take them
+        // out of it - a Take out (a remove edit) does
+        const taken = applied(t, d, s)?.changes ?? []
+        for (const gone of (s.edits ?? []).filter(e => e.add && !input.edits?.some(n => n.id === e.id))) {
+            const shotId = (gone.scope as {id: string}).id
+            const after = taken.find(c => c.shotId === shotId)?.after
+            if (((after?.characters ?? []) as string[]).includes(gone.add!))
+                throw Error(
+                    `${nameIn(d)(gone.add!)} is in the taken plan of ${shotId}: take them out with Take out (--without), or restore an earlier plan version`,
+                )
+        }
         const ids = new Set<string>()
         s.edits = input.edits.map(e => {
             validateEdit(e)
@@ -321,6 +361,7 @@ export async function setDirectionEdits(
             if (t.kind === 'film' && (e.scope.kind === 'time' || e.scope.kind === 'beat')) throw Error('film uses scene scopes, not beat/time')
             if (t.kind === 'music' && e.scope.kind === 'scene') throw Error('music uses beat scope')
             if (e.remove && !d.cast?.characters.some(c => c.id === e.remove)) throw Error(`no character ${e.remove}`)
+            if (e.add && !d.cast?.characters.some(c => c.id === e.add)) throw Error(`no character ${e.add} in the cast`)
             const bound = editBinding(t, d, e)
             if (bound === 'missing') throw Error(`no shot ${(e.scope as {id: string}).id}`)
             return {...e, ...(bound !== undefined ? {binding: e.binding ?? bound} : {})}
@@ -357,7 +398,9 @@ export async function setDirectionRules(
     })
 }
 const editable = new Set(['action', 'framing', 'camera', 'view', 'hold', 'size', 'rest', 'people', 'characters', 'hands'])
-function validateAfter(before: Record<string, unknown>, after: unknown) {
+/** Whoever the director brought into a shot (#792): a proposal may have them although the plan before it did not. */
+const broughtInto = (s: State, shotId: string) => (s.edits ?? []).filter(e => e.add && e.scope.kind === 'shot' && e.scope.id === shotId).map(e => e.add!)
+function validateAfter(before: Record<string, unknown>, after: unknown, brought: string[] = []) {
     if (!after || typeof after !== 'object' || Array.isArray(after)) throw Error('invalid shot object')
     const a = after as Record<string, unknown>
     for (const key of new Set([...Object.keys(before), ...Object.keys(a)])) {
@@ -372,13 +415,17 @@ function validateAfter(before: Record<string, unknown>, after: unknown) {
     }
     if (typeof a.action !== 'string' || !a.action.trim()) throw Error('missing shot action')
     if (a.size !== undefined && !['wide', 'medium', 'close', 'extreme'].includes(a.size as string)) throw Error('invalid size')
-    const original = (before.characters ?? []) as string[],
+    const original = [...new Set([...((before.characters ?? []) as string[]), ...brought])],
         visible = (a.characters ?? []) as string[]
     if (!Array.isArray(visible) || visible.some(id => typeof id !== 'string' || !original.includes(id)) || new Set(visible).size !== visible.length)
         throw Error('protected cast identities')
-    if (Array.isArray(before.lines) && before.lines.length && hash(original) !== hash(visible)) throw Error('protected speaking characters')
+    if (Array.isArray(before.lines) && before.lines.length && hash(before.characters ?? []) !== hash(visible.filter(id => !brought.includes(id))))
+        throw Error('protected speaking characters')
     if (a.hands !== undefined && (typeof a.hands !== 'string' || !visible.includes(a.hands))) throw Error('hands must name visible player')
-    const bp = (before.people ?? {}) as Record<string, Record<string, unknown>>,
+    const bp = {
+            ...Object.fromEntries(brought.map(id => [id, {}])),
+            ...((before.people ?? {}) as Record<string, Record<string, unknown>>),
+        } as Record<string, Record<string, unknown>>,
         ap = (a.people ?? {}) as Record<string, Record<string, unknown>>
     if (
         !ap ||
@@ -483,6 +530,20 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
                     seen.add(c.shotId)
                     return {shotId: c.shotId, before: sh.data, after: validateAfter(sh.data, c.after)}
                 })
+                // whoever the director brought into a shot (#792) stays in it, with a place: the model may leave others out, not them
+                for (const sh of selected) {
+                    const people = (sh.data.people ?? {}) as Record<string, Record<string, unknown>>
+                    for (const e of (s.edits ?? []).filter(
+                        e => e.add && e.scope.kind === 'shot' && e.scope.id === sh.id && people[e.add] && !written(people[e.add]),
+                    )) {
+                        const after = changes.find(c => c.shotId === sh.id)?.after
+                        const placed = ((after?.people ?? {}) as Record<string, Record<string, unknown>>)[e.add!]
+                        if (!after || !((after.characters ?? []) as string[]).includes(e.add!) || !written(placed))
+                            throw Error(
+                                `${nameIn(d)(e.add!)} was brought into ${sh.id}: keep them in characters and give them state, frame and motion in people`,
+                            )
+                    }
+                }
                 proposal = {
                     id: randomUUID(),
                     sourceFingerprint: initialFingerprint,
@@ -514,7 +575,7 @@ export async function takeDirection(t: DirectionTarget) {
         for (const c of p.changes) {
             const before = all.find(sh => sh.id === c.shotId)
             if (!before) throw Error('unknown shot')
-            validateAfter(before.data, c.after)
+            validateAfter(before.data, c.after, broughtInto(s, c.shotId))
         }
         // Keep a baseline and complete overlays so removing a rule never implicitly undoes prior accepted action.
         if (!s.versions.some(v => v.sourceFingerprint === p.sourceFingerprint && v.id.startsWith('baseline-')))

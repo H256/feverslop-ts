@@ -7,7 +7,7 @@ import type {DirectionEdit, DirectionShot, DirectionSize} from '../../shared/dir
 /** The framing words a shot size is written with - the size is what the code knows, the framing what the prompt says. */
 export const SIZE_FRAMING: Record<DirectionSize, string> = {wide: 'wide shot', medium: 'medium shot', close: 'close-up', extreme: 'extreme close-up'}
 
-export type EditResult = {data?: Record<string, unknown>; issue?: string; mentions?: boolean}
+export type EditResult = {data?: Record<string, unknown>; issue?: string; mentions?: boolean; unwritten?: boolean}
 
 type Person = Record<string, unknown>
 
@@ -43,6 +43,16 @@ export function namesIn(data: Record<string, unknown>, name: string, without?: s
  * to rewrite (the preview gets a rule for it), the code only takes the person out of who is in the picture.
  */
 export function applyEdit(data: Record<string, unknown>, edit: DirectionEdit, nameOf: (id: string) => string, film: boolean): EditResult {
+    // a person brought into the shot (#792): the code decides they are in the picture; until the language model wrote where they
+    // are and what they do (unwritten), the preview gets a rule for it
+    if (edit.add) {
+        const id = edit.add
+        const characters = (data.characters ?? []) as string[]
+        const people = data.people as Record<string, Person> | undefined
+        if (characters.includes(id)) return people && !written(people[id]) ? {unwritten: true} : {}
+        const next: Record<string, unknown> = {...data, characters: [...characters, id], ...(people ? {people: {...people, [id]: {}}} : {})}
+        return {data: next, unwritten: true}
+    }
     if (edit.remove) {
         const id = edit.remove
         const characters = (data.characters ?? []) as string[]
@@ -60,6 +70,11 @@ export function applyEdit(data: Record<string, unknown>, edit: DirectionEdit, na
         return {data: {...data, framing, ...(film ? {} : {size: edit.size})}}
     }
     return {}
+}
+
+/** Whether a person of a shot has been given a place: where they are, where in the frame, or how they move. */
+export function written(person: Person | undefined): boolean {
+    return !!person && ['state', 'frame', 'motion'].some(key => typeof person[key] === 'string' && !!(person[key] as string).trim())
 }
 
 /** Whether an edit's scope takes in a shot (a time range: any shot that reaches into it). */
@@ -83,6 +98,7 @@ export function inScope(edit: DirectionEdit, shot: DirectionShot): boolean {
 /** What an edit says, for a person to read - the CLI's list, the planner's notes. */
 export function describeEdit(edit: DirectionEdit, nameOf: (id: string) => string): string {
     if (edit.remove) return `${nameOf(edit.remove)} is not in the picture`
+    if (edit.add) return `${nameOf(edit.add)} is in the picture`
     if (edit.size) return `the shot is a ${SIZE_FRAMING[edit.size]}`
     return 'nothing'
 }

@@ -323,6 +323,55 @@ test('several people out of one shot: one rule for the words of all of them, non
         'B and C are no longer in this shot: write it without them - nobody in it is one of them, looks at, speaks to or touches them.',
     ])
 })
+test('a person brought into one shot: in the picture by code, a place in it written by the preview, kept there', async () => {
+    const {target, data} = fixture()
+    data.shotMoments.s1.shots[1] = {action: '{B} waits', characters: ['b'], people: {b: {state: 'sits'}}}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    // a beat gets people with --with (planned again), not this edit
+    expect(setDirectionEdits(target, {edits: [{id: 'x', scope: {kind: 'beat', id: 's1'}, add: 'a'}]})).rejects.toThrow('one shot')
+    await setDirectionEdits(target, {edits: [{id: 'in', scope: {kind: 'shot', id: 's1:shot2'}, add: 'a'}]})
+    const view = readDirection(target)
+    const shot = view.shots.find(s => s.id === 's1:shot2')!
+    expect(shot.data.characters).toEqual(['b', 'a'])
+    expect((shot.data.people as any).a).toEqual({})
+    expect(view.editIssues.map(i => [i.editId, i.shotId, !!i.mentions])).toEqual([['in', 's1:shot2', true]])
+    expect(applyDirectionOverlay(target, data).shotMoments!.s1!.shots[1]!.characters).toEqual(['b', 'a'])
+    // the first answer leaves A out again: refused, and asked once more
+    const asked: any[] = []
+    await previewDirection(target, async o => {
+        const input = JSON.parse(o.input)
+        asked.push(input)
+        const before = input.selected[0].data
+        return asked.length === 1
+            ? {changes: [{shotId: 's1:shot2', after: {...before, characters: ['b'], people: {b: before.people.b}}}], conflicts: []}
+            : {
+                  changes: [
+                      {
+                          shotId: 's1:shot2',
+                          after: {
+                              ...before,
+                              action: '{B} waits while {A} walks in',
+                              people: {...before.people, a: {state: 'at the door', frame: 'left', motion: 'walks in'}},
+                          },
+                      },
+                  ],
+                  conflicts: [],
+              }
+    })
+    expect(asked).toHaveLength(2)
+    expect(asked[0].rules.map((r: any) => r.text)).toEqual([
+        'A is now in this shot: write A into it, at the place of this shot - in people, where they are at the start (state), where in the frame (frame) and how they move (motion), and in the action. A does not sing; keep what the others do as far as it goes.',
+    ])
+    await takeDirection(target)
+    const taken = readDirection(target)
+    expect(taken.editIssues).toEqual([])
+    expect((taken.shots.find(s => s.id === 's1:shot2')!.data.people as any).a.motion).toBe('walks in')
+    // taken: Undo cannot take A out of the accepted plan, Take out can
+    const kept = taken.edits
+    expect(setDirectionEdits(target, {edits: []})).rejects.toThrow('taken plan')
+    await setDirectionEdits(target, {edits: [...kept, {id: 'out', scope: {kind: 'shot', id: 's1:shot2'}, remove: 'a'}]})
+    expect(readDirection(target).shots.find(s => s.id === 's1:shot2')!.data.characters).toEqual(['b'])
+})
 test('a size set by code: framing and size in music, framing in a film', async () => {
     const music = fixture()
     await setDirectionEdits(music.target, {edits: [{id: 'z', scope: {kind: 'beat', id: 's1'}, size: 'close'}]})

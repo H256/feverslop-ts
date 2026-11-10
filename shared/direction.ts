@@ -34,6 +34,8 @@ export type DirectionEdit = {
     id: string
     scope: DirectionScope
     remove?: string
+    /** a person of the cast brought into one shot (#792): the code puts them in, the preview writes what they do there */
+    add?: string
     size?: DirectionSize
     binding?: string
 }

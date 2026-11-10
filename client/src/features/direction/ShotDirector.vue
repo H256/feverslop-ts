@@ -107,6 +107,38 @@ const markOut = (id: string) => {
   outs.value = next
 }
 const outNames = computed(() => [...outs.value].map(nameOf))
+// people of the cast brought into this shot (#792): put in by the code, their place in the shot written by one proposal
+const ins = ref(new Set<string>())
+const inText = ref('')
+const markIn = (id: string) => {
+  const next = new Set(ins.value)
+  if (!next.delete(id)) next.add(id)
+  ins.value = next
+}
+const others = computed(() => (view.value?.characters ?? []).filter(c => !shot.value?.characters.includes(c.id)))
+const inNames = computed(() => [...ins.value].map(nameOf))
+const bringIn = () =>
+  work(async () => {
+    const ids = [...ins.value]
+    // taken out of this shot by an edit: that edit goes, and they are back where the plan has them - nothing to write
+    const outHere = (e: DirectionEdit) => !!e.remove && ids.includes(e.remove) && e.scope.kind === 'shot' && e.scope.id === props.shotId
+    const back = (view.value?.edits ?? []).filter(outHere).map(e => e.remove!)
+    const added: DirectionEdit[] = ids.filter(id => !back.includes(id)).map(add => ({id: crypto.randomUUID(), scope: {kind: 'shot', id: props.shotId}, add}))
+    const saved = await api.saveDirectionEdits([...(view.value?.edits ?? []).filter(e => !outHere(e)), ...added])
+    // what they do there, in the director's words: an instruction on the shot, for the one person when it is one
+    if (inText.value.trim())
+      await api.saveDirection([
+        ...saved.rules,
+        {id: crypto.randomUUID(), text: inText.value.trim(), scope: {kind: 'shot', id: props.shotId}, ...(ids.length === 1 ? {characterId: ids[0]} : {})},
+      ])
+    const words = !!inText.value.trim()
+    ins.value = new Set()
+    inText.value = ''
+    if (words || saved.editIssues.some(i => i.shotId === props.shotId && i.mentions)) {
+      unbuilt.value = true
+      await start({type: 'direction'})
+    } else await start({type: 'plan'})
+  })
 const takeOut = () =>
   work(async () => {
     const added: DirectionEdit[] = [...outs.value].map(remove => ({id: crypto.randomUUID(), scope: {kind: 'shot', id: props.shotId}, remove}))
@@ -124,7 +156,7 @@ const sized = (size: DirectionSize) =>
   ])
 const unedit = (edit: DirectionEdit) => saveEdits((view.value?.edits ?? []).filter(e => e.id !== edit.id))
 const removeRule = (rule: DirectionRule) => work(() => api.saveDirection((view.value?.rules ?? []).filter(r => r.id !== rule.id)))
-const describeEdit = (e: DirectionEdit) => (e.remove ? `${nameOf(e.remove)} out of the shot` : `size: ${e.size}`)
+const describeEdit = (e: DirectionEdit) => (e.remove ? `${nameOf(e.remove)} out of the shot` : e.add ? `${nameOf(e.add)} into the shot` : `size: ${e.size}`)
 
 // before and after, field by field - only what changed
 const LABELS: Record<string, string> = {
@@ -214,6 +246,34 @@ const diff = computed(() => {
           <span class="muted">By code. If the shot's words still name them, one proposal writes it without all of them.</span>
         </div>
         <p v-if="!shot.characters.length" class="muted">Nobody - the shot shows the place.</p>
+        <section v-if="others.length" class="bring">
+          <div class="btn-row">
+            <span class="muted">Bring in</span>
+            <button
+              v-for="c in others"
+              :key="c.id"
+              :class="['btn', 'in-mark', {on: ins.has(c.id)}]"
+              :aria-pressed="ins.has(c.id)"
+              :disabled="blocked"
+              :title="`Put ${c.name} into this shot - several at once`"
+              @click="markIn(c.id)"
+            >
+              + {{ c.name }}
+            </button>
+          </div>
+          <template v-if="ins.size">
+            <textarea
+              v-model="inText"
+              rows="2"
+              :placeholder="`What ${inNames.join(' and ')} ${ins.size > 1 ? 'do' : 'does'} here (optional) - e.g. walks in from the left and stops behind Elias`"
+            />
+            <div class="btn-row out-bar">
+              <button class="btn primary" :disabled="blocked" @click="bringIn">Bring {{ inNames.join(', ') }} into the shot</button>
+              <button class="btn" :disabled="blocked" @click="ins = new Set()">Clear</button>
+              <span class="muted">By code; one proposal writes where they are and what they do. Nothing is rendered.</span>
+            </div>
+          </template>
+        </section>
         <p v-if="data.rest && plain(data.rest) !== 'none'" class="muted rest">Others: {{ plain(data.rest) }}</p>
 
         <section v-if="edits.length || issues.length" class="list">
@@ -374,6 +434,22 @@ h3 {
 .out-mark.disabled {
   opacity: 0.5;
   cursor: default;
+}
+.bring {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.bring > .btn-row {
+  align-items: center;
+}
+.bring textarea {
+  width: 100%;
+}
+.in-mark.on {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .out-bar {
   align-items: center;
