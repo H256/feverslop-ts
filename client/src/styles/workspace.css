@@ -16,6 +16,11 @@
   --danger: light-dark(#b42318, #ff7a70);
   --danger-soft: light-dark(#fbe4e1, #3b1a18);
   --ok: light-dark(#17693f, #5ed29a);
+  /* what a button does (#774): planning with the language model, and finishing for publishing */
+  --plan: light-dark(#6a3fc4, #b69cff);
+  --plan-soft: light-dark(#efe8fc, #2a2142);
+  --finish: light-dark(#0b6e78, #5fd0db);
+  --finish-soft: light-dark(#dff3f5, #11303a);
   --hatch: light-dark(#d6d5d0, #24272b);
   --sans: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
   --mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
@@ -793,13 +798,69 @@ select.source {
 }
 .legend {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 0;
   color: var(--muted);
   font-size: 12px;
   min-width: 0;
-  overflow: hidden;
   white-space: nowrap;
   align-items: center;
+}
+/* the buttons in groups by what they do, a line between them (#774) */
+.legend .grp {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 10px;
+  border-left: 1px solid var(--line);
+}
+.legend .grp:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.legend .counts {
+  gap: 12px;
+}
+.legend .marked-grp {
+  background: var(--accent-soft);
+  border-radius: 7px;
+  border-left-color: transparent;
+  padding: 2px 8px;
+  margin: 0 6px;
+}
+.legend .marked-grp .num {
+  color: var(--accent);
+  font-weight: 600;
+}
+.legend button.b-render {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+}
+.legend button.b-render.strong {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+.legend button.b-plan {
+  color: var(--plan);
+  background: var(--plan-soft);
+  border-color: color-mix(in oklab, var(--plan) 40%, var(--line));
+}
+.legend button.b-check {
+  color: var(--text);
+  background: var(--raised);
+}
+.legend button.b-finish {
+  color: var(--finish);
+  background: var(--finish-soft);
+  border-color: color-mix(in oklab, var(--finish) 35%, var(--line));
+}
+.legend button.b-render:hover,
+.legend button.b-plan:hover,
+.legend button.b-finish:hover {
+  filter: brightness(1.12);
 }
 .legend i {
   display: inline-block;
@@ -835,7 +896,7 @@ select.source {
   color: var(--muted);
 }
 .zoom button:hover,
-.legend button:hover {
+.legend button:not(.b-render, .b-plan, .b-finish):hover {
   color: var(--text);
   background: var(--raised);
 }
@@ -1145,6 +1206,26 @@ select.source {
   border-radius: 3px;
   padding: 0 3px;
 }
+.clip.again {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.clip.reviewed {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.clip .again {
+  position: absolute;
+  white-space: nowrap;
+  z-index: 1;
+  left: 3px;
+  top: 18px;
+  font: 600 10px var(--sans);
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+}
 .clip .moved {
   position: absolute;
   z-index: 1;
@@ -1254,6 +1335,22 @@ select.source {
   border-radius: 10px;
   font-size: 12px;
   white-space: nowrap;
+}
+.reviewbar .kept {
+  color: var(--accent);
+  font-weight: 600;
+}
+.reviewbar .muted {
+  color: #fffa;
+}
+.reviewbar label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.reviewbar input {
+  width: auto;
+  margin: 0;
 }
 .reviewbar b {
   font-family: var(--mono);
@@ -2215,6 +2312,35 @@ textarea.book {
   align-items: center;
   padding: 5px 12px;
   min-width: 0;
+}
+/* how far a run is (#775) */
+.runprogress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.runprogress .track {
+  width: 180px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--raised);
+  overflow: hidden;
+}
+.runprogress .fill {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  border-radius: 99px;
+  transition: width 0.4s;
+}
+.runstep {
+  flex: none;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--raised);
+  font-size: 12px;
+  white-space: nowrap;
 }
 .runbar code {
   font: 12px var(--mono);

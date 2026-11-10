@@ -1,4 +1,4 @@
-import {computed, reactive, shallowRef} from 'vue'
+import {computed, reactive, ref, shallowRef} from 'vue'
 import type {EditorClip} from '../../../../shared/workspace'
 import {useToasts} from '../../services/toasts'
 import type {ClipActions} from './useClipActions'
@@ -10,18 +10,39 @@ type Review = {clips: EditorClip[]; index: number; again: Set<string>; restore: 
  * Going through clips one by one, with keys: each one in a loop, fine or to be rendered again. A final video would show the clips as
  * they were when it was made, so a review plays the clips; what was there before comes back after.
  */
+// whether a review plays each clip by itself: only when the viewer ticked it - nobody wants a page to start loud videos on its own
+const AUTOPLAY_KEY = 'review.autoplay'
+const readAutoplay = () => {
+  try {
+    return localStorage.getItem(AUTOPLAY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function useReview(timeline: Timeline, actions: ClipActions) {
   const toasts = useToasts()
   const {playback, marked} = timeline
   const review = shallowRef<Review>()
   const current = computed(() => review.value && review.value.clips[review.value.index])
+  const autoplay = ref(readAutoplay())
+  const setAutoplay = (on: boolean) => {
+    autoplay.value = on
+    try {
+      localStorage.setItem(AUTOPLAY_KEY, on ? '1' : '0')
+    } catch {
+      // kept for this visit only
+    }
+    if (on && current.value) playback.setPlaying(true)
+  }
 
+  /** The clip in a loop, from its start - played by itself only with autoplay ticked; Space plays it. */
   function show() {
     const clip = current.value
     if (!clip) return
     playback.loop.value = {from: clip.start, to: clip.end, label: clip.id}
     playback.seek(clip.start)
-    playback.setPlaying(true)
+    playback.setPlaying(autoplay.value)
   }
   function start(clips: EditorClip[]) {
     if (!clips.length) return
@@ -68,7 +89,9 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
       Enter: () => step(1),
       ArrowRight: () => step(1),
       ArrowLeft: () => step(-1),
+      // kept for the render at the end, and on to the next; R on a kept one (after ←) takes it back
       r: () => {
+        if (r.again.has(clip.id)) return void r.again.delete(clip.id)
         r.again.add(clip.id)
         step(1)
       },
@@ -83,6 +106,6 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
     action()
     return true
   }
-  return {review, current, start, end, key}
+  return {review, current, start, end, key, autoplay, setAutoplay}
 }
 export type ReviewControl = ReturnType<typeof useReview>

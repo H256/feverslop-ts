@@ -173,12 +173,13 @@ Ist nur eine Stelle schlecht, gibst du im Reiter **Render** unter **Render a par
 
 ![Review mit Tastenleiste unter dem Bild](images/workspace/review.jpg)
 
-**Review** spielt die markierten Clips nacheinander in Schleife ab. Ist nichts markiert, nimmt es die auffälligen, sonst alle.
+**Review** geht die markierten Clips nacheinander durch, jeden in Schleife. Ist nichts markiert, nimmt es die auffälligen, sonst alle. Abgespielt wird erst mit `Leertaste` - von selbst nur, wenn in der Leiste **Play by itself** angehakt ist (bleibt im Browser gespeichert). Nach einem erneuten Render mehrerer Clips sind diese markiert; die Review startet man dann selbst.
 
 | Taste | |
 |---|---|
+| `Leertaste` | abspielen oder anhalten |
 | `Enter` | passt, nächster Clip |
-| `R` | neu rendern: merken, nächster Clip |
+| `R` | neu rendern: nur vormerken, sofort weiter - gerendert wird am Ende |
 | `←` | zurück |
 | `C` | mit der älteren Fassung vergleichen |
 | `Esc` | Review beenden |
