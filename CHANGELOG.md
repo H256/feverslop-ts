@@ -2,6 +2,50 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.9.0 – directing shots and cast, a rebuilt workspace layout, and lint and format
+
+_2026-11-10_
+
+Planned shots can be directed one at a time and people can be brought into or out of chosen beats and clips. Sung lines are split where the cuts are, and a sung piece starts where its singing is heard. The workspace has a new top bar, a Direction page with an overview of the rules, and a run dock with overall progress. The code base is now linted and formatted.
+
+### Direction and cast
+
+- Direct a shot in a dialog on the timeline, with direct edits, a one-call preview and take, and `--show`; the Direction page gets an overview of rules, direct edits and versions, and a cast lane per character on the timeline (#745, #746, #747, #748).
+- Bring people into or out of one shot, several people out at once with one proposal for their words, and into chosen beats of a planned music video with the director's words for them; see which people are in which clips, and mark or change them per clip or section (#766, #768, #791, #794).
+- Take a Direction proposal despite a continuity note; `"singing": false` is no change. Rules are named, the next step is on the Direction page, a failed run leads there, and the page is laid out anew with rules for people brought in (#785, #796, #798).
+- Plan the shots of chosen beats again, with a beat lane and a taller timeline; `--beats` stops before a run that would plan every beat again anyway (#763, #764).
+
+### Singing and lyrics
+
+- Split sung lines at cuts and give them From/To spans, with no lip-sync before the first words; sung pieces start where their singing is heard (#741, #742).
+- A silent singer's clause names no face, a clip nobody sings in does not open on "sings", and a silent singer in a wide shot is silent without lips (#758, #784, #755).
+- Lyrics timing keeps the lines of the lyrics exactly; ad-libs are suggestions, with a way back to automatic (#749).
+- No line starts in the last second of a clip (#750).
+
+### Planner
+
+- Nobody is seen only by their reflection, the camera stays in its place, and a door that is pushed open fills its frame (#759, #756, #757).
+- The layout of a shot is a floor plan, not an opening shot (#751).
+
+### Workspace
+
+- A new top bar: where you are, the project's pages as tabs, the machine on the right, and the chips in a row of their own (#780).
+- A run dock shows the overall progress of a run (#779).
+- Timeline: the player and the lanes can be hidden and the view toolbar sits under the lanes; the action buttons are grouped by what they do, with colour; a clip rendered for another part of the song is marked as moved (#770, #777, #778).
+- Pictures show as soon as they are rendered (#787).
+- Review: no autoplay and no review on its own; clips kept with **R** stay visible (#771).
+
+### Rendering and tooling
+
+- Stopping a run on purpose cancels our ComfyUI jobs (#744).
+- When ComfyUI rejects a workflow, the missing node or model is named at the start of the message, so it is no longer cut off in the run record (#793).
+- ESLint and Prettier for the CLI and the client: configuration, all lint errors fixed with reasons for the rule options, and the whole code base formatted (#737, #752, #753, #754).
+- Documentation: the workspace as it is now, and install and setup checked against the code (#788, #789).
+
+### Limits
+
+- Automated tests cover the new direction, cast and timeline behavior. Real model quality of the changed clip prompts has not been validated by a new AI render.
+
 ## v0.8.1 – reliable recovery, safer assets, and bounded workspace caches
 
 _2026-11-09_
