@@ -13,6 +13,7 @@ import ClipInspector from './inspector/ClipInspector.vue'
 import PlayerMonitor from './PlayerMonitor.vue'
 import SummaryChips from './SummaryChips.vue'
 import TimelineTracks from './TimelineTracks.vue'
+import {lanes} from './lanes'
 import {useClipActions} from './useClipActions'
 import {useReview} from './useReview'
 import {createTimeline} from './useTimeline'
@@ -121,8 +122,9 @@ const closeDirector = () => {
 
 <template>
   <Teleport :to="TOP_CHIPS" defer><SummaryChips /></Teleport>
-  <div class="timeline-view view">
-    <main class="work">
+  <div :class="['timeline-view view', {'no-player': !lanes.player}]">
+    <!-- hidden, not removed: its video elements play the sound of the timeline (#772) -->
+    <main v-show="lanes.player" class="work">
       <PlayerMonitor ref="monitor" />
       <ClipInspector />
     </main>
