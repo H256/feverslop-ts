@@ -11,6 +11,7 @@ import ClipPeek from './ClipPeek.vue'
 import {stateOf} from './clips'
 import {useTimeline} from './context'
 import TimelineLegend from './TimelineLegend.vue'
+import {lanes, type LaneKey} from './lanes'
 
 /** The timeline: a ruler, the sections or scenes, the sound, the clips and what is sung or said - zoomed, scrolled and scrubbed. */
 const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct} = useTimeline()
@@ -85,10 +86,11 @@ watch(playback.t, t => {
 })
 watchEffect(() => {
   void theme.value
-  if (!ruler.value || !wave.value || !width.value) return
+  if (!ruler.value || !width.value) return
   const view = {left: left.value, width: width.value, pps: pps.value, seconds: project.value.seconds}
   drawRuler(ruler.value, view)
-  drawWave(wave.value, view, peaks.value)
+  // the song lane can be hidden (#772): drawn again when it is back
+  if (wave.value) drawWave(wave.value, view, peaks.value)
 })
 
 const drag = usePointerDrag()
@@ -115,7 +117,6 @@ const hues = computed(() => {
 // The cast lanes (#735): one per character, the stretches of the shots that show them - who is in the picture at all, and where they
 // sing, play or speak. Neighbouring shots that show the same are one stretch. A click directs the shot under it.
 type CastStretch = {key: string; start: number; length: number; does: string[]; shot?: string; title: string}
-const castOpen = ref(true)
 const castLanes = computed(() => {
   const lanes = new Map<string, {id: string; name: string; stretches: CastStretch[]}>()
   for (const clip of project.value.clips) {
@@ -143,6 +144,20 @@ const castLanes = computed(() => {
   }
   return [...lanes.values()]
 })
+// what can be hidden, for room (#772) - the clips always stay; kept per browser (lanes.ts)
+const shownLanes = computed(
+  () =>
+    [
+      {key: 'player', label: 'Player', title: 'The picture and the clip panel above the timeline'},
+      {key: 'groups', label: film.value ? 'Scenes' : 'Sections', title: film.value ? 'The scenes' : 'The parts of the song'},
+      ...(beats.value.length ? [{key: 'beats', label: 'Beats', title: 'Which beat of the story a clip belongs to'}] : []),
+      {key: 'wave', label: project.value.song ? 'Song' : 'Sound', title: 'The waveform'},
+      {key: 'lines', label: film.value ? 'Lines' : 'Sung', title: film.value ? 'What is said' : 'What is sung'},
+      ...(castLanes.value.length
+        ? [{key: 'cast', label: 'Cast', title: 'Who is in which shot - grey: in the picture, orange: sings or speaks, green: plays'}]
+        : []),
+    ] as {key: LaneKey; label: string; title: string}[],
+)
 // The beats (#761): which beat a clip belongs to. A click marks the clips of the beat (Ctrl+click: adds them), and the legend
 // then offers to plan their shots again (#762). A beat without a shot plan is planned by the next plan run anyway.
 const beats = computed(() => project.value.beats ?? [])
@@ -230,35 +245,21 @@ const hidePeek = () => {
     <div class="tl-resize" title="Drag to make the timeline taller or lower" @pointerdown.prevent="resize" />
     <div class="tbar">
       <TimelineLegend />
-      <div class="spacer" />
-      <button
-        v-if="castLanes.length"
-        :class="['cast-toggle', {on: castOpen}]"
-        :title="castOpen ? 'Hide who is in which shot' : 'Show who is in which shot - grey: in the picture, orange: sings or speaks, green: plays'"
-        @click="castOpen = !castOpen"
-      >
-        Cast
-      </button>
-      <div class="zoom">
-        <button title="Show the whole video" @click="fit">Fit</button>
-        <label for="zoom" class="muted">Zoom</label>
-        <input id="zoom" type="range" min="0" max="100" :value="zoom" title="Ctrl + wheel over the timeline" @input="zoomed" />
-      </div>
     </div>
     <div class="tbody">
       <div class="labels" aria-hidden="true">
         <div class="lane-ruler" />
-        <div class="lane-groups">{{ film ? 'Scenes' : 'Sections' }}</div>
-        <div v-if="beats.length" class="lane-beats">Beats</div>
-        <div class="lane-wave">{{ peaks ? (project.song ? 'Song' : 'Sound') : '' }}</div>
+        <div v-if="lanes.groups" class="lane-groups">{{ film ? 'Scenes' : 'Sections' }}</div>
+        <div v-if="beats.length && lanes.beats" class="lane-beats">Beats</div>
+        <div v-if="lanes.wave" class="lane-wave">{{ peaks ? (project.song ? 'Song' : 'Sound') : '' }}</div>
         <div class="lane-clips">Clips</div>
-        <div class="lane-lines">{{ film ? 'Lines' : 'Sung' }}</div>
-        <div v-for="lane in castOpen ? castLanes : []" :key="lane.id" class="lane-cast" :title="lane.name">{{ lane.name }}</div>
+        <div v-if="lanes.lines" class="lane-lines">{{ film ? 'Lines' : 'Sung' }}</div>
+        <div v-for="lane in lanes.cast ? castLanes : []" :key="lane.id" class="lane-cast" :title="lane.name">{{ lane.name }}</div>
       </div>
       <div ref="scroller" class="scroll" @scroll.passive="left = scroller!.scrollLeft" @wheel="wheel">
         <div ref="track" class="track" :style="{'--seconds': project.seconds, '--pps': pps}">
           <div class="lane lane-ruler" @pointerdown="scrub"><canvas ref="ruler" /></div>
-          <div class="lane lane-groups" @pointerdown="scrub">
+          <div v-if="lanes.groups" class="lane lane-groups" @pointerdown="scrub">
             <div
               v-for="group in project.groups"
               :key="group.id"
@@ -271,7 +272,7 @@ const hidePeek = () => {
               {{ group.label }}
             </div>
           </div>
-          <div v-if="beats.length" class="lane lane-beats" @pointerdown="scrub">
+          <div v-if="beats.length && lanes.beats" class="lane lane-beats" @pointerdown="scrub">
             <button
               v-for="beat in beats"
               :key="beat.id"
@@ -284,7 +285,7 @@ const hidePeek = () => {
               <b>{{ beat.id.replace(/^beat-0*/, '') }}</b> {{ beat.label }}
             </button>
           </div>
-          <div class="lane lane-wave" @pointerdown="scrub"><canvas ref="wave" /></div>
+          <div v-if="lanes.wave" class="lane lane-wave" @pointerdown="scrub"><canvas ref="wave" /></div>
           <div :class="['lane lane-clips', {dimmed: onlyFlagged}]" @pointermove="hover" @pointerleave="hidePeek">
             <ClipBlock
               v-for="clip in project.clips"
@@ -299,7 +300,7 @@ const hidePeek = () => {
               @pick="pick($event, clip)"
             />
           </div>
-          <div class="lane lane-lines" @pointerdown="scrub">
+          <div v-if="lanes.lines" class="lane lane-lines" @pointerdown="scrub">
             <div
               v-for="item in spoken"
               :key="item.key"
@@ -310,7 +311,7 @@ const hidePeek = () => {
               <span>{{ item.line.text }}</span>
             </div>
           </div>
-          <div v-for="lane in castOpen ? castLanes : []" :key="lane.id" class="lane lane-cast" @pointerdown="scrub">
+          <div v-for="lane in lanes.cast ? castLanes : []" :key="lane.id" class="lane lane-cast" @pointerdown="scrub">
             <button
               v-for="s in lane.stretches"
               :key="s.key"
@@ -323,6 +324,25 @@ const hidePeek = () => {
           </div>
           <div class="playhead" />
         </div>
+      </div>
+    </div>
+    <div class="tfoot" aria-label="View">
+      <span class="muted">Show</span>
+      <button
+        v-for="lane in shownLanes"
+        :key="lane.key"
+        :class="['lane-toggle', {on: lanes[lane.key]}]"
+        :aria-pressed="lanes[lane.key]"
+        :title="lane.title"
+        @click="lanes[lane.key] = !lanes[lane.key]"
+      >
+        {{ lane.label }}
+      </button>
+      <div class="spacer" />
+      <div class="zoom">
+        <button title="Show the whole video" @click="fit">Fit</button>
+        <label for="zoom" class="muted">Zoom</label>
+        <input id="zoom" type="range" min="0" max="100" :value="zoom" title="Ctrl + wheel over the timeline" @input="zoomed" />
       </div>
     </div>
     <ClipPeek />

@@ -888,17 +888,30 @@ select.source {
 .cast.plays {
   background: var(--ok);
 }
-.cast-toggle {
+/* the view toolbar under the lanes (#772): what is shown, and the zoom */
+.tfoot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.lane-toggle {
   border: 1px solid var(--line);
   background: transparent;
-  border-radius: 6px;
-  padding: 0 8px;
+  border-radius: 99px;
+  padding: 0 9px;
   color: var(--muted);
-  margin-right: 8px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--muted) 60%, transparent);
 }
-.cast-toggle.on {
+.lane-toggle.on {
   color: var(--text);
   background: var(--raised);
+  text-decoration: none;
 }
 .scroll {
   overflow-x: auto;
@@ -2347,6 +2360,13 @@ dialog::backdrop {
   grid-template-rows: minmax(0, 1fr) auto auto;
   height: 100%;
   min-height: 0;
+}
+/* without the player the timeline sits at the top, and the room below stays free */
+.timeline-view.no-player {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.timeline-view.no-player .work {
+  display: none;
 }
 .detail .sheet-picture {
   width: 100%;
