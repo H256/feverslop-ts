@@ -255,11 +255,13 @@ function binding(t: DirectionTarget, d: Data, r: DirectionRule): string | undefi
     return hash({groups, shots: selected})
 }
 function unresolved(t: DirectionTarget, d: Data, s: State) {
-    // a rule saved for a beat or scene without shots yet ('missing') holds for the shots it is planned with (#765)
+    // a rule saved for a beat or scene without shots yet ('missing') holds for the shots it is planned with (#765). The shots as the
+    // direct edits leave them: a rule for someone brought into a shot (#792) selects it
+    const edited = shots(t, withEdits(t, d, structuredClone(d), s))
     return reviewed(s).flatMap(r =>
         r.binding !== undefined && r.binding !== 'missing' && r.binding !== binding(t, d, r)
             ? [{ruleId: r.id, message: 'Its shots were planned again: rebind it to the shots as they are now, or remove it.'}]
-            : !shots(t, d).some(sh => matches(r, sh))
+            : !edited.some(sh => matches(r, sh))
               ? [{ruleId: r.id, message: 'It selects no shot of the plan as it is now: rebind or remove it.'}]
               : [],
     )

@@ -75,6 +75,37 @@ const propose = () =>
     text.value = ''
     await start({type: 'direction'})
   })
+const box = ref<HTMLTextAreaElement>()
+/** The instruction box set to one person, and focused - it is below the people. */
+const instructFor = (id: string) => {
+  forWhom.value = id
+  box.value?.focus()
+  box.value?.scrollIntoView({block: 'nearest'})
+}
+// people brought in with nothing to do yet: a proposal writes them in, with or without an instruction
+const writeIns = computed(() => issues.value.filter(i => i.mentions).length)
+const proposeHint = computed(() => {
+  if (busy.value) return 'A run is going on…'
+  const who = forWhom.value ? `for ${nameOf(forWhom.value)}` : 'for the whole shot'
+  const also = writeIns.value ? ' It also writes in what the direct edits above leave open.' : ''
+  return text.value.trim()
+    ? `Saves the instruction ${who}, then the language model writes the shot anew.${also} Nothing is rendered.`
+    : writeIns.value
+      ? 'The language model writes in what the direct edits above leave open. Nothing is rendered.'
+      : 'Write an instruction; the language model writes the shot anew. Nothing is rendered.'
+})
+/** Saved, not asked yet: the next Propose takes it with the others. */
+const saveOnly = () =>
+  work(async () => {
+    const rule: DirectionRule = {
+      id: crypto.randomUUID(),
+      text: text.value.trim(),
+      scope: {kind: 'shot', id: props.shotId},
+      ...(forWhom.value ? {characterId: forWhom.value} : {}),
+    }
+    await api.saveDirection([...(view.value?.rules ?? []), rule])
+    text.value = ''
+  })
 /** Asked again with what is saved - e.g. for words a direct edit left. */
 const proposeAgain = () => work(() => start({type: 'direction'}))
 /** Taken, and the clip prompts built again. */
@@ -223,7 +254,7 @@ const diff = computed(() => {
             <b class="who">{{ nameOf(id) }}</b>
             <span v-for="flag in flags(id)" :key="flag" class="chip">{{ flag }}</span>
             <div class="spacer" />
-            <button class="btn" :disabled="blocked" @click="forWhom = id">Instruction for {{ nameOf(id) }}</button>
+            <button class="btn" :disabled="blocked" @click="instructFor(id)">Instruction for {{ nameOf(id) }}</button>
             <label
               :class="['btn', 'out-mark', {on: outs.has(id), disabled: blocked || kept(id)}]"
               :title="kept(id) ? `${nameOf(id)} ${flags(id).join(' and ')} in this shot and stays in it` : 'Mark to take out of the shot - several at once'"
@@ -240,6 +271,7 @@ const diff = computed(() => {
               >
             </template>
           </dl>
+          <p v-if="!['state', 'frame', 'motion'].some(k => people[id]?.[k])" class="muted idle">Nothing to do in this shot yet.</p>
         </article>
         <div v-if="outs.size" class="btn-row out-bar">
           <button class="btn primary" :disabled="blocked" @click="takeOut">Take {{ outNames.join(', ') }} out of the shot</button>
@@ -285,7 +317,9 @@ const diff = computed(() => {
           </div>
           <div v-for="(issue, n) in issues" :key="n" class="row sd-issue">
             <span>{{ issue.message }}</span>
-            <button v-if="issue.mentions" class="btn" :disabled="blocked" @click="proposeAgain">Rewrite the words</button>
+            <button v-if="issue.mentions" class="btn" :disabled="blocked" @click="proposeAgain">
+              {{ issue.message.includes('nothing to do') ? 'Write them in' : 'Rewrite the words' }}
+            </button>
           </div>
         </section>
 
@@ -295,12 +329,17 @@ const diff = computed(() => {
             <span>{{ r.characterId ? `${nameOf(r.characterId)}: ` : '' }}{{ r.text }}</span
             ><button class="btn" :disabled="blocked" @click="removeRule(r)">Remove</button>
           </div>
+          <label class="instruction-for"
+            >New instruction for
+            <select v-model="forWhom" :disabled="blocked">
+              <option value="">the whole shot</option>
+              <option v-for="id in shot.characters" :key="id" :value="id">{{ nameOf(id) }}</option>
+            </select>
+          </label>
           <label class="instruction">
-            <span
-              >{{ forWhom ? `For ${nameOf(forWhom)} in this shot` : 'For this shot'
-              }}<button v-if="forWhom" class="link" @click="forWhom = ''">for the whole shot</button></span
-            >
+            <span class="sr-only">Instruction</span>
             <textarea
+              ref="box"
               v-model="text"
               rows="3"
               :placeholder="
@@ -311,8 +350,13 @@ const diff = computed(() => {
             />
           </label>
           <div class="btn-row propose">
-            <button class="btn primary" :disabled="blocked || !text.trim()" @click="propose">Propose</button>
-            <span class="muted">{{ busy ? 'A run is going on…' : 'The language model writes the shot anew; nothing is rendered.' }}</span>
+            <button class="btn primary" :disabled="blocked || (!text.trim() && !writeIns)" @click="text.trim() ? propose() : proposeAgain()">
+              {{ text.trim() ? 'Save and propose' : 'Propose' }}
+            </button>
+            <button v-if="text.trim()" class="btn" :disabled="blocked" title="Saved with the others; proposed with the next Propose" @click="saveOnly">
+              Save only
+            </button>
+            <span class="muted">{{ proposeHint }}</span>
           </div>
         </section>
 
@@ -423,6 +467,10 @@ h3 {
 .sd-person dd {
   margin: 0;
 }
+.idle {
+  margin-top: 6px;
+  font-size: 12px;
+}
 .out-mark {
   cursor: pointer;
 }
@@ -483,6 +531,19 @@ h3 {
 .list .row.sd-issue {
   border-top: 0;
   padding: 6px 0 6px 10px;
+}
+.instruction-for {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 .instruction {
   display: flex;
