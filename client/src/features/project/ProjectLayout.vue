@@ -14,7 +14,7 @@ const route = useRoute()
 const run = useRunDock()
 const session = ProjectService.provide(createProjectSession(route.params.kind as ProjectKind, String(route.params.id), {run, servers: useServers()}))
 const {reload, error, loading} = useResource(signal => session.reload(signal))
-run.follow({events: session.api.events, stop: session.api.stop})
+run.follow({events: session.api.events, stop: session.api.stop, progress: session.api.progress})
 // what a run changed is read again: every page shows the folder as it is now
 run.onEnd(() => {
   void reload()
