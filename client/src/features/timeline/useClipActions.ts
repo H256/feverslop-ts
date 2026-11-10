@@ -295,11 +295,19 @@ export function useClipActions(timeline: Timeline) {
   const plain = (action: RunRequest) => start(action)
   const plan = () => start({type: 'plan'})
 
-  /** After a render of clips that were there before: what came out against what was there - one compared, several reviewed. */
-  async function afterRender(current: RunInfo | null, action: RunRequest | undefined, review: (clips: EditorClip[]) => void) {
+  /**
+   * After a render of clips that were there before: one is compared with what was there (side by side, nothing plays by itself);
+   * several are marked - "Review" goes through them, nothing starts on its own.
+   */
+  async function afterRender(current: RunInfo | null, action: RunRequest | undefined) {
     if (current?.code || action?.type !== 'clips' || !action.again || action.preview) return
     const clips = project.value.clips.filter(c => action.ids.includes(c.id) && c.video)
-    if (clips.length !== 1) return review(clips)
+    if (!clips.length) return
+    if (clips.length > 1) {
+      marked.clear()
+      for (const clip of clips) marked.add(clip.id)
+      return toasts.show(`${clips.length} clips rendered again and marked - Review goes through them`)
+    }
     const {versions} = await api.versions(clips[0]!.id)
     if (versions[0]) timeline.compared.value = {clip: clips[0]!, version: versions[0], fresh: true}
   }

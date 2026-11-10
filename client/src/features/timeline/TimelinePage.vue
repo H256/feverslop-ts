@@ -36,7 +36,7 @@ onScopeDispose(timeline.dispose)
 run.onEnd((current, action) => {
   void session
     .reload()
-    .then(() => actions.afterRender(current, action, review.start))
+    .then(() => actions.afterRender(current, action))
     .catch(toasts.fail)
 })
 
