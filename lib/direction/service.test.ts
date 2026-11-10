@@ -85,6 +85,10 @@ test('protected timing rejected with bounded retries; conflicts cannot be accept
     expect(readDirection(target).proposal).toBeUndefined()
     await previewDirection(target, async o => ({...answer(JSON.parse(o.input)), conflicts: ['contradicts next scene']}))
     await expect(takeDirection(target)).rejects.toThrow('conflict')
+    // a note the director has read: taken anyway, the proposal checked as any other (#795)
+    await takeDirection(target, {despiteConflicts: true})
+    expect(readDirection(target).proposal).toBeUndefined()
+    expect(readDirection(target).activeVersion).toBeDefined()
 })
 test('stale proposals and reused shot IDs rejected, broad intent retained after replan', async () => {
     const {target, data} = fixture()
@@ -371,6 +375,18 @@ test('a person brought into one shot: in the picture by code, a place in it writ
     expect(setDirectionEdits(target, {edits: []})).rejects.toThrow('taken plan')
     await setDirectionEdits(target, {edits: [...kept, {id: 'out', scope: {kind: 'shot', id: 's1:shot2'}, remove: 'a'}]})
     expect(readDirection(target).shots.find(s => s.id === 's1:shot2')!.data.characters).toEqual(['b'])
+})
+test('a person brought in, written with "singing": false as the others have it: no protected field changed', async () => {
+    const {target, data} = fixture()
+    data.shotMoments.s1.shots[1] = {action: '{B} waits', characters: ['b'], people: {b: {state: 'sits', singing: false}}}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    await setDirectionEdits(target, {edits: [{id: 'in', scope: {kind: 'shot', id: 's1:shot2'}, add: 'a'}]})
+    await previewDirection(target, async o => {
+        const before = JSON.parse(o.input).selected[0].data
+        const a = {state: 'at the door', frame: 'left', motion: 'walks in', singing: false}
+        return {changes: [{shotId: 's1:shot2', after: {...before, action: '{B} waits, {A} walks in', people: {...before.people, a}}}], conflicts: []}
+    })
+    expect(readDirection(target).proposal!.changes).toHaveLength(1)
 })
 test('a size set by code: framing and size in music, framing in a film', async () => {
     const music = fixture()

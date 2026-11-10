@@ -433,7 +433,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             if (what === 'direction') {
                 if (!id) return json(await setDirectionRules(target, await body<{rules: DirectionRule[]}>()))
                 if (id === 'edits') return json(await setDirectionEdits(target, await body<{edits: DirectionEdit[]}>()))
-                if (id === 'take') return json(await takeDirection(target))
+                if (id === 'take') return json(await takeDirection(target, {despiteConflicts: !!(await body<{despiteConflicts?: boolean}>()).despiteConflicts}))
                 if (id === 'drop') return json(await dropDirection(target))
                 if (id === 'restore') return json(await restoreDirection(target, (await body<{version: string}>()).version))
                 return notFound()

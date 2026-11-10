@@ -73,7 +73,7 @@ export function projectApi(root: string) {
     direction: (signal?: AbortSignal) => get<DirectionView>('direction', signal),
     saveDirection: (rules: DirectionRule[]) => post<DirectionView>('direction', {rules}),
     saveDirectionEdits: (edits: DirectionEdit[]) => post<DirectionView>('direction/edits', {edits}),
-    takeDirection: () => post<DirectionView>('direction/take', {}),
+    takeDirection: (despiteConflicts = false) => post<DirectionView>('direction/take', {despiteConflicts}),
     dropDirection: () => post<DirectionView>('direction/drop', {}),
     restoreDirection: (version: string) => post<DirectionView>('direction/restore', {version}),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),

@@ -439,7 +439,9 @@ function validateAfter(before: Record<string, unknown>, after: unknown, brought:
         if (!ap[id] || typeof ap[id] !== 'object' || Array.isArray(ap[id])) throw Error('invalid person')
         for (const key of new Set([...Object.keys(bp[id]!), ...Object.keys(ap[id]!)])) {
             // Creative movement/pose fields may change; performance flags and all other structured facts stay.
-            if (!['frame', 'motion', 'state', 'facing', 'plays'].includes(key) && hash(bp[id]![key] ?? null) !== hash(ap[id]![key] ?? null))
+            // a flag that is false says what a missing one says: "singing": false written for someone brought in is no change (#795)
+            const fact = (value: unknown) => (value === false ? null : (value ?? null))
+            if (!['frame', 'motion', 'state', 'facing', 'plays'].includes(key) && hash(fact(bp[id]![key])) !== hash(fact(ap[id]![key])))
                 throw Error(`protected person field ${key}`)
             if (
                 ['frame', 'motion', 'state', 'facing', 'plays'].includes(key) &&
@@ -563,14 +565,20 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
         return readDirection(t)
     })
 }
-export async function takeDirection(t: DirectionTarget) {
+/**
+ * Takes the proposal. A proposal with conflicts is taken only when asked to anyway (despiteConflicts): the model reports both rules
+ * that contradict each other and mere notes on continuity ("the cut to shot 4 changes the perspective"), and only the director can
+ * tell which one it is - the proposal itself is checked like any other.
+ */
+export async function takeDirection(t: DirectionTarget, {despiteConflicts = false}: {despiteConflicts?: boolean} = {}) {
     return locked(t, () => {
         const d = source(t),
             s = state(t),
             p = s.proposal
         if (!p) throw Error('no proposal')
         if (p.sourceFingerprint !== fingerprint(t, d) || p.rulesFingerprint !== hash(reviewed(s))) throw Error('stale proposal')
-        if (p.conflicts.length) throw Error('resolve proposal conflicts before taking')
+        if (p.conflicts.length && !despiteConflicts)
+            throw Error('the proposal reports conflicts: resolve them and preview again, or take it anyway (--despite-conflicts)')
         const all = shots(t, d)
         for (const c of p.changes) {
             const before = all.find(sh => sh.id === c.shotId)
