@@ -55,6 +55,7 @@ import {runProcess} from './process.ts'
 import {produceMedia} from './media-file.ts'
 import {clipRequestRef} from './previous-output.ts'
 import {trackJob, untrackJob} from './comfy-cancel.ts'
+import {describeRejection} from './comfy-rejection.ts'
 
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
 const DEFAULT_SONG_DURATION = 360
@@ -1865,7 +1866,7 @@ export class Renderer implements Disposable {
         const queued = await api.queuePrompt(null, prompt).catch(async (error: unknown) => {
             // ComfyUI answers an invalid graph with 400 and the node errors
             const details = error instanceof Response ? await error.text() : String(error)
-            throw new Error(`${label}: ComfyUI ${server.name} rejected the workflow - ${details}`)
+            throw new Error(`${label}: ${describeRejection(server.name, details)}`)
         })
         const graph = prompt as unknown as Graph
         const nodes = Object.fromEntries(Object.entries(graph).map(([id, node]) => [id, node.class_type]))
