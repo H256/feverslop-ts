@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, ref, watch} from 'vue'
+import {computed, nextTick, onScopeDispose, ref, watch} from 'vue'
 import {useAsk} from '../services/ask'
 import {failedRun, runStateText, useRunDock} from '../services/run'
 import {useToasts} from '../services/toasts'
@@ -10,7 +10,30 @@ const ask = useAsk()
 const toasts = useToasts()
 const logBox = ref<HTMLPreElement>()
 const shown = computed(() => (run.current.value && !run.closed.value ? run.current.value : undefined))
-const state = computed(() => shown.value && `${runStateText(shown.value)}${shown.value.running && run.detail.value ? `: ${run.detail.value}` : ''}`)
+const state = computed(() => shown.value && runStateText(shown.value))
+
+// how far the run is (#775): a render of clips as a bar, any other run by the step of its log - and the time it runs or ran
+const now = ref(Date.now())
+const ticker = setInterval(() => {
+  if (run.current.value?.running) now.value = Date.now()
+}, 1000)
+onScopeDispose(() => clearInterval(ticker))
+const progress = computed(() => (shown.value?.running ? run.progress.value : undefined))
+const percent = computed(() => (progress.value ? Math.round((progress.value.done / progress.value.total) * 100) : 0))
+const clock = (ms: number) => {
+  const s = Math.max(0, Math.round(ms / 1000))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s % 60).padStart(2, '0')}`
+}
+const elapsed = computed(() => {
+  const run_ = shown.value
+  if (!run_) return ''
+  const start = Date.parse(run_.startedAt)
+  if (Number.isNaN(start)) return ''
+  const end = run_.running ? now.value : (run.endedAt.value ?? now.value)
+  return clock(end - start)
+})
 
 // the log follows its end only when it was at its end: who scrolled back to read stays there
 let atEnd = true
@@ -48,6 +71,13 @@ const stop = toasts.guard(async () => {
     <div class="runbar">
       <span :class="['dot', {failed: failedRun(shown), done: !shown.running && !failedRun(shown)}]" />
       <span>{{ state }}</span>
+      <span v-if="progress" class="runprogress" :title="`${progress.done} of ${progress.total} clips done`">
+        <span class="track"><span class="fill" :style="{width: `${percent}%`}" /></span>
+        <b class="num">{{ progress.done }}/{{ progress.total }}</b
+        ><span class="num muted">{{ percent }}%</span>
+      </span>
+      <span v-else-if="shown.running && run.step.value" class="runstep" title="The step of the run, from its log">{{ run.step.value }}</span>
+      <span v-if="elapsed" class="num muted" :title="shown.running ? 'Running for' : 'Took'">{{ elapsed }}</span>
       <code>{{ shown.command }}</code>
       <div class="spacer" />
       <button class="btn" :aria-expanded="run.logOpen.value" @click="run.logOpen.value = !run.logOpen.value">Log</button>

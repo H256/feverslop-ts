@@ -2247,6 +2247,35 @@ textarea.book {
   padding: 5px 12px;
   min-width: 0;
 }
+/* how far a run is (#775) */
+.runprogress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.runprogress .track {
+  width: 180px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--raised);
+  overflow: hidden;
+}
+.runprogress .fill {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  border-radius: 99px;
+  transition: width 0.4s;
+}
+.runstep {
+  flex: none;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--raised);
+  font-size: 12px;
+  white-space: nowrap;
+}
 .runbar code {
   font: 12px var(--mono);
   white-space: nowrap;
