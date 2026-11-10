@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useDraft} from '../../composables/useDraft'
 import {usePending} from '../../composables/usePending'
@@ -82,26 +81,100 @@ const saveLooks = toasts.guard(async () => {
     <template v-if="look">
       <div v-if="look.lookBrief === undefined" class="empty">No look yet - plan it with the button above.</div>
       <template v-else>
-        <div class="section">
-          <PageBar title="The look of the whole" />
-          <p class="muted">Format, style, palette and camera language - every look below is written from it.</p>
-          <textarea v-model="brief.text.value" class="prose" rows="6" aria-label="The look of the whole" />
-          <div class="btn-row" style="margin-top: 6px">
+        <section :class="['lk-whole', {changed: brief.dirty.value}]">
+          <header class="lk-whole-head">
+            <h2>The look of the whole</h2>
+            <span class="muted">Format, style, palette and camera language - every look below is written from it.</span>
+          </header>
+          <textarea v-model="brief.text.value" rows="5" aria-label="The look of the whole" />
+          <div class="btn-row">
             <button class="btn" :disabled="!brief.dirty.value" @click="saveBrief">Save the look of the whole</button>
+            <span v-if="brief.dirty.value" class="muted">Saving it writes every look below again.</span>
           </div>
+        </section>
+
+        <!-- one save for every look changed below, always in reach -->
+        <div class="lk-bar">
+          <button class="btn primary" :disabled="!edits.dirty.value" @click="saveLooks">Save the looks</button>
+          <span class="muted">{{
+            edits.dirty.value ? edits.pending.value : 'Change a text by hand, or tick "Write anew" for the language model to write it again.'
+          }}</span>
         </div>
-        <div class="section btn-row">
-          <button class="btn primary" :disabled="!edits.dirty.value" @click="saveLooks">Save</button>
-          <span class="muted">{{ edits.pending.value }}</span>
-          <span class="muted">Change a text by hand, or tick "Write anew" for the language model to write it again.</span>
-        </div>
-        <div v-if="look.characters.length" class="section">
-          <PageBar title="Characters" /><LookElementCard v-for="element in look.characters" :key="element.id" :element="element" :edits="edits" />
-        </div>
-        <div v-if="look.locations.length" class="section">
-          <PageBar title="Places" /><LookElementCard v-for="element in look.locations" :key="element.id" :element="element" :edits="edits" />
-        </div>
+
+        <section v-if="look.characters.length">
+          <h2 class="lk-title">
+            Characters <span class="muted">{{ look.characters.length }}</span>
+          </h2>
+          <div class="lk-grid">
+            <LookElementCard v-for="element in look.characters" :key="element.id" :element="element" :edits="edits" />
+          </div>
+        </section>
+        <section v-if="look.locations.length">
+          <h2 class="lk-title">
+            Places <span class="muted">{{ look.locations.length }}</span>
+          </h2>
+          <div class="lk-grid">
+            <LookElementCard v-for="element in look.locations" :key="element.id" :element="element" :edits="edits" />
+          </div>
+        </section>
       </template>
     </template>
   </div>
 </template>
+
+<style scoped>
+.lk-whole {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lk-whole.changed {
+  border-left-color: var(--accent);
+}
+.lk-whole-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lk-whole-head h2,
+.lk-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.lk-whole textarea {
+  width: 100%;
+  font: 13px/1.5 var(--sans);
+  resize: vertical;
+}
+.lk-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.lk-title {
+  margin: 16px 0 8px;
+}
+.lk-title .muted {
+  font-weight: normal;
+  margin-left: 4px;
+}
+.lk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(560px, 100%), 1fr));
+  gap: 12px;
+}
+</style>

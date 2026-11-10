@@ -36,6 +36,8 @@ export function useLookEdits() {
       .join(' · '),
   )
   const dirty = computed(() => changed.value.length > 0 || again.size > 0)
+  /** Whether this one has a changed text or is to be written anew - its card is marked. */
+  const isChanged = (element: LookElement) => Object.keys(edits.get(keyOf(element)) ?? {}).length > 2 || again.has(keyOf(element))
   const change = (): LookChange => ({
     elements: changed.value,
     again: [...again].map(key => ({kind: key.slice(0, key.indexOf(':')) as ElementKind, id: key.slice(key.indexOf(':') + 1)})),
@@ -44,6 +46,6 @@ export function useLookEdits() {
     edits.clear()
     again.clear()
   }
-  return {valueOf, set, isAgain, setAgain, pending, dirty, change, clear}
+  return {valueOf, set, isAgain, setAgain, isChanged, pending, dirty, change, clear}
 }
 export type LookEdits = ReturnType<typeof useLookEdits>

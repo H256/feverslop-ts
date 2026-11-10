@@ -145,7 +145,7 @@ test('look: one text changed and one written anew, saved together', async ({page
   await page.getByLabel('Description - what the clip prompts say of it').fill('a tall woman')
   await page.getByLabel('Write anew').check()
   await expect(page.getByText('1 text changed · 1 to write anew')).toBeVisible()
-  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await page.getByRole('button', {name: 'Save the looks', exact: true}).click()
   await expect(dialog(page)).toContainText('What is planned from the looks goes: beats.')
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
   await expect
