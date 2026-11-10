@@ -123,7 +123,7 @@ function withEdits(t: DirectionTarget, source: Data, copy: Data, s: State, issue
     const nameOf = nameIn(source)
     const bound = edits.filter(e => {
         if (e.binding === undefined || e.binding === editBinding(t, source, e)) return true
-        issues.push({editId: e.id, message: 'Source shot changed; explicitly rebind or remove this edit.'})
+        issues.push({editId: e.id, stale: true, message: 'Made for the shot before it was planned again - it no longer applies.'})
         return false
     })
     for (const shot of shots(t, copy)) {
@@ -346,11 +346,15 @@ export async function setDirectionEdits(
             s = state(t)
         // a person brought in whose place in the shot was taken is in the accepted plan now: undoing the edit cannot take them
         // out of it - a Take out (a remove edit) does
+        // - only where the plan itself does not have them: a shot planned again with them in it, or an edit made for a shot planned
+        // again since (it no longer applies), goes without a word
         const taken = applied(t, d, s)?.changes ?? []
         for (const gone of (s.edits ?? []).filter(e => e.add && !input.edits?.some(n => n.id === e.id))) {
             const shotId = (gone.scope as {id: string}).id
             const after = taken.find(c => c.shotId === shotId)?.after
-            if (((after?.characters ?? []) as string[]).includes(gone.add!))
+            const planned = ((shots(t, d).find(sh => sh.id === shotId)?.data.characters ?? []) as string[]).includes(gone.add!)
+            const stale = gone.binding !== undefined && gone.binding !== editBinding(t, d, gone)
+            if (!planned && !stale && ((after?.characters ?? []) as string[]).includes(gone.add!))
                 throw Error(
                     `${nameIn(d)(gone.add!)} is in the taken plan of ${shotId}: take them out with Take out (--without), or restore an earlier plan version`,
                 )
@@ -632,6 +636,37 @@ export async function restoreDirection(t: DirectionTarget, id: string) {
     })
 }
 /** Accepted plan overlay only. Never save this derived data back into project.json. */
+/**
+ * For a plan run (#801): the direct edits made for shots that have been planned again since cannot apply any more - there is
+ * nothing to rebind them to, the new plan has shots of its own. They are dropped, and what was dropped is returned for the log.
+ * The run holds the project's lock, so this writes direction.json directly.
+ */
+export function dropStaleEdits(t: DirectionTarget, d: Data): string[] {
+    if (!existsSync(file(t))) return []
+    const s = state(t)
+    const stale = (s.edits ?? []).filter(e => e.binding !== undefined && e.binding !== editBinding(t, d, e))
+    if (!stale.length) return []
+    s.edits = (s.edits ?? []).filter(e => !stale.includes(e))
+    // a proposal was made with them
+    delete s.proposal
+    save(t, s)
+    const nameOf = nameIn(d)
+    return stale.map(e => `${'id' in e.scope ? `${e.scope.id}: ` : ''}${describeEdit(e, nameOf)}`)
+}
+/** The instructions a run builds the clips without, for its log: not previewed and taken yet, or selecting no shot (#801). */
+export function directionNotTaken(t: DirectionTarget, d: Data): string[] {
+    if (!existsSync(file(t))) return []
+    const s = state(t)
+    const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
+    if (!pending) return []
+    const open = new Set(unresolved(t, d, s).map(u => u.ruleId))
+    return [
+        ...unresolvedLines(t, d, s),
+        ...reviewed(s)
+            .filter(r => !open.has(r.id))
+            .map(r => `${scopeName(r)} "${shortText(r.text)}": not previewed yet`),
+    ]
+}
 export function applyDirectionOverlay<T extends Data>(
     t: DirectionTarget,
     d: T,

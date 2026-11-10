@@ -231,7 +231,19 @@ function describe(data: Record<string, unknown>): string {
 
 // The list (#783): what needs a review first, then everything by what it is about - the whole video, a character, a stretch of the
 // song, then beat by beat (scene by scene) and in it shot by shot. Instructions only for the planner are folded away.
-type Item = {key: string; rule?: DirectionRule; edit?: DirectionEdit; scope: DirectionScope; text: string; issues: string[]; planned: boolean}
+type Item = {
+  key: string
+  rule?: DirectionRule
+  edit?: DirectionEdit
+  scope: DirectionScope
+  text: string
+  issues: string[]
+  planned: boolean
+  /** made for shots planned again since: nothing to decide but clearing it (or, for an instruction, keeping it for the new shot) */
+  leftover: boolean
+  /** left open for the preview to write: someone brought in with nothing to do, words that still name someone taken out */
+  writes: boolean
+}
 const tab = ref<'instruction' | 'edit'>('instruction')
 const filterText = ref('')
 const filterWho = ref('')
@@ -246,6 +258,8 @@ const items = computed<Item[]>(() => {
       text: rule.text,
       issues: [ruleIssue(rule.id)].filter((m): m is string => !!m),
       planned: !!rule.planned,
+      leftover: !!rule.binding && !!ruleIssue(rule.id)?.includes('planned again'),
+      writes: false,
     })),
     ...v.edits.map(edit => ({
       key: `e:${edit.id}`,
@@ -254,6 +268,8 @@ const items = computed<Item[]>(() => {
       text: describeEdit(edit),
       issues: v.editIssues.filter(i => i.editId === edit.id).map(i => i.message),
       planned: false,
+      leftover: v.editIssues.some(i => i.editId === edit.id && i.stale),
+      writes: v.editIssues.some(i => i.editId === edit.id && i.mentions),
     })),
   ]
 })
@@ -266,7 +282,25 @@ const shown = computed(() => {
       (!filterWho.value || about(item).includes(filterWho.value) || item.text.includes(name(filterWho.value))),
   )
 })
-const review = computed(() => shown.value.filter(item => item.issues.length))
+// three kinds of attention (#802): leftovers of an old plan are cleared in one go, what a preview writes is said at its button, and
+// only a real choice - an instruction that selects no shot any more - is to review
+const leftovers = computed(() => items.value.filter(item => item.leftover))
+const writes = computed(() => items.value.filter(item => item.writes && !item.leftover))
+const review = computed(() => shown.value.filter(item => item.issues.length && !item.leftover && !item.writes))
+const leftoverBeats = computed(() => [...new Set(leftovers.value.flatMap(i => ('id' in i.scope ? [shotGroup(i.scope.id)] : [])))].join(', '))
+/** The leftovers gone in one save each; the clip prompts built again unless instructions still wait for a preview. */
+const clearLeftovers = (only?: Item) =>
+  change(async () => {
+    const gone = only ? [only] : leftovers.value
+    const edits = new Set(gone.flatMap(i => (i.edit ? [i.edit.id] : [])))
+    const rules = new Set(gone.flatMap(i => (i.rule ? [i.rule.id] : [])))
+    if (rules.size) await api.saveDirection((view.value?.rules ?? []).filter(r => !rules.has(r.id)))
+    if (edits.size) {
+      const saved = await api.saveDirectionEdits((view.value?.edits ?? []).filter(e => !edits.has(e.id)))
+      if (!saved.pending && !saved.unresolved.length) await start({type: 'plan'})
+    }
+    toasts.show(only ? 'Cleared.' : `Cleared ${gone.length} leftover${gone.length > 1 ? 's' : ''} of the old plan.`)
+  })
 const shotGroup = (id: string) => (id.lastIndexOf(':shot') > 0 ? id.slice(0, id.lastIndexOf(':shot')) : id)
 const shotNumber = (id: string) => Number(id.slice(id.lastIndexOf(':shot') + 5)) || 0
 type Group = {key: string; title: string; label?: string; order: number; general: Item[]; shots: {id: string; items: Item[]}[]}
@@ -288,7 +322,7 @@ const grouped = computed<Group[]>(() => {
     if (!groups.has(key)) groups.set(key, {key, title, label, order: rank, general: [], shots: []})
     return groups.get(key)!
   }
-  for (const item of shown.value.filter(item => !item.issues.length)) {
+  for (const item of shown.value.filter(item => !item.leftover && (!item.issues.length || item.writes))) {
     const group = groupFor(item.scope)
     if (item.scope.kind !== 'shot') group.general.push(item)
     else {
@@ -355,7 +389,11 @@ const editItem = (rule: DirectionRule) => {
           </div>
         </section>
         <div v-else class="actionbar">
-          <span v-if="view.pending" class="warn inline">Instructions or the plan changed: preview, then take the proposal.</span>
+          <span v-if="writes.length" class="warn inline"
+            >{{ writes.length }} edit{{ writes.length > 1 ? 's' : '' }} wait{{ writes.length > 1 ? '' : 's' }} for the words: <b>Preview changes</b> writes
+            them.</span
+          >
+          <span v-else-if="view.pending" class="warn inline">Instructions changed: preview, then take the proposal.</span>
           <span v-else class="muted">The language model writes the shots the instructions are about. Nothing is rendered.</span>
           <div class="spacer" />
           <button class="btn primary" :disabled="blocked || dirty || !view.rules.length || !view.shots.length || !!view.unresolved.length" @click="preview">
@@ -372,10 +410,43 @@ const editItem = (rule: DirectionRule) => {
           <span class="muted small">{{ shown.length }} of {{ items.length }}</span>
         </div>
 
+        <section v-if="leftovers.length" class="dp-card leftovers">
+          <header class="dp-card-head">
+            <h2>Left over from the old plan</h2>
+            <div class="spacer" />
+            <button class="btn primary" :disabled="blocked" @click="clearLeftovers()">Clear them out</button>
+          </header>
+          <p class="muted small">
+            {{ leftoverBeats }} {{ leftoverBeats.includes(',') ? 'were' : 'was' }} planned again. These {{ leftovers.length }} were made for the shots before
+            and no longer apply - the new plan has its own. Nothing to decide: clear them out.
+          </p>
+          <details class="planned">
+            <summary>Show them</summary>
+            <div v-for="item in leftovers" :key="item.key" class="item muted-item">
+              <div class="what">
+                <span class="where">{{ scopeText(item.scope) }}</span>
+                <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ item.text }}</p>
+              </div>
+              <div class="acts">
+                <button
+                  v-if="item.rule"
+                  class="btn mini"
+                  :disabled="blocked"
+                  title="Apply this instruction to the shot as it is now"
+                  @click="rebind(item.rule)"
+                >
+                  Keep for the new shot
+                </button>
+                <button class="btn mini" :disabled="blocked" @click="clearLeftovers(item)">Clear</button>
+              </div>
+            </div>
+          </details>
+        </section>
+
         <section v-if="review.length" class="dp-card needs">
           <header class="dp-card-head">
-            <h2>To review first</h2>
-            <span class="muted small">Instructions here: rebind or remove them. Edits here: <b>Preview changes</b> writes what they leave open.</span>
+            <h2>To decide</h2>
+            <span class="muted small">These select no shot of the plan as it is now: edit them for a shot that is there, or remove them.</span>
           </header>
           <div v-for="item in review" :key="item.key" class="item">
             <div class="what">
@@ -386,14 +457,6 @@ const editItem = (rule: DirectionRule) => {
             </div>
             <div class="acts">
               <template v-if="item.rule">
-                <button
-                  v-if="item.rule.binding && ruleIssue(item.rule.id)?.includes('planned again')"
-                  class="btn mini"
-                  :disabled="blocked"
-                  @click="rebind(item.rule)"
-                >
-                  Review current binding
-                </button>
                 <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="editItem(item.rule)">Edit</button>
                 <button class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
               </template>
@@ -415,6 +478,7 @@ const editItem = (rule: DirectionRule) => {
               <span v-if="item.edit" class="dp-tag">edit</span>
               <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
               <p>{{ item.text }}</p>
+              <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
             </div>
             <div class="acts">
               <template v-if="item.rule">
@@ -430,6 +494,7 @@ const editItem = (rule: DirectionRule) => {
               <div class="what">
                 <span class="dp-tag">in the plan</span>
                 <p>{{ item.text }}</p>
+                <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
               </div>
               <div class="acts">
                 <button v-if="item.rule" class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
@@ -443,6 +508,7 @@ const editItem = (rule: DirectionRule) => {
                 <span v-if="item.edit" class="dp-tag">edit</span>
                 <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
                 <p>{{ item.text }}</p>
+                <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
               </div>
               <div class="acts">
                 <template v-if="item.rule">
@@ -458,6 +524,7 @@ const editItem = (rule: DirectionRule) => {
                 <div class="what">
                   <span class="dp-tag">in the plan</span>
                   <p>{{ item.text }}</p>
+                  <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
                 </div>
                 <div class="acts">
                   <button v-if="item.rule" class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
@@ -800,7 +867,6 @@ const editItem = (rule: DirectionRule) => {
 }
 .what p {
   flex: 1 1 100%;
-  max-width: 110ch;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -810,6 +876,13 @@ const editItem = (rule: DirectionRule) => {
 }
 .where {
   font-weight: 600;
+}
+.dp-card.leftovers {
+  border-color: var(--line);
+  background: var(--raised);
+}
+.dp-card.leftovers .dp-card-head {
+  align-items: center;
 }
 .issue {
   color: var(--stale);

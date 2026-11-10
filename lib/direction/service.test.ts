@@ -3,6 +3,8 @@ import {mkdtempSync, writeFileSync, rmSync, readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {
+    directionNotTaken,
+    dropStaleEdits,
     readDirection,
     setDirectionRules,
     setDirectionEdits,
@@ -484,4 +486,20 @@ test('a rule whose shot was planned again is named, with what to do, by the revi
     ])
     await expect(previewDirection(target, async o => answer(JSON.parse(o.input)))).rejects.toThrow(`shot ${id} "Elias strides`)
     expect(() => applyDirectionOverlay(target, data)).toThrow(`First rebind or remove this rule:\n  - shot ${id} "Elias strides`)
+})
+test('a run drops the edits made for shots planned again since, and names the instructions it builds without (#801)', async () => {
+    const {target, data} = fixture()
+    data.shotMoments.s1.shots[1] = {action: '{B} waits', characters: ['b'], people: {b: {state: 'sits'}}}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    await setDirectionEdits(target, {edits: [{id: 'in', scope: {kind: 'shot', id: 's1:shot2'}, add: 'a'}]})
+    await setDirectionRules(target, {rules: [{id: 'r', text: 'A walks in', scope: {kind: 'shot', id: 's1:shot2'}, characterId: 'a'}]})
+    // the beat planned again: shot 2 is another shot now, with A in it by the plan
+    data.shotMoments.s1.shots[1] = {action: '{A} and {B} talk', characters: ['a', 'b'], people: {a: {state: 'stands'}, b: {state: 'sits'}}}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    expect(readDirection(target).editIssues.map(i => !!i.stale)).toEqual([true])
+    expect(dropStaleEdits(target, data)).toEqual(['s1:shot2: A is in the picture'])
+    expect(readDirection(target).edits).toEqual([])
+    // the instruction is not taken: a run that only plans builds without it and names it
+    expect(directionNotTaken(target, data).join('\n')).toContain('A walks in')
+    expect(() => applyDirectionOverlay(target, data, {allowPending: true})).not.toThrow()
 })

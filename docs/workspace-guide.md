@@ -219,12 +219,13 @@ Ein Zeitbereich betrifft alle sich damit überschneidenden ganzen Shots; er erze
 
 ### Nach einer Neuplanung
 
-Werden die Shots neu geplant, etwa nach einer geänderten Einstellung oder mit **Plan … again**, bleiben die Anweisungen gespeichert. Eine Szene oder ein Shot mit derselben Nummer kann aber etwas anderes zeigen. Eine Anweisung für einen Beat, eine Szene oder einen Shot gilt deshalb erst wieder, wenn du sie neu zuordnest. Bis dahin hält der nächste Lauf an, bevor er einen Clip baut, mit „Direction needs review“ und der Liste der Anweisungen: Bereich, Anfang des Textes und Grund.
+Werden die Shots neu geplant, etwa nach einer geänderten Einstellung oder mit **Plan … again**, gilt für das, was für die alten Shots gemacht war:
 
-1. **Direction** öffnen. Die Leiste des fehlgeschlagenen Laufs (**Open the Direction page**) und der Chip **Next** führen dorthin.
-2. Bei jeder Anweisung mit Warnung: nach Prüfung **Review current binding** (sie gilt für die Shots, wie sie jetzt sind), mit **Edit instruction** eine passende Auswahl treffen, oder **Remove instruction**.
-3. **Preview changes**, dann **Take changes**.
-4. **Take changes** baut die Clip-Prompts neu. Erst dann rendern, zuerst einige markierte Clips zur Probe (siehe die Warnung unter [Mehrere Clips auf einmal](#mehrere-clips-auf-einmal)).
+- **Direkte Änderungen** für einen neu geplanten Shot passen nicht mehr, der neue Plan hat eigene Shots. Der Planlauf verwirft sie und sagt es im Log. Auf **Direction** stehen solche Reste unter **Left over from the old plan**; **Clear them out** räumt alle mit einem Klick weg.
+- **Anweisungen**, die noch nicht per Vorschau übernommen sind, halten einen reinen Planlauf nicht mehr an: Die Clip-Prompts werden ohne sie gebaut, der Lauf nennt sie. Ein Lauf, der Clips rendert, hält für sie **gleich am Anfang** an, nicht erst nach der Planung.
+- Eine Anweisung für einen neu geplanten Shot steht ebenfalls bei den Resten: **Keep for the new shot** wendet sie auf den Shot an, wie er jetzt ist, **Clear** verwirft sie. Trifft eine Anweisung gar keinen Shot mehr, steht sie unter **To decide**: für einen vorhandenen Shot ändern oder entfernen.
+
+Danach erst rendern, zuerst einige markierte Clips zur Probe (siehe die Warnung unter [Mehrere Clips auf einmal](#mehrere-clips-auf-einmal)).
 
 Anweisungen, die an den Planer gegangen sind (mit **People…**), brauchen keine Prüfung. Im Terminal nennt `bun run status` die offenen Anweisungen und als nächsten Schritt `bun run direction <id> --preview`.
 
