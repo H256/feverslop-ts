@@ -12,12 +12,14 @@ import {filmRenderConfig} from './film/pictures.ts'
 import {filmRenderState} from './film/render.ts'
 import {FILM_STEP_NAMES, FilmStore} from './film/store.ts'
 import {type Preproduction, preproductionOf} from './editor/preproduction.ts'
+import {directionReview} from './direction/service.ts'
 
 // Where a project stands - for bun run status and the workspace. Read-only: no lock, no LLM, no ComfyUI; the render estimate comes
 // from the measured timings.
 
 export type StepState = 'done' | 'redo' | 'missing' | 'unused'
-export type Next = {command: string; why: string; estimate?: string}
+// page: the workspace page that does it (the Direction page), where the next step is not a run
+export type Next = {command: string; why: string; estimate?: string; page?: 'direction'}
 // what is printed, of a music video's project or of a film
 export type Status = {
     id: string
@@ -57,6 +59,34 @@ export function withPreproduction(next: Next, pre: Preproduction, kind: 'music' 
         next: {
             command: pre.nextCommand,
             why: `casting.json changed: ${pre.casting.changes.join(', ')}${pre.casting.redo.length ? ` - planned again: ${pre.casting.redo.join(', ')}` : ''}`,
+        },
+    }
+}
+
+/**
+ * What a direction waiting for its review adds (#782): a run would stop at it before it builds a clip, so it is the next step once
+ * nothing is left to plan - the rules to rebind or remove named in the notes. With steps to plan, those come first: they change the
+ * shots the rules are bound to.
+ */
+export function withDirection(
+    next: Next,
+    review: ReturnType<typeof directionReview>,
+    toPlan: string[],
+    kind: 'music' | 'film',
+    id: string,
+): {next: Next; notes: [string, string][]} {
+    if (!review?.pending) return {next, notes: []}
+    const notes = review.unresolved.map(line => ['Direction', `${line} ${styles.muted('- rebind or remove')}`] as [string, string])
+    if (toPlan.length) return {next, notes: [...notes, ['Direction', styles.muted('rules wait for their review - after the plan run')]]}
+    const open = review.unresolved.length
+    return {
+        notes,
+        next: {
+            command: `bun run direction ${id}${kind === 'film' ? ' --film' : ''} --preview`,
+            why: open
+                ? `direction needs review: ${open === 1 ? 'a rule' : `${open} rules`} to rebind or remove, then preview and take`
+                : 'direction needs review: preview and take the rules',
+            page: 'direction',
         },
     }
 }
@@ -133,16 +163,24 @@ export async function projectStatus(id: string): Promise<Status> {
     )
     const preproduction = await preproductionOf({id: project.id, kind: 'music', dir: project.dir})
     const withPre = withPreproduction(next, preproduction, 'music', project.id)
+    const direction = withDirection(
+        withPre.next,
+        safeReview({id: project.id, dir: project.dir, kind: 'music'}),
+        withPre.next === next ? toPlan : ['casting'],
+        'music',
+        project.id,
+    )
     return {
         id: project.id,
         dir: project.dir,
         changed,
         steps,
         render,
-        next: withPre.next,
+        next: direction.next,
         preproduction,
         notes: [
             ...withPre.notes,
+            ...direction.notes,
             ...lostStems.map(
                 step => ['Gone', `${styles.name(step)} ${styles.muted('- a stem file is missing, the next run separates them again')}`] as [string, string],
             ),
@@ -196,15 +234,31 @@ export async function filmStatus(id: string): Promise<Status> {
     )
     const preproduction = await preproductionOf({id: film.id, kind: 'film', dir: film.dir})
     const withPre = withPreproduction(next, preproduction, 'film', film.id)
+    const direction = withDirection(
+        withPre.next,
+        safeReview({id: film.id, dir: film.dir, kind: 'film'}),
+        withPre.next === next ? toPlan : ['casting'],
+        'film',
+        film.id,
+    )
     return {
         id: film.id,
         dir: film.dir,
         changed,
         steps,
         render,
-        next: withPre.next,
+        next: direction.next,
         preproduction,
-        notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')], ...withPre.notes],
+        notes: [['Mode', styles.muted(mode === 'screenplay' ? 'a screenplay of your own' : 'developed from an idea')], ...withPre.notes, ...direction.notes],
         json: {film: film.id},
+    }
+}
+
+/** The review of the direction, or nothing when direction.json cannot be read - the status of a project never fails on it. */
+function safeReview(target: Parameters<typeof directionReview>[0]) {
+    try {
+        return directionReview(target)
+    } catch {
+        return undefined
     }
 }

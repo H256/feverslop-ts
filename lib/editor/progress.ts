@@ -88,6 +88,12 @@ export function explainFailure(failure: string): Explained | undefined {
             action: 'Start it again and repeat: a job that is still queued is picked up. Or repeat on another server.',
         }
     if (/being worked on by another run/.test(failure)) return {text: 'Another run is working on this project.', action: 'Wait for it, or stop it.'}
+    if (/Direction needs review/.test(failure))
+        return {
+            text: 'The direction has rules to review: a run builds no clip before they are taken.',
+            action: 'On the Direction page rebind or remove the marked rules, then Preview and Take - and run again.',
+            page: 'direction',
+        }
     if (/casting\.json/.test(failure)) return {text: 'casting.json names something the library does not have.', action: 'Change the entry on the Casting page.'}
     return undefined
 }

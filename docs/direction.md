@@ -114,6 +114,14 @@ Rules on a beat or scene, a character or the whole video always reach the planne
 
 Broad intent survives regenerated shots. When the source plan changes, review a fresh proposal before rendering from it. Scene and shot bindings include the source they were chosen from: a reused ID is not permission to apply an old instruction to a different scene. Missing or changed bindings are reported for explicit reassignment.
 
+After the shots were planned again (a changed setting, a beat planned again), a run stops with "Direction needs review" before it builds a clip, and names each rule to rebind or remove: its scope, the start of its words and why. `bun run status` names them too, and its next step is `bun run direction demo --preview`. Do this, in this order:
+
+1. Rebind or remove the named rules: `--edit=<rule-id> --scope=shot:b3:shot2` binds a rule to the shot as it is now, `--remove=<rule-id>` drops it. In the workspace this is the **Direction** page: the rule has a warning and **Review current binding**. A failed run's bar and the **Next** chip on the timeline lead there.
+2. **Preview**, then **Take**.
+3. Run again, then render the stale clips. After a new plan that is every clip: render a few marked ones to check first. The **Next** chip asks before it renders most of the video.
+
+Rules that went to the planner (people put in or taken out with **People…**) need no review.
+
 A proposal also records its source plan and rules. If either changed while reviewing, taking the old proposal is refused. Generate another preview.
 
 Removing an instruction removes the requirement; it is not an undo of an accepted performance. Use a saved plan version to restore an earlier result. Restoring a plan does not overwrite rendered videos, and a version from an incompatible source plan cannot be restored onto a newly generated cut.
