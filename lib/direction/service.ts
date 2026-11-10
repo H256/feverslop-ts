@@ -439,7 +439,9 @@ function validateAfter(before: Record<string, unknown>, after: unknown, brought:
         if (!ap[id] || typeof ap[id] !== 'object' || Array.isArray(ap[id])) throw Error('invalid person')
         for (const key of new Set([...Object.keys(bp[id]!), ...Object.keys(ap[id]!)])) {
             // Creative movement/pose fields may change; performance flags and all other structured facts stay.
-            if (!['frame', 'motion', 'state', 'facing', 'plays'].includes(key) && hash(bp[id]![key] ?? null) !== hash(ap[id]![key] ?? null))
+            // a flag that is false says what a missing one says: "singing": false written for someone brought in is no change (#795)
+            const fact = (value: unknown) => (value === false ? null : (value ?? null))
+            if (!['frame', 'motion', 'state', 'facing', 'plays'].includes(key) && hash(fact(bp[id]![key])) !== hash(fact(ap[id]![key])))
                 throw Error(`protected person field ${key}`)
             if (
                 ['frame', 'motion', 'state', 'facing', 'plays'].includes(key) &&
