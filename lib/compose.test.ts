@@ -193,6 +193,18 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(clip.prompt).toContain('keeps their lips together and still, silent.')
         expect(clip.prompt).not.toContain('eyes and brows')
     })
+    // a silent singer seen from behind, walking away in a wide shot: lips named turned him to the lens, walking backwards
+    test('in a wide shot a silent singer is silent, without lips; closer the lips stay together', () => {
+        const sized = (size: 'wide' | 'medium') => {
+            const base = input(false)
+            const shot = {...base.shotMoments!.b9!.shots[0]!, size}
+            return buildClipRequests({...base, singing: {singers: ['greta'], lines: []}, shotMoments: {b9: {...base.shotMoments!.b9!, shots: [shot]}}})[0]!
+                .prompt
+        }
+        expect(sized('wide')).toContain('<Subject 2>, Greta, is silent.')
+        expect(sized('wide')).not.toContain('lips')
+        expect(sized('medium')).toContain('<Subject 2>, Greta, keeps their lips together and still, silent.')
+    })
 })
 
 describe('the background of the place', () => {
