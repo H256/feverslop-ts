@@ -66,13 +66,41 @@ const save = toasts.guard(async () => {
       <div class="spacer" />
       <button class="btn primary" :disabled="!form.dirty.value" @click="save">Save</button>
     </PageBar>
-    <div v-for="group in groups" :key="group.name" class="section">
-      <PageBar :title="group.name" />
-      <SettingField v-for="setting in group.settings" :key="setting.key" :setting="setting" :form="form" />
+    <div class="se-grid">
+      <section v-for="group in groups" :key="group.name" class="se-group">
+        <h2>{{ group.name }}</h2>
+        <SettingField v-for="setting in group.settings" :key="setting.key" :setting="setting" :form="form" />
+      </section>
     </div>
-    <p class="muted">
+    <p class="muted se-foot">
       The same from the terminal: <code>bun run config {{ id }}</code
       >. A change makes what was rendered from another setting stale - the timeline marks it, and nothing is rendered until you ask.
     </p>
   </div>
 </template>
+
+<style scoped>
+/* the groups side by side as cards, as many as the width holds */
+.se-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(520px, 100%), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.se-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 6px 6px;
+}
+.se-group h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 10px 6px;
+}
+.se-foot {
+  margin-top: 14px;
+}
+</style>

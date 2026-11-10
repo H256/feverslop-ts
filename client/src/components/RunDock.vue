@@ -87,7 +87,7 @@ const stop = toasts.guard(async () => {
       <span :class="['dot', {failed: failedRun(shown), done: !shown.running && !failedRun(shown)}]" />
       <span>{{ state }}</span>
       <span v-if="progress" class="runprogress" :title="`${progress.done} of ${progress.total} clips done`">
-        <span class="track"><span class="fill" :style="{width: `${percent}%`}" /></span>
+        <span class="run-track"><span class="run-fill" :style="{width: `${percent}%`}" /></span>
         <b class="num">{{ progress.done }}/{{ progress.total }}</b
         ><span class="num muted">{{ percent }}%</span>
       </span>

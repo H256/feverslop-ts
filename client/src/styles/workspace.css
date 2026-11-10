@@ -2333,14 +2333,14 @@ textarea.book {
   gap: 8px;
   flex: none;
 }
-.runprogress .track {
+.runprogress .run-track {
   width: 180px;
   height: 8px;
   border-radius: 99px;
   background: var(--raised);
   overflow: hidden;
 }
-.runprogress .fill {
+.runprogress .run-fill {
   display: block;
   height: 100%;
   background: var(--ok);
