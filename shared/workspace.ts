@@ -9,7 +9,8 @@ export type PlanStage = 'story' | 'cast' | 'look' | 'plan'
 export type Freshness = 'pinned' | 'current' | 'stale'
 export type FinalState = 'missing' | 'current' | 'older'
 export type RunState = 'running' | 'stopped' | 'failed' | 'finished'
-export type Explained = {text: string; action: string}
+// page: the page of the project where it is done (#782)
+export type Explained = {text: string; action: string; page?: 'direction'}
 export type LastRun = {state: RunState; command: string; startedAt: string; failures: string[]; explained: Explained[]}
 export type AssetKind = 'character' | 'location'
 export type ElementKind = AssetKind
@@ -187,7 +188,8 @@ export type ProjectStatus = {
     pictures: {total: number; missing: number; stale: number}
     clips: {total: number; missing: number; stale: number}
     final: FinalState
-    next: {command?: string; why: string; estimate?: string}
+    // page: the next step is done on that page of the project, not by a run (a direction waiting for its review, #782)
+    next: {command?: string; why: string; estimate?: string; page?: 'direction'}
 }
 /** The overview only reads these fields of a status. */
 export type ListingStatus = Pick<ProjectStatus, 'clips' | 'pictures' | 'next'>

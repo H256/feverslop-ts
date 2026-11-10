@@ -34,7 +34,13 @@ const next = computed(() => status.value?.next)
   <button v-if="failed && last" class="chip" :title="last.command" @click="actions.repeatLast(last)">Repeat</button>
   <RouterLink v-if="missingPictures" class="chip bad" :to="`${session.root}/references`">{{ missingPictures }} pictures missing</RouterLink>
   <RouterLink v-if="stalePictures" class="chip stale" :to="`${session.root}/references`">{{ stalePictures }} pictures stale</RouterLink>
-  <button v-if="next?.command" class="chip next" :title="[next.why, next.command, next.estimate].filter(Boolean).join('\n')" @click="actions.runNext(next)">
+  <RouterLink v-if="next?.page" class="chip next" :title="next.why" :to="`${session.root}/${next.page}`">Next: {{ next.why }}</RouterLink>
+  <button
+    v-else-if="next?.command"
+    class="chip next"
+    :title="[next.why, next.command, next.estimate].filter(Boolean).join('\n')"
+    @click="actions.runNext(next)"
+  >
     Next: {{ next.why }}
   </button>
 </template>

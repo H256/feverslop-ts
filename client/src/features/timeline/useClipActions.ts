@@ -208,8 +208,21 @@ export function useClipActions(timeline: Timeline) {
     if (yes) await start({type: 'repeat', command: last.command})
   }
   async function runNext(next: ProjectStatus['next']) {
-    if (!next.command) return
-    const yes = await ask({title: next.why, lines: [next.command, next.estimate], confirm: 'Run it', render: true})
+    if (!next.command || next.page) return
+    // a render of most of the video - after the shots were planned again every clip is stale (#782): said plainly before it starts
+    const clips = timeline.status.value?.clips
+    const many = clips && /--render=videos/.test(next.command) ? clips.missing + clips.stale : 0
+    const yes = await ask({
+      title: next.why,
+      lines: [next.command, next.estimate],
+      warnings: [
+        clips &&
+          many >= Math.max(10, clips.total / 2) &&
+          `This renders ${many} of the ${plural(clips.total, 'clip')}. After a new plan, look at the Direction page and render a few marked clips to check first.`,
+      ],
+      confirm: 'Run it',
+      render: true,
+    })
     if (yes) await start({type: 'next', command: next.command})
   }
   /** The shots of these beats planned again with the planner as it is now (#762): the language model only, their clips go stale. */
