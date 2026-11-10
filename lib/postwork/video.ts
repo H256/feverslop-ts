@@ -14,6 +14,24 @@ export const POSTWORK_ENDING_NAMES = Object.keys(POSTWORK_ENDINGS) as PostworkEn
 /** `<name>.mp4` -> `<name>-<ending>.mp4` */
 export const postworkName = (video: string, ending: PostworkEnding) => video.replace(/\.mp4$/, `-${ending}.mp4`)
 
+const FINAL_NAME = new RegExp(`^(?:--([a-z0-9.-]+?))?(-preview)?(?:-(\\d+)fps)?(-finished)?((?:-(?:${POSTWORK_ENDING_NAMES.join('|')}))*)$`)
+
+/** What a final video is, by its name: <id>[--<variant>][-preview][-48fps][-finished][-labeled|-credits|-intro...].mp4 - or undefined. */
+export type FinalParts = {variant?: string; preview: boolean; fps: number; finished: boolean; endings: PostworkEnding[]}
+export function finalParts(id: string, name: string): FinalParts | undefined {
+    if (!name.startsWith(id) || !name.endsWith('.mp4')) return undefined
+    // <id>--<variant>[-48fps][-finished].mp4: bun run refinish; then the endings of the post-work steps, in the order they ran
+    const match = FINAL_NAME.exec(name.slice(id.length, -'.mp4'.length))
+    if (!match) return undefined
+    return {
+        ...(match[1] ? {variant: match[1]} : {}),
+        preview: !!match[2],
+        fps: match[3] ? Number(match[3]) : 0,
+        finished: !!match[4],
+        endings: (match[5] ?? '').split('-').filter(Boolean) as PostworkEnding[],
+    }
+}
+
 /** A file name a step may start from: a video right in the project folder, no path. */
 export const VIDEO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.mp4$/
 

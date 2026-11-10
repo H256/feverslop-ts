@@ -10,6 +10,7 @@ before. All steps are off until you run them.
 | The AI marker | `bun run label <id>` | `<name>-labeled.mp4` | #607 |
 | A title card and credits | `bun run credits <id>` | `<name>-credits.mp4` | #609 |
 | An intro | `bun run intro <id>` | `<name>-intro.mp4` | #608 |
+| The YouTube text | `bun run description <id> --from=<video>` | `<name>.youtube.txt`, `.youtube.json` | #805 |
 
 The steps need nothing but ffmpeg: the marker is ffmpeg's own `overlay` filter, the intro its `concat`, `xfade` and
 `acrossfade`, the credits its `drawtext` (with libfreetype, which the usual builds have) in a font of the repo.
@@ -141,6 +142,59 @@ never stretched or cropped. An intro without sound gets silence; the sound of an
 its picture, so the video after it stays in sync. A video without sound stays without. Subtitle tracks of the video are
 kept and moved by the length of the intro. The picture and the sound are encoded once more (the sound as AAC 320k).
 
+## The YouTube text: `bun run description`
+
+The description for publishing a finished video on YouTube, as a text file to paste into YouTube Studio. Nothing is
+uploaded, and no video is written.
+
+```bash
+bun run description my-song                                              # lists the finished videos to choose from
+bun run description my-song --from=my-song-48fps-finished-labeled-intro.mp4
+bun run description my-song --from=my-song-finished.mp4 --new-story      # let the model write the teaser again
+bun run description my-song --from=my-song.mp4 --line="youtube.com/@me" --tag=AIgenerated --tag=feverslop --save-default
+bun run description my-song --from=my-song.mp4 --dry-run                 # the text, nothing written, no model asked
+```
+
+**The video is yours to choose**: any finished one of the project (with or without the marker, 24 or 48 fps, with or
+without intro and credits). With only one there is nothing to choose; with more, the command lists them and asks for
+`--from`. The text follows the video: what it went through (refinish, frame interpolation, grade, marker, credits, intro)
+is read from its name, its size, frame rate and length from the file. Each video gets its own `<name>.youtube.txt` (the
+description) and `<name>.youtube.json` (title, description, tags, the teaser) next to it.
+
+What it says, block by block:
+
+1. **A teaser of the story**, two to four sentences, written by the language model from the project's summary (a film:
+   its logline and summary). The only part a model writes. Run again, the teaser of the earlier run stays, so other tags
+   do not change it; `--new-story` asks for a new one, `--no-story` leaves it out. When the model fails, the text goes
+   without it.
+2. **That it is AI-generated**: every picture and every movement - the song as well, when the project rendered it.
+3. **What FeverSlop TS is**, and the fever-dream AI slop behind the name. Your own words instead: `"about"` in the
+   settings (line breaks allowed; one line per paragraph, YouTube wraps it).
+4. **How it was made**, collected by code as for the credits, whatever is not known left out: the graphics cards with
+   their memory (and `--hardware=`), the language model, the models per kind of render (no interpolation model for a 24
+   fps video), the **measured time per phase** - planning, pictures and reference sheets, song, clips, frame
+   interpolation - and a total, failed and retried attempts said apart. That is the sum of the measured job times,
+   re-renders included, not the time that passed: jobs on several servers overlap. Then the video itself and the
+   software. `--no-facts` leaves the block out.
+5. **Lines of your own** (`--line=`, a link, thanks) and the **hashtags** (`--tag=`, default `#AIgenerated #feverslop
+   #AIvideo`).
+
+The title is the one of the credits (`--title` there), else a film's own, else the heading of a music video's story.
+YouTube's limits (title 100, description 5000 characters) are checked and said; nothing is cut.
+
+**The disclosure on YouTube**: the text is no substitute for YouTube's own *Altered or synthetic content* setting on
+upload. Set it in YouTube Studio; the run reminds you.
+
+| Option | Default | |
+|---|---|---|
+| `--from=<file>` | the only finished video | the video you publish |
+| `--no-story` / `--new-story` | | no teaser / a new one instead of the earlier |
+| `--no-facts` | | leave out how it was made |
+| `--hardware=` | none | your own words after the graphics cards |
+| `--line=TEXT` | none | a line of your own at the end; repeat it for more, `--no-lines` for none |
+| `--tag=TAG` | `AIgenerated`, `feverslop`, `AIvideo` | a hashtag; repeat it for more, `--no-tags` for none |
+| `--save` / `--save-default` | | keep the options given for this project / for every project |
+
 ## The settings
 
 Every option of a step can be kept, so the command needs none of them. The later one wins, field by field:
@@ -155,7 +209,8 @@ Every option of a step can be kept, so the command needs none of them. The later
   "postwork": {
     "label": {"marker": "generated-white50", "mode": "credits", "seconds": 6, "corner": "top-right", "size": 6, "margin": 3},
     "intro": {"file": "D:/videos/channel-intro.mp4", "fade": 0.5},
-    "credits": {"artist": "Klemens", "hardware": "LLM: Strix Halo, 128 GB", "extra": ["youtube.com/@me"], "marker": "generated-white"}
+    "credits": {"artist": "Klemens", "hardware": "LLM: Strix Halo, 128 GB", "extra": ["youtube.com/@me"], "marker": "generated-white"},
+    "description": {"extra": ["youtube.com/@me"], "tags": ["AIgenerated", "feverslop"], "about": "My own words on the program."}
   }
 }
 ```
@@ -179,6 +234,10 @@ Under the timeline, next to *Refinish*, once there is a final video:
   it), the disclosure, a marker on the title card, the lines of your own (one per line), whether to say what it was made
   with, your words on the hardware, a sound under the credits and the lengths. It starts `bun run credits`; the run
   shows the credits line by line, the new video is listed as *… + credits*.
+
+- **YouTube text** asks for the video you publish (none is chosen for you), whether a teaser and a new one, whether to
+  say how it was made, your words on the hardware, your lines and the hashtags. It starts `bun run description`; the run
+  shows the whole text, the file is next to the video.
 
 All forms can keep their settings for this project (`config.json`) or for every project (the settings file).
 

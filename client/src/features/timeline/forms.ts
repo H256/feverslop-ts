@@ -180,3 +180,44 @@ export const introRequest = (draft: IntroDraft): RunRequest => ({
   fade: Number(draft.fade),
   ...kept(draft),
 })
+
+/** The YouTube text of a finished video (bun run description): the video is chosen by the user, nothing is picked for them. */
+export type DescriptionDraft = {
+  from: string
+  story: boolean
+  newStory: boolean
+  facts: boolean
+  hardware: string
+  extra: string
+  tags: string
+  save: boolean
+  saveDefault: boolean
+}
+export const newDescription = (settings: PostworkView['description']): DescriptionDraft => ({
+  from: '',
+  story: settings.story,
+  newStory: false,
+  facts: settings.facts,
+  hardware: settings.hardware,
+  extra: settings.extra.join('\n'),
+  tags: settings.tags.join(' '),
+  save: false,
+  saveDefault: false,
+})
+export const descriptionRequest = (draft: DescriptionDraft): RunRequest => ({
+  type: 'description',
+  from: draft.from,
+  story: draft.story,
+  ...(draft.newStory ? {newStory: true} : {}),
+  facts: draft.facts,
+  hardware: draft.hardware.trim(),
+  extra: draft.extra
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean),
+  tags: draft.tags
+    .split(/[\s,]+/)
+    .map(tag => tag.replace(/^#/, ''))
+    .filter(Boolean),
+  ...kept(draft),
+})

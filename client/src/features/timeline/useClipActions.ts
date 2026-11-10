@@ -6,8 +6,22 @@ import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import AddViewForm from './AddViewForm.vue'
 import {chain} from './clips'
-import {creditsRequest, defaultSource, introRequest, labelRequest, newCredits, newIntro, newLabel, newRefinish, refinishRequest, type NewView} from './forms'
+import {
+  creditsRequest,
+  defaultSource,
+  descriptionRequest,
+  introRequest,
+  labelRequest,
+  newCredits,
+  newDescription,
+  newIntro,
+  newLabel,
+  newRefinish,
+  refinishRequest,
+  type NewView,
+} from './forms'
 import CreditsForm from './CreditsForm.vue'
+import DescriptionForm from './DescriptionForm.vue'
 import IntroForm from './IntroForm.vue'
 import LabelForm from './LabelForm.vue'
 import RefinishForm from './RefinishForm.vue'
@@ -161,6 +175,27 @@ export function useClipActions(timeline: Timeline) {
       body: () => h(CreditsForm, {draft: form, finals: sources(), markers: postwork.markers, kind}),
       confirm: 'Add them',
       submit: () => start(creditsRequest(form, kind)),
+    })
+  }
+  /** The text for publishing a finished video on YouTube (bun run description): a .youtube.txt next to the video chosen. */
+  async function description() {
+    if (!sources().length) throw new Error('There is no final video yet: render it first.')
+    const {postwork} = project.value
+    const form = reactive(newDescription(postwork.description))
+    await ask({
+      title: 'Prepare the YouTube text',
+      lines: [
+        'The description for the video you choose, written next to it as <name>.youtube.txt to paste into YouTube Studio, and .youtube.json with title and tags. Nothing is uploaded.',
+        'That it is AI-generated, what FeverSlop TS is, and how it was made - graphics cards, models, measured time per phase - are collected from the project; only the teaser is written by the language model. The run shows the whole text.',
+        'On upload, still set "Altered or synthetic content" in YouTube Studio.',
+      ],
+      warnings: [postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`],
+      body: () => h(DescriptionForm, {draft: form, finals: sources()}),
+      confirm: 'Write it',
+      submit: async () => {
+        if (!form.from) throw new Error('Choose the video you publish.')
+        return start(descriptionRequest(form))
+      },
     })
   }
   async function pickVersion(clip: EditorClip, version: {id: string; fromThisPlan?: boolean; source?: string}) {
@@ -337,6 +372,7 @@ export function useClipActions(timeline: Timeline) {
     label: guarded(label),
     intro: guarded(intro),
     credits: guarded(credits),
+    description: guarded(description),
     pickVersion: guarded(pickVersion),
     saveOverride: guarded(saveOverride),
     addView: guarded(addView),

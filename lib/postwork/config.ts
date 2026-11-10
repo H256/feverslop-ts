@@ -56,7 +56,21 @@ export type CreditsSettings = {
     font: string // the path of a .ttf or .otf - '' = Lato (assets/fonts/)
 }
 
-export type PostworkSettings = {label: LabelSettings; intro: IntroSettings; credits: CreditsSettings}
+/**
+ * The text for publishing a finished video on YouTube (bun run description, #805): a file next to the video, pasted by hand.
+ * What it was made with and how long it took is collected by code, as the credits do; only the story teaser is written by a
+ * model.
+ */
+export type DescriptionSettings = {
+    about: string // the paragraph on FeverSlop TS and that it is AI-generated - '' = the built-in one (lib/postwork/description.ts)
+    story: boolean // a short teaser of the story, written by the language model from the project's summary
+    facts: boolean // how it was made: hardware, models, measured time per phase, the video itself
+    hardware: string // your own words after the graphics cards - '' = the credits' hardware
+    extra: string[] // lines of your own at the end: links, thanks, a channel
+    tags: string[] // hashtags, without the # - the first three show above the title on YouTube
+}
+
+export type PostworkSettings = {label: LabelSettings; intro: IntroSettings; credits: CreditsSettings; description: DescriptionSettings}
 export type PostworkStep = keyof PostworkSettings
 
 export const POSTWORK_DEFAULTS: PostworkSettings = {
@@ -80,6 +94,7 @@ export const POSTWORK_DEFAULTS: PostworkSettings = {
         sound: '',
         font: '',
     },
+    description: {about: '', story: true, facts: true, hardware: '', extra: [], tags: ['AIgenerated', 'feverslop', 'AIvideo']},
 }
 export const POSTWORK_STEPS = Object.keys(POSTWORK_DEFAULTS) as PostworkStep[]
 
@@ -160,6 +175,18 @@ const CHECKS: {[S in PostworkStep]: {[K in keyof PostworkSettings[S]]: Check}} =
         font: line,
         extra: value =>
             Array.isArray(value) && value.every(v => !line(v)) ? undefined : `must be a list of lines like ["Thanks to ..."], got ${JSON.stringify(value)}`,
+    },
+    description: {
+        about: value => (typeof value === 'string' && !value.includes('\0') ? undefined : `must be text (line breaks allowed), got ${JSON.stringify(value)}`),
+        story: yesNo,
+        facts: yesNo,
+        hardware: line,
+        extra: value =>
+            Array.isArray(value) && value.every(v => !line(v)) ? undefined : `must be a list of lines like ["youtube.com/@me"], got ${JSON.stringify(value)}`,
+        tags: value =>
+            Array.isArray(value) && value.every(v => typeof v === 'string' && /^[\p{L}\p{N}_]+$/u.test(v))
+                ? undefined
+                : `must be a list of hashtags without # and spaces, like ["AIgenerated"], got ${JSON.stringify(value)}`,
     },
 }
 

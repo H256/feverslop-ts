@@ -117,6 +117,11 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description:
             'A title card before a finished video and scrolling credits after it - title, who made it, the AI disclosure, your lines, and the models and hardware it was made with: <name>-credits.mp4. Optional, see docs/postwork.md.',
     },
+    description: {
+        args: '<id> [--film] [--from=<video>] [--no-story] [--new-story] [--no-facts] [--hardware=] [--line=TEXT]... [--no-lines] [--tag=TAG]... [--no-tags] [--save | --save-default] [--dry-run]',
+        description:
+            'The text for publishing the finished video you choose on YouTube - a teaser of the story, that it is AI-generated, the hardware, models and measured time per phase: <name>.youtube.txt and .json next to it. Nothing is uploaded. See docs/postwork.md.',
+    },
     intro: {
         args: '<id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]',
         description:

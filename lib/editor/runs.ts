@@ -246,6 +246,35 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (action.saveDefault) args.push('--save-default')
             return {script: 'tools/credits.ts', args}
         }
+        case 'description': {
+            // the video is the user's choice: always said
+            if (!VIDEO_NAME.test(action.from ?? '')) throw new Error(`no such from: ${action.from}`)
+            const args = [id, ...(kind === 'film' ? ['--film'] : []), `--from=${action.from}`]
+            const text = (name: string, value: string) => {
+                if (/[\n\r\0]/.test(value)) throw new Error(`${name}: one line of text`)
+                args.push(`--${name}=${value}`)
+            }
+            if (action.hardware !== undefined) text('hardware', action.hardware)
+            if (action.extra !== undefined) {
+                if (!Array.isArray(action.extra)) throw new Error('extra: a list of lines')
+                if (!action.extra.length) args.push('--no-lines')
+                for (const line of action.extra) text('line', line)
+            }
+            if (action.tags !== undefined) {
+                if (!Array.isArray(action.tags)) throw new Error('tags: a list of hashtags')
+                if (!action.tags.length) args.push('--no-tags')
+                for (const tag of action.tags) text('tag', tag)
+            }
+            for (const [name, on] of [
+                ['story', action.story],
+                ['facts', action.facts],
+            ] as const)
+                if (on !== undefined) args.push(on ? `--${name}` : `--no-${name}`)
+            if (action.newStory) args.push('--new-story')
+            if (action.save) args.push('--save')
+            if (action.saveDefault) args.push('--save-default')
+            return {script: 'tools/description.ts', args}
+        }
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim())
                 throw new Error('a further view is for a place of a film, with a name and what it shows')

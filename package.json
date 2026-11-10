@@ -54,6 +54,7 @@
         "label": "bun tools/label.ts",
         "intro": "bun tools/intro.ts",
         "credits": "bun tools/credits.ts",
+        "description": "bun tools/description.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
