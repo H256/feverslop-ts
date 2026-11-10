@@ -13,7 +13,7 @@ import {useTimeline} from './context'
 import TimelineLegend from './TimelineLegend.vue'
 
 /** The timeline: a ruler, the sections or scenes, the sound, the clips and what is sung or said - zoomed, scrolled and scrubbed. */
-const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct} = useTimeline()
+const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct, review} = useTimeline()
 const {theme} = ChromeService.use()
 const MAX_PPS = 160
 const scroller = ref<HTMLElement>()
@@ -295,6 +295,8 @@ const hidePeek = () => {
               :marked="marked.has(clip.id)"
               :flagged="isFlagged(clip)"
               :progress="progress?.clips[clip.id]"
+              :again="!!review.review.value?.again.has(clip.id)"
+              :reviewed="review.current.value?.id === clip.id"
               :roots="session.roots"
               @pick="pick($event, clip)"
             />

@@ -89,7 +89,9 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
       Enter: () => step(1),
       ArrowRight: () => step(1),
       ArrowLeft: () => step(-1),
+      // kept for the render at the end, and on to the next; R on a kept one (after ←) takes it back
       r: () => {
+        if (r.again.has(clip.id)) return void r.again.delete(clip.id)
         r.again.add(clip.id)
         step(1)
       },

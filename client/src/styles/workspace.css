@@ -1079,6 +1079,26 @@ select.source {
   border-radius: 3px;
   padding: 0 3px;
 }
+.clip.again {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.clip.reviewed {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.clip .again {
+  position: absolute;
+  white-space: nowrap;
+  z-index: 1;
+  left: 3px;
+  top: 18px;
+  font: 600 10px var(--sans);
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+}
 .clip .moved {
   position: absolute;
   z-index: 1;
@@ -1188,6 +1208,13 @@ select.source {
   border-radius: 10px;
   font-size: 12px;
   white-space: nowrap;
+}
+.reviewbar .kept {
+  color: var(--accent);
+  font-weight: 600;
+}
+.reviewbar .muted {
+  color: #fffa;
 }
 .reviewbar label {
   display: inline-flex;
