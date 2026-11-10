@@ -942,10 +942,18 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // position, same reasoning as the idle prop poses - the story text may still say they "cry out". Only the
                 // lip-sync is ruled out, not the emotion: the retention line keeps expression free. The clause names no face (#755):
                 // "the face showing ..." turned a singer seen from behind to the lens, and walking away face first is walking backwards
+                // In a wide shot it names no lips either: the faces are small there, and the lips of someone seen from behind
+                // (walking away, the back to the lens - a wide shot only) turned him to the lens again, walking backwards
                 const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
-                const silentClause = silentSingers.length
-                    ? ` ${silentSingers.length > 1 ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`)) : `${silentSingers[0]!.label}, ${silentSingers[0]!.name},`} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent.`
-                    : ''
+                const silentWho =
+                    silentSingers.length > 1
+                        ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`))
+                        : `${silentSingers[0]?.label}, ${silentSingers[0]?.name},`
+                const silentClause = !silentSingers.length
+                    ? ''
+                    : shot.plan?.size === 'wide'
+                      ? ` ${silentWho} ${silentSingers.length > 1 ? 'are' : 'is'} silent.`
+                      : ` ${silentWho} ${silentSingers.length > 1 ? 'keep' : 'keeps'} their lips together and still, silent.`
                 const onSinger = shot.starting.length > 0 || shot.continuing.length > 0
                 // while the singer sings, everyone else in the frame (a shadow, a creature of fog) sits it out - the video
                 // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
