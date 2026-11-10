@@ -1189,6 +1189,15 @@ select.source {
   font-size: 12px;
   white-space: nowrap;
 }
+.reviewbar label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.reviewbar input {
+  width: auto;
+  margin: 0;
+}
 .reviewbar b {
   font-family: var(--mono);
   font-weight: 500;
