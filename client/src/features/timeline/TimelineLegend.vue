@@ -34,25 +34,25 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
 
 <template>
   <div class="legend">
-    <span class="num">{{ clips.length - count.missing }} of {{ clips.length }} clips rendered</span>
-    <span v-if="count.missing"
-      ><i style="background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px)" />{{ count.missing }} missing</span
-    >
-    <span v-if="count.stale"><i style="background: var(--stale)" />{{ count.stale }} stale</span>
-    <span v-if="count.pinned">{{ count.pinned }} pinned</span>
-    <span v-if="count.marks"><i style="background: var(--danger)" />{{ plural(count.marks, 'mark') }}</span>
-    <span v-if="clips.some(c => c.startsFrom)"><i style="background: var(--accent); border-radius: 50%" />goes on</span>
-    <template v-if="count.flagged">
-      <label><input v-model="onlyFlagged" type="checkbox" />Only flagged</label>
-      <button title="The flagged clip before" @click="stepFlagged(-1)">‹</button>
-      <button title="The next flagged clip" @click="stepFlagged(1)">›</button>
-    </template>
-    <template v-if="marked.size">
+    <!-- what the clips are, in numbers -->
+    <div class="grp counts">
+      <span class="num">{{ clips.length - count.missing }} of {{ clips.length }} rendered</span>
+      <span v-if="count.missing"
+        ><i style="background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px)" />{{ count.missing }} missing</span
+      >
+      <span v-if="count.stale"><i style="background: var(--stale)" />{{ count.stale }} stale</span>
+      <span v-if="count.pinned">{{ count.pinned }} pinned</span>
+      <span v-if="count.marks"><i style="background: var(--danger)" />{{ plural(count.marks, 'mark') }}</span>
+      <span v-if="clips.some(c => c.startsFrom)"><i style="background: var(--accent); border-radius: 50%" />goes on</span>
+    </div>
+    <!-- the marked clips: render them, or plan their beats again (#774: grouped, coloured by what they do) -->
+    <div v-if="marked.size" class="grp marked-grp">
       <span class="num">{{ marked.size }} marked</span>
-      <button @click="actions.renderMarked()">Render marked</button>
+      <button class="b-render strong" @click="actions.renderMarked()">Render marked</button>
       <button @click="previewMarked">Preview marked</button>
       <button
         v-if="markedBeats.length"
+        class="b-plan"
         :title="`Plan the shots of ${markedBeats.join(', ')} again with the planner as it is now - the language model only; their clips go stale`"
         @click="actions.replanBeats(markedBeats)"
       >
@@ -60,66 +60,88 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       </button>
       <button
         v-if="markedBeats.length && project.kind === 'music'"
+        class="b-plan"
         :title="`Who is in the marked clips: people of the cast or new ones come in, others go out, with what they do there - ${markedBeats.join(', ')} are planned again`"
         @click="actions.bringPeople([...marked])"
       >
         People…
       </button>
-      <button @click="marked.clear()">Clear</button>
-    </template>
-    <button
-      v-if="count.stale"
-      title="Mark the stale clips - made from another request than the plan has now - and render them again: the old versions stay selectable"
-      @click="renderAll('stale')"
-    >
-      Render stale ({{ count.stale }})
-    </button>
-    <button v-if="count.missing" title="Mark the clips that are not rendered yet and render them" @click="renderAll('missing')">
-      Render missing ({{ count.missing }})
-    </button>
-    <button
-      v-if="rendered"
-      title="Mark every clip and render them all again - also those that count as current, e.g. after a change the clips do not notice (a seed, a setting outside the request). The old versions stay selectable"
-      @click="renderAll('all')"
-    >
-      Render all ({{ clips.length }})
-    </button>
-    <button v-if="count.flagged" title="Mark all flagged clips" @click="markFlagged">Mark flagged</button>
-    <template v-if="rendered">
-      <button title="Go through the marked clips, else the flagged ones, else all: one by one, with keys" @click="reviewNow">Review</button>
-      <button title="Larger, 48 fps, grade and sharpen, from the clips there are: nothing is overwritten" @click="actions.refinish()">Refinish</button>
+      <button title="Unmark them all" @click="marked.clear()">Clear</button>
+    </div>
+    <div v-if="count.stale || count.missing || rendered" class="grp">
       <button
-        v-if="hasFinal"
-        title="Optional, for publishing: the EU marker for AI-generated content (or a PNG of your own) over a finished video, as a new video next to it"
-        @click="actions.label()"
+        v-if="count.stale"
+        class="b-render"
+        title="Mark the stale clips - made from another request than the plan has now - and render them again: the old versions stay selectable"
+        @click="renderAll('stale')"
       >
-        AI marker
+        Render stale ({{ count.stale }})
+      </button>
+      <button v-if="count.missing" class="b-render" title="Mark the clips that are not rendered yet and render them" @click="renderAll('missing')">
+        Render missing ({{ count.missing }})
       </button>
       <button
-        v-if="hasFinal"
-        title="Optional, for publishing: a clip of your own (a logo, a channel ident) in front of a finished video, as a new video next to it"
-        @click="actions.intro()"
+        v-if="rendered"
+        class="b-render"
+        title="Mark every clip and render them all again - also those that count as current, e.g. after a change the clips do not notice (a seed, a setting outside the request). The old versions stay selectable"
+        @click="renderAll('all')"
       >
-        Intro
+        Render all ({{ clips.length }})
       </button>
+    </div>
+    <div v-if="count.flagged || rendered" class="grp">
+      <template v-if="count.flagged">
+        <label><input v-model="onlyFlagged" type="checkbox" />Only flagged</label>
+        <button title="The flagged clip before" @click="stepFlagged(-1)">‹</button>
+        <button title="The next flagged clip" @click="stepFlagged(1)">›</button>
+        <button title="Mark all flagged clips" @click="markFlagged">Mark flagged</button>
+      </template>
+      <template v-if="rendered">
+        <button class="b-check" title="Go through the marked clips, else the flagged ones, else all: one by one, with keys" @click="reviewNow">Review</button>
+        <button title="Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU" @click="actions.plain({type: 'leak-scan'})">
+          Scan for backdrops
+        </button>
+      </template>
+    </div>
+    <div v-if="clips.length" class="grp">
+      <button class="b-finish" title="Cheap renders of all clips into previews/" @click="allClips">Preview all</button>
       <button
-        v-if="hasFinal"
-        title="Optional, for publishing: a title card before a finished video and scrolling credits after it - what it was made with, collected from the project"
-        @click="actions.credits()"
+        v-if="clips.some(c => c.preview)"
+        class="b-finish"
+        title="A low-resolution video of the whole thing from the previews"
+        @click="actions.plain({type: 'final', preview: true})"
       >
-        Credits
+        Preview video
       </button>
-      <button title="Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU" @click="actions.plain({type: 'leak-scan'})">
-        Scan for backdrops
-      </button>
-    </template>
-    <button v-if="clips.length" title="Cheap renders of all clips into previews/" @click="allClips">Preview all</button>
-    <button
-      v-if="clips.some(c => c.preview)"
-      title="A low-resolution video of the whole thing from the previews"
-      @click="actions.plain({type: 'final', preview: true})"
-    >
-      Preview video
-    </button>
+      <template v-if="rendered">
+        <button class="b-finish" title="Larger, 48 fps, grade and sharpen, from the clips there are: nothing is overwritten" @click="actions.refinish()">
+          Refinish
+        </button>
+        <button
+          v-if="hasFinal"
+          class="b-finish"
+          title="Optional, for publishing: the EU marker for AI-generated content (or a PNG of your own) over a finished video, as a new video next to it"
+          @click="actions.label()"
+        >
+          AI marker
+        </button>
+        <button
+          v-if="hasFinal"
+          class="b-finish"
+          title="Optional, for publishing: a clip of your own (a logo, a channel ident) in front of a finished video, as a new video next to it"
+          @click="actions.intro()"
+        >
+          Intro
+        </button>
+        <button
+          v-if="hasFinal"
+          class="b-finish"
+          title="Optional, for publishing: a title card before a finished video and scrolling credits after it - what it was made with, collected from the project"
+          @click="actions.credits()"
+        >
+          Credits
+        </button>
+      </template>
+    </div>
   </div>
 </template>
