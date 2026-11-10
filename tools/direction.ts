@@ -38,6 +38,7 @@ const {values: a, positionals} = parseArgs({
         unedit: {type: 'string'},
         show: {type: 'string'},
         'no-rebuild': {type: 'boolean'},
+        'despite-conflicts': {type: 'boolean'},
         with: {type: 'string'},
         join: {type: 'string', multiple: true},
         out: {type: 'string'},
@@ -194,7 +195,7 @@ if (a.preview) {
     await previewDirection(target)
 }
 if (a.take) {
-    await takeDirection(target)
+    await takeDirection(target, {despiteConflicts: a['despite-conflicts'] ?? false})
     rebuild = true
 } else if (a.drop) await dropDirection(target)
 else if (a.restore) {

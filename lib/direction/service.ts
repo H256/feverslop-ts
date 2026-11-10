@@ -563,14 +563,20 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
         return readDirection(t)
     })
 }
-export async function takeDirection(t: DirectionTarget) {
+/**
+ * Takes the proposal. A proposal with conflicts is taken only when asked to anyway (despiteConflicts): the model reports both rules
+ * that contradict each other and mere notes on continuity ("the cut to shot 4 changes the perspective"), and only the director can
+ * tell which one it is - the proposal itself is checked like any other.
+ */
+export async function takeDirection(t: DirectionTarget, {despiteConflicts = false}: {despiteConflicts?: boolean} = {}) {
     return locked(t, () => {
         const d = source(t),
             s = state(t),
             p = s.proposal
         if (!p) throw Error('no proposal')
         if (p.sourceFingerprint !== fingerprint(t, d) || p.rulesFingerprint !== hash(reviewed(s))) throw Error('stale proposal')
-        if (p.conflicts.length) throw Error('resolve proposal conflicts before taking')
+        if (p.conflicts.length && !despiteConflicts)
+            throw Error('the proposal reports conflicts: resolve them and preview again, or take it anyway (--despite-conflicts)')
         const all = shots(t, d)
         for (const c of p.changes) {
             const before = all.find(sh => sh.id === c.shotId)

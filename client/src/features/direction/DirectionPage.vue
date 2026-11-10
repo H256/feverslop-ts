@@ -133,7 +133,7 @@ const preview = toasts.guard(() => start({type: 'direction'}))
 // taken or restored: the clip prompts are built again at once - the planning run, nothing is rendered
 const take = () =>
   change(async () => {
-    await api.takeDirection()
+    await api.takeDirection(!!view.value?.proposal?.conflicts.length)
     await start({type: 'plan'})
     toasts.show('Changes taken. The clip prompts are built again; render the affected clips on the timeline.')
   })
@@ -376,7 +376,10 @@ function describe(data: Record<string, unknown>): string {
         <p v-if="view.proposalStale" class="warn">This proposal belongs to an older plan or set of instructions. Preview again before taking it.</p>
         <p v-if="!view.proposal.changes.length" class="muted">No shot changes proposed.</p>
         <p v-for="conflict in view.proposal.conflicts" :key="conflict" class="warn">{{ conflict }}</p>
-        <p v-if="view.proposal.conflicts.length" class="muted">Edit the instructions or expand their scope to resolve these conflicts, then preview again.</p>
+        <p v-if="view.proposal.conflicts.length" class="muted">
+          A rule that contradicts another: edit the instructions or expand their scope, then preview again. A note on continuity only: read it, and take the
+          proposal anyway.
+        </p>
         <article v-for="change in view.proposal.changes" :key="change.shotId" class="direction-change">
           <h3>{{ change.shotId }}</h3>
           <div class="comparison">
@@ -391,12 +394,8 @@ function describe(data: Record<string, unknown>): string {
           </div>
         </article>
         <div class="btn-row">
-          <button
-            class="btn primary"
-            :disabled="blocked || dirty || view.proposalStale || !!view.proposal.conflicts.length || !!view.unresolved.length"
-            @click="take"
-          >
-            Take changes</button
+          <button class="btn primary" :disabled="blocked || dirty || view.proposalStale || !!view.unresolved.length" @click="take">
+            {{ view.proposal.conflicts.length ? 'Take anyway' : 'Take changes' }}</button
           ><button class="btn" :disabled="blocked" @click="drop">Drop proposal</button>
         </div>
       </section>

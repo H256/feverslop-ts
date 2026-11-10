@@ -50,7 +50,7 @@ test('direction: save a scoped instruction, edit it, and run the CLI preview', a
   await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'direction'}})
 })
 
-test('direction: proposal conflicts block take, drop remains available', async ({page}) => {
+test('direction: proposal conflicts are shown, taken only as Take anyway; drop remains available', async ({page}) => {
   await stubProject(page)
   const state = view()
   state.rules = [{id: 'r', text: 'Turn left', scope: {kind: 'global'}}]
@@ -72,7 +72,8 @@ test('direction: proposal conflicts block take, drop remains available', async (
   await page.goto(`${editor.base}/p/music/demo/direction`)
   await expect(page.getByText('Ann turns right', {exact: false})).toBeVisible()
   await expect(page.getByText('Next shot starts facing the wrong way.')).toBeVisible()
-  await expect(page.getByRole('button', {name: 'Take changes', exact: true})).toBeDisabled()
+  await expect(page.getByRole('button', {name: 'Take changes', exact: true})).toHaveCount(0)
+  await expect(page.getByRole('button', {name: 'Take anyway', exact: true})).toBeEnabled()
   await page.getByRole('button', {name: 'Drop proposal', exact: true}).click()
   await expect.poll(() => dropped).toBe(true)
 })
@@ -126,9 +127,11 @@ test('direction in the timeline: the cast lane, the shot dialog, a person taken 
   await expect(dialog.getByRole('heading', {name: 'b1:shot1'})).toBeVisible()
   // tokens shown as names; whoever sings stays in the shot
   await expect(dialog.getByText('Ann sings while Bob leans on the bar')).toBeVisible()
-  const takeOut = dialog.getByRole('button', {name: 'Take out of the shot'})
+  // marked first (#790), then taken out together
+  const takeOut = dialog.getByRole('checkbox', {name: 'Take out'})
   await expect(takeOut.first()).toBeDisabled()
-  await takeOut.nth(1).click()
+  await takeOut.nth(1).check()
+  await dialog.getByRole('button', {name: 'Take Bob out of the shot'}).click()
   await expect.poll(() => state.edits.map(e => [e.remove, e.scope])).toEqual([['bob', {kind: 'shot', id: 'b1:shot1'}]])
   // the clip prompts are built again at once
   await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'plan'}})

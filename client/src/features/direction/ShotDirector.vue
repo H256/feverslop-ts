@@ -80,7 +80,8 @@ const proposeAgain = () => work(() => start({type: 'direction'}))
 /** Taken, and the clip prompts built again. */
 const take = () =>
   work(async () => {
-    await api.takeDirection()
+    // the conflicts are shown right above: taking it with them is the director's choice (#795)
+    await api.takeDirection(!!view.value?.proposal?.conflicts.length)
     unbuilt.value = false
     await start({type: 'plan'})
     toasts.show('Taken. The clip prompts are built again; render the clip when it is done.')
@@ -330,10 +331,11 @@ const diff = computed(() => {
           <div class="btn-row">
             <button
               class="btn primary"
-              :disabled="blocked || !!view?.proposalStale || !!view?.proposal?.conflicts.length || !!view?.unresolved.length"
+              :disabled="blocked || !!view?.proposalStale || !!view?.unresolved.length"
+              :title="view?.proposal?.conflicts.length ? 'The model notes a conflict above. Taking it keeps the proposal as it is' : undefined"
               @click="take"
             >
-              Take and build the prompts
+              {{ view?.proposal?.conflicts.length ? 'Take anyway and build the prompts' : 'Take and build the prompts' }}
             </button>
             <button class="btn" :disabled="blocked" @click="drop">Drop</button>
           </div>

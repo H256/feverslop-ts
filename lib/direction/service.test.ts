@@ -85,6 +85,10 @@ test('protected timing rejected with bounded retries; conflicts cannot be accept
     expect(readDirection(target).proposal).toBeUndefined()
     await previewDirection(target, async o => ({...answer(JSON.parse(o.input)), conflicts: ['contradicts next scene']}))
     await expect(takeDirection(target)).rejects.toThrow('conflict')
+    // a note the director has read: taken anyway, the proposal checked as any other (#795)
+    await takeDirection(target, {despiteConflicts: true})
+    expect(readDirection(target).proposal).toBeUndefined()
+    expect(readDirection(target).activeVersion).toBeDefined()
 })
 test('stale proposals and reused shot IDs rejected, broad intent retained after replan', async () => {
     const {target, data} = fixture()
