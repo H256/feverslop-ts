@@ -17,7 +17,7 @@ import {useLookEdits} from './lookEdits'
 const {project, api, start} = useProject()
 const ask = useAsk()
 const toasts = useToasts()
-const {data: look, loading, error, reload, refresh} = usePageData(signal => api.look(signal))
+const {data: look, loading, error, reload, refresh} = usePageData(signal => api.look(signal), {live: true})
 const brief = useDraft(() => look.value?.lookBrief)
 const edits = useLookEdits()
 useUnsavedChanges(() => brief.dirty.value || edits.dirty.value, 'looks')

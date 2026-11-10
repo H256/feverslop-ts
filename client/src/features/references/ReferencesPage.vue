@@ -13,10 +13,13 @@ import ReferenceDetail from './ReferenceDetail.vue'
 const {api, project} = useProject()
 const route = useRoute(),
   router = useRouter()
-const {data, loading, error, reload, refresh} = usePageData(async signal => {
-  const [{references}, fresh] = await Promise.all([api.references(signal), api.freshness(signal).catch((): EditorFreshness => ({clips: {}, pictures: {}}))])
-  return {references, fresh}
-})
+const {data, loading, error, reload, refresh} = usePageData(
+  async signal => {
+    const [{references}, fresh] = await Promise.all([api.references(signal), api.freshness(signal).catch((): EditorFreshness => ({clips: {}, pictures: {}}))])
+    return {references, fresh}
+  },
+  {live: true},
+)
 const GROUPS = [
   ['character', 'Characters'],
   ['location', 'Places'],
