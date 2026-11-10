@@ -242,7 +242,7 @@ Am unteren Rand steht, was gerade läuft: bei einem Render ein Balken mit fertig
 
 ![Referenzseite mit Karten und Details](images/workspace/references.jpg)
 
-Unter **References** liegen alle Personen, Orte und Requisiten. Rechts stehen Prompt, Ansichten, ältere Fassungen und die Clips, die das Bild benutzen.
+Unter **References** liegen alle Personen, Orte und Requisiten. Rechts stehen Prompt, Ansichten, ältere Fassungen und die Clips, die das Bild benutzen. Während eines Laufs erscheint jedes Bild hier und auf **Look**, sobald es fertig ist, nicht erst am Ende des Laufs.
 
 - **New sheet, same anchor**: dieselbe Person, andere Ansichten.
 - **New anchor**: eine andere Person oder ein anderer Ort, alles danach wird neu.
