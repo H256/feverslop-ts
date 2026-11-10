@@ -219,11 +219,35 @@ function unresolved(t: DirectionTarget, d: Data, s: State) {
     // a rule saved for a beat or scene without shots yet ('missing') holds for the shots it is planned with (#765)
     return reviewed(s).flatMap(r =>
         r.binding !== undefined && r.binding !== 'missing' && r.binding !== binding(t, d, r)
-            ? [{ruleId: r.id, message: 'Source scene/shot changed; explicitly rebind or remove this rule.'}]
+            ? [{ruleId: r.id, message: 'Its shots were planned again: rebind it to the shots as they are now, or remove it.'}]
             : !shots(t, d).some(sh => matches(r, sh))
-              ? [{ruleId: r.id, message: 'Scope selects no existing shots.'}]
+              ? [{ruleId: r.id, message: 'It selects no shot of the plan as it is now: rebind or remove it.'}]
               : [],
     )
+}
+const scopeName = (r: DirectionRule) =>
+    r.scope.kind === 'global' ? 'whole project' : r.scope.kind === 'time' ? `${r.scope.start}-${r.scope.end} s` : `${r.scope.kind} ${r.scope.id}`
+const shortText = (text: string) => {
+    const flat = text.trim().replace(/\s+/g, ' ')
+    return flat.length > 70 ? `${flat.slice(0, 69)}…` : flat
+}
+/** The unresolved rules one per line, by scope and the start of their words, with what is wrong (#782). */
+function unresolvedLines(t: DirectionTarget, d: Data, s: State): string[] {
+    return unresolved(t, d, s).map(u => {
+        const r = s.rules.find(r => r.id === u.ruleId)!
+        return `${scopeName(r)} "${shortText(r.text)}": ${u.message}`
+    })
+}
+/**
+ * Whether the direction waits for a review before a run can build the clips (#782), read-only: the rules that have to be rebound
+ * or removed first, one per line, and whether rules are not taken yet. Undefined when the project has no direction.
+ */
+export function directionReview(t: DirectionTarget): {pending: boolean; unresolved: string[]} | undefined {
+    if (!existsSync(file(t)) || !existsSync(join(t.dir, 'project.json'))) return undefined
+    const d = source(t),
+        s = state(t)
+    const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
+    return {pending, unresolved: unresolvedLines(t, d, s)}
 }
 function applied(t: DirectionTarget, d: Data, s: State) {
     const v = s.versions.find(v => v.id === s.activeVersion)
@@ -399,7 +423,11 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
             s = state(t),
             initialFingerprint = fingerprint(t, d)
         if (!shots(t, d).length) throw Error('plan shots first')
-        if (unresolved(t, d, s).length) throw Error('unresolved rules need explicit rebinding')
+        const open = unresolvedLines(t, d, s)
+        if (open.length)
+            throw Error(
+                `unresolved rules need explicit rebinding (--edit=ID --text=TEXT --scope=SCOPE, or --remove=ID; on the Direction page: Review current binding or Remove):\n${open.map(line => `  - ${line}`).join('\n')}`,
+            )
         const current = shots(t, overlay(t, d, s))
         // the rules, and for a person an edit took out of a shot whose words still name them, a rule to write it without them
         const rules = [...reviewed(s), ...editRules(t, d, s)]
@@ -532,9 +560,14 @@ export function applyDirectionOverlay<T extends Data>(
 ): T {
     const s = state(t)
     const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
-    if (pending && !options.allowPending)
+    if (pending && !options.allowPending) {
+        const open = unresolvedLines(t, d, s)
         throw Error(
-            `Direction needs review: bun run direction ${t.id}${t.kind === 'film' ? ' --film' : ''} --preview, then --take. Rebind unresolved scene/shot rules explicitly.`,
+            `Direction needs review: bun run direction ${t.id}${t.kind === 'film' ? ' --film' : ''} --preview, then --take - or the Direction page of the workspace.` +
+                (open.length
+                    ? ` First rebind or remove ${open.length === 1 ? 'this rule' : `these ${open.length} rules`}:\n${open.map(line => `  - ${line}`).join('\n')}`
+                    : ''),
         )
+    }
     return overlay(t, d, s) as T
 }

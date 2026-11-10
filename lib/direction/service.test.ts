@@ -12,6 +12,7 @@ import {
     dropDirection,
     restoreDirection,
     applyDirectionOverlay,
+    directionReview,
 } from './service.ts'
 const dirs: string[] = []
 afterEach(() => {
@@ -371,4 +372,23 @@ test('a planned rule on a shot reaches the planner as a note of its beat for tha
     })
     expect(directionPlanNotes(target, data)).toEqual({s1: ['shot 2: B is in this shot.', 'shot 1: B is not in this shot.']})
     expect(readDirection(target).pending).toBe(false)
+})
+test('a rule whose shot was planned again is named, with what to do, by the review, the preview and a run (#782)', async () => {
+    const {target, data} = fixture()
+    expect(directionReview(target)).toBeUndefined()
+    const id = readDirection(target).shots[0]!.id
+    await setDirectionRules(target, {rules: [{id: 'r', text: 'Elias strides quickly right to left across the floor', scope: {kind: 'shot', id}}]})
+    expect(directionReview(target)).toEqual({pending: true, unresolved: []})
+    await previewDirection(target, async o => answer(JSON.parse(o.input)))
+    await takeDirection(target)
+    expect(directionReview(target)).toEqual({pending: false, unresolved: []})
+    data.shotMoments!.s1!.shots[0]!.action = 'run'
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    const review = directionReview(target)!
+    expect(review.pending).toBe(true)
+    expect(review.unresolved).toEqual([
+        `shot ${id} "Elias strides quickly right to left across the floor": Its shots were planned again: rebind it to the shots as they are now, or remove it.`,
+    ])
+    await expect(previewDirection(target, async o => answer(JSON.parse(o.input)))).rejects.toThrow(`shot ${id} "Elias strides`)
+    expect(() => applyDirectionOverlay(target, data)).toThrow(`First rebind or remove this rule:\n  - shot ${id} "Elias strides`)
 })

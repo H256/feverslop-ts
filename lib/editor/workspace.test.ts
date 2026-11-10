@@ -541,6 +541,7 @@ describe('what a failure means', () => {
         expect(explainFailure('ComfyUI x (http://x) has not answered for 5 minutes - start it again')?.text).toContain('does not answer')
         expect(explainFailure('No ComfyUI server reachable (http://x)')?.text).toContain('does not answer')
         expect(explainFailure('casting.json: character "a" is "library:b", but the library has no character "b"')?.action).toContain('Casting')
+        expect(explainFailure('Direction needs review: bun run direction x --preview, then --take')?.page).toBe('direction')
     })
     test('everything else stays as it is', () => {
         expect(explainFailure('ffmpeg could not cut this')).toBeUndefined()
