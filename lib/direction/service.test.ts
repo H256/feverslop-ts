@@ -340,6 +340,10 @@ test('a person brought into one shot: in the picture by code, a place in it writ
     expect((shot.data.people as any).a).toEqual({})
     expect(view.editIssues.map(i => [i.editId, i.shotId, !!i.mentions])).toEqual([['in', 's1:shot2', true]])
     expect(applyDirectionOverlay(target, data).shotMoments!.s1!.shots[1]!.characters).toEqual(['b', 'a'])
+    // an instruction for A in that shot selects it - A is in it by the edit
+    await setDirectionRules(target, {rules: [{id: 'for-a', text: 'A walks in', scope: {kind: 'shot', id: 's1:shot2'}, characterId: 'a'}]})
+    expect(readDirection(target).unresolved).toEqual([])
+    await setDirectionRules(target, {rules: []})
     // the first answer leaves A out again: refused, and asked once more
     const asked: any[] = []
     await previewDirection(target, async o => {

@@ -2347,6 +2347,16 @@ textarea.book {
   border-radius: 99px;
   transition: width 0.4s;
 }
+/* why the run failed (#797): readable with the log folded, the whole text on hover */
+.runreason {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+  font-size: 12px;
+}
 .runstep {
   flex: none;
   padding: 0 8px;

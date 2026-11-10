@@ -18,6 +18,21 @@ const ticker = setInterval(() => {
   if (run.current.value?.running) now.value = Date.now()
 }, 1000)
 onScopeDispose(() => clearInterval(ticker))
+// why a run failed, in the bar - also with the log folded (#797): the CLI prints it right after "✗ FAILED", before its "Help:" line
+const reason = computed(() => {
+  if (!shown.value || !failedRun(shown.value)) return ''
+  // eslint-disable-next-line no-control-regex -- the colours of the terminal
+  const plain = run.log.value.replace(/\u001b\[[0-9;]*m/g, '')
+  const at = plain.lastIndexOf('FAILED')
+  if (at < 0) return ''
+  return plain
+    .slice(at + 'FAILED'.length)
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('Help:') && !line.startsWith('▸'))
+    .slice(0, 3)
+    .join(' ')
+})
 const progress = computed(() => (shown.value?.running ? run.progress.value : undefined))
 const percent = computed(() => (progress.value ? Math.round((progress.value.done / progress.value.total) * 100) : 0))
 const clock = (ms: number) => {
@@ -78,7 +93,8 @@ const stop = toasts.guard(async () => {
       </span>
       <span v-else-if="shown.running && run.step.value" class="runstep" title="The step of the run, from its log">{{ run.step.value }}</span>
       <span v-if="elapsed" class="num muted" :title="shown.running ? 'Running for' : 'Took'">{{ elapsed }}</span>
-      <code>{{ shown.command }}</code>
+      <span v-if="reason" class="runreason" :title="reason">{{ reason }}</span>
+      <code v-else>{{ shown.command }}</code>
       <div class="spacer" />
       <button class="btn" :aria-expanded="run.logOpen.value" @click="run.logOpen.value = !run.logOpen.value">Log</button>
       <button v-if="shown.running && run.scope.value?.stop" class="btn danger" @click="stop">Stop</button>
