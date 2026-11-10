@@ -63,7 +63,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run refinish <id> [--film]` | an older project larger, at 48 fps and finished, from the clips it has - see [Making an older project over](#making-an-older-project-over) |
-| `bun run label <id>`, `intro <id>`, `credits <id>` | the AI marker, an intro, a title card and credits around a finished video - see [Before publishing](#before-publishing) |
+| `bun run label <id>`, `intro <id>`, `credits <id>`, `description <id>` | the AI marker, an intro, a title card and credits around a finished video, its YouTube text - see [Before publishing](#before-publishing) |
 | `bun run add-view <film-id> <location-id>` | one more view of a film's place, as a camera move from its anchor - see [The workspace](#the-workspace) |
 | `bun run film:init`, `bun film.ts <id>` | the short-film pipeline; `film:replace-character`, `film:check-joins`, `film:gallery`, `film:migrate` - see [docs/film.md](docs/film.md) |
 | `bun run styles:doc`    | regenerates [docs/style-examples.md](docs/style-examples.md) from `lib/styles.ts` |
@@ -992,6 +992,9 @@ rendered again ([docs/postwork.md](docs/postwork.md)):
   cards, collected from what the project ran: `<name>-credits.mp4`. On the page: *Credits*.
 - `bun run intro <id> [--film]`: a clip of your own in front of it - `input/intro.mp4` of the project or any path, a hard
   cut or a fade, in the size of the video: `<name>-intro.mp4`. On the page: *Intro*.
+- `bun run description <id> [--film] --from=<video>`: the YouTube text of the finished video you choose - a teaser
+  of the story, that it is AI-generated, what FeverSlop TS is, the graphics cards, models and measured time per phase:
+  `<name>.youtube.txt` to paste into YouTube Studio. Nothing is uploaded. On the page: *YouTube text*.
 
 Its settings can be kept in `"postwork"` of the settings file (every project) and of `config.json` (this project);
 `--save` keeps the options given.

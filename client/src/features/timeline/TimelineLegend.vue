@@ -141,6 +141,14 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
         >
           Credits
         </button>
+        <button
+          v-if="hasFinal"
+          class="b-finish"
+          title="Optional, for publishing: the YouTube description of the video you choose - AI disclosure, hardware, models, measured time - as a text file next to it. Nothing is uploaded."
+          @click="actions.description()"
+        >
+          YouTube text
+        </button>
       </template>
     </div>
   </div>

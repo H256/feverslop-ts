@@ -212,6 +212,7 @@ const RENDER_ACTIONS = new Set<RunAction['type']>([
     'label',
     'intro',
     'credits',
+    'description',
 ])
 /** A music video planned up to the look: a picture is rendered there and then, the shots are not planned for it (#540). */
 const atLook = (target: EditorTarget) => target.kind === 'music' && stageOf(target) === 'look'

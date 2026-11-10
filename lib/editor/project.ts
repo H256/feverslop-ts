@@ -24,7 +24,7 @@ import {filmStage, musicStage, nextStage} from '../stages.ts'
 import {clipRequestFile, clipRequestsDir} from '../previous-output.ts'
 import {INTRO_EXTENSIONS, MARKER_PRESETS, POSTWORK_DEFAULTS} from '../postwork/config.ts'
 import {loadPostwork} from '../postwork/store.ts'
-import {POSTWORK_ENDING_NAMES, POSTWORK_ENDINGS, type PostworkEnding} from '../postwork/video.ts'
+import {finalParts, POSTWORK_ENDINGS} from '../postwork/video.ts'
 import {applyDirectionOverlay} from '../direction/service.ts'
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
@@ -112,29 +112,22 @@ const probedVideo = (file: string, v: number) => {
     return probed(key, () => probeVideo(file).catch(() => undefined))
 }
 
-const FINAL_NAME = new RegExp(`^(?:--([a-z0-9.-]+?))?(-preview)?(?:-(\\d+)fps)?(-finished)?((?:-(?:${POSTWORK_ENDING_NAMES.join('|')}))*)$`)
-
 /**
  * <id>.mp4, <id>-48fps.mp4, <id>-finished.mp4, <id>-48fps-finished.mp4, <id>-preview.mp4, <id>-finished-labeled.mp4: what name a
  * video has says what it is. Partial try-outs do not lie on the timeline.
  */
 export function finalLabel(id: string, name: string): {label: string; preview: boolean; order: number} | undefined {
-    if (!name.startsWith(id) || !name.endsWith('.mp4')) return undefined
-    // <id>--<variant>[-48fps][-finished].mp4: bun run refinish; then the endings of the post-work steps, in the order they ran
-    const match = FINAL_NAME.exec(name.slice(id.length, -'.mp4'.length))
-    if (!match) return undefined
-    const variant = match[1]
-    const preview = !!match[2]
-    const fps = match[3] ? Number(match[3]) : 0
-    const endings = (match[5] ?? '').split('-').filter(Boolean) as PostworkEnding[]
+    const parts = finalParts(id, name)
+    if (!parts) return undefined
+    const {variant, preview, fps, finished, endings} = parts
     const base = preview
         ? 'Preview video'
-        : [variant ? (variant === 'original' ? 'Refinish' : `Refinish ${variant}`) : 'Final', fps ? `${fps} fps` : '', match[4] ? 'finished' : '']
+        : [variant ? (variant === 'original' ? 'Refinish' : `Refinish ${variant}`) : 'Final', fps ? `${fps} fps` : '', finished ? 'finished' : '']
               .filter(Boolean)
               .join(' ')
     const label = endings.length ? `${base} + ${endings.map(ending => POSTWORK_ENDINGS[ending]).join(' + ')}` : base
     // a step's video right after the one it was made from
-    return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 20 + (match[4] ? 10 : 0) + endings.length}
+    return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 20 + (finished ? 10 : 0) + endings.length}
 }
 
 /** input/intro.<ext> of the project, as the intro takes it when no file is set. */

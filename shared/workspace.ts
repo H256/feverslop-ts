@@ -176,6 +176,7 @@ export type PostworkView = {
         sound: string
         font: string
     }
+    description: {about: string; story: boolean; facts: boolean; hardware: string; extra: string[]; tags: string[]}
     introFound?: string // input/intro.<ext> of the project, when there is one: the intro without a file set
     markers: string[] // the presets of the marker: the EU icons in assets/eu-ai-icons/
     problem?: string // what is wrong with the settings when they cannot be read: the steps take their defaults then, and the form says it
@@ -443,6 +444,19 @@ export type RunRequest =
           hardware?: string
           facts?: boolean
           sound?: string
+          save?: boolean
+          saveDefault?: boolean
+      }
+    // the YouTube text of the video chosen (#805): newStory = let the model write the teaser again
+    | {
+          type: 'description'
+          from: string
+          story?: boolean
+          newStory?: boolean
+          facts?: boolean
+          hardware?: string
+          extra?: string[]
+          tags?: string[]
           save?: boolean
           saveDefault?: boolean
       }

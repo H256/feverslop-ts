@@ -84,6 +84,7 @@ export const project: EditorProject = {
       sound: '',
       font: '',
     },
+    description: {about: '', story: true, facts: true, hardware: '', extra: [], tags: ['AIgenerated', 'feverslop']},
     introFound: 'input/intro.mp4',
     markers: ['generated-white', 'generated-white50', 'basic-black'],
   },
