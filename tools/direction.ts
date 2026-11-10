@@ -65,6 +65,9 @@ if (
     throw Error('--scope goes with --add, --edit, --without or --size; --character with --add or --edit')
 if (a.character !== undefined && (a.without !== undefined || a.size !== undefined))
     throw Error('--character goes with --add or --edit; --without names the character itself')
+// --with on one shot (#792) is a direct edit: they are put into that shot, the preview writes what they do there
+const shotWith = a.with !== undefined && !!a.scope?.startsWith('shot:') && !a.join?.length && a.out === undefined && a.clips === undefined
+const people = (value: string) => [...new Set(value.split(',').map(id => id.trim()))].filter(Boolean)
 function scope(value: string): DirectionScope {
     if (value === 'global') return {kind: 'global'}
     const colon = value.indexOf(':')
@@ -81,7 +84,7 @@ function scope(value: string): DirectionScope {
 // who is in which beats or clips (#765, #767): characters of the cast (--with) and new ones joining it (--join="Name: who they
 // are") come in, characters go out (--out), with --add as what they do there - of whole beats (--scope=beat:ID[,ID]) or of some
 // clips only (--clips=slot-024,slot-025). The floor plans and shots of those beats go, the next plan run plans just them again
-if (a.with !== undefined || a.join?.length || a.out !== undefined) {
+if ((a.with !== undefined && !shotWith) || a.join?.length || a.out !== undefined) {
     if (target.kind !== 'music') throw Error('--with, --out and --join are for a music video; a film has its script')
     if (!a.scope?.startsWith('beat:') && !a.clips)
         throw Error('--with, --out and --join need --scope=beat:ID[,ID] or --clips=ID[,ID] - the beats or clips they are about')
@@ -116,7 +119,7 @@ if (a.with !== undefined || a.join?.length || a.out !== undefined) {
 }
 // a direct edit: no language model, applied by code to the shots of its scope - and the prompts are built again right away
 let rebuild = false
-if (a.without !== undefined || a.size !== undefined || a.unedit !== undefined) {
+if (a.without !== undefined || a.size !== undefined || a.unedit !== undefined || shotWith) {
     let edits = readDirection(target).edits
     if (a.unedit !== undefined) {
         if (!edits.some(e => e.id === a.unedit)) throw Error('unknown edit')
@@ -124,15 +127,36 @@ if (a.without !== undefined || a.size !== undefined || a.unedit !== undefined) {
     } else {
         if (a.scope === undefined) throw Error('--without and --size need --scope (shot:ID, beat:ID, scene:ID, character:ID, time:START-END or global)')
         if (a.size !== undefined && !['wide', 'medium', 'close', 'extreme'].includes(a.size)) throw Error('--size takes wide, medium, close or extreme')
-        // --without=kael,mara: one edit each, saved together - one rebuild, and one preview writes the shots without all of them
-        const added: DirectionEdit[] =
-            a.without !== undefined
-                ? [...new Set(a.without.split(',').map(id => id.trim()))].filter(Boolean).map(remove => ({id: randomUUID(), scope: scope(a.scope!), remove}))
-                : [{id: randomUUID(), scope: scope(a.scope), size: a.size as DirectionSize}]
-        if (!added.length) throw Error('--without takes one or more characters: --without=kael,mara')
+        // --without=kael,mara or --with=mara,lene on a shot: one edit each, saved together - one rebuild, and one preview writes the
+        // shots without or with all of them
+        // taken out of this shot by an edit before: that edit goes, and they are back where the plan has them
+        const shotId = a.scope.slice('shot:'.length)
+        const back = shotWith
+            ? edits.filter(e => e.remove && people(a.with!).includes(e.remove) && e.scope.kind === 'shot' && e.scope.id === shotId).map(e => e.remove!)
+            : []
+        edits = edits.filter(e => !(e.remove && back.includes(e.remove) && e.scope.kind === 'shot' && e.scope.id === shotId))
+        for (const id of back) console.log(`${id} is back in ${shotId}: the edit that took them out is undone`)
+        const added: DirectionEdit[] = shotWith
+            ? people(a.with!)
+                  .filter(id => !back.includes(id))
+                  .map(add => ({id: randomUUID(), scope: scope(a.scope!), add}))
+            : a.without !== undefined
+              ? people(a.without).map(remove => ({id: randomUUID(), scope: scope(a.scope!), remove}))
+              : [{id: randomUUID(), scope: scope(a.scope), size: a.size as DirectionSize}]
+        if (!added.length && !back.length) throw Error('--without and --with take one or more characters: --without=kael,mara')
         edits = [...edits, ...added]
     }
     await setDirectionEdits(target, {edits})
+    // what they do there, in the director's words: an instruction on the shot - for the one person when it is one
+    if (shotWith && a.add !== undefined) {
+        const ids = people(a.with!)
+        await setDirectionRules(target, {
+            rules: [
+                ...readDirection(target).rules,
+                {id: randomUUID(), text: a.add, scope: scope(a.scope!), ...(ids.length === 1 ? {characterId: ids[0]} : {})},
+            ],
+        })
+    }
     rebuild = true
 } else if (a.set) await setDirectionRules(target, JSON.parse(readFileSync(a.set, 'utf8')))
 else if (a.add !== undefined || a.edit || a.remove) {
@@ -223,7 +247,7 @@ else {
     console.log(`Shots: ${view.shots.map(s => s.id).join(', ') || 'not planned yet'}`)
     console.log('--show=SHOT lists who is in a shot and what each does. --add=TEXT asks the LLM (--preview, then --take; one call can do all three);')
     console.log(
-        '--without=CHARACTER[,CHARACTER] and --size=wide|medium|close|extreme change the plan directly (with --scope; add --preview to have the words that still name them rewritten in the same call). Removing a rule does not undo accepted action; use --restore=VERSION. Nothing is rendered here.',
+        '--without=CHARACTER[,CHARACTER], --with=CHARACTER[,CHARACTER] on a shot and --size=wide|medium|close|extreme change the plan directly (with --scope; add --preview to have the words that still name them rewritten in the same call). Removing a rule does not undo accepted action; use --restore=VERSION. Nothing is rendered here.',
     )
 }
 // taken, restored or edited: the clip prompts are built again from the plan as it is now - the normal planning run, which reuses

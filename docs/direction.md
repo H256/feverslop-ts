@@ -29,10 +29,13 @@ Some choices need no language model: take a person out of a shot, or set its siz
 ```powershell
 bun run direction demo --without=kael --scope=shot:b3:shot2
 bun run direction demo --without=kael,mara --scope=shot:b3:shot2 --preview --take   # several at once, the words rewritten in the same call
+bun run direction demo --with=mara --scope=shot:b3:shot1 --add="Mara walks in from the left" --preview --take   # into this one shot
 bun run direction demo --without=kael --scope=beat:b3
 bun run direction demo --size=close --scope=shot:b3:shot2   # wide, medium, close or extreme
 bun run direction demo --unedit=<edit-id>
 ```
+
+`--with` on a shot scope brings people of the cast into that one shot: the code puts them in the picture, and the preview gets a rule to write where they are and what they do (with `--add`, in your words). The proposal must keep them and give them a place; the other shots of the clip and the beat stay as they are. Someone taken out of that shot by an edit is simply put back. Once their place is taken, undoing the edit is refused: `--without` takes them out again. `--with` on beats or clips plans those beats again instead (below).
 
 An edit applies to every shot its scope selects, like a rule. Whoever sings or plays in a shot - in a film, whoever speaks in it - is not taken out of it; the edit says so and leaves them. When the shot's words still name the person taken out ("{Kael} looks on"), the edit lists it and the next `--preview` gets a rule to write the shot without them: the code decides who is in the picture, the language model only rewrites the words. Several people out of one shot get one rule naming all of them, so one preview writes the shot once; words that named someone only in the part of another person taken out go with that part and need no rewrite. In the workspace, **Direct this shot** marks several people with **Take out** and takes them out together; if their names are left in the words, the proposal is asked right away instead of building the prompts twice.
 

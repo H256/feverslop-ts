@@ -187,7 +187,8 @@ const addEdit = () =>
     {id: crypto.randomUUID(), scope: editScope.value, ...(editKind.value === 'remove' ? {remove: editWho.value} : {size: editSize.value})},
   ])
 const unedit = (e: DirectionEdit) => saveEdits((view.value?.edits ?? []).filter(x => x.id !== e.id))
-const describeEdit = (e: DirectionEdit) => (e.remove ? `${name(e.remove)} is not in the picture` : `the shot is ${e.size}`)
+const describeEdit = (e: DirectionEdit) =>
+  e.remove ? `${name(e.remove)} is not in the picture` : e.add ? `${name(e.add)} is in the picture` : `the shot is ${e.size}`
 /** A shot's place on the timeline, its dialog opened there. */
 const inTimeline = (shotId: string) => ({path: `${root}/`, query: {direct: shotId}})
 const scopeText = (s: DirectionScope) => (s.kind === 'global' ? 'Whole project' : s.kind === 'time' ? `${s.start}–${s.end} s` : `${s.kind}: ${s.id}`)
