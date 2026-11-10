@@ -124,12 +124,13 @@ if (a.without !== undefined || a.size !== undefined || a.unedit !== undefined) {
     } else {
         if (a.scope === undefined) throw Error('--without and --size need --scope (shot:ID, beat:ID, scene:ID, character:ID, time:START-END or global)')
         if (a.size !== undefined && !['wide', 'medium', 'close', 'extreme'].includes(a.size)) throw Error('--size takes wide, medium, close or extreme')
-        const edit: DirectionEdit = {
-            id: randomUUID(),
-            scope: scope(a.scope),
-            ...(a.without !== undefined ? {remove: a.without} : {size: a.size as DirectionSize}),
-        }
-        edits = [...edits, edit]
+        // --without=kael,mara: one edit each, saved together - one rebuild, and one preview writes the shots without all of them
+        const added: DirectionEdit[] =
+            a.without !== undefined
+                ? [...new Set(a.without.split(',').map(id => id.trim()))].filter(Boolean).map(remove => ({id: randomUUID(), scope: scope(a.scope!), remove}))
+                : [{id: randomUUID(), scope: scope(a.scope), size: a.size as DirectionSize}]
+        if (!added.length) throw Error('--without takes one or more characters: --without=kael,mara')
+        edits = [...edits, ...added]
     }
     await setDirectionEdits(target, {edits})
     rebuild = true
@@ -222,7 +223,7 @@ else {
     console.log(`Shots: ${view.shots.map(s => s.id).join(', ') || 'not planned yet'}`)
     console.log('--show=SHOT lists who is in a shot and what each does. --add=TEXT asks the LLM (--preview, then --take; one call can do all three);')
     console.log(
-        '--without=CHARACTER and --size=wide|medium|close|extreme change the plan directly (with --scope). Removing a rule does not undo accepted action; use --restore=VERSION. Nothing is rendered here.',
+        '--without=CHARACTER[,CHARACTER] and --size=wide|medium|close|extreme change the plan directly (with --scope; add --preview to have the words that still name them rewritten in the same call). Removing a rule does not undo accepted action; use --restore=VERSION. Nothing is rendered here.',
     )
 }
 // taken, restored or edited: the clip prompts are built again from the plan as it is now - the normal planning run, which reuses

@@ -28,12 +28,13 @@ Some choices need no language model: take a person out of a shot, or set its siz
 
 ```powershell
 bun run direction demo --without=kael --scope=shot:b3:shot2
+bun run direction demo --without=kael,mara --scope=shot:b3:shot2 --preview --take   # several at once, the words rewritten in the same call
 bun run direction demo --without=kael --scope=beat:b3
 bun run direction demo --size=close --scope=shot:b3:shot2   # wide, medium, close or extreme
 bun run direction demo --unedit=<edit-id>
 ```
 
-An edit applies to every shot its scope selects, like a rule. Whoever sings or plays in a shot - in a film, whoever speaks in it - is not taken out of it; the edit says so and leaves them. When the shot's words still name the person taken out ("{Kael} looks on"), the edit lists it and the next `--preview` gets a rule to write the shot without them: the code decides who is in the picture, the language model only rewrites the words.
+An edit applies to every shot its scope selects, like a rule. Whoever sings or plays in a shot - in a film, whoever speaks in it - is not taken out of it; the edit says so and leaves them. When the shot's words still name the person taken out ("{Kael} looks on"), the edit lists it and the next `--preview` gets a rule to write the shot without them: the code decides who is in the picture, the language model only rewrites the words. Several people out of one shot get one rule naming all of them, so one preview writes the shot once; words that named someone only in the part of another person taken out go with that part and need no rewrite. In the workspace, **Direct this shot** marks several people with **Take out** and takes them out together; if their names are left in the words, the proposal is asked right away instead of building the prompts twice.
 
 Edits are kept apart from the plan. When the shots are planned again, the planner is told about them ("in shot 2, Kael is not in the picture") and the code enforces them on the new plan as well. An edit for a beat, a scene, a character, a time range or the project keeps applying; an edit for one shot waits to be bound again, like a shot rule, since a new plan has other shots.
 

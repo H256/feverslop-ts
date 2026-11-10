@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test'
 import {buildClipRequests, type Input, layoutLine, singingPerBeat} from './compose.ts'
-import type {Character, StoryBeat} from './project.ts'
+import type {BeatShots, Character, StoryBeat} from './project.ts'
 import {slotVocals} from './lyrics.ts'
 
 const characters: Character[] = [
@@ -197,9 +197,9 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
     test('in a wide shot a silent singer is silent, without lips; closer the lips stay together', () => {
         const sized = (size: 'wide' | 'medium') => {
             const base = input(false)
-            const shot = {...base.shotMoments!.b9!.shots[0]!, size}
-            return buildClipRequests({...base, singing: {singers: ['greta'], lines: []}, shotMoments: {b9: {...base.shotMoments!.b9!, shots: [shot]}}})[0]!
-                .prompt
+            const beat = base.shotMoments!.b9 as BeatShots
+            const shot = {...beat.shots[0]!, size}
+            return buildClipRequests({...base, singing: {singers: ['greta'], lines: []}, shotMoments: {b9: {...beat, shots: [shot]}}})[0]!.prompt
         }
         expect(sized('wide')).toContain('<Subject 2>, Greta, is silent.')
         expect(sized('wide')).not.toContain('lips')

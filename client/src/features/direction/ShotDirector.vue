@@ -81,16 +81,42 @@ const proposeAgain = () => work(() => start({type: 'direction'}))
 const take = () =>
   work(async () => {
     await api.takeDirection()
+    unbuilt.value = false
     await start({type: 'plan'})
     toasts.show('Taken. The clip prompts are built again; render the clip when it is done.')
   })
-const drop = () => work(() => api.dropDirection())
+const drop = () =>
+  work(async () => {
+    await api.dropDirection()
+    // the people were taken out without building the prompts, for the proposal to do it: dropped, they are built now
+    if (unbuilt.value) await start({type: 'plan'})
+    unbuilt.value = false
+  })
 const saveEdits = (next: DirectionEdit[]) =>
   work(async () => {
     await api.saveDirectionEdits(next)
     await start({type: 'plan'})
   })
-const without = (id: string) => saveEdits([...(view.value?.edits ?? []), {id: crypto.randomUUID(), scope: {kind: 'shot', id: props.shotId}, remove: id}])
+// several people out of the shot in one go (#790): marked, then taken out together - one save, and then one run: the prompts built
+// again, or, when the shot's words still name one of them, one proposal that writes it without all of them (taking it builds them)
+const outs = ref(new Set<string>())
+const unbuilt = ref(false)
+const markOut = (id: string) => {
+  const next = new Set(outs.value)
+  if (!next.delete(id)) next.add(id)
+  outs.value = next
+}
+const outNames = computed(() => [...outs.value].map(nameOf))
+const takeOut = () =>
+  work(async () => {
+    const added: DirectionEdit[] = [...outs.value].map(remove => ({id: crypto.randomUUID(), scope: {kind: 'shot', id: props.shotId}, remove}))
+    const saved = await api.saveDirectionEdits([...(view.value?.edits ?? []), ...added])
+    outs.value = new Set()
+    if (saved.editIssues.some(i => i.shotId === props.shotId && i.mentions)) {
+      unbuilt.value = true
+      await start({type: 'direction'})
+    } else await start({type: 'plan'})
+  })
 const sized = (size: DirectionSize) =>
   saveEdits([
     ...(view.value?.edits ?? []).filter(e => !(e.size && e.scope.kind === 'shot' && e.scope.id === props.shotId)),
@@ -163,14 +189,13 @@ const diff = computed(() => {
             <span v-for="flag in flags(id)" :key="flag" class="chip">{{ flag }}</span>
             <div class="spacer" />
             <button class="btn" :disabled="blocked" @click="forWhom = id">Instruction for {{ nameOf(id) }}</button>
-            <button
-              class="btn"
-              :disabled="blocked || kept(id)"
-              :title="kept(id) ? `${nameOf(id)} ${flags(id).join(' and ')} in this shot and stays in it` : 'Taken out by the code - no language model'"
-              @click="without(id)"
+            <label
+              :class="['btn', 'out-mark', {on: outs.has(id), disabled: blocked || kept(id)}]"
+              :title="kept(id) ? `${nameOf(id)} ${flags(id).join(' and ')} in this shot and stays in it` : 'Mark to take out of the shot - several at once'"
             >
-              Take out of the shot
-            </button>
+              <input type="checkbox" :checked="outs.has(id)" :disabled="blocked || kept(id)" @change="markOut(id)" />
+              Take out
+            </label>
           </header>
           <dl>
             <template v-for="key in ['state', 'frame', 'motion', 'facing']" :key="key">
@@ -181,6 +206,11 @@ const diff = computed(() => {
             </template>
           </dl>
         </article>
+        <div v-if="outs.size" class="btn-row out-bar">
+          <button class="btn primary" :disabled="blocked" @click="takeOut">Take {{ outNames.join(', ') }} out of the shot</button>
+          <button class="btn" :disabled="blocked" @click="outs = new Set()">Clear</button>
+          <span class="muted">By code. If the shot's words still name them, one proposal writes it without all of them.</span>
+        </div>
         <p v-if="!shot.characters.length" class="muted">Nobody - the shot shows the place.</p>
         <p v-if="data.rest" class="muted">Others: {{ plain(data.rest) }}</p>
 
@@ -308,6 +338,24 @@ h3 {
 }
 .person dd {
   margin: 0;
+}
+.out-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.out-mark.on {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.out-mark.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.out-bar {
+  align-items: center;
+  margin: 4px 0 8px;
 }
 .list .row {
   display: flex;

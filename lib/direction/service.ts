@@ -7,7 +7,7 @@ import type {Project} from '../project.ts'
 import type {FilmProject} from '../film/types.ts'
 import type {AskOptions} from '../llm.ts'
 import type {DirectionRule, DirectionShot, DirectionView, DirectionProposal, DirectionVersion, DirectionChange, DirectionEdit} from '../../shared/direction.ts'
-import {applyEdit, describeEdit, directionNotes, inScope} from './edits.ts'
+import {applyEdit, describeEdit, directionNotes, inScope, namesIn} from './edits.ts'
 import {musicShots, putMusicShot, musicContext} from './music.ts'
 import {filmShots, putFilmShot, filmContext} from './film.ts'
 import {directionPrompt} from './prompt.ts'
@@ -126,21 +126,24 @@ function withEdits(t: DirectionTarget, source: Data, copy: Data, s: State, issue
     for (const shot of shots(t, copy)) {
         let data = shot.data,
             changed = false
+        const named: DirectionEdit[] = []
         for (const e of bound.filter(e => inScope(e, shot))) {
             const result = applyEdit(data, e, nameOf, t.kind === 'film')
             if (result.issue) issues.push({editId: e.id, shotId: shot.id, message: result.issue})
-            if (result.mentions)
-                issues.push({
-                    editId: e.id,
-                    shotId: shot.id,
-                    mentions: true,
-                    message: `The shot's text still names ${nameOf(e.remove!)} - a preview rewrites it.`,
-                })
+            if (result.mentions) named.push(e)
             if (result.data) {
                 data = result.data
                 changed = true
             }
         }
+        // asked once all of them are out: words that named somebody only in the part of another one taken out are gone with it
+        for (const e of named.filter(e => namesIn(data, nameOf(e.remove!))))
+            issues.push({
+                editId: e.id,
+                shotId: shot.id,
+                mentions: true,
+                message: `The shot's text still names ${nameOf(e.remove!)} - a preview rewrites it.`,
+            })
         if (changed) put(t, copy, shot.id, data)
     }
     return copy
@@ -150,16 +153,23 @@ function editRules(t: DirectionTarget, d: Data, s: State): DirectionRule[] {
     const issues: EditIssue[] = []
     withEdits(t, d, overlay(t, d, {...s, edits: []}), s, issues)
     const nameOf = nameIn(d)
-    return issues
-        .filter(i => i.mentions && i.shotId)
-        .map(i => {
-            const name = nameOf((s.edits ?? []).find(e => e.id === i.editId)!.remove!)
-            return {
-                id: `edit:${i.editId}:${i.shotId}`,
-                text: `${name} is no longer in this shot: write it without ${name} - nobody in it is ${name}, looks at, speaks to or touches ${name}.`,
-                scope: {kind: 'shot', id: i.shotId!},
-            }
-        })
+    const joinAnd = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : (items[0] ?? ''))
+    // one rule a shot, however many were taken out of it: the model writes the shot once, without all of them
+    const out = new Map<string, string[]>()
+    for (const i of issues.filter(i => i.mentions && i.shotId)) {
+        const name = nameOf((s.edits ?? []).find(e => e.id === i.editId)!.remove!)
+        const names = out.get(i.shotId!) ?? []
+        if (!names.includes(name)) out.set(i.shotId!, [...names, name])
+    }
+    return [...out].map(([shotId, names]) => {
+        const who = joinAnd(names)
+        const them = names.length > 1 ? 'them' : who
+        return {
+            id: `edit:${shotId}`,
+            text: `${who} ${names.length > 1 ? 'are' : 'is'} no longer in this shot: write it without ${them} - nobody in it is ${names.length > 1 ? 'one of them' : who}, looks at, speaks to or touches ${them}.`,
+            scope: {kind: 'shot', id: shotId},
+        }
+    })
 }
 /** The edits as notes for the planner, per beat or scene (lib/shot-planner.ts, the film's coverage): what a new plan keeps to. */
 export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, string[]> {

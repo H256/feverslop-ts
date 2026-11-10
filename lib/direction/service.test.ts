@@ -299,6 +299,30 @@ test('a person taken out of a shot by code; whoever performs in it stays; the wo
     expect(readDirection(target).editIssues.filter(i => i.mentions)).toEqual([])
     expect(applyDirectionOverlay(target, data).shotMoments!.s1!.shots[1]!.action).toBe('{B} waits alone')
 })
+test('several people out of one shot: one rule for the words of all of them, none for words gone with another one', async () => {
+    const {target, data} = fixture()
+    data.shotMoments.s1.shots[1] = {
+        action: '{B} and {C} wait',
+        characters: ['a', 'b', 'c'],
+        people: {a: {state: 'stands'}, b: {state: 'sits beside {A}'}, c: {state: 'sits'}},
+    }
+    data.cast.characters.push({id: 'c', name: 'C'})
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    const out = (remove: string) => ({id: remove, scope: {kind: 'shot' as const, id: 's1:shot2'}, remove})
+    await setDirectionEdits(target, {edits: [out('a'), out('b'), out('c')]})
+    const view = readDirection(target)
+    expect(view.shots.find(s => s.id === 's1:shot2')!.data.characters).toEqual([])
+    // A was named only where B was, and B is out too: nothing left to rewrite for A
+    expect(view.editIssues.filter(i => i.mentions).map(i => i.editId)).toEqual(['b', 'c'])
+    let asked: any
+    await previewDirection(target, async o => {
+        asked = JSON.parse(o.input)
+        return {changes: [{shotId: 's1:shot2', after: {...asked.selected[0].data, action: 'The room is empty'}}], conflicts: []}
+    })
+    expect(asked.rules.map((r: any) => r.text)).toEqual([
+        'B and C are no longer in this shot: write it without them - nobody in it is one of them, looks at, speaks to or touches them.',
+    ])
+})
 test('a size set by code: framing and size in music, framing in a film', async () => {
     const music = fixture()
     await setDirectionEdits(music.target, {edits: [{id: 'z', scope: {kind: 'beat', id: 's1'}, size: 'close'}]})
