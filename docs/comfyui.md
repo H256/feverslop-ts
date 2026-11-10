@@ -48,8 +48,19 @@ To write your own workflows, see [custom-workflows.md](custom-workflows.md).
    | `krea2-image` (pictures)          | `krea2_turbo_fp8_scaled.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_image_vae.safetensors`                                                                                                             | `VRAMCleanup`                                               |
    | `h3-ref2video` (clips)            | `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`                           |
    | `h3-sequence-to-sheet` (reference sheets) | `minimax_h3_fl2va_pruned_int8_convrot.safetensors`, `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (LoRA), `qwen3vl_32b_minimax_h3_int8_convrot.safetensors`, `minimax_h3_video_vae_fp16.safetensors` | `VHS_VideoCombine`, `VRAMCleanup`                           |
+   | `h3-ref2video-full` (clips)       | as `h3-ref2video`, without the LoRA | as `h3-ref2video` |
+   | `h3-ref2video-2pass` (clips, the *Quality* preset of `bun run init`) | as `h3-ref2video` without the LoRA, and `minimax_h3_latent_upscaler_3d_bf16.safetensors` (for `MinimaxH3LatentUpscaler3D`) | as `h3-ref2video` |
+   | `h3-ref2video-prism-2pass` (clips), `h3-sequence-to-sheet-prism` (sheets) | `PRISM_DMAD_PDMD_int8.safetensors` (in `diffusion_models/`) instead of the H3 model, the other files as above | as above, and the RES4LYF nodes for the `beta57` scheduler |
+   | `frame-interpolate` (`finalFps`, 48 fps of refinish) | the `interpolationModel`, `rife_v4.26_heavy.safetensors` by default, in `models/frame_interpolation/` | `VHS_LoadVideo`, `VHS_VideoCombine` |
+   | `h3-refine`, `h3-latent-upscale` (refinish) | the files of `h3-ref2video-2pass` (`h3-latent-upscale`: only the latent upscaler and the video VAE) | `VHS_LoadVideo`, `VHS_VideoCombine`, `VRAMCleanup` |
+   | `video-upscale` (refinish, `--upscale=model`) | the upscale model, `RealESRGAN_x2plus.pth` by default, in `models/upscale_models/` | `VHS_LoadVideo`, `VHS_VideoCombine` |
+   | `yue2-song` (`--render=song`) | `yue2_3b_int8_convrot.safetensors` | the YuE2 nodes (`YuE2GenerateABC`, `YuE2GenerateMusic`, `EmptyYuE2LatentAudio`), `SaveAudioAdvanced` |
 
-   All three workflows also use ComfyUI's built-in `Model Attention Backend` node set to `comfy kitchen attention`
+   The `VHS_*` nodes come with ComfyUI-VideoHelperSuite. Only what a project uses is needed: the defaults are `kroma-image`,
+   `h3-ref2video` and `h3-sequence-to-sheet`; the song, the extra frame rates and refinish only when you use them.
+   `bun run comfy:types` and `bun run typecheck` (step 3) say what a server is missing.
+
+   `krea2-image` and every H3 workflow (clips, sheets, refine) also use ComfyUI's built-in `Model Attention Backend` node set to `comfy kitchen attention`
    (needs a ComfyUI with the `comfy-kitchen` package). On the Radeon it cuts MiniMax H3 sampling by about 25%;
    on Krea2 the gain is smaller and untested, and the output changes slightly. To turn it off, set the node's
    `attention` to `'pytorch attention'` in the workflow file.

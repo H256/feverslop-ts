@@ -14,12 +14,14 @@ Two modes:
 
 ## Requirements
 
-- [Bun](https://bun.com)
+- [Bun](https://bun.com) 1.3 or newer (the checks run on 1.3.13)
 - [uv](https://docs.astral.sh/uv/) – runs the song analysis (`tools/analyze_song.py`, installs librosa on first use)
   and, for singing characters, the stem separation and transcription (`tools/vocals.py`, installs PyTorch with CUDA
-  13.0, demucs and Whisper on first use - runs on the CPU without an NVIDIA GPU, just much slower)
-- [ffmpeg](https://ffmpeg.org) – cuts the song into one audio file per clip
-- [Node.js](https://nodejs.org) 20.19 or 22.12+ – only to build the workspace page (`bun run editor` does that by itself); the pipeline does not need it
+  13.0, demucs and faster-whisper on first use - runs on the CPU without an NVIDIA GPU, just much slower). uv fetches
+  Python 3.11 or 3.12 itself if there is none; the versions of the packages are fixed by `tools/*.py.lock`
+- [ffmpeg](https://ffmpeg.org) with ffprobe, on the PATH – cuts the song into one audio file per clip, joins the clips
+  into the final video and does the finish, 48/60 fps, refinish, the AI marker, intro and credits
+- [Node.js](https://nodejs.org) 20.19 or 22.12+ – only to build the workspace page: `bun run editor` installs the client's packages and builds it by itself; the pipeline does not need it
 - An OpenAI-compatible LLM server with the Responses API (llama.cpp, vLLM, LM Studio, …) – see [Setup](#setup)
 - Optional, for rendering: one or more [ComfyUI](https://github.com/comfyanonymous/ComfyUI) servers with the models
   and nodes of the workflows – see [docs/comfyui.md](docs/comfyui.md#setup)
@@ -60,9 +62,14 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run texture-chains <id> [--film]` | measures whether clips that continue on the clip before get grittier from link to link, next to the change at an ordinary cut; reads the rendered clips with ffmpeg only, writes nothing (`--json` for machines) |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
 | `bun run stats`         | render and LLM timings of all projects: medians, outliers, tokens, prices - see [Measuring and comparing](#measuring-and-comparing) |
-| `bun run film:init`, `bun film.ts <id>` | the short-film pipeline - see [docs/film.md](docs/film.md) |
+| `bun run refinish <id> [--film]` | an older project larger, at 48 fps and finished, from the clips it has - see [Making an older project over](#making-an-older-project-over) |
+| `bun run label <id>`, `intro <id>`, `credits <id>` | the AI marker, an intro, a title card and credits around a finished video - see [Before publishing](#before-publishing) |
+| `bun run add-view <film-id> <location-id>` | one more view of a film's place, as a camera move from its anchor - see [The workspace](#the-workspace) |
+| `bun run film:init`, `bun film.ts <id>` | the short-film pipeline; `film:replace-character`, `film:check-joins`, `film:gallery`, `film:migrate` - see [docs/film.md](docs/film.md) |
 | `bun run styles:doc`    | regenerates [docs/style-examples.md](docs/style-examples.md) from `lib/styles.ts` |
-| `bun test`              | the unit tests |
+| `bun run test`          | the unit tests (`./lib`, `./comfy`); a bare `bun test` also picks up the workspace and browser tests, which need a build first - see [docs/development.md](docs/development.md#tests-and-checks) |
+| `bun run lint`, `bun run format` | ESLint and Prettier (`lint:fix`, `format:check`) |
+| `bun run client:build`, `client:check`, `client:test` | the workspace page on its own - see [client/README.md](client/README.md) |
 | `bun run typecheck`     | type-checks the project, including the workflows against the ComfyUI nodes   |
 | `bun run comfy:types`   | regenerates the ComfyUI node types after installing nodes or models          |
 | `bun run comfy:convert` | turns a ComfyUI workflow (API export) into a draft workflow file             |
@@ -80,11 +87,12 @@ the arrow keys. Each part also works on its own:
 
 | Command                   | What it does                                                                               |
 |---------------------------|--------------------------------------------------------------------------------------------|
-| `bun run setup`           | everything below, in order                                                                 |
+| `bun run setup`           | the LLM server, the vision model and the ComfyUI servers, in that order                    |
 | `bun run setup llm`       | the LLM server: URL → API key (optional) → connects, lists the models → pick one            |
 | `bun run setup llm-model` | only the model: lists the models of the configured server → pick one                       |
 | `bun run setup vision`    | the model that describes pictures: the text model, another model on the text server, or one on another server - says whether it takes pictures |
 | `bun run setup comfy`     | the ComfyUI servers with their status (GPU, free VRAM) - add, remove, test again           |
+| `bun run setup whisper`   | the transcription of the vocals stem: model, beams, temperatures (see below)                |
 | `bun run setup show`      | the effective settings and where each value comes from, API keys masked                    |
 
 The file, if you'd rather write it yourself:
@@ -659,6 +667,7 @@ connection before anything is rendered. The same SDK runs the jobs: uploads, pro
 | `h3-ref2video-cpu-clip` | video | `h3-ref2video` with the text encoder on the CPU - for a GPU whose VRAM doesn't hold the encoder next to the model |
 | `h3-sequence-to-sheet` | sequence | the turnaround video of a reference sheet (`sequenceWorkflow`, default): the FL2VA model with its 8-step turbo LoRA |
 | `h3-sequence-to-sheet-prism` | sequence | the same turnaround with the distilled `PRISM_DMAD_PDMD_int8` checkpoint and no LoRA: sigma shift 12/3, 4 steps euler/beta57, as its two-pass clips. PRISM is a merge of Ref2VA finetunes, driven here by the first frame of the FL2VA node: `"sequenceWorkflow": "h3-sequence-to-sheet-prism"` |
+| `h3-refine`, `h3-latent-upscale`, `video-upscale` | refinish | a finished clip made larger: the second pass of `h3-ref2video-2pass` on the clip (`--upscale=refine`), the latent upscaler alone, or an upscale model frame by frame (`RealESRGAN_x2plus.pth` by default) - see [Making an older project over](#making-an-older-project-over) |
 | `frame-interpolate` | interpolation | RIFE/FILM frame interpolation per shot, for `finalFps` (not set in `config.json`, always this one) |
 | `yue2-song`     | audio | `audio_yue2_text2music.json`                       |
 | `h3-ref2video-film`, `h3-ref2video-film-beta`, `h3-ref2video-film-2pass`, `h3-ref2video-film-prism-2pass` | video | the short-film pipeline's clips, without audio input (`-2pass`: the two passes of `h3-ref2video-2pass`, `-prism-2pass` those of `h3-ref2video-prism-2pass`) - see [docs/film.md](docs/film.md) |

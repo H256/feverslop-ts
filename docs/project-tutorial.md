@@ -8,8 +8,8 @@ Two commands, in the same interactive style as `bun run setup` (see [../README.m
 bun run example
 ```
 
-Picks one of 10 built-in ideas at random, creates a project and generates a 1-minute song right away. Skip ahead to
-[step 5](#5-listen-to-the-result).
+Picks one of 10 built-in ideas at random, creates a project and generates a 1-minute song right away. Listen to it
+under `projects/<id>/input/`, then skip ahead to [step 4](#4-render-everything).
 
 **Your own project** - want to make your own song/story?
 
@@ -51,7 +51,7 @@ The wizard asks, in order:
 9. **Aspect ratio of the video** - 16:9 (default), 9:16, 2:1, 2:3 or another one (`videoAspect`)
 10. **Render settings** - *Defaults*; *Quick test* (`sequenceSheets: false`, `videoResolution: 0.5`, a 60 s song when
     it is generated and no length was given); *Quality* (`h3-ref2video-2pass`, 2 MP); *Custom* → image workflow
-    (`kroma-image`, `krea2-image`), video workflow (`h3-ref2video`, `-full`, `-2pass`, `-cpu-clip`), image/video
+    (`kroma-image`, `krea2-image`), video workflow (`h3-ref2video`, `-full`, `-2pass`, `-prism-2pass`, `-cpu-clip`), image/video
     resolution, and `continuity`: never (default), where the story marks one unbroken take, or always - a continuing
     clip starts on the last frame of the one before, read [Continuous scenes](../README.md#continuous-scenes) first.
     With continuity on, `contextFrames`: the clip starts on the last frame (default), or on the last 22 or 39 frames of
@@ -110,8 +110,13 @@ bun run inspect <id> slot-007                    # one clip: its beat and shots,
 bun index.ts <id> --gallery                      # gallery.html: cast, storyboard, videos at a glance
 ```
 
-A good order for a new project: plan with `--review`, then `--render=images` and check the pictures in the gallery,
-then `--render=videos --only=slot-001` for one clip, then the rest. More: [recipes.md](recipes.md).
+A good order for a new project: plan in stages - `bun index.ts <id> --until=story`, then `--until=cast` and
+`--until=look`, each one to read and change before the next (see
+[Planning in stages from the terminal](../README.md#planning-in-stages-from-the-terminal)) - then
+`--until=look --render=images` and check the pictures, then plan the shots (`bun index.ts <id>`),
+`--render=videos --only=slot-001` for one clip, then the rest. `--review` stops after story, cast, look and beats in one
+run instead. The same in the browser: `bun run editor <id>` - see [workspace-guide.md](workspace-guide.md) (in German).
+More: [recipes.md](recipes.md).
 
 ## Doing it again / differently
 
