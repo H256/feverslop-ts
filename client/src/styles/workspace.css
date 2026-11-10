@@ -87,15 +87,81 @@ p {
   flex: 1;
 }
 
-/* top bar */
-.top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
+/* top bar (#776): where you are, the project's pages as tabs, the machine on the right - and the project's chips under it */
+.topwrap {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   min-width: 0;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  min-height: 44px;
+  min-width: 0;
+}
+.crumbs {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  font-size: 12px;
+}
+.crumbs a {
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.crumbs a:hover {
+  color: var(--text);
+  background: var(--raised);
+}
+.crumbs a[aria-current='page'] {
+  color: var(--text);
+}
+.crumb-sep {
+  color: var(--muted);
+  flex: none;
+}
+.top .tabs {
+  align-self: stretch;
+  margin-left: 8px;
+  gap: 0;
+}
+.top .tabs a {
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+}
+.top .tabs a:hover {
+  background: var(--raised);
+}
+.top .tabs a[aria-current='page'] {
+  background: none;
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.machine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.subbar {
+  flex-wrap: wrap;
+  padding: 5px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+/* no chips, no row */
+.subbar:not(:has(*)) {
+  display: none;
 }
 .mark {
   width: 24px;
