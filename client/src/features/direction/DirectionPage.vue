@@ -386,7 +386,12 @@ const editItem = (rule: DirectionRule) => {
             </div>
             <div class="acts">
               <template v-if="item.rule">
-                <button v-if="item.rule.binding && ruleIssue(item.rule.id)" class="btn mini" :disabled="blocked" @click="rebind(item.rule)">
+                <button
+                  v-if="item.rule.binding && ruleIssue(item.rule.id)?.includes('planned again')"
+                  class="btn mini"
+                  :disabled="blocked"
+                  @click="rebind(item.rule)"
+                >
                   Review current binding
                 </button>
                 <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="editItem(item.rule)">Edit</button>
