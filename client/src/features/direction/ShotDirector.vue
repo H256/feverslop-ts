@@ -171,9 +171,11 @@ const diff = computed(() => {
           <div class="spacer" />
           <button class="btn" @click="modal?.close()">Close</button>
         </header>
-        <p class="how muted">{{ [data.framing, data.camera].filter(Boolean).map(plain).join(' · ') }}</p>
-        <p v-if="data.view" class="muted">{{ plain(data.view) }}</p>
-        <p>{{ plain(data.action) }}</p>
+        <div class="about">
+          <p class="muted">{{ [data.framing, data.camera].filter(Boolean).map(plain).join(' · ') }}</p>
+          <p v-if="data.view" class="muted">{{ plain(data.view) }}</p>
+          <p class="action">{{ plain(data.action) }}</p>
+        </div>
 
         <div class="btn-row size">
           <span class="muted">Shot size</span>
@@ -183,9 +185,9 @@ const diff = computed(() => {
         </div>
 
         <h3>In the picture</h3>
-        <article v-for="id in shot.characters" :key="id" class="person">
+        <article v-for="id in shot.characters" :key="id" class="sd-person">
           <header>
-            <b>{{ nameOf(id) }}</b>
+            <b class="who">{{ nameOf(id) }}</b>
             <span v-for="flag in flags(id)" :key="flag" class="chip">{{ flag }}</span>
             <div class="spacer" />
             <button class="btn" :disabled="blocked" @click="forWhom = id">Instruction for {{ nameOf(id) }}</button>
@@ -212,7 +214,7 @@ const diff = computed(() => {
           <span class="muted">By code. If the shot's words still name them, one proposal writes it without all of them.</span>
         </div>
         <p v-if="!shot.characters.length" class="muted">Nobody - the shot shows the place.</p>
-        <p v-if="data.rest" class="muted">Others: {{ plain(data.rest) }}</p>
+        <p v-if="data.rest && plain(data.rest) !== 'none'" class="muted rest">Others: {{ plain(data.rest) }}</p>
 
         <section v-if="edits.length || issues.length" class="list">
           <h3>Direct edits</h3>
@@ -220,7 +222,7 @@ const diff = computed(() => {
             <span>{{ describeEdit(e) }}</span
             ><button class="btn" :disabled="blocked" @click="unedit(e)">Undo</button>
           </div>
-          <div v-for="(issue, n) in issues" :key="n" class="row notice">
+          <div v-for="(issue, n) in issues" :key="n" class="row sd-issue">
             <span>{{ issue.message }}</span>
             <button v-if="issue.mentions" class="btn" :disabled="blocked" @click="proposeAgain">Rewrite the words</button>
           </div>
@@ -247,7 +249,7 @@ const diff = computed(() => {
               "
             />
           </label>
-          <div class="btn-row">
+          <div class="btn-row propose">
             <button class="btn primary" :disabled="blocked || !text.trim()" @click="propose">Propose</button>
             <span class="muted">{{ busy ? 'A run is going on…' : 'The language model writes the shot anew; nothing is rendered.' }}</span>
           </div>
@@ -263,7 +265,7 @@ const diff = computed(() => {
             </tr>
           </table>
           <p v-if="!diff.length" class="muted">The shot already does what was asked - nothing changes.</p>
-          <p v-for="c in view?.proposal?.conflicts ?? []" :key="c" class="notice">{{ c }}</p>
+          <p v-for="c in view?.proposal?.conflicts ?? []" :key="c" class="sd-issue">{{ c }}</p>
           <p v-if="otherChanges" class="muted">The proposal changes {{ otherChanges }} more shot(s) - see Direction.</p>
           <div class="btn-row">
             <button
@@ -283,67 +285,87 @@ const diff = computed(() => {
 </template>
 
 <style scoped>
+/* class names of their own: .person and .notice are taken by the timeline's styles (workspace.css) */
 .shot-director {
-  width: min(760px, calc(100vw - 32px));
+  width: min(780px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
-  padding: 16px 18px;
+  padding: 18px 22px 20px;
 }
 .head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
 }
 .head h2 {
   margin: 0;
   font-size: 16px;
 }
+.head .btn {
+  align-self: center;
+}
 .spacer {
   flex: 1;
 }
-.how {
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  line-height: 1.45;
+}
+.about .action {
   margin-top: 4px;
 }
 h3 {
-  margin: 16px 0 6px;
-  font-size: 13px;
+  margin: 22px 0 8px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--muted);
 }
 .size {
-  margin-top: 10px;
+  margin-top: 14px;
   align-items: center;
 }
-.person {
+.size > .muted {
+  margin-right: 4px;
+}
+.sd-person {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   margin-bottom: 8px;
 }
-.person header {
+.sd-person header {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
-.person dl {
+.sd-person .who {
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 2px;
+}
+.sd-person dl {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 2px 10px;
-  margin: 6px 0 0;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+  line-height: 1.4;
 }
-.person dt {
+.sd-person dt {
   color: var(--muted);
 }
-.person dd {
+.sd-person dd {
   margin: 0;
 }
 .out-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   cursor: pointer;
+}
+.out-mark input {
+  margin: 0;
 }
 .out-mark.on {
   border-color: var(--danger);
@@ -357,21 +379,38 @@ h3 {
   align-items: center;
   margin: 4px 0 8px;
 }
+.rest {
+  margin-top: 4px;
+}
 .list .row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  justify-content: space-between;
-  padding: 4px 0;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  line-height: 1.4;
 }
-.notice {
-  color: var(--stale);
+.list .row:first-of-type {
+  border-top: 0;
+}
+.list .row > span {
+  flex: 1;
+}
+.sd-issue {
+  color: var(--text);
+  border-left: 3px solid var(--stale);
+  padding-left: 10px;
+  margin: 6px 0;
+}
+.list .row.sd-issue {
+  border-top: 0;
+  padding: 6px 0 6px 10px;
 }
 .instruction {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 12px;
 }
 .instruction span {
   display: flex;
@@ -381,6 +420,10 @@ h3 {
 .instruction textarea {
   width: 100%;
 }
+.propose {
+  align-items: center;
+  margin-top: 8px;
+}
 .diff {
   width: 100%;
   border-collapse: collapse;
@@ -388,14 +431,14 @@ h3 {
 .diff th {
   text-align: left;
   vertical-align: top;
-  padding: 4px 8px 4px 0;
+  padding: 6px 10px 6px 0;
   color: var(--muted);
   font-weight: normal;
   white-space: nowrap;
 }
 .diff td {
   vertical-align: top;
-  padding: 4px 6px;
+  padding: 6px 8px;
   width: 50%;
 }
 .diff .before {
