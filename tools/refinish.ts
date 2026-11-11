@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 import {completeDerivative} from '../lib/refinish.ts'
 // A project made before larger clips, 48 fps and the finish gets them afterwards, from the clips it has. No plan run: it reads output/clips/ and the
@@ -20,7 +21,7 @@ import {songFileOf} from '../lib/inputs.ts'
 import {multiplierFor} from '../lib/interpolate.ts'
 import {lockProject} from '../lib/lock.ts'
 import {keepLogIn, log, styles} from '../lib/log.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import type {Project} from '../lib/project.ts'
 import {clipFolder, finalName, readOptions, targetSize, variantOf} from '../lib/refinish.ts'
 import {readClipRequests} from '../lib/render-state.ts'
@@ -33,7 +34,7 @@ import type {FilmClipRequest} from '../lib/film/compose.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
 import {filmRenderConfig} from '../lib/film/pictures.ts'
 import {FilmRenderer, filmAssemblyClips} from '../lib/film/render.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {addSubtitles} from '../lib/film/subtitles.ts'
 cli('refinish')
 
@@ -65,7 +66,8 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-if (!id || !(args.film ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${args.film ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
+if (!id || !(args.film ? filmExists(id) : projectExists(id)))
+    log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const options = (() => {
     try {
         return readOptions(args)

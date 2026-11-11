@@ -140,6 +140,8 @@ export type Input = {
     // with "auto" the one the shot planning chose for the first shot of the clip (shotViews); -1 or none = the sheet
     locationView?: number | 'auto'
     shotViews?: Record<string, number[]>
+    // config.clipPrompt: "compact" tells every movement once and writes the shot sentence in its natural order (#824)
+    clipPrompt?: 'full' | 'compact'
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
@@ -962,6 +964,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
+                // "medium shot, three-quarter angle from behind Elias" + " of <Subject 2> in <Subject 1>": the size first, then who and
+                // where, then the angle - joined as it was, the sentence read "… from behind Elias of <Subject 2>" (#824, compact only)
+                const framed = (rest: string) => {
+                    const cut = input.clipPrompt === 'compact' ? shot.framing.indexOf(', ') : -1
+                    return cut < 0 ? `${shot.framing}${rest}` : `${shot.framing.slice(0, cut)}${rest}${rest ? ',' : ''} ${shot.framing.slice(cut + 2)}`
+                }
                 const where = (still: boolean) => (locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, ${the(locationSubject.name)}` : '')
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
                 // fill the frame, where the playing is easiest to keep in time with its track
@@ -969,11 +977,11 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the ${shot.hands.hands} of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. ${shot.hands.hands === 'hands' ? 'The hand that strikes, picks or strums, the hand that holds, frets or presses,' : `The ${shot.hands.hands} - what strikes, picks or strums and what holds, frets or presses -`} and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
                     : j === 0
                       ? onSinger
-                          ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
-                          : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
+                          ? `${shot.label} A ${framed(` of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}`)}; ${shot.camera}.`
+                          : `${shot.label} A ${framed(locationSubject ? ` of ${locationSubject.label}, ${the(locationSubject.name)}` : '')}; ${shot.camera}.`
                       : // repeats the location on every cut, not just the first shot - otherwise a shot with no location
                         // callout tends to fall back to the character reference pictures' plain grey background
-                        `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
+                        `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${framed(`${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}`)}; ${shot.camera}.`
                 const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
                 // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
                 // plan keeps the fixed positions
@@ -986,12 +994,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const personInFrame = (s: (typeof shot.focus)[number], n: number) => `${personAlone(s, n)}${together(s)}`
                 const personAlone = (s: (typeof shot.focus)[number], n: number) => {
                     const p = stagedPeople?.[s.id]
-                    const face = shot.singers.includes(s) ? ', the face clearly visible' : ''
+                    // not for a singer the plan shows from behind (#822): "three-quarter back view" and "the face clearly visible" cannot both hold
+                    const face = shot.singers.includes(s) && !p?.faceHidden ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
                     if (!p) return `${s.label}, ${s.name}, in the frame${face}`
                     return `${s.label}, ${s.name}, ${
-                        [p.state, p.frame, p.motion]
+                        // compact: the movement is told by the shot's action - told again here, the two differed in detail (#824)
+                        [p.state, p.frame, input.clipPrompt === 'compact' && shot.plan.action ? undefined : p.motion]
                             .filter(Boolean)
                             .map(t => withLabels(t!, planTokens))
                             .join('; ') || 'in the frame'

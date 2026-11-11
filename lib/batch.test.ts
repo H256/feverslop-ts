@@ -5,7 +5,7 @@ test('--only: the clips it names, all without a name, and a name that is no clip
     const clips = [{id: 'slot-001'}, {id: 'slot-002'}, {id: 'slot-003'}]
     expect(onlyClips(clips, new Set())).toEqual(clips)
     expect(onlyClips(clips, new Set(['slot-003', 'slot-001']))).toEqual([{id: 'slot-001'}, {id: 'slot-003'}])
-    expect(() => onlyClips(clips, new Set(['slot-001', 'slot-01']))).toThrow('--only: no clip slot-01 - the clips are slot-001, slot-002, slot-003')
+    expect(() => onlyClips(clips, new Set(['slot-001', 'slot-01']))).toThrow('--only: no clip slot-01 - the clips are slot-001-003')
 })
 
 test('clips going on from a selected clip are named, through a whole chain, unless they are selected too', () => {

@@ -14,7 +14,11 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Plan and render a film.',
     },
     setup: {args: '[llm|llm-model|vision|comfy|show]', description: 'Configure servers, or show the effective settings.', banner: true},
-    init: {args: '[project-id]', description: 'Create a music-video project interactively.', banner: true},
+    init: {
+        args: '[project-id] [--song=<file> | --idea=<text|file>] [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--language=en]',
+        description: 'Create a music-video project: by questions, or - with --song or --idea - by options, asking nothing.',
+        banner: true,
+    },
     'film:init': {args: '[film-id]', description: 'Create a film project interactively.', banner: true},
     example: {args: '[--no-render]', description: 'Create an example project and optionally generate its song.'},
     'replace-character': {args: '<project-id>', description: 'Replace a character interactively.'},
@@ -95,6 +99,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
     interpolate: {
         args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]',
         description: 'Interpolate the rendered clips of a project.',
+    },
+    doctor: {
+        args: '[--json]',
+        description:
+            'Check this machine: the settings, the LLM and ComfyUI servers, ffmpeg and uv - what is ready, and what to do about what is not. Only reads.',
+        json: true,
     },
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},

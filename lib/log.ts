@@ -1,3 +1,4 @@
+import {usageMessage} from './usage.ts'
 import {closeSync, mkdirSync, openSync, writeSync} from 'node:fs'
 import {dirname} from 'node:path'
 import {format, stripVTControlCharacters, styleText} from 'node:util'
@@ -237,11 +238,7 @@ export const log = {
         print(lines.join('\n'))
     },
     /** A bad --flag/argument: a loud red box with the problem and how to call the script correctly, then exits. */
-    usageError: (message: string, usage: string): never =>
-        errorBox(' ✗ BAD USAGE ', [
-            {text: message, style: styles.warning},
-            {text: usage, style: styles.muted},
-        ]),
+    usageError: (message: string, usage: string): never => usageBox(usageMessage(message, usage), usage),
     /** Any other uncaught runtime failure (a rejected step, a missing file, ...) - the same loud red box, just
      * without a usage line, instead of Bun's raw stack-trace dump. */
     fatal: (message: string): never => {
@@ -263,14 +260,28 @@ export function failRun(e: unknown): never {
     return log.fatal(e instanceof Error ? e.message : String(e))
 }
 
-function errorBox(heading: string, sections: {text: string; style: (s: string) => string}[]): never {
+/**
+ * A usage error (#817): the cause, then where the help is. The whole usage is in --help - printed here it buried the one line
+ * that says what was wrong; a machine that asked for JSON still gets it. Nothing ran, so nothing is said about a run.
+ */
+function usageBox(message: string, usage: string): never {
+    if (json) {
+        clearBoard()
+        console.error(JSON.stringify({error: message, usage, hint: errorHint || undefined, log: logFile?.path}))
+        process.exit(1)
+    }
+    const help = errorHint.split('\n')[0] ?? ''
+    return errorBox(' ✗ BAD USAGE ', [{text: message, style: styles.warning}, ...(help ? [{text: help, style: styles.muted}] : [])], false)
+}
+
+function errorBox(heading: string, sections: {text: string; style: (s: string) => string}[], ofRun = true): never {
     clearBoard()
     if (json) {
         console.error(JSON.stringify({error: sections[0]?.text, usage: sections[1]?.text, hint: errorHint || undefined, log: logFile?.path}))
         process.exit(1)
     }
-    if (logFile) sections = [...sections, {text: `The whole run: ${logFile.path}`, style: styles.muted}]
-    if (errorHint) sections = [...sections, {text: errorHint, style: styles.muted}]
+    if (ofRun && logFile) sections = [...sections, {text: `The whole run: ${logFile.path}`, style: styles.muted}]
+    if (ofRun && errorHint) sections = [...sections, {text: errorHint, style: styles.muted}]
     if (!process.stderr.isTTY) {
         console.error(`${heading.trim()}\n${sections.map(s => s.text).join('\n')}`)
         process.exit(1)

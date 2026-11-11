@@ -11797,6 +11797,7 @@ exports[`the ComfyUI workflows, node by node the render lengths 1`] = `
 
 exports[`the config music video: the defaults 1`] = `
 {
+  "clipPrompt": "full",
   "contextFrames": 0,
   "continuity": "never",
   "fightClips": false,
@@ -11835,6 +11836,7 @@ exports[`the config music video: the defaults 1`] = `
 exports[`the config music video: the defaults 2`] = `
 {
   "alignLyrics": false,
+  "clipPrompt": "full",
   "contextFrames": 0,
   "continuity": "never",
   "fightClips": false,
@@ -11873,6 +11875,7 @@ exports[`the config music video: the defaults 2`] = `
 exports[`the config music video: every render setting set 1`] = `
 {
   "alignLyrics": false,
+  "clipPrompt": "full",
   "contextFrames": 22,
   "continuity": "never",
   "fightClips": false,
@@ -11960,6 +11963,7 @@ exports[`the config film: the defaults and what the renderer is given 1`] = `
 
 exports[`the config film: the defaults and what the renderer is given 2`] = `
 {
+  "clipPrompt": "full",
   "contextFrames": 0,
   "continuity": "never",
   "fightClips": false,

@@ -1,3 +1,4 @@
+import {noProject} from '../usage.ts'
 import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {writeJsonFile} from '../json-file.ts'
 import {dirname, join} from 'node:path'
@@ -8,8 +9,8 @@ import {withProjectLock} from '../lock.ts'
 import {dropPartials, KEPT_BY_HAND} from '../partials.ts'
 import {builtOn, type Character, type Location, type Project, redoAfter, STEP_NAMES, type StepName} from '../project.ts'
 import {filmStage, musicStage, type PlanStage, nextStage} from '../stages.ts'
-import {projectDir, projectExists, validProjectId} from '../project-setup.ts'
-import {filmDir, filmExists} from '../film/setup.ts'
+import {projectDir, projectExists, validProjectId, listProjects} from '../project-setup.ts'
+import {filmDir, filmExists, filmIds} from '../film/setup.ts'
 import {screenplayToText} from '../film/fountain.ts'
 import {FILM_STEP_NAMES, filmBuiltOn, filmRedoAfter, type FilmStepName} from '../film/store.ts'
 import type {FilmCharacter, FilmLocation, FilmProject} from '../film/types.ts'
@@ -769,9 +770,10 @@ export async function takeScreenplayProposal(target: EditorTarget) {
 
 /** The project or film a command is about, or why there is none. */
 export function commandTarget(id: string | undefined, film: boolean): EditorTarget | string {
-    if (!id || !validProjectId(id)) return id ? `"${id}" is no project id` : 'No project id given'
-    if (film) return filmExists(id) ? {id, kind: 'film', dir: filmDir(id)} : `No film "${id}" in films/`
-    return projectExists(id) ? {id, kind: 'music', dir: projectDir(id)} : `No project "${id}" in projects/`
+    if (!id) return film ? noProject('film', undefined, filmIds()) : noProject('project', undefined, listProjects())
+    if (!validProjectId(id)) return `"${id}" is no project id`
+    if (film) return filmExists(id) ? {id, kind: 'film', dir: filmDir(id)} : noProject('film', id, filmIds())
+    return projectExists(id) ? {id, kind: 'music', dir: projectDir(id)} : noProject('project', id, listProjects())
 }
 
 /**
