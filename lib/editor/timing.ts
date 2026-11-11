@@ -31,10 +31,30 @@ const UNPLACED_WORD_SEC = 0.4
 /**
  * The words of a line as the page moves them. A line the alignment found sung nowhere keeps no words (lib/lyrics.ts) and has
  * no length - nothing to see or drag: its words are laid out one after the other from where it would start. Given back
- * unmoved they are not saved, so the line stays as it was.
+ * unmoved they are not saved, so the line stays as it was. Compressed alignment words also need editable widths:
+ * give them the minimum duration and move following words only when necessary to avoid overlap.
  */
 export function wordsToPlace(line: TimedLine, duration: number): TimedLine['words'] {
-    if (line.words.length) return line.words
+    if (line.words.length) {
+        if (line.words.every(w => round(w.end) - round(w.start) >= MIN_WORD_SEC - 1e-9)) return line.words
+        let end = 0
+        const words = line.words.map(w => {
+            const start = round(Math.max(end, w.start))
+            end = round(Math.max(w.end, start + MIN_WORD_SEC))
+            return {...w, start, end, ...(start !== round(w.start) || end !== round(w.end) ? {estimated: true} : {})}
+        })
+        let limit = duration
+        for (let n = words.length - 1; n >= 0; n--) {
+            const w = words[n]!
+            if (w.end > limit) {
+                w.start = round(w.start - (w.end - limit))
+                w.end = round(limit)
+                w.estimated = true
+            }
+            limit = w.start
+        }
+        return words
+    }
     const texts = line.text.split(' ').filter(w => normalizeWord(w))
     const start = Math.max(0, Math.min(line.start, duration - texts.length * UNPLACED_WORD_SEC))
     return texts.map((text, n) => ({text, start: round(start + n * UNPLACED_WORD_SEC), end: round(start + (n + 1) * UNPLACED_WORD_SEC)}))
