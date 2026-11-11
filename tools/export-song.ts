@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // Puts a project's song into the library (lib/song-library.ts): the audio, the lyrics, the six stems and all that is worked
 // out from them - the analysis, the transcript and the timing of every word, with what was placed by hand on the Timing page.
@@ -8,7 +9,7 @@ import {join} from 'node:path'
 import {loadProjectConfig} from '../lib/config.ts'
 import {libraryDir, libraryIdPattern} from '../lib/library.ts'
 import {log} from '../lib/log.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import type {Project} from '../lib/project.ts'
 import {exportSong, songFolder} from '../lib/song-library.ts'
 cli('export-song')
@@ -17,8 +18,7 @@ const usage = 'usage: bun run export-song <project-id> [--as=<song id>] [--name=
 const args = Bun.argv.slice(2)
 const option = (name: string) => args.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
 const [id] = args.filter(a => !a.startsWith('--'))
-if (!id) log.usageError('Which project?', usage)
-if (!projectExists(id!)) log.usageError(`No project "${id}" in projects/`, usage)
+if (!id || !projectExists(id)) log.usageError(noProject('project', id, listProjects()), usage)
 const dir = projectDir(id!)
 const songId = option('as') ?? id!
 if (!libraryIdPattern.test(songId)) log.usageError(`"${songId}" is no usable song id - lowercase letters, digits and dashes`, usage)
