@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // The cuts within a scene, checked by a model that reads pictures: the last frame of a clip against the first of the next. It only
 // says what it finds - the clips to render again are named with the command to do it, nothing is rendered on its own.
@@ -14,7 +15,7 @@ import {loadSettings} from '../lib/settings.ts'
 import type {FilmClipRequest} from '../lib/film/compose.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
 import {cutsOf, joinFingerprint, joinFrames, joinPrompt, type JoinRecord, plannedChanges, readVerdict} from '../lib/film/joins.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {FilmStore} from '../lib/film/store.ts'
 cli('film:check-joins')
 
@@ -33,7 +34,7 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-if (!id || !filmExists(id)) log.usageError(id ? `No film "${id}" in films/` : 'Which film?', usage)
+if (!id || !filmExists(id)) log.usageError(noProject('film', id, filmIds()), usage)
 const dir = filmDir(id!)
 lockProject(dir, `film ${id}`)
 
