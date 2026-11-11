@@ -19,7 +19,7 @@ const keyOf = (role: object) => keys.get(role) ?? keys.set(role, next++).get(rol
       <div class="head">
         <b>new</b>
         <div class="spacer" />
-        <button class="btn" title="Not added after all" @click="remove(n)">Remove</button>
+        <button class="btn danger" title="Not added after all" @click="remove(n)">Remove</button>
       </div>
       <FormField label="Name"><input v-model="role.name" type="text" aria-label="Name" maxlength="80" /></FormField>
       <FormField label="Role in the story">

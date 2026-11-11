@@ -209,7 +209,7 @@ const copy = toasts.guard(async (text: string) => {
 .pw-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: start;
 }
 .pw-steps {
@@ -218,13 +218,13 @@ const copy = toasts.guard(async (text: string) => {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .pw-step {
   border: 1px solid var(--line);
   border-left: 3px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 .pw-step.made {
@@ -236,7 +236,7 @@ const copy = toasts.guard(async (text: string) => {
 .pw-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   width: 100%;
   padding: 10px 12px;
   background: none;
@@ -251,41 +251,41 @@ const copy = toasts.guard(async (text: string) => {
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--raised);
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 600;
 }
 .pw-done {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 8px;
   border: 1px solid var(--line);
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
 }
 .pw-body {
   padding: 0 14px 14px 44px;
 }
 .pw-line {
-  font-size: 12px;
+  font-size: var(--text-s);
   margin: 0 0 6px;
 }
 .pw-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   margin-top: 10px;
 }
 .pw-side {
   position: sticky;
   top: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   padding: 10px 12px 12px;
   min-width: 0;
 }
 .pw-side h3 {
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -295,17 +295,17 @@ const copy = toasts.guard(async (text: string) => {
 .pw-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin-bottom: 10px;
 }
 .pw-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--space-half);
   padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   background: none;
   color: inherit;
   font: inherit;
@@ -314,7 +314,7 @@ const copy = toasts.guard(async (text: string) => {
   min-width: 0;
 }
 .pw-item code {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -324,7 +324,7 @@ const copy = toasts.guard(async (text: string) => {
 }
 .pw-video {
   width: 100%;
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   background: #000;
   display: block;
 }
@@ -334,7 +334,7 @@ const copy = toasts.guard(async (text: string) => {
 .pw-texthead {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 6px;
 }
 .pw-text pre {
@@ -342,9 +342,9 @@ const copy = toasts.guard(async (text: string) => {
   overflow: auto;
   padding: 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   background: var(--raised);
-  font: 12px/1.5 var(--mono);
+  font: var(--text-s)/1.5 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
