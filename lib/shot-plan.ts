@@ -105,6 +105,11 @@ function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, charact
             )
         if (p.singing !== true && singing.includes(id))
             problems.push(`shot ${j + 1}: ${name} sings in this shot - singing: yes, the mouth in view, singing into the microphone if ${name} has one`)
+        // a singer seen from behind cannot be lip-synced: the planner turns the camera or the singer, the composer papers over nothing (#822)
+        if (p.faceHidden && singing.includes(id))
+            problems.push(
+                `shot ${j + 1}: ${name} sings in this shot, but the face is hidden - a camera position and a "frame" in which the face and the mouth of ${name} are seen (three-quarter or profile), and face: seen`,
+            )
         const instrument = props?.find(e => e.characterId === id)
         if (!instrument) continue
         const heard = instrument.activePerShot[j] === true
@@ -224,6 +229,8 @@ export function readBeatPlan(
                     ...(text(p.frame) ? {frame: text(p.frame)} : {}),
                     ...(text(p.motion) ? {motion: text(p.motion)} : {}),
                     ...(yes(p.singing) ? {singing: true} : {}),
+                    // the planner's own word in a field of its own ("face: seen|hidden"), never read out of "frame"
+                    ...(text(p.face).toLowerCase().startsWith('hidden') ? {faceHidden: true} : {}),
                     ...playingOf(p.playing),
                 }
             }
@@ -250,6 +257,13 @@ export function readBeatPlan(
             problem(
                 j,
                 `shot ${j + 1}: the text names ${strangers.join(', ')}, who ${strangers.length > 1 ? 'are' : 'is'} not in the shot's characters - leave them out of the text, or put them in the shot`,
+            )
+        // the planner's own word that the shot is outside the place of the beat (#823): the clip has a picture of the place only - a
+        // camera in the corridor looking at a closed door showed the model nothing it had a picture of
+        if (/^\s*no\b/i.test(text(e.inside)))
+            problem(
+                j,
+                `shot ${j + 1}: the camera or somebody in it is outside the place of this beat - the clip has a picture of the place only: take the shot from inside the place (a doorway is looked at from inside, whoever comes in comes through it), and inside: yes`,
             )
         // a shot of a player's hands on the instrument (hands:): that one player, whose instrument is heard in it - the
         // code checks what it can count; the face is out of the frame, so a singer of the line need not be in it
@@ -329,8 +343,8 @@ export function readBeatPlan(
  * The planner's answer in the line format (index.ts, step 11b) as the object readBeatPlan reads. One field per line:
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
- *   framing: / size: wide|medium|close|extreme / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ... / hands: A|no
- *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no
+ *   framing: / size: wide|medium|close|extreme / camera: / view: / inside: yes|no / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ... / hands: A|no
+ *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no | face: seen|hidden
  *   START                   (the blocking call)
  *   start: A | where they are when the beat starts
  *   ENDS
@@ -339,8 +353,8 @@ export function readBeatPlan(
  * a line that does not fit is just skipped. Markdown around a key (bullets, bold, fences) is tolerated.
  */
 /** The fields of a "person:" line and of a shot, as the planner prompt asks for them (lib/shot-planner.ts) - a field not in here is skipped. */
-export const PERSON_FIELDS = ['state', 'frame', 'motion', 'playing', 'singing'] as const
-export const SHOT_FIELDS = ['framing', 'size', 'camera', 'view', 'hold', 'risky', 'characters', 'action', 'rest', 'hands'] as const
+export const PERSON_FIELDS = ['state', 'frame', 'motion', 'playing', 'singing', 'face'] as const
+export const SHOT_FIELDS = ['framing', 'size', 'camera', 'view', 'inside', 'hold', 'risky', 'characters', 'action', 'rest', 'hands'] as const
 const personSplit = new RegExp(`\\s*\\|\\s*(?=(?:${PERSON_FIELDS.join('|')})\\s*:)`, 'i')
 const personField = new RegExp(`^(${PERSON_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')
 const shotField = new RegExp(`^(${SHOT_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')

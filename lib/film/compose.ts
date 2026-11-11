@@ -10,7 +10,7 @@ import {withoutSentencesNaming} from './names.ts'
 import {placeViewFrame, statePictureId} from './pictures.ts'
 import {characterOf, locationOf} from './screenplay.ts'
 import type {DialogueKind, Facing, FilmCast, FilmCharacter, FilmProp, Screenplay} from './types.ts'
-import {boundaryFrameAsset, joinAnd, pictureAsset, positions} from '../compose.ts'
+import {boundaryFrameAsset, joinAnd, pictureAsset, positions, the} from '../compose.ts'
 
 // which way a face is turned in the picture, said plainly after the person's place in the frame
 const facingPhrase = (facing?: Facing) =>
@@ -265,9 +265,9 @@ function buildClip(
         const focusLabels = joinAnd(shot.focus.map(s => s.label))
         const opening =
             j === 0
-                ? `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                ? `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
                 : // the place is repeated on every cut - a shot without it tends to fall back to the plain grey background of the character pictures
-                  `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                  `${shot.label} At ${formatTimestamp(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
         const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
         const inFrame = shot.focus.length
             ? ` In frame: ${shot.focus.map((s, n) => `${s.label}, ${s.name}, ${shot.people?.[s.id]?.frame ?? (shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length])}${facingPhrase(shot.people?.[s.id]?.facing)}`).join('; ')}.`
@@ -289,7 +289,7 @@ function buildClip(
         const motion = moving.length ? ` During the shot: ${moving.map(s => `${s.label} ${withLabels(shot.people![s.id]!.motion!)}`).join('; ')}.` : ''
         // a prop in the picture is the one of its picture - drawn from the word alone, it came out new in every clip
         const propsIn = propSubjects.filter(p => shot.props?.includes(p.id))
-        const propClause = propsIn.length ? ` In the shot: ${propsIn.map(p => `${p.label}, the ${p.name}, exactly as in ${p.picture}`).join('; ')}.` : ''
+        const propClause = propsIn.length ? ` In the shot: ${propsIn.map(p => `${p.label}, ${the(p.name)}, exactly as in ${p.picture}`).join('; ')}.` : ''
         const lines = shot.spoken.map(l => lineText(l, !l.character || shot.focus.some(f => f.id === l.character!.id))).join(' ')
         // nobody but the speaker moves their mouth - the video model otherwise gives the words to someone else in the frame too
         const speaking = new Set(shot.spoken.filter(l => l.kind === 'spoken' && l.character).map(l => l.character!.id))
@@ -328,9 +328,9 @@ function buildClip(
         'subject_definitions:',
         ...subjects.map(s =>
             s.kind === 'location'
-                ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+                ? `${s.label} is ${the(s.name)} environment in ${s.picture}: ${s.description}`.trim()
                 : s.kind === 'prop'
-                  ? `${s.label} is the ${s.name}, the object in ${s.picture}: ${s.description}`.trim()
+                  ? `${s.label} is ${the(s.name)}, the object in ${s.picture}: ${s.description}`.trim()
                   : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim(),
         ),
         ...(framePicture
@@ -356,9 +356,9 @@ function buildClip(
                           : appearsIn(s.label) || shots[0]!.label
                 }): fully_preserved - ${
                     s.kind === 'location'
-                        ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
+                        ? `the layout, materials, colors and lighting of ${the(s.name)} are retained.`
                         : s.kind === 'prop'
-                          ? `the shape, size, colors and material of the ${s.name} are retained; the plain grey backdrop of its picture is discarded - it is only where the shots put it, held or in the place.`
+                          ? `the shape, size, colors and material of ${the(s.name)} are retained; the plain grey backdrop of its picture is discarded - it is only where the shots put it, held or in the place.`
                           : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded, but expression is free to follow the shot's action.`
                 }`,
         ),
@@ -385,7 +385,7 @@ function buildClip(
         ...shotTexts,
         '',
         'overall_soundscape:',
-        `${withoutSentencesNaming(soundscapes[clip.sceneId] ?? '', unpictured) || `Quiet ambience of the ${location?.name ?? 'scene'}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'The dialogue given in the shots is the only speech; voices and whispers described above are indistinct and wordless.' : 'The dialogue given in the shots is the only speech.') : voicesInScene ? 'Voices and whispers described above are indistinct and wordless.' : 'The only sounds are the ambience and the on-screen action.'}`,
+        `${withoutSentencesNaming(soundscapes[clip.sceneId] ?? '', unpictured) || `Quiet ambience of ${the(location?.name ?? 'scene')}; footsteps, cloth and prop sounds follow the on-screen action.`} ${speakers.length ? (voicesInScene ? 'The dialogue given in the shots is the only speech; voices and whispers described above are indistinct and wordless.' : 'The dialogue given in the shots is the only speech.') : voicesInScene ? 'Voices and whispers described above are indistinct and wordless.' : 'The only sounds are the ambience and the on-screen action.'}`,
         '',
         'non_diegetic_music:',
         'N/A',
