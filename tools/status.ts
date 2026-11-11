@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // Where a project stands: which steps are done, which an edited input or setting will redo on the next run, which
 // pictures and clips are rendered, missing or stale, and the command that comes next. Read-only - no lock, no LLM, no
@@ -7,7 +8,6 @@ import {parseArgs} from 'node:util'
 import {log, styles} from '../lib/log.ts'
 import {listProjects, projectExists} from '../lib/project-setup.ts'
 import {filmExists, filmIds} from '../lib/film/setup.ts'
-import {FILMS_DIR} from '../lib/film/store.ts'
 import {filmStatus, projectStatus, type StepState} from '../lib/status.ts'
 import {lastRun, runState} from '../lib/run-record.ts'
 import {lastRunLines} from '../lib/run-record-view.ts'
@@ -29,10 +29,10 @@ const id = positionals[0]
 
 if (args.film) {
     if (!id || !filmExists(id)) {
-        log.usageError(`${id ? `No film "${id}" in ${FILMS_DIR}/` : 'Which film?'} - the films here are: ${filmIds().join(', ')}`, usage)
+        log.usageError(noProject('film', id, filmIds()), usage)
     }
 } else if (!id || !projectExists(id)) {
-    log.usageError(`${id ? `No project "${id}" in projects/` : 'Which project?'} - the projects here are: ${listProjects().join(', ')}`, usage)
+    log.usageError(noProject('project', id, listProjects()), usage)
 }
 
 const {dir, changed, notes, steps, render, next, preproduction, json} = args.film ? await filmStatus(id!) : await projectStatus(id!)

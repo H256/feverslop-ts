@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // A title card before a finished video and scrolling credits after it (#609, docs/postwork.md): the title, who made it, a line
 // that it contains AI-generated content, your own lines, and what it was made with - the language model, the models of the
@@ -11,7 +12,7 @@ import {existsSync} from 'node:fs'
 import {basename, isAbsolute, join} from 'node:path'
 import {parseArgs} from 'node:util'
 import {versionStamp} from '../lib/archive.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {lockProject} from '../lib/lock.ts'
 import {keepLogIn, log, styles} from '../lib/log.ts'
 import {type CreditsSettings, markerFile} from '../lib/postwork/config.ts'
@@ -19,7 +20,7 @@ import {probeVideo} from '../lib/assemble.ts'
 import {collectFacts, creditLines, creditsVideo, DISCLOSURE_LENGTH, endSeconds, fontFiles, projectTitle, wrapLines} from '../lib/postwork/credits.ts'
 import {loadPostwork, savePostwork, withOptions} from '../lib/postwork/store.ts'
 import {sourceVideo} from '../lib/postwork/video.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import {beginRun} from '../lib/run-record-view.ts'
 import {readSettingsFile} from '../lib/settings.ts'
 cli('credits')
@@ -66,7 +67,8 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-if (!id || !(args.film ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${args.film ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
+if (!id || !(args.film ? filmExists(id) : projectExists(id)))
+    log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = args.film ? filmDir(id!) : projectDir(id!)
 
 const numberOf = (name: string, value: string | undefined) => {

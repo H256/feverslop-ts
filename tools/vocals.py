@@ -15,7 +15,7 @@
 """Stem separation and vocal transcription for the lyrics alignment.
 
 usage: uv run tools/vocals.py separate <song.wav> <stems-dir> [model] [only...]
-       uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt> [--model=…] [--beam-size=…] [--temperatures=…]
+       uv run tools/vocals.py transcribe <vocals.wav> <language> <lyrics.txt> [--model=…] [--beam-size=…] [--temperatures=…] [--retry-gain-db=6]
        uv run tools/vocals.py draft <vocals.wav> <language> [--model=…] [--beam-size=…] [--temperatures=…]
 
 separate    [model] defaults to htdemucs_ft -> <stems-dir>/{vocals,drums,bass,other}.wav
@@ -36,6 +36,9 @@ transcribe  faster-whisper (CTranslate2) large-v3 (large-v3-turbo on a CPU) - [-
             matching how the alignment step already interpolates words it can't pin down exactly.
             Stretches where the vocals are active but whisper wrote (almost) nothing get a second pass: the same audio
             cut out and transcribed on its own (whisper can go deaf for half a minute inside a long song).
+            --retry-gain-db=6 optionally boosts retry excerpts by up to +6 dB, limited to a 0.95 sample peak.
+            It defaults to 0 (off); WHISPER_RETRY_GAIN_DB also sets it for pipeline runs.
+            The source stem is never changed.
             Also runs an RMS-energy vocal activity detection on the same audio (independent of whisper) - for
             growled/screamed vocals whisper often transcribes nothing at all, but the alignment step can still
             place interpolated words inside a real detected-activity window instead of guessing blind.
@@ -91,6 +94,7 @@ preload_cuda12_libs()
 import numpy as np
 import soundfile as sf
 import torch
+from audio_gain import boost_audio
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -103,6 +107,7 @@ whisper = {
     "beam_size": 5 if device == "cuda" else 2,
     "temperatures": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0] if device == "cuda" else [0.0, 0.4, 0.8],
 }
+retry_gain_db = 0.0
 
 
 def log(message: str):
@@ -297,6 +302,8 @@ def fill_deaf_windows(model, vocals: str, words: list[dict], activity: list[dict
     for start, end in windows:
         log(f"second pass on {start:.1f}-{end:.1f}s: vocals are active, whisper heard (almost) nothing there")
         chunk = data[int(start * sr):int(end * sr)]
+        chunk, gain = boost_audio(chunk, retry_gain_db)
+        log(f"  retry gain +{gain:.1f} dB (requested +{retry_gain_db:g} dB)")
         tmp = Path(vocals).with_name(f"_deaf_{int(start)}.wav")
         sf.write(tmp, chunk, sr)
         try:
@@ -362,6 +369,8 @@ def draft(vocals: str, language: str):
 
 if __name__ == "__main__":
     command, *args = sys.argv[1:]
+    if (retry_gain := os.environ.get("WHISPER_RETRY_GAIN_DB")) is not None:
+        args.insert(0, f"--retry-gain-db={retry_gain}")
     for option in [a for a in args if a.startswith("--")]:
         args.remove(option)
         name, _, value = option[2:].partition("=")
@@ -371,6 +380,13 @@ if __name__ == "__main__":
             whisper["beam_size"] = int(value)
         elif name == "temperatures" and value:
             whisper["temperatures"] = [float(t) for t in value.split(",")]
+        elif name == "retry-gain-db" and value:
+            try:
+                retry_gain_db = float(value)
+            except ValueError:
+                sys.exit(f"invalid retry gain: {value}")
+            if not math.isfinite(retry_gain_db) or not 0 <= retry_gain_db <= 6:
+                sys.exit("--retry-gain-db must be between 0 and 6")
         else:
             sys.exit(f"unknown or invalid option {option}\n\n{__doc__}")
     if command == "separate" and len(args) >= 2:

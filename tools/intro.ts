@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // A clip in front of a finished video (#608, docs/postwork.md): a logo, a channel ident, a title card. Reads one final video
 // of the project and writes <name>-intro.mp4 next to it; the intro takes the size and frame rate of the video. The intro
@@ -8,14 +9,14 @@ import {basename, join} from 'node:path'
 import {parseArgs} from 'node:util'
 import {versionStamp} from '../lib/archive.ts'
 import {probeVideo} from '../lib/assemble.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {lockProject} from '../lib/lock.ts'
 import {keepLogIn, log, styles} from '../lib/log.ts'
 import {introFile, type IntroSettings} from '../lib/postwork/config.ts'
 import {introFilter, introVideo} from '../lib/postwork/intro.ts'
 import {loadPostwork, savePostwork, withOptions} from '../lib/postwork/store.ts'
 import {sourceVideo} from '../lib/postwork/video.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import {beginRun} from '../lib/run-record-view.ts'
 cli('intro')
 
@@ -42,7 +43,8 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-if (!id || !(args.film ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${args.film ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
+if (!id || !(args.film ? filmExists(id) : projectExists(id)))
+    log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = args.film ? filmDir(id!) : projectDir(id!)
 
 const fade = args.fade === undefined ? undefined : Number(args.fade)
