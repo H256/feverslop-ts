@@ -1,3 +1,5 @@
+import {usageArgs} from './command-schema.ts'
+import {introCommand, labelCommand} from './postwork/commands.ts'
 import {helpDetails} from './cli-help.ts'
 import {activeJobs, cancelJobs} from './comfy-cancel.ts'
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts'
@@ -14,7 +16,11 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Plan and render a film.',
     },
     setup: {args: '[llm|llm-model|vision|comfy|show]', description: 'Configure servers, or show the effective settings.', banner: true},
-    init: {args: '[project-id]', description: 'Create a music-video project interactively.', banner: true},
+    init: {
+        args: '[project-id] [--song=<file> | --idea=<text|file>] [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--language=en]',
+        description: 'Create a music-video project: by questions, or - with --song or --idea - by options, asking nothing.',
+        banner: true,
+    },
     'film:init': {args: '[film-id]', description: 'Create a film project interactively.', banner: true},
     example: {args: '[--no-render]', description: 'Create an example project and optionally generate its song.'},
     'replace-character': {args: '<project-id>', description: 'Replace a character interactively.'},
@@ -96,6 +102,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]',
         description: 'Interpolate the rendered clips of a project.',
     },
+    doctor: {
+        args: '[--json]',
+        description:
+            'Check this machine: the settings, the LLM and ComfyUI servers, ffmpeg and uv - what is ready, and what to do about what is not. Only reads.',
+        json: true,
+    },
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},
     stats: {
@@ -108,7 +120,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.',
     },
     label: {
-        args: '<id> [--film] [--from=<video>] [--marker=generated-white|<png>] [--mode=credits|interval|always] [--seconds=5] [--interval=60] [--corner=top-right|top-left|bottom-right|bottom-left] [--size=6] [--margin=3] [--save | --save-default] [--dry-run]',
+        args: usageArgs(labelCommand),
         description:
             'Put the AI marker (an EU icon or a PNG of your own) over a finished video: <name>-labeled.mp4 next to it. Optional, see docs/postwork.md.',
     },
@@ -123,7 +135,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
             'The text for publishing the finished video you choose on YouTube - a teaser of the story, that it is AI-generated, the hardware, models and measured time per phase: <name>.youtube.txt and .json next to it. Nothing is uploaded. See docs/postwork.md.',
     },
     intro: {
-        args: '<id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]',
+        args: usageArgs(introCommand),
         description:
             'Put an intro clip (input/intro.mp4, or a path) in front of a finished video: <name>-intro.mp4 next to it. Optional, see docs/postwork.md.',
     },

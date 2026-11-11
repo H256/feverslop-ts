@@ -1,3 +1,5 @@
+import {checkPrompt} from '../lib/prompt-check.ts'
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // One clip on one screen: the beat and the staged shots it comes from, its pictures and audio tracks, whether it is
 // rendered (and from the request it has now), and the prompt itself. Read-only - no lock, no LLM, no ComfyUI.
@@ -10,7 +12,7 @@ import {formatTime} from '../lib/frames.ts'
 import {jsonOutput, log, styles} from '../lib/log.ts'
 import {factText, type Project} from '../lib/project.ts'
 import {plainText} from '../lib/refs.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import {freshness} from '../lib/provenance.ts'
 import {clipFingerprint} from '../lib/render.ts'
 import {asBeatShots} from '../lib/shot-plan.ts'
@@ -18,8 +20,7 @@ import type {FilmClipRequest} from '../lib/film/compose.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
 import {filmRenderConfig} from '../lib/film/pictures.ts'
 import {filmClipFreshness} from '../lib/film/render.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
-import {FILMS_DIR} from '../lib/film/store.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import type {FilmProject} from '../lib/film/types.ts'
 import {clipRequestsDir} from '../lib/previous-output.ts'
 cli('inspect')
@@ -30,7 +31,7 @@ if (Bun.argv.includes('--film')) {
     await inspectFilm(id, clipId)
     process.exit(0)
 }
-if (!id || !projectExists(id)) log.usageError(id ? `No project "${id}" in projects/` : 'Which project?', usage)
+if (!id || !projectExists(id)) log.usageError(noProject('project', id, listProjects()), usage)
 const dir = projectDir(id!)
 const {clipsDir, clipIds} = requestedClip(dir, clipId, `project first: bun index.ts ${id}`)
 
@@ -111,10 +112,11 @@ await showRender(
 )
 
 log.box('Prompt', clip.prompt)
+for (const finding of checkPrompt(clip)) log.warn(`prompt: ${finding}`)
 
 /** --film: one clip of a film - its scene, the planned shots it has, its dialogue, its pictures, whether it is rendered, its prompt. */
 async function inspectFilm(id: string | undefined, clipId: string | undefined) {
-    if (!id || !filmExists(id)) log.usageError(id ? `No film "${id}" in ${FILMS_DIR}/` : 'Which film?', usage)
+    if (!id || !filmExists(id)) log.usageError(noProject('film', id, filmIds()), usage)
     const dir = filmDir(id!)
     const {clipsDir, clipIds} = requestedClip(dir, clipId, `film first: bun film.ts ${id}`)
 
@@ -173,6 +175,7 @@ async function inspectFilm(id: string | undefined, clipId: string | undefined) {
     )
 
     log.box('Prompt', clip.prompt)
+    for (const finding of checkPrompt(clip)) log.warn(`prompt: ${finding}`)
 }
 
 // What the two halves share - function declarations, so the --film branch at the top can call them before this point.

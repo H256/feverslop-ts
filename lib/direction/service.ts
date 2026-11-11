@@ -681,7 +681,7 @@ export function applyDirectionOverlay<T extends Data>(
         throw Error(
             `Direction needs review: bun run direction ${t.id}${t.kind === 'film' ? ' --film' : ''} --preview, then --take - or the Direction page of the workspace.` +
                 (open.length
-                    ? ` First rebind or remove ${open.length === 1 ? 'this rule' : `these ${open.length} rules`}:\n${open.map(line => `  - ${line}`).join('\n')}`
+                    ? ` First ${open.length === 1 ? 'this instruction needs' : `these ${open.length} instructions need`} a shot of the plan as it is now ("Keep for the new shot" or Edit on the page, --edit=ID --scope=… in the terminal), or ${open.length === 1 ? 'is' : 'are'} removed:\n${open.map(line => `  - ${line}`).join('\n')}`
                     : ''),
         )
     }

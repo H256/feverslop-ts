@@ -1,4 +1,6 @@
+import {formatSlotRanges} from './assemble.ts'
 import {log} from './log.ts'
+import {readClipRequests, readPictureJobs} from './render-state.ts'
 import {noteRunFailures, runCommand} from './run-record.ts'
 
 /**
@@ -35,8 +37,33 @@ export function clipChains<T extends {id: string; startsFrom?: string}>(clips: T
  */
 export function onlyClips<T extends {id: string}>(clips: T[], only: Set<string>): T[] {
     const unknown = [...only].filter(id => !clips.some(c => c.id === id))
-    if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${clips.map(c => c.id).join(', ')}`)
+    if (unknown.length) throw new Error(`--only: no clip ${unknown.join(', ')} - the clips are ${formatSlotRanges(clips.map(c => c.id))}`)
     return clips.filter(c => !only.size || only.has(c.id))
+}
+
+/**
+ * What is wrong with the ids of --only and --retake, said before the first step (#818): a typo in an id was found only at
+ * the render, after every cached step had been replayed. Checked against the requests and pictures of the last plan run -
+ * undefined when the ids are known, or when there is no plan yet to check them against (the render checks them then).
+ */
+export async function unknownIds(
+    projectDir: string,
+    picturesFile: string,
+    asked: {only: string[]; retake?: string; pictures: boolean; clips: boolean},
+): Promise<string | undefined> {
+    const clips = (await readClipRequests<{id: string}>(projectDir)).map(c => c.id)
+    if (!clips.length) return undefined
+    const pictures = (await readPictureJobs(picturesFile)).map(p => p.id)
+    const known = [...(asked.clips ? clips : []), ...(asked.pictures ? pictures : [])]
+    const there = [
+        ...(asked.clips ? [`the clips are ${formatSlotRanges(clips)}`] : []),
+        ...(asked.pictures && pictures.length ? [`the pictures are ${pictures.join(', ')}`] : []),
+    ].join('; ')
+    if (asked.retake && !clips.includes(asked.retake)) return `--retake: no clip ${asked.retake} in the last plan - the clips are ${formatSlotRanges(clips)}`
+    const unknown = asked.only.filter(id => !known.includes(id))
+    if (!unknown.length || !known.length) return undefined
+    const what = asked.clips && asked.pictures ? 'clip or picture' : asked.clips ? 'clip' : 'picture'
+    return `--only: no ${what} ${unknown.join(', ')} in the last plan - ${there}`
 }
 
 /** A clip that is rendered again with a fixed seed comes out the same (--again). */
@@ -62,6 +89,6 @@ export function warnClipsGoingOn<T extends {id: string; startsFrom?: string}>(se
     const later = clipsGoingOn(selected, all)
     if (later.length)
         log.warn(
-            `${later.join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`,
+            `${later.join(', ')} ${later.length > 1 ? 'start' : 'starts'} on the last frame of a clip rendered again and ${later.length > 1 ? 'are' : 'is'} not rendered again - name ${later.length > 1 ? 'them' : 'it'} in --only too if the picture should go on from the new one`,
         )
 }

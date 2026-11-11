@@ -1,3 +1,5 @@
+import {checkPrompts} from './lib/prompt-check.ts'
+import {noProject} from './lib/usage.ts'
 import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
@@ -22,7 +24,7 @@ import {
     type StepName,
     type StoryBeat,
 } from './lib/project.ts'
-import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
+import {clipChains, onlyClips, renderAll, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import {finishOf} from './lib/finish.ts'
 import {finishCopy, interpolateClips} from './lib/final-pass.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, dropStaleEdits} from './lib/direction/service.ts'
@@ -244,14 +246,22 @@ if (!validProjectId(projectId))
     )
 if (!projectExists(projectId)) {
     const existing = listProjects()
-    log.usageError(
-        `No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`,
-        usage,
-    )
+    log.usageError(noProject('project', projectId, existing), usage)
 }
 const project = new ProjectStore(projectId)
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
+// a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818). A run that plans again
+// (--redo) can make other clips: the render checks them then
+if (!redoSteps.length && (args.only || retake)) {
+    const wrong = await unknownIds(project.dir, join(project.dir, 'output', 'assets.json'), {
+        only: args.only.split(',').filter(Boolean),
+        retake: retake?.clip,
+        pictures: render.has('images'),
+        clips: render.has('videos') || render.has('final'),
+    })
+    if (wrong) log.usageError(wrong, usage)
+}
 if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 if (!args['dry-run']) keepTimingsIn(project.dir)
@@ -1664,6 +1674,7 @@ const clips = buildClipRequests({
     pinStartFrame: config.pinStartFrame || config.contextFrames > 0,
     contextFrames: config.contextFrames,
     locationView,
+    clipPrompt: config.clipPrompt,
     shotViews,
 })
 
@@ -1738,6 +1749,12 @@ for (const clip of clips) {
 }
 hideDetails(false)
 if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${clipRequestsDir(project.dir)} (--show=clips prints them here)`))
+// what went wrong between the parts of a prompt (#825): a word twice in a row, a label without a picture - said by clip
+{
+    const found = checkPrompts(clips)
+    for (const finding of found.slice(0, 8)) log.warn(`prompt of ${finding}`)
+    if (found.length > 8) log.warn(`${found.length - 8} more findings in the prompts - bun run inspect ${project.id} <clip> shows a clip's`)
+}
 const changes = requestChanges(outputDir)
 if (changes) {
     const {changed, added, gone} = changes
@@ -2194,8 +2211,8 @@ For every beat that plays while the song has vocals:
 // terminal (scripts, CI) nobody can pick, so the usage error lists them instead
 async function pickProject(): Promise<string> {
     const projects = listProjects()
-    if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
-    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
+    if (!projects.length) return log.usageError(noProject('project', undefined, []), usage)
+    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(noProject('project', undefined, projects), usage)
     const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
     if (clack.isCancel(picked)) {
         log.cancel('No project selected')

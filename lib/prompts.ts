@@ -236,7 +236,8 @@ Answer only with the look description.`
 
 export function lookBriefPrompt(style: string, storySummary: string): AskOptions {
     return {
-        maxTokens: 4096,
+        // measured (#820): 5 of 25 calls were cut off at 4096 - the answers that fit took up to 5630 tokens with their thinking
+        maxTokens: 8192,
         input: style
             ? `Design the visual look for a film of the following story. It will be generated with the MiniMax H3 video model.
 The director has already chosen the style of the film:
@@ -311,6 +312,8 @@ export function characterLookPrompt(
     otherLooks: {name: string; look: string}[] = [],
 ): AskOptions {
     return {
+        // measured (#820): 5 of 96 calls were cut off at the default of 8192 - the answers that fit took up to 7779 tokens with their thinking
+        maxTokens: 12288,
         input: `
 Write a Krea 2 image prompt for a character reference sheet of the given character.
 The image must match the film look below - same medium, style, palette and lighting - but it is a clean reference plate, not a film frame: it must be sharp and clearly readable, so leave out anything that would degrade or obscure the detail.
@@ -518,7 +521,8 @@ Place: ${description}`,
 // it instead of inventing a room per beat), and what each of the five views of its reference sheet shows of it.
 export function locationLayoutPrompt(name: string, look: string, description: string): AskOptions {
     return {
-        maxTokens: 4096,
+        // measured (#820): answers up to 3870 tokens under a limit of 4096, one cut off - room for the long ones
+        maxTokens: 8192,
         input: `
 A place of a music video is shown to the video model by a reference picture and by a sheet of five views of it:
 ${LOCATION_VIEWS.map((v, n) => `${n}: ${v}`).join('\n')}

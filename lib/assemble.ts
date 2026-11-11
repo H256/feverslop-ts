@@ -1,3 +1,4 @@
+import {commandStart} from './run-record.ts'
 import {existsSync, mkdirSync, renameSync} from 'node:fs'
 import {join} from 'node:path'
 import {log, startSpinner, styles} from './log.ts'
@@ -188,7 +189,7 @@ export async function assembleFinal({
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
     if (missing.length)
         throw new Error(
-            `Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`,
+            `Can't assemble - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: ${commandStart()}--render=videos --only=${missing.join(',')}`,
         )
 
     const infos = await Promise.all(files.map(probeVideo))

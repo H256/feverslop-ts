@@ -1,3 +1,5 @@
+import {checkPrompts} from './lib/prompt-check.ts'
+import {noProject} from './lib/usage.ts'
 import {cli} from './lib/cli.ts'
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
@@ -31,7 +33,7 @@ import {archiveClip} from './lib/film/archive.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
 import {previewSources} from './lib/assemble.ts'
 import {parseRetake} from './lib/retake.ts'
-import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
+import {clipChains, onlyClips, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import type {AssetKind} from './lib/asset-import.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {libraryDir} from './lib/library.ts'
@@ -69,10 +71,10 @@ import {
     toProps,
     toScreenplay,
 } from './lib/film/screenplay.ts'
-import {filmExists, filmIds} from './lib/film/setup.ts'
+import {filmExists, filmIds, filmDir} from './lib/film/setup.ts'
 import {applyAnnotations, parseFountain} from './lib/film/fountain-import.ts'
 import {askFilmJson as askJson} from './lib/film/json.ts'
-import {filmBuiltOn, FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from './lib/film/store.ts'
+import {filmBuiltOn, FILM_STEP_NAMES, FilmStore, type FilmStepName} from './lib/film/store.ts'
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from './lib/film/types.ts'
 import {ask, configureLlm} from './lib/llm.ts'
 import {keepLogIn, log, styles} from './lib/log.ts'
@@ -176,12 +178,19 @@ if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join
 const filmId = positionals[0]
 if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
     const existing = filmIds()
-    log.usageError(
-        `${filmId ? `No film "${filmId}" in ${FILMS_DIR}/` : 'No film id given'} - ${existing.length ? `the films here are: ${existing.join(', ')}. ` : ''}Create one with: bun run film:init`,
-        usage,
-    )
+    log.usageError(noProject('film', filmId, existing), usage)
 }
 
+// a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818)
+if (!redoSteps.length && (args.only || retake)) {
+    const wrong = await unknownIds(filmDir(filmId!), join(filmDir(filmId!), 'assets.json'), {
+        only: args.only.split(',').filter(Boolean),
+        retake: retake?.clip,
+        pictures: render.has('images'),
+        clips: render.has('videos') || render.has('final'),
+    })
+    if (wrong) log.usageError(wrong, usage)
+}
 const film = new FilmStore(filmId!)
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
@@ -838,6 +847,10 @@ async function planClips() {
         ),
     )
     await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
+    // what went wrong between the parts of a prompt (#825)
+    const found = checkPrompts(requests)
+    for (const finding of found.slice(0, 8)) log.warn(`prompt of ${finding}`)
+    if (found.length > 8) log.warn(`${found.length - 8} more findings in the prompts - bun run inspect ${film.id} <clip> --film shows a clip's`)
     for (const request of requests)
         log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
     log.step(
