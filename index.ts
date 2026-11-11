@@ -23,7 +23,7 @@ import {
     type StepName,
     type StoryBeat,
 } from './lib/project.ts'
-import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
+import {clipChains, onlyClips, renderAll, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import {finishOf} from './lib/finish.ts'
 import {finishCopy, interpolateClips} from './lib/final-pass.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, dropStaleEdits} from './lib/direction/service.ts'
@@ -250,6 +250,17 @@ if (!projectExists(projectId)) {
 const project = new ProjectStore(projectId)
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
+// a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818). A run that plans again
+// (--redo) can make other clips: the render checks them then
+if (!redoSteps.length && (args.only || retake)) {
+    const wrong = await unknownIds(project.dir, join(project.dir, 'output', 'assets.json'), {
+        only: args.only.split(',').filter(Boolean),
+        retake: retake?.clip,
+        pictures: render.has('images'),
+        clips: render.has('videos') || render.has('final'),
+    })
+    if (wrong) log.usageError(wrong, usage)
+}
 if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 if (!args['dry-run']) keepTimingsIn(project.dir)
