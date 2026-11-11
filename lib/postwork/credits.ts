@@ -1,6 +1,6 @@
 import {existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
-import {basename, isAbsolute, join, relative, resolve} from 'node:path'
+import {basename, dirname, isAbsolute, join, relative, resolve} from 'node:path'
 import {probeVideo} from '../assemble.ts'
 import {workflowDir} from '../config.ts'
 import {readTimings, type Timing} from '../timings.ts'
@@ -33,6 +33,19 @@ const MODEL_FIELDS = /\b(?:unet_name|ckpt_name|lora_name|clip_name\d?)\s*:\s*'([
 /** The models a workflow of comfy/workflows/ loads, by their file names without the ending - only those it names literally. */
 export function workflowModels(source: string): string[] {
     return [...new Set([...source.matchAll(MODEL_FIELDS)].map(m => m[1]!.replace(/\.(safetensors|gguf|ckpt|pt|pth|bin)$/i, '')))]
+}
+
+/**
+ * A workflow file and the comfy/ modules it imports (the graph builders the workflows share name the models, not the file
+ * that picks them) - only what lies in comfy/, so helpers elsewhere are not read.
+ */
+function workflowSource(file: string, seen = new Set<string>()): string {
+    if (seen.has(file) || !existsSync(file)) return ''
+    seen.add(file)
+    const source = readFileSync(file, 'utf8')
+    const comfyDir = resolve(workflowDir, '..')
+    const imported = [...source.matchAll(/from\s+'(\.{1,2}\/[^']+\.ts)'/g)].map(m => resolve(dirname(file), m[1]!)).filter(path => path.startsWith(comfyDir))
+    return [source, ...imported.map(path => workflowSource(path, seen))].join('\n')
 }
 
 const KINDS: Record<string, string> = {clip: 'Video', picture: 'Pictures', song: 'Song', interpolation: 'Frame interpolation'}
@@ -130,7 +143,7 @@ export function collectFacts(dir: string, opts: {timings?: Timing[]; version: st
             for (const entry of workflows.get(what) ?? []) {
                 if (entry.startsWith('model:')) names.add(entry.slice(6).replace(/\.(safetensors|pth|pt|ckpt)$/i, ''))
                 const file = join(workflowDir, `${entry.slice(9)}.ts`)
-                if (entry.startsWith('workflow:') && existsSync(file)) for (const name of workflowModels(readFileSync(file, 'utf8'))) names.add(name)
+                if (entry.startsWith('workflow:') && existsSync(file)) for (const name of workflowModels(workflowSource(file))) names.add(name)
             }
         return names.size ? [{what, names: [...names]}] : []
     })

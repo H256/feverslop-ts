@@ -18,13 +18,20 @@ test('all package CLI entry points provide help without starting work', async ()
                 .map(s => s.slice(4)),
         ]),
     ]
-    for (const entry of entries) {
-        const result = run(entry, '--help')
-        expect({entry, code: result.exitCode, error: result.stderr.toString()}).toEqual({entry, code: 0, error: ''})
-        expect(result.stdout.toString()).toContain('--quiet')
-        expect(result.stdout.toString()).toContain('--debug')
+    // started side by side: one after the other, 40+ entry points took longer than the default 5 s test timeout
+    const results = await Promise.all(
+        entries.map(async entry => {
+            const child = Bun.spawn(['bun', entry, '--help'], {cwd: root, stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1'}})
+            const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+            return {entry, code, stdout, stderr}
+        }),
+    )
+    for (const {entry, code, stdout, stderr} of results) {
+        expect({entry, code, error: stderr}).toEqual({entry, code: 0, error: ''})
+        expect(stdout).toContain('--quiet')
+        expect(stdout).toContain('--debug')
     }
-})
+}, 60_000)
 
 test('quiet preserves failures and prints no human stdout', () => {
     const result = run('tools/status.ts', 'nonexistent-cli-test-project', '--quiet')
