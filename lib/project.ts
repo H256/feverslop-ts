@@ -83,7 +83,8 @@ export type ShotPlan = {
     risky?: boolean // the planner could only write the action with a blank face or a stand-in object: it is rewritten once
     characters?: string[] // ids of everyone visible in the shot
     // plays: what the hands do on the instrument in this shot, as the planner wrote it in "playing:" (a plan from before has only playing: true)
-    people?: Record<string, {state?: string; frame?: string; motion?: string; singing?: boolean; playing?: boolean; plays?: string}>
+    // faceHidden: the planner's "face: hidden" - seen from behind, or the face out of the frame (#822); a plan from before says nothing
+    people?: Record<string, {state?: string; frame?: string; motion?: string; singing?: boolean; playing?: boolean; plays?: string; faceHidden?: boolean}>
     rest?: string // what everyone in the shot who has no entry of their own does at the same time, each in their own way
     hands?: string // id of the player the shot is about: their hands on the instrument, both hands and the instrument in the frame, the face out of it
 }

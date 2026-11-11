@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // Takes a song of the library (lib/song-library.ts) into a project: the audio, the lyrics, the six stems, the analysis, the
 // transcript and the timing of every word. The next plan run starts at the story - nothing of the song is done again. A song
@@ -8,15 +9,14 @@ import {loadProjectConfig} from '../lib/config.ts'
 import {libraryDir} from '../lib/library.ts'
 import {log, styles} from '../lib/log.ts'
 import {withProjectLock} from '../lib/lock.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import {ProjectStore} from '../lib/project.ts'
 import {importSong, librarySongIds, readLibrarySong} from '../lib/song-library.ts'
 cli('import-song')
 
 const usage = 'usage: bun run import-song <project-id> [song-id]'
 const [id, songId] = Bun.argv.slice(2).filter(a => !a.startsWith('--'))
-if (!id) log.usageError('Which project?', usage)
-if (!projectExists(id!)) log.usageError(`No project "${id}" in projects/ - create it first: bun run init ${id}`, usage)
+if (!id || !projectExists(id)) log.usageError(noProject('project', id, listProjects()), usage)
 const library = await libraryDir()
 
 if (!songId) {

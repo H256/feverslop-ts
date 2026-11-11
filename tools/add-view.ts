@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 import {log, styles} from '../lib/log.ts'
 // One more view of a place of a film, for where its sheet has none that fits (the reverse side, a close-up of a feature): rendered as one
@@ -13,7 +14,7 @@ import {configureLlm} from '../lib/llm.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
 import {filmRenderConfig} from '../lib/film/pictures.ts'
 import {FilmRenderer} from '../lib/film/render.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import type {FilmProject} from '../lib/film/types.ts'
 import {nextViewNumber, placeViews, viewRoute} from '../lib/film/views.ts'
 import {sequenceSheetDir, sheetAnchor} from '../lib/sequenceSheet.ts'
@@ -32,7 +33,7 @@ const name = flag('name')
 const shows = flag('shows')
 if (!id || !locationId || !name || !shows) log.usageError('Which film, which place, and what the view shows?', usage)
 if (!libraryIdPattern.test(locationId!)) log.usageError(`Invalid location id "${locationId}" - use lowercase letters, digits and dashes`, usage)
-if (!filmExists(id!)) log.usageError(`No film "${id}" in films/`, usage)
+if (!filmExists(id!)) log.usageError(noProject('film', id, filmIds()), usage)
 const dir = filmDir(id!)
 const anchor = sheetAnchor(sequenceSheetDir('location', locationId!))
 if (!existsSync(join(dir, anchor)))
