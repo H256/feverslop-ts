@@ -13,8 +13,8 @@ export function matchesState(project: ProjectListing, state: StateFilter) {
   switch (state) {
     case 'running': return project.lastRun?.state === 'running'
     case 'failed': return project.lastRun?.state === 'failed' || project.lastRun?.state === 'stopped'
-    case 'unfinished': return !project.clips || project.rendered < project.clips || project.final !== 'current'
-    case 'done': return project.clips > 0 && project.rendered === project.clips && project.final === 'current'
+    case 'unfinished': return !project.clips || project.rendered < project.clips || (project.final !== 'current' && project.final !== 'variant')
+    case 'done': return project.clips > 0 && project.rendered === project.clips && (project.final === 'current' || project.final === 'variant')
     default: return true
   }
 }

@@ -27,7 +27,7 @@ Zusätzliche aktuelle Funktionen, die in älteren Plänen fehlen:
 - Wort-/Zeilen-Timing mit Wellenform, Undo, Abhören, Speichern und erneutem Schneiden.
 - CLI-Gegenstücke für GUI-Änderungen und `lib/editor/cli-first.test.ts` als Architekturprüfung.
 
-**Vorrang:** Dieser Plan ersetzt die frühere Vorgabe „kein Frontend-Build“ aus `docs/frontend-guidelines.md`. Dessen Regeln zu Zuständigkeiten, Ressourcen, Entwürfen und sicherer Darstellung bleiben sinnvoll. Der frühere Plain-JS-Zwischenrefactor ist keine Vorbedingung mehr; gezielte Extraktionen erfolgen direkt im Zuge der Vue-Migration.
+**Vorrang:** Dieser Plan ersetzt die frühere Vorgabe „kein Frontend-Build“ aus den früheren Frontend-Leitlinien (entfernt; was weiter gilt, steht in `client/README.md`). Dessen Regeln zu Zuständigkeiten, Ressourcen, Entwürfen und sicherer Darstellung bleiben sinnvoll. Der frühere Plain-JS-Zwischenrefactor ist keine Vorbedingung mehr; gezielte Extraktionen erfolgen direkt im Zuge der Vue-Migration.
 
 ## 2. Entscheidungen und Grenzen
 

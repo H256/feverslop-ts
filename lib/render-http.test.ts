@@ -11,7 +11,8 @@ import {runTimings} from './timings.ts'
 const what: RenderWhat = {label: 'test', kind: 'picture', workflow: 'krea2-image', spec: {kind: 'picture', id: 'test', parts: ['test']}}
 class TestWorkflow extends WorkflowBuilder {
     output() {
-        return this.addNode('SaveImage', {})
+        // by its own method, not by a generated node: this test runs without comfy/nodes.ts too, where the builder's type has none
+        return (this as unknown as {addNode: (type: string, inputs: object) => string}).addNode('SaveImage', {})
     }
 }
 const prepare = async () => {

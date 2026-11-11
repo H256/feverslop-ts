@@ -85,3 +85,44 @@ test('direction preview runs the CLI with fixed arguments, never arbitrary clien
         })
     }
 })
+
+// #830: a change of the direction and the run that builds the clip prompts again are one request - as the command does it
+// (bun run direction --take). The page no longer starts the run itself after the change.
+test('a change with rebuild starts the plan run in the same request, and is refused before anything changes while a run goes on', async () => {
+    // a project of its own: the one above has instructions waiting for a preview, and edits build nothing while they wait
+    const dir = join(root, 'projects', 'rebuild')
+    mkdirSync(dir, {recursive: true})
+    writeFileSync(join(dir, 'project.json'), JSON.stringify({cast: {characters: [{id: 'kael', name: 'Kael'}], locations: []}}))
+    const started: {type: string}[] = []
+    let running = false
+    const runs = {
+        current: () => (running ? {running: true, command: 'bun index.ts rebuild'} : undefined),
+        start: (_target: unknown, action: {type: string}) => {
+            started.push(action)
+            return {source: 'here', command: 'bun index.ts rebuild', pid: 1, startedAt: '', running: true}
+        },
+    }
+    const post = (path: string, body: unknown) =>
+        editorHandler(runs as never)(new Request(`http://localhost/p/music/rebuild/api/direction${path}`, {method: 'POST', body: JSON.stringify(body)}))
+    const answer = async (response: Response) => (await response.json()) as {run?: {command: string}; error?: string}
+
+    // edits saved with rebuild: the answer carries the run
+    const saved = await post('/edits', {edits: [], rebuild: true})
+    expect(saved.status).toBe(200)
+    expect((await answer(saved)).run).toMatchObject({command: 'bun index.ts rebuild'})
+    expect(started).toEqual([{type: 'plan'}])
+
+    // without rebuild nothing is started
+    expect((await answer(await post('/edits', {edits: []}))).run).toBeUndefined()
+    expect(started.length).toBe(1)
+
+    // a run goes on: refused, and the direction file is as it was
+    running = true
+    const file = join(dir, 'direction.json')
+    const before = readFileSync(file, 'utf8')
+    const refused = await post('/edits', {edits: [{id: 'e1', scope: {kind: 'global'}, size: 'close'}], rebuild: true})
+    expect(refused.status).toBe(409)
+    expect((await answer(refused)).error).toContain('a run is going on')
+    expect(readFileSync(file, 'utf8')).toBe(before)
+    expect(started.length).toBe(1)
+})

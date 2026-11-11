@@ -15,7 +15,7 @@ import {useProject} from '../project/session'
  */
 const props = defineProps<{shotId: string}>()
 const emit = defineEmits<{close: []}>()
-const {api, busy, start, project} = useProject()
+const {api, busy, start, changing, project} = useProject()
 const toasts = useToasts()
 const {data: view, loading, error, reload} = useResource(signal => api.direction(signal))
 useRunDock().onEnd(() => {
@@ -112,9 +112,8 @@ const proposeAgain = () => work(() => start({type: 'direction'}))
 const take = () =>
   work(async () => {
     // the conflicts are shown right above: taking it with them is the director's choice (#795)
-    await api.takeDirection(!!view.value?.proposal?.conflicts.length)
+    await changing(rebuild => api.takeDirection(!!view.value?.proposal?.conflicts.length, rebuild))
     unbuilt.value = false
-    await start({type: 'plan'})
     toasts.show('Taken. The clip prompts are built again; render the clip when it is done.')
   })
 const drop = () =>
@@ -126,8 +125,7 @@ const drop = () =>
   })
 const saveEdits = (next: DirectionEdit[]) =>
   work(async () => {
-    await api.saveDirectionEdits(next)
-    await start({type: 'plan'})
+    await changing(rebuild => api.saveDirectionEdits(next, rebuild))
   })
 // several people out of the shot in one go (#790): marked, then taken out together - one save, and then one run: the prompts built
 // again, or, when the shot's words still name one of them, one proposal that writes it without all of them (taking it builds them)
