@@ -105,6 +105,11 @@ function musicChecks(j: number, people: NonNullable<ShotPlan['people']>, charact
             )
         if (p.singing !== true && singing.includes(id))
             problems.push(`shot ${j + 1}: ${name} sings in this shot - singing: yes, the mouth in view, singing into the microphone if ${name} has one`)
+        // a singer seen from behind cannot be lip-synced: the planner turns the camera or the singer, the composer papers over nothing (#822)
+        if (p.faceHidden && singing.includes(id))
+            problems.push(
+                `shot ${j + 1}: ${name} sings in this shot, but the face is hidden - a camera position and a "frame" in which the face and the mouth of ${name} are seen (three-quarter or profile), and face: seen`,
+            )
         const instrument = props?.find(e => e.characterId === id)
         if (!instrument) continue
         const heard = instrument.activePerShot[j] === true
@@ -224,6 +229,8 @@ export function readBeatPlan(
                     ...(text(p.frame) ? {frame: text(p.frame)} : {}),
                     ...(text(p.motion) ? {motion: text(p.motion)} : {}),
                     ...(yes(p.singing) ? {singing: true} : {}),
+                    // the planner's own word in a field of its own ("face: seen|hidden"), never read out of "frame"
+                    ...(text(p.face).toLowerCase().startsWith('hidden') ? {faceHidden: true} : {}),
                     ...playingOf(p.playing),
                 }
             }
@@ -330,7 +337,7 @@ export function readBeatPlan(
  *   STAGING: ...            (first call of a beat)
  *   SHOT 1
  *   framing: / size: wide|medium|close|extreme / camera: / view: / hold: yes|no / risky: yes|no / characters: A, B / action: ... / rest: ... / hands: A|no
- *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no
+ *   person: A | state: ... | frame: ... | motion: ... | playing: <what the hands do on the instrument>|no | singing: yes|no | face: seen|hidden
  *   START                   (the blocking call)
  *   start: A | where they are when the beat starts
  *   ENDS
@@ -339,7 +346,7 @@ export function readBeatPlan(
  * a line that does not fit is just skipped. Markdown around a key (bullets, bold, fences) is tolerated.
  */
 /** The fields of a "person:" line and of a shot, as the planner prompt asks for them (lib/shot-planner.ts) - a field not in here is skipped. */
-export const PERSON_FIELDS = ['state', 'frame', 'motion', 'playing', 'singing'] as const
+export const PERSON_FIELDS = ['state', 'frame', 'motion', 'playing', 'singing', 'face'] as const
 export const SHOT_FIELDS = ['framing', 'size', 'camera', 'view', 'hold', 'risky', 'characters', 'action', 'rest', 'hands'] as const
 const personSplit = new RegExp(`\\s*\\|\\s*(?=(?:${PERSON_FIELDS.join('|')})\\s*:)`, 'i')
 const personField = new RegExp(`^(${PERSON_FIELDS.join('|')})\\s*:\\s*(.*)$`, 'i')

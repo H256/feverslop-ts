@@ -490,3 +490,32 @@ end: The orcs | driven back to the water`
         expect(r.plan.ends).toEqual({vael: "stands at the river's edge, hammer low", 'the-orcs': 'driven back to the water'})
     })
 })
+
+describe('the face of a person (#822)', () => {
+    test('"face: hidden" on a person line is read, "face: seen" and no word leave nothing', () => {
+        const parsed = parseShotLines(
+            [
+                'SHOT 1',
+                'action: {Cael} pushes the door open',
+                'characters: Cael, Maren',
+                'person: Cael | state: at the door, palms on it | frame: three-quarter back view | motion: leans in | playing: no | singing: no | face: hidden',
+                'person: Maren | state: behind him | frame: profile toward Cael | motion: waits | playing: no | singing: no | face: seen',
+            ].join('\n'),
+        )
+        const r = readBeatPlan(parsed, beat, [cael, maren], 1)!
+        expect(r.plan.shots[0]!.people?.cael?.faceHidden).toBe(true)
+        expect(r.plan.shots[0]!.people?.maren?.faceHidden).toBeUndefined()
+        expect(r.problems).toEqual([])
+    })
+    test('a singer whose face is hidden is asked again', () => {
+        const shot = (face: string) => ({
+            action: '{Cael} walks to the door',
+            characters: ['Cael'],
+            people: {Cael: {state: 'at the door', frame: 'back view', motion: 'walks', singing: 'yes', face}},
+        })
+        const singers = {singerIds: ['cael'], singingPerShot: [true]}
+        const hidden = readBeatPlan({shots: [shot('hidden')]}, beat, [cael, maren], 1, singers)!
+        expect(hidden.problems.join(' ')).toContain('the face is hidden')
+        expect(readBeatPlan({shots: [shot('seen')]}, beat, [cael, maren], 1, singers)!.problems).toEqual([])
+    })
+})
