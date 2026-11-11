@@ -1,3 +1,7 @@
+import {listProjects} from '../lib/project-setup.ts'
+import {filmIds} from '../lib/film/setup.ts'
+import {noProject} from '../lib/usage.ts'
+import {log} from '../lib/log.ts'
 import {cli} from '../lib/cli.ts'
 import {parseArgs} from 'node:util'
 import {readFileSync} from 'node:fs'
@@ -45,7 +49,13 @@ const {values: a, positionals} = parseArgs({
         clips: {type: 'string'},
     },
 })
-if (positionals.length !== 1) throw Error('give exactly one project id')
+if (positionals.length !== 1)
+    log.usageError(
+        positionals.length
+            ? `One project id at a time, got ${positionals.join(', ')}`
+            : noProject(a.film ? 'film' : 'project', undefined, a.film ? filmIds() : listProjects()),
+        'bun run direction <project-id> [--film] …',
+    )
 if (a.text !== undefined && !a.edit) throw Error('--text goes with --edit=ID')
 const target = commandTarget(positionals[0], a.film ?? false)
 if (typeof target === 'string') throw Error(target)
