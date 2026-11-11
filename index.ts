@@ -1,3 +1,4 @@
+import {checkPrompts} from './lib/prompt-check.ts'
 import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
@@ -1739,6 +1740,12 @@ for (const clip of clips) {
 }
 hideDetails(false)
 if (!showsDetails('clips')) log.step('Prompts', styles.muted(`${clips.length} - in ${clipRequestsDir(project.dir)} (--show=clips prints them here)`))
+// what went wrong between the parts of a prompt (#825): a word twice in a row, a label without a picture - said by clip
+{
+    const found = checkPrompts(clips)
+    for (const finding of found.slice(0, 8)) log.warn(`prompt of ${finding}`)
+    if (found.length > 8) log.warn(`${found.length - 8} more findings in the prompts - bun run inspect ${project.id} <clip> shows a clip's`)
+}
 const changes = requestChanges(outputDir)
 if (changes) {
     const {changed, added, gone} = changes
