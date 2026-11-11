@@ -105,7 +105,7 @@ The run prints the credits line by line before it draws them; `--dry-run` only p
 | `--from=<file>` | `<id>-finished.mp4`, else `<id>.mp4` | the video |
 | `--title=` | a film's title, a music video's id | |
 | `--artist=` / `--director=` | none | a music video: "by …", a film: "Directed by …" (the words before it: `artistLabel`, `directorLabel` in the settings) |
-| `--disclosure=` | `Contains AI-generated content` | on the title card and at the end of the credits; `--disclosure=` empty: none |
+| `--disclosure=` | `Contains AI-generated content` | on the title card and at the end of the credits; `--disclosure=` empty: none. Up to 200 characters are recommended; a longer one goes in, with a warning |
 | `--marker=` | none | an AI marker on the title card: a preset or a PNG, as `bun run label` takes it |
 | `--line=TEXT` | none | a line of your own in the credits; repeat it for more, `--no-lines` for none |
 | `--hardware=` | none | your own words after the graphics cards |
@@ -117,7 +117,9 @@ The run prints the credits line by line before it draws them; `--dry-run` only p
 | `--font=<path>` | Lato (`assets/fonts/`) | a .ttf or .otf of your own |
 | `--save` / `--save-default` | | keep the options given for this project / for every project |
 
-The cards have the size and frame rate of the video, black, white text, faded in and out. The sound of the video is
+The cards have the size and frame rate of the video, black, white text, faded in and out. A line too long for the
+picture is broken at spaces into several of the same size - sooner in a vertical video - and the credits' length
+counts them; the settings keep it as one line. The sound of the video is
 untouched; silence runs under the title card. Subtitle tracks are kept and moved by the length of the title card.
 
 ## An intro: `bun run intro`

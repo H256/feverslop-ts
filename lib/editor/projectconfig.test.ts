@@ -136,4 +136,35 @@ describe('writing it', () => {
         expect(configOf(target)).toEqual({qaRetries: 1})
         rmSync(join(target.dir, '.lock'))
     })
+    test('the finish: on or off, and each field on its own - folded into the one object of config.json (#809)', async () => {
+        const target = {id: 'finished', kind: 'music' as const, dir: join(root, 'projects', 'finished')}
+        write(join(target.dir, 'config.json'), {singers: ['elias']})
+        const by = async (key: string) => (await readConfig(target)).settings.find(s => s.key === key)!
+        expect(await by('finish')).toMatchObject({value: false, default: false, own: false, group: 'Finish'})
+        expect(await by('finish.grain')).toMatchObject({value: 0, default: 0, own: false, needs: 'finish', step: 0.5})
+        // a field set turns the finish on; its other fields are the mild one's
+        expect(await writeConfig(target, {'finish.grain': 3})).toMatchObject({written: true, changed: ['finish.grain']})
+        expect(configOf(target)).toEqual({singers: ['elias'], finish: {grain: 3}})
+        expect(await by('finish')).toMatchObject({value: true, own: true})
+        expect(await by('finish.grain')).toMatchObject({value: 3, own: true})
+        expect(await by('finish.sharpen')).toMatchObject({value: 0.4, own: false})
+        // another field joins it; one back at its default leaves the object - an empty one is the plain "on"
+        await writeConfig(target, {'finish.colorMatch': 0.5, 'finish.colorReference': 'slot-014'})
+        expect(configOf(target).finish).toEqual({grain: 3, colorMatch: 0.5, colorReference: 'slot-014'})
+        await writeConfig(target, {'finish.grain': null, 'finish.colorMatch': 0, 'finish.colorReference': null})
+        expect(configOf(target).finish).toBe(true)
+        // a value out of range is refused in the loader's words, and nothing written
+        expect(await writeConfig(target, {'finish.sharpen': 2})).toMatchObject({
+            written: false,
+            problems: [expect.stringContaining('sharpen must be between 0 and 1')],
+        })
+        // off: no finish at all, the default
+        expect(await writeConfig(target, {finish: null})).toMatchObject({written: true, changed: ['finish']})
+        expect(configOf(target)).toEqual({singers: ['elias']})
+        // a custom finish written by hand is read field by field, and a whole object is still taken as it is
+        write(join(target.dir, 'config.json'), {finish: {sharpen: 0.2}})
+        expect(await by('finish.sharpen')).toMatchObject({value: 0.2, own: true})
+        await writeConfig(target, {finish: {grain: 2}})
+        expect(configOf(target)).toEqual({finish: {grain: 2}})
+    })
 })

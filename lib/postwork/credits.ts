@@ -1,6 +1,6 @@
 import {existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
-import {basename, isAbsolute, join, relative, resolve} from 'node:path'
+import {basename, dirname, isAbsolute, join, relative, resolve} from 'node:path'
 import {probeVideo} from '../assemble.ts'
 import {workflowDir} from '../config.ts'
 import {readTimings, type Timing} from '../timings.ts'
@@ -33,6 +33,19 @@ const MODEL_FIELDS = /\b(?:unet_name|ckpt_name|lora_name|clip_name\d?)\s*:\s*'([
 /** The models a workflow of comfy/workflows/ loads, by their file names without the ending - only those it names literally. */
 export function workflowModels(source: string): string[] {
     return [...new Set([...source.matchAll(MODEL_FIELDS)].map(m => m[1]!.replace(/\.(safetensors|gguf|ckpt|pt|pth|bin)$/i, '')))]
+}
+
+/**
+ * A workflow file and the comfy/ modules it imports (the graph builders the workflows share name the models, not the file
+ * that picks them) - only what lies in comfy/, so helpers elsewhere are not read.
+ */
+function workflowSource(file: string, seen = new Set<string>()): string {
+    if (seen.has(file) || !existsSync(file)) return ''
+    seen.add(file)
+    const source = readFileSync(file, 'utf8')
+    const comfyDir = resolve(workflowDir, '..')
+    const imported = [...source.matchAll(/from\s+'(\.{1,2}\/[^']+\.ts)'/g)].map(m => resolve(dirname(file), m[1]!)).filter(path => path.startsWith(comfyDir))
+    return [source, ...imported.map(path => workflowSource(path, seen))].join('\n')
 }
 
 const KINDS: Record<string, string> = {clip: 'Video', picture: 'Pictures', song: 'Song', interpolation: 'Frame interpolation'}
@@ -130,7 +143,7 @@ export function collectFacts(dir: string, opts: {timings?: Timing[]; version: st
             for (const entry of workflows.get(what) ?? []) {
                 if (entry.startsWith('model:')) names.add(entry.slice(6).replace(/\.(safetensors|pth|pt|ckpt)$/i, ''))
                 const file = join(workflowDir, `${entry.slice(9)}.ts`)
-                if (entry.startsWith('workflow:') && existsSync(file)) for (const name of workflowModels(readFileSync(file, 'utf8'))) names.add(name)
+                if (entry.startsWith('workflow:') && existsSync(file)) for (const name of workflowModels(workflowSource(file))) names.add(name)
             }
         return names.size ? [{what, names: [...names]}] : []
     })
@@ -190,6 +203,39 @@ export const endSeconds = (c: Pick<CreditsSettings, 'endSeconds'>, lines: number
 
 const SIZE = {title: 0.075, large: 0.05, normal: 0.036, small: 0.028}
 const LEADING = 1.55
+
+// what a line may take of the picture's width, and how wide a character of Lato is on average - on the wide side, so a
+// line breaks a little early rather than running off the picture
+const WIDTH_USED = 0.88
+const CHAR_WIDTH = 0.55
+
+/** The disclosure's recommended length: longer ones still go in, broken into more lines. */
+export const DISCLOSURE_LENGTH = 200
+
+/** How many characters of a line of this size fit across a picture this wide. */
+export const charsPerLine = (size: CreditLine['size'], width: number, height: number) =>
+    Math.max(8, Math.floor((width * WIDTH_USED) / (Math.round(height * SIZE[size]) * CHAR_WIDTH)))
+
+/**
+ * The lines as they are drawn: one too long for the picture is broken at spaces into several of the same size - drawtext
+ * does not wrap. A single word longer than a line stays whole. A vertical video breaks sooner.
+ */
+export function wrapLines(lines: CreditLine[], width: number, height: number): CreditLine[] {
+    return lines.flatMap(line => {
+        const fits = charsPerLine(line.size, width, height)
+        if (line.text.length <= fits) return [line]
+        const out: string[] = []
+        let current = ''
+        for (const word of line.text.split(/\s+/).filter(Boolean)) {
+            if (current && current.length + 1 + word.length > fits) {
+                out.push(current)
+                current = word
+            } else current = current ? `${current} ${word}` : word
+        }
+        if (current) out.push(current)
+        return out.map(text => ({text, size: line.size}))
+    })
+}
 
 /** The font files: Lato of the repo, or one of your own for both weights. */
 export function fontFiles(font: string, projectDir: string): {regular: string; bold: string} {
@@ -311,6 +357,11 @@ export async function creditsVideo(
     const files = {...given, ...(given.marker ? {marker: resolve(given.marker)} : {}), ...(given.sound ? {sound: resolve(given.sound)} : {})}
     const info = await probeVideo(video)
     const fps = Math.round(info.fps * 1000) / 1000
+    // drawtext does not wrap: a line too long for this picture becomes several
+    lines = {
+        ...(lines.opening ? {opening: wrapLines(lines.opening, info.width, info.height)} : {}),
+        ...(lines.end ? {end: wrapLines(lines.end, info.width, info.height)} : {}),
+    }
     const end = lines.end ? endSeconds(c, lines.end.length) : 0
     const plan: CreditsPlan = {
         width: info.width,

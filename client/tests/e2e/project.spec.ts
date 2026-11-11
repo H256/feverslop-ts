@@ -377,6 +377,28 @@ test('settings: a setting back to its default takes the key out of config.json; 
   await expect(dialog(page)).toContainText('changes to the settings')
 })
 
+test('settings: the finish field by field - its fields are locked while it is off, a step of their own (#809)', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/settings`)
+  await expect(page.getByLabel('Film grain')).toHaveValue('3')
+  await expect(page.getByLabel('Sharpen')).toHaveAttribute('step', '0.05')
+  await page.getByLabel('Film grain').fill('2.5')
+  await page.getByRole('button', {name: 'Save', exact: true}).click()
+  await expect.poll(() => posted.find(p => p.path === 'config')?.body).toEqual({change: {'finish.grain': 2.5}, dryRun: true})
+  await dialog(page).getByRole('button', {name: 'Cancel'}).click()
+  await page.getByLabel('Finish', {exact: true}).selectOption('off')
+  await expect(page.getByLabel('Film grain')).toBeDisabled()
+  await expect(page.getByLabel('Sharpen')).toBeDisabled()
+})
+
+test('refinish: the question says what the finish does, as the settings have it, and leads to them (#809)', async ({page}) => {
+  await page.goto(`${base}/p/music/demo/`)
+  await page.getByRole('button', {name: 'Refinish'}).click()
+  await expect(dialog(page)).toContainText('The finish: grade, sharpen 0.4, grain 3.')
+  await dialog(page).getByRole('link', {name: 'Change it on Settings'}).click()
+  await expect(page).toHaveURL(/\/p\/music\/demo\/settings$/)
+  await expect(dialog(page)).toHaveCount(0)
+})
+
 test('timing: a first word that starts before its singing is said, tightened with one click, and a clip that does not know the move is named', async ({
   page,
 }) => {

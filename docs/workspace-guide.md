@@ -307,7 +307,7 @@ Mit bekannten Lyrics geht nichts verloren und es kommt nichts still dazu. Jede Z
 
 ## Die Einstellungen eines Projekts ändern
 
-Die Seite **Settings** enthält die Render-Einstellungen des Projekts, also das, was sonst in seiner `config.json` steht: den **Video workflow** (etwa `h3-ref2video-prism-2pass` statt `h3-ref2video-2pass`), die Workflows für Bilder und Sheets, die Größe von Video und Bildern, das Seitenverhältnis, Continuity und Context frames, den Seed, die Wiederholungen und die Bildrate des fertigen Videos. Jede Einstellung sagt, was sie tut und was ihr Standard ist. **Use the default** geht auf den Standard zurück, **Undo** auf das, was das Projekt hatte.
+Die Seite **Settings** enthält die Render-Einstellungen des Projekts, also das, was sonst in seiner `config.json` steht: den **Video workflow** (etwa `h3-ref2video-prism-2pass` statt `h3-ref2video-2pass`), die Workflows für Bilder und Sheets, die Größe von Video und Bildern, das Seitenverhältnis, Continuity und Context frames, den Seed, die Wiederholungen und die Bildrate des fertigen Videos. In der Gruppe **Finish** schaltest du den Finish des fertigen Videos ein und stellst jeden Wert einzeln ein: Schwarz- und Weißpunkt, Kontrast, Sättigung, Schärfe, **Colour match** mit seinem Referenz-Clip und **Film grain** (etwa 3 ist leicht). Solange Finish aus ist, sind die Felder gesperrt. Jede Einstellung sagt, was sie tut und was ihr Standard ist. **Use the default** geht auf den Standard zurück, **Undo** auf das, was das Projekt hatte.
 
 1. Ändere, was du brauchst. Eine geänderte Einstellung hat links einen farbigen Balken.
 2. Klicke **Save**. Die Frage davor sagt, was sich ändert und **wie viele gerenderte Clips und Bilder dadurch stale werden**. Workflow, Größe und Seitenverhältnis gehören zu dem, woraus ein Clip gemacht wird: Ändert sich eines davon, ist der Clip stale. Andere Einstellungen, etwa die Wiederholungen oder die Bildrate des fertigen Videos, machen nichts stale.
@@ -331,6 +331,8 @@ Ein falscher Wert wird abgelehnt, mit denselben Worten wie beim Start eines Lauf
 | **48 fps, grade and sharpen** | dazu Zwischenbilder | etwa 15 Minuten für 37 Clips auf der Radeon |
 | **Full HD by a refine pass, 48 fps, grade and sharpen** | dazu der zweite Render-Pass auf jedem Clip | etwa 6 s pro Frame auf der Radeon, also viele Stunden für ein ganzes Projekt |
 | **Say it one by one** | alles einzeln wählen | |
+
+Unter der Auswahl steht, was der Finish tun wird, etwa *grade, sharpen 0.4, grain 3*. Körnung und Colour match stellst du auf **Settings** ein; der Link dorthin schließt den Dialog. Ist der Finish dort aus, nimmt Refinish den milden.
 
 So gehst du sinnvoll vor:
 
