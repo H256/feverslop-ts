@@ -986,7 +986,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const personInFrame = (s: (typeof shot.focus)[number], n: number) => `${personAlone(s, n)}${together(s)}`
                 const personAlone = (s: (typeof shot.focus)[number], n: number) => {
                     const p = stagedPeople?.[s.id]
-                    const face = shot.singers.includes(s) ? ', the face clearly visible' : ''
+                    // not for a singer the plan shows from behind (#822): "three-quarter back view" and "the face clearly visible" cannot both hold
+                    const face = shot.singers.includes(s) && !p?.faceHidden ? ', the face clearly visible' : ''
                     if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
                     if (!p) return `${s.label}, ${s.name}, in the frame${face}`
