@@ -1,5 +1,5 @@
 import {computed, ref, shallowRef} from 'vue'
-import type {EditorProject, ProjectKind, RunRequest} from '../../../../shared/workspace'
+import type {EditorProject, ProjectKind, RunInfo, RunRequest} from '../../../../shared/workspace'
 import {projectApi} from '../../api/project'
 import {projectRoot, rootsOf} from '../../api/urls'
 import type {RunDock} from '../../services/run'
@@ -47,8 +47,20 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
     const {run} = await api.run(action, deps.servers.take())
     started(run, action)
   }
+  /**
+   * A change that the server follows with a run of its own - the direction taken and the clip prompts built again (#830): one request,
+   * and the run it answers with is followed like one started here. `rebuild` is what the request is given to start that run with.
+   */
+  const changing = async <T extends {run?: RunInfo}>(change: (rebuild: {servers?: string[]}) => Promise<T>): Promise<T> => {
+    if (deps.run.running()) throw new Error('a run is going on - wait for it, or stop it')
+    const started = deps.run.starter()
+    const servers = deps.servers.take()
+    const done = await change(servers ? {servers} : {})
+    if (done.run) started(done.run, {type: 'plan'})
+    return done
+  }
   const busy = computed(() => !!deps.run.current.value?.running)
-  return {kind, id, root, api, roots: rootsOf(root), project, error, reload, start, starter: deps.run.starter, busy, takeServers: deps.servers.take}
+  return {kind, id, root, api, roots: rootsOf(root), project, error, reload, start, changing, starter: deps.run.starter, busy, takeServers: deps.servers.take}
 }
 export type ProjectSession = ReturnType<typeof createProjectSession>
 export const ProjectService = defineService<ProjectSession>('project')
