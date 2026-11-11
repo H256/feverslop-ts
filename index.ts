@@ -1664,6 +1664,7 @@ const clips = buildClipRequests({
     pinStartFrame: config.pinStartFrame || config.contextFrames > 0,
     contextFrames: config.contextFrames,
     locationView,
+    clipPrompt: config.clipPrompt,
     shotViews,
 })
 

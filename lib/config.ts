@@ -78,6 +78,11 @@ export type PlanConfig = {
     // shot planning chooses the view of every shot (step shotViews) and a clip gets the one of its first shot - from
     // the text of the plan and the names of the views, deliberately not from the pictures (no vision model needed)
     locationView: number | 'auto'
+    // how a clip prompt is worded (#824): "full" = as before; "compact" = every movement told once - a person's entry keeps where
+    // they are and how they are framed, the movement is in the shot's action only - and the shot sentence in its natural order
+    // ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind"). A switch to render the two against each
+    // other: it changes every clip prompt, so the rendered clips turn stale
+    clipPrompt: 'full' | 'compact'
 }
 
 // a project may use another model than the settings - never another server or key
@@ -114,6 +119,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     lyricsLanguage: 'en',
     continuity: 'never',
     locationView: 'auto',
+    clipPrompt: 'full',
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
@@ -272,6 +278,8 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
     }
     if (config.locationView !== 'auto' && (!Number.isInteger(config.locationView) || config.locationView < -1 || config.locationView > 4))
         fail(`locationView must be -1 (the whole sheet), the number of a view, 0 to 4, or "auto", got ${JSON.stringify(config.locationView)}`)
+    if (config.clipPrompt !== 'full' && config.clipPrompt !== 'compact')
+        fail(`clipPrompt must be "full" or "compact", got ${JSON.stringify(config.clipPrompt)}`)
     if (!['auto', 'always', 'never'].includes(config.continuity))
         fail(`continuity must be "auto", "always" or "never", got ${JSON.stringify(config.continuity)}`)
     if (typeof config.alignLyrics !== 'boolean') fail(`alignLyrics must be true or false, got ${JSON.stringify(config.alignLyrics)}`)
