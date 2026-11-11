@@ -62,6 +62,6 @@ export function warnClipsGoingOn<T extends {id: string; startsFrom?: string}>(se
     const later = clipsGoingOn(selected, all)
     if (later.length)
         log.warn(
-            `${later.join(', ')} start on the last frame of a clip rendered again and are not - render them again too (--again) if the picture should go on from the new one`,
+            `${later.join(', ')} ${later.length > 1 ? 'start' : 'starts'} on the last frame of a clip rendered again and ${later.length > 1 ? 'are' : 'is'} not rendered again - name ${later.length > 1 ? 'them' : 'it'} in --only too if the picture should go on from the new one`,
         )
 }

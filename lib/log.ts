@@ -1,3 +1,4 @@
+import {failureAdvice} from './failure-help.ts'
 import {closeSync, mkdirSync, openSync, writeSync} from 'node:fs'
 import {dirname} from 'node:path'
 import {format, stripVTControlCharacters, styleText} from 'node:util'
@@ -246,7 +247,9 @@ export const log = {
      * without a usage line, instead of Bun's raw stack-trace dump. */
     fatal: (message: string): never => {
         noteRunError(message)
-        return errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}])
+        // a failure in somebody else's words (a timeout, EPERM, a server's JSON) gets ours under it: what it means, what to do (#819)
+        const advice = failureAdvice(message)
+        return errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}, ...(advice ? [{text: `What to do: ${advice}`, style: styles.muted}] : [])])
     },
 }
 

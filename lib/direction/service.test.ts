@@ -485,7 +485,9 @@ test('a rule whose shot was planned again is named, with what to do, by the revi
         `shot ${id} "Elias strides quickly right to left across the floor": Its shots were planned again: rebind it to the shots as they are now, or remove it.`,
     ])
     await expect(previewDirection(target, async o => answer(JSON.parse(o.input)))).rejects.toThrow(`shot ${id} "Elias strides`)
-    expect(() => applyDirectionOverlay(target, data)).toThrow(`First rebind or remove this rule:\n  - shot ${id} "Elias strides`)
+    expect(() => applyDirectionOverlay(target, data)).toThrow(
+        `First this instruction needs a shot of the plan as it is now ("Keep for the new shot" or Edit on the page, --edit=ID --scope=… in the terminal), or is removed:\n  - shot ${id} "Elias strides`,
+    )
 })
 test('a run drops the edits made for shots planned again since, and names the instructions it builds without (#801)', async () => {
     const {target, data} = fixture()

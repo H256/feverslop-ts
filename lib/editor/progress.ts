@@ -1,7 +1,7 @@
 import {existsSync, statSync} from 'node:fs'
 import {join} from 'node:path'
 import {clipFolder, readOptions, variantOf} from '../refinish.ts'
-import type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts'
+import type {ClipProgress, RunProgress} from '../../shared/workspace.ts'
 export type {ClipProgress, RunProgress, Explained} from '../../shared/workspace.ts'
 
 // How far a run has come, clip by clip, from what it leaves in the project folder and nothing else: a job on a server has its
@@ -75,25 +75,5 @@ function summed(clips: Record<string, ClipProgress>): RunProgress {
     return {clips, done: states.filter(state => state === 'done').length, total: states.length}
 }
 
-/**
- * What a failure of a run means, in plain words, for the failures that can be told surely - by the messages of ComfyUI and of this
- * program, never a text of a language model. The others stay as they are.
- */
-export function explainFailure(failure: string): Explained | undefined {
-    if (/out of memory/i.test(failure))
-        return {text: 'The render server ran out of memory on this job.', action: 'Repeat on another server, or render a shorter clip or at a smaller size.'}
-    if (/has not answered for|No ComfyUI server reachable/.test(failure))
-        return {
-            text: 'A render server does not answer.',
-            action: 'Start it again and repeat: a job that is still queued is picked up. Or repeat on another server.',
-        }
-    if (/being worked on by another run/.test(failure)) return {text: 'Another run is working on this project.', action: 'Wait for it, or stop it.'}
-    if (/Direction needs review/.test(failure))
-        return {
-            text: 'The direction has rules to review: a run builds no clip before they are taken.',
-            action: 'On the Direction page rebind or remove the marked rules, then Preview and Take - and run again.',
-            page: 'direction',
-        }
-    if (/casting\.json/.test(failure)) return {text: 'casting.json names something the library does not have.', action: 'Change the entry on the Casting page.'}
-    return undefined
-}
+// what a failure means and what to do: lib/failure-help.ts - the terminal says the same
+export {explainFailure} from '../failure-help.ts'

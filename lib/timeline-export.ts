@@ -2,6 +2,7 @@
 // one video track, each trimmed to the frames it owns (see assembleFinal), with the song on an audio track, so
 // every cut can be adjusted by hand in Shotcut/Kdenlive (.mlt) or OpenShot (.osp). Paths are relative to the
 // project file, so the project folder can be moved or zipped. Nothing here renders anything.
+import {commandStart} from './run-record.ts'
 import {existsSync} from 'node:fs'
 import {join, relative} from 'node:path'
 import {log} from './log.ts'
@@ -35,7 +36,7 @@ export async function exportTimelines({
     const missing = clips.filter((_, i) => !existsSync(files[i]!)).map(c => c.id)
     if (missing.length)
         throw new Error(
-            `Can't export - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: --render=videos --only=${missing.join(',')}`,
+            `Can't export - ${missing.length} of ${clips.length} clip(s) not rendered yet: ${formatSlotRanges(missing)}\nRender them first: ${commandStart()}--render=videos --only=${missing.join(',')}`,
         )
 
     const infos = await Promise.all(files.map(probeVideo))
