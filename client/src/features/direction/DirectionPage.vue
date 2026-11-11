@@ -3,6 +3,7 @@ import {computed, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import {RouterLink} from 'vue-router'
 import type {DirectionEdit, DirectionRule, DirectionScope, DirectionSize} from '../../../../shared/direction'
+import {withNames} from '../../lib/format'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
@@ -427,7 +428,7 @@ const editItem = (rule: DirectionRule) => {
             <div v-for="item in leftovers" :key="item.key" class="item muted-item">
               <div class="what">
                 <span class="where">{{ scopeText(item.scope) }}</span>
-                <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ item.text }}</p>
+                <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ withNames(item.text) }}</p>
               </div>
               <div class="acts">
                 <button
@@ -454,7 +455,7 @@ const editItem = (rule: DirectionRule) => {
             <div class="what">
               <span class="where">{{ scopeText(item.scope) }}</span>
               <RouterLink v-if="item.scope.kind === 'shot'" class="go" :to="inTimeline(item.scope.id)">open in the timeline</RouterLink>
-              <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ item.text }}</p>
+              <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ withNames(item.text) }}</p>
               <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
             </div>
             <div class="acts">
@@ -473,13 +474,13 @@ const editItem = (rule: DirectionRule) => {
         <section v-for="group in grouped" :key="group.key" class="dp-card dp-group">
           <header class="dp-card-head">
             <h2>{{ group.title }}</h2>
-            <span v-if="group.label" class="muted" :title="group.label">{{ group.label }}</span>
+            <span v-if="group.label" class="muted" :title="withNames(group.label)">{{ withNames(group.label) }}</span>
           </header>
           <div v-for="item in activeOf(group.general)" :key="item.key" class="item">
             <div class="what">
               <span v-if="item.edit" class="dp-tag">edit</span>
               <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
-              <p>{{ item.text }}</p>
+              <p>{{ withNames(item.text) }}</p>
               <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
             </div>
             <div class="acts">
@@ -491,11 +492,11 @@ const editItem = (rule: DirectionRule) => {
             </div>
           </div>
           <details v-if="plannedOf(group.general).length" class="planned">
-            <summary>{{ plannedOf(group.general).length }} for the planner - who is in it, kept when it is planned again</summary>
+            <summary>Who is in the shot ({{ plannedOf(group.general).length }}, kept when the shots are planned again)</summary>
             <div v-for="item in plannedOf(group.general)" :key="item.key" class="item muted-item">
               <div class="what">
                 <span class="dp-tag">in the plan</span>
-                <p>{{ item.text }}</p>
+                <p>{{ withNames(item.text) }}</p>
                 <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
               </div>
               <div class="acts">
@@ -509,7 +510,7 @@ const editItem = (rule: DirectionRule) => {
               <div class="what">
                 <span v-if="item.edit" class="dp-tag">edit</span>
                 <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
-                <p>{{ item.text }}</p>
+                <p>{{ withNames(item.text) }}</p>
                 <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
               </div>
               <div class="acts">
@@ -521,11 +522,11 @@ const editItem = (rule: DirectionRule) => {
               </div>
             </div>
             <details v-if="plannedOf(shot.items).length" class="planned">
-              <summary>{{ plannedOf(shot.items).length }} for the planner</summary>
+              <summary>Who is in the shot ({{ plannedOf(shot.items).length }})</summary>
               <div v-for="item in plannedOf(shot.items)" :key="item.key" class="item muted-item">
                 <div class="what">
                   <span class="dp-tag">in the plan</span>
-                  <p>{{ item.text }}</p>
+                  <p>{{ withNames(item.text) }}</p>
                   <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
                 </div>
                 <div class="acts">
