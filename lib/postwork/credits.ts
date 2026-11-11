@@ -191,6 +191,39 @@ export const endSeconds = (c: Pick<CreditsSettings, 'endSeconds'>, lines: number
 const SIZE = {title: 0.075, large: 0.05, normal: 0.036, small: 0.028}
 const LEADING = 1.55
 
+// what a line may take of the picture's width, and how wide a character of Lato is on average - on the wide side, so a
+// line breaks a little early rather than running off the picture
+const WIDTH_USED = 0.88
+const CHAR_WIDTH = 0.55
+
+/** The disclosure's recommended length: longer ones still go in, broken into more lines. */
+export const DISCLOSURE_LENGTH = 200
+
+/** How many characters of a line of this size fit across a picture this wide. */
+export const charsPerLine = (size: CreditLine['size'], width: number, height: number) =>
+    Math.max(8, Math.floor((width * WIDTH_USED) / (Math.round(height * SIZE[size]) * CHAR_WIDTH)))
+
+/**
+ * The lines as they are drawn: one too long for the picture is broken at spaces into several of the same size - drawtext
+ * does not wrap. A single word longer than a line stays whole. A vertical video breaks sooner.
+ */
+export function wrapLines(lines: CreditLine[], width: number, height: number): CreditLine[] {
+    return lines.flatMap(line => {
+        const fits = charsPerLine(line.size, width, height)
+        if (line.text.length <= fits) return [line]
+        const out: string[] = []
+        let current = ''
+        for (const word of line.text.split(/\s+/).filter(Boolean)) {
+            if (current && current.length + 1 + word.length > fits) {
+                out.push(current)
+                current = word
+            } else current = current ? `${current} ${word}` : word
+        }
+        if (current) out.push(current)
+        return out.map(text => ({text, size: line.size}))
+    })
+}
+
 /** The font files: Lato of the repo, or one of your own for both weights. */
 export function fontFiles(font: string, projectDir: string): {regular: string; bold: string} {
     if (!font.trim()) return {regular: join(FONTS, 'Lato-Regular.ttf'), bold: join(FONTS, 'Lato-Bold.ttf')}
@@ -311,6 +344,11 @@ export async function creditsVideo(
     const files = {...given, ...(given.marker ? {marker: resolve(given.marker)} : {}), ...(given.sound ? {sound: resolve(given.sound)} : {})}
     const info = await probeVideo(video)
     const fps = Math.round(info.fps * 1000) / 1000
+    // drawtext does not wrap: a line too long for this picture becomes several
+    lines = {
+        ...(lines.opening ? {opening: wrapLines(lines.opening, info.width, info.height)} : {}),
+        ...(lines.end ? {end: wrapLines(lines.end, info.width, info.height)} : {}),
+    }
     const end = lines.end ? endSeconds(c, lines.end.length) : 0
     const plan: CreditsPlan = {
         width: info.width,

@@ -34,7 +34,12 @@ const choice = computed({
     <p v-if="!draft.opening && !draft.end" class="warn">Neither the title card nor the credits: there is nothing to add.</p>
     <FormField label="Title (empty: the project's)"><input v-model="draft.title" type="text" maxlength="200" /></FormField>
     <FormField :label="kind === 'film' ? 'Directed by' : 'Artist (by …)'"><input v-model="draft.who" type="text" maxlength="200" /></FormField>
-    <FormField label="Disclosure (on the card and at the end; empty: none)"><input v-model="draft.disclosure" type="text" maxlength="200" /></FormField>
+    <FormField label="Disclosure (on the card and at the end; empty: none)"
+      ><input v-model="draft.disclosure" type="text" maxlength="200" aria-describedby="cf-disclosure-count"
+    /></FormField>
+    <p id="cf-disclosure-count" class="muted cf-count">
+      {{ draft.disclosure.length }} / 200 characters - a line too long for the picture is broken into several when it is drawn
+    </p>
     <FormField v-if="draft.opening" label="Marker on the title card">
       <select v-model="choice">
         <option :value="NONE">None</option>
@@ -68,3 +73,10 @@ const choice = computed({
     <KeepSettings :draft="draft" />
   </div>
 </template>
+
+<style scoped>
+.cf-count {
+  margin: -4px 0 8px;
+  font-size: 12px;
+}
+</style>
