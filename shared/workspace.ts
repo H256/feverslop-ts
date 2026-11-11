@@ -45,6 +45,20 @@ export type LibraryEntry = {
     usedBy: {kind: ProjectKind; id: string; role: string}[]
 }
 export type Library = {dir: string; assets: LibraryEntry[]}
+/** A new music video as the start page asks for it: the options of `bun run init` (#831). `song`: a file on this machine. */
+export type NewProject = {
+    id: string
+    song?: string
+    idea?: string
+    lyrics?: string
+    storyIdea?: string
+    style?: string
+    musicStyle?: string
+    singers?: string
+    language?: string
+}
+/** One line of `bun run doctor`: what the machine has, and what to do about what it lacks. */
+export type MachineCheck = {what: string; state: 'ready' | 'missing' | 'note'; found: string; fix?: string}
 export type EditorServer = {name: string; reachable: boolean; running: number; pending: number; device?: string; freeGb?: number; totalGb?: number}
 
 ////////// A PROJECT

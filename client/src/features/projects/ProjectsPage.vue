@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, reactive, ref} from 'vue'
+import {computed, h, reactive, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {projectRoot} from '../../api/urls'
 import {workspace} from '../../api/workspace'
@@ -13,6 +13,10 @@ import {usePageTitle} from '../../services/chrome'
 import ProjectCard from './ProjectCard.vue'
 import {filterOf, groupProjects, KINDS, matchesFilter, PAGE_SIZE, queryOf, STATES, type ListFilter} from './listing'
 import {useListingStatus} from './useListingStatus'
+import {useAsk} from '../../services/ask'
+import MachineChecks from './MachineChecks.vue'
+import NewProjectForm from './NewProjectForm.vue'
+import {machineSummary, newProjectDraft, newProjectProblem, newProjectRequest} from './newProject'
 
 usePageTitle('All projects', 'Workspace')
 const route = useRoute(), router = useRouter()
@@ -28,6 +32,37 @@ const first = computed(() => (page.value - 1) * PAGE_SIZE)
 const shown = computed(() => entries.value.slice(first.value, first.value + PAGE_SIZE))
 const count = computed(() => hits.value.length === entries.value.length ? plural(hits.value.length, 'project') : `${plural(entries.value.length, 'group')} · ${plural(hits.value.length, 'project')}`)
 const {statusOf} = useListingStatus(computed(() => shown.value.map(entry => entry.project)))
+
+// what this machine has of what a video needs (bun run doctor, #831): asked once when the page opens, and again from its dialog
+const ask = useAsk()
+const machine = useResource(signal => workspace.doctor(signal))
+const checks = computed(() => machine.data.value?.checks ?? [])
+const missing = computed(() => checks.value.filter(check => check.state === 'missing'))
+const showMachine = async () => {
+  void machine.reload()
+  await ask({
+    title: 'This machine',
+    lines: ['What a video needs, and what to do about what is not there. The same as: bun run doctor'],
+    body: () => h(MachineChecks, {checks: checks.value}),
+    confirm: 'Close',
+  })
+}
+/** A new music video: the form becomes the options of `bun run init`, and the page goes to the project it made. */
+const newProject = async () => {
+  const draft = reactive(newProjectDraft())
+  const made = await ask({
+    title: 'New music video',
+    lines: ['Writes projects/<id>/ with what you give here. Nothing is planned or rendered yet.'],
+    body: () => h(NewProjectForm, {draft}),
+    confirm: 'Create',
+    submit: async () => {
+      const problem = newProjectProblem(draft)
+      if (problem) throw new Error(problem)
+      await workspace.createProject(newProjectRequest(draft))
+    },
+  })
+  if (made) await router.push(`/p/music/${draft.id.trim()}/story`)
+}
 
 const list = ref<HTMLElement>()
 /** A change of the filter is a place in the history; typing is not. Another filter starts on the first page. */
@@ -45,14 +80,57 @@ function change(next: Partial<ListFilter>, replace = false) {
       <SegmentedControl :model-value="filter.state" :options="STATES" label="Project state" @update:model-value="state => change({state})" />
       <input type="search" placeholder="Find a project" aria-label="Find a project" :value="filter.text" @input="change({text: ($event.target as HTMLInputElement).value}, true)">
       <span v-if="data" class="muted num">{{ count }}</span>
+      <div class="spacer" />
+      <button class="btn" :title="machine.data.value ? machineSummary(checks) : 'What this machine has of what a video needs'" @click="showMachine">
+        Machine<span v-if="missing.length" class="chip bad pp-count">{{ missing.length }} missing</span>
+      </button>
+      <button class="btn primary" @click="newProject">New music video</button>
     </PageBar>
+    <!-- something a run needs is not there: said before a first run fails on it -->
+    <div v-if="missing.length" class="warn pp-machine">
+      <span>{{ missing[0]!.what }}: {{ missing[0]!.found }}</span>
+      <code v-if="missing[0]!.fix">{{ missing[0]!.fix }}</code>
+      <button class="btn mini" @click="showMachine">{{ missing.length > 1 ? `All ${missing.length}` : 'Details' }}</button>
+    </div>
     <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
     <template v-if="data">
       <div class="cards">
         <ProjectCard v-for="entry in shown" :key="projectRoot(entry.project)" :project="entry.project" :more="entry.others.length" :status="statusOf(entry.project)" @expand="expanded.add(entry.project.group)" />
-        <div v-if="!shown.length" class="empty">{{ projects.length ? 'Nothing fits.' : 'No projects here yet - start one with: bun run init' }}</div>
+        <div v-if="!shown.length && projects.length" class="empty">Nothing fits.</div>
+        <div v-if="!projects.length" class="empty pp-first">
+          <b>No projects here yet.</b>
+          <ol>
+            <li>See what this machine has: <button class="btn mini" @click="showMachine">Machine</button> - the servers are set up in the terminal with <code>bun run setup</code>.</li>
+            <li>Start a music video: <button class="btn mini primary" @click="newProject">New music video</button> - or <code>bun run init</code>, <code>bun run film:init</code> for a film.</li>
+            <li>Plan it stage by stage on the project's pages, then render.</li>
+          </ol>
+        </div>
       </div>
       <PageNumbers :page="page" :pages="pages" :first="first" :shown="shown.length" :total="entries.length" @go="n => change({...filter, page: n})" />
     </template>
   </div>
 </template>
+
+<style scoped>
+.pp-count {
+  margin-left: 6px;
+}
+.pp-machine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pp-first {
+  text-align: left;
+  grid-column: 1 / -1;
+  max-width: 640px;
+}
+.pp-first ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+</style>

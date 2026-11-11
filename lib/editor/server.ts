@@ -55,7 +55,9 @@ import {readServers, urlsOfChoice} from './servers.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
-import type {ProjectStatus} from '../../shared/workspace.ts'
+import type {NewProject, ProjectStatus} from '../../shared/workspace.ts'
+import {doctor} from '../doctor.ts'
+import {createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
 import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts'
 
@@ -601,6 +603,16 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                             .sort((a, b) => b.changed - a.changed),
                     })
                 if (parts[1] === 'servers' && !post) return json({servers: await readServers()})
+                // what this machine has of what a video needs: `bun run doctor`, asked by the start page (#831)
+                if (parts[1] === 'doctor' && !post) return json({checks: await doctor()})
+                // a new music video: `bun run init <id> …` with the form as its options
+                if (parts[1] === 'projects' && parts[2] === 'new' && post) {
+                    try {
+                        return json(await createProject((await request.json()) as NewProject))
+                    } catch (e) {
+                        return refused(e)
+                    }
+                }
                 if (parts[1] === 'library') return libraryApi(parts.slice(2), request, url)
                 return notFound()
             }
