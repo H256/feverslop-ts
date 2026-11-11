@@ -16,3 +16,24 @@ jobs:
             - run: bun install --frozen-lockfile
             - run: bun run test
             - run: bun run typecheck
+            # the rules that find real bugs are errors (docs/development.md); warnings do not fail the check
+            - run: bun run lint
+            - run: bun run format:check
+
+    # the workspace's page: its types, its unit tests, and the real editor serving the built page
+    client:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: '1.3.13'
+            # the client is built with Vite, which runs on Node
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+            - run: bun install --frozen-lockfile
+            - run: bun run client:install
+            - run: bun run client:check
+            - run: bun run client:test
+            - run: bun run test:workspace

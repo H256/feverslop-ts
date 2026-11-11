@@ -13,7 +13,8 @@ export type ProjectPage = (typeof PROJECT_PAGES)[number]
 export type Media = {file: string; v: number}
 export type PlanStage = 'story' | 'cast' | 'look' | 'plan'
 export type Freshness = 'pinned' | 'current' | 'stale'
-export type FinalState = 'missing' | 'current' | 'older'
+// variant: no final video of its own, but a made-over one (bun run refinish) - a video to publish (#832)
+export type FinalState = 'missing' | 'current' | 'older' | 'variant'
 export type RunState = 'running' | 'stopped' | 'failed' | 'finished'
 // page: the page of the project where it is done (#782)
 export type Explained = {text: string; action: string; page?: 'direction'}
@@ -51,6 +52,20 @@ export type LibraryEntry = {
     usedBy: {kind: ProjectKind; id: string; role: string}[]
 }
 export type Library = {dir: string; assets: LibraryEntry[]}
+/** A new music video as the start page asks for it: the options of `bun run init` (#831). `song`: a file on this machine. */
+export type NewProject = {
+    id: string
+    song?: string
+    idea?: string
+    lyrics?: string
+    storyIdea?: string
+    style?: string
+    musicStyle?: string
+    singers?: string
+    language?: string
+}
+/** One line of `bun run doctor`: what the machine has, and what to do about what it lacks. */
+export type MachineCheck = {what: string; state: 'ready' | 'missing' | 'note'; found: string; fix?: string}
 export type EditorServer = {name: string; reachable: boolean; running: number; pending: number; device?: string; freeGb?: number; totalGb?: number}
 
 ////////// A PROJECT
@@ -203,8 +218,10 @@ export type PostworkView = {
 export type EditorFreshness = {clips: Record<string, Freshness>; pictures: Record<string, Freshness>}
 /** What `bun run status` says of a project, as far as the page shows it. */
 export type ProjectStatus = {
-    steps: unknown
-    changed: unknown
+    /** every step with where it stands: done, redone by the next run, not generated yet, not used by this project */
+    steps: {step: string; state: 'done' | 'redo' | 'missing' | 'unused'}[]
+    /** the inputs and settings that changed since the last run, each with the steps it redoes */
+    changed: {name: string; steps: string[]}[]
     pictures: {total: number; missing: number; stale: number}
     clips: {total: number; missing: number; stale: number}
     final: FinalState

@@ -111,7 +111,7 @@ pass - only for a change the PR means and names. The ffmpeg part needs ffmpeg on
 
 ### Lint and format
 
-`bun run lint` checks the CLI and the client with ESLint (`eslint.config.js`, type-aware: `typescript-eslint` recommendedTypeChecked, `eslint-plugin-vue`); `bun run lint:fix` fixes what it can. `bun run format` formats with Prettier (`.prettierrc.json`: 4 spaces, 2 in `client/`, no semicolons, single quotes, 160 columns), `bun run format:check` only says what it would change. There is no CI gate: run both before a PR. Rules that find real bugs here are errors - `no-floating-promises` (a forgotten `await`), `no-misused-promises`, `switch-exhaustiveness-check`; `any` from JSON and ComfyUI answers is a warning for now.
+`bun run lint` checks the CLI and the client with ESLint (`eslint.config.js`, type-aware: `typescript-eslint` recommendedTypeChecked, `eslint-plugin-vue`); `bun run lint:fix` fixes what it can. `bun run format` formats with Prettier (`.prettierrc.json`: 4 spaces, 2 in `client/`, no semicolons, single quotes, 160 columns), `bun run format:check` only says what it would change. The Checks workflow runs `lint` and `format:check` on every push and pull request, next to the tests and the typecheck - and, as a job of its own, the client's `client:check`, `client:test` and `test:workspace`. The Playwright run (`bun run client:e2e`) needs a browser installed and is run by hand before a change to the page. Rules that find real bugs here are errors - `no-floating-promises` (a forgotten `await`), `no-misused-promises`, `switch-exhaustiveness-check`; `any` from JSON and ComfyUI answers is a warning for now.
 
 ## Docs
 

@@ -11,7 +11,7 @@ import {useToasts} from '../../services/toasts'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 
-const {api, project, busy, start, root} = useProject()
+const {api, project, busy, start, changing, root} = useProject()
 const {data: view, loading, error, reload, refresh} = usePageData(signal => api.direction(signal))
 const route = useRoute()
 const toasts = useToasts()
@@ -133,8 +133,7 @@ const preview = toasts.guard(() => start({type: 'direction'}))
 // taken or restored: the clip prompts are built again at once - the planning run, nothing is rendered
 const take = () =>
   change(async () => {
-    await api.takeDirection(!!view.value?.proposal?.conflicts.length)
-    await start({type: 'plan'})
+    await changing(rebuild => api.takeDirection(!!view.value?.proposal?.conflicts.length, rebuild))
     toasts.show('Changes taken. The clip prompts are built again; render the affected clips on the timeline.')
   })
 const drop = () => change(() => api.dropDirection())
@@ -149,8 +148,7 @@ const restore = (id: string) =>
         confirm: 'Restore plan',
       })
     ) {
-      await api.restoreDirection(id)
-      await start({type: 'plan'})
+      await changing(rebuild => api.restoreDirection(id, rebuild))
     }
   })
 const plan = toasts.guard(() => start({type: 'plan'}))
@@ -178,8 +176,7 @@ const editInvalid = computed(
 )
 const saveEdits = (edits: DirectionEdit[]) =>
   change(async () => {
-    await api.saveDirectionEdits(edits)
-    await start({type: 'plan'})
+    await changing(rebuild => api.saveDirectionEdits(edits, rebuild))
   })
 const addEdit = () =>
   saveEdits([
@@ -258,7 +255,7 @@ const items = computed<Item[]>(() => {
       text: rule.text,
       issues: [ruleIssue(rule.id)].filter((m): m is string => !!m),
       planned: !!rule.planned,
-      leftover: !!rule.binding && !!ruleIssue(rule.id)?.includes('planned again'),
+      leftover: !!rule.binding && !!v.unresolved.find(u => u.ruleId === rule.id)?.stale,
       writes: false,
     })),
     ...v.edits.map(edit => ({
@@ -296,8 +293,13 @@ const clearLeftovers = (only?: Item) =>
     const rules = new Set(gone.flatMap(i => (i.rule ? [i.rule.id] : [])))
     if (rules.size) await api.saveDirection((view.value?.rules ?? []).filter(r => !rules.has(r.id)))
     if (edits.size) {
-      const saved = await api.saveDirectionEdits((view.value?.edits ?? []).filter(e => !edits.has(e.id)))
-      if (!saved.pending && !saved.unresolved.length) await start({type: 'plan'})
+      // the prompts are built again by the server, unless instructions still wait for a preview
+      await changing(rebuild =>
+        api.saveDirectionEdits(
+          (view.value?.edits ?? []).filter(e => !edits.has(e.id)),
+          rebuild,
+        ),
+      )
     }
     toasts.show(only ? 'Cleared.' : `Cleared ${gone.length} leftover${gone.length > 1 ? 's' : ''} of the old plan.`)
   })

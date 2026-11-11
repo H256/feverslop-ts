@@ -72,10 +72,15 @@ export function projectApi(root: string) {
     book: (signal?: AbortSignal) => get<BookView>('book', signal),
     direction: (signal?: AbortSignal) => get<DirectionView>('direction', signal),
     saveDirection: (rules: DirectionRule[]) => post<DirectionView>('direction', {rules}),
-    saveDirectionEdits: (edits: DirectionEdit[]) => post<DirectionView>('direction/edits', {edits}),
-    takeDirection: (despiteConflicts = false) => post<DirectionView>('direction/take', {despiteConflicts}),
+    // rebuild: the server builds the clip prompts again in the same request and answers with the run it started (#830) - for the
+    // edits only when none of them waits for its words
+    saveDirectionEdits: (edits: DirectionEdit[], rebuild?: {servers?: string[]}) =>
+      post<DirectionView & {run?: RunInfo}>('direction/edits', {edits, ...(rebuild ? {rebuild: true, ...rebuild} : {})}),
+    takeDirection: (despiteConflicts: boolean, rebuild: {servers?: string[]}) =>
+      post<DirectionView & {run?: RunInfo}>('direction/take', {despiteConflicts, rebuild: true, ...rebuild}),
     dropDirection: () => post<DirectionView>('direction/drop', {}),
-    restoreDirection: (version: string) => post<DirectionView>('direction/restore', {version}),
+    restoreDirection: (version: string, rebuild: {servers?: string[]}) =>
+      post<DirectionView & {run?: RunInfo}>('direction/restore', {version, rebuild: true, ...rebuild}),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),
     config: (signal?: AbortSignal) => get<ConfigView>('config', signal),
     /** Can the project's language model read a picture: a description from an uploaded picture is offered only then. */

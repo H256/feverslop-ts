@@ -57,5 +57,27 @@ Run backend tests with `bun run test`; Playwright tests have their own runner.
   include the installed `public` directory.
 - Both root and client dependencies have separate lockfiles. Use frozen installs for both.
 
+## Rules for work on the page
+
+What held before the Vue client and still holds (from the former frontend guidelines, which are gone):
+
+- **The pipeline decides, the page shows.** Planning, rendering, files, locks and every check belong to the commands and the
+  server. A check on the page is for a quick answer and never replaces the server's. Every change the page makes is a
+  command or the function a command calls (`lib/editor/cli-first.test.ts`).
+- **Four kinds of state, each with one owner:** what the server said (a page's data), what the page shows (selection, tab,
+  filter, zoom), what is being typed and not saved yet (a draft), and playback (time, the active video). A selection is kept
+  by id, not by an object of an older answer.
+- **A background refresh never overwrites what someone is typing.** A draft follows the data only while it is unchanged
+  (`useDraft`); an older answer that comes late is dropped (`useResource`, the session's `reload`).
+- **Whoever starts something ends it.** A timer, an event stream, a request belongs to the component or service that made it
+  and goes with it (`onScopeDispose`); no module starts work by being imported.
+- **Nothing starts by itself.** A run, a render and playback begin on a click. An effect that watches state never starts a
+  job.
+- **Errors by kind:** a first load that fails is shown with a retry; a later refresh that fails keeps what is shown and says
+  so once; a change that fails is said at the action. No silent catch on an action of the user.
+- **Text of projects, prompts and model answers is text:** never `v-html` for it.
+- **Playback is not the page's clock.** The playhead and the time may run per frame; the inspector, lists and forms change
+  when their own data does. Video and audio elements stay mounted, their source changes only when the file does.
+
 Feature ownership, API/state rules and the migration order are in the
 [implementation plan](../docs/superpowers/plans/2026-11-03-vue-workspace-client.md).

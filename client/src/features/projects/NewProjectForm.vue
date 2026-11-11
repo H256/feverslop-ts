@@ -1,0 +1,63 @@
+<script setup lang="ts">
+import FormField from '../../components/FormField.vue'
+import type {NewProjectDraft} from './newProject'
+
+/** What a new music video is made from, filled into the caller's draft: the options of `bun run init` (#831). */
+defineProps<{draft: NewProjectDraft}>()
+</script>
+
+<template>
+  <div class="np-form">
+    <FormField label="Project id"><input v-model="draft.id" type="text" placeholder="well-of-youth" required /></FormField>
+    <div class="np-seg" role="group" aria-label="The song">
+      <button type="button" :aria-pressed="draft.from === 'song'" @click="draft.from = 'song'">A song I have</button>
+      <button type="button" :aria-pressed="draft.from === 'idea'" @click="draft.from = 'idea'">A song to be made</button>
+    </div>
+    <template v-if="draft.from === 'song'">
+      <FormField label="Song file on this machine (.wav, .mp3, .flac)"><input v-model="draft.song" type="text" placeholder="D:\music\my-song.mp3" /></FormField>
+      <FormField label="Lyrics"><textarea v-model="draft.lyrics" rows="6" placeholder="Verse 1&#10;…" /></FormField>
+    </template>
+    <template v-else>
+      <FormField label="Song idea"><textarea v-model="draft.idea" rows="3" placeholder="What the song is about, its mood, its genre" /></FormField>
+      <FormField label="Lyrics of your own (optional - else they are written from the idea)"><textarea v-model="draft.lyrics" rows="4" /></FormField>
+    </template>
+    <FormField label="Story idea (optional)"><textarea v-model="draft.storyIdea" rows="2" placeholder="What the video shows" /></FormField>
+    <FormField label="Visual style (optional - picked from the examples if empty)"><textarea v-model="draft.style" rows="2" /></FormField>
+    <div class="np-pair">
+      <FormField label="Who sings on screen"><input v-model="draft.singers" type="text" placeholder="auto, or names - empty: nobody" /></FormField>
+      <FormField label="Language of the lyrics"><input v-model="draft.language" type="text" placeholder="en" /></FormField>
+    </div>
+    <p class="muted np-note">The same as <code>bun run init &lt;id&gt; --song=… --lyrics=…</code>. The render settings start at their defaults and are changed on the Settings page.</p>
+  </div>
+</template>
+
+<style scoped>
+.np-form {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.np-seg {
+  display: flex;
+  gap: 6px;
+}
+.np-seg button {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.np-seg button[aria-pressed='true'] {
+  background: var(--raised);
+  border-color: var(--text);
+}
+.np-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.np-note {
+  font-size: 12px;
+}
+</style>

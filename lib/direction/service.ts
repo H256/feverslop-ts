@@ -260,7 +260,7 @@ function unresolved(t: DirectionTarget, d: Data, s: State) {
     const edited = shots(t, withEdits(t, d, structuredClone(d), s))
     return reviewed(s).flatMap(r =>
         r.binding !== undefined && r.binding !== 'missing' && r.binding !== binding(t, d, r)
-            ? [{ruleId: r.id, message: 'Its shots were planned again: rebind it to the shots as they are now, or remove it.'}]
+            ? [{ruleId: r.id, stale: true, message: 'Its shots were planned again: rebind it to the shots as they are now, or remove it.'}]
             : !edited.some(sh => matches(r, sh))
               ? [{ruleId: r.id, message: 'It selects no shot of the plan as it is now: rebind or remove it.'}]
               : [],
