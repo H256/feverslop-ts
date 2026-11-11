@@ -38,6 +38,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | Script                  | What it does                                                                 |
 |-------------------------|------------------------------------------------------------------------------|
 | `bun run setup`         | connects the LLM server and the ComfyUI servers - see [Setup](#setup)        |
+| `bun run doctor`        | checks this machine: the settings, the LLM and ComfyUI servers, ffmpeg and uv - what is ready, and what to do about what is not; `--json` for a script |
 | `bun run init`          | creates a new project - see [Creating a project](#creating-a-project)        |
 | `bun run example`       | creates a random example project and generates its song - see [Creating a project](#creating-a-project) |
 | `bun run status <id>`   | where a project stands: steps done or redone by the next run, renders missing or stale, the next command - `--film` for a film |
@@ -75,6 +76,9 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run comfy:convert` | turns a ComfyUI workflow (API export) into a draft workflow file             |
 
 ## Setup
+
+`bun run doctor` says what this machine has of what a video needs and what to do about the rest - the settings file, the LLM server
+and its model, each ComfyUI server, ffmpeg and uv. It only reads; run it first, and again after `bun run setup`.
 
 The servers are machine settings, not project settings - they live in a settings file outside the repo:
 
