@@ -7,7 +7,19 @@ import {finalLabel} from '../editor/project.ts'
 import {runCommand} from '../editor/runs.ts'
 import type {Timing} from '../timings.ts'
 import {POSTWORK_DEFAULTS, postworkProblem} from './config.ts'
-import {collectFacts, creditLines, creditsFilter, creditsVideo, endSeconds, fontFiles, linesFilter, projectTitle, workflowModels} from './credits.ts'
+import {
+    charsPerLine,
+    collectFacts,
+    creditLines,
+    creditsFilter,
+    creditsVideo,
+    endSeconds,
+    fontFiles,
+    linesFilter,
+    projectTitle,
+    workflowModels,
+    wrapLines,
+} from './credits.ts'
 
 const credits = POSTWORK_DEFAULTS.credits
 const timing = (t: Partial<Timing>): Timing => ({at: '2026-11-05T00:00:00Z', project: 'demo', kind: 'clip', name: 'h3-ref2video', seconds: 60, ...t})
@@ -80,6 +92,35 @@ describe('credits - a title card and the credits of a finished video (#609)', ()
         expect(endSeconds({endSeconds: 0}, 3)).toBe(8)
         expect(endSeconds({endSeconds: 0}, 20)).toBe(30)
         expect(endSeconds({endSeconds: 12}, 20)).toBe(12)
+    })
+    test('a line too long for the picture is broken at spaces into lines of the same size - sooner in a vertical video (#808)', () => {
+        const disclosure =
+            'This video shows AI generated content. All characters appearing in this work are fictitious. Any resemblance to real persons, living or dead, is purely coincidental.'
+        const lines = [
+            {text: 'Song', size: 'title' as const},
+            {text: disclosure, size: 'small' as const},
+            {text: '', size: 'normal' as const},
+        ]
+        const wide = wrapLines(lines, 1920, 1080)
+        const tall = wrapLines(lines, 1080, 1920)
+        for (const [wrapped, w, h] of [
+            [wide, 1920, 1080],
+            [tall, 1080, 1920],
+        ] as const) {
+            const small = wrapped.filter(l => l.size === 'small')
+            // nothing is lost: joined again, it is the text
+            expect(small.map(l => l.text).join(' ')).toBe(disclosure)
+            for (const l of small) expect(l.text.length).toBeLessThanOrEqual(charsPerLine('small', w, h))
+            // the short lines and the gap stay as they were
+            expect(wrapped[0]).toEqual({text: 'Song', size: 'title'})
+            expect(wrapped.at(-1)).toEqual({text: '', size: 'normal'})
+        }
+        expect(wide.length).toBe(4)
+        expect(tall.length).toBeGreaterThan(wide.length)
+        // what fits stays one line; a word longer than a line stays whole
+        expect(wrapLines([{text: 'Contains AI-generated content', size: 'small'}], 1920, 1080)).toHaveLength(1)
+        const word = 'x'.repeat(200)
+        expect(wrapLines([{text: `a ${word} b`, size: 'small'}], 1920, 1080).map(l => l.text)).toEqual(['a', word, 'b'])
     })
     test('every line is a drawtext of its own, read from a file, centred, sized by the height of the video', () => {
         const {filter, files, height} = linesFilter(
