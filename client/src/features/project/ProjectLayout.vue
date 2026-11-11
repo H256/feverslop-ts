@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import {RouterLink, RouterView, useRoute} from 'vue-router'
-import type {ProjectKind} from '../../../../shared/workspace'
+import type {ProjectKind, ProjectPage} from '../../../../shared/workspace'
 import ResourceState from '../../components/ResourceState.vue'
 import {useResource} from '../../composables/useResource'
 import {TOP_NAV, usePageTitle} from '../../services/chrome'
@@ -23,14 +23,15 @@ run.onEnd(() => {
 const project = session.project
 usePageTitle(() => project.value?.title ?? session.id)
 // in the order a film is made: the book, who plays, who sings, how it looks - the timeline is where it all comes together
-const pages = computed(() => {
+type Tab = {name: string; label: string; path: '' | ProjectPage}
+const pages = computed((): Tab[] => {
   const p = project.value
   return [
     {name: 'timeline', label: 'Timeline', path: ''},
     {name: 'story', label: p?.kind === 'film' ? 'Screenplay' : 'Story', path: 'story'},
     {name: 'casting', label: 'Casting', path: 'casting'},
-    ...(p?.sings ? [{name: 'singers', label: 'Singers', path: 'singers'}] : []),
-    ...(p?.timed ? [{name: 'timing', label: 'Timing', path: 'timing'}] : []),
+    ...(p?.sings ? ([{name: 'singers', label: 'Singers', path: 'singers'}] satisfies Tab[]) : []),
+    ...(p?.timed ? ([{name: 'timing', label: 'Timing', path: 'timing'}] satisfies Tab[]) : []),
     {name: 'look', label: 'Look', path: 'look'},
     {name: 'direction', label: 'Direction', path: 'direction'},
     {name: 'references', label: 'References', path: 'references'},
