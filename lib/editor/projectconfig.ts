@@ -163,6 +163,18 @@ const DEFINITIONS: Definition[] = [
         note: 'A continuing clip is pinned to the last frame of the clip before it, not only given it as a picture.',
     },
     {
+        key: 'clipPrompt',
+        label: 'Clip prompt',
+        group: 'Sampling',
+        control: 'select',
+        for: 'music',
+        choices: () => [
+            {value: 'full', label: 'full: as the planner wrote it'},
+            {value: 'compact', label: 'compact: every movement told once'},
+        ],
+        note: 'How a clip prompt is worded. Compact leaves a movement to the action of the shot instead of telling it again per person, and writes the shot sentence in its natural order. To render the two against each other: a change makes every rendered clip stale.',
+    },
+    {
         key: 'seed',
         label: 'Seed',
         group: 'Seed and retries',

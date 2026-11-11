@@ -46,6 +46,7 @@
         "texture-chains": "bun tools/texture-chains.ts",
         "interpolate": "bun tools/interpolate.ts",
         "stats": "bun tools/stats.ts",
+        "doctor": "bun tools/doctor.ts",
         "status": "bun tools/status.ts",
         "inspect": "bun tools/inspect.ts",
         "editor": "bun editor.ts",
