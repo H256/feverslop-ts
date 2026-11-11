@@ -443,9 +443,9 @@ describe('the look of a film', () => {
     test('a character written anew: its looks and their descriptions, its other looks too - everyone else is kept', () => {
         const data = film()
         const result = applyLook('film', data, {again: [{kind: 'character', id: 'ana'}]})
-        // a film's shots are planned from the cast and the views of the places, not from the looks: they stay
-        expect(result).toEqual({changed: true, remade: ['characterLooks: ana', 'characterDescriptions: ana'], dropped: []})
-        expect(data.coverage).toBeDefined()
+        // a film's shots are planned against the descriptions of the cast and the places (#731): a description written anew drops them
+        expect(result).toEqual({changed: true, remade: ['characterLooks: ana', 'characterDescriptions: ana'], dropped: ['coverage']})
+        expect(data.coverage).toBeUndefined()
         expect(data.partials!.characterLooks).toEqual({bo: {fingerprint: KEPT_BY_HAND, value: 'bo look'}})
         expect(data.partials!.characterDescriptions).toEqual({bo: {fingerprint: KEPT_BY_HAND, value: 'bo desc'}})
         expect(data.locationViews).toBeDefined()
