@@ -519,3 +519,18 @@ describe('the face of a person (#822)', () => {
         expect(readBeatPlan({shots: [shot('seen')]}, beat, [cael, maren], 1, singers)!.problems).toEqual([])
     })
 })
+
+describe('a shot outside the place of its beat (#823)', () => {
+    const lines = (inside: string) =>
+        ['SHOT 1', 'view: from the corridor, looking at the closed door', `inside: ${inside}`, 'characters: Cael', 'action: {Cael} pushes the door open'].join(
+            '\n',
+        )
+    test('"inside: no" is asked again', () => {
+        const r = readBeatPlan(parseShotLines(lines('no')), beat, [cael, maren], 1)!
+        expect(r.problems.join(' ')).toContain('outside the place of this beat')
+    })
+    test('"inside: yes", and a plan that says nothing, pass', () => {
+        expect(readBeatPlan(parseShotLines(lines('yes')), beat, [cael, maren], 1)!.problems).toEqual([])
+        expect(readBeatPlan({shots: [{action: '{Cael} pushes the door open', characters: ['Cael']}]}, beat, [cael, maren], 1)!.problems).toEqual([])
+    })
+})
