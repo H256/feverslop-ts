@@ -25,6 +25,7 @@ import DescriptionForm from './DescriptionForm.vue'
 import IntroForm from './IntroForm.vue'
 import LabelForm from './LabelForm.vue'
 import RefinishForm from './RefinishForm.vue'
+import {finishSummary} from '../settings/settings'
 import type {Timeline} from './useTimeline'
 
 /** What can be asked for on the timeline, each asked first - what it costs, what goes stale - and then run. */
@@ -99,6 +100,9 @@ export function useClipActions(timeline: Timeline) {
   async function refinish() {
     const form = reactive(newRefinish())
     const picked = markedClips.value
+    // what the finish will do, as the settings have it - grain and colour match are set there
+    const config = await api.config().catch(() => undefined)
+    const finish = config && finishSummary(config.settings)
     await ask({
       title: 'Make this project over',
       lines: [
@@ -106,7 +110,7 @@ export function useClipActions(timeline: Timeline) {
         picked.length ? `Only the ${plural(picked.length, 'marked clip')}: larger clips, no final video.` : 'All clips, and the final videos.',
       ],
       warnings: ['Refine is slow, about 6 s per frame on the Radeon, and can change mouths a little: try a marked clip first, and compare.'],
-      body: () => h(RefinishForm, {draft: form}),
+      body: () => h(RefinishForm, {draft: form, finish, settings: `${session.root}/settings`}),
       confirm: 'Start',
       render: true,
       submit: () =>

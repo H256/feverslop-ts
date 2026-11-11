@@ -43,3 +43,20 @@ export function costOf(impact: ConfigImpact): string[] {
   ].filter(Boolean)
   return parts.length ? [`${parts.join(' and ')} would be made from something else then: they are stale, and nothing is rendered on its own.`] : []
 }
+
+/**
+ * What the finish of these settings does, in a few words: "grade, sharpen 0.4, grain 3". A refinish finishes with the mild one
+ * when the project has it off - the fields then show the mild one's values.
+ */
+export function finishSummary(settings: SettingView[]): string {
+  const value = (key: string) => settings.find(s => s.key === key)?.value
+  const amount = (field: string) => Number(value(`finish.${field}`)) || 0
+  const reference = value('finish.colorReference')
+  const parts = [
+    'grade',
+    amount('sharpen') > 0 && `sharpen ${amount('sharpen')}`,
+    amount('colorMatch') > 0 && `colour match ${amount('colorMatch')}${typeof reference === 'string' && reference ? ` to ${reference}` : ''}`,
+    amount('grain') > 0 && `grain ${amount('grain')}`,
+  ].filter(Boolean)
+  return `${parts.join(', ')}${value('finish') === true ? '' : ' - the mild one, as Finish is off in Settings'}`
+}

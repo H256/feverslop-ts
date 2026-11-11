@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {defaults, loadProjectConfig, qaRetriesNote, workflowDir} from '../config.ts'
 import {filmDefaults, loadFilmConfig} from '../film/config.ts'
+import {type Finish, finishOf, MILD_FINISH} from '../finish.ts'
 import {withProjectLock} from '../lock.ts'
 import {readEditorFreshness, type EditorTarget} from './project.ts'
 import type {ConfigChange, ConfigImpact, ConfigResult, ConfigView, SettingView} from '../../shared/workspace.ts'
@@ -204,14 +205,93 @@ const DEFINITIONS: Definition[] = [
     {
         key: 'finish',
         label: 'Finish',
-        group: 'Final video',
+        group: 'Finish',
         control: 'select',
         for: 'both',
         choices: () => [
             {value: false, label: 'off'},
-            {value: true, label: 'mild: a light grade and sharpen'},
+            {value: true, label: 'on'},
         ],
-        note: 'A grade and sharpen of the final video, written next to it as <name>-finished.mp4. A custom finish is written in config.json and shown here as it is.',
+        note: 'A grade, sharpen and grain of the final video, written next to it as <name>-finished.mp4 - the video itself stays as it is. Off forgets the values below.',
+    },
+    {
+        key: 'finish.blackLevel',
+        label: 'Black level',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.005,
+        for: 'both',
+        note: 'Of the range taken as black, 0-1: the clips come out a little milky, this makes their darks dark again.',
+    },
+    {
+        key: 'finish.whiteLevel',
+        label: 'White level',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.005,
+        for: 'both',
+        note: 'Of the range taken as white, 0-1, above the black level.',
+    },
+    {
+        key: 'finish.contrast',
+        label: 'Contrast',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.01,
+        for: 'both',
+        note: '1 = unchanged.',
+    },
+    {
+        key: 'finish.saturation',
+        label: 'Saturation',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.01,
+        for: 'both',
+        note: '1 = unchanged.',
+    },
+    {
+        key: 'finish.sharpen',
+        label: 'Sharpen',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.05,
+        for: 'both',
+        note: 'A contrast-adaptive sharpen, 0-1: 0 = off.',
+    },
+    {
+        key: 'finish.colorMatch',
+        label: 'Colour match',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.05,
+        for: 'both',
+        note: 'Every clip this part of the way (0-1) to one reference in black, white and mean colour, so the cuts do not jump. 0 = off.',
+    },
+    {
+        key: 'finish.colorReference',
+        label: 'Colour reference',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'text',
+        for: 'both',
+        note: 'The clip the others are matched to, like slot-014 - empty: the median of all clips. Only with a colour match.',
+    },
+    {
+        key: 'finish.grain',
+        label: 'Film grain',
+        group: 'Finish',
+        needs: 'finish',
+        control: 'number',
+        step: 0.5,
+        for: 'both',
+        note: 'Over everything, last, 0-100: 0 = off, about 3 is light.',
     },
 ]
 const definitionsOf = (target: EditorTarget) => DEFINITIONS.filter(d => d.for === 'both' || d.for === target.kind)
@@ -244,6 +324,16 @@ export async function readConfig(target: EditorTarget): Promise<ConfigView> {
     const base = (target.kind === 'film' ? filmDefaults : defaults) as unknown as Record<string, unknown>
     return {
         settings: definitionsOf(target).map(({for: _, choices, ...definition}): SettingView => {
+            // the finish: on or off, and each of its fields on its own - config.json has them in one object
+            if (definition.key === 'finish' || finishField(definition.key)) {
+                return {
+                    ...definition,
+                    value: settingIn(own, definition.key, base),
+                    default: settingIn({}, definition.key, base),
+                    own: ownFinish(own, definition.key),
+                    ...(choices ? {choices: choices(target)} : {}),
+                }
+            }
             const value = config[definition.key]
             const offered = choices?.(target)
             return {
@@ -274,6 +364,46 @@ function applied(own: Record<string, unknown>, change: ConfigChange): Record<str
     return next
 }
 
+/** `finish.grain` -> `grain`: a field of the finish object, set on its own. */
+const finishField = (key: string) => (key.startsWith('finish.') ? (key.slice(7) as keyof Finish) : undefined)
+
+/**
+ * A change as config.json takes it: the finish's fields (`finish.grain`) folded into its object. A field set turns the
+ * finish on, one at its default is taken out of the object, and an object with nothing in it is the plain `true`. Off
+ * writes no finish at all - the default.
+ */
+export function foldFinish(own: Record<string, unknown>, change: ConfigChange): ConfigChange {
+    const fields = Object.keys(change).filter(key => finishField(key))
+    if (!fields.length) return change
+    const rest = Object.fromEntries(Object.entries(change).filter(([key]) => key !== 'finish' && !finishField(key)))
+    const given = change.finish
+    const was = own.finish ?? false
+    const object: Record<string, unknown> =
+        given && typeof given === 'object' ? {...given} : was && typeof was === 'object' ? {...(was as Record<string, unknown>)} : {}
+    for (const key of fields) {
+        const field = finishField(key)!
+        const value = change[key]
+        if (value === null || JSON.stringify(value) === JSON.stringify(MILD_FINISH[field])) delete object[field]
+        else object[field] = value
+    }
+    const on = 'finish' in change ? given !== null && given !== false : true
+    if (!on) return {...rest, finish: null}
+    return {...rest, finish: Object.keys(object).length ? object : true}
+}
+
+/** What a setting is in these settings of config.json (`base`: the defaults) - a finish field as the finish has it. */
+function settingIn(settings: Record<string, unknown>, key: string, base?: Record<string, unknown>): unknown {
+    const field = finishField(key)
+    if (key !== 'finish' && !field) return settings[key]
+    const finish = finishOf((settings.finish ?? base?.finish ?? false) as boolean | Partial<Finish>)
+    return field ? (finish ?? MILD_FINISH)[field] : !!finish
+}
+/** Whether config.json has this finish setting written: the finish at all, or this field of its object. */
+const ownFinish = (own: Record<string, unknown>, key: string) => {
+    const field = finishField(key)
+    return field ? typeof own.finish === 'object' && own.finish !== null && field in own.finish : 'finish' in own
+}
+
 const NOTHING = {clips: [] as string[], pictures: [] as string[]}
 
 /** What a change would do, without doing it: whether the loader takes it, which keys change, and what goes stale. */
@@ -281,8 +411,10 @@ export async function previewConfig(target: EditorTarget, change: ConfigChange):
     const known = definitionsOf(target).map(d => d.key)
     const unknown = Object.keys(change).filter(key => !known.includes(key))
     const own = ownSettings(target)
-    const next = applied(own, change)
-    const changed = Object.keys(change).filter(key => known.includes(key) && !same(own[key], next[key]))
+    const next = applied(own, foldFinish(own, change))
+    const changed = Object.keys(change).filter(key => known.includes(key) && !same(settingIn(own, key), settingIn(next, key)))
+    // a finish written whole another way (an object for `true`): still a change of the file
+    if ('finish' in change && !changed.includes('finish') && !same(own.finish, next.finish)) changed.push('finish')
     if (unknown.length) {
         return {
             problems: [`${unknown.join(', ')}: not a setting here - the settings are ${known.join(', ')}; anything else in config.json is edited by hand`],
@@ -323,7 +455,8 @@ export async function writeConfig(target: EditorTarget, change: ConfigChange): P
     return withProjectLock(target.dir, target.id, async () => {
         const impact = await previewConfig(target, change)
         if (impact.problems.length || !impact.changed.length) return {...impact, written: false}
-        const text = `${JSON.stringify(applied(ownSettings(target), change), null, 2)}\n`
+        const own = ownSettings(target)
+        const text = `${JSON.stringify(applied(own, foldFinish(own, change)), null, 2)}\n`
         // whole or not at all: a file a run is reading is never half written
         const temporary = `${configFile(target)}.tmp`
         writeFileSync(temporary, text)
