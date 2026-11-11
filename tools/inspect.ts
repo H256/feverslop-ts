@@ -1,3 +1,4 @@
+import {checkPrompt} from '../lib/prompt-check.ts'
 import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // One clip on one screen: the beat and the staged shots it comes from, its pictures and audio tracks, whether it is
@@ -111,6 +112,7 @@ await showRender(
 )
 
 log.box('Prompt', clip.prompt)
+for (const finding of checkPrompt(clip)) log.warn(`prompt: ${finding}`)
 
 /** --film: one clip of a film - its scene, the planned shots it has, its dialogue, its pictures, whether it is rendered, its prompt. */
 async function inspectFilm(id: string | undefined, clipId: string | undefined) {
@@ -173,6 +175,7 @@ async function inspectFilm(id: string | undefined, clipId: string | undefined) {
     )
 
     log.box('Prompt', clip.prompt)
+    for (const finding of checkPrompt(clip)) log.warn(`prompt: ${finding}`)
 }
 
 // What the two halves share - function declarations, so the --film branch at the top can call them before this point.

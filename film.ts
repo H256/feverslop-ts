@@ -1,3 +1,4 @@
+import {checkPrompts} from './lib/prompt-check.ts'
 import {noProject} from './lib/usage.ts'
 import {cli} from './lib/cli.ts'
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
@@ -846,6 +847,10 @@ async function planClips() {
         ),
     )
     await Bun.write(join(outputDir, 'shotlist.md'), shotlistMarkdown({screenplay, cast, coverage, clips}))
+    // what went wrong between the parts of a prompt (#825)
+    const found = checkPrompts(requests)
+    for (const finding of found.slice(0, 8)) log.warn(`prompt of ${finding}`)
+    if (found.length > 8) log.warn(`${found.length - 8} more findings in the prompts - bun run inspect ${film.id} <clip> --film shows a clip's`)
     for (const request of requests)
         log.box(`${request.id} · ${request.sceneId} · ${request.seconds}s${request.startsFrom ? ` · goes on from ${request.startsFrom}` : ''}`, request.prompt)
     log.step(
