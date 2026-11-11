@@ -96,6 +96,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         args: '<project-id> --only=slot-001,... --model=file,... [--multiplier=5] [--comfy=URL]',
         description: 'Interpolate the rendered clips of a project.',
     },
+    doctor: {
+        args: '[--json]',
+        description:
+            'Check this machine: the settings, the LLM and ComfyUI servers, ffmpeg and uv - what is ready, and what to do about what is not. Only reads.',
+        json: true,
+    },
     status: {args: '<project-id> [--json] [--film]', description: 'Show project state and the next command.', json: true},
     inspect: {args: '<project-id> <clip-id> [--json] [--film]', description: 'Inspect one clip, its references and prompt.', json: true},
     stats: {
