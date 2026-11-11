@@ -10,6 +10,7 @@ const FINAL = {
   missing: ['No final video', 'chip'],
   current: ['Final video current', 'chip good'],
   older: ['Final video older than its clips', 'chip stale'],
+  variant: ['Final video: made over', 'chip good'],
 } as const
 const RUN = {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']} as const
 const final = computed(() => FINAL[project.value.final.state])
