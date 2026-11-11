@@ -28,13 +28,13 @@ describe('the fallback for a missing comfy/nodes.ts', () => {
         expect(() => wf.SomeCustomNode!({})).toThrow('bun run comfy:types')
     })
 
-    test.if(existsSync(generated))('has the outputs of the generated file', async () => {
+    test.if(existsSync(generated))('fallback outputs match generated indices, allowing extra server outputs', async () => {
         const {WorkflowBuilder} = await import(generated)
         for (const [name, outputs] of Object.entries(FALLBACK_NODES)) {
             const node = (new WorkflowBuilder() as Builder)[name]?.({}) ?? {}
             const fallback = (new FallbackWorkflowBuilder() as unknown as Builder)[name]!({})
-            const {inputs: _, ...withoutPaths} = node
-            expect([name, withoutPaths]).toEqual([name, fallback])
+            // Custom nodes may append outputs; every fallback reference must still point at the same output.
+            expect([name, node]).toEqual([name, expect.objectContaining(fallback)])
             expect(outputs).toEqual(Object.keys(fallback).filter(key => key !== '__id'))
         }
     })

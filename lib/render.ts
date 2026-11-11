@@ -366,6 +366,14 @@ export class Renderer implements Disposable {
         for (const server of this.connected) server.api.destroy()
     }
 
+    /**
+     * A run that puts something away before it renders - --again, --refresh, --retake, a picture of the user's own - asks the servers
+     * first: one that cannot render leaves the project as it was, instead of a clip in old/ and none in its place (#816).
+     */
+    async serversFirst() {
+        await this.connect()
+    }
+
     // connects on the first render, so a run where everything exists works without a server
     private connect() {
         this.ready ??= (async () => {

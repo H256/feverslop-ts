@@ -516,7 +516,7 @@ if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
 
 const transcript = stems
     ? await project.step('transcript', '2b · TRANSCRIBING THE VOCALS', async () => {
-          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
+          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper (${language})`))
           return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
       })
     : undefined
@@ -1007,6 +1007,7 @@ if (until === 'look') {
         renderer.refresh = refreshKinds
         log.section('8e · RENDERING THE CAST AND THE PLACES')
         log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
+        if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
         await renderPictures(renderer, lookPictures)
     } else
         log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
@@ -1771,6 +1772,7 @@ if (render.has('images') || render.has('videos') || retake) {
         ),
     )
     log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
+    if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
 
     if (retake) {
         const clip = clips.find(c => c.id === retake.clip)

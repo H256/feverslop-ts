@@ -214,7 +214,7 @@ const settings = await loadSettings({
     llmModel: args['llm-model'],
     comfy: args.comfy,
 })
-configureLlm(settings.llm)
+configureLlm(settings.llm, {endsRun: true})
 // your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
 if (args['picture-anchor'] && !args['dry-run']) {
     if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
@@ -860,6 +860,7 @@ if (render.has('images') || render.has('videos') || retake) {
         ),
     )
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
+    if (args.again || renderer.refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
     if (retake) {
         const clip = requests.find(r => r.id === retake.clip)
         if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${requests.map(r => r.id).join(', ')}`)
