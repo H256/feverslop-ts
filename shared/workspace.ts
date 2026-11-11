@@ -4,6 +4,12 @@
  */
 
 export type ProjectKind = 'music' | 'film'
+/**
+ * The pages of a project besides its timeline, by the last part of their address: /p/<kind>/<id>/<page>. One list (#840) - the
+ * server answers these addresses with the page, the client's router has a route for each and the layout a tab.
+ */
+export const PROJECT_PAGES = ['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'postwork', 'settings'] as const
+export type ProjectPage = (typeof PROJECT_PAGES)[number]
 export type Media = {file: string; v: number}
 export type PlanStage = 'story' | 'cast' | 'look' | 'plan'
 export type Freshness = 'pinned' | 'current' | 'stale'

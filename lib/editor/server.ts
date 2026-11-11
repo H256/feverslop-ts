@@ -55,7 +55,7 @@ import {readServers, urlsOfChoice} from './servers.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
-import type {ProjectStatus} from '../../shared/workspace.ts'
+import {PROJECT_PAGES, type ProjectStatus} from '../../shared/workspace.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
 import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts'
 
@@ -621,11 +621,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                if (
-                    parts.length > 4 ||
-                    (area && !['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'settings', 'postwork'].includes(area))
-                )
-                    return notFound()
+                if (parts.length > 4 || (area && !(PROJECT_PAGES as readonly string[]).includes(area))) return notFound()
                 return post ? notFound() : page(request)
             }
         } catch (e) {
