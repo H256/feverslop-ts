@@ -197,8 +197,10 @@ export type PostworkView = {
 export type EditorFreshness = {clips: Record<string, Freshness>; pictures: Record<string, Freshness>}
 /** What `bun run status` says of a project, as far as the page shows it. */
 export type ProjectStatus = {
-    steps: unknown
-    changed: unknown
+    /** every step with where it stands: done, redone by the next run, not generated yet, not used by this project */
+    steps: {step: string; state: 'done' | 'redo' | 'missing' | 'unused'}[]
+    /** the inputs and settings that changed since the last run, each with the steps it redoes */
+    changed: {name: string; steps: string[]}[]
     pictures: {total: number; missing: number; stale: number}
     clips: {total: number; missing: number; stale: number}
     final: FinalState
