@@ -862,6 +862,7 @@ if (render.has('images') || render.has('videos') || retake) {
         ),
     )
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
+    if (args.again || renderer.refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
     if (retake) {
         const clip = requests.find(r => r.id === retake.clip)
         if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${requests.map(r => r.id).join(', ')}`)

@@ -70,7 +70,9 @@ describe('the jobs of a run', () => {
         pending('a.mp4.pending.json', {promptId: 'ours', queuedAt: 1})
         pending('b.mp4.pending.json', {promptId: 'far', queuedAt: 1})
         const {fetcher} = comfy([], ['ours'])
-        const [a, b] = await jobsQueuedSince(dir, 0, [server])
+        const jobs = await jobsQueuedSince(dir, 0, [server])
+        const a = jobs.find(job => job.promptId === 'ours'),
+            b = jobs.find(job => job.promptId === 'far')
         await cancelJobs([a!], fetcher)
         await cancelJobs([b!], (async () => {
             throw new Error('down')

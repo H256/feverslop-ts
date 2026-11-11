@@ -1,6 +1,7 @@
 import {describe, expect, test} from 'bun:test'
 import type {Project} from '../project.ts'
-import {applyTiming, outdatedClips, timingView} from './timing.ts'
+import {applyTiming, outdatedClips, timingView, wordsToPlace} from './timing.ts'
+import {translate, validateWords} from '../../client/src/features/timing/edit.ts'
 
 // two clips: slot-001 0-4 s (beat b1), slot-002 4-8 s (beat b2). Line 0 "we rise" in the first, line 1 "and fall" in the
 // second - but line 1 is barely found: its words are a guess at 6 s, the singer really sings it at 2.5 s, in the first clip
@@ -453,4 +454,41 @@ describe('applyTiming - back to the automatic timing (#738)', () => {
         // without the automatic timing, or a line it does not have: said
         expect(() => applyTiming(project(), {lines: [{line: 1, reset: true}]}, requests)).toThrow('automatic timing has no such line')
     })
+})
+
+test('compressed alignment words can be dragged and saved without changing the source on read', () => {
+    for (const start of [1, 19.97]) {
+        const source = [
+            {text: 'one', start, end: start + 0.01, estimated: true},
+            {text: 'two', start: start + 0.01, end: start + 0.02, estimated: true},
+        ]
+        const data = {
+            music: {durationSec: 20},
+            lyricsTiming: {lines: [{line: 0, sectionIndex: 0, section: 'Verse', text: 'one two', start, end: start + 0.02, words: source, confidence: 0}]},
+        } as Project
+        const before = JSON.stringify(data)
+        const shown = timingView('/nowhere', data, [])!
+        expect(JSON.stringify(data)).toBe(before)
+        const moved = translate(shown.lines[0]!.words, 0, 1, -0.5, shown.duration)
+        validateWords(moved, shown.duration)
+        expect(moved[0]!.start).toBeCloseTo(start === 1 ? 0.5 : 19.4)
+        expect(moved.every(w => w.end - w.start >= 0.05 - 1e-9)).toBe(true)
+        expect(moved[1]!.start).toBeGreaterThanOrEqual(moved[0]!.end)
+        expect(applyTiming(data, {lines: [{line: 0, words: moved}]}, []).changed).toEqual([0])
+        expect(data.lyricsTiming!.lines[0]!.words).toEqual(moved)
+    }
+})
+
+test('repair near the song end uses gaps without pushing the first word before zero', () => {
+    const line = project().lyricsTiming!.lines[0]!
+    line.words = [
+        {text: 'we', start: 0, end: 0.01},
+        {text: 'rise', start: 19.99, end: 20},
+    ]
+    const placed = wordsToPlace(line, 20)
+    validateWords(placed, 20)
+    expect(placed.map(w => [w.start, w.end])).toEqual([
+        [0, 0.05],
+        [19.95, 20],
+    ])
 })
