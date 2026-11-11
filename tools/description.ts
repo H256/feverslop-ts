@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // The text for publishing a finished video on YouTube (#805, docs/postwork.md): the video you choose, a teaser of its story,
 // that it is AI-generated and what FeverSlop TS is, and how it was made - the graphics cards, the models, the measured time
@@ -11,14 +12,14 @@ import {parseArgs} from 'node:util'
 import {probeVideo} from '../lib/assemble.ts'
 import {loadProjectConfig} from '../lib/config.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {ask, configureLlm} from '../lib/llm.ts'
 import {log, styles} from '../lib/log.ts'
 import type {DescriptionSettings} from '../lib/postwork/config.ts'
 import {collectFacts, projectTitle} from '../lib/postwork/credits.ts'
 import {descriptionText, factsFor, phaseTimes, publishableVideos, storySource, storyTitle, teaserPrompt} from '../lib/postwork/description.ts'
 import {loadPostwork, savePostwork, withOptions} from '../lib/postwork/store.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import {loadSettings, readSettingsFile} from '../lib/settings.ts'
 import {readTimings} from '../lib/timings.ts'
 cli('description')
@@ -56,7 +57,8 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-if (!id || !(args.film ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${args.film ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
+if (!id || !(args.film ? filmExists(id) : projectExists(id)))
+    log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = args.film ? filmDir(id!) : projectDir(id!)
 const kind = args.film ? ('film' as const) : ('music' as const)
 

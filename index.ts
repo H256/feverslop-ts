@@ -1,3 +1,4 @@
+import {noProject} from './lib/usage.ts'
 import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
@@ -244,10 +245,7 @@ if (!validProjectId(projectId))
     )
 if (!projectExists(projectId)) {
     const existing = listProjects()
-    log.usageError(
-        `No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`,
-        usage,
-    )
+    log.usageError(noProject('project', projectId, existing), usage)
 }
 const project = new ProjectStore(projectId)
 // before the load: a run that writes works from the state it read, so no other run may save in between
@@ -343,7 +341,7 @@ const settings = await loadSettings({
     llmParallel: args['llm-parallel'],
     comfy: args.comfy,
 })
-configureLlm(settings.llm, {endsRun: true})
+configureLlm(settings.llm)
 // your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
 if (args['picture-anchor'] && !args['dry-run']) {
     if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
@@ -529,7 +527,7 @@ if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
 
 const transcript = stems
     ? await project.step('transcript', '2b · TRANSCRIBING THE VOCALS', async () => {
-          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
+          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper (${language})`))
           return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
       })
     : undefined
@@ -2205,8 +2203,8 @@ For every beat that plays while the song has vocals:
 // terminal (scripts, CI) nobody can pick, so the usage error lists them instead
 async function pickProject(): Promise<string> {
     const projects = listProjects()
-    if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
-    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
+    if (!projects.length) return log.usageError(noProject('project', undefined, []), usage)
+    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(noProject('project', undefined, projects), usage)
     const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
     if (clack.isCancel(picked)) {
         log.cancel('No project selected')
