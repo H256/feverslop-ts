@@ -1,3 +1,4 @@
+import {HttpError} from '../api/http'
 /** Seconds as m:ss.s, or m:ss when not precise. */
 export function clock(seconds: number, precise = true) {
   const whole = Math.max(0, seconds)
@@ -10,6 +11,16 @@ export const dateOf = (ms: number) => new Date(ms).toLocaleString(undefined, {da
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 /** The steps a change drops, in words. */
 export const listSteps = (steps: string[]) => steps.join(', ')
-export const errorText = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
+/**
+ * An error as the person reads it. By the kind the server said (#837): a run holding the project says what to do about it, an error
+ * of the workspace says that it is one - and where, to copy into a report. A mistake in the input is its own words.
+ */
+export function errorText(cause: unknown): string {
+  if (!(cause instanceof Error)) return String(cause)
+  if (cause instanceof HttpError && cause.kind === 'busy') return `${cause.message}. Wait for the run to end, or stop it in the run dock.`
+  if (cause instanceof HttpError && cause.kind === 'failed')
+    return `An error of the workspace, not of what you did: ${cause.message}${cause.where ? ` (${cause.where})` : ''}. To report it, copy this text.`
+  return cause.message
+}
 /** The words that are there, the empty ones left out. */
 export const joined = (parts: (string | false | undefined | null)[], by = ' · ') => parts.filter(Boolean).join(by)
