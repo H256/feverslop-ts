@@ -62,6 +62,8 @@ export function startRunRecord(dir: string, command: string): RunRecord | undefi
 }
 
 export const runCommand = () => current?.command
+/** "bun index.ts my-project " - how this run was started, for a command a message advises: whole, to be pasted (#819). Empty outside a run. */
+export const commandStart = () => (current ? `${current.command.split(' ').slice(0, 3).join(' ')} ` : '')
 
 export function noteRunFailures(failures: string[]) {
     if (current) current.failures = [...(current.failures ?? []), ...failures]
