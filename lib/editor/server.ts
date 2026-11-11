@@ -432,11 +432,29 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             }
             if (what === 'stop') return json({stopped: await runs.stop(target)})
             if (what === 'direction') {
-                if (!id) return json(await setDirectionRules(target, await body<{rules: DirectionRule[]}>()))
-                if (id === 'edits') return json(await setDirectionEdits(target, await body<{edits: DirectionEdit[]}>()))
-                if (id === 'take') return json(await takeDirection(target, {despiteConflicts: !!(await body<{despiteConflicts?: boolean}>()).despiteConflicts}))
+                // `rebuild`: the clip prompts are built again right after the change, as the command does it (bun run direction --take,
+                // without --no-rebuild) - one request, so that a change is never taken with the prompts left as they were (#830). Refused
+                // before anything is changed while a run goes on: the build could not start.
+                const asked = await body<{
+                    rules?: DirectionRule[]
+                    edits?: DirectionEdit[]
+                    despiteConflicts?: boolean
+                    version?: string
+                    rebuild?: boolean
+                    servers?: string[]
+                }>()
+                if (asked.rebuild && runs.current(target)?.running) return refused(new Error('a run is going on - wait for it, or stop it'))
+                const rebuilt = async <V extends object>(view: V, when = true) =>
+                    asked.rebuild && when ? {...view, run: runs.start(target, {type: 'plan'}, await urlsOfChoice(asked.servers))} : view
+                if (!id) return json(await setDirectionRules(target, {rules: asked.rules ?? []}))
+                if (id === 'edits') {
+                    // edits that still wait for their words (a preview writes them) build nothing yet
+                    const view = await setDirectionEdits(target, {edits: asked.edits ?? []})
+                    return json(await rebuilt(view, !view.pending && !view.unresolved.length))
+                }
+                if (id === 'take') return json(await rebuilt(await takeDirection(target, {despiteConflicts: !!asked.despiteConflicts})))
                 if (id === 'drop') return json(await dropDirection(target))
-                if (id === 'restore') return json(await restoreDirection(target, (await body<{version: string}>()).version))
+                if (id === 'restore') return json(await rebuilt(await restoreDirection(target, asked.version ?? '')))
                 return notFound()
             }
             if (what === 'estimate') {
