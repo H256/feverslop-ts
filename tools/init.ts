@@ -4,6 +4,7 @@ import {log} from '../lib/log.ts'
 // own), who sings it, lyrics and/or a story idea, the look and the render settings - then shows a summary to change any
 // answer in, writes projects/<id>/ and prints the command to run it.
 // usage: bun run init [project-id]   (the id only pre-fills the first question)
+//        bun run init <project-id> --song=<file> | --idea=<text|file> […]   (asks nothing: lib/init-options.ts, #827)
 import * as p from '@clack/prompts'
 import {existsSync, readdirSync} from 'node:fs'
 import type {Resolution} from '../comfy/helpers.ts'
@@ -12,6 +13,7 @@ import {FPS} from '../lib/frames.ts'
 import {defaults, languageName, type ProjectConfig, type SingerVoice, workflowDir} from '../lib/config.ts'
 import {styles} from '../lib/log.ts'
 import {projectExists, validProjectId, writeProject} from '../lib/project-setup.ts'
+import {INIT_USAGE, initOptions} from '../lib/init-options.ts'
 import {answer, askResolution, askStyle, askText, projectWorkflows} from '../lib/wizard.ts'
 import {libraryDir} from '../lib/library.ts'
 import {ProjectStore} from '../lib/project.ts'
@@ -19,15 +21,22 @@ import {importSong, librarySongIds, type LibrarySong, readLibrarySong, songsLike
 import {loadProjectConfig} from '../lib/config.ts'
 cli('init')
 
-if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    log.error(`No terminal to ask in - create projects/<id>/input/ by hand instead:
-  input/song.wav, .mp3 or .flac   a song you already have
-  input/idea.txt                  or a song idea, for: bun index.ts <id> --render=song (lyrics.txt alone works too)
-  input/lyrics.txt and/or input/story-idea.txt   at least one, unless idea.txt writes the lyrics for you
-  input/style.txt                 optional visual style - see docs/style-examples.md (picked from the list if missing)
-  config.json                     optional - see docs/comfyui.md`)
-    process.exit(1)
+// by options, nothing asked (#827): a script, or the workspace, which has no terminal to ask in
+{
+    const asked = await initOptions(Bun.argv.slice(2)).catch((e: unknown) => log.usageError(e instanceof Error ? e.message : String(e), INIT_USAGE))
+    if (asked) {
+        await writeProject(asked.id, asked.seed)
+        log.output(`projects/${asked.id}/`)
+        // the next step, whole: a song to make first, or the plan
+        log.next(asked.seed.songFile ? `bun index.ts ${asked.id}` : `bun index.ts ${asked.id} --render=song`)
+        process.exit(0)
+    }
 }
+if (!process.stdin.isTTY || !process.stdout.isTTY)
+    log.usageError(
+        'No terminal to ask in - say what the project is made from by options, then nothing is asked: bun run init <project-id> --song=<file> --lyrics=<text|file>, or --idea=<text|file> for a song still to be made',
+        INIT_USAGE,
+    )
 
 log.section('feverslop-ts · new project')
 
