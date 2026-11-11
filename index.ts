@@ -23,7 +23,7 @@ import {
     type StepName,
     type StoryBeat,
 } from './lib/project.ts'
-import {clipChains, onlyClips, renderAll, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
+import {clipChains, onlyClips, renderAll, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import {finishOf} from './lib/finish.ts'
 import {finishCopy, interpolateClips} from './lib/final-pass.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, dropStaleEdits} from './lib/direction/service.ts'
@@ -250,6 +250,17 @@ if (!projectExists(projectId)) {
 const project = new ProjectStore(projectId)
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
+// a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818). A run that plans again
+// (--redo) can make other clips: the render checks them then
+if (!redoSteps.length && (args.only || retake)) {
+    const wrong = await unknownIds(project.dir, join(project.dir, 'output', 'assets.json'), {
+        only: args.only.split(',').filter(Boolean),
+        retake: retake?.clip,
+        pictures: render.has('images'),
+        clips: render.has('videos') || render.has('final'),
+    })
+    if (wrong) log.usageError(wrong, usage)
+}
 if (!args.gallery && !args['dry-run']) lockProject(project.dir, `project ${project.id}`)
 await project.load()
 if (!args['dry-run']) keepTimingsIn(project.dir)
@@ -516,7 +527,7 @@ if (stems) log.step('Stems', styles.muted(Object.values(stems).join(' · ')))
 
 const transcript = stems
     ? await project.step('transcript', '2b · TRANSCRIBING THE VOCALS', async () => {
-          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper large-v3 (${language}) - the first run downloads the model (~3 GB)`))
+          log.step('Transcribing', styles.muted(`${stems.vocals} with Whisper (${language})`))
           return transcribeVocals(join(project.dir, stems.vocals), config.lyricsLanguage, project.input('lyrics.txt'))
       })
     : undefined
@@ -1007,6 +1018,7 @@ if (until === 'look') {
         renderer.refresh = refreshKinds
         log.section('8e · RENDERING THE CAST AND THE PLACES')
         log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
+        if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
         await renderPictures(renderer, lookPictures)
     } else
         log.step('Pictures', `${lookPictures.length} ${styles.muted(`- render them before the shots: bun index.ts ${projectId} --until=look --render=images`)}`)
@@ -1661,6 +1673,7 @@ const clips = buildClipRequests({
     pinStartFrame: config.pinStartFrame || config.contextFrames > 0,
     contextFrames: config.contextFrames,
     locationView,
+    clipPrompt: config.clipPrompt,
     shotViews,
 })
 
@@ -1771,6 +1784,7 @@ if (render.has('images') || render.has('videos') || retake) {
         ),
     )
     log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
+    if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
 
     if (retake) {
         const clip = clips.find(c => c.id === retake.clip)

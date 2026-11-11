@@ -43,6 +43,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # generated, several MB (bun run comfy:types)
 comfy/nodes.ts
+__pycache__/
 
 /films
 

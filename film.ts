@@ -32,7 +32,7 @@ import {archiveClip} from './lib/film/archive.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
 import {previewSources} from './lib/assemble.ts'
 import {parseRetake} from './lib/retake.ts'
-import {clipChains, onlyClips, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
+import {clipChains, onlyClips, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import type {AssetKind} from './lib/asset-import.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {libraryDir} from './lib/library.ts'
@@ -70,7 +70,7 @@ import {
     toProps,
     toScreenplay,
 } from './lib/film/screenplay.ts'
-import {filmExists, filmIds} from './lib/film/setup.ts'
+import {filmExists, filmIds, filmDir} from './lib/film/setup.ts'
 import {applyAnnotations, parseFountain} from './lib/film/fountain-import.ts'
 import {askFilmJson as askJson} from './lib/film/json.ts'
 import {filmBuiltOn, FILM_STEP_NAMES, FilmStore, type FilmStepName} from './lib/film/store.ts'
@@ -180,6 +180,16 @@ if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
     log.usageError(noProject('film', filmId, existing), usage)
 }
 
+// a clip or picture that is not there is said now - before the run is begun, so a typo is no failed run - not after every cached step was replayed (#818)
+if (!redoSteps.length && (args.only || retake)) {
+    const wrong = await unknownIds(filmDir(filmId!), join(filmDir(filmId!), 'assets.json'), {
+        only: args.only.split(',').filter(Boolean),
+        retake: retake?.clip,
+        pictures: render.has('images'),
+        clips: render.has('videos') || render.has('final'),
+    })
+    if (wrong) log.usageError(wrong, usage)
+}
 const film = new FilmStore(filmId!)
 // before the load: a run that writes works from the state it read, so no other run may save in between
 // --dry-run only reads: no lock, nothing saved
@@ -214,7 +224,7 @@ const settings = await loadSettings({
     llmModel: args['llm-model'],
     comfy: args.comfy,
 })
-configureLlm(settings.llm)
+configureLlm(settings.llm, {endsRun: true})
 // your own picture as the anchor: its description first - the clips and its sheet are planned from it (lib/own-picture.ts)
 if (args['picture-anchor'] && !args['dry-run']) {
     if (!existsSync(args['picture-anchor'])) log.usageError(`--picture-anchor: no file ${args['picture-anchor']}`, usage)
@@ -860,6 +870,7 @@ if (render.has('images') || render.has('videos') || retake) {
         ),
     )
     log.step('Servers', settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', '))
+    if (args.again || renderer.refresh.size || retake || args['picture-anchor']) await renderer.serversFirst()
     if (retake) {
         const clip = requests.find(r => r.id === retake.clip)
         if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${requests.map(r => r.id).join(', ')}`)

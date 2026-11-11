@@ -281,6 +281,7 @@ built on it (and everything built on those):
 | `singerVoice`                 | `story` (and everything after it), `songStyle` |
 | `lyricsLanguage`              | `transcript`                        |
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
+| `clipPrompt`                          | `"full"` (default) = a clip prompt as before; `"compact"` = every movement told once - a person's entry keeps where they are and how they are framed, the movement is in the action of the shot only - and the shot sentence in its natural order ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind"). A switch to render the two against each other; a change makes every rendered clip stale |
 | `fightClips`                  | `blocking` (and so `shotMoments`)   |
 | `vocalGap`                    | `timeline` (and everything after it) |
 | `locationView`, `sequenceSheets` | `shotViews`                      |
