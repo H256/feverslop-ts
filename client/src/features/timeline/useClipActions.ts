@@ -6,24 +6,7 @@ import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import AddViewForm from './AddViewForm.vue'
 import {chain} from './clips'
-import {
-  creditsRequest,
-  defaultSource,
-  descriptionRequest,
-  introRequest,
-  labelRequest,
-  newCredits,
-  newDescription,
-  newIntro,
-  newLabel,
-  newRefinish,
-  refinishRequest,
-  type NewView,
-} from './forms'
-import CreditsForm from './CreditsForm.vue'
-import DescriptionForm from './DescriptionForm.vue'
-import IntroForm from './IntroForm.vue'
-import LabelForm from './LabelForm.vue'
+import {newRefinish, refinishRequest, type NewView} from './forms'
 import RefinishForm from './RefinishForm.vue'
 import type {Timeline} from './useTimeline'
 
@@ -116,86 +99,6 @@ export function useClipActions(timeline: Timeline) {
             picked.map(c => c.id),
           ),
         ),
-    })
-  }
-  /** The finished videos a post-work step can start from: every final one but the low-resolution preview. */
-  const sources = () => project.value.finals.filter(f => !f.preview)
-  /** The AI marker over a finished video (bun run label): a new video next to it, nothing else changes. */
-  async function label() {
-    const from = defaultSource(project.value.id, project.value.finals)
-    if (!from) throw new Error('There is no final video yet: render it first.')
-    const {postwork} = project.value
-    const form = reactive(newLabel(postwork.label, from))
-    await ask({
-      title: 'Put the AI marker on a video',
-      lines: [
-        'A marker in a corner of a finished video, written next to it as <name>-labeled.mp4. The video it is made from stays as it is; the sound is copied.',
-        'Article 50(4) of the AI Act asks for it on a deep fake: real faces or voices made by AI. For an evidently artistic or fictional work, a marker at the start is enough.',
-      ],
-      warnings: [postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`],
-      body: () => h(LabelForm, {draft: form, finals: sources(), markers: postwork.markers}),
-      confirm: 'Put it on',
-      submit: () => start(labelRequest(form)),
-    })
-  }
-  /** A clip in front of a finished video (bun run intro): a new video next to it, nothing else changes. */
-  async function intro() {
-    const from = defaultSource(project.value.id, project.value.finals)
-    if (!from) throw new Error('There is no final video yet: render it first.')
-    const {postwork} = project.value
-    const form = reactive(newIntro(postwork.intro, from))
-    await ask({
-      title: 'Put an intro in front of a video',
-      lines: [
-        'A clip of your own - a logo, a channel ident - in front of a finished video, written next to it as <name>-intro.mp4. The video it is made from stays as it is.',
-        'The intro takes the size and frame rate of the video; another aspect ratio gets black bars. An intro without sound gets silence.',
-      ],
-      warnings: [
-        postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`,
-        !postwork.intro.file && !postwork.introFound && 'There is no input/intro.mp4 in this project: give the path of the intro.',
-      ],
-      body: () => h(IntroForm, {draft: form, finals: sources(), found: postwork.introFound}),
-      confirm: 'Put it in front',
-      submit: () => start(introRequest(form)),
-    })
-  }
-  /** A title card before a finished video and the credits after it (bun run credits): a new video next to it. */
-  async function credits() {
-    const from = defaultSource(project.value.id, project.value.finals)
-    if (!from) throw new Error('There is no final video yet: render it first.')
-    const {postwork, kind} = project.value
-    const form = reactive(newCredits(postwork.credits, kind, from))
-    await ask({
-      title: 'Add a title card and credits',
-      lines: [
-        'A title card before a finished video and scrolling credits after it, written next to it as <name>-credits.mp4. The video it is made from stays as it is.',
-        'What it was made with - the language model, the models, the graphics cards - is collected from what this project ran; nothing is asked of a model. The run shows the credits line by line.',
-      ],
-      warnings: [postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`],
-      body: () => h(CreditsForm, {draft: form, finals: sources(), markers: postwork.markers, kind}),
-      confirm: 'Add them',
-      submit: () => start(creditsRequest(form, kind)),
-    })
-  }
-  /** The text for publishing a finished video on YouTube (bun run description): a .youtube.txt next to the video chosen. */
-  async function description() {
-    if (!sources().length) throw new Error('There is no final video yet: render it first.')
-    const {postwork} = project.value
-    const form = reactive(newDescription(postwork.description))
-    await ask({
-      title: 'Prepare the YouTube text',
-      lines: [
-        'The description for the video you choose, written next to it as <name>.youtube.txt to paste into YouTube Studio, and .youtube.json with title and tags. Nothing is uploaded.',
-        'That it is AI-generated, what FeverSlop TS is, and how it was made - graphics cards, models, measured time per phase - are collected from the project; only the teaser is written by the language model. The run shows the whole text.',
-        'On upload, still set "Altered or synthetic content" in YouTube Studio.',
-      ],
-      warnings: [postwork.problem && `The post-work settings cannot be read, the defaults are shown: ${postwork.problem}`],
-      body: () => h(DescriptionForm, {draft: form, finals: sources()}),
-      confirm: 'Write it',
-      submit: async () => {
-        if (!form.from) throw new Error('Choose the video you publish.')
-        return start(descriptionRequest(form))
-      },
     })
   }
   async function pickVersion(clip: EditorClip, version: {id: string; fromThisPlan?: boolean; source?: string}) {
@@ -369,10 +272,6 @@ export function useClipActions(timeline: Timeline) {
     preview: guarded(preview),
     retake: guarded(retake),
     refinish: guarded(refinish),
-    label: guarded(label),
-    intro: guarded(intro),
-    credits: guarded(credits),
-    description: guarded(description),
     pickVersion: guarded(pickVersion),
     saveOverride: guarded(saveOverride),
     addView: guarded(addView),

@@ -34,6 +34,7 @@ const pages = computed(() => {
     {name: 'look', label: 'Look', path: 'look'},
     {name: 'direction', label: 'Direction', path: 'direction'},
     {name: 'references', label: 'References', path: 'references'},
+    {name: 'postwork', label: 'Post-work', path: 'postwork'},
     {name: 'settings', label: 'Settings', path: 'settings'},
   ]
 })

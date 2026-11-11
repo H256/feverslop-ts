@@ -17,6 +17,7 @@ export const router = createRouter({
         {path: 'casting', name: 'casting', component: () => import('./features/casting/CastingPage.vue')},
         {path: 'look', name: 'look', component: () => import('./features/look/LookPage.vue')},
         {path: 'direction', name: 'direction', component: () => import('./features/direction/DirectionPage.vue')},
+        {path: 'postwork', name: 'postwork', component: () => import('./features/postwork/PostworkPage.vue')},
         {path: 'settings', name: 'settings', component: () => import('./features/settings/SettingsPage.vue')},
         {path: 'references', name: 'references', component: () => import('./features/references/ReferencesPage.vue')},
         {path: 'singers', name: 'singers', component: () => import('./features/singers/SingersPage.vue')},

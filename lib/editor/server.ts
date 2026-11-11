@@ -621,7 +621,10 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (area === 'thumb') return thumbnail(file, url, request)
                     return file ? serveMedia(file, request, url.searchParams.has('v')) : notFound()
                 }
-                if (parts.length > 4 || (area && !['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'settings'].includes(area)))
+                if (
+                    parts.length > 4 ||
+                    (area && !['story', 'casting', 'singers', 'timing', 'look', 'direction', 'references', 'settings', 'postwork'].includes(area))
+                )
                     return notFound()
                 return post ? notFound() : page(request)
             }

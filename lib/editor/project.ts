@@ -116,7 +116,7 @@ const probedVideo = (file: string, v: number) => {
  * <id>.mp4, <id>-48fps.mp4, <id>-finished.mp4, <id>-48fps-finished.mp4, <id>-preview.mp4, <id>-finished-labeled.mp4: what name a
  * video has says what it is. Partial try-outs do not lie on the timeline.
  */
-export function finalLabel(id: string, name: string): {label: string; preview: boolean; order: number} | undefined {
+export function finalLabel(id: string, name: string): {label: string; preview: boolean; order: number; postwork: boolean} | undefined {
     const parts = finalParts(id, name)
     if (!parts) return undefined
     const {variant, preview, fps, finished, endings} = parts
@@ -127,7 +127,7 @@ export function finalLabel(id: string, name: string): {label: string; preview: b
               .join(' ')
     const label = endings.length ? `${base} + ${endings.map(ending => POSTWORK_ENDINGS[ending]).join(' + ')}` : base
     // a step's video right after the one it was made from
-    return {label, preview, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 20 + (finished ? 10 : 0) + endings.length}
+    return {label, preview, postwork: endings.length > 0, order: (preview ? 20000 : variant ? 10000 : 0) + fps * 20 + (finished ? 10 : 0) + endings.length}
 }
 
 /** input/intro.<ext> of the project, as the intro takes it when no file is set. */
@@ -153,9 +153,10 @@ async function finalsOf(dir: string, id: string, clips: {id: string}[]): Promise
         })
         .sort((a, b) => a.order - b.order)
     return Promise.all(
-        found.map(async ({name, label, preview}) => {
+        found.map(async ({name, label, preview, postwork}) => {
             const {file, v} = media(dir, name)!
             const info = await probedVideo(join(dir, name), v)
+            const youtube = join(dir, name.replace(/\.mp4$/, '.youtube.txt'))
             return {
                 file,
                 v,
@@ -163,6 +164,8 @@ async function finalsOf(dir: string, id: string, clips: {id: string}[]): Promise
                 preview,
                 state: finalStateOf(dir, join(dir, name), clips),
                 ...(info ? {width: info.width, height: info.height, fps: info.fps} : {}),
+                ...(postwork ? {postwork} : {}),
+                ...(existsSync(youtube) ? {youtube: readFileSync(youtube, 'utf8')} : {}),
             }
         }),
     )

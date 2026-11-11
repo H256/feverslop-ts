@@ -46,10 +46,12 @@ export const fpsOf = (item: {fps?: number}) => (item.fps ? `${Math.round(item.fp
 
 export function sourceOptions(project: EditorProject): {value: Source; label: string}[] {
   return [
-    ...project.finals.map(final => ({
-      value: `final:${final.file}`,
-      label: [final.label, sizeOf(final), final.state === 'older' && 'older than its clips'].filter(Boolean).join(' · '),
-    })),
+    ...project.finals
+      .filter(final => !final.postwork)
+      .map(final => ({
+        value: `final:${final.file}`,
+        label: [final.label, sizeOf(final), final.state === 'older' && 'older than its clips'].filter(Boolean).join(' · '),
+      })),
     {value: 'clips', label: project.song ? 'Clips over the song' : 'Clips'},
     ...project.refinedVariants.map(variant => ({value: `variant:${variant}`, label: `Clips: ${variant}`})),
     ...(project.clips.some(c => c.preview) ? [{value: 'previews', label: 'Previews of the clips'}] : []),
@@ -57,7 +59,7 @@ export function sourceOptions(project: EditorProject): {value: Source; label: st
 }
 /** Without a choice by hand: the plain final video when it is newer than its clips; all else plays what is there now, clip by clip. */
 export function bestSource(project: EditorProject): Source {
-  const best = project.finals.find(f => !f.preview && f.state === 'current')
+  const best = project.finals.find(f => !f.preview && !f.postwork && f.state === 'current')
   return best ? `final:${best.file}` : 'clips'
 }
 /** What a review goes through: the marked clips, else the flagged ones, else all - of those that are rendered. */
