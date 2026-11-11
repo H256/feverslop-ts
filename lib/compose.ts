@@ -962,18 +962,18 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
-                const where = (still: boolean) => (locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, the ${locationSubject.name}` : '')
+                const where = (still: boolean) => (locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, ${the(locationSubject.name)}` : '')
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
                 // fill the frame, where the playing is easiest to keep in time with its track
                 const opening = shot.hands
                     ? `${shot.label} ${j === 0 ? 'An' : `At ${clipTime(shot.at)}, the shot cuts to an`} extreme close-up of the ${shot.hands.hands} of ${shot.hands.label}, ${shot.hands.name}, on the ${shot.hands.prop}${where(j > 0)}; ${shot.camera}. ${shot.hands.hands === 'hands' ? 'The hand that strikes, picks or strums, the hand that holds, frets or presses,' : `The ${shot.hands.hands} - what strikes, picks or strums and what holds, frets or presses -`} and the body of the ${shot.hands.prop} fill the frame; the face is out of the frame.`
                     : j === 0
                       ? onSinger
-                          ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
-                          : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                          ? `${shot.label} A ${shot.framing} of ${focusLabels}${locationSubject ? ` in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
+                          : `${shot.label} A ${shot.framing}${locationSubject ? ` of ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
                       : // repeats the location on every cut, not just the first shot - otherwise a shot with no location
                         // callout tends to fall back to the character reference pictures' plain grey background
-                        `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, the ${locationSubject.name}` : ''}; ${shot.camera}.`
+                        `${shot.label} At ${clipTime(shot.at)}, the shot cuts to a ${shot.framing}${shot.focus.length === 1 || onSinger ? ` of ${focusLabels}` : ''}${locationSubject ? `, still in ${locationSubject.label}, ${the(locationSubject.name)}` : ''}; ${shot.camera}.`
                 const fromFrame = j === 0 && framePicture ? ` The shot begins from ${framePicture} and goes on from there.` : ''
                 // staged: each person's place, posture and movement as the planner wrote them (one position each); a shot without a
                 // plan keeps the fixed positions
@@ -981,7 +981,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // the other members of a group the frame shows several of (see buildSubjects), right next to it
                 const together = (s: (typeof shot.focus)[number]) =>
                     s.companions.length
-                        ? `, with ${joinAnd(s.companions)} beside ${s.companions.length > 1 ? 'them' : 'it'} - ${s.companions.length > 1 ? `${s.companions.length} more` : 'another one'} of the ${s.name}, each the one in their own picture`
+                        ? `, with ${joinAnd(s.companions)} beside ${s.companions.length > 1 ? 'them' : 'it'} - ${s.companions.length > 1 ? `${s.companions.length} more` : 'another one'} of ${the(s.name)}, each the one in their own picture`
                         : ''
                 const personInFrame = (s: (typeof shot.focus)[number], n: number) => `${personAlone(s, n)}${together(s)}`
                 const personAlone = (s: (typeof shot.focus)[number], n: number) => {
@@ -1188,7 +1188,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 'subject_definitions:',
                 ...subjects.map(s =>
                     s.kind === 'location'
-                        ? `${s.label} is the ${s.name} environment in ${s.picture}: ${s.description}`.trim()
+                        ? `${s.label} is ${the(s.name)} environment in ${s.picture}: ${s.description}`.trim()
                         : s.companionOf
                           ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
                           : s.isGroup && s.companions.length
@@ -1217,7 +1217,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     s =>
                         `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${
                             s.kind === 'location'
-                                ? `the layout, materials, colors and lighting of the ${s.name} are retained.`
+                                ? `the layout, materials, colors and lighting of ${the(s.name)} are retained.`
                                 : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded${s.stationary ? `, and so is its standing pose - ${s.name} is only at the ${s.stationary}` : ''}, but expression is free to follow the shot's action.`
                         }`,
                 ),
@@ -1263,7 +1263,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...shotTexts,
                 '',
                 'overall_soundscape:',
-                `Low ambience of the ${location?.name ?? 'scene'} sits under the music; footsteps, cloth and prop sounds follow the on-screen action.`,
+                `Low ambience of ${the(location?.name ?? 'scene')} sits under the music; footsteps, cloth and prop sounds follow the on-screen action.`,
                 '',
                 // no single track is "the complete audience-only score" any more - each <Audio N> is just one
                 // isolated stem, not a mix. Nothing meaningful to say here.
@@ -1411,4 +1411,9 @@ function normalizeLyric(line: string) {
     return /[.?!-]$/.test(clean) ? clean : `${clean}.`
 }
 
+/**
+ * A name with its article, once: the cast step names a place "the empty rooms" as readily as "Blackwood Forest", and "the " in front
+ * of the first made every clip say "the the empty rooms" (#821). A name that brings an article keeps its own.
+ */
+export const the = (name: string) => (/^(the|a|an)\s/i.test(name) ? name : `the ${name}`)
 export const joinAnd = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join(''))
