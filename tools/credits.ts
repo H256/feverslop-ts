@@ -15,7 +15,8 @@ import {filmDir, filmExists} from '../lib/film/setup.ts'
 import {lockProject} from '../lib/lock.ts'
 import {keepLogIn, log, styles} from '../lib/log.ts'
 import {type CreditsSettings, markerFile} from '../lib/postwork/config.ts'
-import {collectFacts, creditLines, creditsVideo, endSeconds, fontFiles, projectTitle} from '../lib/postwork/credits.ts'
+import {probeVideo} from '../lib/assemble.ts'
+import {collectFacts, creditLines, creditsVideo, DISCLOSURE_LENGTH, endSeconds, fontFiles, projectTitle, wrapLines} from '../lib/postwork/credits.ts'
 import {loadPostwork, savePostwork, withOptions} from '../lib/postwork/store.ts'
 import {sourceVideo} from '../lib/postwork/video.ts'
 import {projectDir, projectExists} from '../lib/project-setup.ts'
@@ -113,7 +114,14 @@ const {credits, source, fonts, marker, sound} = await (async () => {
 const kind = args.film ? ('film' as const) : ('music' as const)
 const {version} = (await Bun.file(join(import.meta.dir, '..', 'package.json')).json()) as {version: string}
 const facts = credits.facts ? collectFacts(dir, {version, fallbackLlm: (await readSettingsFile()).llm?.model}) : undefined
-const lines = creditLines(credits, facts, {title: projectTitle(dir, kind, id!, credits.title), kind})
+const written = creditLines(credits, facts, {title: projectTitle(dir, kind, id!, credits.title), kind})
+// as they are drawn on this video: a line too long for its picture is broken into several (drawtext does not wrap)
+const picture = await probeVideo(source)
+const lines = {opening: wrapLines(written.opening, picture.width, picture.height), end: wrapLines(written.end, picture.width, picture.height)}
+if (credits.disclosure.length > DISCLOSURE_LENGTH)
+    log.warn(
+        `The disclosure has ${credits.disclosure.length} characters, more than the ${DISCLOSURE_LENGTH} recommended - it goes in as it is, over more lines.`,
+    )
 
 log.step('From', basename(source))
 if (credits.opening)
