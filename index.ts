@@ -1,3 +1,4 @@
+import {noProject} from './lib/usage.ts'
 import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
@@ -244,10 +245,7 @@ if (!validProjectId(projectId))
     )
 if (!projectExists(projectId)) {
     const existing = listProjects()
-    log.usageError(
-        `No project "${projectId}" in projects/ - ${existing.length ? `the projects here are: ${existing.join(', ')}. ` : ''}Create one with: bun run init`,
-        usage,
-    )
+    log.usageError(noProject('project', projectId, existing), usage)
 }
 const project = new ProjectStore(projectId)
 // before the load: a run that writes works from the state it read, so no other run may save in between
@@ -2192,8 +2190,8 @@ For every beat that plays while the song has vocals:
 // terminal (scripts, CI) nobody can pick, so the usage error lists them instead
 async function pickProject(): Promise<string> {
     const projects = listProjects()
-    if (!projects.length) return log.usageError('No project id given, and there is no project in projects/ yet - create one with: bun run init', usage)
-    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(`No project id given - the projects here are: ${projects.join(', ')}`, usage)
+    if (!projects.length) return log.usageError(noProject('project', undefined, []), usage)
+    if (!process.stdin.isTTY || !process.stdout.isTTY) return log.usageError(noProject('project', undefined, projects), usage)
     const picked = await clack.select({message: 'Which project?', options: projects.map(id => ({value: id, label: id}))})
     if (clack.isCancel(picked)) {
         log.cancel('No project selected')

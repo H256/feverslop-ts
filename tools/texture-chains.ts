@@ -1,3 +1,4 @@
+import {noProject} from '../lib/usage.ts'
 import {cli} from '../lib/cli.ts'
 // Measures whether continuing clips get grittier from link to link (#478): the fine detail of every rendered clip
 // (lib/texture.ts), each chain of clips that start on the clip before shown relative to its first clip, and the change
@@ -9,18 +10,19 @@ import {join} from 'node:path'
 import {probeVideo} from '../lib/assemble.ts'
 import {clipChains} from '../lib/batch.ts'
 import {jsonOutput, log, styles} from '../lib/log.ts'
-import {projectDir, projectExists} from '../lib/project-setup.ts'
+import {projectDir, projectExists, listProjects} from '../lib/project-setup.ts'
 import {readClipRequests} from '../lib/render-state.ts'
 import {median} from '../lib/predict.ts'
 import {recordedContextFrames} from '../lib/provenance.ts'
 import {clipTexture, perLink, type Texture} from '../lib/texture.ts'
-import {filmDir, filmExists} from '../lib/film/setup.ts'
+import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 cli('texture-chains')
 
 const usage = 'usage: bun run texture-chains <project-id> [--film] [--json]'
 const isFilm = Bun.argv.includes('--film')
 const [id] = Bun.argv.slice(2).filter(a => !a.startsWith('--'))
-if (!id || !(isFilm ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${isFilm ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
+if (!id || !(isFilm ? filmExists(id) : projectExists(id)))
+    log.usageError(isFilm ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = isFilm ? filmDir(id!) : projectDir(id!)
 
 type Clip = {id: string; startsFrom?: string}

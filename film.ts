@@ -1,3 +1,4 @@
+import {noProject} from './lib/usage.ts'
 import {cli} from './lib/cli.ts'
 // The short-film pipeline: a story idea or a screenplay (any language) -> screenplay, cast, locations.
 // Separate from the music-video pipeline (index.ts) - it shares the LLM client, the settings and the helpers, nothing else.
@@ -72,7 +73,7 @@ import {
 import {filmExists, filmIds} from './lib/film/setup.ts'
 import {applyAnnotations, parseFountain} from './lib/film/fountain-import.ts'
 import {askFilmJson as askJson} from './lib/film/json.ts'
-import {filmBuiltOn, FILM_STEP_NAMES, FILMS_DIR, FilmStore, type FilmStepName} from './lib/film/store.ts'
+import {filmBuiltOn, FILM_STEP_NAMES, FilmStore, type FilmStepName} from './lib/film/store.ts'
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from './lib/film/types.ts'
 import {ask, configureLlm} from './lib/llm.ts'
 import {keepLogIn, log, styles} from './lib/log.ts'
@@ -176,10 +177,7 @@ if (unknownRedo.length) log.usageError(`--redo: unknown step "${unknownRedo.join
 const filmId = positionals[0]
 if (!filmId || !validProjectId(filmId) || !filmExists(filmId)) {
     const existing = filmIds()
-    log.usageError(
-        `${filmId ? `No film "${filmId}" in ${FILMS_DIR}/` : 'No film id given'} - ${existing.length ? `the films here are: ${existing.join(', ')}. ` : ''}Create one with: bun run film:init`,
-        usage,
-    )
+    log.usageError(noProject('film', filmId, existing), usage)
 }
 
 const film = new FilmStore(filmId!)
