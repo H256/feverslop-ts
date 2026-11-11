@@ -23,7 +23,7 @@ Drei Dinge gelten überall:
 Die Leiste oben liest sich von links nach rechts:
 
 - **Links** steht, wo du bist: **Projects** (die Startseite) und **Library**, in einem Projekt dahinter sein Name.
-- **Daneben** liegen die Seiten des Projekts als Reiter: **Timeline**, **Story** (beim Film **Screenplay**), **Casting**, **Singers** und **Timing** (nur bei Musikvideos, in denen gesungen wird), **Look**, **Direction**, **References**, **Settings**.
+- **Daneben** liegen die Seiten des Projekts als Reiter: **Timeline**, **Story** (beim Film **Screenplay**), **Casting**, **Singers** und **Timing** (nur bei Musikvideos, in denen gesungen wird), **Look**, **Direction**, **References**, **Post-work** (die Schritte vor dem Veröffentlichen), **Settings**.
 - **Rechts** steht der Rechner: welche Render-Server erreichbar und wie ausgelastet sie sind, das Farbschema und die Version des Workspace.
 
 Darunter steht auf der Timeline eine schmale Zeile mit dem Zustand des Projekts: Art, ob das fertige Video aktuell ist, ob der letzte Lauf fehlgeschlagen ist (mit **Repeat**), fehlende oder stale Bilder (ein Klick führt zu **References**) und **Next:** mit dem nächsten Schritt. Führt der nächste Schritt über eine Seite, etwa weil Regie-Anweisungen nach einer Neuplanung geprüft werden müssen, öffnet **Next** diese Seite, statt etwas zu starten (siehe [Nach einer Neuplanung](#nach-einer-neuplanung)).
@@ -131,7 +131,7 @@ Nützliche Tasten: `Leertaste` spielt und pausiert, `←` und `→` springen zum
 | Markiert | nur mit Markierung: **Render marked**, **Preview marked**, **Plan … again**, **People…**, **Clear** (siehe [Mehrere Clips auf einmal](#mehrere-clips-auf-einmal)) |
 | Rendern | **Render stale**, **Render missing**, **Render all**, jeweils mit der Zahl der Clips |
 | Prüfen | **Only flagged** blendet alle anderen ab, `‹` und `›` springen von einem auffälligen Clip zum nächsten, **Mark flagged**, **Review**, **Scan for backdrops** (sucht ohne GPU nach grauen Studio-Hintergründen) |
-| Fertigstellen | **Preview all**, **Preview video**, **Refinish**, und sobald es ein fertiges Video gibt **AI marker**, **Intro**, **Credits** |
+| Fertigstellen | **Preview all**, **Preview video**, **Refinish**, und sobald es ein fertiges Video gibt **Post-work** (führt zum Reiter Post-work) |
 
 **Render stale**, **Render missing** und **Render all** markieren diese Clips und stellen dann die übliche Frage mit Schätzung. **Render all** nimmt auch Clips, die als aktuell gelten, etwa nach einem anderen Seed.
 
@@ -343,22 +343,30 @@ So gehst du sinnvoll vor:
 
 Die Varianten erscheinen in der Auswahl neben der Abspielzeit als **Clips: refine-fullhd** und die fertigen Videos als **Refinish refine-fullhd 48 fps finished**. Die Optionen für das Terminal stehen in der [README](../README.md#making-an-older-project-over).
 
+## Vor dem Veröffentlichen: der Reiter Post-work
+
+Alles, was vor dem Veröffentlichen mit einem fertigen Video passiert, steht im Reiter **Post-work**: in der empfohlenen Reihenfolge **AI marker**, **Title card and credits**, **Intro** und **YouTube text**. Jeder Schritt ist eine Karte mit seinem Formular. Offen ist der erste, der noch nicht gemacht ist; ein gemachter Schritt trägt *made*.
+
+Jeder Schritt startet von dem, was der vorige geschrieben hat, sobald es das gibt: die Credits vom gekennzeichneten Video, das Intro vom Video mit Credits, der YouTube-Text vom neuesten. Unter **From** kannst du das ändern.
+
+Rechts unter **What the steps made** stehen die Videos der Schritte und jedes Video mit YouTube-Text. Das gewählte spielt erst, wenn du es startest, darunter steht sein YouTube-Text mit **Copy**. Auf der Timeline erscheinen diese Videos nicht mehr: Dort läuft das Musikvideo selbst mit seinen Versionen, und **Post-work** in der Leiste führt hierher.
+
 ## Vor dem Veröffentlichen: die KI-Kennzeichnung
 
-**AI marker** in der Leiste über den Spuren (sobald es ein fertiges Video gibt) legt eine Kennzeichnung über ein fertiges Video, als neues Video daneben: `<name>-labeled.mp4`. Das Ausgangsvideo bleibt, wie es ist.
+**AI marker**, der erste Schritt auf **Post-work**, legt eine Kennzeichnung über ein fertiges Video, als neues Video daneben: `<name>-labeled.mp4`. Das Ausgangsvideo bleibt, wie es ist.
 
 1. **From**: welches Video. Gibt es ein fertiges, ist es gewählt.
 2. **Marker**: ein EU-Symbol für KI-erzeugte Inhalte (*AI GENERATED*, *AI MODIFIED* oder *AI*, weiß oder schwarz, deckend oder zu 50 % durchsichtig), oder *A PNG of my own* mit seinem Pfad.
 3. **When**: nur am Anfang (genug für ein Musikvideo oder einen Film, also ein künstlerisches Werk), am Anfang und dann in Abständen wieder, oder die ganze Zeit. Dann Ecke, Höhe und Rand.
 4. **Keep these settings for this project** schreibt sie in die `config.json`, das Formular öffnet beim nächsten Mal mit ihnen. **Keep them for every project** schreibt sie in die Einstellungsdatei.
 
-Das läuft auf diesem Rechner, ohne GPU, etwa so lange, wie das Video dauert. Das neue Video erscheint unter den Videos der Timeline als *… + AI label*. Warum und wann so eine Kennzeichnung nötig ist: [docs/postwork.md](postwork.md).
+Das läuft auf diesem Rechner, ohne GPU, etwa so lange, wie das Video dauert. Das neue Video erscheint rechts unter **What the steps made** als *… + AI label*. Warum und wann so eine Kennzeichnung nötig ist: [docs/postwork.md](postwork.md).
 
 **Im Terminal:** `bun run label <id>` mit denselben Wahlmöglichkeiten als Optionen (`--marker=`, `--mode=`, `--corner=`, …).
 
 ## Vor dem Veröffentlichen: Titelkarte und Abspann
 
-**Credits** in der Leiste über den Spuren setzt eine Titelkarte vor ein fertiges Video und danach einen Abspann, der nach oben läuft: `<name>-credits.mp4`.
+**Title card and credits** auf **Post-work** setzt eine Titelkarte vor ein fertiges Video und danach einen Abspann, der nach oben läuft: `<name>-credits.mp4`.
 
 - **Title card**: der Titel (leer: der des Projekts), der Künstler, beim Film wer Regie geführt hat, der Hinweis (*Contains AI-generated content*) und, wenn du willst, die KI-Kennzeichnung darunter.
 - **Credits**: noch einmal der Titel, deine eigenen Zeilen (eine pro Zeile: Dank, Links, dein Kanal) und womit es gemacht wurde: das Sprachmodell, die Modelle, die Grafikkarten. Das kommt aus dem, was dieses Projekt wirklich benutzt hat, nichts ist erfunden. Deine eigenen Worte zur Hardware stehen danach.
@@ -370,9 +378,9 @@ Behältst du deinen Namen und deine Zeilen für jedes Projekt, braucht das näch
 
 ## Vor dem Veröffentlichen: ein Intro
 
-**Intro** in der Leiste über den Spuren setzt einen eigenen Clip, etwa ein Logo oder ein Kanal-Intro, vor ein fertiges Video: `<name>-intro.mp4`.
+**Intro** auf **Post-work** setzt einen eigenen Clip, etwa ein Logo oder ein Kanal-Intro, vor ein fertiges Video: `<name>-intro.mp4`.
 
-- **From**: welches Video. Bei einem Video mit KI-Kennzeichnung nimmst du das gekennzeichnete: Die Kennzeichnung beginnt dann nach dem Intro.
+- **From**: welches Video. Vorgewählt ist das letzte, das die Schritte davor gemacht haben, also das gekennzeichnete mit Credits: Die Kennzeichnung beginnt dann nach dem Intro.
 - **Intro**: der Pfad des Clips. Leer nimmt `input/intro.mp4` des Projekts; das Feld sagt, wenn es eins gibt.
 - **Fade**: wie viele Sekunden das Intro in das Video überblendet. 0 ist ein harter Schnitt.
 

@@ -5,7 +5,7 @@ import {reviewList, stateOf} from './clips'
 import {useTimeline} from './context'
 
 /** What the clips are, in numbers, and what can be done with several of them at once. */
-const {project, fresh, marked, markedClips, onlyFlagged, isFlagged, markFlagged, markState, stepFlagged, review, actions} = useTimeline()
+const {session, project, fresh, marked, markedClips, onlyFlagged, isFlagged, markFlagged, markState, stepFlagged, review, actions} = useTimeline()
 const clips = computed(() => project.value.clips)
 const count = computed(() => {
   const states = clips.value.map(c => stateOf(c, fresh.value))
@@ -117,38 +117,13 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
         <button class="b-finish" title="Larger, 48 fps, grade and sharpen, from the clips there are: nothing is overwritten" @click="actions.refinish()">
           Refinish
         </button>
-        <button
+        <RouterLink
           v-if="hasFinal"
-          class="b-finish"
-          title="Optional, for publishing: the EU marker for AI-generated content (or a PNG of your own) over a finished video, as a new video next to it"
-          @click="actions.label()"
+          class="btn b-finish"
+          :to="`${session.root}/postwork`"
+          title="Optional, for publishing: the AI marker, a title card and credits, an intro, the YouTube text - in their order, with a player for what they made"
+          >Post-work</RouterLink
         >
-          AI marker
-        </button>
-        <button
-          v-if="hasFinal"
-          class="b-finish"
-          title="Optional, for publishing: a clip of your own (a logo, a channel ident) in front of a finished video, as a new video next to it"
-          @click="actions.intro()"
-        >
-          Intro
-        </button>
-        <button
-          v-if="hasFinal"
-          class="b-finish"
-          title="Optional, for publishing: a title card before a finished video and scrolling credits after it - what it was made with, collected from the project"
-          @click="actions.credits()"
-        >
-          Credits
-        </button>
-        <button
-          v-if="hasFinal"
-          class="b-finish"
-          title="Optional, for publishing: the YouTube description of the video you choose - AI disclosure, hardware, models, measured time - as a text file next to it. Nothing is uploaded."
-          @click="actions.description()"
-        >
-          YouTube text
-        </button>
       </template>
     </div>
   </div>

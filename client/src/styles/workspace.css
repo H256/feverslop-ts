@@ -369,7 +369,8 @@ textarea {
   border-radius: 7px;
   padding: 4px 8px;
 }
-.field input,
+/* a checkbox or radio in a field stays its own size */
+.field input:not([type='checkbox'], [type='radio']),
 .field textarea,
 .field select,
 .section > textarea {

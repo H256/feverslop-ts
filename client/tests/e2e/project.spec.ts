@@ -660,7 +660,10 @@ test('timing: listening marks exactly one onset per key, pauses and applies an o
     })
 })
 
-test('timeline: the AI marker is put on a finished video, from the settings of the project, changed in the question', async ({page}) => {
+// the step that is open on the Post-work page: its form is on the page, not in a question
+const step = (page: Page) => page.locator('.pw-step.open')
+
+test('post-work: the AI marker is put on a finished video, from the settings of the project, changed in the form', async ({page}) => {
   // its own stub: a project with a final video and its finished copy
   await page.unrouteAll()
   posted = await stubProject(page, 'music', {
@@ -670,20 +673,22 @@ test('timeline: the AI marker is put on a finished video, from the settings of t
       {file: 'demo-finished.mp4', v: 1, label: 'Final finished', state: 'current', preview: false},
     ],
   })
+  // from the timeline: one way to the page, the four questions are gone from it
   await page.goto(`${base}/p/music/demo/`)
-  await page.getByRole('button', {name: 'AI marker'}).click()
-  // the finished video by default, and what the project has set
-  await expect(dialog(page).getByLabel('From')).toHaveValue('demo-finished.mp4')
-  await expect(dialog(page).getByLabel('Marker')).toHaveValue('generated-white50')
-  // no render servers: it runs on this machine
-  await expect(dialog(page).getByRole('checkbox', {name: /gpu/})).toHaveCount(0)
-  await dialog(page).getByLabel('When').selectOption('interval')
-  await dialog(page).getByLabel('Every (seconds)').fill('30')
-  await dialog(page).getByLabel('Marker').selectOption('basic-black')
-  await dialog(page)
+  await expect(page.getByRole('button', {name: 'AI marker'})).toHaveCount(0)
+  await page.getByRole('link', {name: 'Post-work'}).first().click()
+  await expect(page).toHaveURL(/\/p\/music\/demo\/postwork$/)
+  // the first step is open: the finished video by default, and what the project has set
+  await expect(step(page)).toContainText('AI marker')
+  await expect(step(page).getByLabel('From')).toHaveValue('demo-finished.mp4')
+  await expect(step(page).getByLabel('Marker')).toHaveValue('generated-white50')
+  await step(page).getByLabel('When').selectOption('interval')
+  await step(page).getByLabel('Every (seconds)').fill('30')
+  await step(page).getByLabel('Marker').selectOption('basic-black')
+  await step(page)
     .getByRole('checkbox', {name: /Keep these settings/})
     .check()
-  await dialog(page).getByRole('button', {name: 'Put it on'}).click()
+  await step(page).getByRole('button', {name: 'Put it on'}).click()
   await expect
     .poll(() => posted.at(-1)?.body)
     .toEqual({
@@ -702,53 +707,57 @@ test('timeline: the AI marker is put on a finished video, from the settings of t
     })
 })
 
-test('timeline: an intro is put in front of a finished video - input/intro.mp4 of the project, or a path - and kept for every project', async ({page}) => {
+test('post-work: the steps chain - each starts from what the step before wrote - and an intro is kept for every project', async ({page}) => {
   await page.unrouteAll()
   posted = await stubProject(page, 'music', {
     final: {state: 'current', file: 'demo.mp4', v: 1},
     finals: [
       {file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false},
-      {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false},
+      {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false, postwork: true},
+      {file: 'demo-labeled-credits.mp4', v: 1, label: 'Final + AI label + credits', state: 'current', preview: false, postwork: true},
     ],
   })
-  await page.goto(`${base}/p/music/demo/`)
-  await page.getByRole('button', {name: 'Intro', exact: true}).click()
-  await expect(dialog(page).getByLabel('From')).toHaveValue('demo.mp4')
-  // the intro of the project is offered without a path
-  await expect(dialog(page).getByLabel(/Intro \(path/)).toHaveAttribute('placeholder', 'input/intro.mp4 of this project')
-  await dialog(page).getByLabel('From').selectOption('demo-labeled.mp4')
-  await dialog(page)
+  await page.goto(`${base}/p/music/demo/postwork`)
+  // marker and credits are made: the intro is open, from the credits' video
+  await expect(step(page)).toContainText('Intro')
+  await expect(step(page).getByLabel('From')).toHaveValue('demo-labeled-credits.mp4')
+  // the credits start from the marker's video
+  await page.getByRole('button', {name: /Title card and credits/}).click()
+  await expect(step(page).getByLabel('From')).toHaveValue('demo-labeled.mp4')
+  await page.getByRole('button', {name: /^3 Intro/}).click()
+  await expect(step(page).getByLabel(/Intro \(path/)).toHaveAttribute('placeholder', 'input/intro.mp4 of this project')
+  await step(page)
     .getByLabel(/Intro \(path/)
     .fill('D:/videos/channel.mp4')
-  await dialog(page).getByLabel(/Fade/).fill('0.5')
-  await dialog(page)
+  await step(page).getByLabel(/Fade/).fill('0.5')
+  await step(page)
     .getByRole('checkbox', {name: /every project/})
     .check()
-  await dialog(page).getByRole('button', {name: 'Put it in front'}).click()
+  await step(page).getByRole('button', {name: 'Put it in front'}).click()
   await expect
     .poll(() => posted.at(-1)?.body)
-    .toEqual({action: {type: 'intro', from: 'demo-labeled.mp4', file: 'D:/videos/channel.mp4', fade: 0.5, saveDefault: true}})
+    .toEqual({action: {type: 'intro', from: 'demo-labeled-credits.mp4', file: 'D:/videos/channel.mp4', fade: 0.5, saveDefault: true}})
 })
 
-test('timeline: a title card and credits are added to a finished video, with the lines of the project and its artist', async ({page}) => {
+test('post-work: a title card and credits are added to a finished video, with the lines of the project and its artist', async ({page}) => {
   await page.unrouteAll()
   posted = await stubProject(page, 'music', {
     final: {state: 'current', file: 'demo.mp4', v: 1},
     finals: [{file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false}],
   })
-  await page.goto(`${base}/p/music/demo/`)
-  await page.getByRole('button', {name: 'Credits', exact: true}).click()
-  await expect(dialog(page).getByLabel('Artist (by …)')).toHaveValue('Klemens')
-  await expect(dialog(page).getByLabel(/Lines of your own/)).toHaveValue('Thanks to the band')
-  await dialog(page).getByLabel("Title (empty: the project's)").fill('Demo Song')
-  await dialog(page)
+  await page.goto(`${base}/p/music/demo/postwork`)
+  await page.getByRole('button', {name: /Title card and credits/}).click()
+  await expect(step(page).getByLabel('Artist (by …)')).toHaveValue('Klemens')
+  await expect(step(page).getByLabel(/Lines of your own/)).toHaveValue('Thanks to the band')
+  await step(page).getByLabel("Title (empty: the project's)").fill('Demo Song')
+  await step(page)
     .getByLabel(/Lines of your own/)
     .fill('Thanks to the band\n\nfeverslop.example')
-  await dialog(page).getByLabel('Marker on the title card').selectOption('generated-white')
-  await dialog(page)
+  await step(page).getByLabel('Marker on the title card').selectOption('generated-white')
+  await step(page)
     .getByRole('checkbox', {name: /this project/})
     .check()
-  await dialog(page).getByRole('button', {name: 'Add them'}).click()
+  await step(page).getByRole('button', {name: 'Add them'}).click()
   await expect
     .poll(() => posted.at(-1)?.body)
     .toEqual({
@@ -770,6 +779,34 @@ test('timeline: a title card and credits are added to a finished video, with the
         save: true,
       },
     })
+})
+
+test('post-work: what the steps made plays on the page, never by itself, with its YouTube text - and not on the timeline', async ({page}) => {
+  await page.unrouteAll()
+  posted = await stubProject(page, 'music', {
+    final: {state: 'current', file: 'demo.mp4', v: 1},
+    finals: [
+      {file: 'demo.mp4', v: 1, label: 'Final', state: 'current', preview: false},
+      {file: 'demo-labeled.mp4', v: 1, label: 'Final + AI label', state: 'current', preview: false, postwork: true, youtube: 'Demo Song\n\nMade with AI.'},
+    ],
+  })
+  await page.goto(`${base}/p/music/demo/postwork`)
+  await expect(page.getByRole('listbox', {name: 'What the steps made'}).getByRole('option', {name: /Final \+ AI label/})).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  const video = page.locator('.pw-video')
+  await expect(video).toHaveAttribute('src', /demo-labeled\.mp4/)
+  expect(await video.evaluate((v: HTMLVideoElement) => v.autoplay || !v.paused)).toBe(false)
+  await expect(page.locator('.pw-text pre')).toHaveText('Demo Song\n\nMade with AI.')
+  // the YouTube text takes the newest video of the steps
+  await page.getByRole('button', {name: /YouTube text/}).click()
+  await expect(step(page).getByLabel('The video you publish')).toHaveValue('demo-labeled.mp4')
+  // the timeline's video choice has the music video, not what a step made
+  await page.getByRole('navigation', {name: 'Project'}).getByRole('link', {name: 'Timeline'}).click()
+  const choice = page.getByLabel('What the monitor plays')
+  await expect(choice.locator('option', {hasText: 'Final'})).toHaveCount(1)
+  await expect(choice.locator('option', {hasText: 'AI label'})).toHaveCount(0)
 })
 
 test('timeline: R renders the clip at the playhead again, asked first - a key of the help works in capitals too', async ({page}) => {

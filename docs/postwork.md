@@ -223,27 +223,30 @@ run that reads `config.json`. Nothing is capped.
 
 ## In the workspace
 
-Under the timeline, next to *Refinish*, once there is a final video:
+The **Post-work** tab of a project has the steps in the order below (see [Chaining the steps](#chaining-the-steps)),
+each a card with its form, and opens the first one not made yet. Each starts from what the step before wrote, when it
+is there - the marker's video for the credits, the credits' for the intro - still to be changed in *From*:
 
-- **AI marker** asks for the video to start from (every final video of the project, the finished one first), the marker
-  (an EU icon, or the path of a PNG of your own), when, where and how large, and whether to keep these settings for the
-  project. It then starts `bun run label` with them, as in the terminal; the new video appears among the videos of the
-  timeline, as *… + AI label*.
-- **Intro** asks for the video to start from, the intro (empty: `input/intro.mp4` of the project, the field says when
-  there is one) and the fade. It starts `bun run intro`; the new video is listed as *… + intro*.
+1. **AI marker**: the video to start from (every final video of the project, the finished one first), the marker (an
+   EU icon, or the path of a PNG of your own), when, where and how large. *Put it on* starts `bun run label` with them,
+   as in the terminal.
+2. **Title card and credits**: whether a title card, credits or both, the title, the artist (a film: who directed it),
+   the disclosure (with a character count), a marker on the title card, the lines of your own (one per line), whether
+   to say what it was made with, your words on the hardware, a sound under the credits and the lengths. *Add them*
+   starts `bun run credits`; the run shows the credits line by line.
+3. **Intro**: the intro (empty: `input/intro.mp4` of the project, the field says when there is one) and the fade. *Put
+   it in front* starts `bun run intro`.
+4. **YouTube text**: the video you publish - the newest one the steps made, none before a step has run - whether a
+   teaser and a new one, whether to say how it was made, your words on the hardware, your lines and the hashtags. *Write
+   it* starts `bun run description`; the run shows the whole text.
 
-- **Credits** asks for the video, whether a title card, credits or both, the title, the artist (a film: who directed
-  it), the disclosure, a marker on the title card, the lines of your own (one per line), whether to say what it was made
-  with, your words on the hardware, a sound under the credits and the lengths. It starts `bun run credits`; the run
-  shows the credits line by line, the new video is listed as *… + credits*.
+Every form can keep its settings for this project (`config.json`) or for every project (the settings file), and opens
+with what the project has set (the defaults, the settings file and `config.json` together).
 
-- **YouTube text** asks for the video you publish (none is chosen for you), whether a teaser and a new one, whether to
-  say how it was made, your words on the hardware, your lines and the hashtags. It starts `bun run description`; the run
-  shows the whole text, the file is next to the video.
-
-All forms can keep their settings for this project (`config.json`) or for every project (the settings file).
-
-The form opens with what the project has set (the defaults, the settings file and `config.json` together).
+Next to the steps, **What the steps made** lists their videos and any video with a YouTube text; the one chosen plays in
+a plain player when you play it - never by itself - with its YouTube text below, to copy. These videos are not among
+the videos of the timeline: the timeline plays the music video itself and its versions (rendered, refinished, at
+another frame rate), and its *Post-work* button leads to this tab.
 
 ## Chaining the steps
 

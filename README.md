@@ -957,7 +957,7 @@ The language model writes the same scenes again: a part for whoever is new (with
 - **Settings**: the render settings of the project - workflows (the video workflow from `comfy/workflows/`, the image and sheet workflows), video and picture size, aspect ratio, continuity and context frames, seed, the retries, the final frame rate, and the finish with each of its fields (grade, sharpen, colour match, grain). A change is checked as the loader checks it and the question before it says which rendered clips and pictures it makes stale (the workflow, the size and the aspect are part of what a clip is made from); nothing is rendered or planned by it. A change of continuity or context frames that changes how long a clip may be has the next plan run cut the song again and plan every shot again (#781 is to plan only what it touches). It is `bun run config <id>` in the terminal; other keys of `config.json` (singers, languages) are changed where they belong, or by hand. Not changed while a run is going on.
 - **Library**: the asset library, who uses what, a new asset from a picture.
 - **Refinish**: an older project larger, at 48 fps and finished, from the clips it has: see [Making an older project over](#making-an-older-project-over).
-- **AI marker**, **Credits** and **Intro**: the EU icon for AI-generated content (or a PNG of your own) over a finished video, a title card and credits around it, or a clip of your own in front of it, each as a new video next to it: see [Before publishing](#before-publishing).
+- **Post-work**: the steps before publishing in their order - the EU icon for AI-generated content (or a PNG of your own) over a finished video, a title card and credits around it, a clip of your own in front of it, each as a new video next to it, and the YouTube text - each starting from what the step before made, with a player for what they made: see [Before publishing](#before-publishing). The timeline plays the music video itself, not these.
 
 Everything that renders is the CLI, started from the page and through the same lock as in the terminal, so the two exclude each other; a run started in the terminal can be followed and stopped from the page too. The bar at the bottom says what runs: for a render the clips done of all with a progress bar, otherwise the step of its log, and how long it has run; a known failure is said in plain words above the timeline, with *Repeat* or a link to the page that solves it. The page keeps no state of its own, the project folder is the model. The server listens on this machine only.
 
@@ -989,15 +989,16 @@ rendered again ([docs/postwork.md](docs/postwork.md)):
 
 - `bun run label <id> [--film]`: the AI marker in a corner - an EU icon from `assets/eu-ai-icons/` or a PNG of your own -
   at the start, at an interval or the whole time: `<name>-labeled.mp4`. From 2 August 2026 the EU AI Act asks for such a
-  disclosure on a deep fake, e.g. a clip with a real face. On the page: *AI marker* under the timeline.
+  disclosure on a deep fake, e.g. a clip with a real face. On the page: *AI marker* on the *Post-work* tab.
 - `bun run credits <id> [--film]`: a title card before it and scrolling credits after it - the title, the artist or
   director, the disclosure, lines of your own, and what it was made with: the language model, the models, the graphics
-  cards, collected from what the project ran: `<name>-credits.mp4`. On the page: *Credits*.
+  cards, collected from what the project ran: `<name>-credits.mp4`. On the page: *Title card and credits*.
 - `bun run intro <id> [--film]`: a clip of your own in front of it - `input/intro.mp4` of the project or any path, a hard
   cut or a fade, in the size of the video: `<name>-intro.mp4`. On the page: *Intro*.
 - `bun run description <id> [--film] --from=<video>`: the YouTube text of the finished video you choose - a teaser
   of the story, that it is AI-generated, what FeverSlop TS is, the graphics cards, models and measured time per phase:
-  `<name>.youtube.txt` to paste into YouTube Studio. Nothing is uploaded. On the page: *YouTube text*.
+  `<name>.youtube.txt` to paste into YouTube Studio. Nothing is uploaded. On the page: *YouTube text*, shown next to
+  the video it is for.
 
 Its settings can be kept in `"postwork"` of the settings file (every project) and of `config.json` (this project);
 `--save` keeps the options given.

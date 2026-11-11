@@ -615,6 +615,7 @@ describe('the start page', () => {
             '/p/music/listed/',
             '/p/music/listed/references',
             '/p/music/listed/direction',
+            '/p/music/listed/postwork',
             '/p/film/titled/direction',
             '/p/film/titled/casting',
         ])
@@ -668,6 +669,8 @@ describe('the finished videos of a project', () => {
         await video('finals.mp4', '64x36', 24)
         await video('finals-48fps.mp4', '128x72', 48)
         await video('finals-partial.mp4', '64x36', 24)
+        await video('finals-labeled.mp4', '64x36', 24)
+        writeFileSync(join(project.dir, 'finals-labeled.youtube.txt'), 'Finals\n\nMade with AI.')
         write(join(project.dir, 'output/clips/slot-001.json'), {
             id: 'slot-001',
             frameStart: 0,
@@ -684,8 +687,12 @@ describe('the finished videos of a project', () => {
         const {finals} = await readEditorProject(project)
         expect(finals.map(f => [f.file, f.label, f.width, f.height, f.fps, f.state])).toEqual([
             ['finals.mp4', 'Final', 64, 36, 24, 'current'],
+            ['finals-labeled.mp4', 'Final + AI label', 64, 36, 24, 'current'],
             ['finals-48fps.mp4', 'Final 48 fps', 128, 72, 48, 'older'],
         ])
+        // what a post-work step made is said, for its page, with the YouTube text written for it (#807)
+        expect(finals.find(f => f.file === 'finals-labeled.mp4')).toMatchObject({postwork: true, youtube: 'Finals\n\nMade with AI.'})
+        expect(finals.find(f => f.file === 'finals.mp4')).not.toHaveProperty('postwork')
     })
 })
 

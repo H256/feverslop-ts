@@ -130,7 +130,20 @@ export type BeatCastResult = {
 }
 // a beat of a music video along the timeline (#761): planned - its shots have a plan; without one the next plan run plans them
 export type EditorBeat = {id: string; label: string; start: number; end: number; planned: boolean; clips: string[]; characters: string[]}
-export type EditorFinal = {file: string; v: number; label: string; state: FinalState; preview: boolean; width?: number; height?: number; fps?: number}
+export type EditorFinal = {
+    file: string
+    v: number
+    label: string
+    state: FinalState
+    preview: boolean
+    width?: number
+    height?: number
+    fps?: number
+    /** made by a post-work step (-labeled, -credits, -intro): on the Post-work page, not on the timeline */
+    postwork?: boolean
+    /** its YouTube text (<name>.youtube.txt of bun run description), when there is one */
+    youtube?: string
+}
 export type EditorProject = {
     id: string
     kind: ProjectKind
