@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {computed} from 'vue'
 import type {SettingView} from '../../../../shared/workspace'
 import {labelOf, textOfValue, valueOfText} from './settings'
 import type {SettingsDraft} from './useSettingsDraft'
@@ -6,14 +7,16 @@ import type {SettingsDraft} from './useSettingsDraft'
 /** One setting in one row: its name and control side by side, what it does and its default small below - and the way back. */
 const props = defineProps<{setting: SettingView; form: SettingsDraft}>()
 const text = (event: Event) => (event.target as HTMLInputElement).value
-const inputId = `setting-${props.setting.key}`
+const inputId = `setting-${props.setting.key.replace(/\W/g, '-')}`
+// a setting that only does something while another is on (a field of the finish): shown, not to be changed while it is off
+const off = computed(() => !!props.setting.needs && !props.form.draft[props.setting.needs])
 </script>
 
 <template>
-  <div :class="['sf-row', {changed: form.isChanged(setting.key)}]">
+  <div :class="['sf-row', {changed: form.isChanged(setting.key), off}]">
     <label class="sf-label" :for="inputId">{{ setting.label }}</label>
     <div class="sf-control">
-      <select v-if="setting.control === 'select'" :id="inputId" v-model="form.draft[setting.key]" :aria-label="setting.label">
+      <select v-if="setting.control === 'select'" :id="inputId" v-model="form.draft[setting.key]" :disabled="off" :aria-label="setting.label">
         <option v-for="choice in setting.choices" :key="textOfValue(choice.value)" :value="choice.value">{{ choice.label }}</option>
       </select>
       <input
@@ -21,13 +24,15 @@ const inputId = `setting-${props.setting.key}`
         :id="inputId"
         v-model.number="form.draft[setting.key]"
         type="number"
-        step="1"
+        :step="setting.step ?? 1"
+        :disabled="off"
         :aria-label="setting.label"
       />
       <input
         v-else
         :id="inputId"
         type="text"
+        :disabled="off"
         :value="textOfValue(form.draft[setting.key])"
         :aria-label="setting.label"
         @input="form.draft[setting.key] = valueOfText(text($event))"
@@ -37,7 +42,7 @@ const inputId = `setting-${props.setting.key}`
       {{ setting.note }}
       <span class="sf-default"
         >Default <code>{{ labelOf(setting, setting.default) }}</code
-        ><button v-if="!form.isDefault(setting)" class="btn link" @click="form.toDefault(props.setting)">Use the default</button
+        ><button v-if="!off && !form.isDefault(setting)" class="btn link" @click="form.toDefault(props.setting)">Use the default</button
         ><button v-if="form.isChanged(setting.key)" class="btn link" @click="form.undo(props.setting)">Undo</button></span
       >
     </p>
@@ -61,6 +66,10 @@ const inputId = `setting-${props.setting.key}`
 .sf-row.changed {
   border-left-color: var(--accent);
   background: var(--raised);
+}
+.sf-row.off .sf-label,
+.sf-row.off .sf-note {
+  opacity: 0.6;
 }
 .sf-label {
   font-weight: 500;

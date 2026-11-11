@@ -476,9 +476,12 @@ export type RunLines = {lines: string[]; next: number}
 export type SettingView = {
     key: string
     label: string
-    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Final video'
-    /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a whole number */
+    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Final video' | 'Finish'
+    /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a number, whole unless `step` says otherwise */
     control: 'select' | 'text' | 'number'
+    step?: number
+    /** a setting that only does something while this one is on: shown, but not to be changed while it is off */
+    needs?: string
     choices?: {value: unknown; label: string}[]
     note: string
     value: unknown // what the project has now: its own, else the default

@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import FormField from '../../components/FormField.vue'
+import {AskService} from '../../services/ask'
 import {FPS, REFINISH_PRESETS, SIZE, UPSCALE, type Refinish} from './forms'
 
-/** The fields of a refinish, filled into the caller's reactive draft - the question reads it when it is answered. */
-defineProps<{draft: Refinish}>()
+/**
+ * The fields of a refinish, filled into the caller's reactive draft - the question reads it when it is answered. `finish`: what
+ * the finish does, as the project's settings have it; `settings`: the page they are changed on.
+ */
+defineProps<{draft: Refinish; finish?: string; settings: string}>()
+const {current} = AskService.use()
+// to Settings: the question is let go, nothing is started
+const leave = () => current.value?.answer(false)
 </script>
 
 <template>
@@ -34,5 +41,16 @@ defineProps<{draft: Refinish}>()
         ><input v-model="draft.finish" type="checkbox" /><span style="margin: 0">Grade and sharpen</span></label
       >
     </div>
+    <p v-if="draft.preset !== 'custom' || draft.finish" class="muted rf-finish">
+      The finish: {{ finish ?? 'as the settings have it' }}. <RouterLink :to="settings" @click="leave">Change it on Settings</RouterLink> - grain and colour
+      match are set there.
+    </p>
   </div>
 </template>
+
+<style scoped>
+.rf-finish {
+  margin-top: 8px;
+  font-size: 12px;
+}
+</style>
