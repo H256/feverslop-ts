@@ -1,3 +1,5 @@
+import {usageArgs} from './command-schema.ts'
+import {introCommand, labelCommand} from './postwork/commands.ts'
 import {helpDetails} from './cli-help.ts'
 import {activeJobs, cancelJobs} from './comfy-cancel.ts'
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts'
@@ -108,7 +110,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.',
     },
     label: {
-        args: '<id> [--film] [--from=<video>] [--marker=generated-white|<png>] [--mode=credits|interval|always] [--seconds=5] [--interval=60] [--corner=top-right|top-left|bottom-right|bottom-left] [--size=6] [--margin=3] [--save | --save-default] [--dry-run]',
+        args: usageArgs(labelCommand),
         description:
             'Put the AI marker (an EU icon or a PNG of your own) over a finished video: <name>-labeled.mp4 next to it. Optional, see docs/postwork.md.',
     },
@@ -123,7 +125,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
             'The text for publishing the finished video you choose on YouTube - a teaser of the story, that it is AI-generated, the hardware, models and measured time per phase: <name>.youtube.txt and .json next to it. Nothing is uploaded. See docs/postwork.md.',
     },
     intro: {
-        args: '<id> [--film] [--from=<video>] [--file=<video>] [--fade=0.5] [--save | --save-default] [--dry-run]',
+        args: usageArgs(introCommand),
         description:
             'Put an intro clip (input/intro.mp4, or a path) in front of a finished video: <name>-intro.mp4 next to it. Optional, see docs/postwork.md.',
     },

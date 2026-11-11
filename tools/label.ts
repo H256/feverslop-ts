@@ -6,12 +6,13 @@ import {cli} from '../lib/cli.ts'
 // usage: bun run label <id> [--film] [--from=<video>] [--marker=generated-white|<png>] [--mode=credits|interval|always]
 //        [--seconds=5] [--interval=60] [--corner=top-right] [--size=6] [--margin=3] [--save | --save-default] [--dry-run]
 import {basename, join} from 'node:path'
-import {parseArgs} from 'node:util'
+import {parseCommand, usageOf} from '../lib/command-schema.ts'
+import {labelCommand} from '../lib/postwork/commands.ts'
 import {filmDir, filmExists} from '../lib/film/setup.ts'
 import {lockProject} from '../lib/lock.ts'
 import {keepLogIn, log, styles} from '../lib/log.ts'
 import {versionStamp} from '../lib/archive.ts'
-import {CORNERS, LABEL_MODES, type LabelSettings, markerFile} from '../lib/postwork/config.ts'
+import {type LabelSettings, markerFile} from '../lib/postwork/config.ts'
 import {labelFilter, labelVideo} from '../lib/postwork/label.ts'
 import {loadPostwork, savePostwork, withOptions} from '../lib/postwork/store.ts'
 import {sourceVideo} from '../lib/postwork/video.ts'
@@ -20,55 +21,32 @@ import {projectDir, projectExists} from '../lib/project-setup.ts'
 import {beginRun} from '../lib/run-record-view.ts'
 cli('label')
 
-const usage = `usage: bun run label <id> [--film] [--from=<video>] [--marker=generated-white|<png>] [--mode=${LABEL_MODES.join('|')}] [--seconds=5] [--interval=60] [--corner=${CORNERS.join('|')}] [--size=6] [--margin=3] [--save | --save-default] [--dry-run]`
-const {
-    values: args,
-    positionals: [id],
-} = (() => {
+const usage = usageOf(labelCommand)
+const args = (() => {
     try {
-        return parseArgs({
-            args: Bun.argv.slice(2),
-            allowPositionals: true,
-            options: {
-                film: {type: 'boolean', default: false},
-                from: {type: 'string'},
-                marker: {type: 'string'},
-                mode: {type: 'string'},
-                seconds: {type: 'string'},
-                interval: {type: 'string'},
-                corner: {type: 'string'},
-                size: {type: 'string'},
-                margin: {type: 'string'},
-                save: {type: 'boolean', default: false},
-                'save-default': {type: 'boolean', default: false},
-                'dry-run': {type: 'boolean', default: false},
-            },
-        })
+        return parseCommand(labelCommand, Bun.argv.slice(2))
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-if (!id || !(args.film ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${args.film ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
-const dir = args.film ? filmDir(id!) : projectDir(id!)
+const [id] = args.positionals
+const film = args.flag('film')
+if (!id || !(film ? filmExists(id) : projectExists(id))) log.usageError(id ? `No ${film ? 'film' : 'project'} "${id}"` : 'Which project?', usage)
+const dir = film ? filmDir(id!) : projectDir(id!)
 
-const numberOf = (name: string, value: string | undefined) => {
-    if (value === undefined) return undefined
-    const n = Number(value)
-    return Number.isFinite(n) && value.trim() !== '' ? n : log.usageError(`--${name} must be a number, got "${value}"`, usage)
-}
 const given: Partial<LabelSettings> = {
-    marker: args.marker,
-    mode: args.mode as LabelSettings['mode'] | undefined,
-    corner: args.corner as LabelSettings['corner'] | undefined,
-    seconds: numberOf('seconds', args.seconds),
-    interval: numberOf('interval', args.interval),
-    size: numberOf('size', args.size),
-    margin: numberOf('margin', args.margin),
+    marker: args.text('marker'),
+    mode: args.text('mode') as LabelSettings['mode'] | undefined,
+    corner: args.text('corner') as LabelSettings['corner'] | undefined,
+    seconds: args.number('seconds'),
+    interval: args.number('interval'),
+    size: args.number('size'),
+    margin: args.number('margin'),
 }
 const {label, source, marker} = await (async () => {
     try {
         const label = withOptions('label', (await loadPostwork(dir)).label, given)
-        return {label, source: sourceVideo(dir, id!, args.from), marker: markerFile(label.marker, dir)}
+        return {label, source: sourceVideo(dir, id!, args.text('from')), marker: markerFile(label.marker, dir)}
     } catch (e) {
         return log.usageError((e as Error).message, usage)
     }
@@ -83,7 +61,7 @@ const when =
 log.step('Marker', `${label.marker} ${styles.muted(`- ${label.corner}, ${label.size} % of the height, ${when}`)}`)
 log.step('From', basename(source))
 
-if (args['dry-run']) {
+if (args.flag('dry-run')) {
     log.step('Filter', styles.muted(labelFilter(label, (await probeVideo(source)).height)))
     log.step('Dry run', styles.muted('nothing written'))
     process.exit(0)
@@ -92,8 +70,8 @@ if (args['dry-run']) {
 lockProject(dir, id!)
 keepLogIn(join(dir, 'logs', `${versionStamp()}.log`))
 beginRun(dir, 'tools/label.ts')
-if (args.save || args['save-default']) {
-    const where = await savePostwork(args['save-default'] ? 'settings' : 'project', dir, 'label', given)
+if (args.flag('save') || args.flag('save-default')) {
+    const where = await savePostwork(args.flag('save-default') ? 'settings' : 'project', dir, 'label', given)
     log.step('Kept', styles.muted(`the options given, in ${where}`))
 }
 const done = await labelVideo(source, marker, label)
