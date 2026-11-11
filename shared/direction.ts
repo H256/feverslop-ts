@@ -86,6 +86,8 @@ export type DirectionView = {
     unresolved: {
         ruleId: string
         message: string
+        /** made for shots that were planned again since: a leftover of the old plan, nothing to decide (#830) */
+        stale?: boolean
     }[]
     proposal?: DirectionProposal
     versions: DirectionVersion[]

@@ -22,6 +22,8 @@ const NOT_A_CHANGE = new Set([
     'readPictureJobs',
     'picturesFile',
     'atLook',
+    // the plan run started with a change of the direction (#830): the command does the same after --take
+    'rebuilt',
     // an upload checked and kept for the run that puts it in (lib/editor/upload.ts), and what is read to refuse one
     'checkUploadSize',
     'takePictureUpload',
