@@ -9,7 +9,7 @@ import {stageName} from '../plan/stages'
 
 const props = defineProps<{project: ProjectListing, status?: ListingStatus, more: number}>()
 defineEmits<{expand: []}>()
-const FINAL = {missing: ['No final video', 'chip'], current: ['Final video', 'chip good'], older: ['Final older than its clips', 'chip stale']} as const
+const FINAL = {missing: ['No final video', 'chip'], current: ['Final video', 'chip good'], older: ['Final older than its clips', 'chip stale'], variant: ['Final video: made over', 'chip good']} as const
 const RUN = {running: ['Running', 'chip good'], failed: ['Last run failed', 'chip bad'], stopped: ['Last run stopped', 'chip bad']} as const
 const root = computed(() => projectRoot(props.project))
 const run = computed(() => {

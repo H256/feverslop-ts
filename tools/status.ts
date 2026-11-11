@@ -48,7 +48,8 @@ if (args.json) {
         steps,
         pictures: {total: pictures.length, missing: missingPictures.map(p => p.id), stale: stalePictures.map(p => p.id)},
         clips: {total: clips.length, missing: missingClips.map(c => c.id), stale: staleClips.map(c => c.id)},
-        finalVideo: finalState === 'missing' ? 'missing' : finalState === 'current' ? 'current' : 'older than the clips',
+        finalVideo:
+            finalState === 'missing' ? 'missing' : finalState === 'current' ? 'current' : finalState === 'variant' ? 'made over' : 'older than the clips',
         next,
         preproduction,
     })
@@ -90,7 +91,9 @@ log.step(
         ? styles.muted('not assembled yet')
         : finalState === 'current'
           ? finalVideo
-          : styles.warning(`${finalVideo} - older than its clips`),
+          : finalState === 'variant'
+            ? styles.muted('a made-over one (bun run refinish) - its own is not assembled')
+            : styles.warning(`${finalVideo} - older than its clips`),
 )
 
 if (run && runState(run) !== 'finished') {

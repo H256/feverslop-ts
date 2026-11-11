@@ -9,7 +9,7 @@ import type {Project} from '../project.ts'
 import {freshness} from '../provenance.ts'
 import {plainText} from '../refs.ts'
 import {clipFingerprint, pictureFingerprint, type PictureJob} from '../render.ts'
-import {finalStateOf, readClipRequests, readPictureJobs} from '../render-state.ts'
+import {finalStateOf, projectFinalState, readClipRequests, readPictureJobs} from '../render-state.ts'
 import {lastRun, runState} from '../run-record.ts'
 import {explainFailure} from './progress.ts'
 import {asBeatShots} from '../shot-plan.ts'
@@ -174,7 +174,7 @@ async function finalsOf(dir: string, id: string, clips: {id: string}[]): Promise
 const previewVideoOf = (dir: string, id: string) => media(dir, `${id}-preview.mp4`)
 
 const finalOf = (dir: string, id: string, clips: {id: string}[]): EditorProject['final'] => {
-    const state = finalStateOf(dir, join(dir, `${id}.mp4`), clips)
+    const state = projectFinalState(dir, id, join(dir, `${id}.mp4`), clips)
     return {state, ...(media(dir, `${id}.mp4`) ?? {})}
 }
 
@@ -660,8 +660,9 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
             countOf(join(dir, 'assets', 'characters'), /\.png$/) +
             countOf(join(dir, 'assets', 'locations'), /\.png$/) +
             countOf(join(dir, 'assets', 'props'), /\.png$/),
-        final: finalStateOf(
+        final: projectFinalState(
             dir,
+            id,
             join(dir, `${id}.mp4`),
             ids.map(c => ({id: c})),
         ),

@@ -7,7 +7,8 @@ export type ProjectKind = 'music' | 'film'
 export type Media = {file: string; v: number}
 export type PlanStage = 'story' | 'cast' | 'look' | 'plan'
 export type Freshness = 'pinned' | 'current' | 'stale'
-export type FinalState = 'missing' | 'current' | 'older'
+// variant: no final video of its own, but a made-over one (bun run refinish) - a video to publish (#832)
+export type FinalState = 'missing' | 'current' | 'older' | 'variant'
 export type RunState = 'running' | 'stopped' | 'failed' | 'finished'
 // page: the page of the project where it is done (#782)
 export type Explained = {text: string; action: string; page?: 'direction'}

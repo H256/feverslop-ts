@@ -6,11 +6,27 @@ type Choice = readonly (readonly [string, string])[]
 type ValueOf<C extends Choice> = C[number][0]
 
 type FinalChoice = {file: string; label: string; preview: boolean}
+// the ending each video step adds to the name of the one it starts from (lib/postwork/video.ts POSTWORK_ENDINGS)
+const ENDINGS = {label: 'labeled', credits: 'credits', intro: 'intro'} as const
 
-/** The video a step starts from by default: the finished final video, else the final one - as the command takes it without --from. */
+/**
+ * The video a step starts from by default: the finished final video, else the final one - as the command takes it without --from.
+ * A project without them (only made-over videos, bun run refinish) starts from the one the steps were already run on: the one with
+ * the most videos made from it, the last of them when several have as many - not from the first of the list, whose steps then
+ * all looked undone (#832).
+ */
 export function defaultSource(id: string, finals: FinalChoice[]): string | undefined {
   const names = finals.filter(f => !f.preview).map(f => f.file)
-  return [`${id}-finished.mp4`, `${id}.mp4`].find(name => names.includes(name)) ?? names[0]
+  const own = [`${id}-finished.mp4`, `${id}.mp4`].find(name => names.includes(name))
+  if (own) return own
+  const stepEnding = new RegExp(`(-(${Object.values(ENDINGS).join('|')}))+\\.mp4$`)
+  const sources = names.filter(name => !stepEnding.test(name))
+  // made from it: its name, then nothing but the endings of the steps ("…-48fps-finished" is another video, not a step of "…")
+  const madeFrom = (source: string) => {
+    const stem = source.replace(/\.mp4$/, '')
+    return names.filter(name => name.startsWith(`${stem}-`) && stepEnding.test(name) && name.replace(stepEnding, '') === stem).length
+  }
+  return sources.reduce<string | undefined>((best, source) => (best === undefined || madeFrom(source) >= madeFrom(best) ? source : best), undefined) ?? names[0]
 }
 
 export const LABEL_MODES = [
@@ -182,8 +198,6 @@ export const descriptionRequest = (draft: DescriptionDraft): RunRequest => ({
 /** The steps in the order docs/postwork.md recommends: the marker under the credits, the intro first of all, the text of what is published. */
 export const STEPS = ['label', 'credits', 'intro', 'description'] as const
 export type Step = (typeof STEPS)[number]
-// the ending each video step adds to the name of the one it starts from (lib/postwork/video.ts POSTWORK_ENDINGS)
-const ENDINGS = {label: 'labeled', credits: 'credits', intro: 'intro'} as const
 /** `<name>.mp4` -> `<name>-<ending>.mp4`: what a video step writes. */
 export const outputOf = (from: string, step: Exclude<Step, 'description'>) => from.replace(/\.mp4$/, `-${ENDINGS[step]}.mp4`)
 

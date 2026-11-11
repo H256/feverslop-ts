@@ -120,6 +120,8 @@ async function nextOf(
             estimate: await estimates.clips([...missingClips, ...staleClips]),
         }
     }
+    // a made-over final video is one to publish: nothing asks for another to be assembled (#832)
+    if (finalState === 'variant') return {command: '', why: `everything is done - the ${finalName} is a made-over one (bun run refinish)`}
     if (finalState !== 'current')
         return {command: `${run} --render=final`, why: finalState === 'missing' ? `no ${finalName} yet` : `clips are newer than the ${finalName}`}
     return {command: '', why: 'everything is done'}

@@ -1,5 +1,6 @@
+import {finalParts} from './postwork/video.ts'
 import {existsSync, readdirSync, statSync} from 'node:fs'
-import {join} from 'node:path'
+import {basename, join} from 'node:path'
 import type {ClipRequest} from './compose.ts'
 import type {ProjectConfig, RenderConfig} from './config.ts'
 import {describePrediction, predictJobs, type RenderJob} from './predict.ts'
@@ -21,7 +22,9 @@ export type RenderState<C = ClipRequest> = {
     finalVideo: string
     finalState: FinalState
 }
-export type FinalState = 'missing' | 'current' | 'older'
+// variant: the project's own final video is not there, but one made over from its clips is (bun run refinish) - a video to
+// publish, so nothing asks to assemble another one (#832)
+export type FinalState = 'missing' | 'current' | 'older' | 'variant'
 
 export async function renderState(projectDir: string, projectId: string, config: ProjectConfig): Promise<RenderState> {
     return renderStateOf<ClipRequest>(
@@ -47,6 +50,24 @@ export async function readClipRequests<C>(projectDir: string): Promise<C[]> {
                   .map(f => Bun.file(join(clipsDir, f)).json()),
           )
         : []
+}
+
+/** The made-over final videos of a project, by name: <id>--<variant>[-48fps][-finished].mp4 - not a preview, not a post-work step's. */
+export function variantFinals(projectDir: string, projectId: string): string[] {
+    if (!existsSync(projectDir)) return []
+    return readdirSync(projectDir).filter(name => {
+        const parts = finalParts(projectId, name)
+        return !!parts?.variant && !parts.preview && !parts.endings.length
+    })
+}
+
+/**
+ * Where the final video of a project stands: its own (`finalVideo`), as finalStateOf says - or, when that one is missing,
+ * 'variant' when a made-over one is there. The same for `status`, the listing and the pages.
+ */
+export function projectFinalState(projectDir: string, projectId: string, finalVideo: string, clips: {id: string}[]): FinalState {
+    const own = finalStateOf(projectDir, finalVideo, clips)
+    return own === 'missing' && variantFinals(projectDir, projectId).length ? 'variant' : own
 }
 
 /** Is the final video there, and is it newer than every clip it is made of? */
@@ -84,7 +105,8 @@ export async function renderStateOf<C extends {id: string}>(
         missingClips: clips.filter(c => !existsSync(videoOf(c))),
         staleClips: clips.filter(c => existsSync(videoOf(c)) && stale(c, videoOf(c))),
         finalVideo,
-        finalState: finalStateOf(projectDir, finalVideo, clips),
+        // the id is the name of the final video: <id>.mp4
+        finalState: projectFinalState(projectDir, basename(finalVideo, '.mp4'), finalVideo, clips),
     }
 }
 
