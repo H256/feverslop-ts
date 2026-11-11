@@ -3,7 +3,7 @@ import type {ResponseCreateParamsStreaming, ResponseStreamEvent} from 'openai/re
 import {currentStep, readTimings, recordTiming} from './timings.ts'
 import {nameService} from './service-error.ts'
 import {predictLlmSeconds} from './predict.ts'
-import {countWords, formatDuration, formatRate, log, startSpinner, styles, suffix} from './log.ts'
+import {countWords, failRun, formatDuration, formatRate, log, startSpinner, styles, suffix} from './log.ts'
 import type {VisionSettings} from './settings.ts'
 
 export type LlmSettings = {url?: string; apiKey?: string; model?: string; parallel?: number; vision?: VisionSettings}
@@ -31,9 +31,34 @@ type Endpoint = {
 let settings: LlmSettings = {}
 let text: Endpoint = {label: 'Model'}
 let vision: Endpoint = text
+let endsRun = false
 
-/** Sets the server for the following calls - the connection itself is made on the first call. */
-export function configureLlm(llm: LlmSettings) {
+/**
+ * The server cannot be asked at all - none is configured, or it does not answer (refused, reset, timed out). Not a bad answer:
+ * asking again or going on with a fallback helps nothing, so a pipeline run ends on it (#815).
+ */
+export class LlmUnavailableError extends Error {}
+
+/** What a transport failure of a call comes to, undefined for everything else (a bad answer, a refusal with a status). */
+function unavailable(e: unknown, endpoint: Endpoint): LlmUnavailableError | undefined {
+    if (e instanceof LlmUnavailableError) return e
+    if (!(e instanceof OpenAI.APIConnectionError)) return undefined
+    // the system's word for it (ECONNREFUSED, ETIMEDOUT) where there is one: the runtime's sentence helps nobody
+    const code = (e.cause as {code?: unknown} | undefined)?.code
+    const cause = typeof code === 'string' && code ? code : e.cause instanceof Error && e.cause.message ? e.cause.message : e.message
+    const setup = endpoint === text ? 'bun run setup llm' : 'bun run setup vision'
+    return new LlmUnavailableError(
+        `The LLM server ${endpoint.url} does not answer (${cause}) - start it or wait until it has loaded its model, then repeat the command: finished steps are kept. Another server: ${setup}`,
+    )
+}
+
+/**
+ * Sets the server for the following calls - the connection itself is made on the first call. `endsRun`: a server that cannot be
+ * asked ends the process as a failed run, whoever catches the error of the call - the pipelines, whose steps otherwise take a
+ * fallback for every element of a step in turn and report the run as done.
+ */
+export function configureLlm(llm: LlmSettings, options: {endsRun?: boolean} = {}) {
+    endsRun = !!options.endsRun
     settings = llm
     text = {url: llm.url, apiKey: llm.apiKey, model: llm.model, label: 'Model'}
     const v = llm.vision
@@ -54,7 +79,7 @@ const newClient = (url: string, apiKey?: string, timeout?: number) =>
     new OpenAI({baseURL: url, apiKey: apiKey || 'none', ...(timeout ? {timeout, maxRetries: 0} : {})})
 
 function getClient(endpoint: Endpoint = text) {
-    if (!endpoint.url) throw new Error('No LLM server configured - run: bun run setup llm (or set FEVERSLOP_LLM_URL, or pass --llm-url)')
+    if (!endpoint.url) throw new LlmUnavailableError('No LLM server configured - run: bun run setup llm (or set FEVERSLOP_LLM_URL, or pass --llm-url)')
     return (endpoint.client ??= newClient(endpoint.url, endpoint.apiKey))
 }
 
@@ -88,7 +113,8 @@ async function resolveModelId(endpoint: Endpoint) {
     const client = getClient(endpoint)
     const ids: string[] = []
     const names = new Map<string, string>()
-    for await (const model of client.models.list()) {
+    // asked once, without the client's own retries: a server that is not there is said at once
+    for await (const model of client.models.list({maxRetries: 0})) {
         ids.push(model.id)
         names.set(model.id, modelNames(model as unknown as {id: string} & Record<string, unknown>))
     }
@@ -501,6 +527,11 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
                 `${of}empty answer - the model only thought - asking again with ${attempts[i + 1]!.limit}${attempts[i + 1]!.note ? ' and a shorter-thinking prompt' : ''}`,
             )
         } catch (e) {
+            const gone = unavailable(e, endpoint)
+            if (gone) {
+                if (endsRun) failRun(gone)
+                throw gone
+            }
             // a server that could not tell beforehand refuses the picture now (llama.cpp without --mmproj: "image input is not supported")
             if (images?.length && /image|vision|mmproj|multimodal/i.test((e as Error).message)) {
                 throw new Error(`${await getModelId(endpoint)} on ${endpoint.url} took no picture (${(e as Error).message}) - ${visionHint(endpoint)}`)
