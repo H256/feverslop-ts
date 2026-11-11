@@ -3,6 +3,7 @@ import {computed, nextTick, onScopeDispose, ref, watch} from 'vue'
 import {useAsk} from '../services/ask'
 import {failedRun, runStateText, useRunDock} from '../services/run'
 import {useToasts} from '../services/toasts'
+import {plural} from '../lib/format'
 
 /** What goes on, at the foot of every page: the run, its log, and stopping it. */
 const run = useRunDock()
@@ -18,21 +19,14 @@ const ticker = setInterval(() => {
   if (run.current.value?.running) now.value = Date.now()
 }, 1000)
 onScopeDispose(() => clearInterval(ticker))
-// why a run failed, in the bar - also with the log folded (#797): the CLI prints it right after "✗ FAILED", before its "Help:" line
+// why a run failed and what to do, in the bar - also with the log folded (#797), from the run's events (#829)
 const reason = computed(() => {
   if (!shown.value || !failedRun(shown.value)) return ''
-  // eslint-disable-next-line no-control-regex -- the colours of the terminal
-  const plain = run.log.value.replace(/\u001b\[[0-9;]*m/g, '')
-  const at = plain.lastIndexOf('FAILED')
-  if (at < 0) return ''
-  return plain
-    .slice(at + 'FAILED'.length)
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith('Help:') && !line.startsWith('▸'))
-    .slice(0, 3)
-    .join(' ')
+  const failure = run.said.value.failure
+  return failure ? [failure.message, failure.advice && `What to do: ${failure.advice}`].filter(Boolean).join(' ') : ''
 })
+// a run that ended well with warnings says how many, the first ones on a click
+const warnings = computed(() => (shown.value && !shown.value.running && !failedRun(shown.value) ? run.said.value.warnings : []))
 const progress = computed(() => (shown.value?.running ? run.progress.value : undefined))
 const percent = computed(() => (progress.value ? Math.round((progress.value.done / progress.value.total) * 100) : 0))
 const clock = (ms: number) => {
@@ -91,10 +85,17 @@ const stop = toasts.guard(async () => {
         <b class="num">{{ progress.done }}/{{ progress.total }}</b
         ><span class="num muted">{{ percent }}%</span>
       </span>
-      <span v-else-if="shown.running && run.step.value" class="runstep" title="The step of the run, from its log">{{ run.step.value }}</span>
+      <span v-else-if="shown.running && run.step.value" class="runstep" title="The step the run is at">{{ run.step.value }}</span>
       <span v-if="elapsed" class="num muted" :title="shown.running ? 'Running for' : 'Took'">{{ elapsed }}</span>
       <span v-if="reason" class="runreason" :title="reason">{{ reason }}</span>
       <code v-else>{{ shown.command }}</code>
+      <details v-if="warnings.length" class="rd-warnings">
+        <summary>{{ plural(warnings.length, 'warning') }}</summary>
+        <ul>
+          <li v-for="(warning, n) in warnings.slice(0, 5)" :key="n">{{ warning }}</li>
+          <li v-if="warnings.length > 5" class="muted">and {{ warnings.length - 5 }} more in the log</li>
+        </ul>
+      </details>
       <div class="spacer" />
       <button class="btn" :aria-expanded="run.logOpen.value" @click="run.logOpen.value = !run.logOpen.value">Log</button>
       <button v-if="shown.running && run.scope.value?.stop" class="btn danger" @click="stop">Stop</button>

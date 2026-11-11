@@ -206,3 +206,20 @@ test('the stages a plan run makes, and a clock', () => {
   expect(clock(75.25)).toBe('1:15.3')
   expect(clock(75.25, false)).toBe('1:15')
 })
+
+// #829: the run dock reads the events of a run, never its log
+test('what the events of a run say: its step, warnings, failure - only of the run followed', async () => {
+  const {runSaid} = await import('../../src/services/run')
+  const said = runSaid(
+    [
+      {at: 1, type: 'failed', message: 'an older run'},
+      {at: 10, type: 'step', state: 'cached', name: 'story', title: '2 · Story'},
+      {at: 11, type: 'step', state: 'started', name: 'beats', title: '3 · Beats'},
+      {at: 12, type: 'warning', message: 'a beat without a place'},
+      {at: 13, type: 'step', state: 'done', name: 'beats', title: '3 · Beats'},
+      {at: 14, type: 'failed', message: 'EPERM', advice: 'Close the program that holds it.'},
+    ],
+    5,
+  )
+  expect(said).toEqual({step: '3 · Beats', warnings: ['a beat without a place'], failure: {message: 'EPERM', advice: 'Close the program that holds it.'}})
+})

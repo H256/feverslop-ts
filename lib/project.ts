@@ -4,6 +4,7 @@ import {join} from 'node:path'
 import {log, styles} from './log.ts'
 import {withStep} from './timings.ts'
 import {dropPartials, keepEach, keepFound, type Partials} from './partials.ts'
+import {runEvent, stepTitle} from './run-events.ts'
 
 // prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
 // propStem: only set when the prop is a musical instrument audible in the song - which stem its sound belongs to,
@@ -457,10 +458,13 @@ export class ProjectStore {
         const cached = this.data[name]
         if (cached !== undefined) {
             log.cached(name, title)
+            runEvent({type: 'step', state: 'cached', name, title: stepTitle(title)})
             return cached as NonNullable<Project[K]>
         }
         log.section(title)
+        runEvent({type: 'step', state: 'started', name, title: stepTitle(title)})
         const result = await withStep(name, run)
+        runEvent({type: 'step', state: 'done', name, title: stepTitle(title)})
         this.generated.add(name)
         this.data[name] = result
         dropPartials(this.data, name)

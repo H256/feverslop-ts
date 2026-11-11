@@ -2349,6 +2349,28 @@ textarea.book {
   transition: width 0.4s;
 }
 /* why the run failed (#797): readable with the log folded, the whole text on hover */
+/* the warnings of a run that ended well (#829): a count, the first ones above the bar on a click */
+.rd-warnings {
+  position: relative;
+  flex: none;
+  color: var(--stale);
+}
+.rd-warnings summary {
+  cursor: pointer;
+}
+.rd-warnings ul {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 5;
+  width: min(560px, 80vw);
+  margin: 0 0 6px;
+  padding: 8px 10px 8px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  box-shadow: 0 4px 16px #0004;
+}
 .runreason {
   flex: 1 1 auto;
   min-width: 0;

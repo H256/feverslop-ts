@@ -55,7 +55,7 @@ import {readServers, urlsOfChoice} from './servers.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
-import {PROJECT_PAGES, type NewProject, type ProjectStatus} from '../../shared/workspace.ts'
+import {PROJECT_PAGES, type NewProject, type ProjectStatus, type RunEvents} from '../../shared/workspace.ts'
 import {doctor} from '../doctor.ts'
 import {createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
@@ -281,10 +281,17 @@ export function runEvents(runs: RunControl, target: EditorTarget, request: Reque
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream({
         start(controller) {
-            const send = (event: string, data: unknown, id?: number) =>
-                controller.enqueue(new TextEncoder().encode(`${id === undefined ? '' : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+            // what one tick has to say goes out as one chunk
+            let said = ''
+            const send = (event: string, data: unknown, id?: number) => {
+                said += `${id === undefined ? '' : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+            }
             let wasRunning: boolean | undefined
+            // the events of the newest run (#829): from its start for a new connection or a new run, then what was added
+            let eventsFile: string | undefined | null = null
+            let eventsSent = 0
             const tick = () => {
+                said = ''
                 try {
                     const {lines, next} = runs.lines(target, after)
                     after = next
@@ -294,6 +301,17 @@ export function runEvents(runs: RunControl, target: EditorTarget, request: Reque
                         wasRunning = current?.running ?? false
                         send('state', current ?? null)
                     }
+                    const {file, events} = runs.events(target)
+                    if (file !== eventsFile) {
+                        // another run (or the first look): its events from the start, even none - the page drops what it had
+                        eventsFile = file
+                        send('events', {events, from: 0, next: events.length} satisfies RunEvents)
+                        eventsSent = events.length
+                    } else if (events.length > eventsSent) {
+                        send('events', {events: events.slice(eventsSent), from: eventsSent, next: events.length} satisfies RunEvents)
+                        eventsSent = events.length
+                    }
+                    if (said) controller.enqueue(new TextEncoder().encode(said))
                 } catch {
                     // a log being replaced, or the page gone: the next tick sees
                 }

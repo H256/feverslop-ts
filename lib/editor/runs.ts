@@ -1,4 +1,4 @@
-import {closeSync, existsSync, openSync, readdirSync, readSync, rmSync, statSync} from 'node:fs'
+import {closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync} from 'node:fs'
 import {join} from 'node:path'
 import {lockHolder, verifiedLockHolder} from '../lock.ts'
 import {cancelJobs, jobsQueuedSince} from '../comfy-cancel.ts'
@@ -14,7 +14,8 @@ import {FILM_STEP_NAMES} from '../film/store.ts'
 import {VIDEO_NAME} from '../postwork/video.ts'
 import {requestArgs} from '../command-schema.ts'
 import {introCommand, labelCommand} from '../postwork/commands.ts'
-import type {RunInfo, RunRequest} from '../../shared/workspace.ts'
+import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
+import {eventsFileOf} from '../run-events.ts'
 export type {RunInfo} from '../../shared/workspace.ts'
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
@@ -407,6 +408,27 @@ export class RunControl {
         if (!log || !lockHolder(target.dir)) return {lines: [], next: after}
         const all = this.terminalLog(this.key(target), log)
         return {lines: all.slice(after), next: all.length}
+    }
+
+    /**
+     * The events of the newest run of this project (#829), started here or in the terminal: the file next to its newest log. `file`
+     * names it, so that a follower sees when another run began.
+     */
+    events(target: EditorTarget): {file?: string; events: RunEvent[]} {
+        const log = newestLog(target.dir)
+        if (!log) return {events: []}
+        const file = eventsFileOf(log)
+        if (!existsSync(file)) return {file, events: []}
+        const events: RunEvent[] = []
+        // only whole lines: a line still being written is read when it is complete
+        for (const line of readFileSync(file, 'utf8').split('\n').slice(0, -1)) {
+            try {
+                events.push(JSON.parse(line) as RunEvent)
+            } catch {
+                // a line that is not an event is skipped, not the run
+            }
+        }
+        return {file, events}
     }
 
     // the lines of the log being followed, per project: only the bytes appended since the last poll are read

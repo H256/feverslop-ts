@@ -1,7 +1,8 @@
 import {readdirSync, rmSync, statSync} from 'node:fs'
 import {join, resolve} from 'node:path'
+import {eventsFileOf} from './run-events.ts'
 
-/** Keep the most recent run logs in a project; inaccessible files are left alone. */
+/** Keep the most recent run logs in a project, and the events of each; inaccessible files are left alone. */
 export function pruneRunLogs(dir: string, keep = 20, preserve?: string): number {
     const logs = readdirSync(dir, {withFileTypes: true})
         .filter(entry => entry.isFile() && entry.name.endsWith('.log'))
@@ -20,6 +21,8 @@ export function pruneRunLogs(dir: string, keep = 20, preserve?: string): number 
     for (const log of candidates.slice(limit)) {
         try {
             rmSync(log.path)
+            // its events (#829) go with it
+            rmSync(eventsFileOf(log.path), {force: true})
             removed++
         } catch {
             /* best effort; never stop a run over old logs */
