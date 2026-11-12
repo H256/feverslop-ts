@@ -8,6 +8,7 @@ export const router = createRouter({
   routes: [
     {path: '/', name: 'home', component: ProjectsPage},
     {path: '/library', name: 'library', component: () => import('./features/library/LibraryPage.vue')},
+    {path: '/stats', name: 'stats', component: () => import('./features/stats/StatsPage.vue')},
     {
       path: '/p/:kind(music|film)/:id',
       component: () => import('./features/project/ProjectLayout.vue'),
