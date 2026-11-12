@@ -66,7 +66,7 @@ const createAsset = toasts.guard(async () => {
     <div class="scrollpage">
       <PageBar title="Library">
         <SegmentedControl v-model="kind" :options="KINDS" label="Asset kind" />
-        <input v-model="text" type="search" :placeholder="kind === 'song' ? 'Find a song' : 'Find an asset'" aria-label="Find">
+        <input v-model="text" type="search" :placeholder="kind === 'song' ? 'Find a song' : 'Find an asset'" :aria-label="kind === 'song' ? 'Find a song' : 'Find an asset'">
         <span v-if="data" class="muted" :title="data.dir">{{ kind === 'song' ? plural(songs.length, 'song') : plural(shown.length, 'asset') }}</span>
         <div class="spacer" />
         <button class="btn primary" @click="createAsset">New asset from a picture</button>
