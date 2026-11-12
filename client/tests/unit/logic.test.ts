@@ -257,3 +257,15 @@ test('the stages a changed input or setting makes again', async () => {
   expect(changedStages(steps, 'music')).toEqual(['look', 'plan'])
   expect(changedStages([{step: 'screenplay', state: 'redo'}], 'film')).toEqual(['story'])
 })
+
+// #834: what a change drops is said by stage and count, the step names only for pointing at
+test('the steps a change drops, in words', async () => {
+  const {listSteps, stepNames} = await import('../../src/lib/format')
+  const look = ['lookBrief', 'characterLooks', 'locationLooks']
+  expect(listSteps([...look, 'beats', 'mapping'])).toBe('the look and the shot plan (5 steps)')
+  expect(listSteps(['summary', 'cast', 'singing', ...look, 'shotMoments'])).toBe('the story, the cast, the look and the shot plan (7 steps)')
+  expect(listSteps(['transcript', 'story'])).toBe('the song analysis and the story (2 steps)')
+  expect(listSteps(['screenplay', 'coverage'], 'film')).toBe('the screenplay and the shot plan (2 steps)')
+  expect(listSteps([])).toBe('nothing')
+  expect(stepNames(['beats', 'mapping'])).toBe('beats, mapping')
+})

@@ -27,7 +27,7 @@ const saveBrief = toasts.guard(async () => {
   const yes = await ask({
     title: 'Save the look of the whole?',
     lines: ['Every look is written from it: the next plan run writes them all again, and what is built on them. The language model only, nothing is rendered.'],
-    warnings: goes.length ? [`What goes: ${listSteps(goes)}.`, 'Texts changed by hand on this page go too.'] : [],
+    warnings: goes.length ? [`What goes: ${listSteps(goes, project.value.kind)}.`, 'Texts changed by hand on this page go too.'] : [],
     confirm: 'Save it',
   })
   if (!yes) return
@@ -49,7 +49,7 @@ const saveLooks = toasts.guard(async () => {
       "What is written from a changed text is written again for that character or place only - a changed look: its description; a place's look: its description, background and floor plan. Everyone else keeps their texts. The next plan run does it: the language model only.",
     ],
     warnings: [
-      goes.length && `What is planned from the looks goes: ${listSteps(goes)}.`,
+      goes.length && `What is planned from the looks goes: ${listSteps(goes, project.value.kind)}.`,
       project.value.pictures.some(p => p.exists) && 'A picture made from an old look stays, and is stale: render it again on References.',
     ],
     confirm: 'Save it',

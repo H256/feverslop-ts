@@ -7,7 +7,7 @@ import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {usePending} from '../../composables/usePending'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
-import {listSteps, plural} from '../../lib/format'
+import {listSteps, plural, stepNames} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useRunDock} from '../../services/run'
 import {useToasts} from '../../services/toasts'
@@ -77,7 +77,7 @@ const planNow = toasts.guard(async () => {
     lines: [
       ...changes,
       redo.length
-        ? `Planned again from the new texts: ${listSteps(redo)}. The language model only, nothing is rendered.`
+        ? `Planned again from the new texts: ${listSteps(redo, project.value.kind)}. The language model only, nothing is rendered.`
         : 'Nothing planned so far is built on the old texts: the run only takes the casting over. Nothing is rendered.',
     ],
     warnings:
@@ -172,7 +172,9 @@ const tellAnew = toasts.guard(async () => {
       'The language model writes the same scenes again with them: a part for whoever is new, nothing left of whoever goes. Nothing changes until you take it - it waits on the Story page next to the screenplay there is.',
     ],
     warnings: dropped.length
-      ? [`Taking it drops what is read from the script: ${listSteps(dropped)}. Who stays keeps their looks, the look of the film and the places stay.`]
+      ? [
+          `Taking it drops what is read from the script: ${listSteps(dropped, project.value.kind)}. Who stays keeps their looks, the look of the film and the places stay.`,
+        ]
       : [],
     confirm: 'Have it written',
   })
@@ -205,7 +207,7 @@ const saveCast = toasts.guard(async () => {
       cast.remakes.length > 0 && 'The looks of whoever is new or changed are written again; everyone else keeps theirs.',
     ],
     warnings: [
-      cast.builtOn.length > 0 && `What is built on the cast goes: ${listSteps(cast.builtOn)}.`,
+      cast.builtOn.length > 0 && `What is built on the cast goes: ${listSteps(cast.builtOn, project.value.kind)}.`,
       cast.builtOn.includes('singing') && 'Who sings which line is asked again - a choice made on the Singers page goes too.',
       project.value.clips.some(c => c.video) && 'Pictures and clips made before stay, and are stale once the plan has new prompts for them.',
       !film.value && 'The story still tells what it told: a role that is now someone else entirely is best changed in the story too (Story page).',
@@ -281,7 +283,9 @@ const saveCast = toasts.guard(async () => {
         <div class="section btn-row">
           <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
           <button class="btn" @click="cancel">Cancel</button>
-          <span v-if="data.cast.builtOn.length" class="muted">Saving drops what is built on the cast: {{ listSteps(data.cast.builtOn) }}.</span>
+          <span v-if="data.cast.builtOn.length" class="muted" :title="stepNames(data.cast.builtOn)"
+            >Saving drops what is built on the cast: {{ listSteps(data.cast.builtOn, project.kind) }}.</span
+          >
         </div>
       </template>
       <template v-else>
