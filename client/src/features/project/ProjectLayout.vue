@@ -5,7 +5,9 @@ import type {PlanStage, ProjectKind, ProjectPage} from '../../../../shared/works
 import ResourceState from '../../components/ResourceState.vue'
 import {useResource} from '../../composables/useResource'
 import {TOP_CHIPS, TOP_NAV, usePageTitle} from '../../services/chrome'
+import {useAsk} from '../../services/ask'
 import {useRunDock} from '../../services/run'
+import {useToasts} from '../../services/toasts'
 import {useServers} from '../../services/servers'
 import {STAGE_PAGE, STAGES, stageName} from '../plan/stages'
 import NextStep from './NextStep.vue'
@@ -14,9 +16,11 @@ import {createProjectSession, ProjectService} from './session'
 /** Every page of one project: the session they share, the project's pages in the top bar, its runs followed. */
 const route = useRoute()
 const run = useRunDock()
-const session = ProjectService.provide(createProjectSession(route.params.kind as ProjectKind, String(route.params.id), {run, servers: useServers()}))
+const session = ProjectService.provide(
+  createProjectSession(route.params.kind as ProjectKind, String(route.params.id), {run, servers: useServers(), ask: useAsk(), toasts: useToasts()}),
+)
 const {reload, error, loading} = useResource(signal => session.reload(signal))
-run.follow({events: session.api.events, stop: session.api.stop})
+run.follow({events: session.api.events, stop: session.api.stop, history: session.api.runs, unqueue: session.api.unqueue})
 // what a run changed is read again: every page shows the folder as it is now
 run.onEnd(() => {
   void reload()

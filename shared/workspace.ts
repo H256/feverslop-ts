@@ -571,6 +571,18 @@ export type RunInfo = {
     running: boolean
     code?: number
 }
+/** A run asked for while another went on, to start after it - kept in the project's logs/queue.json (#837). */
+export type QueuedRun = {id: string; request: {type: string; [field: string]: unknown}; command: string; servers?: string[]; askedAt: string}
+/** A run that ended, from the project's logs/runs.jsonl: its command, how it ended, its log in logs/ (#837). */
+export type PastRun = {
+    command: string
+    startedAt: string
+    endedAt?: string
+    state: 'running' | 'stopped' | 'failed' | 'finished'
+    log?: string
+    failure?: string
+}
+export type RunHistory = {queue: QueuedRun[]; past: PastRun[]}
 /** The server-sent events of a run: its log lines from a cursor on, and its state when it changes. */
 export type RunLines = {lines: string[]; next: number}
 

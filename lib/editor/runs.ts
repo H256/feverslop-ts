@@ -17,7 +17,9 @@ import {introCommand, labelCommand} from '../postwork/commands.ts'
 import {EXPORT_FORMATS} from '../timeline-export.ts'
 import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
 import {newestLog, newestRunEvents} from '../run-events.ts'
-import {busy} from '../service-error.ts'
+import {busy, KindError} from '../service-error.ts'
+import {hasQueue, notePastRun, queueRun, readQueue, takeFirst} from '../run-queue.ts'
+import type {QueuedRun} from '../../shared/workspace.ts'
 export type {RunInfo} from '../../shared/workspace.ts'
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
@@ -335,6 +337,41 @@ export class RunControl {
         })
     }
 
+    /**
+     * Starts it now, or - while this project is worked on - puts it behind the run that goes on (#837): logs/queue.json, started in
+     * order as the project is free (see startQueued). What cannot run at all is refused now, not when its turn comes.
+     */
+    startOrQueue(target: EditorTarget, action: RunAction, servers?: string[]): {run: RunInfo} | {queued: QueuedRun} {
+        try {
+            return {run: this.start(target, action, servers)}
+        } catch (e) {
+            if (!(e instanceof KindError) || e.kind !== 'busy') throw e
+            const {script, args} = runCommand(target, action)
+            return {queued: queueRun(target.dir, {request: action, command: ['bun', script, ...args].join(' '), ...(servers ? {servers} : {})})}
+        }
+    }
+
+    /** The first run of the queue, started when nothing goes on in the project; one that cannot start any more is taken out and said. */
+    startQueued(target: EditorTarget): RunInfo | undefined {
+        if (this.own.get(this.key(target))?.info.running || lockHolder(target.dir) || !hasQueue(target.dir)) return undefined
+        const next = takeFirst(target.dir)
+        if (!next) return undefined
+        try {
+            return this.start(target, next.request as unknown as RunAction, next.servers)
+        } catch (e) {
+            console.error(`the queued run of ${target.id} was not started: ${next.command} - ${e instanceof Error ? e.message : String(e)}`)
+            return undefined
+        }
+    }
+
+    /** Looks for queued runs every few seconds - also those left by an editor before this one; the projects are asked anew each time. */
+    watchQueues(targets: () => EditorTarget[], every = 3000): () => void {
+        const timer = setInterval(() => {
+            for (const target of targets()) if (readQueue(target.dir).length) this.startQueued(target)
+        }, every)
+        return () => clearInterval(timer)
+    }
+
     /** A tool that is not about one project's files, under a name of its own - the library's create-asset. */
     startTool(target: EditorTarget, script: string, args: string[], servers?: string[], temporary: string[] = []): RunInfo {
         return this.dropping(temporary, () => this.spawn(target, script, args, false, servers, temporary))
@@ -387,6 +424,14 @@ export class RunControl {
             .then(code => {
                 own.info.running = false
                 own.info.code = code
+                // a tool that keeps no record of its own (leak-scan, texture-chains, ...): the editor puts it in the history (#837)
+                if (lastRun(target.dir)?.pid !== proc.pid)
+                    notePastRun(target.dir, {
+                        command: own.info.command,
+                        startedAt: own.info.startedAt,
+                        endedAt: new Date().toISOString(),
+                        state: code === 0 ? 'finished' : 'failed',
+                    })
             })
             .finally(() => dropFolders(temporary))
         this.own.set(this.key(target), own)

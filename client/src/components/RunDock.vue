@@ -11,6 +11,15 @@ const ask = useAsk()
 const toasts = useToasts()
 const logBox = ref<HTMLPreElement>()
 const shown = computed(() => (run.current.value && !run.closed.value ? run.current.value : undefined))
+// what waits behind the run, and the runs before it (#837) - the queue keeps the dock open
+const queue = computed(() => run.history.value.queue)
+const past = computed(() => run.history.value.past)
+const pastOpen = ref(false)
+const when = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '')
+const unqueue = toasts.guard(async (id: string) => {
+  await run.scope.value?.unqueue?.(id)
+  run.readHistory()
+})
 const state = computed(() => shown.value && runStateText(shown.value))
 
 // how far the run is (#775): a render of clips as a bar, any other run by the step of its log - and the time it runs or ran
@@ -76,8 +85,8 @@ const stop = toasts.guard(async () => {
 </script>
 
 <template>
-  <section v-if="shown" class="rundock" aria-label="Run">
-    <div class="runbar">
+  <section v-if="shown || queue.length" class="rundock" aria-label="Run">
+    <div v-if="shown" class="runbar">
       <span :class="['dot', {failed: failedRun(shown), done: !shown.running && !failedRun(shown)}]" />
       <span>{{ state }}</span>
       <span v-if="progress" class="runprogress" :title="`${progress.done} of ${progress.total} clips done`">
@@ -99,8 +108,69 @@ const stop = toasts.guard(async () => {
       <div class="spacer" />
       <button class="btn" :aria-expanded="run.logOpen.value" @click="run.logOpen.value = !run.logOpen.value">Log</button>
       <button v-if="shown.running && run.scope.value?.stop" class="btn danger" @click="stop">Stop</button>
+      <button v-if="past.length" class="btn" :aria-expanded="pastOpen" title="The runs that ended: bun run runs" @click="pastOpen = !pastOpen">Runs</button>
       <button v-if="!shown.running" class="btn" aria-label="Close" @click="run.closed.value = true">✕</button>
     </div>
+    <ol v-if="queue.length" class="rd-queue" aria-label="Waiting">
+      <li v-for="(queued, n) in queue" :key="queued.id">
+        <span class="muted">{{ n === 0 ? 'Next' : `${n + 1}.` }}</span>
+        <code :title="`asked ${when(queued.askedAt)}`">{{ queued.command }}</code>
+        <button class="btn mini" :aria-label="`Take out: ${queued.command}`" title="Take it out of the queue" @click="unqueue(queued.id)">✕</button>
+      </li>
+    </ol>
+    <ol v-if="pastOpen && past.length" class="rd-past" aria-label="Runs that ended">
+      <li v-for="(ended, n) in past.slice(0, 10)" :key="n">
+        <span :class="['rd-state', ended.state]">{{ ended.state }}</span>
+        <span class="num muted">{{ when(ended.startedAt) }}</span>
+        <code>{{ ended.command }}</code>
+        <span v-if="ended.failure" class="warn" :title="ended.failure">{{ ended.failure }}</span>
+        <code v-if="ended.log" class="muted">logs/{{ ended.log }}</code>
+      </li>
+    </ol>
     <pre v-show="run.logOpen.value" ref="logBox" class="runlog">{{ run.log.value }}</pre>
   </section>
 </template>
+
+<style scoped>
+/* the queue and the runs before (#837) - rd- names: .queue and .past are not styled elsewhere, kept apart all the same */
+.rd-queue,
+.rd-past {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-top: 1px solid var(--line);
+  max-height: 30vh;
+  overflow: auto;
+}
+.rd-queue li,
+.rd-past li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.rd-queue code,
+.rd-past code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.rd-past .warn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+.rd-state {
+  font-size: var(--text-xs);
+  min-width: 7ch;
+}
+.rd-state.failed,
+.rd-state.stopped {
+  color: var(--stale);
+}
+</style>
