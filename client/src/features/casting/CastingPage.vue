@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, reactive, ref} from 'vue'
+import {computed, h, nextTick, reactive, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import type {CastingRole, CastView} from '../../../../shared/workspace'
 import NoticeList from '../../components/NoticeList.vue'
@@ -16,6 +16,7 @@ import {usePageData} from '../project/usePageData'
 import CastEditor from './CastEditor.vue'
 import CastingRoleRow from './CastingRoleRow.vue'
 import NewFilmRoles from './NewFilmRoles.vue'
+import TakeAsset from './TakeAsset.vue'
 import {castDraft, newMember, type CastDraft} from './forms'
 
 /** Who plays whom: a role given a library asset, or the cast changed by hand - two ways, never at once. */
@@ -62,6 +63,35 @@ async function choose(role: CastingRole, value: string, select: HTMLSelectElemen
     toasts.fail(cause)
   }
 }
+/** A finished character or place of another music video taken over (#835): `bun run import-asset`, asked first. */
+const takeFrom = toasts.guard(async (role: CastingRole) => {
+  const {sources} = await api.assetSources(role.kind)
+  if (!sources.length) {
+    toasts.show(`No other music video has a finished ${role.kind === 'character' ? 'character' : 'place'} yet`)
+    return
+  }
+  const same = sources.flatMap(s => s.assets.filter(a => a.id === role.id || a.name === role.name).map(a => `${s.project}/${a.id}`))[0]
+  const draft = reactive({choice: same ?? '', description: 'source' as 'source' | 'vision' | 'keep'})
+  const yes = await ask({
+    title: `${role.name} from another project?`,
+    lines: [
+      'Its picture and its whole reference sheet are copied here and pinned - nothing is rendered. The pictures there are now are put away in old/attempts/.',
+    ],
+    body: () => h(TakeAsset, {draft, sources, role}),
+    warnings: [
+      role.clips.length > 0 &&
+        `${role.name} is in ${plural(role.clips.length, 'clip')}: those rendered count as stale then; --render=videos --refresh=clips renders them again.`,
+      'What was planned from the old description is said after the run, with the command that plans it again.',
+    ],
+    confirm: 'Take it over',
+    submit: async () => {
+      if (!draft.choice) throw new Error('Choose what is taken over.')
+    },
+  })
+  if (!yes) return
+  const [project, from] = draft.choice.split('/')
+  await start({type: 'import-asset', asset: role.id, project: project!, from: from!, description: draft.description})
+})
 const chooseGuarded = (role: CastingRole, value: string, select: HTMLSelectElement) => {
   choose(role, value, select).catch(toasts.fail)
 }
@@ -336,6 +366,7 @@ const saveCast = toasts.guard(async () => {
               :out="out.has(outKey(role.kind, role.id))"
               @choose="(value, select) => chooseGuarded(role, value, select)"
               @remove="remove(role)"
+              @take="takeFrom(role)"
               @put-back="keep(role)"
             />
           </div>

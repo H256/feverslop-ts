@@ -288,6 +288,14 @@ describe('what can be started', () => {
             '--describe-picture',
         ])
         expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
+        // a finished asset of another music video taken over (#835)
+        expect(runCommand(music, {type: 'import-asset', asset: 'ann', project: 'older', from: 'ann-2', description: 'source'})).toEqual({
+            script: 'tools/import-asset.ts',
+            args: ['demo', 'ann', '--from=older:ann-2', '--description=source'],
+        })
+        expect(() => runCommand(music, {type: 'import-asset', asset: 'ann', project: '../x', from: 'ann', description: 'source'})).toThrow('no such asset')
+        expect(() => runCommand(music, {type: 'import-asset', asset: 'ann', project: 'demo', from: 'ann', description: 'source'})).toThrow('no such asset')
+        expect(() => runCommand(film, {type: 'import-asset', asset: 'ann', project: 'older', from: 'ann', description: 'source'})).toThrow('a film takes')
         expect(runCommand(film, {type: 'texture-chains'})).toEqual({script: 'tools/texture-chains.ts', args: ['demo', '--film']})
         expect(runCommand(music, {type: 'texture-chains'})).toEqual({script: 'tools/texture-chains.ts', args: ['demo']})
         expect(runCommand(film, {type: 'check-joins'})).toEqual({script: 'tools/film-check-joins.ts', args: ['demo']})
@@ -857,6 +865,21 @@ test('the next step in the workspace is the one bun run status says', async () =
     expect(answer.next.why).toBe(said.next.why)
     expect(answer.next.command).toBe(said.next.command)
     expect(answer.next.command).toContain('bun index.ts next-step')
+})
+
+// #835: what the Casting page offers to take over - the finished characters of the other music videos, with their names
+test('the finished assets of the other projects', async () => {
+    const write2 = (file: string, content: unknown = 'x') => write(join(root, file), content)
+    write2('projects/taker/project.json', {cast: {characters: [{id: 'ann', name: 'Ann'}], locations: []}})
+    write2('projects/giver/project.json', {cast: {characters: [{id: 'ann', name: 'Ann'}], locations: []}, characterDescriptions: {ann: 'tall'}})
+    write2('projects/giver/assets/characters/ann.png')
+    write2('projects/giver/assets/characters/bob.partial.png')
+    const answer = (await (await editorHandler()(new Request('http://localhost/p/music/taker/api/asset-sources?kind=character'))).json()) as {
+        sources: {project: string; assets: unknown[]}[]
+    }
+    expect(answer.sources.find(s => s.project === 'giver')).toEqual({project: 'giver', assets: [{id: 'ann', name: 'Ann', described: true}]})
+    expect(answer.sources.some(s => s.project === 'taker')).toBe(false)
+    expect((await editorHandler()(new Request('http://localhost/p/music/taker/api/asset-sources?kind=prop'))).status).toBe(400)
 })
 
 test('malformed URL paths return a JSON error', async () => {
