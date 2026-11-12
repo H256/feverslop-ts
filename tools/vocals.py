@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.13"
-# dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "soundfile", "numpy", "librosa>=0.10", "nvidia-cublas-cu12; sys_platform == 'linux'", "nvidia-cudnn-cu12; sys_platform == 'linux'"]
+# dependencies = ["torch>=2.14", "torchaudio>=2.11", "demucs>=4.0.1", "faster-whisper>=1.0", "av<19", "soundfile", "numpy", "librosa>=0.10", "nvidia-cublas-cu12; sys_platform == 'linux'", "nvidia-cudnn-cu12; sys_platform == 'linux'"]
 #
 # [tool.uv.sources]
 # # the CUDA 13.0 wheels only exist for Linux and Windows - macOS takes the regular PyPI build
