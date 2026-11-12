@@ -71,6 +71,8 @@ export type DirectionView = {
         shotId?: string
         message: string
         mentions?: boolean
+        /** someone brought in who has nothing to do in the shot yet: the words are to be written in, not rewritten (#830) */
+        idle?: boolean
         /** made for a shot that has been planned again since: it no longer applies, there is nothing to decide but clearing it */
         stale?: boolean
     }[]

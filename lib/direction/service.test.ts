@@ -15,6 +15,7 @@ import {
     restoreDirection,
     applyDirectionOverlay,
     directionReview,
+    shotPeople,
 } from './service.ts'
 const dirs: string[] = []
 afterEach(() => {
@@ -504,4 +505,23 @@ test('a run drops the edits made for shots planned again since, and names the in
     // the instruction is not taken: a run that only plans builds without it and names it
     expect(directionNotTaken(target, data).join('\n')).toContain('A walks in')
     expect(() => applyDirectionOverlay(target, data, {allowPending: true})).not.toThrow()
+})
+
+// #830: people in or out of one shot and the words for it, saved in one call that also says what follows - the page and the command
+test('people into one shot and out of it: one call, and whether the shot is to be written by a proposal', async () => {
+    const {target, data} = fixture()
+    data.shotMoments.s1.shots[1] = {action: '{B} waits', characters: ['b'], people: {b: {state: 'sits'}}}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    expect(shotPeople(target, {shotId: 's1:shot2'})).rejects.toThrow('people to bring in')
+    // brought in with nothing to do: written by a proposal, the issue says so as a field
+    const brought = await shotPeople(target, {shotId: 's1:shot2', add: ['a']})
+    expect(brought.propose).toBe(true)
+    expect(brought.view.editIssues.find(i => i.shotId === 's1:shot2')?.idle).toBe(true)
+    // taken out, then brought back with words: the edit that took them out goes, the words are an instruction for them on the shot
+    await shotPeople(target, {shotId: 's1:shot2', remove: ['b']})
+    const back = await shotPeople(target, {shotId: 's1:shot2', add: ['b'], words: 'B leans on the door'})
+    expect(back.back).toEqual(['b'])
+    expect(back.view.edits.some(e => e.remove === 'b')).toBe(false)
+    expect(back.view.rules.map(r => [r.text, r.characterId])).toEqual([['B leans on the door', 'b']])
+    expect(back.propose).toBe(true)
 })

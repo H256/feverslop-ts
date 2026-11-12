@@ -76,4 +76,24 @@ describe('CLI first', () => {
         const pageOnly = calls.filter(name => !new RegExp(`\\b${name}\\(`).test(commands))
         expect(pageOnly).toEqual([])
     })
+    // #830: a change of the direction and the build of the prompts are one request - a page never takes, restores, drops or edits
+    // and then starts the plan run itself: a failure or a closed page in between would leave the prompts as they were
+    test('no page starts the plan run itself after changing the direction', () => {
+        const changes = ['saveDirection', 'saveDirectionEdits', 'takeDirection', 'dropDirection', 'restoreDirection', 'shotPeople']
+        const files: string[] = []
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(join(root, dir), {withFileTypes: true}))
+                if (entry.isDirectory()) walk(`${dir}/${entry.name}`)
+                else if (/\.(vue|ts)$/.test(entry.name)) files.push(`${dir}/${entry.name}`)
+        }
+        walk('client/src')
+        const found = files.flatMap(file =>
+            read(file)
+                // one action: a declaration of the page's script
+                .split(/\n(?=const |function |async function )/)
+                .filter(action => changes.some(name => action.includes(`api.${name}(`)) && action.includes("start({type: 'plan'"))
+                .map(action => `${file}: ${action.split('\n')[0]}`),
+        )
+        expect(found).toEqual([])
+    })
 })

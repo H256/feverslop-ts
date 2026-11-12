@@ -17,6 +17,7 @@ import {
     dropDirection,
     restoreDirection,
     describeEdit,
+    shotPeople,
 } from '../lib/direction/service.ts'
 import type {DirectionEdit, DirectionScope, DirectionSize, DirectionView} from '../shared/direction.ts'
 cli('direction')
@@ -130,7 +131,19 @@ if ((a.with !== undefined && !shotWith) || a.join?.length || a.out !== undefined
 }
 // a direct edit: no language model, applied by code to the shots of its scope - and the prompts are built again right away
 let rebuild = false
-if (a.without !== undefined || a.size !== undefined || a.unedit !== undefined || shotWith) {
+// people into one shot or out of it, with what they do there (--add): the same function as the Direction page (#830)
+if (a.scope?.startsWith('shot:') && (shotWith || a.without !== undefined)) {
+    const shotId = a.scope.slice('shot:'.length)
+    const {propose, back} = await shotPeople(target, {
+        shotId,
+        ...(shotWith ? {add: people(a.with!)} : {remove: people(a.without!)}),
+        ...(shotWith && a.add !== undefined ? {words: a.add} : {}),
+    })
+    for (const id of back) console.log(`${id} is back in ${shotId}: the edit that took them out is undone`)
+    // the shot's words name who left, or give who came nothing to do: a proposal writes them (--preview); else the prompts are built
+    if (propose && !a.preview) console.log(`The words of ${shotId} are to be written for it: --preview writes them as a proposal, --take takes it`)
+    rebuild = !propose
+} else if (a.without !== undefined || a.size !== undefined || a.unedit !== undefined || shotWith) {
     let edits = readDirection(target).edits
     if (a.unedit !== undefined) {
         if (!edits.some(e => e.id === a.unedit)) throw Error('unknown edit')

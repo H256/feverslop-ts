@@ -119,6 +119,15 @@ test('direction in the timeline: the cast lane, the shot dialog, a person taken 
     state = {...state, edits: route.request().postDataJSON().edits}
     await route.fulfill({json: state})
   })
+  // people out of the shot and the run that follows: one request (#830)
+  let people: unknown
+  await page.route('**/api/direction/people', async route => {
+    people = route.request().postDataJSON()
+    state = {...state, edits: [{id: 'out', scope: {kind: 'shot', id: 'b1:shot1'}, remove: 'bob'}]}
+    await route.fulfill({
+      json: {...state, proposing: false, run: {source: 'here', command: 'bun index.ts demo', pid: 1, startedAt: new Date().toISOString(), running: true}},
+    })
+  })
   await page.goto(`${editor.base}/p/music/demo/`)
   // the cast lane: one per character, a click directs the shot under it
   await expect(page.locator('.labels .lane-cast', {hasText: 'Ann'})).toBeVisible()
@@ -132,7 +141,8 @@ test('direction in the timeline: the cast lane, the shot dialog, a person taken 
   await expect(takeOut.first()).toBeDisabled()
   await takeOut.nth(1).check()
   await dialog.getByRole('button', {name: 'Take Bob out of the shot'}).click()
-  await expect.poll(() => state.edits.map(e => [e.remove, e.scope])).toEqual([['bob', {kind: 'shot', id: 'b1:shot1'}]])
-  // the clip prompts are built again at once
-  await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'plan'}})
+  await expect.poll(() => people).toMatchObject({shotId: 'b1:shot1', remove: ['bob']})
+  // the server built the clip prompts again in the same request: the page starts no run of its own
+  await expect(dialog.getByRole('button', {name: 'Take Bob out of the shot'})).toBeHidden()
+  expect(posted.find(p => p.path === 'run')).toBeUndefined()
 })
