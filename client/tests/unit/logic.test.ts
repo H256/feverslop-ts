@@ -262,10 +262,10 @@ test('the stages a changed input or setting makes again', async () => {
 test('the steps a change drops, in words', async () => {
   const {listSteps, stepNames} = await import('../../src/lib/format')
   const look = ['lookBrief', 'characterLooks', 'locationLooks']
-  expect(listSteps([...look, 'beats', 'mapping'])).toBe('the look and the shot plan (5 steps)')
-  expect(listSteps(['summary', 'cast', 'singing', ...look, 'shotMoments'])).toBe('the story, the cast, the look and the shot plan (7 steps)')
-  expect(listSteps(['transcript', 'story'])).toBe('the song analysis and the story (2 steps)')
-  expect(listSteps(['screenplay', 'coverage'], 'film')).toBe('the screenplay and the shot plan (2 steps)')
+  expect(listSteps([...look, 'beats', 'mapping'])).toBe('5 steps of the look and the shot plan')
+  expect(listSteps(['summary', 'cast', 'singing', ...look, 'shotMoments'])).toBe('7 steps of the story, the cast, the look and the shot plan')
+  expect(listSteps(['transcript', 'story'])).toBe('2 steps of the song analysis and the story')
+  expect(listSteps(['screenplay', 'coverage'], 'film')).toBe('2 steps of the screenplay and the shot plan')
   expect(listSteps([])).toBe('nothing')
   expect(stepNames(['beats', 'mapping'])).toBe('beats, mapping')
 })

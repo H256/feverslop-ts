@@ -14,7 +14,7 @@ export const dateOf = (ms: number) => new Date(ms).toLocaleString(undefined, {da
 export const withNames = (text: string) => text.replace(/\{([^{}\n]{1,80})\}/g, '$1')
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 /**
- * What a change makes again, in the person's words (#834): the stages it reaches and how many steps - "the look and the shot plan, 12 steps"
+ * What a change makes again, in the person's words (#834): how many steps, of which stages - "12 steps of the look and the shot plan"
  * - not the names of the steps; those are in `stepNames` for a title, asked for by pointing.
  */
 export function listSteps(steps: string[], kind: ProjectKind = 'music'): string {
@@ -23,7 +23,7 @@ export function listSteps(steps: string[], kind: ProjectKind = 'music'): string 
   // the song's own steps, a film's subtitles: no stage of the plan
   if (steps.some(step => !STAGES.some(stage => STAGE_STEPS[kind][stage].includes(step)))) named.unshift(kind === 'film' ? 'the subtitles' : 'the song analysis')
   const words = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named.at(-1)}` : (named[0] ?? 'nothing')
-  return steps.length ? `${words} (${plural(steps.length, 'step')})` : words
+  return steps.length ? `${plural(steps.length, 'step')} of ${words}` : words
 }
 /** The names of the steps, for a title: what listSteps sums up. */
 export const stepNames = (steps: string[]) => steps.join(', ')

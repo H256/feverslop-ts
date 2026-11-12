@@ -70,7 +70,7 @@ test('story: a changed story is saved after the question, and leaving with chang
   await dialog(page).getByRole('button', {name: 'Cancel'}).click()
   await expect(page).toHaveURL(/\/story$/)
   await page.getByRole('button', {name: 'Save the story'}).click()
-  await expect(dialog(page)).toContainText('What is built on the story goes: summary.')
+  await expect(dialog(page)).toContainText('What is built on the story goes: 1 step of the story.')
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
   await expect.poll(() => posted.find(p => p.path === 'book')?.body).toEqual({text: 'Once upon a night'})
 })
@@ -147,7 +147,7 @@ test('look: one text changed and one written anew, saved together', async ({page
   await page.getByLabel('Write anew').check()
   await expect(page.getByText('1 text changed · 1 to write anew')).toBeVisible()
   await page.getByRole('button', {name: 'Save the looks', exact: true}).click()
-  await expect(dialog(page)).toContainText('What is planned from the looks goes: beats.')
+  await expect(dialog(page)).toContainText('What is planned from the looks goes: 1 step of the shot plan.')
   await dialog(page).getByRole('button', {name: 'Save it'}).click()
   await expect
     .poll(() => posted.find(p => p.path === 'look')?.body)
