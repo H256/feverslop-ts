@@ -57,7 +57,7 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
         </select>
         <button
           v-if="removable"
-          class="btn"
+          class="btn danger"
           :aria-label="`Remove ${role.name}`"
           :title="
             project.kind === 'film'

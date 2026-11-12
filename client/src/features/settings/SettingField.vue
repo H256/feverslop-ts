@@ -45,8 +45,8 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
       {{ setting.note }}
       <span class="sf-default"
         >Default <code>{{ labelOf(setting, setting.default) }}</code
-        ><button v-if="!off && !form.isDefault(setting)" class="btn link" @click="form.toDefault(props.setting)">Use the default</button
-        ><button v-if="form.isChanged(setting.key)" class="btn link" @click="form.undo(props.setting)">Undo</button></span
+        ><button v-if="!off && !form.isDefault(setting)" class="btn mini" @click="form.toDefault(props.setting)">Use the default</button
+        ><button v-if="form.isChanged(setting.key)" class="btn mini" @click="form.undo(props.setting)">Undo</button></span
       >
     </p>
   </div>
@@ -57,11 +57,11 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 .sf-row {
   display: grid;
   grid-template-columns: minmax(120px, 26%) minmax(0, 1fr);
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
   align-items: center;
   padding: 8px 10px;
   border-left: 3px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
 }
 .sf-row + .sf-row {
   border-top: 1px solid var(--line);
@@ -83,7 +83,7 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 }
 .sf-note {
   grid-column: 2;
-  font-size: 12px;
+  font-size: var(--text-s);
   line-height: 1.4;
   color: var(--muted);
 }
@@ -93,6 +93,9 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 }
 .sf-default code {
   margin-left: 3px;
+}
+.sf-default .btn {
+  margin-left: var(--space-2);
 }
 @media (max-width: 640px) {
   .sf-row {

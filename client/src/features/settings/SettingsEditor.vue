@@ -84,16 +84,16 @@ const save = toasts.guard(async () => {
 .se-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(520px, 100%), 1fr));
-  gap: 14px;
+  gap: var(--space-4);
   align-items: start;
 }
 .se-group {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   padding: 10px 6px 6px;
 }
 .se-group h2 {
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
