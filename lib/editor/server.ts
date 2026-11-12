@@ -59,11 +59,11 @@ import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
 import {busy, invalid, kindOf, missing, STATUS_OF} from '../service-error.ts'
-import {PROJECT_PAGES, type LibraryChange, type NewProject, type ProjectStatus, type SetupChange, type RunEvents} from '../../shared/workspace.ts'
+import {PROJECT_PAGES, type LibraryChange, type NewFilm, type NewProject, type ProjectStatus, type SetupChange, type RunEvents} from '../../shared/workspace.ts'
 import {doctor} from '../doctor.ts'
 import {settingsView} from '../setup-options.ts'
 import {runSetup} from './setup-run.ts'
-import {createProject} from './new-project.ts'
+import {createFilm, createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
 import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts'
 
@@ -698,6 +698,14 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (parts[1] === 'projects' && parts[2] === 'new' && post) {
                     try {
                         return json(await createProject((await request.json()) as NewProject))
+                    } catch (e) {
+                        return refused(e)
+                    }
+                }
+                // a new film: `bun run film:init <id> …` with the form as its options (#831)
+                if (parts[1] === 'films' && parts[2] === 'new' && post) {
+                    try {
+                        return json(await createFilm((await request.json()) as NewFilm))
                     } catch (e) {
                         return refused(e)
                     }

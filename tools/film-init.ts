@@ -3,9 +3,11 @@ import {log} from '../lib/log.ts'
 // Creates a new short film: asks for a story idea or a screenplay (any language), a visual style and, if wanted, the
 // film's settings - then writes films/<id>/ and prints the command to run it.
 // usage: bun run film:init [film-id]   (the id only pre-fills the first question)
+//        bun run film:init <film-id> --idea=<text|file> | --screenplay=<file|text> [--style=…] [--length=…] [--language=…]   (asks nothing, #827)
 import * as p from '@clack/prompts'
 import {loadFilmConfig, filmDefaults, type FilmConfig} from '../lib/film/config.ts'
 import {filmExists, writeFilm} from '../lib/film/setup.ts'
+import {FILM_INIT_USAGE, filmInitOptions} from '../lib/film/init-options.ts'
 import {FILMS_DIR} from '../lib/film/store.ts'
 import {languageName} from '../lib/config.ts'
 import {styles} from '../lib/log.ts'
@@ -13,8 +15,20 @@ import {validProjectId} from '../lib/project-setup.ts'
 import {answer, askResolution, askStyle, askText} from '../lib/wizard.ts'
 cli('film:init')
 
+// by options, nothing asked (#827): a script, or the workspace, which has no terminal to ask in
+{
+    const asked = await filmInitOptions(Bun.argv.slice(2)).catch((e: unknown) => log.usageError(e instanceof Error ? e.message : String(e), FILM_INIT_USAGE))
+    if (asked) {
+        await writeFilm(asked.id, asked.seed)
+        // the file is checked once, here, so a wrong setting shows up now and not on the first run
+        await loadFilmConfig(`${FILMS_DIR}/${asked.id}`)
+        log.output(`${FILMS_DIR}/${asked.id}/`)
+        log.next(`bun film.ts ${asked.id}`)
+        process.exit(0)
+    }
+}
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    log.error(`No terminal to ask in - create ${FILMS_DIR}/<id>/input/ by hand instead:
+    log.error(`No terminal to ask in - give the film by options: bun run film:init <film-id> --idea=<text|file> | --screenplay=<file|text>, or create ${FILMS_DIR}/<id>/input/ by hand:
   input/idea.txt          a story idea, in any language - developed into a screenplay
   input/screenplay.txt    or a screenplay, in any language - adopted as it is (wins if both exist)
   input/style.txt         optional visual style - see docs/style-examples.md

@@ -90,6 +90,8 @@ export type NewProject = {
     singers?: string
     language?: string
 }
+/** A new film, as the start page's form asks it: the options of `bun run film:init` (#831, #827). */
+export type NewFilm = {id: string; idea?: string; screenplay?: string; style?: string; length?: string; language?: string}
 /** Another music video with finished characters or places of a kind: what import-asset can take over (#835). */
 export type AssetSource = {project: string; assets: {id: string; name: string; described: boolean}[]}
 /** The settings of this machine's servers, keys masked: `bun run setup show --json` (#827, #831). */

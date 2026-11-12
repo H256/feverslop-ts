@@ -16,7 +16,9 @@ import {useListingStatus} from './useListingStatus'
 import {useAsk} from '../../services/ask'
 import MachineChecks from './MachineChecks.vue'
 import MachineServers from './MachineServers.vue'
+import NewFilmForm from './NewFilmForm.vue'
 import NewProjectForm from './NewProjectForm.vue'
+import {newFilmDraft, newFilmProblem, newFilmRequest} from './newFilm'
 import {machineSummary, newProjectDraft, newProjectProblem, newProjectRequest} from './newProject'
 
 usePageTitle('All projects', 'Workspace')
@@ -68,6 +70,23 @@ const newProject = async () => {
   if (made) await router.push(`/p/music/${draft.id.trim()}/story`)
 }
 
+/** A new film: the form becomes the options of `bun run film:init` (#831). */
+const newFilm = async () => {
+  const draft = reactive(newFilmDraft())
+  const made = await ask({
+    title: 'New film',
+    lines: ['Writes films/<id>/ with what you give here. Nothing is planned or rendered yet.'],
+    body: () => h(NewFilmForm, {draft}),
+    confirm: 'Create',
+    submit: async () => {
+      const problem = newFilmProblem(draft)
+      if (problem) throw new Error(problem)
+      await workspace.createFilm(newFilmRequest(draft))
+    },
+  })
+  if (made) await router.push(`/p/film/${draft.id.trim()}/story`)
+}
+
 const list = ref<HTMLElement>()
 /** A change of the filter is a place in the history; typing is not. Another filter starts on the first page. */
 function change(next: Partial<ListFilter>, replace = false) {
@@ -88,6 +107,7 @@ function change(next: Partial<ListFilter>, replace = false) {
       <button class="btn" :title="machine.data.value ? machineSummary(checks) : 'What this machine has of what a video needs'" @click="showMachine">
         Machine<span v-if="missing.length" class="chip bad pp-count">{{ missing.length }} missing</span>
       </button>
+      <button class="btn" @click="newFilm">New film</button>
       <button class="btn primary" @click="newProject">New music video</button>
     </PageBar>
     <!-- something a run needs is not there: said before a first run fails on it -->
@@ -105,7 +125,10 @@ function change(next: Partial<ListFilter>, replace = false) {
           <b>No projects here yet.</b>
           <ol>
             <li>See what this machine has: <button class="btn mini" @click="showMachine">Machine</button> - the servers are set up in the terminal with <code>bun run setup</code>.</li>
-            <li>Start a music video: <button class="btn mini primary" @click="newProject">New music video</button> - or <code>bun run init</code>, <code>bun run film:init</code> for a film.</li>
+            <li>
+              Start a music video or a film: <button class="btn mini primary" @click="newProject">New music video</button>
+              <button class="btn mini" @click="newFilm">New film</button> - or <code>bun run init</code>, <code>bun run film:init</code>.
+            </li>
             <li>Plan it stage by stage on the project's pages, then render.</li>
           </ol>
         </div>

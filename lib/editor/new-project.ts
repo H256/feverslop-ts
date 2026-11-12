@@ -1,6 +1,6 @@
 import {join} from 'node:path'
 import {validProjectId} from '../project-setup.ts'
-import type {NewProject} from '../../shared/workspace.ts'
+import type {NewFilm, NewProject} from '../../shared/workspace.ts'
 
 // A new music video from the workspace (#831): the page's form becomes the options of `bun run init`, which asks nothing when it is
 // given them (lib/init-options.ts) - the same command as in the terminal, CLI first. It only writes the project's folder, in an
@@ -57,5 +57,32 @@ export async function createProject(request: NewProject, root = ROOT): Promise<{
     })
     const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
     if (code !== 0) throw new Error(saidWrong(`${out}\n${err}`))
+    return {id: request.id}
+}
+
+/** The arguments of `bun run film:init` a request of the page comes to (#831). Throws on what is no usable value. */
+export function filmInitArgs(request: NewFilm): string[] {
+    if (typeof request.id !== 'string' || !validProjectId(request.id)) throw new Error('the id of a film: lowercase letters, digits and "-"')
+    const args = [request.id]
+    for (const field of ['idea', 'screenplay', 'style', 'length', 'language'] as const) {
+        const value = request[field]
+        if (value === undefined || value === '') continue
+        if (typeof value !== 'string' || value.includes(String.fromCharCode(0)) || value.length > 200_000) throw new Error(`${field}: a text`)
+        if (value.trim()) args.push(`--${field}=${value}`)
+    }
+    if (!args.some(arg => arg.startsWith('--idea=') || arg.startsWith('--screenplay='))) throw new Error('a story idea or a screenplay')
+    return args
+}
+
+/** Runs `bun run film:init <id> …` and answers with the id, or throws with what the command said. */
+export async function createFilm(request: NewFilm, root = ROOT): Promise<{id: string}> {
+    const proc = Bun.spawn(['bun', join(root, 'tools', 'film-init.ts'), ...filmInitArgs(request)], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {...process.env, NO_COLOR: '1', FORCE_COLOR: '0', FEVERSLOP_QUIET: ''},
+    })
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+    if (code !== 0) throw new Error(saidWrong(`${out}${err}`))
     return {id: request.id}
 }

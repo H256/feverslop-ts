@@ -5,6 +5,7 @@ import type {
   ListingStatus,
   StatsView,
   MachineCheck,
+  NewFilm,
   NewProject,
   SetupChange,
   SetupView,
@@ -27,6 +28,8 @@ export const workspace = {
   changeSetup: (change: SetupChange) => postJson<{said: string[]}>('/api/setup', change),
   /** A new music video, made by `bun run init` with these as its options. */
   createProject: (project: NewProject) => postJson<{id: string}>('/api/projects/new', project),
+  /** A new film, made by `bun run film:init` with these as its options. */
+  createFilm: (film: NewFilm) => postJson<{id: string}>('/api/films/new', film),
   library: (signal?: AbortSignal) => getJson<Library>('/api/library/assets', signal),
   /** What `bun run library rename|describe|remove` does (#835). */
   changeLibrary: (change: LibraryChange) => postJson<unknown>('/api/library/change', change),

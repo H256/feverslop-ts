@@ -28,7 +28,11 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Create a music-video project: by questions, or - with --song or --idea - by options, asking nothing.',
         banner: true,
     },
-    'film:init': {args: '[film-id]', description: 'Create a film project interactively.', banner: true},
+    'film:init': {
+        args: '[film-id] [--idea=<text|file> | --screenplay=<file|text>] [--style=<text|file>] [--length=<seconds>] [--language=<code|auto>]',
+        description: 'Create a film project: by questions, or - with --idea or --screenplay - by options, asking nothing.',
+        banner: true,
+    },
     example: {args: '[--no-render]', description: 'Create an example project and optionally generate its song.'},
     'replace-character': {
         args: '<project-id> [--character=<id>] [--member=<n>] [--picture=<file>] [--description=vision|keep|<text>] [--render-sheet] [--dry-run]',

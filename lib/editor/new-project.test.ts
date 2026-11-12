@@ -2,7 +2,7 @@ import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
 import {existsSync, mkdtempSync, readFileSync, rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
-import {initArgs, saidWrong} from './new-project.ts'
+import {filmInitArgs, initArgs, saidWrong} from './new-project.ts'
 import {editorHandler} from './server.ts'
 import {setupArgs} from './setup-run.ts'
 
@@ -29,6 +29,16 @@ describe('the arguments of init from the form', () => {
         expect(() => setupArgs({command: 'llm', options: {add: 'x'}})).toThrow('has no option --add')
         expect(() => setupArgs({command: 'comfy', options: {add: 'a\nb'}})).toThrow('a line of text')
         expect(() => setupArgs({command: 'whisper' as 'llm', options: {}})).toThrow('llm, vision or comfy')
+    })
+    test('a film: its idea or screenplay, the length and language as given', () => {
+        expect(filmInitArgs({id: 'night', idea: 'A keeper', length: '90', language: 'de', style: ''})).toEqual([
+            'night',
+            '--idea=A keeper',
+            '--length=90',
+            '--language=de',
+        ])
+        expect(() => filmInitArgs({id: 'night', style: 'noir'})).toThrow('a story idea or a screenplay')
+        expect(() => filmInitArgs({id: 'Night'})).toThrow('the id of a film')
     })
     test('what the command said was wrong is the line under its heading', () => {
         expect(saidWrong('INIT · rain\n✗ BAD USAGE\n--song: no file nope.wav\nHelp: bun run init --help')).toBe('--song: no file nope.wav')
@@ -82,6 +92,19 @@ describe('the routes of the start page', () => {
         const wrong = await change({command: 'comfy', options: {remove: 'gpu9'}})
         expect(wrong.status).toBe(400)
         expect(((await wrong.json()) as {error: string}).error).toContain('no server "gpu9"')
+    })
+    test('a new film is written by film:init, with the form as its options (#831)', async () => {
+        const made = await editorHandler()(
+            new Request('http://localhost/api/films/new', {method: 'POST', body: JSON.stringify({id: 'night', idea: 'A lighthouse keeper', length: '60'})}),
+        )
+        expect(await made.json()).toEqual({id: 'night'})
+        expect(readFileSync(join(root, 'films', 'night', 'input', 'idea.txt'), 'utf8')).toBe('A lighthouse keeper')
+        expect(JSON.parse(readFileSync(join(root, 'films', 'night', 'config.json'), 'utf8'))).toEqual({targetDuration: 60})
+        const wrong = await editorHandler()(
+            new Request('http://localhost/api/films/new', {method: 'POST', body: JSON.stringify({id: 'other', idea: 'x', length: '5'})}),
+        )
+        expect(wrong.status).toBe(400)
+        expect(((await wrong.json()) as {error: string}).error).toContain('--length: at least 10 seconds')
     })
     test('a page of another site cannot create one', async () => {
         const response = await editorHandler()(
