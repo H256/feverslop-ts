@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {onMounted, shallowRef, watch} from 'vue'
+import {computed, onMounted, shallowRef, watch} from 'vue'
 import {RouterLink} from 'vue-router'
 import type {ProjectStatus} from '../../../../shared/workspace'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useRunDock} from '../../services/run'
 import {useToasts} from '../../services/toasts'
+import {stageDoes, stageName} from '../plan/stages'
 import {usePlanning} from '../plan/usePlanning'
 import {useProject} from './session'
 
@@ -21,6 +22,11 @@ const toasts = useToasts()
 const run = useRunDock()
 const status = shallowRef<ProjectStatus>()
 
+// a stage of the preproduction still to plan: story, cast or look - the shots are the plan run of the status
+const preproduction = computed(() => {
+  const next = project.value.plan.next
+  return next && next !== 'plan' ? next : undefined
+})
 // "22 step(s) to generate: songStyle, music, …" as "22 step(s) to generate" - the step names are in the title, asked for by pointing (#834)
 const said = (why: string) => why.replace(/: [\w-]+(, [\w-]+)+…?$/, '')
 
@@ -64,6 +70,16 @@ const runNext = toasts.guard(async () => {
       <span class="ns-why" :title="[status.next.why, status.next.command, status.next.estimate].filter(Boolean).join('\n')">{{ said(status.next.why) }}</span>
       <span v-if="status.next.estimate" class="ns-estimate muted">{{ status.next.estimate }}</span>
       <RouterLink v-if="status.next.page" class="btn mini primary" :to="`${root}/${status.next.page}`">Open {{ status.next.page }}</RouterLink>
+      <!-- the preproduction is planned stage by stage (#526): the stage next, looked at before the next one is built on it -->
+      <button
+        v-else-if="preproduction"
+        class="btn mini primary"
+        :disabled="busy"
+        :title="stageDoes(preproduction, project.kind)"
+        @click="toasts.guard(planStage)(preproduction)"
+      >
+        Plan the {{ stageName(preproduction, project.kind).toLowerCase() }}
+      </button>
       <button v-else class="btn mini primary" :disabled="busy" @click="runNext">Run it</button>
     </template>
     <span v-else class="ns-why muted">Everything is done</span>
