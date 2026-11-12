@@ -50,10 +50,12 @@ const showMachine = async () => {
 /** A new music video: the form becomes the options of `bun run init`, and the page goes to the project it made. */
 const newProject = async () => {
   const draft = reactive(newProjectDraft())
+  // the songs of the library a project can start from (#835) - none when the library cannot be read
+  const songs = (await workspace.library().catch(() => undefined))?.songs ?? []
   const made = await ask({
     title: 'New music video',
     lines: ['Writes projects/<id>/ with what you give here. Nothing is planned or rendered yet.'],
-    body: () => h(NewProjectForm, {draft}),
+    body: () => h(NewProjectForm, {draft, songs}),
     confirm: 'Create',
     submit: async () => {
       const problem = newProjectProblem(draft)

@@ -11,6 +11,7 @@ const ROOT = join(import.meta.dir, '..', '..')
 const FIELDS = {
     song: 'song',
     idea: 'idea',
+    librarySong: 'library-song',
     lyrics: 'lyrics',
     storyIdea: 'story-idea',
     style: 'style',
