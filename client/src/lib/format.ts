@@ -1,4 +1,6 @@
+import type {ProjectKind} from '../../../shared/workspace'
 import {HttpError} from '../api/http'
+import {STAGE_STEPS, STAGES, stageName} from '../features/plan/stages'
 /** Seconds as m:ss.s, or m:ss when not precise. */
 export function clock(seconds: number, precise = true) {
   const whole = Math.max(0, seconds)
@@ -11,8 +13,20 @@ export const dateOf = (ms: number) => new Date(ms).toLocaleString(undefined, {da
 /** A text of the plan as the person reads it: the cast's {Name} tokens as names (#834). Edited, a text keeps its tokens. */
 export const withNames = (text: string) => text.replace(/\{([^{}\n]{1,80})\}/g, '$1')
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-/** The steps a change drops, in words. */
-export const listSteps = (steps: string[]) => steps.join(', ')
+/**
+ * What a change makes again, in the person's words (#834): how many steps, of which stages - "12 steps of the look and the shot plan"
+ * - not the names of the steps; those are in `stepNames` for a title, asked for by pointing.
+ */
+export function listSteps(steps: string[], kind: ProjectKind = 'music'): string {
+  const stages = STAGES.filter(stage => steps.some(step => STAGE_STEPS[kind][stage].includes(step)))
+  const named = stages.map(stage => `the ${stageName(stage, kind).toLowerCase()}`)
+  // the song's own steps, a film's subtitles: no stage of the plan
+  if (steps.some(step => !STAGES.some(stage => STAGE_STEPS[kind][stage].includes(step)))) named.unshift(kind === 'film' ? 'the subtitles' : 'the song analysis')
+  const words = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named.at(-1)}` : (named[0] ?? 'nothing')
+  return steps.length ? `${plural(steps.length, 'step')} of ${words}` : words
+}
+/** The names of the steps, for a title: what listSteps sums up. */
+export const stepNames = (steps: string[]) => steps.join(', ')
 /**
  * An error as the person reads it. By the kind the server said (#837): a run holding the project says what to do about it, an error
  * of the workspace says that it is one - and where, to copy into a report. A mistake in the input is its own words.

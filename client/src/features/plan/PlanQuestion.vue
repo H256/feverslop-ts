@@ -3,7 +3,7 @@ import {onMounted, shallowRef, watch} from 'vue'
 import type {DirectionView} from '../../../../shared/direction'
 import type {DryRun, ProjectKind, ProjectStatus} from '../../../../shared/workspace'
 import FormField from '../../components/FormField.vue'
-import {errorText, plural} from '../../lib/format'
+import {errorText, listSteps, plural, stepNames} from '../../lib/format'
 import {type PlanChoice, planAsked} from './planChoice'
 
 /**
@@ -77,7 +77,7 @@ watch(
     <p v-else-if="failed" class="warn">The dry run failed: {{ failed }}</p>
     <template v-else-if="said">
       <p v-for="reason in said.reasons" :key="reason.why" class="pq-line">
-        <b>{{ reason.why }}</b> <span class="muted">redoes {{ reason.steps.join(', ') }}</span>
+        <b>{{ reason.why }}</b> <span class="muted" :title="stepNames(reason.steps)">redoes {{ listSteps(reason.steps, kind) }}</span>
       </p>
       <p class="pq-line" :title="said.redone.join(', ')">
         <b>Made again</b>

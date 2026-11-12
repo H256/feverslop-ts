@@ -4,7 +4,7 @@ import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useDraft} from '../../composables/useDraft'
 import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
-import {listSteps} from '../../lib/format'
+import {listSteps, stepNames} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import {usePageData} from '../project/usePageData'
@@ -31,7 +31,7 @@ const save = toasts.guard(async () => {
     ],
     warnings: builtOn.value.length
       ? [
-          `What is built on the story goes: ${listSteps(builtOn.value)}.`,
+          `What is built on the story goes: ${listSteps(builtOn.value, project.value.kind)}.`,
           project.value.clips.some(c => c.video) && 'Pictures and clips made before stay, and are stale once the plan has new prompts for them.',
         ]
       : [],
@@ -46,7 +46,9 @@ const writeAgain = toasts.guard(async () => {
   const yes = await ask({
     title: 'Write the story again?',
     lines: ['The language model writes a new story from the lyrics and the story idea, and the run stops after it.'],
-    warnings: [`The story there is now goes${builtOn.value.length ? `, and with it ${listSteps(builtOn.value)}` : ''}. A story changed by hand goes too.`],
+    warnings: [
+      `The story there is now goes${builtOn.value.length ? `, and with it ${listSteps(builtOn.value, project.value.kind)}` : ''}. A story changed by hand goes too.`,
+    ],
     confirm: 'Write it again',
   })
   if (yes) await start({type: 'plan', redo: ['story'], until: 'story'})
@@ -73,7 +75,8 @@ const take = toasts.guard(async () => {
             'Who stays keeps their id and their looks, the look of the film and the places stay. The looks of whoever is new are written by the next plan run.',
           ],
           warnings: [
-            kept.length > 0 && `What is read from the script goes: ${listSteps(kept)}. The next plan run makes it again - the language model only.`,
+            kept.length > 0 &&
+              `What is read from the script goes: ${listSteps(kept, project.value.kind)}. The next plan run makes it again - the language model only.`,
             project.value.clips.some(c => c.video) && 'Clips made before stay, and are stale once the plan has new shots for them.',
           ],
           confirm: 'Take it',
@@ -81,7 +84,9 @@ const take = toasts.guard(async () => {
       : {
           title: 'Take the new story?',
           lines: ['The cast, who sings and the looks stay as they are: the story was told for them.'],
-          warnings: kept.length ? [`What is planned from the story goes: ${listSteps(kept)}. The next plan run makes it again - the language model only.`] : [],
+          warnings: kept.length
+            ? [`What is planned from the story goes: ${listSteps(kept, project.value.kind)}. The next plan run makes it again - the language model only.`]
+            : [],
           confirm: 'Take it',
         },
   )
@@ -139,7 +144,8 @@ const drop = toasts.guard(async () => {
           </button>
         </div>
         <p v-if="book.editable && builtOn.length" class="muted">
-          Saving a changed story drops what is built on it: {{ listSteps(builtOn) }}. The next plan run makes those again.
+          Saving a changed story drops what is built on it: <span :title="stepNames(builtOn)">{{ listSteps(builtOn, project.kind) }}</span
+          >. The next plan run makes those again.
         </p>
       </template>
     </template>

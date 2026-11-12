@@ -19,6 +19,26 @@ import TimingEditor from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
 import TimingSide from './TimingSide.vue'
 import TimingTools from './TimingTools.vue'
+
+// the side column - saving, the cut, the library and its help - can be folded away for room, and stays so in this browser (#834)
+const SIDE_KEY = 'timing-side-folded'
+const sideFolded = ref(
+  (() => {
+    try {
+      return localStorage.getItem(SIDE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })(),
+)
+watch(sideFolded, folded => {
+  try {
+    if (folded) localStorage.setItem(SIDE_KEY, '1')
+    else localStorage.removeItem(SIDE_KEY)
+  } catch {
+    // a browser that keeps nothing folds it for this visit only
+  }
+})
 import {useTimingDraft} from './useTimingDraft'
 
 /**
@@ -201,9 +221,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="split view" :inert="saving.pending.value" :aria-busy="saving.pending.value" @keydown.capture="timingTools?.key($event)">
+  <div
+    :class="['split', 'view', {'tw-folded': sideFolded}]"
+    :inert="saving.pending.value"
+    :aria-busy="saving.pending.value"
+    @keydown.capture="timingTools?.key($event)"
+  >
     <div class="scrollpage">
-      <PageBar title="When the lyrics are sung"><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /></PageBar>
+      <PageBar title="When the lyrics are sung"
+        ><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /><button
+          class="btn mini"
+          :aria-expanded="!sideFolded"
+          title="The column with saving, the cut and the help"
+          @click="sideFolded = !sideFolded"
+        >
+          {{ sideFolded ? 'Show the side column' : 'Hide the side column' }}
+        </button></PageBar
+      >
       <div class="tedit-wrap">
         <div class="tedit-head btn-row">
           <template v-if="draft.line.value">
@@ -339,7 +373,7 @@ onMounted(() => {
       </div>
       <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
     </div>
-    <aside class="detail">
+    <aside v-show="!sideFolded" class="detail">
       <TimingSide
         :view="view"
         :draft="draft"
@@ -354,3 +388,10 @@ onMounted(() => {
     </aside>
   </div>
 </template>
+
+<style scoped>
+/* the side column folded away: the editor takes the whole width */
+.tw-folded {
+  grid-template-columns: minmax(0, 1fr);
+}
+</style>
