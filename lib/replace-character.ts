@@ -79,17 +79,23 @@ export async function askDescription(
     char: {name: string; role: string},
     configure: () => Promise<void>,
     answer: <T>(value: T) => Exclude<T, symbol>,
+    // given on the command line (#827): vision, keep, or the text itself - then nothing is asked
+    given?: string,
 ): Promise<string | undefined> {
-    const mode = answer(
-        await p.select({
-            message: 'Update the description used in the clip prompts?',
-            options: [
-                {value: 'vision', label: 'Generate it from the image (vision-capable LLM)', hint: 'recommended'},
-                {value: 'manual', label: 'Type it myself'},
-                {value: 'skip', label: 'Leave the current description unchanged'},
-            ],
-        }),
-    )
+    if (given === 'keep') return undefined
+    if (given !== undefined && given !== 'vision') return given.trim() || undefined
+    const mode =
+        given ??
+        answer(
+            await p.select({
+                message: 'Update the description used in the clip prompts?',
+                options: [
+                    {value: 'vision', label: 'Generate it from the image (vision-capable LLM)', hint: 'recommended'},
+                    {value: 'manual', label: 'Type it myself'},
+                    {value: 'skip', label: 'Leave the current description unchanged'},
+                ],
+            }),
+        )
     if (mode === 'skip') return undefined
     if (mode === 'vision') {
         await configure()
@@ -103,6 +109,11 @@ export async function askDescription(
             }
         } catch (e) {
             log.warn(`Vision description failed - the connected model may not support images (${(e as Error).message})`)
+        }
+        // told on the command line: nobody to ask - the description stays as it is
+        if (given) {
+            log.warn('The description stays as it is - give it with --description=<text>, or describe the picture on the References page')
+            return undefined
         }
         return answer(await p.text({message: 'Type a description instead (leave empty to keep the current one)'})) || undefined
     }
