@@ -1,4 +1,15 @@
-import type {EditorServer, Library, LibraryChange, ListingStatus, StatsView, MachineCheck, NewProject, ProjectListing, RunInfo} from '../../../shared/workspace'
+import type {
+  EditorServer,
+  Library,
+  LibraryChange,
+  ListingStatus,
+  StatsView,
+  MachineCheck,
+  NewFilm,
+  NewProject,
+  ProjectListing,
+  RunInfo,
+} from '../../../shared/workspace'
 import {getJson, postForm, postJson} from './http'
 import {projectRoot} from './urls'
 
@@ -11,6 +22,8 @@ export const workspace = {
   doctor: (signal?: AbortSignal) => getJson<{checks: MachineCheck[]}>('/api/doctor', signal),
   /** A new music video, made by `bun run init` with these as its options. */
   createProject: (project: NewProject) => postJson<{id: string}>('/api/projects/new', project),
+  /** A new film, made by `bun run film:init` with these as its options. */
+  createFilm: (film: NewFilm) => postJson<{id: string}>('/api/films/new', film),
   library: (signal?: AbortSignal) => getJson<Library>('/api/library/assets', signal),
   /** What `bun run library rename|describe|remove` does (#835). */
   changeLibrary: (change: LibraryChange) => postJson<unknown>('/api/library/change', change),
