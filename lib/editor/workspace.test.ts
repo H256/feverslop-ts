@@ -857,6 +857,21 @@ describe('a choice per clip of a film', () => {
     })
 })
 
+// #833: the next-step bar of every page shows what the command says - the same function, asked through the workspace and the terminal
+test('the next step in the workspace is the one bun run status says', async () => {
+    const project = target('next-step')
+    write(join(project.dir, 'input/lyrics.txt'), 'la la la')
+    write(join(project.dir, 'project.json'), {story: 'Ann rows out.'})
+    const answer = (await (await editorHandler()(new Request('http://localhost/p/music/next-step/api/status'))).json()) as {
+        next: {command?: string; why: string}
+    }
+    const cli = Bun.spawnSync(['bun', join(here, 'tools/status.ts'), 'next-step', '--json'], {cwd: root, env: {...process.env, NO_COLOR: '1'}})
+    const said = JSON.parse(cli.stdout.toString()) as {next: {command?: string; why: string}}
+    expect(answer.next.why).toBe(said.next.why)
+    expect(answer.next.command).toBe(said.next.command)
+    expect(answer.next.command).toContain('bun index.ts next-step')
+})
+
 test('malformed URL paths return a JSON error', async () => {
     const response = await editorHandler()(new Request('http://localhost/%zz'))
     expect(response.status).toBe(400)

@@ -1,5 +1,5 @@
 import {computed, ref, shallowRef} from 'vue'
-import type {EditorProject, ProjectKind, RunInfo, RunRequest} from '../../../../shared/workspace'
+import type {EditorProject, ProjectKind, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
 import {projectApi} from '../../api/project'
 import {projectRoot, rootsOf} from '../../api/urls'
 import type {RunDock} from '../../services/run'
@@ -60,7 +60,32 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
     return done
   }
   const busy = computed(() => !!deps.run.current.value?.running)
-  return {kind, id, root, api, roots: rootsOf(root), project, error, reload, start, changing, starter: deps.run.starter, busy, takeServers: deps.servers.take}
+  /** What `bun run status` says of the project - its steps and the next one: the tabs and the next-step bar read it (#833). */
+  const status = shallowRef<ProjectStatus>()
+  const loadStatus = () =>
+    api
+      .status()
+      .then(found => {
+        status.value = found
+      })
+      .catch(() => {})
+  return {
+    kind,
+    id,
+    root,
+    api,
+    roots: rootsOf(root),
+    project,
+    error,
+    reload,
+    start,
+    changing,
+    starter: deps.run.starter,
+    busy,
+    takeServers: deps.servers.take,
+    status,
+    loadStatus,
+  }
 }
 export type ProjectSession = ReturnType<typeof createProjectSession>
 export const ProjectService = defineService<ProjectSession>('project')
