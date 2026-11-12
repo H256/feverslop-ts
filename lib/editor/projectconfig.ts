@@ -204,6 +204,14 @@ const DEFINITIONS: Definition[] = [
         note: 'A clip with black frames or a picture that stands still is rendered again with a derived seed, and the better take kept. 0 = off. Each retry is a whole render.',
     },
     {
+        key: 'llm.model',
+        label: 'Language model',
+        group: 'Language model',
+        control: 'text',
+        for: 'both',
+        note: 'A model id of the LLM server for the plan runs of this project - empty: the one of the settings (bun run setup llm). The same as --llm-model for every run; only the model, the server stays.',
+    },
+    {
         key: 'finalFps',
         label: 'Final frame rate',
         group: 'Final video',
@@ -351,6 +359,9 @@ export async function readConfig(target: EditorTarget): Promise<ConfigView> {
                     ...(choices ? {choices: choices(target)} : {}),
                 }
             }
+            // the language model: the one field of config.json's llm object a project can set
+            if (definition.key === LLM_MODEL)
+                return {...definition, value: settingIn(own, LLM_MODEL), default: undefined, own: settingIn(own, LLM_MODEL) !== undefined}
             const value = config[definition.key]
             const offered = choices?.(target)
             return {
@@ -379,6 +390,14 @@ function applied(own: Record<string, unknown>, change: ConfigChange): Record<str
         else next[key] = value
     }
     return next
+}
+
+/** The project's language model, config.json's {"llm": {"model": …}}: empty or null takes it out - the one of the settings then. */
+const LLM_MODEL = 'llm.model'
+function foldLlm(change: ConfigChange): ConfigChange {
+    if (!(LLM_MODEL in change)) return change
+    const {[LLM_MODEL]: model, ...rest} = change
+    return {...rest, llm: typeof model === 'string' && model.trim() ? {model: model.trim()} : null}
 }
 
 /** `finish.grain` -> `grain`: a field of the finish object, set on its own. */
@@ -410,6 +429,7 @@ export function foldFinish(own: Record<string, unknown>, change: ConfigChange): 
 
 /** What a setting is in these settings of config.json (`base`: the defaults) - a finish field as the finish has it. */
 function settingIn(settings: Record<string, unknown>, key: string, base?: Record<string, unknown>): unknown {
+    if (key === LLM_MODEL) return (settings.llm as {model?: string} | undefined)?.model
     const field = finishField(key)
     if (key !== 'finish' && !field) return settings[key]
     const finish = finishOf((settings.finish ?? base?.finish ?? false) as boolean | Partial<Finish>)
@@ -428,7 +448,7 @@ export async function previewConfig(target: EditorTarget, change: ConfigChange):
     const known = definitionsOf(target).map(d => d.key)
     const unknown = Object.keys(change).filter(key => !known.includes(key))
     const own = ownSettings(target)
-    const next = applied(own, foldFinish(own, change))
+    const next = applied(own, foldLlm(foldFinish(own, change)))
     const changed = Object.keys(change).filter(key => known.includes(key) && !same(settingIn(own, key), settingIn(next, key)))
     // a finish written whole another way (an object for `true`): still a change of the file
     if ('finish' in change && !changed.includes('finish') && !same(own.finish, next.finish)) changed.push('finish')
@@ -473,7 +493,7 @@ export async function writeConfig(target: EditorTarget, change: ConfigChange): P
         const impact = await previewConfig(target, change)
         if (impact.problems.length || !impact.changed.length) return {...impact, written: false}
         const own = ownSettings(target)
-        const text = `${JSON.stringify(applied(own, foldFinish(own, change)), null, 2)}\n`
+        const text = `${JSON.stringify(applied(own, foldLlm(foldFinish(own, change))), null, 2)}\n`
         // whole or not at all: a file a run is reading is never half written
         const temporary = `${configFile(target)}.tmp`
         writeFileSync(temporary, text)

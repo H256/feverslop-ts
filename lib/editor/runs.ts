@@ -131,12 +131,15 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (!Array.isArray(scenes) || scenes.some(s => typeof s !== 'string' || !PICTURE_ID.test(s)))
                 throw new Error(`no such scenes: ${JSON.stringify(scenes)}`)
             if (scenes.length && kind !== 'film') throw new Error('scenes are planned again in a film; a music video plans beats again')
+            // a film's script repaired where it contradicts itself (#836)
+            if (action.fixScript && kind !== 'film') throw new Error('a script is repaired in a film')
             const again = beats.length ? 'shotMoments' : scenes.length ? 'coverage' : undefined
             const redoSteps = again && !redo.includes(again) ? [...redo, again] : redo
             return run(
                 ...(redoSteps.length ? [`--redo=${redoSteps.join(',')}`] : []),
                 ...(beats.length ? [`--beats=${beats.join(',')}`] : []),
                 ...(scenes.length ? [`--scenes=${scenes.join(',')}`] : []),
+                ...(action.fixScript ? [`--fix-script`] : []),
                 ...(action.until ? [`--until=${action.until}`] : []),
             )
         }

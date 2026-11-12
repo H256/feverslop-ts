@@ -130,6 +130,11 @@ describe('a plan run from the page', () => {
         expect(() => runCommand(film, {type: 'plan', scenes: ['s6 --render=all']})).toThrow('no such scenes')
         expect(() => runCommand(music, {type: 'plan', scenes: ['s6']})).toThrow('a music video plans beats again')
     })
+
+    test("a film's script repaired by a plan run (#836)", () => {
+        expect(runCommand(film, {type: 'plan', fixScript: true}).args).toEqual(['demo', '--fix-script'])
+        expect(() => runCommand(music, {type: 'plan', fixScript: true})).toThrow('repaired in a film')
+    })
 })
 
 describe('casting.json changed after the plan - what Plan now plans again', () => {
@@ -298,7 +303,11 @@ describe('the story by hand', () => {
         })
         expect(view.editable).toBe(false)
         expect(view.text).toContain('Ana waits.')
+        expect(view.scriptNotes).toBeUndefined()
         expect(bookView('music', {}).editable).toBe(false)
+        // what the script contradicts itself in, and the repairs made: for the page to offer --fix-script (#836)
+        const noted = bookView('film', {scriptNotes: ['Ana is in two places'], scriptFixes: [{scene: 's1', before: 'a', after: 'b'}]})
+        expect([noted.scriptNotes, noted.scriptFixes]).toEqual([['Ana is in two places'], 1])
     })
 })
 

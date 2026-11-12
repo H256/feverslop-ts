@@ -340,6 +340,8 @@ export type BookView = {
     proposal?: string // the story written anew for the cast as it is now, waiting to be taken or dropped - a film: its screenplay told anew for a role added or taken out
     proposalCast?: {added: string[]; removed: string[]} // a film: who comes and who goes with the proposal, by name
     keptByCast: string[] // what goes when it is told anew for the same cast: the summary and the plan from the beats on (a film: what is read from the script)
+    scriptNotes?: string[] // a film: what the script contradicts itself in, as the plan run read it - repaired by a plan run with --fix-script (#836)
+    scriptFixes?: number // a film: how many repairs of the script were made so far
 }
 export type StoryResult = {changed: boolean; dropped: string[]}
 export type StoryForCast = {proposal?: boolean; renamed?: {from: string; to: string}[]}
@@ -495,7 +497,7 @@ export type RunRequest =
     | {type: 'look-pictures'}
     | {type: 'adapt-story'; add?: {name: string; role: string}[]; remove?: string[]} // add, remove: a film's roles (#589)
     | {type: 'final'; preview?: boolean}
-    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]; scenes?: string[]} // beats: a music video's beats whose shots are planned again (#762); scenes: a film's (#836)
+    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]; scenes?: string[]; fixScript?: boolean} // beats: a music video's beats whose shots are planned again (#762); scenes: a film's (#836)
     | {type: 'retake'; clip: string; range: string}
     | {type: 'repeat'; command: string}
     | {type: 'next'; command: string}
@@ -572,7 +574,7 @@ export type RunLines = {lines: string[]; next: number}
 export type SettingView = {
     key: string
     label: string
-    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Final video' | 'Finish'
+    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish'
     /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a number, whole unless `step` says otherwise */
     control: 'select' | 'text' | 'number'
     step?: number
