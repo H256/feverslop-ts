@@ -1,395 +1,411 @@
-# Anleitung: der Workspace
+# Guide: the workspace
 
-Der Workspace zeigt alle Projekte und Filme im Browser. Du siehst ein Video als Ganzes auf einer Timeline und kannst einzelne Teile neu rendern, ohne dass der Plan sich ändert. Diese Anleitung beschreibt die typischen Abläufe, die Beschriftungen stehen so da, wie die Seite sie zeigt. Alle Optionen im Detail stehen in der [README](../README.md#the-workspace).
+The workspace shows every project and film in the browser. You see a video as a whole on a timeline and can render single parts of it again without the plan changing. This guide walks through the usual tasks; the labels are written as the page shows them. Every option in detail is in the [README](../README.md#the-workspace).
 
-## Starten
+## Starting it
 
 ```powershell
 bun run editor
 ```
 
-Dann http://127.0.0.1:4173/ öffnen. Mit `bun run editor <id>` startest du direkt in einem Projekt, `--film` nimmt einen Film, `--port=4174` einen anderen Port. Die Seite ist nur auf diesem Rechner erreichbar. Beim ersten Start, und nach einem Pull, der die Seite geändert hat, baut `bun run editor` sie vorher neu (ein paar Sekunden, dafür braucht es Node.js).
+Then open http://127.0.0.1:4173/. `bun run editor <id>` opens a project right away, `--film` a film, `--port=4174` takes another port. The page can only be reached from this machine. On the first start, and after a pull that changed the page, `bun run editor` builds it first (a few seconds; it needs Node.js for that).
 
-Alles, was rendert, ist die normale CLI: Die Seite startet sie nur. Solange ein Lauf an einem Projekt arbeitet, ist es gesperrt, egal ob du ihn hier oder im Terminal gestartet hast. Einen Lauf aus dem Terminal kannst du hier verfolgen und stoppen.
+Everything that renders is the normal CLI: the page only starts it. While a run works on a project, the project is locked - whether you started the run here or in the terminal. A run from the terminal can be followed and stopped here.
 
-Drei Dinge gelten überall:
+Three things hold everywhere:
 
-- **Vor jedem Render fragt die Seite nach.** Der Dialog nennt, was passiert, was es ungefähr kostet und welche anderen Clips betroffen sind. Unter **Render on** wählst du die Server. Ohne **Start** oder **Render it** passiert nichts.
-- **Alte Fassungen gehen nicht verloren.** Eine ersetzte Fassung wird weggelegt und bleibt auswählbar.
-- **`?`** zeigt alle Tasten und erklärt die Begriffe.
+- **Before every render the page asks.** The dialog says what happens, roughly what it costs and which other clips are affected. Under **Render on** you choose the servers. Nothing happens without **Start** or **Render it**.
+- **Old versions are never lost.** A replaced version is put away and stays selectable.
+- **`?`** shows every key and explains the terms.
 
-## Die Leiste oben
+## The start page
 
-Die Leiste oben liest sich von links nach rechts:
+![The start page with project cards](images/workspace/home.jpg)
 
-- **Links** steht, wo du bist: **Projects** (die Startseite) und **Library**, in einem Projekt dahinter sein Name.
-- **Daneben** liegen die Seiten des Projekts als Reiter: **Timeline**, **Story** (beim Film **Screenplay**), **Casting**, **Singers** und **Timing** (nur bei Musikvideos, in denen gesungen wird), **Look**, **Direction**, **References**, **Post-work** (die Schritte vor dem Veröffentlichen), **Settings**.
-- **Rechts** steht der Rechner: welche Render-Server erreichbar und wie ausgelastet sie sind, das Farbschema und die Version des Workspace.
+Every card shows how far a project is, when it was changed, and what would come next; a finished video made over or through post-work is named under the card and plays on **Post-work** when you play it. At the top you filter by kind (**Music videos**, **Films**) and state (**Running**, **Failed**, **Unfinished**, **Done**) and search with **Find a project**. A click on a card opens the project.
 
-Darunter steht auf der Timeline eine schmale Zeile mit dem Zustand des Projekts: Art, ob das fertige Video aktuell ist, ob der letzte Lauf fehlgeschlagen ist (mit **Repeat**), fehlende oder stale Bilder (ein Klick führt zu **References**) und **Next:** mit dem nächsten Schritt. Führt der nächste Schritt über eine Seite, etwa weil Regie-Anweisungen nach einer Neuplanung geprüft werden müssen, öffnet **Next** diese Seite, statt etwas zu starten (siehe [Nach einer Neuplanung](#nach-einer-neuplanung)).
+- **New music video** and **New film** make a project from a form - the options of `bun run init` and `bun run film:init`. A music video starts from a song file, a song of the library or an idea; a film from a story idea or a screenplay.
+- **Machine** shows what this machine has of what a video needs (`bun run doctor`): the language model, ComfyUI and the nodes and models the workflows name, ffmpeg, uv, disk space - each missing part with its fix. Below it the servers are set: the language model, the model that reads pictures, the ComfyUI servers to add or remove (`bun run setup … --…`).
 
-## Die wichtigsten Begriffe
+## The bar at the top
 
-| Begriff | Bedeutung |
+The bar at the top reads from left to right:
+
+- **Left** says where you are: **Projects** (the start page), **Library** and **Stats**, inside a project its name.
+- **Next to it** are the project's pages as tabs, in the order a video is made: **Plan** (**Story** - for a film **Screenplay** -, **Casting**, **Singers** and **Timing** for a music video that is sung, **Look**), **Shoot** (**References**, **Timeline**, **Direction**), **Publish** (**Post-work**), and **Settings** apart. A planned stage has ✓, the one planned next ●, and a stage that a changed input or setting makes again ⟳.
+- **Right** is the machine: which render servers answer and how busy they are, the colour scheme and the version of the workspace. With no server set up it says **No render server set up**, with a link to the start page.
+
+Under the tabs, on every page of a project, is the **Next** bar: what `bun run status` says is next, with its button and the estimate. While the plan is not done, the stages to plan are next to it (**Plan the cast**, **Plan everything**); a planned project has **Plan again…**. When the next step is done on a page - instructions of the direction to check after the shots were planned again - **Next** opens that page instead of starting anything (see [After the shots are planned again](#after-the-shots-are-planned-again)).
+
+## The main terms
+
+| Term | Meaning |
 |---|---|
-| **Stale** | Aus einem anderen Prompt, Bild oder Startframe gemacht, als der Plan jetzt hat. Die Datei ist noch brauchbar und wird nur auf deinen Wunsch neu gerendert. |
-| **Pinned** | Eigene Datei, geänderter Prompt oder älter als diese Prüfung. Die Pipeline lässt sie in Ruhe. |
-| **Goes on** | Der Clip beginnt auf dem letzten Frame des Clips davor. Wird der neu gerendert, passt der Anfang nicht mehr. |
-| **Anchor** | Das eine Bild, von dem eine Person oder ein Ort ausgeht. |
-| **Sheet** | Das Referenzbild mit mehreren Ansichten, aus einem kurzen Video vom Anchor gemacht. |
-| **Take** | Projekte, deren Namen sich nur durch Datum oder Endung unterscheiden. Sie liegen auf der Startseite in einer Karte. |
+| **Stale** | Made from another prompt, picture or start frame than the plan has now. The file is still usable and is only rendered again when you ask for it. |
+| **Pinned** | A file of your own, an edited prompt, or older than this check. The pipeline leaves it alone. |
+| **Goes on** | The clip starts on the last frame of the clip before. If that one is rendered again, the start no longer fits. |
+| **Anchor** | The one picture a person or a place starts from. |
+| **Sheet** | The reference picture with several views, made from a short video of the anchor. |
+| **Take** | Projects whose names differ only by a date or an ending. They are one card on the start page. |
 
-## Ein Projekt finden
+## Planning a project in stages
 
-![Startseite mit Projektkarten](images/workspace/home.jpg)
+A new project is best planned the way a film is made: first the book, then the cast, then the look, then the shots - and only then rendered. That way you change the characters before anything is built on them, and long before GPU time is spent.
 
-Jede Karte zeigt, wie weit ein Projekt ist und was als Nächstes käme. Oben filterst du nach Art (**Music videos**, **Films**) und Zustand (**Running**, **Failed**, **Unfinished**, **Done**) und suchst über **Find a project**. Ein Klick auf die Karte öffnet die Timeline.
-
-## Ein Projekt in Stufen planen
-
-Ein neues Projekt planst du am besten so, wie ein Film entsteht: erst das Buch, dann die Besetzung, dann der Look, dann die Einstellungen. Erst danach wird gerendert. So änderst du die Figuren, bevor irgendetwas auf ihnen aufbaut, und lange bevor GPU-Zeit anfällt.
-
-| Stufe | Was entsteht | Wo du es ansiehst |
+| Stage | What is made | Where you look at it |
 |---|---|---|
-| **Story** (beim Film: **Screenplay**) | die Geschichte aus Songtext und Story-Idee, beim Film das Drehbuch | **Story** |
-| **Cast** | Figuren und Orte, beim Musikvideo auch, wer welche Zeile singt | **Casting**, **Singers** |
-| **Look** | der Look des Videos, das Aussehen jeder Figur und jedes Orts, auf Wunsch die Bilder dazu | **Look**, **References** |
-| **Shot plan** | die Beats auf dem Song und die Einstellungen jedes Clips | **Timeline** |
+| **Story** (film: **Screenplay**) | the story from the lyrics and the story idea, for a film the screenplay | **Story** |
+| **Cast** | characters and places, for a music video also who sings which line | **Casting**, **Singers** |
+| **Look** | the look of the video, how every character and place looks, the pictures if you want them | **Look**, **References** |
+| **Shot plan** | the beats on the song and the shots of every clip | **Timeline** |
 
-Oben auf **Story** und **Casting**, und auf der Timeline eines Projekts ohne Clips, steht eine Leiste mit den Stufen. Erledigte Stufen sind abgehakt. Der Knopf rechts plant die nächste Stufe und hält dann an, zum Beispiel **Plan the cast**. **Plan everything** plant ohne Halt bis zu den Einstellungen. Das alles macht nur das Sprachmodell, gerendert wird nichts. Im Terminal geht dasselbe mit `--until=story`, `--until=cast` oder `--until=look`.
+The **Next** bar plans the next stage and stops, for example **Plan the cast**. **Plan everything** plans without stopping up to the shots. All of this is the language model only; nothing is rendered. Before a plan run the question says what it would do (the command's `--dry-run`): which steps are made again and why, which beats or scenes are planned again and which clips turn stale. **Plan again from a step** picks a step to make again (`--redo`); for a film, with the shot plan picked, only some scenes can be planned again (`--scenes`). In the terminal: `--until=story`, `--until=cast` or `--until=look`.
 
-**Die Story ändern:** Auf **Story** steht der Text zum Bearbeiten. **Save the story** speichert ihn. Alles, was aus der alten Story geplant war, fällt dabei weg, und der nächste Planlauf macht es neu. **Write it again** lässt das Sprachmodell eine neue Story schreiben. Ein Drehbuch steht hier nur zum Lesen: Es wird im Skript unter `input/` geändert.
+**Changing the story:** **Story** has the text to edit. **Save the story** saves it; what was planned from the old story goes - "17 steps of the story, the cast, the look and the shot plan", the step names when you point at it - and the next plan run makes it again. **Write it again** has the language model write a new story. A screenplay is only read here: it is changed in the script in `input/`. When the script contradicts itself, the page lists where, and **Repair the script…** has a plan run repair it (`--fix-script`).
 
-**Die Story an den Cast anpassen:** **Tell it anew for the cast** lässt das Sprachmodell dieselbe Story mit der Besetzung erzählen, die **Casting** jetzt hat: gleiche Handlung, gleiche Orte, etwa gleiche Länge. Der Vorschlag erscheint neben der jetzigen Story. **Take the new story** übernimmt ihn, **Drop it** verwirft ihn. Beim Übernehmen bleiben Cast, Sängerwahl und Looks, nur die Zusammenfassung und alles ab den Beats wird neu geplant.
+**The story for the cast:** **Tell it anew for the cast** has the language model tell the same story with the cast **Casting** has now: the same plot, the same places, about the same length. The proposal appears next to the story there is. **Take the new story** takes it, **Drop it** drops it. Taking it keeps the cast, who sings and the looks; only the summary and everything from the beats on is planned again.
 
-![Vorschlag neben der jetzigen Story](images/workspace/story-proposal.jpg)
+![The proposal next to the story there is](images/workspace/story-proposal.jpg)
 
-![Story-Seite mit der Stufen-Leiste](images/workspace/story.jpg)
+![The Story page](images/workspace/story.jpg)
 
-**Den Look ändern:** Auf **Look** steht oben der Look des ganzen Videos, darunter je Figur und Ort der Look (daraus wird das Bild gemacht) und die Beschreibung für die Clip-Prompts, bei Orten auch Hintergrund und Grundriss. Du änderst einen Text von Hand oder setzt den Haken **Write anew**, dann schreibt das Sprachmodell ihn neu. Was aus einem geänderten Text folgt, wird nur für diese eine Figur oder diesen einen Ort neu geschrieben: aus einem neuen Look die Beschreibung, aus einem neuen Ort-Look Beschreibung, Hintergrund und Grundriss. Alle anderen behalten ihre Texte. Nach **Save** fragt die Seite, ob das gleich geschehen soll. Ein geänderter Look des ganzen Videos schreibt dagegen alle Looks neu.
+**Changing the look:** **Look** has the look of the whole video at the top, below it for every character and place its look (the picture is made from it) and the description for the clip prompts - for a place also its background and floor plan. Change a text by hand, or tick **Write anew** to have the language model write it again. What follows from a changed text is written again for that one character or place only: from a new look the description, from a new look of a place its description, background and floor plan. All others keep their texts. After **Save** the page asks whether that is to happen right away. A changed look of the whole video writes every look again.
 
-![Look-Seite mit dem Look des Videos und je Figur Look und Beschreibung](images/workspace/look.jpg)
+![The Look page with the look of the video and, for every character, look and description](images/workspace/look.jpg)
 
-**Casting-Fotos:** Steht der Look, rendert **Render the pictures** die Bilder aller Figuren und Orte, bevor die Einstellungen geplant werden. Auf **References** siehst du sie an, änderst einen Prompt oder renderst ein Bild neu, ohne dass dabei schon die Einstellungen geplant werden. Nur die Mitglieder einer Gruppe kommen erst mit den Einstellungen, denn wie viele es sind, steht erst in den Beats. Im Terminal: `--until=look --render=images`.
+**Casting photos:** Once the look is there, **Render the pictures** renders the pictures of every character and place before the shots are planned. On **References** you look at them, change a prompt or render a picture again - without the shots being planned yet. Only the members of a group come with the shots, because how many there are is decided in the beats. In the terminal: `--until=look --render=images`.
 
-**Den Cast ändern:** Siehe [Besetzung und Bibliothek](#besetzung-und-bibliothek). Am besten direkt nach **Plan the cast**: Dann baut noch nichts auf ihm auf.
+**Changing the cast:** see [Casting and the library](#casting-and-the-library). Best right after **Plan the cast**: then nothing is built on it yet.
 
-### Dasselbe im Terminal
+### The same in the terminal
 
-Alles aus diesem Abschnitt geht auch ohne Workspace. Die Seiten rufen dieselben Befehle auf. Jeder Befehl gibt ohne Option aus, was da ist. Mit Option ändert er es, nennt, was dabei wegfällt, und schlägt den Planlauf vor, der es neu macht.
+Everything in this section works without the workspace; the pages start the same commands. Without an option every command prints what is there. With one it changes it, says what goes, and proposes the plan run that makes it again.
 
-| Im Workspace | Im Terminal |
+| In the workspace | In the terminal |
 |---|---|
-| Stufen-Leiste: **Plan the cast** usw. | `bun index.ts <id> --until=story` (auch `cast`, `look`); Film: `bun film.ts <id> --until=…` |
-| **Story** lesen, ändern | `bun run story <id> --out=story.txt`, ändern, dann `bun run story <id> --set=story.txt` |
-| **Tell it anew for the cast**, **Take the new story**, **Drop it** | `bun run story <id> --adapt`, dann `--take` oder `--drop` |
-| Film: **Add a character**, **Remove**, **Tell the screenplay anew** | `bun run story <id> --film --adapt --add="Name: Rolle" --remove=<id>`, dann `--take` oder `--drop` |
-| neue Namen in die Story | `bun run story <id> --rename="Soren Hale=Soren Vale"` |
-| **Change the cast**, **Add a character**, **Add a place**, **Remove** | `bun run cast <id> --json > cast.json`, ändern, dann `bun run cast <id> --set=cast.json`. Eine neue Figur steht ohne `id` drin, eine entfernte fehlt einfach. |
-| Rolle aus der Bibliothek, **Plan now** | `bun run casting <id> --set=character:mara=library:mara-v2`, der Befehl nennt das passende `--redo` |
-| Timing: **Put the song into the library…** | `bun run export-song <id> [--as=<song-id>] [--name=<name>]`; in ein Projekt: `bun run import-song <id> <song-id>` |
-| **Look** lesen, ändern | `bun run look <id>`; `--json > look.json`, ändern, `--set=look.json` |
+| **Plan the cast** etc. | `bun run plan <id> --until=story` (also `cast`, `look`); film: `bun film.ts <id> --until=…` |
+| The question before a plan run | `bun run plan <id> --dry-run [--json] [--redo=…]`; film: `bun film.ts <id> --dry-run [--json] [--redo=coverage --scenes=s2,s3]` |
+| Read and change **Story** | `bun run story <id> --out=story.txt`, change it, then `bun run story <id> --set=story.txt` |
+| **Tell it anew for the cast**, **Take the new story**, **Drop it** | `bun run story <id> --adapt`, then `--take` or `--drop` |
+| Film: **Add a character**, **Remove**, **Tell the screenplay anew** | `bun run story <id> --film --adapt --add="Name: role" --remove=<id>`, then `--take` or `--drop` |
+| New names into the story | `bun run story <id> --rename="Soren Hale=Soren Vale"` |
+| **Change the cast**, **Add a character**, **Add a place**, **Remove** | `bun run cast <id> --json > cast.json`, change it, then `bun run cast <id> --set=cast.json`. A new character is in it without an `id`, a removed one is simply missing. |
+| A role from the library, **Plan now** | `bun run casting <id> --set=character:mara=library:mara-v2` - the command names the `--redo` that fits |
+| **From another project…** | `bun run import-asset <id> <asset> --from=<project>:<asset> --description=source` |
+| **Replace in what is planned…** | `bun run replace-character <id> --character=<id> --picture=<file> --description=vision [--dry-run]` |
+| Timing: **Put the song into the library…** | `bun run export-song <id> [--as=<song-id>] [--name=<name>]`; into a project: `bun run import-song <id> <song-id>` |
+| Read and change **Look** | `bun run look <id>`; `--json > look.json`, change it, `--set=look.json` |
 | **Write anew** | `bun run look <id> --again=leo,location:hall` |
-| **Render the pictures** | `bun index.ts <id> --until=look --render=images` |
+| **Render the pictures** | `bun run plan <id> --until=look --render=images` |
 
-Beim Film kommt überall `--film` dazu. Das Drehbuch wird dort nur ausgegeben, und `cast --set` ändert nur Namen und Texte. Eine Figur kommt dazu oder fällt weg, indem das Drehbuch für sie neu erzählt wird: `bun run story <id> --film --adapt --add="Mira: eine junge Beleuchterin" --remove=emil`, dann `--take` oder `--drop` (Casting: **Add a character**, **Remove**, **Tell the screenplay anew**; Story: **Take the new screenplay**, **Drop it**).
+For a film add `--film` everywhere. There the screenplay is only printed, and `cast --set` changes only names and texts. A character comes or goes by telling the screenplay anew for them: `bun run story <id> --film --adapt --add="Mira: a young lighting technician" --remove=emil`, then `--take` or `--drop` (Casting: **Add a character**, **Remove**, **Tell the screenplay anew**; Story: **Take the new screenplay**, **Drop it**).
 
-Ein Beispiel von vorne bis zu den Casting-Fotos:
+An example from the start to the casting photos:
 
 ```powershell
-bun index.ts mein-video --until=cast
-bun run cast mein-video --json > cast.json
-# cast.json bearbeiten: einen Namen ändern, eine Figur ohne "id" ergänzen
-bun run cast mein-video --set=cast.json
-bun run story mein-video --adapt
-bun run story mein-video --take
-bun index.ts mein-video --until=look
-bun run look mein-video
-bun run look mein-video --again=soren-hale
-bun index.ts mein-video --until=look --render=images
-bun index.ts mein-video
+bun run plan my-video --until=cast
+bun run cast my-video --json > cast.json
+# edit cast.json: change a name, add a character without "id"
+bun run cast my-video --set=cast.json
+bun run story my-video --adapt
+bun run story my-video --take
+bun run plan my-video --until=look
+bun run look my-video
+bun run look my-video --again=soren-hale
+bun run plan my-video --until=look --render=images
+bun run plan my-video
 ```
 
-## Ein Video ansehen
+## Watching a video
 
-![Timeline mit Monitor und Clip-Details](images/workspace/timeline.jpg)
+![The timeline with the monitor and the clip's details](images/workspace/timeline.jpg)
 
-- **Oben links** läuft das Video, **rechts** daneben stehen die Details des gewählten Clips: **Prompt**, **Shots**, **References**, **Render** und **Versions**.
-- **Rechts neben der Abspielzeit** wählst du, was läuft: das fertige Video oder **Clips over the song**, also die einzelnen Clips. Zum Beurteilen von Clips nimmst du Letzteres, denn ein fertiges Video zeigt die Clips so, wie sie beim Zusammenbau waren.
-- **Unten** liegt die Timeline, von oben nach unten: Abschnitte (beim Film Szenen), die Beats der Story (Musikvideo), der Ton, die Clips mit ihren Shots, die gesungenen oder gesprochenen Zeilen.
-- **Darunter** hat jede Figur eine schmale Spur: grau, wo sie im Bild ist, orange, wo sie singt oder spricht, grün, wo sie spielt. Ein Klick auf einen Abschnitt öffnet den Shot im Regie-Dialog (siehe [Einen Shot direkt in der Timeline führen](#einen-shot-direkt-in-der-timeline-führen)).
+- **Top left** the video plays, **right** of it are the details of the chosen clip: **Prompt**, **Shots**, **References**, **Render** and **Versions**.
+- **Right of the play time** you choose what plays: the finished video or **Clips over the song**, the clips one by one. To judge clips take the latter: a finished video shows the clips as they were when it was assembled.
+- **At the bottom** is the timeline, from top to bottom: the sections (for a film the scenes), the beats of the story (music video), the sound, the clips with their shots, the lines sung or spoken.
+- **Below it** every character has a narrow lane: grey where they are in the picture, orange where they sing or speak, green where they play. A click on a stretch opens that shot in the direction dialog (see [Directing a shot on the timeline](#directing-a-shot-on-the-timeline)).
 
-**Die Leiste unter den Spuren** blendet unter **Show** den Player und jede Spur außer den Clips aus und ein: **Player**, **Sections** (**Scenes**), **Beats**, **Song** (**Sound**), **Sung** (**Lines**), **Cast**. Das bleibt im Browser gespeichert. Ohne Player hat die Timeline den ganzen Platz; der Ton läuft weiter. Rechts in der Leiste stehen **Fit** (das ganze Video) und **Zoom** (auch `Strg`+Mausrad über der Timeline). Am oberen Rand der Timeline ziehst du sie höher oder niedriger.
+**The bar under the lanes** shows and hides, under **Show**, the player and every lane but the clips: **Player**, **Sections** (**Scenes**), **Beats**, **Song** (**Sound**), **Sung** (**Lines**), **Cast**. The browser keeps the choice. Without the player the timeline has all the room; the sound goes on. On the right of the bar are **Fit** (the whole video) and **Zoom** (also `Ctrl`+mouse wheel over the timeline). The top edge of the timeline is dragged to make it taller or lower.
 
-Nützliche Tasten: `Leertaste` spielt und pausiert, `←` und `→` springen zum vorigen oder nächsten Clip, `,` und `.` gehen einen Frame zurück oder vor, `O` wiederholt den Clip in Schleife.
+Useful keys: `Space` plays and pauses, `←` and `→` jump to the clip before or after, `,` and `.` step a frame back or on, `O` loops the clip.
 
-**Die Leiste über den Spuren** fasst die Knöpfe nach dem zusammen, was sie tun:
+**The bar above the lanes** groups the buttons by what they do:
 
-| Gruppe | Was drin steht |
+| Group | What is in it |
 |---|---|
-| Zahlen | wie viele Clips gerendert sind, fehlen, stale oder gepinnt sind, Markierungen, *goes on* |
-| Markiert | nur mit Markierung: **Render marked**, **Preview marked**, **Plan … again**, **People…**, **Clear** (siehe [Mehrere Clips auf einmal](#mehrere-clips-auf-einmal)) |
-| Rendern | **Render stale**, **Render missing**, **Render all**, jeweils mit der Zahl der Clips |
-| Prüfen | **Only flagged** blendet alle anderen ab, `‹` und `›` springen von einem auffälligen Clip zum nächsten, **Mark flagged**, **Review**, **Scan for backdrops** (sucht ohne GPU nach grauen Studio-Hintergründen) |
-| Fertigstellen | **Preview all**, **Preview video**, **Refinish**, und sobald es ein fertiges Video gibt **Post-work** (führt zum Reiter Post-work) |
+| Counts | how many clips are rendered, missing, stale or pinned, marks, *goes on* |
+| Marked | only with marked clips: **Render marked**, **Preview marked**, **Plan … again**, **People…**, **Clear** (see [Several clips at once](#several-clips-at-once)) |
+| Render | **Render stale**, **Render missing**, **Render all**, each with the number of clips |
+| Check | **Only flagged** hides all others, `‹` and `›` jump from one flagged clip to the next, **Mark flagged**, **Review**, **Scan for backdrops** (looks for grey studio backdrops, no GPU), **Check textures** (whether continuing clips get grittier from link to link, no GPU), for a film **Check cuts** (whether the cuts within a scene fit, read by a model that reads pictures). What a check finds marks the clips. |
+| Finish | **Preview all**, **Preview video**, **Refinish**, and, once there is a finished video, **Post-work** (goes to the Post-work tab) |
 
-**Render stale**, **Render missing** und **Render all** markieren diese Clips und stellen dann die übliche Frage mit Schätzung. **Render all** nimmt auch Clips, die als aktuell gelten, etwa nach einem anderen Seed.
+**Render stale**, **Render missing** and **Render all** mark these clips and then ask the usual question with its estimate. **Render all** also takes clips that count as current, for example after another seed.
 
-## Einen Clip neu rendern
+## Rendering a clip again
 
-1. Clip auf der Timeline anklicken.
-2. Rechts den Reiter **Render** öffnen.
-3. **Preview** ist der billige Test: wenige Schritte, wenige Pixel, in einem eigenen Ordner. Ein echter Clip wird dabei nie ersetzt.
-4. **Render again** rendert den ganzen Clip neu. Der Dialog nennt die geschätzte Dauer und warnt, wenn andere Clips auf diesem aufbauen.
-5. Nach dem Render öffnen sich alte und neue Fassung nebeneinander.
+1. Click the clip on the timeline.
+2. Open the **Render** tab on the right.
+3. **Preview** is the cheap test: few steps, few pixels, in a folder of its own. A real clip is never replaced by it.
+4. **Render again** renders the whole clip again. The dialog gives the estimated time and warns when other clips go on from this one.
+5. After the render the old and the new version open side by side.
 
-![Alte und neue Fassung nebeneinander](images/workspace/compare.jpg)
+![The old and the new version side by side](images/workspace/compare.jpg)
 
-**Play both from the start** spielt beide synchron. Gefällt dir die alte besser, nimmst du **Go back to the old one**. Später geht das im Reiter **Versions** mit **Compare** (das Fenster im Bild, dort heißt der Knopf **Make the right one current**) oder direkt mit **Make current**.
+**Play both from the start** plays both in step. If you like the old one better, take **Go back to the old one**. Later the **Versions** tab does the same with **Compare** (the window in the picture; there the button is **Make the right one current**) or directly with **Make current**.
 
-**Im Terminal:** `bun run versions <id> slot-007` listet die weggelegten Fassungen eines Clips, die neueste zuerst. `--pick=<Fassung>` macht eine davon wieder aktuell. Das geht genauso für Bilder (`bun run versions <id> mara`). Die aktuelle Fassung wird dabei weggelegt und bleibt auswählbar. Beim Film kommt `--film` dazu. Die eigene Wahl eines Film-Clips (Ansicht, Referenzen) setzt `bun run override <film-id> clip-007 --view=2 --without=<bild>`, `--clear` nimmt sie zurück.
+**In the terminal:** `bun run versions <id> slot-007` lists the versions put away of a clip, the newest first. `--pick=<version>` makes one of them current again. The same works for pictures (`bun run versions <id> mara`). The current version is put away and stays selectable. For a film add `--film`. A film clip's own choice (view, references) is set with `bun run override <film-id> clip-007 --view=2 --without=<picture>`, `--clear` takes it back.
 
-### Nur einen Teil neu rendern
+### Rendering only a part again
 
-Ist nur eine Stelle schlecht, gibst du im Reiter **Render** unter **Render a part again** die Sekunden an und klickst **Render this part**. Hat der Clip mehrere Shots, gibt es dafür je einen Knopf. Der übrige Clip bleibt erhalten, das fertige Video wird dabei nicht neu zusammengebaut.
+When only one moment is bad, give its seconds in the **Render** tab under **Render a part again** and click **Render this part**. A clip with several shots has a button for each. The rest of the clip stays; the finished video is not assembled again.
 
-> **Vorsicht:** Das ist noch nicht erprobt. Auf der Radeon lief dieser Job in den Speicherfehler, und ein Versuch hat den Server abstürzen lassen. Bei einem Film geht ein Teil mit Dialog nicht, weil der Ton dort am Bild hängt.
+> **Careful:** this is not well tried yet. On the Radeon the job ran out of memory, and one try took the server down. For a film a part with dialogue does not work, because the sound belongs to the picture there.
 
-## Mehrere Clips auf einmal
+## Several clips at once
 
-![Timeline mit drei markierten Clips](images/workspace/marked.jpg)
+![The timeline with three marked clips](images/workspace/marked.jpg)
 
-1. Mit `Strg`+Klick markierst du einzelne Clips, mit `Umschalt`+Klick alle bis zu diesem Clip. **Mark flagged** markiert alle auffälligen.
-   - Ein Klick auf einen **Beat** markiert seine Clips, `Strg`+Klick nimmt sie dazu.
-   - Ein Klick auf einen **Abschnitt** markiert die Clips darin, `Umschalt`+Klick die Clips aller Abschnitte mit diesem Namen (alle Refrains), `Strg`+Klick nimmt sie dazu oder heraus.
-2. Über den Spuren erscheinen **Render marked**, **Preview marked** und **Clear**.
-3. Während des Laufs zeigt jeder Clip auf der Timeline, ob er wartet, rendert oder fertig ist.
+1. `Ctrl`+click marks single clips, `Shift`+click all up to this one. **Mark flagged** marks every flagged clip.
+   - A click on a **beat** marks its clips, `Ctrl`+click adds them.
+   - A click on a **section** marks the clips in it, `Shift`+click the clips of every section of that name (all choruses), `Ctrl`+click adds them or takes them out.
+2. Above the lanes appear **Render marked**, **Preview marked** and **Clear**.
+3. While the run goes on, every clip on the timeline shows whether it waits, renders, is done or failed.
 
-Gehören die markierten Clips zu Beats, kommen zwei Knöpfe dazu, beide nur mit dem Sprachmodell, gerendert wird nichts:
+When the marked clips belong to beats, two more buttons come - both the language model only, nothing is rendered:
 
-- **Plan … again** plant die Shots dieser Beats mit dem Planer, wie er jetzt ist, neu. Die anderen Beats behalten ihre Shots, die Clips werden stale. Ein gestrichelter Beat hat noch keinen Shot-Plan, der nächste Planlauf plant ihn sowieso.
-- **People…** (Musikvideo) sagt, wer in den markierten Clips ist: Leute aus dem Cast oder neue mit eigenem Bild kommen dazu (**In these clips**, **New people**), andere gehen heraus (**Not in these clips**), und unter **What they do there** steht, was sie dort tun. Die Beats werden danach neu geplant. Im Terminal: `bun run direction <id> --with=… --join=… --out=… --clips=…` (siehe [Regie-Leitfaden](direction.md#who-is-in-which-beats-and-clips-music-video)).
+- **Plan … again** plans the shots of these beats again with the planner as it is now. The other beats keep their shots; the clips turn stale. A dashed beat has no shot plan yet; the next plan run plans it anyway.
+- **People…** (music video) says who is in the marked clips: people of the cast or new ones with a picture of their own come in (**In these clips**, **New people**), others go out (**Not in these clips**), and **What they do there** says what they do. The beats are planned again afterwards. In the terminal: `bun run direction <id> --with=… --join=… --out=… --clips=…` (see the [direction guide](direction.md#who-is-in-which-beats-and-clips-music-video)).
 
-> **Vorsicht nach einer Neuplanung:** Danach ist meist fast jeder Clip stale. Prüfe zuerst die Seite **Direction** und rendere einige markierte Clips zur Probe, statt gleich **Render stale** oder **Next** zu nehmen. Würde **Next** den Großteil des Videos rendern, warnt der Dialog davor.
+> **Careful after a new plan:** almost every clip is stale then. Check the **Direction** page first and render a few marked clips as a test, rather than **Render stale** or **Next** at once. Where **Next** would render most of the video, its question warns; and before any clip is rendered, **Next** renders one first.
 
-## Clips durchgehen und entscheiden
+## Going through clips and deciding
 
-![Review mit Tastenleiste unter dem Bild](images/workspace/review.jpg)
+![The review with its key bar under the picture](images/workspace/review.jpg)
 
-**Review** geht die markierten Clips nacheinander durch, jeden in Schleife. Ist nichts markiert, nimmt es die auffälligen, sonst alle. Abgespielt wird erst mit `Leertaste` - von selbst nur, wenn in der Leiste **Play by itself** angehakt ist (bleibt im Browser gespeichert). Nach einem erneuten Render mehrerer Clips sind diese markiert; die Review startet man dann selbst.
+**Review** goes through the marked clips one by one, each in a loop - with nothing marked the flagged ones, else all. It plays only with `Space`; by itself only when **Play by itself** in its bar is ticked (the browser keeps that). After several clips were rendered again they are marked; you start the review yourself.
 
-| Taste | |
+| Key | |
 |---|---|
-| `Leertaste` | abspielen oder anhalten |
-| `Enter` | passt, nächster Clip |
-| `R` | neu rendern: nur vormerken, sofort weiter - gerendert wird am Ende |
-| `←` | zurück |
-| `C` | mit der älteren Fassung vergleichen |
-| `Esc` | Review beenden |
+| `Space` | play or pause |
+| `Enter` | fits, next clip |
+| `R` | render again: only noted, on at once - rendered at the end |
+| `←` | back |
+| `C` | compare with the older version |
+| `Esc` | end the review |
 
-Am Ende bleiben genau die mit `R` gemerkten Clips markiert, und die Seite fragt, ob sie gerendert werden sollen.
+At the end exactly the clips noted with `R` stay marked, and the page asks whether to render them.
 
-## Regie nachträglich ändern
+## Changing the direction afterwards
 
-Bewegung, Spiel und Bildausschnitt eines bereits geplanten Projekts änderst du nachträglich. Story, Cast, Referenzbilder, Ton und Schnittzeiten bleiben bestehen. Du musst die Regie nicht beim Anlegen des Projekts festlegen.
+The movement, acting and framing of a project already planned can be changed afterwards. The story, the cast, the reference pictures, the sound and the cuts stay. The direction need not be decided when the project is made.
 
-### Einen Shot direkt in der Timeline führen
+### Directing a shot on the timeline
 
-In der Timeline unter **Shots → Direct this shot** öffnet sich der Shot in einem Dialog: Bildausschnitt, Kamera, Handlung und darunter jede Person im Bild mit dem, was sie tut (**Start**, **In frame**, **Movement**) und ob sie singt, spielt oder spricht.
+**Shots → Direct this shot** on the timeline opens the shot in a dialog: framing, camera, action, and below it every person in the picture with what they do (**Start**, **In frame**, **Movement**) and whether they sing, play or speak.
 
-- **Shot size** (wide, medium, close, extreme) ändert den Plan direkt, ohne Sprachmodell, und die Clip-Prompts werden gleich neu gebaut.
-- **Take out** markiert eine Person, auch mehrere. **Take … out of the shot** nimmt alle markierten in einem Schritt heraus, durch den Code. Wer im Shot singt, spielt oder spricht, kann nicht herausgenommen werden. Nennt der Text des Shots danach noch jemanden von ihnen, startet gleich ein einziger Vorschlag des Sprachmodells, der den Shot ohne alle schreibt; **Take and build the prompts** übernimmt ihn, **Drop** baut die Prompts nur mit dem Herausnehmen. Sonst werden die Clip-Prompts gleich neu gebaut. **Rewrite the words** fragt für einen früher herausgenommenen noch einmal, **Undo** nimmt eine direkte Änderung zurück.
-- **Bring in** zeigt alle aus dem Cast, die nicht im Shot sind. **+ Name** markiert sie, auch mehrere, darunter steht optional, was sie hier tun. **Bring … into the shot** setzt sie durch den Code in genau diesen Shot, ein einziger Vorschlag des Sprachmodells schreibt, wo sie stehen und was sie tun. Die anderen Shots des Clips und des Beats bleiben, wie sie sind; so kommt jemand aus Shot 2 auch in Shot 1. War die Person vorher mit **Take out** herausgenommen, wird nur das zurückgenommen. Nach der Übernahme nimmt **Undo** sie nicht mehr heraus, dafür ist **Take out** da.
-- Unter **Instructions** schreibst du eine Anweisung für den ganzen Shot oder, über **Instruction for …**, für eine Person darin. **Propose** speichert sie und fragt das Sprachmodell in einem Schritt. **Proposed** zeigt danach nur die geänderten Felder, vorher und nachher.
-- **Take and build the prompts** übernimmt den Vorschlag und baut die Clip-Prompts neu. Danach den Clip auf der Timeline rendern. **Drop** verwirft den Vorschlag.
+- **Shot size** (wide, medium, close, extreme) changes the plan directly, without the language model, and the clip prompts are built again at once.
+- **Take out** marks a person, several too. **Take … out of the shot** takes all marked ones out in one step, by code. Whoever sings, plays or speaks in the shot cannot be taken out. If the shot's text still names one of them, one proposal of the language model starts at once that writes the shot without all of them; **Take and build the prompts** takes it, **Drop** builds the prompts with them taken out only. Otherwise the clip prompts are built again at once - in the same request that takes them out. **Rewrite the words** asks again for someone taken out before, **Undo** takes a direct change back.
+- **Bring in** shows everyone of the cast who is not in the shot. **+ Name** marks them, several too; below goes, if you like, what they do here. **Bring … into the shot** puts them into exactly this shot by code, and one proposal of the language model writes where they are and what they do. The other shots of the clip and the beat stay as they are; this way someone of shot 2 also comes into shot 1. Someone taken out with **Take out** before only has that taken back. Once the proposal is taken, **Undo** no longer takes them out; **Take out** does.
+- Under **Instructions** you write an instruction for the whole shot or, with **Instruction for …**, for one person in it. **Propose** saves it and asks the language model in one step. **Proposed** then shows only the changed fields, before and after.
+- **Take and build the prompts** takes the proposal and builds the clip prompts again; then render the clip on the timeline. **Drop** drops the proposal.
 
-Direkte Änderungen überstehen eine Neuplanung: Der Planer bekommt sie als Vorgabe, und der Code setzt sie auch im neuen Plan durch. Eine Änderung für einen einzelnen Shot muss nach einer Neuplanung neu zugeordnet werden, weil der neue Plan andere Shots hat.
+Direct changes survive a new plan: the planner gets them as a given, and the code puts them through in the new plan too. A change for a single shot has to be assigned again after a new plan, because the new plan has other shots.
 
-### Anweisungen für mehrere Shots
+### Instructions for several shots
 
-1. **Direction** in der Projektnavigation öffnen.
-2. Unter **Scope** Projekt, Charakter, Beat/Szene, einen Songzeitbereich oder einen Shot wählen. **Only for character** schränkt den Bereich zusätzlich ein.
-3. Unter **Instruction** beispielsweise „Kael dreht sich zu seiner linken Seite, bis sein Rücken zur Kamera zeigt“ oder „Nahaufnahme der Greifhand beim Gitarrensolo“ eingeben. **Save instruction** speichert deinen Originaltext.
-4. **Preview changes** startet den CLI-Aufruf an das Sprachmodell. **Before / After** zeigt die vorgeschlagenen Änderungen einschließlich Pose und Bewegung. Gleichrangige widersprüchliche Vorgaben oder Anschlussprobleme verhindern die Übernahme: Anweisungen korrigieren oder den Bereich erweitern und neu vorschlagen lassen.
-5. **Take changes** übernimmt den Vorschlag und baut die Clip-Prompts gleich neu; **Drop proposal** verwirft ihn. Danach auf der Timeline die betroffenen veralteten Clips rendern. Die Regieaktionen selbst rendern nichts.
+1. Open **Direction** in the project's tabs.
+2. Under **Scope** choose the project, a character, a beat or scene, a stretch of the song or a shot. **Only for character** narrows it further.
+3. Under **Instruction** write, for example, "Kael turns to his left until his back faces the camera" or "a close-up of the fretting hand in the guitar solo". **Save instruction** keeps your own words.
+4. **Preview changes** starts the CLI's call to the language model. **Before / After** shows the changes it proposes, pose and movement included. Contradicting instructions of the same rank or a continuity problem keep it from being taken: correct the instructions or widen the scope and propose again.
+5. **Take changes** takes the proposal and builds the clip prompts again; **Drop proposal** drops it. Then render the stale clips on the timeline. The direction itself renders nothing.
 
-Unter **Direct edits** legst du direkte Änderungen für mehrere Shots an, ohne Sprachmodell: eine Person aus allen Shots eines Beats, einer Szene, eines Zeitbereichs oder aller Shots mit einer bestimmten Figur nehmen, oder dort die Einstellungsgröße setzen. **Add edit and build the prompts** speichert sie und baut die Clip-Prompts neu, **Undo edit** nimmt sie zurück. Bei einer Anweisung oder Änderung für einen einzelnen Shot öffnet **open in the timeline** den Shot im Regie-Dialog.
+Under **Direct edits** you make direct changes for several shots, without the language model: take a person out of every shot of a beat, a scene, a stretch of time or of every shot with a certain character, or set the shot size there. **Add edit and build the prompts** saves them and builds the clip prompts again; **Undo edit** takes them back. For an instruction or change of a single shot, **open in the timeline** opens the shot in the direction dialog.
 
-Ein Zeitbereich betrifft alle sich damit überschneidenden ganzen Shots; er erzeugt keine zusätzlichen Schnitte. **Remove instruction** entfernt die Vorgabe, macht eine bereits übernommene Bewegung jedoch nicht rückgängig.
+A stretch of time covers every whole shot that overlaps it; it makes no extra cuts. **Remove instruction** removes the instruction but does not undo a movement already taken.
 
-### Nach einer Neuplanung
+### After the shots are planned again
 
-Werden die Shots neu geplant, etwa nach einer geänderten Einstellung oder mit **Plan … again**, gilt für das, was für die alten Shots gemacht war:
+When the shots are planned again - after a changed setting, or with **Plan … again** - this holds for what was made for the old shots:
 
-- **Direkte Änderungen** für einen neu geplanten Shot passen nicht mehr, der neue Plan hat eigene Shots. Der Planlauf verwirft sie und sagt es im Log. Auf **Direction** stehen solche Reste unter **Left over from the old plan**; **Clear them out** räumt alle mit einem Klick weg.
-- **Anweisungen**, die noch nicht per Vorschau übernommen sind, halten einen reinen Planlauf nicht mehr an: Die Clip-Prompts werden ohne sie gebaut, der Lauf nennt sie. Ein Lauf, der Clips rendert, hält für sie **gleich am Anfang** an, nicht erst nach der Planung.
-- Eine Anweisung für einen neu geplanten Shot steht ebenfalls bei den Resten: **Keep for the new shot** wendet sie auf den Shot an, wie er jetzt ist, **Clear** verwirft sie. Trifft eine Anweisung gar keinen Shot mehr, steht sie unter **To decide**: für einen vorhandenen Shot ändern oder entfernen.
+- **Direct changes** for a shot planned again no longer fit; the new plan has its own shots. The plan run drops them and says so in its log. On **Direction** such leftovers are under **Left over from the old plan**; **Clear them out** removes all of them with one click.
+- **Instructions** not yet taken by a preview no longer stop a plan run: the clip prompts are built without them, and the run names them. A run that renders clips stops for them **at its start**, not after the planning.
+- An instruction for a shot planned again is among the leftovers too: **Keep for the new shot** applies it to the shot as it is now, **Clear** drops it. An instruction that hits no shot at all is under **To decide**: change it for a shot there is, or remove it.
 
-Danach erst rendern, zuerst einige markierte Clips zur Probe (siehe die Warnung unter [Mehrere Clips auf einmal](#mehrere-clips-auf-einmal)).
+Render only after that, a few marked clips first (see the warning under [Several clips at once](#several-clips-at-once)).
 
-Anweisungen, die an den Planer gegangen sind (mit **People…**), brauchen keine Prüfung. Im Terminal nennt `bun run status` die offenen Anweisungen und als nächsten Schritt `bun run direction <id> --preview`.
+Instructions that went to the planner (with **People…**) need no check. In the terminal `bun run status` names the open instructions and, as the next step, `bun run direction <id> --preview`.
 
-### Pläne zurückholen
+### Bringing plans back
 
-Unter **Plan versions** kannst du einen kompatiblen früheren Plan einschließlich des Originalplans wiederherstellen. Bereits gerenderte Videos bleiben erhalten. CLI-Beispiele, JSON-Format und Regeln stehen im [Regie-Leitfaden](direction.md).
+Under **Plan versions** an earlier plan that still fits, the original plan included, can be restored. Videos already rendered stay. Examples for the CLI, the JSON format and the rules are in the [direction guide](direction.md).
 
-## Einen Lauf verfolgen oder stoppen
+## Following or stopping a run
 
-![Laufender Render mit Leiste am Seitenende](images/workspace/run.jpg)
+![A render running, with its bar at the foot of the page](images/workspace/run.jpg)
 
-Am unteren Rand steht, was gerade läuft: bei einem Render ein Balken mit fertigen und allen Clips (`12/37`) und Prozent, sonst der Schritt aus dem Log, dazu die Laufzeit. **Log** zeigt die Ausgabe der CLI, **Stop** beendet den Lauf. Fertige Dateien bleiben. Die Jobs, auf die der Lauf gewartet hat - Bilder, Sheets und Clips -, werden auf ihren Servern abgebrochen: aus der Warteschlange genommen, oder angehalten, wenn es gerade der eigene Job ist (nie der eines anderen). Der Server ist damit sofort frei, und der nächste Lauf rendert sie neu. So wirkt auch Ctrl+C im Terminal. Nur wenn ein Lauf abstürzt oder der Rechner einschläft, laufen seine Jobs weiter, und der nächste Lauf nimmt sie wieder auf.
+The foot of the page says what runs now: for a render a bar with the clips done and all of them (`12/37`) and the percent - counted from the run's own events -, otherwise the step it is at, and how long it runs. **Log** shows the CLI's output, **Stop** ends the run. Finished files stay. The jobs the run waited for - pictures, sheets and clips - are cancelled on their servers: taken out of the queue, or stopped when it is the run's own job (never someone else's). The server is free at once, and the next run renders them again. Ctrl+C in the terminal does the same. Only when a run crashes or the machine goes to sleep do its jobs go on, and the next run picks them up.
 
-**Wenn etwas schiefgeht:** Bei bekannten Fehlern steht über der Timeline in Klartext, was passiert ist und was zu tun ist, daneben **Repeat**. Gehört die Lösung auf eine andere Seite, etwa „Direction needs review“, führt ein Link dorthin. Andere Fehler zeigt das **Log**. Der häufigste Fall ist `out of memory`: Dann nimmst du einen anderen Server oder renderst kürzer oder kleiner, statt denselben Job noch einmal zu schicken.
+**Asked for while a run goes on:** a button that starts a run asks whether it is to start after this run. It then waits in the project's queue (`logs/queue.json`) and starts as soon as the project is free - also when the workspace was started again in between. The run bar shows what waits, with ✕ to take it out, and **Runs** lists the runs that ended, with their state, time and log. In the terminal: `bun run runs <id> [--remove=<id>]`.
 
-## Referenzbilder ändern
+**When something goes wrong:** for known failures the bar says in plain words what happened and what to do, with **Repeat**. When the fix is on another page - "Direction needs review" - a link goes there. Other failures are in the **Log**. The most common one is `out of memory`: take another server, or render shorter or smaller, rather than sending the same job again.
 
-![Referenzseite mit Karten und Details](images/workspace/references.jpg)
+## Changing reference pictures
 
-Unter **References** liegen alle Personen, Orte und Requisiten. Rechts stehen Prompt, Ansichten, ältere Fassungen und die Clips, die das Bild benutzen. Während eines Laufs erscheint jedes Bild hier und auf **Look**, sobald es fertig ist, nicht erst am Ende des Laufs.
+![The References page with cards and details](images/workspace/references.jpg)
 
-- **New sheet, same anchor**: dieselbe Person, andere Ansichten.
-- **New anchor**: eine andere Person oder ein anderer Ort, alles danach wird neu.
-- **Prompt ändern** und dann rendern: Das Bild bleibt danach gepinnt, der Prompt im Plan bleibt, wie er war. Das Prompt-Feld zeigt danach den geänderten Prompt, und du kannst ihn weiter ändern und noch einmal rendern.
-- **Take the plan's prompt** holt den Prompt aus dem Plan zurück. Damit gerendert, ist das Bild nicht mehr gepinnt und folgt wieder dem Plan. Der Anchor aus dem geänderten Prompt geht dabei mit weg.
-- **Use my own anchor** setzt ein eigenes Bild als Anchor ein, egal ob es von Hand in ComfyUI oder sonst wo entstanden ist. Du lädst das Bild hoch (PNG, JPEG oder WebP, höchstens 50 MB). Dazu kannst du einen Prompt als Notiz mitgeben. Die Beschreibung, die die Clips und das Sheet von der Person oder dem Ort sagen, behältst du, schreibst du selbst oder lässt du vom Vision-Modell aus dem Bild lesen. Die letzte Möglichkeit gibt es nur, wenn ein Modell eingerichtet ist, das Bilder liest. ComfyUI rendert das Sheet dann aus deinem Bild. Was vorher da war, landet unter den älteren Fassungen. Das hochgeladene Bild liegt nur für die Dauer des Laufs in einem eigenen Temp-Ordner. Im Terminal geht dasselbe mit `--render=images --only=<id> --again --picture-anchor=<bild> [--picture-description=<datei> | --describe-picture]`.
-- **Make current** holt eine ältere Fassung zurück.
+**References** has every person, place and prop. On the right are the prompt, the views, older versions and the clips that use the picture. During a run every picture appears here and on **Look** as soon as it is done, not only at the end of the run.
 
-Auch ein gepinntes Bild lässt sich neu rendern, auch ein eigenes. Was da ist, landet unter den älteren Fassungen. Gesperrt sind die Render-Knöpfe nur, wenn ein Asset aus der Bibliothek die Rolle spielt. Clips, die das Bild benutzen, werden danach stale, aber nicht von selbst neu gerendert: Das entscheidest du auf der Timeline.
+- **New sheet, same anchor**: the same person, other views.
+- **New anchor**: another person or place; everything after it is made again.
+- **Change the prompt** and render: the picture stays pinned afterwards, the prompt of the plan stays as it was. The prompt field then shows the changed prompt, and you can change it further and render again.
+- **Take the plan's prompt** brings the plan's prompt back. Rendered with it, the picture is no longer pinned and follows the plan again; the anchor of the changed prompt goes with it.
+- **Use my own anchor** puts a picture of your own in as the anchor, whether it was made by hand in ComfyUI or anywhere else. You upload it (PNG, JPEG or WebP, at most 50 MB), with a prompt as a note if you like. The description the clips and the sheet give of the person or place you keep, write yourself, or have the vision model read from the picture - the last only when a model is set up that reads pictures. ComfyUI then renders the sheet from your picture; what was there before is among the older versions. The uploaded picture is kept in a temporary folder of its own for the run only. In the terminal: `--render=images --only=<id> --again --picture-anchor=<picture> [--picture-description=<file> | --describe-picture]`.
+- **Make current** brings an older version back.
 
-## Besetzung und Bibliothek
+A pinned picture can be rendered again too, your own as well; what is there goes to the older versions. The render buttons are only locked when a library asset plays the role. Clips that use the picture are stale afterwards but are not rendered again by themselves: that is decided on the timeline.
 
-![Casting-Seite mit einer Auswahl je Rolle](images/workspace/casting.jpg)
+## Casting and the library
 
-**Casting** zeigt jede Rolle und jeden Ort mit einer Auswahl: **Rendered in this project** oder ein Asset aus der Bibliothek. Eine Änderung schreibt nur einen Eintrag in `casting.json`. Wirksam wird sie mit dem nächsten Planlauf (**Plan now**). Der Dialog davor nennt, welche Schritte aus den alten Texten der Rolle geplant waren und jetzt neu geplant werden. Die betroffenen Clips werden dann stale, gerendert wird nichts von selbst.
+![The Casting page with a choice for every role](images/workspace/casting.jpg)
 
-**Change the cast** ändert den Cast selbst, ganz ohne Bibliothek: Name, Rolle in der Story und Requisite jeder Figur, die Namen der Orte. Beim Musikvideo kannst du Figuren und Orte auch hinzufügen und entfernen: **Add a character** und **Add a place** stehen über den Listen, **Remove** auf der Karte jeder Rolle. **Add** öffnet den Cast zum Bearbeiten, mit der neuen Figur oder dem neuen Ort schon drin. **Remove** bleibt auf der Liste: Die Karte wird als „Out of the cast when saved“ markiert, **Put back** auf ihr holt die Rolle zurück. Eine Leiste unten zählt, wer wegfällt, und speichert alle Streichungen auf einmal (**Save the cast**) oder verwirft sie (**Discard**). So streichst du viele Rollen in einem Rutsch und speicherst einmal. Im Formular von **Change the cast** steht, wer beim Speichern wegfällt, über dem Knopf, mit **Put back** daneben. Beim Film legt das Drehbuch fest, wer vorkommt: Dort änderst du mit **Edit the roles and places** Name, Rolle, Aussehen und Stimme. Die Ids bleiben, eine umbenannte Figur behält also ihre Bilder und ihren Eintrag in `casting.json`.
+**Casting** shows every role and place with a choice: **Rendered in this project**, or an asset of the library. A change writes one entry of `casting.json`; it takes effect with the next plan run (**Plan now**). The question before it names the steps planned from the role's old texts, which are planned again. The clips concerned turn stale; nothing is rendered by itself.
 
-**Eine Figur im Film dazu oder heraus** (#589): Hat die Pipeline das Drehbuch aus `input/idea.txt` selbst geschrieben, stehen über den Figuren **Add a character** und auf jeder Karte **Remove**. Eine neue Figur bekommt einen Namen und ihre Rolle in der Geschichte. Die Leiste unten zählt, wer dazukommt und wer geht, und **Tell the screenplay anew** lässt das Sprachmodell das Drehbuch für diese Besetzung neu schreiben: dieselben Szenen an denselben Orten, eine Rolle für die Neuen (mit Aussehen und Stimme), nichts mehr von denen, die gehen, die Dialoge der anderen so weit wie möglich wörtlich. Der Code prüft die Antwort und fragt bei Fehlern einmal nach. Das Ergebnis wartet auf der Story-Seite neben dem Drehbuch. **Take the new screenplay** übernimmt es: Wer bleibt, behält Id, Looks und Bilder, der Look des Films und die Orte bleiben. Weg fallen, was aus dem Skript gelesen wird (Zusammenfassung, Requisiten, Einstellungen, Skript-Notizen), und der nächste Planlauf schreibt sie neu, dazu die Looks der Neuen. Bei einem eigenen Drehbuch (`input/screenplay.txt`) geht das nicht, denn dort prüft die Pipeline, dass keine Zeile verändert wird. Die Seite sagt dann: Figur im Skript ergänzen oder streichen, danach neu planen.
+Every role also has:
 
-**Save the cast** nennt vorher, was aus dem alten Cast geplant war und wegfällt: die Looks, beim Musikvideo auch die Sängerwahl, später die Beats und Einstellungen. Der nächste Planlauf macht es neu, nur mit dem Sprachmodell. Beim Musikvideo werden dabei nur die Looks der neuen oder geänderten Figuren und Orte neu geschrieben, alle anderen behalten ihre. Nach dem Speichern fragt die Seite nach: Bei einer umbenannten Figur setzt **Put them in** den neuen Namen in die Story (als ganzes Wort, auch Vor- oder Nachname allein). Kam jemand dazu oder fiel weg, bietet sie an, die Story für die neue Besetzung erzählen zu lassen (siehe oben).
+- **From another project…** (music video): a finished character or place of another music video taken over - its picture and its whole reference sheet, pinned, nothing rendered - with the description of that picture, one written from it, or the one here.
+- **Replace in what is planned…** (characters): a picture of your own on this machine for the character, with the description to go with it. What it would do is shown first (`bun run replace-character … --dry-run`).
 
-![Change the cast: je Figur Name, Rolle und Requisite, darüber wer beim Speichern wegfällt](images/workspace/cast-edit.jpg)
+**Change the cast** changes the cast itself, without the library: the name, the role in the story and the prop of every character, the names of the places. For a music video characters and places can also be added and removed: **Add a character** and **Add a place** are above the lists, **Remove** on every role's card. **Add** opens the cast for editing with the new character or place already in it. **Remove** keeps the card in the list, marked "Out of the cast when saved"; **Put back** on it brings the role back. A bar at the bottom counts who goes and saves every removal at once (**Save the cast**) or drops them (**Discard**) - so many roles go in one go and are saved once. In the form of **Change the cast**, who goes on saving is said above the button, with **Put back** next to it. In a film the screenplay decides who is in it: there **Edit the roles and places** changes name, role, appearance and voice. The ids stay, so a renamed character keeps its pictures and its entry in `casting.json`.
 
-**Library** (oben links neben **Projects**) zeigt alle Assets und wo sie benutzt werden. **New asset from a picture** legt eines aus einem Bild an. Aus einem Projekt heraus geht es unter **References** mit **Put into the library**. Ein vorhandenes Asset wird dabei nie überschrieben.
+**A character into or out of a film** (#589): when the pipeline wrote the screenplay itself from `input/idea.txt`, **Add a character** is above the characters and **Remove** on every card. A new character gets a name and their role in the story. The bar at the bottom counts who comes and who goes, and **Tell the screenplay anew** has the language model write the screenplay again for this cast: the same scenes at the same places, a part for the new ones (with appearance and voice), nothing more of those who go, the dialogue of the others word for word as far as it can. The code checks the answer and asks once more on a fault. The result waits on the Story page next to the screenplay. **Take the new screenplay** takes it: who stays keeps id, looks and pictures, the look of the film and the places stay. What is read from the script goes (summary, props, shots, script notes); the next plan run writes it again, with the looks of the new ones. With a screenplay of your own (`input/screenplay.txt`) this cannot be done, because there the pipeline checks that no line is changed; the page then says to add or remove the character in the script and plan again.
 
-## Wer welche Zeile singt
+**Save the cast** says beforehand what was planned from the old cast and goes: the looks, for a music video also who sings, later the beats and shots. The next plan run makes it again, the language model only; for a music video only the looks of the new or changed characters and places are written again, all others keep theirs. After saving the page asks: for a renamed character **Put them in** puts the new name into the story (as a whole word, also a first or last name alone). When someone came or went, it offers to tell the story for the new cast (see above).
 
-**Singers** (nur bei Musikvideos, in denen jemand singt) listet jede gesungene Zeile, nach Songteilen gruppiert. Hinter jeder Zeile stehen die Sänger als Schalter: Einer singt sie allein, mehrere singen sie zusammen (Duett, Chor). **All of these** schaltet einen Sänger für einen ganzen Songteil. Mit **Add a singer from the cast…** kommt jemand aus dem Cast dazu, der bisher nicht singt. Der Knopf ▶ (oder Leertaste) spielt die Zeile aus dem Vocals-Stem: So hört man, ob eine Frauen- oder Männerstimme singt. Auf der Timeline führt **Change singers** im Tab Shots zur ersten Zeile des Clips.
+![Change the cast: name, role and prop of every character, above it who goes on saving](images/workspace/cast-edit.jpg)
 
-**Wechselt der Sänger mitten in der Zeile**, klickst du zwischen die beiden Wörter: Dort beginnt ein neuer Teil. Jeder Teil bekommt eigene Sänger-Schalter und einen eigenen ▶. Die Wörter sind in der Farbe ihres Sängers unterstrichen. Ein Klick auf die Trennstelle nimmt sie zurück. Zwei Teile mit denselben Sängern werden beim Speichern wieder einer. Die Trennstelle sitzt auf den Wortzeiten aus dem Abgleich mit dem Transkript. Bei einer Zeile, die dort kaum gefunden wurde, sind sie nur geschätzt; die Seite sagt das, dann hilft ▶ pro Teil.
+**Library** (top left next to **Projects**) shows every asset and song and where they are used. **New asset from a picture** makes one from a picture; a song plays on a click and shows the projects made from it. An asset can be renamed, described anew or removed (put away, not deleted). From a project, **Put into the library** on **References** puts an asset in. An asset the library has is never overwritten. In the terminal: `bun run library [rename | describe | remove …]`.
 
-Tasten auf einer Zeile: **1** bis **9** schaltet den Sänger mit dieser Nummer (bei einer geteilten Zeile im gewählten Teil), **← →** wählt den Teil, **↑ ↓** geht zur nächsten Zeile, **Leertaste** spielt die Zeile oder den gewählten Teil.
+## Who sings which line
 
-Rechts steht, was das Speichern auslöst: Die Beats, in denen eine geänderte Zeile gesungen wird, verlieren ihren Shot-Plan. Ihre Clips werden stale. Steht ein Sänger noch nicht in so einem Beat, wird er hinzugefügt, und der Beat wird ohne seinen Grundriss neu inszeniert. **Save and plan** startet danach den Planlauf. Er fragt das Sprachmodell nur nach diesen Beats, alle anderen Beats und die Story bleiben, gerendert wird nichts. `bun run status` und `--dry-run` nennen die Beats ohne Plan.
+**Singers** (only for a music video in which someone sings) lists every sung line, grouped by the parts of the song. After every line are the singers as switches: one sings it alone, several sing it together (duet, choir). **All of these** switches a singer for a whole part of the song. **Add a singer from the cast…** brings in someone of the cast who does not sing yet. The ▶ button (or `Space`) plays the line from the vocals stem - so you hear whether a woman's or a man's voice sings it. On the timeline **Change singers** in the Shots tab goes to the first line of the clip.
 
-Die Zuordnung steht in `project.json` (Schritt `singing`). Sie bleibt, bis sich `lyrics.txt` oder `singers` in `config.json` ändern oder `--redo=singing` das Modell neu fragt.
+**When the singer changes in the middle of a line**, click between the two words: a new part starts there. Every part gets switches and a ▶ of its own, and the words are underlined in the colour of their singer. A click on the split takes it back. Two parts with the same singers become one again on saving. The split sits on the times of the words from the alignment with the transcript; for a line that was hardly found there they are only estimated - the page says so, and ▶ for each part helps.
 
-**Im Terminal:** `bun run singers <id>` listet die Zeilen, nummeriert ab 1. `bun run singers <id> --line=12:mara,ben` lässt Zeile 12 von Mara und Ben singen. Für mehr auf einmal schreibt `--json > singers.json` die Zeilen in eine Datei. Du änderst sie, auch Wechsel mitten in der Zeile als `parts`, und gibst sie mit `--set=singers.json` zurück. Danach nennt der Befehl die neu zu planenden Beats und den Planlauf.
+Keys on a line: **1** to **9** switches the singer of that number (in a split line in the chosen part), **← →** chooses the part, **↑ ↓** goes to the next line, **Space** plays the line or the chosen part.
 
-## Wann die Lyrics gesungen werden
+On the right is what saving causes: the beats in which a changed line is sung lose their shot plan, their clips turn stale. A singer not yet in such a beat is added, and the beat is staged again without its floor plan. **Save and plan** then starts the plan run. It asks the language model about these beats only - all other beats and the story stay, nothing is rendered. `bun run status` and `--dry-run` name the beats without a plan.
 
-**Timing** (bei Musikvideos mit abgeglichenen Lyrics) zeigt oben die Wellenform des Vocals-Stems um eine Zeile, darüber ihre Wörter als Kästen, darunter alle Zeilen. **Estimated** filtert die Zeilen, die der Abgleich mit dem Transkript kaum gefunden hat: Ihre Zeiten sind nur über die Zeile verteilt und können Sekunden danebenliegen.
+The assignment is in `project.json` (the step `singing`). It stays until `lyrics.txt` or `singers` in `config.json` change, or `--redo=singing` asks the model again.
 
-- Ein Wort ziehen verschiebt es, seine Ränder ziehen ändert Anfang oder Ende. Stößt es an ein Nachbarwort, gibt dieses nach.
-- Der Balken über den Wörtern verschiebt die ganze Zeile. **← →** verschiebt sie um 0,05 s, mit Shift um 0,5 s. **Tab** wählt ein Wort, dann gelten die Pfeile für das Wort, **Esc** wieder für die Zeile.
-- **Leertaste** spielt die Zeile oder das gewählte Wort, ein Doppelklick ein Wort, ein Klick in die Wellenform spielt ab dort. **Strg+Mausrad** oder **+ / −** zoomt, **Strg+Z** macht rückgängig.
-- Gestrichelte Linien sind die Schnitte zwischen den Clips. Fällt ein Schnitt in ein Wort, wird das Wort rot umrandet und die Seite warnt.
+**In the terminal:** `bun run singers <id>` lists the lines, numbered from 1. `bun run singers <id> --line=12:mara,ben` has line 12 sung by Mara and Ben. For more at once `--json > singers.json` writes the lines to a file; change them - a change in the middle of a line as `parts` - and give them back with `--set=singers.json`. The command then names the beats to plan again and the plan run.
 
-Mit bekannten Lyrics geht nichts verloren und es kommt nichts still dazu. Jede Zeile aus `lyrics.txt` ist genau einmal da, mit ihren eigenen Wörtern. Ein Wort, das Whisper nicht gehört hat, bleibt als geschätzt in der Zeile. Passt eine Zeile nicht zu `lyrics.txt` (ein Wort fehlt, sie fehlt ganz oder liegt nirgends), zeigt die Seite das als **check** an. Hat Whisper Gesang gehört, den `lyrics.txt` nicht hat, etwa eine Wiederholung, wird daraus ein **ad-lib**: ein Vorschlag, den kein Clip singt, bis du **Sing it** wählst. Hört Whisper eine Zeile zweimal an derselben Stelle, entsteht kein Ad-lib.
+## When the lyrics are sung
 
-**Back to automatic** setzt eine von Hand gesetzte Zeile auf den automatischen Abgleich zurück, **All back to automatic** alle. Der Abgleich wird dafür aus dem gespeicherten Transkript neu berechnet, Whisper läuft nicht noch einmal.
+**Timing** (for a music video with aligned lyrics) shows at the top the waveform of the vocals stem around a line, above it its words as boxes, below it all lines. **Estimated** filters the lines the alignment with the transcript hardly found: their times are only spread over the line and can be seconds off.
 
-**Save** behält die Schnitte: Die Vocals jedes Clips werden aus den neuen Zeiten neu berechnet, nur Beats mit geänderten Clips verlieren ihren Shot-Plan. **Save and plan** plant sie gleich neu. **Save and cut the song again…** schneidet den Song um die neuen Zeiten neu (`--redo=timeline`) und plant dabei jeden Shot neu, das dauert. Verschobene Zeilen gelten als von Hand gesetzt und nicht mehr als geschätzt. Die Zeiten stehen in `project.json` (`lyricsTiming`), bis sich `lyrics.txt` ändert oder `--redo=lyricsTiming` neu abgleicht.
+- Dragging a word moves it, dragging its edges changes its start or end. When it bumps into a neighbour, the neighbour gives way.
+- The bar above the words moves the whole line. **← →** moves it by 0.05 s, with Shift by 0.5 s. **Tab** chooses a word, then the arrows move the word, **Esc** the line again.
+- **Space** plays the line or the chosen word, a double click a word, a click into the waveform plays from there. **Ctrl+mouse wheel** or **+ / −** zooms, **Ctrl+Z** undoes.
+- Dashed lines are the cuts between the clips. When a cut falls into a word, the word gets a red frame and the page warns.
+- **Hide the side column** folds the column on the right away for room; the browser keeps that.
 
-**Im Terminal:** `bun run timing <id>` listet jede Zeile mit Anfang und Ende. `--json > timing.json` schreibt die Wortzeiten in eine Datei. Du verschiebst `start` und `end` und gibst sie mit `--set=timing.json` zurück. Unverändert zurückgegebene Zeilen zählen nicht als geändert. Fällt danach ein Schnitt in ein Wort, sagt der Befehl das und nennt `--redo=timeline`. `--reset=12,40` oder `--reset=all` setzt von Hand gesetzte Zeilen auf den automatischen Abgleich zurück, `--on=N` singt einen Ad-lib. Die Liste nennt Ad-libs und Zeilen, die nicht zu `lyrics.txt` passen.
+With known lyrics nothing is lost and nothing is added quietly. Every line of `lyrics.txt` is there exactly once, with its own words. A word Whisper did not hear stays in the line as estimated. When a line does not fit `lyrics.txt` (a word missing, the line missing, or found nowhere), the page shows it as **check**. When Whisper heard singing that `lyrics.txt` does not have, a repeat for example, it becomes an **ad-lib**: a proposal no clip sings until you choose **Sing it**. A line Whisper hears twice at the same place makes no ad-lib.
 
-**Den Song in die Bibliothek:** **Put the song into the library…** kopiert den Song, die Lyrics, die sechs Stems, die Analyse, das Transkript und das gespeicherte Timing in die Bibliothek (`library/songs/<id>/`), mit jeder von Hand gesetzten Zeile. Erst speichern: Der Knopf ist gesperrt, solange verschobene Zeilen ungespeichert sind. Ein neues Projekt nimmt den Song mit `bun run init` (die Songs der Bibliothek stehen dort zuerst) oder `bun run import-song <id> <song>` und fängt bei der Story an: Am Song wird nichts mehr neu gemacht. Jedes Projekt bekommt eine Kopie, eine spätere Änderung am Timing ändert weder die Bibliothek noch andere Projekte. Ein Song, den die Bibliothek schon hat, wird nie überschrieben. Im Terminal: `bun run export-song <id> [--as=<song-id>] [--name=<name>]`.
+**Back to automatic** sets a line placed by hand back to the automatic alignment, **All back to automatic** all of them. The alignment is computed again from the saved transcript; Whisper does not run again.
 
-## Die Einstellungen eines Projekts ändern
+**Save** keeps the cuts: the vocals of every clip are computed again from the new times, only beats with changed clips lose their shot plan. **Save and plan** plans them again at once. **Save and cut the song again…** cuts the song again around the new times (`--redo=timeline`) and plans every shot again - that takes a while. Moved lines count as placed by hand, no longer as estimated. The times are in `project.json` (`lyricsTiming`) until `lyrics.txt` changes or `--redo=lyricsTiming` aligns again.
 
-Die Seite **Settings** enthält die Render-Einstellungen des Projekts, also das, was sonst in seiner `config.json` steht: den **Video workflow** (etwa `h3-ref2video-prism-2pass` statt `h3-ref2video-2pass`), die Workflows für Bilder und Sheets, die Größe von Video und Bildern, das Seitenverhältnis, Continuity und Context frames, den Seed, die Wiederholungen und die Bildrate des fertigen Videos. In der Gruppe **Finish** schaltest du den Finish des fertigen Videos ein und stellst jeden Wert einzeln ein: Schwarz- und Weißpunkt, Kontrast, Sättigung, Schärfe, **Colour match** mit seinem Referenz-Clip und **Film grain** (etwa 3 ist leicht). Solange Finish aus ist, sind die Felder gesperrt. Jede Einstellung sagt, was sie tut und was ihr Standard ist. **Use the default** geht auf den Standard zurück, **Undo** auf das, was das Projekt hatte.
+**In the terminal:** `bun run timing <id>` lists every line with its start and end. `--json > timing.json` writes the times of the words to a file; move `start` and `end` and give it back with `--set=timing.json`. Lines given back unchanged do not count as changed. When a cut then falls into a word, the command says so and names `--redo=timeline`. `--reset=12,40` or `--reset=all` sets lines placed by hand back to the automatic alignment, `--on=N` sings an ad-lib. The list names ad-libs and lines that do not fit `lyrics.txt`.
 
-1. Ändere, was du brauchst. Eine geänderte Einstellung hat links einen farbigen Balken.
-2. Klicke **Save**. Die Frage davor sagt, was sich ändert und **wie viele gerenderte Clips und Bilder dadurch stale werden**. Workflow, Größe und Seitenverhältnis gehören zu dem, woraus ein Clip gemacht wird: Ändert sich eines davon, ist der Clip stale. Andere Einstellungen, etwa die Wiederholungen oder die Bildrate des fertigen Videos, machen nichts stale.
-3. Durch das Speichern wird **nichts gerendert**. Die Timeline zeigt danach, welche Clips stale sind, und du renderst sie, wann du willst.
+**The song into the library:** **Put the song into the library…** copies the song, the lyrics, the six stems, the analysis, the transcript and the saved timing into the library (`library/songs/<id>/`), with every line placed by hand. Save first: the button is locked while moved lines are not saved. A new project takes the song with **New music video** on the start page, `bun run init <id> --library-song=<song>` or `bun run import-song <id> <song>`, and starts at the story: nothing of the song is made again. Every project gets a copy; a later change of the timing changes neither the library nor other projects. A song the library has is never overwritten. In the terminal: `bun run export-song <id> [--as=<song-id>] [--name=<name>]`.
 
-> **Vorsicht bei Continuity und Context frames:** Sie bestimmen mit, wie lang ein Clip höchstens sein darf (ein Clip, der auf dem letzten Frame des vorigen beginnt, wird um die Context frames kürzer geplant). Ändert sich diese Länge, schneidet der nächste Planlauf den Song neu und plant dabei jeden Shot neu, auch wo sich nichts geändert hätte. Danach sind alle Clips stale, und die Regie-Anweisungen müssen geprüft werden (siehe [Nach einer Neuplanung](#nach-einer-neuplanung)). Dass nur neu geplant wird, was die Änderung betrifft, ist Issue #781.
+## Changing the settings of a project
 
-Ein falscher Wert wird abgelehnt, mit denselben Worten wie beim Start eines Laufs. Ein sehr hoher Wert wird nur angemerkt, nie gekürzt. Solange ein Lauf an dem Projekt arbeitet, wird nichts geschrieben: Warte, bis er fertig ist.
+The **Settings** page has the render settings of the project, what its `config.json` holds otherwise: the **Video workflow** (for example `h3-ref2video-prism-2pass` instead of `h3-ref2video-2pass`), the workflows for pictures and sheets, the size of video and pictures, the aspect ratio, continuity and context frames, the seed, the retries, the language model of the project, and the frame rate of the finished video. In the group **Finish** you switch the finish of the finished video on and set each value on its own: black and white point, contrast, saturation, sharpness, **Colour match** with its reference clip, and **Film grain** (about 3 is light). While the finish is off, these fields are locked. Every setting says what it does and what its default is. **Use the default** goes back to the default, **Undo** to what the project had.
 
-**Im Terminal:** `bun run config <id>` zeigt die Einstellungen, `--set=videoWorkflow=h3-ref2video-prism-2pass` ändert eine (mehrfach möglich), `--unset=seed` nimmt eine aus der Datei. Beim Film kommt `--film` dazu. Andere Schlüssel der `config.json`, etwa die Sänger, änderst du auf der Seite, zu der sie gehören, oder von Hand.
+1. Change what you need. A changed setting has a coloured bar on its left.
+2. Click **Save**. The question before it says what changes and **how many rendered clips and pictures turn stale by it**. The workflow, the size and the aspect ratio are part of what a clip is made from: when one of them changes, the clip is stale. Other settings - the retries, the frame rate of the finished video - make nothing stale.
+3. Saving **renders nothing**. The timeline then shows which clips are stale, and you render them when you want.
 
-## Ein älteres Projekt aufwerten
+> **Careful with continuity and context frames:** they decide how long a clip may be at most (a clip that starts on the last frame of the one before is planned shorter by the context frames). When that length changes, the next plan run cuts the song again and plans every shot again, also where nothing would have changed. Every clip is stale afterwards, and the direction's instructions have to be checked (see [After the shots are planned again](#after-the-shots-are-planned-again)). Planning again only what the change concerns is issue #781.
 
-![Refinish-Dialog](images/workspace/refinish.jpg)
+A wrong value is refused, in the same words as at the start of a run. A very high value is only remarked on, never lowered. While a run works on the project, nothing is written: wait until it is done.
 
-**Refinish** in der Leiste über den Spuren macht ein fertiges Projekt größer, flüssiger und farblich wie die neueren, aus den vorhandenen Clips. Es läuft kein Plan und kein Prompt ändert sich. `videos/` und das fertige Video bleiben, wie sie sind: Jede Variante bekommt einen eigenen Ordner und eigene Dateinamen.
+**In the terminal:** `bun run config <id>` shows the settings, `--set=videoWorkflow=h3-ref2video-prism-2pass` changes one (several times if you like), `--unset=seed` takes one out of the file. For a film add `--film`. Other keys of `config.json`, such as the singers, are changed on the page they belong to, or by hand.
 
-| Auswahl | Was passiert | Aufwand |
+## Making an older project over
+
+![The Refinish dialog](images/workspace/refinish.jpg)
+
+**Refinish** in the bar above the lanes makes a finished project larger, smoother and graded like the newer ones, from the clips it has. No plan runs and no prompt changes. `videos/` and the finished video stay as they are: every variant gets a folder and file names of its own.
+
+| Choice | What happens | Cost |
 |---|---|---|
-| **Grade and sharpen only** | Farbe und Schärfe | keine GPU |
-| **48 fps, grade and sharpen** | dazu Zwischenbilder | etwa 15 Minuten für 37 Clips auf der Radeon |
-| **Full HD by a refine pass, 48 fps, grade and sharpen** | dazu der zweite Render-Pass auf jedem Clip | etwa 6 s pro Frame auf der Radeon, also viele Stunden für ein ganzes Projekt |
-| **Say it one by one** | alles einzeln wählen | |
+| **Grade and sharpen only** | colour and sharpness | no GPU |
+| **48 fps, grade and sharpen** | in-between frames too | about 15 minutes for 37 clips on the Radeon |
+| **Full HD by a refine pass, 48 fps, grade and sharpen** | the second render pass on every clip too | about 6 s per frame on the Radeon, so many hours for a whole project |
+| **Say it one by one** | choose everything on its own | |
 
-Unter der Auswahl steht, was der Finish tun wird, etwa *grade, sharpen 0.4, grain 3*. Körnung und Colour match stellst du auf **Settings** ein; der Link dorthin schließt den Dialog. Ist der Finish dort aus, nimmt Refinish den milden.
+Below the choice it says what the finish will do, for example *grade, sharpen 0.4, grain 3*. Grain and colour match are set on **Settings**; the link there closes the dialog. With the finish off there, Refinish takes the mild one.
 
-So gehst du sinnvoll vor:
+A sensible way:
 
-1. **Einen oder zwei Clips markieren**, am besten einen mit Gesang. Mit Markierung entstehen nur die größeren Clips, kein fertiges Video. Das lohnt sich also nur mit einer Variante, die vergrößert: Ohne Vergrößerung entsteht dabei gar nichts.
-2. **Refinish** öffnen und die Variante starten.
-3. Im Reiter **Render** unter **Larger versions** auf **Compare with the original** klicken und **mit Ton** ansehen. Refine kann Münder leicht verändern. Prüfe auch Clips mit *Goes on*, weil jeder Clip für sich bearbeitet wird und es am Übergang springen kann.
-4. Passt es, ohne Markierung für das ganze Projekt starten. Fertige Clips werden nicht noch einmal gemacht.
+1. **Mark one or two clips**, best one with singing. With marked clips only the larger clips are made, no finished video - so this is only worth it with a variant that makes them larger: without that nothing is made at all.
+2. Open **Refinish** and start the variant.
+3. In the **Render** tab under **Larger versions** click **Compare with the original** and watch **with the sound**. A refine can change mouths a little. Check clips that *go on* too, because every clip is worked on by itself and the join can jump.
+4. When it fits, start it for the whole project without marks. Clips already done are not made again.
 
-Die Varianten erscheinen in der Auswahl neben der Abspielzeit als **Clips: refine-fullhd** und die fertigen Videos als **Refinish refine-fullhd 48 fps finished**. Die Optionen für das Terminal stehen in der [README](../README.md#making-an-older-project-over).
+The variants appear in the choice next to the play time as **Clips: refine-fullhd**, the finished videos as **Refinish refine-fullhd 48 fps finished**. The options for the terminal are in the [README](../README.md#making-an-older-project-over).
 
-## Vor dem Veröffentlichen: der Reiter Post-work
+## Before publishing: the Post-work tab
 
-Alles, was vor dem Veröffentlichen mit einem fertigen Video passiert, steht im Reiter **Post-work**: in der empfohlenen Reihenfolge **AI marker**, **Title card and credits**, **Intro** und **YouTube text**. Jeder Schritt ist eine Karte mit seinem Formular. Offen ist der erste, der noch nicht gemacht ist; ein gemachter Schritt trägt *made*.
+Everything done to a finished video before it is published is on the **Post-work** tab, in the order recommended: **AI marker**, **Title card and credits**, **Intro** and **YouTube text**. Every step is a card with its form. The first one not made yet is open; a step is *made* once any video of the project went through it, and its head names the newest such file.
 
-Jeder Schritt startet von dem, was der vorige geschrieben hat, sobald es das gibt: die Credits vom gekennzeichneten Video, das Intro vom Video mit Credits, der YouTube-Text vom neuesten. Unter **From** kannst du das ändern.
+Every step starts from what the step before wrote, once there is one: the credits from the labelled video, the intro from the video with credits, the YouTube text from the newest. **From** changes that.
 
-Rechts unter **What the steps made** stehen die Videos der Schritte und jedes Video mit YouTube-Text. Das gewählte spielt erst, wenn du es startest, darunter steht sein YouTube-Text mit **Copy**. Auf der Timeline erscheinen diese Videos nicht mehr: Dort läuft das Musikvideo selbst mit seinen Versionen, und **Post-work** in der Leiste führt hierher.
+On the right, **What the steps made** lists the videos of the steps and every video with a YouTube text. The chosen one plays only when you start it; below it is its YouTube text with **Copy**. These videos are not on the timeline: there the music video itself plays with its versions, and **Post-work** in its bar leads here.
 
-## Vor dem Veröffentlichen: die KI-Kennzeichnung
+**For a video editor**, below it, gives a music video's timeline to cut further elsewhere: **Shotcut / Kdenlive** and **OpenShot** write `timeline.mlt` or `timeline.osp` (the rendered clips on one track, the song under them). They can be pressed when that run has nothing to plan first and every clip is rendered. A film writes `output/timeline.edl` when it is assembled; the card shows it once it is there.
 
-**AI marker**, der erste Schritt auf **Post-work**, legt eine Kennzeichnung über ein fertiges Video, als neues Video daneben: `<name>-labeled.mp4`. Das Ausgangsvideo bleibt, wie es ist.
+## Before publishing: the AI marker
 
-1. **From**: welches Video. Gibt es ein fertiges, ist es gewählt.
-2. **Marker**: ein EU-Symbol für KI-erzeugte Inhalte (*AI GENERATED*, *AI MODIFIED* oder *AI*, weiß oder schwarz, deckend oder zu 50 % durchsichtig), oder *A PNG of my own* mit seinem Pfad.
-3. **When**: nur am Anfang (genug für ein Musikvideo oder einen Film, also ein künstlerisches Werk), am Anfang und dann in Abständen wieder, oder die ganze Zeit. Dann Ecke, Höhe und Rand.
-4. **Keep these settings for this project** schreibt sie in die `config.json`, das Formular öffnet beim nächsten Mal mit ihnen. **Keep them for every project** schreibt sie in die Einstellungsdatei.
+**AI marker**, the first step on **Post-work**, lays a marker over a finished video, as a new video next to it: `<name>-labeled.mp4`. The video it starts from stays as it is.
 
-Das läuft auf diesem Rechner, ohne GPU, etwa so lange, wie das Video dauert. Das neue Video erscheint rechts unter **What the steps made** als *… + AI label*. Warum und wann so eine Kennzeichnung nötig ist: [docs/postwork.md](postwork.md).
+1. **From**: which video. When there is a finished one, it is chosen.
+2. **Marker**: an EU icon for AI-generated content (*AI GENERATED*, *AI MODIFIED* or *AI*, white or black, opaque or 50 % see-through), or *A PNG of my own* with its path.
+3. **When**: only at the start (enough for a music video or a film, an artistic work), at the start and then again at intervals, or all the time. Then the corner, the height and the margin.
+4. **Keep these settings for this project** writes them into `config.json`; the form opens with them next time. **Keep them for every project** writes them into the settings file.
 
-**Im Terminal:** `bun run label <id>` mit denselben Wahlmöglichkeiten als Optionen (`--marker=`, `--mode=`, `--corner=`, …).
+It runs on this machine, without a GPU, about as long as the video lasts. The new video appears on the right under **What the steps made** as *… + AI label*. Why and when such a marker is needed: [docs/postwork.md](postwork.md).
 
-## Vor dem Veröffentlichen: Titelkarte und Abspann
+**In the terminal:** `bun run label <id>` with the same choices as options (`--marker=`, `--mode=`, `--corner=`, …).
 
-**Title card and credits** auf **Post-work** setzt eine Titelkarte vor ein fertiges Video und danach einen Abspann, der nach oben läuft: `<name>-credits.mp4`.
+## Before publishing: title card and credits
 
-- **Title card**: der Titel (leer: der des Projekts), der Künstler, beim Film wer Regie geführt hat, der Hinweis (*Contains AI-generated content*) und, wenn du willst, die KI-Kennzeichnung darunter.
-- **Credits**: noch einmal der Titel, deine eigenen Zeilen (eine pro Zeile: Dank, Links, dein Kanal) und womit es gemacht wurde: das Sprachmodell, die Modelle, die Grafikkarten. Das kommt aus dem, was dieses Projekt wirklich benutzt hat, nichts ist erfunden. Deine eigenen Worte zur Hardware stehen danach.
-- Ein Ton unter dem Abspann (ein Pfad), sonst Stille. Bei den Längen bedeutet 0 für den Abspann etwa 1,5 s pro Zeile.
+**Title card and credits** on **Post-work** puts a title card before a finished video and credits after it that scroll up: `<name>-credits.mp4`.
 
-Behältst du deinen Namen und deine Zeilen für jedes Projekt, braucht das nächste Video nur einen Klick. Der Lauf zeigt den Abspann Zeile für Zeile, bevor er ihn zeichnet.
+- **Title card**: the title (empty: the project's), the artist - for a film who directed it -, the disclosure (*Contains AI-generated content*) and, if you like, the AI marker below it.
+- **Credits**: the title again, lines of your own (one per line: thanks, links, your channel) and what it was made with: the language model, the models, the graphics cards. That comes from what this project really used; nothing is made up. Your own words on the hardware follow it.
+- A sound under the credits (a path), else silence. For the lengths, 0 for the credits means about 1.5 s per line.
 
-**Im Terminal:** `bun run credits <id> [--artist=…] [--line=…] [--dry-run]`.
+When you keep your name and your lines for every project, the next video needs only a click. The run shows the credits line by line before it draws them.
 
-## Vor dem Veröffentlichen: ein Intro
+**In the terminal:** `bun run credits <id> [--artist=…] [--line=…] [--dry-run]`.
 
-**Intro** auf **Post-work** setzt einen eigenen Clip, etwa ein Logo oder ein Kanal-Intro, vor ein fertiges Video: `<name>-intro.mp4`.
+## Before publishing: an intro
 
-- **From**: welches Video. Vorgewählt ist das letzte, das die Schritte davor gemacht haben, also das gekennzeichnete mit Credits: Die Kennzeichnung beginnt dann nach dem Intro.
-- **Intro**: der Pfad des Clips. Leer nimmt `input/intro.mp4` des Projekts; das Feld sagt, wenn es eins gibt.
-- **Fade**: wie viele Sekunden das Intro in das Video überblendet. 0 ist ein harter Schnitt.
+**Intro** on **Post-work** puts a clip of your own - a logo, a channel intro - before a finished video: `<name>-intro.mp4`.
 
-Das Intro wird wie das Video gemacht: dieselbe Größe und Bildrate, schwarze Balken bei einem anderen Seitenverhältnis, Stille, wenn es keinen Ton hat. Behältst du das Intro für jedes Projekt, braucht das nächste Projekt nur einen Klick.
+- **From**: which video. The last one the steps before made is chosen, the labelled one with credits: the marker then starts after the intro.
+- **Intro**: the path of the clip. Empty takes `input/intro.mp4` of the project; the field says when there is one.
+- **Fade**: how many seconds the intro fades into the video. 0 is a hard cut.
 
-**Im Terminal:** `bun run intro <id> [--file=<path>] [--fade=0.5]`.
+The intro is made like the video: the same size and frame rate, black bars for another aspect ratio, silence when it has no sound. When you keep the intro for every project, the next project needs only a click.
 
-## Tasten
+**In the terminal:** `bun run intro <id> [--file=<path>] [--fade=0.5]`.
 
-![Fenster mit allen Tasten und Begriffen](images/workspace/keys.jpg)
+## Keys
 
-`?` zeigt dieses Fenster auf jeder Timeline.
+![The window with every key and term](images/workspace/keys.jpg)
+
+`?` shows this window on every timeline.
