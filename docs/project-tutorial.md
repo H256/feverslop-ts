@@ -115,7 +115,7 @@ A good order for a new project: plan in stages - `bun index.ts <id> --until=stor
 [Planning in stages from the terminal](../README.md#planning-in-stages-from-the-terminal)) - then
 `--until=look --render=images` and check the pictures, then plan the shots (`bun index.ts <id>`),
 `--render=videos --only=slot-001` for one clip, then the rest. `--review` stops after story, cast, look and beats in one
-run instead. The same in the browser: `bun run editor <id>` - see [workspace-guide.md](workspace-guide.md) (in German).
+run instead. The same in the browser: `bun run editor <id>` - see [workspace-guide.md](workspace-guide.md).
 More: [recipes.md](recipes.md).
 
 ## Doing it again / differently

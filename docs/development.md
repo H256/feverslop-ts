@@ -61,8 +61,25 @@ redo; the format registry records the migration instead of adding another silent
 
 ## Tests and checks
 
-The Checks workflow runs the backend tests and typecheck on pushes and pull requests. Release publication depends on those
-checks, so create version tags only from green builds.
+### Before a pull request
+
+This is the one list (#842). The Checks workflow (`.github/workflows/ci.yml`) runs all of them but the last on pushes and
+pull requests - a lint error or a failing client test makes it red. Release publication depends on those checks, so create
+version tags only from green builds.
+
+```bash
+bun run test            # the backend and the pipeline, golden snapshots included
+bun run typecheck
+bun run lint            # errors fail; warnings are listed
+bun run format:check
+bun run client:check    # the page's types
+bun run client:test     # the page's unit tests
+bun run test:workspace  # builds the page, then the real editor serving it
+bun run client:e2e      # by hand: Playwright against the built page (once: node client/node_modules/@playwright/test/cli.js install chromium)
+```
+
+The Playwright run is the one check not in CI: the runner has no browser installed. Run it before a pull request that
+changes the page.
 
 ### Workspace startup without a configured machine
 

@@ -30,16 +30,8 @@ There is no CDN, Vite dev-server dependency, API proxy or second production serv
 
 ## Checks
 
-```sh
-bun run client:check
-bun run client:test
-bun test ./lib/editor
-bun run test:workspace   # builds, then the real editor with its page
-bun run typecheck
-# Once per developer/CI browser environment:
-node client/node_modules/@playwright/test/cli.js install chromium
-bun run client:e2e
-```
+The checks before a pull request are listed in one place: [docs/development.md](../docs/development.md#before-a-pull-request).
+The page's own are `bun run client:check`, `bun run client:test`, `bun run test:workspace` and, by hand, `bun run client:e2e`.
 
 The browser check builds and installs the production artifact, starts the real Bun editor
 with a temporary empty project directory, and verifies navigation, direct URLs, local-only
