@@ -67,6 +67,7 @@ export function formatReport(report: StatsReport, options: {width?: number; deta
                 line(row.key)
                 line(`  ${row.calls} calls · ${row.complete} complete / ${row.partial} partial / ${row.missing} missing usage`)
                 line(`  in ${number(row.prompt)} · out ${number(row.completion)} · cached ${number(row.cached)} · reasoning ${number(row.reasoning)}`)
+                if (row.instructionCalls) line(`  instructions ${number(Math.round(row.instructions / row.instructionCalls))} characters per call`)
             }
         }
     return lines.join('\n').trim()

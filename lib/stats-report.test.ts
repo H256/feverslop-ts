@@ -110,3 +110,15 @@ test('automatic baselines skip cold-only groups and unknown workloads are not co
     expect(report.renders.find(r => r.key === 'C')).toMatchObject({baseline: 'B', changePercent: -50})
     expect(report.renders.find(r => r.key === 'D')?.changePercent).toBeUndefined()
 })
+
+test('the size of the instructions per step: their characters per call, of the calls that said it (#825)', () => {
+    const llm = (step: string, instructionChars?: number) => clip(5, {kind: 'llm', name: 'm', step, ...(instructionChars ? {instructionChars} : {})})
+    const report = buildReport([llm('shotPlan', 60000), llm('shotPlan', 40000), llm('shotPlan'), llm('summary', 3000)], {kind: 'llm'})
+    expect(report.tokens.step.map(r => [r.key, r.instructions, r.instructionCalls])).toEqual([
+        ['shotPlan', 100000, 2],
+        ['summary', 3000, 1],
+    ])
+    const text = formatReport(report, {details: true})
+    expect(text).toContain('instructions 50,000 characters per call')
+    expect(text).toContain('instructions 3,000 characters per call')
+})
