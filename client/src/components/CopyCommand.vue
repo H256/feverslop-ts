@@ -22,7 +22,7 @@ onScopeDispose(() => clearTimeout(timer))
   <div class="cmd">
     <code
       ><template v-for="(word, n) in words" :key="n"
-        >{{ n ? ' ' : '' }}<span style="display: inline-block">{{ word }}</span></template
+        >{{ n ? ' ' : '' }}<span class="u-inline">{{ word }}</span></template
       ></code
     >
     <button title="Copy" aria-label="Copy" @click="copy"><template v-if="copied">✓</template><AppIcon v-else name="copy" /></button>

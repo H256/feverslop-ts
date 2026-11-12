@@ -37,9 +37,7 @@ const leave = () => current.value?.answer(false)
           <option v-for="[value, label] in FPS" :key="value" :value="value">{{ label }}</option>
         </select></FormField
       >
-      <label class="field" style="display: flex; gap: var(--space-2)"
-        ><input v-model="draft.finish" type="checkbox" /><span style="margin: 0">Grade and sharpen</span></label
-      >
+      <label class="field field-check"><input v-model="draft.finish" type="checkbox" /><span>Grade and sharpen</span></label>
     </div>
     <p v-if="draft.preset !== 'custom' || draft.finish" class="muted rf-finish">
       The finish: {{ finish ?? 'as the settings have it' }}. <RouterLink :to="settings" @click="leave">Change it on Settings</RouterLink> - grain and colour

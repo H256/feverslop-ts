@@ -251,7 +251,7 @@ onMounted(() => {
               title="Barely found in the transcript: the times are spread over the line, a guess"
               >estimated</span
             >
-            <span v-if="draft.isChanged(draft.line.value)" class="chip" style="color: var(--accent)">moved</span>
+            <span v-if="draft.isChanged(draft.line.value)" class="chip u-accent">moved</span>
             <span
               v-if="draft.line.value.adlib"
               class="chip stale"

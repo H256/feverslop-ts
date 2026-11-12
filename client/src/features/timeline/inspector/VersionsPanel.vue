@@ -52,9 +52,7 @@ const frameOf = (version: ClipVersionView) => (version.firstFrame ? {file: versi
       :about="about(version)"
       @view="viewer.open(frameOf(version)!, session.roots, 'Older version', clip.id)"
     >
-      <template #note
-        ><div v-if="version.fromThisPlan === false" class="muted" style="color: var(--stale)">Made from another plan: it will count as stale.</div></template
-      >
+      <template #note><div v-if="version.fromThisPlan === false" class="muted u-stale">Made from another plan: it will count as stale.</div></template>
       <button v-if="clip.video" class="btn" @click="compare(version)">Compare</button>
       <button class="btn" @click="actions.pickVersion(clip, version)">Make current</button>
     </VersionCard>

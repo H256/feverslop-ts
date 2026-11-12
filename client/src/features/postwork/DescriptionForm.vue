@@ -15,16 +15,12 @@ defineProps<{draft: DescriptionDraft; finals: {file: string; label: string}[]}>(
         <option v-for="final in finals" :key="final.file" :value="final.file">{{ final.label }} ({{ final.file }})</option>
       </select>
     </FormField>
-    <label class="field" style="display: flex; gap: var(--space-2)"
-      ><input v-model="draft.story" type="checkbox" /><span style="margin: 0">A teaser of the story, written by the language model</span></label
+    <label class="field field-check"><input v-model="draft.story" type="checkbox" /><span>A teaser of the story, written by the language model</span></label>
+    <label v-if="draft.story" class="field field-check"
+      ><input v-model="draft.newStory" type="checkbox" /><span>Write the teaser again (else the one written before for this video stays)</span></label
     >
-    <label v-if="draft.story" class="field" style="display: flex; gap: var(--space-2)"
-      ><input v-model="draft.newStory" type="checkbox" /><span style="margin: 0"
-        >Write the teaser again (else the one written before for this video stays)</span
-      ></label
-    >
-    <label class="field" style="display: flex; gap: var(--space-2)"
-      ><input v-model="draft.facts" type="checkbox" /><span style="margin: 0">How it was made: hardware, models, measured time per phase</span></label
+    <label class="field field-check"
+      ><input v-model="draft.facts" type="checkbox" /><span>How it was made: hardware, models, measured time per phase</span></label
     >
     <FormField label="Your words on the hardware (after the graphics cards)">
       <input v-model="draft.hardware" type="text" placeholder="LLM: Strix Halo, 128 GB" />

@@ -21,7 +21,7 @@ const custom = () => {
 <template>
   <div class="section">
     <h3>Render a part again</h3>
-    <div v-if="clip.shots.length > 1" class="btn-row" style="margin-bottom: 6px">
+    <div v-if="clip.shots.length > 1" class="btn-row u-mb-1">
       <button
         v-for="shot in shots"
         :key="shot.n"
@@ -33,9 +33,9 @@ const custom = () => {
       </button>
     </div>
     <div class="btn-row">
-      <input v-model.number="from" type="number" min="0" :max="seconds" step="0.1" style="width: 76px" aria-label="From second" />
+      <input v-model.number="from" type="number" min="0" :max="seconds" step="0.1" aria-label="From second" class="u-num" />
       <span class="muted">to</span>
-      <input v-model.number="to" type="number" min="0" :max="seconds" step="0.1" style="width: 76px" aria-label="To second" />
+      <input v-model.number="to" type="number" min="0" :max="seconds" step="0.1" aria-label="To second" class="u-num" />
       <span class="muted">s</span>
       <button class="btn" @click="custom">Render this part</button>
     </div>

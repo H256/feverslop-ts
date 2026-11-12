@@ -43,17 +43,17 @@ const effects = computed(() => {
 <template>
   <div>
     <h2>Timing of the lyrics</h2>
-    <p class="muted" style="margin-bottom: 10px">
+    <p class="muted u-mb-2">
       Where the words are sung, from the alignment with the transcript. A line it barely found is only spread over the line: estimated.
     </p>
-    <FactList :facts="KEYS" style="margin-bottom: 12px" />
-    <div v-if="early" class="note" style="margin-bottom: 10px">
+    <FactList :facts="KEYS" class="u-mb-3" />
+    <div v-if="early" class="note u-mb-2">
       {{ plural(early, 'line') }} start{{ early === 1 ? 's' : '' }} before the singing does: the box of the first word covers silence.
-      <div class="btn-row" style="margin-top: 6px">
+      <div class="btn-row u-mt-1">
         <button class="btn" @click="$emit('tighten')">{{ early === 1 ? 'Tighten the start' : `Tighten the ${early} starts` }}</button>
       </div>
     </div>
-    <div v-if="outdated.length" class="warn" style="margin-bottom: 10px">
+    <div v-if="outdated.length" class="warn u-mb-2">
       {{ plural(outdated.length, 'clip') }} still {{ outdated.length === 1 ? 'has' : 'have' }} the old times of a moved line in
       {{ outdated.length === 1 ? 'its' : 'their' }} prompt: {{ outdated.join(', ') }}. A plan run writes {{ outdated.length === 1 ? 'it' : 'them' }} again{{
         replanned.length
@@ -82,7 +82,7 @@ const effects = computed(() => {
         </div>
       </template>
       <template #more>
-        <div class="btn-row" style="margin-top: 8px">
+        <div class="btn-row u-mt-2">
           <button
             class="btn"
             :disabled="busy"
@@ -95,8 +95,8 @@ const effects = computed(() => {
       </template>
     </PlanChanges>
     <!-- apart from the changes: the saved timing goes into the library, so it is there with nothing moved -->
-    <h3 style="margin-top: 16px">The song in the library</h3>
-    <p class="muted" style="margin-bottom: 8px">
+    <h3 class="u-mt-4">The song in the library</h3>
+    <p class="muted u-mb-2">
       The song, its lyrics, its stems and the saved timing - with what was placed by hand - for another video of the song, which then starts at the story. A
       song the library has is never overwritten: a later state goes in under another id.
     </p>

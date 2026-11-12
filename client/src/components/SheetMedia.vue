@@ -30,7 +30,7 @@ const viewer = useViewer()
   <slot />
   <div v-if="item.video" class="section">
     <h3>Sequence</h3>
-    <video :key="item.video.file" :src="mediaUrl(item.video, roots)" controls preload="metadata" style="width: 100%" />
+    <video :key="item.video.file" :src="mediaUrl(item.video, roots)" controls preload="metadata" class="u-wide" />
   </div>
   <div v-if="item.frames.length" class="section">
     <h3>Views</h3>

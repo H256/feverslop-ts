@@ -60,6 +60,6 @@ const REVIEW = [
         <dd>{{ text }}</dd></template
       >
     </dl>
-    <div class="btn-row" style="justify-content: flex-end; margin-top: 12px"><button class="btn" @click="modal?.close()">Close</button></div>
+    <div class="btn-row u-end u-mt-3"><button class="btn" @click="modal?.close()">Close</button></div>
   </ModalDialog>
 </template>

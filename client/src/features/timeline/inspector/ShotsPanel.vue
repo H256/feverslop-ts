@@ -13,7 +13,7 @@ const {project, session, direct} = useTimeline()
   <div v-if="clip.context.text || clip.context.staging" class="section">
     <h3>{{ clip.context.label }}</h3>
     <p v-if="clip.context.text">{{ withNames(clip.context.text) }}</p>
-    <p v-if="clip.context.staging" class="muted" style="margin-top: 4px">{{ withNames(clip.context.staging) }}</p>
+    <p v-if="clip.context.staging" class="muted u-mt-1">{{ withNames(clip.context.staging) }}</p>
   </div>
   <div class="section">
     <h3>Shots</h3>
@@ -40,11 +40,7 @@ const {project, session, direct} = useTimeline()
   <div v-if="clip.lines.length" class="section">
     <h3>
       {{ project.kind === 'film' ? 'Dialogue' : 'Sung' }}
-      <RouterLink
-        v-if="project.sings"
-        class="link"
-        style="margin-left: 8px; font-family: var(--sans); text-transform: none; letter-spacing: 0"
-        :to="`${session.root}/singers#line-${clip.lines[0]!.line}`"
+      <RouterLink v-if="project.sings" class="link u-sans u-plain u-ml-2" :to="`${session.root}/singers#line-${clip.lines[0]!.line}`"
         >Change singers</RouterLink
       >
     </h3>
