@@ -65,7 +65,7 @@ import {settingsView} from '../setup-options.ts'
 import {runSetup} from './setup-run.ts'
 import {createFilm, createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
-import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts'
+import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection, shotPeople} from '../direction/service.ts'
 
 // The workspace's server: one HTML page, what it shows of the projects as JSON, and their pictures, videos and sound. What it changes
 // goes through the CLI (RunControl) or under the project's lock; it keeps nothing but thumbnails and waveforms in memory.
@@ -493,6 +493,10 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     version?: string
                     rebuild?: boolean
                     servers?: string[]
+                    shotId?: string
+                    add?: string[]
+                    remove?: string[]
+                    words?: string
                 }>()
                 if (asked.rebuild && runs.current(target)?.running) return refused(busy('a run is going on'))
                 const rebuilt = async <V extends object>(view: V, when = true) =>
@@ -504,7 +508,20 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     return json(await rebuilt(view, !view.pending && !view.unresolved.length))
                 }
                 if (id === 'take') return json(await rebuilt(await takeDirection(target, {despiteConflicts: !!asked.despiteConflicts})))
-                if (id === 'drop') return json(await dropDirection(target))
+                // a drop rebuilds only when asked: people taken out for a proposal to write were not built yet
+                if (id === 'drop') return json(await rebuilt(await dropDirection(target)))
+                // people into one shot or out of it, and the run that follows - one request (#830): bun run direction --scope=shot:… --with|--without
+                if (id === 'people') {
+                    if (runs.current(target)?.running) return refused(busy('a run is going on'))
+                    const {view, propose} = await shotPeople(target, {
+                        shotId: asked.shotId ?? '',
+                        ...(asked.add ? {add: asked.add} : {}),
+                        ...(asked.remove ? {remove: asked.remove} : {}),
+                        ...(asked.words ? {words: asked.words} : {}),
+                    })
+                    const run = runs.start(target, propose ? {type: 'direction'} : {type: 'plan'}, await urlsOfChoice(asked.servers))
+                    return json({...view, run, proposing: propose})
+                }
                 if (id === 'restore') return json(await rebuilt(await restoreDirection(target, asked.version ?? '')))
                 return notFound()
             }

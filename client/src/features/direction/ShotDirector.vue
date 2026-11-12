@@ -78,9 +78,10 @@ const take = () =>
   })
 const drop = () =>
   work(async () => {
-    await api.dropDirection()
-    // the people were taken out without building the prompts, for the proposal to do it: dropped, they are built now
-    if (unbuilt.value) await start({type: 'plan'})
+    // the people were taken out without building the prompts, for the proposal to do it: dropped, they are built now - one request
+    const rebuild = unbuilt.value
+    if (rebuild) await changing(servers => api.dropDirection(servers))
+    else await api.dropDirection()
     unbuilt.value = false
   })
 const saveEdits = (next: DirectionEdit[]) =>
@@ -90,33 +91,15 @@ const saveEdits = (next: DirectionEdit[]) =>
 // several people out of the shot in one go (#790), or people of the cast brought in (#792): one save, then one run - the prompts built
 // again, or, when the shot's words still name them or leave them nothing to do, one proposal that writes it (taking it builds them)
 const unbuilt = ref(false)
-const bringIn = (ids: string[], words: string) =>
+// the server saves the edits (and the words as an instruction on the shot) and starts what follows in the same request (#830): a
+// proposal that writes the shot when its words name who left or give who came nothing to do, else the prompts built again
+const people = (change: {add?: string[]; remove?: string[]; words?: string}) =>
   work(async () => {
-    // taken out of this shot by an edit: that edit goes, and they are back where the plan has them - nothing to write
-    const outHere = (e: DirectionEdit) => !!e.remove && ids.includes(e.remove) && e.scope.kind === 'shot' && e.scope.id === props.shotId
-    const back = (view.value?.edits ?? []).filter(outHere).map(e => e.remove!)
-    const added: DirectionEdit[] = ids.filter(id => !back.includes(id)).map(add => ({id: crypto.randomUUID(), scope: {kind: 'shot', id: props.shotId}, add}))
-    const saved = await api.saveDirectionEdits([...(view.value?.edits ?? []).filter(e => !outHere(e)), ...added])
-    // what they do there, in the director's words: an instruction on the shot, for the one person when it is one
-    if (words)
-      await api.saveDirection([
-        ...saved.rules,
-        {id: crypto.randomUUID(), text: words, scope: {kind: 'shot', id: props.shotId}, ...(ids.length === 1 ? {characterId: ids[0]} : {})},
-      ])
-    if (words || saved.editIssues.some(i => i.shotId === props.shotId && i.mentions)) {
-      unbuilt.value = true
-      await start({type: 'direction'})
-    } else await start({type: 'plan'})
+    const done = await changing(servers => api.shotPeople({shotId: props.shotId, ...change}, servers))
+    if (done.proposing) unbuilt.value = true
   })
-const takeOut = (ids: string[]) =>
-  work(async () => {
-    const added: DirectionEdit[] = ids.map(remove => ({id: crypto.randomUUID(), scope: {kind: 'shot', id: props.shotId}, remove}))
-    const saved = await api.saveDirectionEdits([...(view.value?.edits ?? []), ...added])
-    if (saved.editIssues.some(i => i.shotId === props.shotId && i.mentions)) {
-      unbuilt.value = true
-      await start({type: 'direction'})
-    } else await start({type: 'plan'})
-  })
+const bringIn = (ids: string[], words: string) => people({add: ids, ...(words ? {words} : {})})
+const takeOut = (ids: string[]) => people({remove: ids})
 const sized = (size: DirectionSize) =>
   saveEdits([
     ...(view.value?.edits ?? []).filter(e => !(e.size && e.scope.kind === 'shot' && e.scope.id === props.shotId)),
@@ -172,7 +155,7 @@ const describeEdit = (e: DirectionEdit) => (e.remove ? `${nameOf(e.remove)} out 
           <div v-for="(issue, n) in issues" :key="n" class="row sd-issue">
             <span>{{ issue.message }}</span>
             <button v-if="issue.mentions" class="btn" :disabled="blocked" @click="proposeAgain">
-              {{ issue.message.includes('nothing to do') ? 'Write them in' : 'Rewrite the words' }}
+              {{ issue.idle ? 'Write them in' : 'Rewrite the words' }}
             </button>
           </div>
         </section>

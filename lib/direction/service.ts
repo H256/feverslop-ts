@@ -157,6 +157,7 @@ function withEdits(t: DirectionTarget, source: Data, copy: Data, s: State, issue
                 editId: e.id,
                 shotId: shot.id,
                 mentions: true,
+                idle: true,
                 message: `${nameOf(e.add!)} is in the shot with nothing to do yet - a preview writes where they are and what they do.`,
             })
         if (changed) put(t, copy, shot.id, data)
@@ -378,6 +379,40 @@ export async function setDirectionEdits(
         save(t, s)
         return readDirection(t)
     })
+}
+/**
+ * People taken out of one shot or brought into it (#790, #792, #830) - one save of the edits, and the director's words for what they do
+ * there as an instruction on the shot. A person brought back whom an edit of this shot had taken out loses that edit instead. Says
+ * whether the shot's words have to be written by a proposal (the words given, or the shot's text still names who left or gives who
+ * came nothing to do) - else the prompts are only built again. `bun run direction --scope=shot:ID --with=… | --without=… [--add=…]`
+ * and the Direction page both do it here.
+ */
+export async function shotPeople(
+    t: DirectionTarget,
+    input: {shotId: string; add?: string[]; remove?: string[]; words?: string},
+): Promise<{view: DirectionView; propose: boolean; back: string[]}> {
+    const add = input.add ?? [],
+        remove = input.remove ?? []
+    if (!add.length && !remove.length) throw Error('people to bring in (--with) or to take out (--without)')
+    let edits = readDirection(t).edits
+    const outHere = (e: DirectionEdit) => !!e.remove && add.includes(e.remove) && e.scope.kind === 'shot' && e.scope.id === input.shotId
+    const back = edits.filter(outHere).map(e => e.remove!)
+    edits = [
+        ...edits.filter(e => !outHere(e)),
+        ...add.filter(id => !back.includes(id)).map(id => ({id: randomUUID(), scope: {kind: 'shot' as const, id: input.shotId}, add: id})),
+        ...remove.map(id => ({id: randomUUID(), scope: {kind: 'shot' as const, id: input.shotId}, remove: id})),
+    ]
+    let view = await setDirectionEdits(t, {edits})
+    const words = input.words?.trim()
+    if (words && add.length)
+        view = await setDirectionRules(t, {
+            rules: [
+                ...view.rules,
+                {id: randomUUID(), text: words, scope: {kind: 'shot', id: input.shotId}, ...(add.length === 1 ? {characterId: add[0]} : {})},
+            ],
+        })
+    const propose = (!!words && add.length > 0) || view.editIssues.some(i => i.shotId === input.shotId && i.mentions)
+    return {view, propose, back}
 }
 export async function setDirectionRules(
     t: DirectionTarget,

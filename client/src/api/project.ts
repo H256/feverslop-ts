@@ -82,7 +82,11 @@ export function projectApi(root: string) {
       post<DirectionView & {run?: RunInfo}>('direction/edits', {edits, ...(rebuild ? {rebuild: true, ...rebuild} : {})}),
     takeDirection: (despiteConflicts: boolean, rebuild: {servers?: string[]}) =>
       post<DirectionView & {run?: RunInfo}>('direction/take', {despiteConflicts, rebuild: true, ...rebuild}),
-    dropDirection: () => post<DirectionView>('direction/drop', {}),
+    // rebuild: given when people were taken out for the proposal to write - dropped, the prompts are built now (#830)
+    dropDirection: (rebuild?: {servers?: string[]}) => post<DirectionView & {run?: RunInfo}>('direction/drop', rebuild ? {rebuild: true, ...rebuild} : {}),
+    // people into one shot or out of it, and the run that follows - the proposal that writes the shot, or the prompts built (#830)
+    shotPeople: (change: {shotId: string; add?: string[]; remove?: string[]; words?: string}, rebuild: {servers?: string[]}) =>
+      post<DirectionView & {run: RunInfo; proposing: boolean}>('direction/people', {...change, ...rebuild}),
     restoreDirection: (version: string, rebuild: {servers?: string[]}) =>
       post<DirectionView & {run?: RunInfo}>('direction/restore', {version, rebuild: true, ...rebuild}),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),
