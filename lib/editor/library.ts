@@ -10,6 +10,9 @@ import type {Project} from '../project.ts'
 import {filmDir, filmIds} from '../film/setup.ts'
 import type {FilmProject} from '../film/types.ts'
 import type {EditorTarget} from './project.ts'
+import {describeEntry, removeEntry, renameEntry, songUsers} from '../library-admin.ts'
+import {librarySongIds, readLibrarySong} from '../song-library.ts'
+import type {LibraryChange, LibrarySongEntry} from '../../shared/workspace.ts'
 
 // The asset library and casting.json as the workspace shows them. Taking something out of the library stays with the pipeline:
 // the page only changes the entry in casting.json, and the next run copies the asset, pins it and writes its texts.
@@ -30,7 +33,7 @@ import type {CastingRole} from '../../shared/workspace.ts'
 export type {CastingRole} from '../../shared/workspace.ts'
 
 /** Everything in the library, with who uses it: the library does not know that itself, every project's casting.json does. */
-export async function readLibrary(): Promise<{dir: string; assets: LibraryEntry[]}> {
+export async function readLibrary(): Promise<{dir: string; assets: LibraryEntry[]; songs: LibrarySongEntry[]}> {
     const dir = await libraryDir()
     const projects = [
         ...listProjects().map(id => ({kind: 'music' as const, id, casting: castingOf(projectDir(id))})),
@@ -70,7 +73,36 @@ export async function readLibrary(): Promise<{dir: string; assets: LibraryEntry[
             })
         }
     }
-    return {dir, assets}
+    // the songs (#835): listened to on the page, taken into a project with bun run import-song
+    const songs: LibrarySongEntry[] = []
+    for (const id of librarySongIds(dir)) {
+        const song = await readLibrarySong(dir, id)
+        if (!song) continue
+        songs.push({
+            id,
+            name: song.name,
+            seconds: song.music?.durationSec,
+            stems: Object.keys(song.stems ?? {}).length,
+            lines: song.lyricsTiming?.lines.length ?? 0,
+            byHand: song.lyricsTiming?.lines.filter(l => l.byHand).length ?? 0,
+            source: song.source,
+            audio: versioned(dir, `songs/${id}/${song.songFile}`),
+            usedBy: songUsers(song),
+        })
+    }
+    return {dir, assets, songs}
+}
+
+/** What `bun run library rename|describe|remove` does, asked by the Library page - the same functions (lib/library-admin.ts). */
+export async function changeLibrary(change: LibraryChange) {
+    const dir = await libraryDir()
+    if (change.action === 'rename') return {renamed: renameEntry(dir, change.kind, change.id, change.name)}
+    if (change.action === 'describe') {
+        await describeEntry(dir, change.kind, change.id, change.description)
+        return {described: true}
+    }
+    if (change.action === 'remove') return {putAway: removeEntry(dir, change.kind, change.id)}
+    throw new Error('no such change of the library')
 }
 
 type Cast = {characters: {id: string; name: string; role?: string; isGroup?: boolean; voiceOnly?: boolean}[]; locations: {id: string; name: string}[]}

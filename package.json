@@ -25,6 +25,7 @@
         "export-song": "bun tools/export-song.ts",
         "import-song": "bun tools/import-song.ts",
         "create-asset": "bun tools/create-asset.ts",
+        "library": "bun tools/library.ts",
         "styles:doc": "bun tools/styles-doc.ts",
         "typecheck": "bun tools/typecheck.ts",
         "test": "bun test ./lib ./comfy",

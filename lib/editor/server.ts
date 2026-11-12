@@ -17,7 +17,7 @@ import {readTimings} from '../timings.ts'
 import {loadFilmConfig} from '../film/config.ts'
 import {filmRenderConfig} from '../film/pictures.ts'
 import {filmDir, filmExists, filmIds} from '../film/setup.ts'
-import {readCasting, readLibrary, writeCastingEntry} from './library.ts'
+import {changeLibrary, readCasting, readLibrary, writeCastingEntry} from './library.ts'
 import {
     clipRequestId,
     type EditorKind,
@@ -55,7 +55,7 @@ import {readServers, urlsOfChoice} from './servers.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
-import {PROJECT_PAGES, type NewProject, type ProjectStatus} from '../../shared/workspace.ts'
+import {PROJECT_PAGES, type LibraryChange, type NewProject, type ProjectStatus} from '../../shared/workspace.ts'
 import {doctor} from '../doctor.ts'
 import {createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
@@ -551,6 +551,14 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             if (rest[0] === 'assets') return json(await readLibrary())
             if (rest[0] === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
             return notFound()
+        }
+        // renamed, described anew or put away: the command's functions (bun run library, #835)
+        if (rest[0] === 'change') {
+            try {
+                return json(await changeLibrary((await request.json()) as LibraryChange))
+            } catch (e) {
+                return refused(e)
+            }
         }
         if (rest[0] === 'create') {
             try {

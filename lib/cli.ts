@@ -82,6 +82,11 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Put the song of a project into the library: audio, lyrics, stems and the timing of every word.',
     },
     'import-song': {args: '<project-id> [song-id]', description: 'Take a song of the library into a project, or list the songs; the plan starts at the story.'},
+    library: {
+        args: '[--json] | rename <character|location|song> <id> <name> | describe <character|location> <id> <text> | remove <character|location|song> <id>',
+        description: 'List the library - characters, places, songs and who uses them - or rename, describe anew or put away one of them.',
+        json: true,
+    },
     'create-asset': {
         args: '<character|location> <library-id> --anchor=picture [--name=name] [--role=role] [--description=text] [--like=project]',
         description: 'Create a library asset from a reference picture.',

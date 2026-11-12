@@ -1,4 +1,4 @@
-import type {EditorServer, Library, ListingStatus, MachineCheck, NewProject, ProjectListing, RunInfo} from '../../../shared/workspace'
+import type {EditorServer, Library, LibraryChange, ListingStatus, MachineCheck, NewProject, ProjectListing, RunInfo} from '../../../shared/workspace'
 import {getJson, postForm, postJson} from './http'
 import {projectRoot} from './urls'
 
@@ -12,6 +12,8 @@ export const workspace = {
   /** A new music video, made by `bun run init` with these as its options. */
   createProject: (project: NewProject) => postJson<{id: string}>('/api/projects/new', project),
   library: (signal?: AbortSignal) => getJson<Library>('/api/library/assets', signal),
+  /** What `bun run library rename|describe|remove` does (#835). */
+  changeLibrary: (change: LibraryChange) => postJson<unknown>('/api/library/change', change),
   createAsset: (form: FormData) => postForm<{run: RunInfo}>('/api/library/create', form),
   libraryEvents: '/api/library/run-events',
 }
