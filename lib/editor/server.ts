@@ -59,8 +59,10 @@ import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
 import {busy, invalid, kindOf, missing, STATUS_OF} from '../service-error.ts'
-import {PROJECT_PAGES, type LibraryChange, type NewFilm, type NewProject, type ProjectStatus, type RunEvents} from '../../shared/workspace.ts'
+import {PROJECT_PAGES, type LibraryChange, type NewFilm, type NewProject, type ProjectStatus, type SetupChange, type RunEvents} from '../../shared/workspace.ts'
 import {doctor} from '../doctor.ts'
+import {settingsView} from '../setup-options.ts'
+import {runSetup} from './setup-run.ts'
 import {createFilm, createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
 import {readDirection, setDirectionRules, setDirectionEdits, takeDirection, dropDirection, restoreDirection} from '../direction/service.ts'
@@ -683,6 +685,15 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (parts[1] === 'servers' && !post) return json({servers: await readServers()})
                 // what this machine has of what a video needs: `bun run doctor`, asked by the start page (#831)
                 if (parts[1] === 'doctor' && !post) return json({checks: await doctor()})
+                // the servers of this machine: bun run setup show --json, and a change of them by bun run setup <command> --… (#831)
+                if (parts[1] === 'setup' && !post) return json(await settingsView())
+                if (parts[1] === 'setup' && post) {
+                    try {
+                        return json(await runSetup((await request.json()) as SetupChange))
+                    } catch (e) {
+                        return refused(e)
+                    }
+                }
                 // a new music video: `bun run init <id> …` with the form as its options
                 if (parts[1] === 'projects' && parts[2] === 'new' && post) {
                     try {

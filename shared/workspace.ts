@@ -94,6 +94,15 @@ export type NewProject = {
 export type NewFilm = {id: string; idea?: string; screenplay?: string; style?: string; length?: string; language?: string}
 /** Another music video with finished characters or places of a kind: what import-asset can take over (#835). */
 export type AssetSource = {project: string; assets: {id: string; name: string; described: boolean}[]}
+/** The settings of this machine's servers, keys masked: `bun run setup show --json` (#827, #831). */
+export type SetupView = {
+    file: string
+    llm: {url?: string; apiKey?: string; model?: string; parallel: number; vision?: {url?: string; apiKey?: string; model?: string}}
+    comfy: {name: string; url: string; auth?: string}[]
+    sources: Record<string, string>
+}
+/** A change of the servers, as the Machine panel asks it: `bun run setup <command> --<option>=…`. */
+export type SetupChange = {command: 'llm' | 'vision' | 'comfy'; options: Record<string, string | boolean>}
 /** One line of `bun run doctor`: what the machine has, and what to do about what it lacks. */
 export type MachineCheck = {what: string; state: 'ready' | 'missing' | 'note'; found: string; fix?: string}
 export type EditorServer = {name: string; reachable: boolean; running: number; pending: number; device?: string; freeGb?: number; totalGb?: number}

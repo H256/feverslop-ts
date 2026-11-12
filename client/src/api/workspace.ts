@@ -7,6 +7,8 @@ import type {
   MachineCheck,
   NewFilm,
   NewProject,
+  SetupChange,
+  SetupView,
   ProjectListing,
   RunInfo,
 } from '../../../shared/workspace'
@@ -20,6 +22,10 @@ export const workspace = {
   servers: (signal?: AbortSignal) => getJson<{servers: EditorServer[]}>('/api/servers', signal),
   /** What `bun run doctor` says of this machine. */
   doctor: (signal?: AbortSignal) => getJson<{checks: MachineCheck[]}>('/api/doctor', signal),
+  /** The servers of this machine: bun run setup show --json (#831). */
+  setup: (signal?: AbortSignal) => getJson<SetupView>('/api/setup', signal),
+  /** A change of them: bun run setup <command> --… */
+  changeSetup: (change: SetupChange) => postJson<{said: string[]}>('/api/setup', change),
   /** A new music video, made by `bun run init` with these as its options. */
   createProject: (project: NewProject) => postJson<{id: string}>('/api/projects/new', project),
   /** A new film, made by `bun run film:init` with these as its options. */

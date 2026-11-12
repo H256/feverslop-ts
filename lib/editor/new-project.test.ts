@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {filmInitArgs, initArgs, saidWrong} from './new-project.ts'
 import {editorHandler} from './server.ts'
+import {setupArgs} from './setup-run.ts'
 
 // #831: a new music video from the start page is `bun run init` with the form as its options - the same command as in the terminal.
 describe('the arguments of init from the form', () => {
@@ -21,6 +22,13 @@ describe('the arguments of init from the form', () => {
         expect(() => initArgs({id: 'Rain Song', idea: 'x'})).toThrow('the id of a project')
         expect(() => initArgs({id: 'rain'})).toThrow('a song with its lyrics or a story idea')
         expect(() => initArgs({id: 'rain', idea: 5 as unknown as string})).toThrow('idea: a text')
+    })
+    test('a change of the servers: only the options of its command, each a line of text', () => {
+        expect(setupArgs({command: 'llm', options: {url: 'http://a/v1', model: 'm', key: ''}})).toEqual(['llm', '--url=http://a/v1', '--model=m'])
+        expect(setupArgs({command: 'vision', options: {off: true}})).toEqual(['vision', '--off'])
+        expect(() => setupArgs({command: 'llm', options: {add: 'x'}})).toThrow('has no option --add')
+        expect(() => setupArgs({command: 'comfy', options: {add: 'a\nb'}})).toThrow('a line of text')
+        expect(() => setupArgs({command: 'whisper' as 'llm', options: {}})).toThrow('llm, vision or comfy')
     })
     test('a film: its idea or screenplay, the length and language as given', () => {
         expect(filmInitArgs({id: 'night', idea: 'A keeper', length: '90', language: 'de', style: ''})).toEqual([
@@ -74,6 +82,17 @@ describe('the routes of the start page', () => {
         expect(existsSync(join(root, 'projects', 'snow'))).toBe(false)
     }, 60_000)
 
+    test('the servers of the machine: read as setup show --json, changed by the command (#831)', async () => {
+        const handler = editorHandler()
+        const change = (body: unknown) => handler(new Request('http://localhost/api/setup', {method: 'POST', body: JSON.stringify(body)}))
+        const added = await change({command: 'comfy', options: {add: 'gpu1.lan:8188', name: 'gpu1'}})
+        expect(((await added.json()) as {said: string[]}).said[0]).toContain('Added gpu1')
+        const view = (await (await handler(new Request('http://localhost/api/setup'))).json()) as {comfy: {name: string; url: string}[]}
+        expect(view.comfy).toEqual([{name: 'gpu1', url: 'http://gpu1.lan:8188'}])
+        const wrong = await change({command: 'comfy', options: {remove: 'gpu9'}})
+        expect(wrong.status).toBe(400)
+        expect(((await wrong.json()) as {error: string}).error).toContain('no server "gpu9"')
+    })
     test('a new film is written by film:init, with the form as its options (#831)', async () => {
         const made = await editorHandler()(
             new Request('http://localhost/api/films/new', {method: 'POST', body: JSON.stringify({id: 'night', idea: 'A lighthouse keeper', length: '60'})}),

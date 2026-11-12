@@ -15,6 +15,7 @@ import {filterOf, groupProjects, KINDS, matchesFilter, PAGE_SIZE, queryOf, STATE
 import {useListingStatus} from './useListingStatus'
 import {useAsk} from '../../services/ask'
 import MachineChecks from './MachineChecks.vue'
+import MachineServers from './MachineServers.vue'
 import NewFilmForm from './NewFilmForm.vue'
 import NewProjectForm from './NewProjectForm.vue'
 import {newFilmDraft, newFilmProblem, newFilmRequest} from './newFilm'
@@ -45,7 +46,8 @@ const showMachine = async () => {
   await ask({
     title: 'This machine',
     lines: ['What a video needs, and what to do about what is not there. The same as: bun run doctor'],
-    body: () => h(MachineChecks, {checks: checks.value}),
+    // the servers can be set here too (#831): a change is checked again at once
+    body: () => h('div', [h(MachineChecks, {checks: checks.value}), h(MachineServers, {onChanged: () => void machine.reload()})]),
     confirm: 'Close',
   })
 }
