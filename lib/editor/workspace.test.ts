@@ -287,6 +287,9 @@ describe('what can be started', () => {
             '--describe-picture',
         ])
         expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
+        expect(runCommand(music, {type: 'export', formats: ['mlt', 'openshot']})).toEqual({script: 'index.ts', args: ['demo', '--export=mlt,openshot']})
+        expect(() => runCommand(music, {type: 'export', formats: ['mlt --render=all']})).toThrow('no such formats')
+        expect(() => runCommand(film, {type: 'export', formats: ['mlt']})).toThrow('when it is assembled')
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: '3.2-5'})).toEqual({script: 'index.ts', args: ['demo', '--retake=slot-007:3.2-5']})
         expect(runCommand(music, {type: 'retake', clip: 'slot-007', range: 'shot2'}).args[1]).toBe('--retake=slot-007:shot2')
     })

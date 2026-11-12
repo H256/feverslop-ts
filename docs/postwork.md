@@ -248,6 +248,12 @@ a plain player when you play it - never by itself - with its YouTube text below,
 the videos of the timeline: the timeline plays the music video itself and its versions (rendered, refinished, at
 another frame rate), and its *Post-work* button leads to this tab.
 
+Below it, **For a video editor** gives a music video's timeline to cut further elsewhere: *Shotcut / Kdenlive* and
+*OpenShot* start `bun index.ts <id> --export=mlt` or `--export=openshot`, which writes `timeline.mlt` or `timeline.osp`
+(the rendered clips on one track, the song under them). The buttons are only there to press when that run has nothing
+to plan first and every clip is rendered - an export never plans or renders. A film writes `output/timeline.edl` when
+it is assembled; the card shows it once it is there.
+
 ## Chaining the steps
 
 Each step starts from the video you name with `--from` (on the page: *From*), so the steps can follow each other in any
