@@ -238,6 +238,8 @@ export type PostworkView = {
     description: {about: string; story: boolean; facts: boolean; hardware: string; extra: string[]; tags: string[]}
     introFound?: string // input/intro.<ext> of the project, when there is one: the intro without a file set
     markers: string[] // the presets of the marker: the EU icons in assets/eu-ai-icons/
+    /** the timelines for a video editor there are (#836): a music video's --export (Shotcut/Kdenlive, OpenShot), a film's EDL written as it is assembled */
+    edits: {format: 'mlt' | 'openshot' | 'edl'; file: string; changed: number}[]
     problem?: string // what is wrong with the settings when they cannot be read: the steps take their defaults then, and the form says it
 }
 export type EditorFreshness = {clips: Record<string, Freshness>; pictures: Record<string, Freshness>}
@@ -497,6 +499,7 @@ export type RunRequest =
     | {type: 'repeat'; command: string}
     | {type: 'next'; command: string}
     | {type: 'leak-scan'}
+    | {type: 'export'; formats: string[]} // a music video's timeline for a video editor: --export=mlt,openshot (#836)
     | {type: 'export-asset'; asset: string; as?: string}
     | {type: 'export-song'; as?: string; name?: string}
     | {type: 'add-view'; location: string; name: string; shows: string}

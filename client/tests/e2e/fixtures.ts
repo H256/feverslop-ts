@@ -87,6 +87,7 @@ export const project: EditorProject = {
     description: {about: '', story: true, facts: true, hardware: '', extra: [], tags: ['AIgenerated', 'feverslop']},
     introFound: 'input/intro.mp4',
     markers: ['generated-white', 'generated-white50', 'basic-black'],
+    edits: [],
   },
 }
 const fresh: EditorFreshness = {clips: {'clip-1': 'current'}, pictures: {ann: 'current'}}

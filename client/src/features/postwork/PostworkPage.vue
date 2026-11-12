@@ -7,6 +7,7 @@ import {useToasts} from '../../services/toasts'
 import {useProject} from '../project/session'
 import CreditsForm from './CreditsForm.vue'
 import DescriptionForm from './DescriptionForm.vue'
+import EditorExport from './EditorExport.vue'
 import {
   chainSources,
   creditsRequest,
@@ -199,6 +200,7 @@ const copy = toasts.guard(async (text: string) => {
             </div>
           </template>
         </template>
+        <EditorExport />
       </aside>
     </div>
   </div>

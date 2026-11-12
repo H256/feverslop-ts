@@ -227,6 +227,7 @@ const RENDER_ACTIONS = new Set<RunAction['type']>([
     'repeat',
     'next',
     'leak-scan',
+    'export',
     'export-asset',
     'export-song',
     'add-view',

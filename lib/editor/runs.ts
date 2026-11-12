@@ -14,6 +14,7 @@ import {FILM_STEP_NAMES} from '../film/store.ts'
 import {VIDEO_NAME} from '../postwork/video.ts'
 import {requestArgs} from '../command-schema.ts'
 import {introCommand, labelCommand} from '../postwork/commands.ts'
+import {EXPORT_FORMATS} from '../timeline-export.ts'
 import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
 import {eventsFileOf} from '../run-events.ts'
 import {busy} from '../service-error.ts'
@@ -154,6 +155,13 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             const options = allowedOptions(kind, id, action.command)
             if (!options) throw new Error(`this command cannot be started from here - run it in the terminal: ${action.command}`)
             return run(...options)
+        }
+        case 'export': {
+            if (kind !== 'music') throw new Error('a film writes its timeline (output/timeline.edl) when it is assembled')
+            const formats = action.formats
+            if (!Array.isArray(formats) || !formats.length || formats.some(f => !(EXPORT_FORMATS as readonly string[]).includes(f)))
+                throw new Error(`no such formats: ${JSON.stringify(formats)} - ${EXPORT_FORMATS.join(', ')}`)
+            return run(`--export=${formats.join(',')}`)
         }
         case 'leak-scan':
             return {script: 'tools/leak-scan.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}

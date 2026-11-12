@@ -22,6 +22,7 @@ import {speakingSeconds, splitLongShot} from '../film/coverage.ts'
 import {withExtraViews} from '../film/views.ts'
 import {filmStage, musicStage, nextStage} from '../stages.ts'
 import {clipRequestFile, clipRequestsDir} from '../previous-output.ts'
+import {EXPORT_FILES} from '../timeline-export.ts'
 import {INTRO_EXTENSIONS, MARKER_PRESETS, POSTWORK_DEFAULTS} from '../postwork/config.ts'
 import {loadPostwork} from '../postwork/store.ts'
 import {finalParts, POSTWORK_ENDINGS} from '../postwork/video.ts'
@@ -136,12 +137,23 @@ const introFoundIn = (dir: string): {introFound?: string} => {
     return found ? {introFound: found} : {}
 }
 
+/** The timelines for a video editor written so far: --export's of a music video, the EDL of a film. */
+const editsIn = (dir: string): PostworkView['edits'] =>
+    (
+        [
+            ['mlt', EXPORT_FILES.mlt],
+            ['openshot', EXPORT_FILES.openshot],
+            ['edl', 'output/timeline.edl'],
+        ] as const
+    ).flatMap(([format, file]) => (existsSync(join(dir, file)) ? [{format, file, changed: Math.round(statSync(join(dir, file)).mtimeMs)}] : []))
+
 /** The settings of the post-work steps for their forms. Settings that cannot be read are said, and the defaults offered. */
 async function postworkOf(dir: string): Promise<PostworkView> {
+    const found = {markers: MARKER_PRESETS, ...introFoundIn(dir), edits: editsIn(dir)}
     try {
-        return {...(await loadPostwork(dir)), markers: MARKER_PRESETS, ...introFoundIn(dir)}
+        return {...(await loadPostwork(dir)), ...found}
     } catch (e) {
-        return {...POSTWORK_DEFAULTS, markers: MARKER_PRESETS, ...introFoundIn(dir), problem: (e as Error).message}
+        return {...POSTWORK_DEFAULTS, ...found, problem: (e as Error).message}
     }
 }
 
