@@ -4,7 +4,8 @@ import {log} from '../lib/log.ts'
 // renamed to the id it has here - instead of rendering it again. Nothing is rendered: the copied files are pinned (never
 // reported stale), the old ones go to old/attempts/. The description that goes with the picture is chosen here; what
 // the plan built on the old one is printed as a --redo, not done.
-// usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]
+// usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>] [--description=source|vision|keep] [--dry-run]
+// With the id, --from=…:<id> and --description given, nothing is asked (#827): a script, the workspace. --dry-run says what it would do.
 import * as p from '@clack/prompts'
 import {existsSync, readdirSync, readFileSync} from 'node:fs'
 import {join} from 'node:path'
@@ -29,13 +30,20 @@ cli('import-asset')
 // what a cancel after the copy must say: the pictures are already swapped, only project.json is untouched
 let alreadyDone = ''
 
-const usage = 'usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>]'
-if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    log.error(`This needs a terminal to ask in - ${usage}`)
-    process.exit(1)
-}
+const usage =
+    'usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>] [--description=source|vision|keep] [--dry-run]'
+// in a terminal what is not given is asked; without one, what is missing is said (#827)
+const inTerminal = !!(process.stdin.isTTY && process.stdout.isTTY)
+const needs = (option: string): never => log.usageError(`No terminal to ask in - give ${option}`, usage)
+
 const args = Bun.argv.slice(2)
 const from = args.find(a => a.startsWith('--from='))?.slice('--from='.length)
+const describeBy = args.find(a => a.startsWith('--description='))?.slice('--description='.length)
+if (describeBy !== undefined && !['source', 'vision', 'keep'].includes(describeBy)) {
+    log.error(`--description: source, vision or keep, got "${describeBy}" - ${usage}`)
+    process.exit(1)
+}
+const dryRun = args.includes('--dry-run')
 const [id, wantedId] = args.filter(a => !a.startsWith('--'))
 if (!id || !projectExists(id)) {
     log.error(`${usage}${id ? `\nprojects/${id} does not exist` : ''}`)
@@ -67,16 +75,18 @@ log.section(`feverslop-ts · import asset · ${id}`)
 // 1. what is replaced here
 const target = wantedId
     ? (targets.find(t => t.id === wantedId) ?? fail(`"${wantedId}" is no character or location of ${id}: ${targets.map(t => t.id).join(', ')}`))
-    : targets[
-          Number(
-              answer(
-                  await p.select({
-                      message: 'What gets the imported pictures?',
-                      options: targets.map((t, n) => ({value: String(n), label: `${t.name} ${styles.muted(`(${t.kind} · ${t.id})`)}`})),
-                  }),
-              ),
-          )
-      ]!
+    : !inTerminal
+      ? needs('the id of the character or location: bun run import-asset <project-id> <id> …')
+      : targets[
+            Number(
+                answer(
+                    await p.select({
+                        message: 'What gets the imported pictures?',
+                        options: targets.map((t, n) => ({value: String(n), label: `${t.name} ${styles.muted(`(${t.kind} · ${t.id})`)}`})),
+                    }),
+                ),
+            )
+        ]!
 
 // 2. where it comes from: the library, or another project with a finished asset of that kind
 type Source = {
@@ -128,41 +138,64 @@ const source: Source =
           ? projects.includes(fromWhere)
               ? projectSource(fromWhere)
               : fail(`projects/${fromWhere} has no finished ${target.kind}s`)
-          : await (async () => {
-                const choice = answer(
-                    await p.select({
-                        message: `Where to take the ${target.kind} from`,
-                        // the library first, then the projects with an asset of the same id or name - the same character in another version of the song
-                        options: [
-                            ...(librarySource.ids.length
-                                ? [{value: 'library:', label: `The library ${styles.muted(`(${librarySource.ids.length} ${target.kind}s)`)}`}]
-                                : []),
-                            ...projects
-                                .map(projectSource)
-                                .sort((a, b) => Number(matches(b)) - Number(matches(a)))
-                                .map(s => ({value: s.label, label: `${s.label}${matches(s) ? styles.muted(' · same id or name') : ''}`})),
-                        ],
-                    }),
-                )
-                return choice === 'library:' ? librarySource : projectSource(choice)
-            })()
+          : !inTerminal
+            ? needs('--from=library:<id> or --from=<project-id>:<id>')
+            : await (async () => {
+                  const choice = answer(
+                      await p.select({
+                          message: `Where to take the ${target.kind} from`,
+                          // the library first, then the projects with an asset of the same id or name - the same character in another version of the song
+                          options: [
+                              ...(librarySource.ids.length
+                                  ? [{value: 'library:', label: `The library ${styles.muted(`(${librarySource.ids.length} ${target.kind}s)`)}`}]
+                                  : []),
+                              ...projects
+                                  .map(projectSource)
+                                  .sort((a, b) => Number(matches(b)) - Number(matches(a)))
+                                  .map(s => ({value: s.label, label: `${s.label}${matches(s) ? styles.muted(' · same id or name') : ''}`})),
+                          ],
+                      }),
+                  )
+                  return choice === 'library:' ? librarySource : projectSource(choice)
+              })()
 const sourceId = fromId
     ? source.ids.includes(fromId)
         ? fromId
         : fail(`${source.label} has no ${target.kind} "${fromId}": ${source.ids.join(', ') || 'none'}`)
-    : answer(
-          await p.select({
-              message: `${target.kind === 'character' ? 'Character' : 'Location'} of ${source.label}`,
-              initialValue: source.ids.find(a => a === target.id || source.name(a) === target.name) ?? source.ids[0],
-              options: source.ids.map(a => ({value: a, label: `${source.name(a) ?? a} ${styles.muted(`(${a})`)}`})),
-          }),
-      )
+    : !inTerminal
+      ? needs(`the id after --from=${fromWhere}: - ${source.ids.join(', ') || 'none there'}`)
+      : answer(
+            await p.select({
+                message: `${target.kind === 'character' ? 'Character' : 'Location'} of ${source.label}`,
+                initialValue: source.ids.find(a => a === target.id || source.name(a) === target.name) ?? source.ids[0],
+                options: source.ids.map(a => ({value: a, label: `${source.name(a) ?? a} ${styles.muted(`(${a})`)}`})),
+            }),
+        )
 const fromLibrary = source === librarySource
 const sourceLabel = fromLibrary ? `library:${sourceId}` : `${source.label}/${sourceId}`
 
 const {picture, sheet} = assetPaths(target.kind, target.id)
 const replacing = [picture, sheet].some(f => existsSync(join(dir, f)))
+const theirs = source.description(sourceId)
+const descriptions0 = target.kind === 'character' ? data.characterDescriptions : data.locationDescriptions
+if (describeBy === 'source' && !theirs) fail(`${sourceLabel} has no description of its own - --description=vision or keep`)
+if (describeBy === 'keep' && !descriptions0?.[target.id]) fail(`${target.name} has no description here yet - --description=source or vision`)
+// what it would do, nothing done: for a question before it runs (the workspace's Casting page)
+if (dryRun) {
+    log.step('Copies', `${sourceLabel} → ${target.name} (${target.kind} ${target.id}) ${styles.muted('- the pictures and the whole reference sheet, pinned')}`)
+    if (replacing) log.step('Puts away', `the current pictures of ${target.name} ${styles.muted('in old/attempts/')}`)
+    const said = {
+        source: `the one ${fromLibrary ? 'of the library' : `of ${source.label}`}`,
+        vision: 'written from the picture by a vision model',
+        keep: `the one of ${id}`,
+    }
+    log.step('Description', describeBy ? said[describeBy as keyof typeof said] : styles.muted('asked'))
+    log.success('Dry run - nothing was changed')
+    process.exit(0)
+}
+// all of it given on the command line: that was the question
 if (
+    !(describeBy !== undefined && fromId && wantedId) &&
     !answer(
         await p.confirm({
             message: `Copy ${sourceLabel} to ${target.id}${replacing ? ` - the current pictures of ${target.name} are put away in old/attempts/` : ''}?`,
@@ -184,20 +217,23 @@ alreadyDone = `the pictures were already copied to ${sheet}${done.putAway ? ` an
 // 3. the description that goes with the picture
 const config = await loadProjectConfig(dir)
 const descriptions = target.kind === 'character' ? (data.characterDescriptions ??= {}) : (data.locationDescriptions ??= {})
-const theirs = source.description(sourceId)
 const ours = descriptions[target.id]
-const mode = answer(
-    await p.select({
-        message: 'Description used in the clip prompts',
-        options: [
-            ...(theirs ? [{value: 'source', label: `${fromLibrary ? 'The library' : source.label}: written for this picture`, hint: theirs.slice(0, 80)}] : []),
-            {value: 'vision', label: 'Write it from the picture (vision-capable LLM)'},
-            ...(ours ? [{value: 'keep', label: `Keep the one of ${id}`, hint: ours.slice(0, 80)}] : []),
-        ],
-    }),
-)
+const mode =
+    describeBy ??
+    answer(
+        await p.select({
+            message: 'Description used in the clip prompts',
+            options: [
+                ...(theirs
+                    ? [{value: 'source', label: `${fromLibrary ? 'The library' : source.label}: written for this picture`, hint: theirs.slice(0, 80)}]
+                    : []),
+                {value: 'vision', label: 'Write it from the picture (vision-capable LLM)'},
+                ...(ours ? [{value: 'keep', label: `Keep the one of ${id}`, hint: ours.slice(0, 80)}] : []),
+            ],
+        }),
+    )
 let description = mode === 'source' ? theirs : mode === 'keep' ? ours : await fromPicture()
-if (!description) description = answer(await p.text({message: 'Type the description (leave empty to keep the current one)'})) || ours
+if (!description) description = inTerminal ? answer(await p.text({message: 'Type the description (leave empty to keep the current one)'})) || ours : ours
 const changed: StepName[] = []
 if (description && applyLibraryText(descriptions, target.id, description)) {
     changed.push(target.kind === 'character' ? 'characterDescriptions' : 'locationDescriptions')

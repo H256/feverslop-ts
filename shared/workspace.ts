@@ -89,6 +89,8 @@ export type NewProject = {
     singers?: string
     language?: string
 }
+/** Another music video with finished characters or places of a kind: what import-asset can take over (#835). */
+export type AssetSource = {project: string; assets: {id: string; name: string; described: boolean}[]}
 /** One line of `bun run doctor`: what the machine has, and what to do about what it lacks. */
 export type MachineCheck = {what: string; state: 'ready' | 'missing' | 'note'; found: string; fix?: string}
 export type EditorServer = {name: string; reachable: boolean; running: number; pending: number; device?: string; freeGb?: number; totalGb?: number}
@@ -511,6 +513,8 @@ export type RunRequest =
     | {type: 'check-joins'} // a film: the cuts within a scene, read by a model that sees pictures (#836)
     | {type: 'export'; formats: string[]} // a music video's timeline for a video editor: --export=mlt,openshot (#836)
     | {type: 'export-asset'; asset: string; as?: string}
+    // a finished character or place of another music video taken over (#835): bun run import-asset <id> <asset> --from=<project>:<asset>
+    | {type: 'import-asset'; asset: string; project: string; from: string; description: 'source' | 'vision' | 'keep'}
     | {type: 'export-song'; as?: string; name?: string}
     | {type: 'add-view'; location: string; name: string; shows: string}
     | {type: 'refinish'; preset?: string; upscale?: string; size?: string; denoise?: number; fps?: number; finish?: boolean; only?: string[]}

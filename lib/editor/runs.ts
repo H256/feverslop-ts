@@ -1,6 +1,7 @@
 import {closeSync, openSync, readSync, rmSync, statSync} from 'node:fs'
 import {join} from 'node:path'
 import {lockHolder, verifiedLockHolder} from '../lock.ts'
+import {validProjectId} from '../project-setup.ts'
 import {cancelJobs, jobsQueuedSince} from '../comfy-cancel.ts'
 import {type ComfyServer, loadSettings} from '../settings.ts'
 
@@ -277,6 +278,16 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim())
                 throw new Error('a further view is for a place of a film, with a name and what it shows')
             return {script: 'tools/add-view.ts', args: [id, action.location, `--name=${action.name.trim()}`, `--shows=${action.shows.trim()}`]}
+        case 'import-asset': {
+            if (kind !== 'music') throw new Error('a film takes a character or place from the library on the Casting page')
+            if (![action.asset, action.from].every(a => PICTURE_ID.test(a)) || !validProjectId(action.project) || action.project === id)
+                throw new Error('no such asset of another project')
+            if (!['source', 'vision', 'keep'].includes(action.description)) throw new Error(`no such description: ${action.description}`)
+            return {
+                script: 'tools/import-asset.ts',
+                args: [id, action.asset, `--from=${action.project}:${action.from}`, `--description=${action.description}`],
+            }
+        }
         case 'export-asset':
             if (!PICTURE_ID.test(action.asset.replace('--', '-')) || (action.as && !PICTURE_ID.test(action.as))) throw new Error('no such asset')
             return {

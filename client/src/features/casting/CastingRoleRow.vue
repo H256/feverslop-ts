@@ -12,7 +12,7 @@ import {useProject} from '../project/session'
  * the cast can shrink the role can be taken out - marked here (`out`), and saved by the page with whatever else is taken out.
  */
 const props = defineProps<{role: CastingRole; options: string[]; removable: boolean; out?: boolean}>()
-const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement]; remove: []; putBack: []}>()
+const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement]; remove: []; putBack: []; take: []}>()
 const {roots, project} = useProject()
 const viewer = useViewer()
 const own = computed(() => `project:${props.role.id}`)
@@ -55,6 +55,15 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
           <option v-for="id in options" :key="id" :value="`library:${id}`">library: {{ id }}</option>
           <option v-if="unknown" :value="role.entry">{{ role.entry }}</option>
         </select>
+        <button
+          v-if="project.kind === 'music'"
+          class="btn"
+          :aria-label="`${role.name} from another project`"
+          title="Take over a finished character or place of another music video - its picture and its whole reference sheet: bun run import-asset"
+          @click="emit('take')"
+        >
+          From another project…
+        </button>
         <button
           v-if="removable"
           class="btn danger"

@@ -35,6 +35,7 @@ import {readSinging, type SingingChange, writeSinging} from './singing.ts'
 import {writeBeatCast} from './beat-cast.ts'
 import type {BeatCastChange, RunHistory} from '../../shared/workspace.ts'
 import {pastRuns, readQueue, unqueue} from '../run-queue.ts'
+import {assetSources} from './asset-sources.ts'
 import {pickVersion, writeOverride} from './choices.ts'
 import {
     type CastChange,
@@ -231,6 +232,7 @@ const RENDER_ACTIONS = new Set<RunAction['type']>([
     'check-joins',
     'export',
     'export-asset',
+    'import-asset',
     'export-song',
     'add-view',
     'refinish',
@@ -429,6 +431,12 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (!file) return json({peaks: null})
                     const key = `fine:${file}:${statSync(file).mtimeMs}`
                     return json({peaks: (await waveform(key, () => readFineWaveform(file, 100).catch(() => undefined))) ?? null})
+                }
+                // the finished characters or places of the other music videos, to take over on the Casting page (#835): bun run import-asset
+                if (what === 'asset-sources') {
+                    const kind = url.searchParams.get('kind')
+                    if (kind !== 'character' && kind !== 'location') return refused(invalid('kind: character or location'))
+                    return json({sources: target.kind === 'music' ? assetSources(target.id, kind) : []})
                 }
                 if (what === 'casting') {
                     const project = await readEditorProject(target)
