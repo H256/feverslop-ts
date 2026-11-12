@@ -99,6 +99,7 @@ const librarySongs = (await Promise.all(librarySongIds(library).map(id => readLi
 const WORKFLOW_HINTS: Record<string, string> = {
     'kroma-image': 'Kroma turbo, half size + 2x refine',
     'krea2-image': 'Krea 2, one pass',
+    'h3-image': 'MiniMax H3 Image, 6 steps, no prompt enhancer',
     'h3-ref2video': 'MiniMax H3, one pass with the turbo LoRA - fastest',
     'h3-ref2video-full': 'MiniMax H3 base model, 20 steps - ~2.5x slower, more detail and motion',
     'h3-ref2video-2pass': 'MiniMax H3 in two passes - quarter size, latent x2, short refine',

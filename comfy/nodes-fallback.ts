@@ -29,6 +29,7 @@ export const FALLBACK_NODES: Record<string, string[]> = {
     LoadImage: ['IMAGE', 'MASK'],
     LoraLoaderModelOnly: ['MODEL'],
     MiniMaxH3AddGuide: ['positive'],
+    MiniMaxH3ImageConditioning: ['positive', 'LATENT'],
     MiniMaxH3ImageToVideo: ['positive', 'LATENT'],
     MiniMaxH3ReferenceToVideo: ['positive', 'LATENT'],
     MiniMaxH3SigmaShift: ['MODEL'],
