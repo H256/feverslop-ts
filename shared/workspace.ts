@@ -51,7 +51,24 @@ export type LibraryEntry = {
     frames: Media[]
     usedBy: {kind: ProjectKind; id: string; role: string}[]
 }
-export type Library = {dir: string; assets: LibraryEntry[]}
+/** A song of the library (bun run export-song): how long, what is worked out of it, the music videos made of it (#835). */
+export type LibrarySongEntry = {
+    id: string
+    name: string
+    seconds?: number
+    stems: number
+    lines: number
+    byHand: number
+    source?: string
+    audio?: Media
+    usedBy: {kind: ProjectKind; id: string}[]
+}
+export type Library = {dir: string; assets: LibraryEntry[]; songs: LibrarySongEntry[]}
+/** A library entry renamed, described anew or put away - what `bun run library rename|describe|remove` does (#835). */
+export type LibraryChange =
+    | {action: 'rename'; kind: AssetKind | 'song'; id: string; name: string}
+    | {action: 'describe'; kind: AssetKind; id: string; description: string}
+    | {action: 'remove'; kind: AssetKind | 'song'; id: string}
 /** A new music video as the start page asks for it: the options of `bun run init` (#831). `song`: a file on this machine. */
 export type NewProject = {
     id: string

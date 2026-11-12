@@ -59,6 +59,7 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
 | `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
 | `bun run export-song <id>` / `import-song <id> [song]` | a song with its stems and the timing of its lyrics into the library, or from it into a project - see [The asset library](#the-asset-library) |
+| `bun run library [--json]` | what is in the library - characters, places, songs - and who uses each; `rename`, `describe` or `remove` one (put into the library's `.trash/`, refused while a project casts it) |
 | `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
 | `bun run texture-chains <id> [--film]` | measures whether clips that continue on the clip before get grittier from link to link, next to the change at an ordinary cut; reads the rendered clips with ffmpeg only, writes nothing (`--json` for machines) |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
@@ -1051,6 +1052,15 @@ on the Timing page is fixed once for every video of the song:
 bun run export-song epa-streikt-261104 --as=epa-streikt --name="EPA streikt"   # into the library
 bun run import-song new-video                                                  # the songs in the library
 bun run import-song new-video epa-streikt                                      # into a project: the plan starts at the story
+```
+
+**What is in the library**, and who uses it - the Library page shows the same, with the songs on a tab of their own:
+
+```bash
+bun run library                                         # characters, places and songs, each with the projects that use it
+bun run library rename song epa-streikt "EPA streikt (live)"   # another name; the id stays
+bun run library describe character kael "a tall drummer in a long coat"
+bun run library remove location old-hall                # into library/.trash/ - refused while a project casts it
 ```
 
 - `export-song` copies the audio, `lyrics.txt`, the stems and the steps worked out from them alone: the analysis
