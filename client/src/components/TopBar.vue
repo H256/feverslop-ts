@@ -21,10 +21,10 @@ const workspacePage = computed(() => ['/', '/library', '/stats'].includes(route.
   <header class="topwrap">
     <div class="top">
       <RouterLink class="mark" to="/" title="All projects" aria-label="All projects"><img :src="mark" alt="" /></RouterLink>
-      <nav class="crumbs" aria-label="Workspace">
+      <nav :class="['crumbs', {'in-project': !workspacePage}]" aria-label="Workspace">
         <RouterLink to="/" active-class="" exact-active-class="" :aria-current="$route.path === '/' ? 'page' : undefined">Projects</RouterLink>
-        <RouterLink to="/library" :aria-current="$route.path === '/library' ? 'page' : undefined">Library</RouterLink>
-        <RouterLink to="/stats" :aria-current="$route.path === '/stats' ? 'page' : undefined">Stats</RouterLink>
+        <RouterLink class="crumb-more" to="/library" :aria-current="$route.path === '/library' ? 'page' : undefined">Library</RouterLink>
+        <RouterLink class="crumb-more" to="/stats" :aria-current="$route.path === '/stats' ? 'page' : undefined">Stats</RouterLink>
       </nav>
       <!-- on the workspace's own pages the crumbs say where you are already -->
       <template v-if="!workspacePage">
