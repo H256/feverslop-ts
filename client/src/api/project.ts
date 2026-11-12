@@ -70,6 +70,8 @@ export function projectApi(root: string) {
     timingWave: (signal?: AbortSignal) => get<{peaks: number[] | null}>('timing-wave', signal),
     casting: (signal?: AbortSignal) => get<CastingView>('casting', signal),
     /** The finished characters or places of the other music videos (#835): what import-asset can take over. */
+    /** What replacing a character's picture would do: bun run replace-character … --dry-run (#835). */
+    replaceDryRun: (asked: {character: string; picture: string; description: string}) => post<{lines: string[]}>('replace-dry-run', asked),
     assetSources: (kind: 'character' | 'location') => get<{sources: AssetSource[]}>(`asset-sources?kind=${kind}`),
     castingRedo: (signal?: AbortSignal) => get<CastingRedo>('casting-redo', signal),
     cast: (signal?: AbortSignal) => get<{cast: CastView | null}>('cast', signal),

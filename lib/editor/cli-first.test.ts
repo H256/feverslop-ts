@@ -23,6 +23,7 @@ const NOT_A_CHANGE = new Set([
     'estimateClips',
     // the command itself with --dry-run: it reads only
     'dryRun',
+    'replaceDryRun',
     'estimatePictures',
     'readPictureJobs',
     'picturesFile',
@@ -35,14 +36,17 @@ const NOT_A_CHANGE = new Set([
     'readReferences',
 ])
 
-/** The functions the POST part of the project routes calls. */
+/** The functions the POST part of the project routes and of the library's calls. */
 function postCalls(): string[] {
     const server = read('lib/editor/server.ts')
     const from = server.indexOf('const started = (run: unknown) => json({run})')
     const to = server.indexOf('const libraryApi', from)
     expect(from).toBeGreaterThan(0)
     expect(to).toBeGreaterThan(from)
-    const post = server.slice(from, to)
+    // and the library's POST routes (#835): from its change on, up to the handler of all requests
+    const library = server.slice(server.indexOf("if (rest[0] === 'change')", to), server.indexOf('return async (request: Request)', to))
+    expect(library).toContain('changeLibrary')
+    const post = server.slice(from, to) + library
     // runs.start / runs.stop start and stop a command: the command is what changes the project
     return [...new Set([...post.matchAll(/(?<![.\w])([a-z][A-Za-z]+)\(/g)].map(m => m[1]!))].filter(
         name =>

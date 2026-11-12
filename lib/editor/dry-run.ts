@@ -1,6 +1,7 @@
 import {join} from 'node:path'
 import type {DryRun, RunRequest} from '../../shared/workspace.ts'
 import type {EditorTarget} from './project.ts'
+import {saidWrong} from './new-project.ts'
 import {runCommand} from './runs.ts'
 
 // What a plan run would do, asked before it runs (#836): the command itself with --dry-run --json - the same reasons, steps and
@@ -22,4 +23,23 @@ export async function dryRun(target: EditorTarget, action: Extract<RunRequest, {
         throw new Error(said || `the dry run ended with code ${code}`)
     }
     return JSON.parse(out) as DryRun
+}
+
+/** What replacing a character's picture would do (#835): the command with --dry-run, its lines as the terminal shows them. Reads only. */
+export async function replaceDryRun(target: EditorTarget, action: Extract<RunRequest, {type: 'replace-character'}>): Promise<{lines: string[]}> {
+    const {script, args} = runCommand(target, action)
+    const proc = Bun.spawn(['bun', join(ROOT, script), ...args.filter(a => a !== '--render-sheet'), '--dry-run'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+        env: {...process.env, NO_COLOR: '1', FORCE_COLOR: '0', FEVERSLOP_QUIET: ''},
+    })
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+    const lines = `${out}${err}`
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.startsWith('▸ '))
+        .map(line => line.slice(2))
+    if (code !== 0) throw new Error(saidWrong(`${out}${err}`))
+    return {lines}
 }
