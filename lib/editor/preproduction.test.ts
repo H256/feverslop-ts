@@ -123,6 +123,13 @@ describe('a plan run from the page', () => {
         expect(() => runCommand(music, {type: 'plan', beats: ['beat-05 --render=all']})).toThrow('no such beats')
         expect(() => runCommand(film, {type: 'plan', beats: ['beat-05']})).toThrow('a film plans scenes again')
     })
+
+    test('the shots of chosen scenes of a film planned again (#836)', () => {
+        expect(runCommand(film, {type: 'plan', scenes: ['s6', 's7']}).args).toEqual(['demo', '--redo=coverage', '--scenes=s6,s7'])
+        expect(runCommand(film, {type: 'plan', redo: ['coverage'], scenes: ['s6']}).args).toEqual(['demo', '--redo=coverage', '--scenes=s6'])
+        expect(() => runCommand(film, {type: 'plan', scenes: ['s6 --render=all']})).toThrow('no such scenes')
+        expect(() => runCommand(music, {type: 'plan', scenes: ['s6']})).toThrow('a music video plans beats again')
+    })
 })
 
 describe('casting.json changed after the plan - what Plan now plans again', () => {

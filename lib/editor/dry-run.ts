@@ -4,12 +4,11 @@ import type {EditorTarget} from './project.ts'
 import {runCommand} from './runs.ts'
 
 // What a plan run would do, asked before it runs (#836): the command itself with --dry-run --json - the same reasons, steps and
-// estimate the terminal shows. It only reads; nothing is locked or written. A film has no dry run as data yet.
+// estimate the terminal shows - a music video's and a film's. It only reads; nothing is locked or written.
 
 const ROOT = join(import.meta.dir, '..', '..')
 
-export async function dryRun(target: EditorTarget, action: Extract<RunRequest, {type: 'plan'}>): Promise<DryRun | undefined> {
-    if (target.kind !== 'music') return undefined
+export async function dryRun(target: EditorTarget, action: Extract<RunRequest, {type: 'plan'}>): Promise<DryRun> {
     const {script, args} = runCommand(target, action)
     // --until stops a run; a dry run says what all of it would redo, the page says where it stops
     const asked = args.filter(a => !a.startsWith('--until='))
