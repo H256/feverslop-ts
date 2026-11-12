@@ -7,13 +7,14 @@ import {readClipRequests, readPictureJobs} from '../render-state.ts'
 import type {EditorTarget} from './project.ts'
 import {sequenceSheetDir, sheetAnchor, sheetFrames, sheetVideo} from '../sequenceSheet.ts'
 import type {EditorReference} from '../../shared/workspace.ts'
+import {kindOf} from './kinds.ts'
 export type {EditorReference} from '../../shared/workspace.ts'
 
 // Every reference picture of a project: its prompt, its files, its older versions and the clips that use it.
 
 const versioned = (dir: string, file: string) => (existsSync(join(dir, file)) ? {file, v: Math.round(statSync(join(dir, file)).mtimeMs)} : undefined)
 
-export const picturesFile = ({dir, kind}: EditorTarget) => (kind === 'film' ? join(dir, 'assets.json') : join(dir, 'output', 'assets.json'))
+export const picturesFile = (target: EditorTarget) => kindOf(target).picturesFile(target.dir)
 export const sheetOf = (picture: {kind: string; id: string}) => (picture.kind === 'prop' ? undefined : sequenceSheetDir(picture.kind, picture.id))
 
 export async function readReferences(target: EditorTarget): Promise<EditorReference[]> {

@@ -9,9 +9,7 @@ import {type ComfyServer, loadSettings} from '../settings.ts'
 const STOP_WAIT_MS = 10_000
 import {lastRun, runState} from '../run-record.ts'
 import type {EditorKind, EditorTarget} from './project.ts'
-import {STEP_NAMES} from '../project.ts'
 import {UNTIL_STAGES} from '../stages.ts'
-import {FILM_STEP_NAMES} from '../film/store.ts'
 import {requestArgs} from '../command-schema.ts'
 import {creditsCommand, descriptionCommand, introCommand, labelCommand} from '../postwork/commands.ts'
 import {refinishCommand} from '../refinish-command.ts'
@@ -21,6 +19,7 @@ import {newestLog, newestRunEvents} from '../run-events.ts'
 import {busy, KindError} from '../service-error.ts'
 import {hasQueue, notePastRun, queueRun, readQueue, takeFirst} from '../run-queue.ts'
 import type {QueuedRun} from '../../shared/workspace.ts'
+import {KINDS} from './kinds.ts'
 export type {RunInfo} from '../../shared/workspace.ts'
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
@@ -48,7 +47,7 @@ export type RunAction =
           describe?: boolean
       }
 
-const pipeline = (kind: EditorKind) => (kind === 'film' ? 'film.ts' : 'index.ts')
+const pipeline = (kind: EditorKind) => KINDS[kind].pipeline
 
 // what a command of the last run or of `status` may hold to be started from the page: rendering, nothing that asks in the terminal, no keys.
 // Which servers a run goes to is chosen again on the page, so what the command said about them is left out
@@ -74,7 +73,7 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
     }
     switch (action.type) {
         case 'direction':
-            return {script: 'tools/direction.ts', args: [id, ...(kind === 'film' ? ['--film'] : []), '--preview']}
+            return {script: 'tools/direction.ts', args: [id, ...KINDS[kind].flag, '--preview']}
         case 'clips':
             return run(
                 '--render=videos',
@@ -119,7 +118,7 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         case 'final':
             return run('--render=final', ...(action.preview ? ['--preview'] : []))
         case 'plan': {
-            const steps: readonly string[] = kind === 'film' ? FILM_STEP_NAMES : STEP_NAMES
+            const steps = KINDS[kind].stepNames
             const redo = action.redo ?? []
             if (!Array.isArray(redo) || redo.some(step => typeof step !== 'string' || !steps.includes(step)))
                 throw new Error(`no such steps: ${JSON.stringify(redo)}`)
@@ -177,9 +176,9 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             return run(`--export=${formats.join(',')}`)
         }
         case 'leak-scan':
-            return {script: 'tools/leak-scan.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}
+            return {script: 'tools/leak-scan.ts', args: [id, ...KINDS[kind].flag]}
         case 'texture-chains':
-            return {script: 'tools/texture-chains.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}
+            return {script: 'tools/texture-chains.ts', args: [id, ...KINDS[kind].flag]}
         case 'check-joins':
             if (kind !== 'film') throw new Error('the cuts within a scene are checked in a film')
             return {script: 'tools/film-check-joins.ts', args: [id]}
@@ -187,23 +186,23 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             // the clips as a list in the request, one option on the command line
             return {
                 script: refinishCommand.script,
-                args: [id, ...requestArgs(refinishCommand, {...action, only: action.only?.join(','), film: kind === 'film'})],
+                args: [id, ...requestArgs(refinishCommand, {...action, only: action.only?.join(','), film: KINDS[kind].film})],
             }
         // the options of these two are their schema's (lib/postwork/commands.ts, #826): no option is checked a second time here
         case 'label':
-            return {script: labelCommand.script, args: [id, ...requestArgs(labelCommand, {...action, film: kind === 'film'})]}
+            return {script: labelCommand.script, args: [id, ...requestArgs(labelCommand, {...action, film: KINDS[kind].film})]}
         case 'intro':
-            return {script: introCommand.script, args: [id, ...requestArgs(introCommand, {...action, film: kind === 'film'})]}
+            return {script: introCommand.script, args: [id, ...requestArgs(introCommand, {...action, film: KINDS[kind].film})]}
         case 'credits': {
             // a music video names its artist, a film its director: the other field is not this kind's
             const {artist, director, ...rest} = action
-            const asked = {...rest, ...(kind === 'film' ? {director} : {artist}), film: kind === 'film'}
+            const asked = {...rest, ...(kind === 'film' ? {director} : {artist}), film: KINDS[kind].film}
             return {script: creditsCommand.script, args: [id, ...requestArgs(creditsCommand, asked)]}
         }
         case 'description':
             // the video is the user's choice: always said
             if (!action.from) throw new Error(`no such from: ${action.from}`)
-            return {script: descriptionCommand.script, args: [id, ...requestArgs(descriptionCommand, {...action, film: kind === 'film'})]}
+            return {script: descriptionCommand.script, args: [id, ...requestArgs(descriptionCommand, {...action, film: KINDS[kind].film})]}
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim())
                 throw new Error('a further view is for a place of a film, with a name and what it shows')
@@ -241,7 +240,7 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (!PICTURE_ID.test(action.asset.replace('--', '-')) || (action.as && !PICTURE_ID.test(action.as))) throw new Error('no such asset')
             return {
                 script: 'tools/export-asset.ts',
-                args: [id, action.asset, ...(action.as ? [`--as=${action.as}`] : []), ...(kind === 'film' ? ['--film'] : [])],
+                args: [id, action.asset, ...(action.as ? [`--as=${action.as}`] : []), ...KINDS[kind].flag],
             }
         case 'export-song': {
             if (kind === 'film') throw new Error('a film has no song to put into the library')

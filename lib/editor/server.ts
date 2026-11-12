@@ -3,10 +3,10 @@ import {statSync} from 'node:fs'
 import {extname} from 'node:path'
 import {peaks} from '../waveform.ts'
 import {libraryDir} from '../library.ts'
-import {listProjects, projectDir, projectExists, validProjectId} from '../project-setup.ts'
-import {filmDir, filmExists, filmIds} from '../film/setup.ts'
+import {validProjectId} from '../project-setup.ts'
+import {KINDS} from './kinds.ts'
 import {statsView} from './stats.ts'
-import {type EditorKind, type EditorTarget, readListing} from './project.ts'
+import {type EditorTarget, readListing} from './project.ts'
 import {RunControl} from './runs.ts'
 import {readServers} from './servers.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
@@ -101,16 +101,11 @@ export function fromThisPage(request: Request): boolean {
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
 function targetOf(kind: string, id: string): EditorTarget | undefined {
-    if (!validProjectId(id)) return undefined
-    if (kind === 'music' && projectExists(id)) return {id, kind, dir: projectDir(id)}
-    if (kind === 'film' && filmExists(id)) return {id, kind, dir: filmDir(id)}
-    return undefined
+    if (!validProjectId(id) || (kind !== 'music' && kind !== 'film') || !KINDS[kind].exists(id)) return undefined
+    return {id, kind, dir: KINDS[kind].dir(id)}
 }
 
-const allTargets = (): EditorTarget[] => [
-    ...listProjects().map(id => ({id, kind: 'music' as EditorKind, dir: projectDir(id)})),
-    ...filmIds().map(id => ({id, kind: 'film' as EditorKind, dir: filmDir(id)})),
-]
+const allTargets = (): EditorTarget[] => Object.values(KINDS).flatMap(({kind, ids, dir}) => ids().map(id => ({id, kind, dir: dir(id)})))
 
 export function editorHandler(runs = new RunControl(), options: EditorOptions = {}) {
     // bounded: a re-rendered file is a new key, the entries of its old versions must not stay forever

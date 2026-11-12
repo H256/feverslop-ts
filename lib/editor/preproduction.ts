@@ -21,6 +21,7 @@ export type {
     LookChange,
     LookResult,
 } from '../../shared/workspace.ts'
+import {kindOf} from './kinds.ts'
 
 // The preproduction in the workspace (issue #526): the book, the cast and the look are looked at and changed before the shots
 // are planned and long before anything is rendered. What is changed here is put into project.json as the pipeline would have
@@ -51,7 +52,7 @@ export function planCommand(target: EditorTarget, change: PlanStage, redo: strin
     const at = stageOf(target)
     const stages: PlanStage[] = ['story', 'cast', 'look', 'plan']
     const until = stages[Math.max(stages.indexOf(change), at ? stages.indexOf(at) : -1)]!
-    return `bun ${target.kind === 'film' ? 'film.ts' : 'index.ts'} ${target.id}${redo.length ? ` --redo=${redo.join(',')}` : ''}${until !== 'plan' ? ` --until=${until}` : ''}`
+    return `bun ${kindOf(target).pipeline} ${target.id}${redo.length ? ` --redo=${redo.join(',')}` : ''}${until !== 'plan' ? ` --until=${until}` : ''}`
 }
 
 ////////// WHERE THE PREPRODUCTION STANDS - for bun run status and the workspace alike

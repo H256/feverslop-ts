@@ -18,6 +18,75 @@ export type DirectionTarget = {
     kind: 'music' | 'film'
 }
 type Data = Project | FilmProject
+/**
+ * What differs between a music video and a film for the direction (#840): its shots and how one is put back, the groups they are
+ * planned in (beats or scenes), the scopes it takes, and what a preview is told about the groups.
+ */
+type Shape = {
+    film: boolean
+    /** what bun run direction is told for this kind */
+    flag: string
+    shots: (t: DirectionTarget, d: Data) => DirectionShot[]
+    context: (d: Data) => unknown
+    put: (d: Data, id: string, s: Record<string, unknown>) => void
+    /** the groups as the project has them - undefined when it has none yet */
+    raw: (d: Data) => {id: string}[] | undefined
+    /** a group as the page lists it */
+    label: (group: {id: string}) => string
+    /** the groups a rule for this character is about: a film's every scene, a music video's beats with the character in them */
+    groupsWith: (d: Data, character: string) => string[]
+    /** a scope this kind does not take, and why */
+    wrongScope: (kind: DirectionRule['scope']['kind']) => string | undefined
+    /** what a preview is told about the groups of the shots it rewrites */
+    localContext: (d: Data, groups: Set<string>, ids: Set<string>) => object
+}
+const SHAPES: Record<DirectionTarget['kind'], Shape> = {
+    film: {
+        film: true,
+        flag: ' --film',
+        shots: (_, d) => filmShots(d as FilmProject),
+        context: d => filmContext(d as FilmProject),
+        put: (d, id, s) => putFilmShot(d as FilmProject, id, s),
+        raw: d => (d as FilmProject).screenplay?.scenes,
+        label: g => (g as {location?: string}).location ?? g.id,
+        groupsWith: d => ((d as FilmProject).screenplay?.scenes ?? []).map(g => g.id),
+        wrongScope: kind => (kind === 'time' || kind === 'beat' ? 'film uses scene scopes, not beat/time' : undefined),
+        localContext: (d, groups, ids) => {
+            const f = d as FilmProject
+            return {
+                scenes: f.screenplay?.scenes.filter(g => groups.has(g.id)),
+                coverage: f.coverage?.filter(g => groups.has(g.sceneId)).map(({shots, ...g}) => g),
+                cast: f.cast?.characters.filter(c => ids.has(c.id)),
+                look: f.lookBrief,
+            }
+        },
+    },
+    music: {
+        film: false,
+        flag: '',
+        shots: (t, d) => musicShots(d as Project, renderConfig(t)),
+        context: d => musicContext(d as Project),
+        put: (d, id, s) => putMusicShot(d as Project, id, s),
+        raw: d => (d as Project).beats,
+        label: g => (g as {id: string; summary: string}).summary,
+        groupsWith: (d, character) => ((d as Project).beats ?? []).filter(b => b.characterIds.includes(character)).map(b => b.id),
+        wrongScope: kind => (kind === 'scene' ? 'music uses beat scope' : undefined),
+        localContext: (d, groups, ids) => {
+            const m = d as Project
+            return {
+                beats: m.beats?.filter(g => groups.has(g.id)),
+                blocking: Object.fromEntries(Object.entries(m.blocking ?? {}).filter(([id]) => groups.has(id))),
+                cast: m.cast?.characters.filter(c => ids.has(c.id)),
+                look: m.lookBrief,
+            }
+        },
+    },
+}
+const shapeOf = (t: DirectionTarget) => SHAPES[t.kind]
+const checkScope = (t: DirectionTarget, kind: DirectionRule['scope']['kind']) => {
+    const wrong = shapeOf(t).wrongScope(kind)
+    if (wrong) throw Error(wrong)
+}
 type State = {
     schema: 1
     rules: DirectionRule[]
@@ -34,8 +103,8 @@ const hash = (v: unknown): string => createHash('sha256').update(JSON.stringify(
 const reviewed = (s: State) => s.rules.filter(r => !r.planned)
 const file = (t: DirectionTarget) => join(t.dir, 'direction.json')
 const source = (t: DirectionTarget): Data => JSON.parse(readFileSync(join(t.dir, 'project.json'), 'utf8'))
-const shots = (t: DirectionTarget, d: Data) => (t.kind === 'film' ? filmShots(d as FilmProject) : musicShots(d as Project, renderConfig(t)))
-const context = (t: DirectionTarget, d: Data) => (t.kind === 'film' ? filmContext(d as FilmProject) : musicContext(d as Project))
+const shots = (t: DirectionTarget, d: Data) => shapeOf(t).shots(t, d)
+const context = (t: DirectionTarget, d: Data) => shapeOf(t).context(d)
 const renderConfig = (t: DirectionTarget) => (existsSync(join(t.dir, 'config.json')) ? JSON.parse(readFileSync(join(t.dir, 'config.json'), 'utf8')) : {})
 const fingerprint = (t: DirectionTarget, d: Data) => {
     const config = renderConfig(t)
@@ -44,8 +113,7 @@ const fingerprint = (t: DirectionTarget, d: Data) => {
         config: {fightClips: config.fightClips ?? false, continuity: config.continuity ?? 'never', contextFrames: config.contextFrames ?? 0},
     })
 }
-const put = (t: DirectionTarget, d: Data, id: string, s: Record<string, unknown>) =>
-    t.kind === 'film' ? putFilmShot(d as FilmProject, id, s) : putMusicShot(d as Project, id, s)
+const put = (t: DirectionTarget, d: Data, id: string, s: Record<string, unknown>) => shapeOf(t).put(d, id, s)
 function state(t: DirectionTarget): State {
     if (!existsSync(file(t))) return {schema: 1, rules: [], versions: []}
     const s = JSON.parse(readFileSync(file(t), 'utf8')) as State
@@ -111,8 +179,7 @@ function validateEdit(e: DirectionEdit) {
     if (e.binding !== undefined && typeof e.binding !== 'string') throw Error('invalid binding')
 }
 const nameIn = (d: Data) => (id: string) => d.cast?.characters.find(c => c.id === id)?.name ?? id
-const groupIds = (t: DirectionTarget, d: Data) =>
-    t.kind === 'film' ? ((d as FilmProject).screenplay?.scenes ?? []).map(g => g.id) : ((d as Project).beats ?? []).map(g => g.id)
+const groupIds = (t: DirectionTarget, d: Data) => (shapeOf(t).raw(d) ?? []).map(g => g.id)
 /** A shot edit is bound to the shot it was chosen for: after a new plan it waits for an explicit rebind, like a rule. */
 const editBinding = (t: DirectionTarget, d: Data, e: DirectionEdit) =>
     e.scope.kind === 'shot' ? binding(t, d, {id: e.id, text: 'edit', scope: e.scope}) : undefined
@@ -133,7 +200,7 @@ function withEdits(t: DirectionTarget, source: Data, copy: Data, s: State, issue
         const named: DirectionEdit[] = [],
             added: DirectionEdit[] = []
         for (const e of bound.filter(e => inScope(e, shot))) {
-            const result = applyEdit(data, e, nameOf, t.kind === 'film')
+            const result = applyEdit(data, e, nameOf, shapeOf(t).film)
             if (result.issue) issues.push({editId: e.id, shotId: shot.id, message: result.issue})
             if (result.mentions) named.push(e)
             if (result.unwritten) added.push(e)
@@ -223,7 +290,7 @@ export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, 
         else if (sc.kind === 'beat' || sc.kind === 'scene') add(sc.id, about)
         else if (sc.kind === 'global') for (const group of groupIds(t, d)) add(group, about)
         else if (sc.kind === 'character') {
-            const groups = t.kind === 'film' ? groupIds(t, d) : ((d as Project).beats ?? []).filter(b => b.characterIds.includes(sc.id)).map(b => b.id)
+            const groups = shapeOf(t).groupsWith(d, sc.id)
             for (const group of groups) add(group, `for ${nameOf(sc.id)}: ${text}`)
         }
     }
@@ -252,8 +319,10 @@ function binding(t: DirectionTarget, d: Data, r: DirectionRule): string | undefi
     const selected = shots(t, d).filter(s => matches(r, s))
     if (!selected.length) return 'missing'
     const groupIds = new Set(selected.map(s => s.groupId))
-    const groups =
-        t.kind === 'film' ? (d as FilmProject).screenplay?.scenes.filter(g => groupIds.has(g.id)) : (d as Project).beats?.filter(g => groupIds.has(g.id))
+    // the groups as the project has them: the binding is a hash of them, the same as before the shapes (#840)
+    const groups = shapeOf(t)
+        .raw(d)
+        ?.filter(g => groupIds.has(g.id))
     return hash({groups, shots: selected})
 }
 function unresolved(t: DirectionTarget, d: Data, s: State) {
@@ -322,10 +391,7 @@ export function readDirection(t: DirectionTarget): DirectionView {
         editIssues,
         shots: shots(t, planned),
         characters: cast?.characters.map(c => ({id: c.id, name: c.name})) ?? [],
-        groups:
-            t.kind === 'film'
-                ? ((d as FilmProject).screenplay?.scenes ?? []).map(g => ({id: g.id, label: g.location ?? g.id}))
-                : ((d as Project).beats ?? []).map(g => ({id: g.id, label: g.summary})),
+        groups: (shapeOf(t).raw(d) ?? []).map(g => ({id: g.id, label: shapeOf(t).label(g)})),
         unresolved: unresolved(t, d, s),
         proposal: s.proposal,
         versions: s.versions,
@@ -366,8 +432,7 @@ export async function setDirectionEdits(
             validateEdit(e)
             if (ids.has(e.id)) throw Error('duplicate edit id')
             ids.add(e.id)
-            if (t.kind === 'film' && (e.scope.kind === 'time' || e.scope.kind === 'beat')) throw Error('film uses scene scopes, not beat/time')
-            if (t.kind === 'music' && e.scope.kind === 'scene') throw Error('music uses beat scope')
+            checkScope(t, e.scope.kind)
             if (e.remove && !d.cast?.characters.some(c => c.id === e.remove)) throw Error(`no character ${e.remove}`)
             if (e.add && !d.cast?.characters.some(c => c.id === e.add)) throw Error(`no character ${e.add} in the cast`)
             const bound = editBinding(t, d, e)
@@ -429,8 +494,7 @@ export async function setDirectionRules(
             validateRule(r)
             if (ids.has(r.id)) throw Error('duplicate rule id')
             ids.add(r.id)
-            if (t.kind === 'film' && (r.scope.kind === 'time' || r.scope.kind === 'beat')) throw Error('film uses scene scopes, not beat/time')
-            if (t.kind === 'music' && r.scope.kind === 'scene') throw Error('music uses beat scope')
+            checkScope(t, r.scope.kind)
             return {...r, ...(binding(t, d, r) !== undefined ? {binding: r.binding ?? binding(t, d, r)} : {})}
         })
         if (!reviewed(s).length && applied(t, d, s)) s.appliedRules = hash(reviewed(s))
@@ -498,24 +562,7 @@ function validateAfter(before: Record<string, unknown>, after: unknown, brought:
     return a
 }
 function localContext(t: DirectionTarget, d: Data, selected: DirectionShot[]) {
-    const groups = new Set(selected.map(s => s.groupId)),
-        ids = new Set(selected.flatMap(s => s.characters))
-    if (t.kind === 'film') {
-        const f = d as FilmProject
-        return {
-            scenes: f.screenplay?.scenes.filter(g => groups.has(g.id)),
-            coverage: f.coverage?.filter(g => groups.has(g.sceneId)).map(({shots, ...g}) => g),
-            cast: f.cast?.characters.filter(c => ids.has(c.id)),
-            look: f.lookBrief,
-        }
-    }
-    const m = d as Project
-    return {
-        beats: m.beats?.filter(g => groups.has(g.id)),
-        blocking: Object.fromEntries(Object.entries(m.blocking ?? {}).filter(([id]) => groups.has(id))),
-        cast: m.cast?.characters.filter(c => ids.has(c.id)),
-        look: m.lookBrief,
-    }
+    return shapeOf(t).localContext(d, new Set(selected.map(s => s.groupId)), new Set(selected.flatMap(s => s.characters)))
 }
 export type DirectionAsk = (options: AskOptions) => Promise<unknown>
 export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
@@ -715,7 +762,7 @@ export function applyDirectionOverlay<T extends Data>(
     if (pending && !options.allowPending) {
         const open = unresolvedLines(t, d, s)
         throw Error(
-            `Direction needs review: bun run direction ${t.id}${t.kind === 'film' ? ' --film' : ''} --preview, then --take - or the Direction page of the workspace.` +
+            `Direction needs review: bun run direction ${t.id}${shapeOf(t).flag} --preview, then --take - or the Direction page of the workspace.` +
                 (open.length
                     ? ` First ${open.length === 1 ? 'this instruction needs' : `these ${open.length} instructions need`} a shot of the plan as it is now ("Keep for the new shot" or Edit on the page, --edit=ID --scope=… in the terminal), or ${open.length === 1 ? 'is' : 'are'} removed:\n${open.map(line => `  - ${line}`).join('\n')}`
                     : ''),
