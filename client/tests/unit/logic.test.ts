@@ -206,3 +206,10 @@ test('the stages a plan run makes, and a clock', () => {
   expect(clock(75.25)).toBe('1:15.3')
   expect(clock(75.25, false)).toBe('1:15')
 })
+
+// #834: the plan's {Name} tokens are shown as names; a brace that is not a token stays
+test('a text of the plan reads with names', async () => {
+  const {withNames} = await import('../../src/lib/format')
+  expect(withNames('{Elias} stops; {Suzie} and {Leanne} step in')).toBe('Elias stops; Suzie and Leanne step in')
+  expect(withNames('no tokens {')).toBe('no tokens {')
+})

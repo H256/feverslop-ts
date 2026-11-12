@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import type {SettingView} from '../../../../shared/workspace'
-import {labelOf, textOfValue, valueOfText} from './settings'
+import {fieldTextOf, labelOf, textOfValue, valueOfField} from './settings'
 import type {SettingsDraft} from './useSettingsDraft'
 
 /** One setting in one row: its name and control side by side, what it does and its default small below - and the way back. */
@@ -22,20 +22,23 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
       <input
         v-else-if="setting.control === 'number'"
         :id="inputId"
-        v-model.number="form.draft[setting.key]"
+        :value="fieldTextOf(setting, form.draft[setting.key])"
         type="number"
         :step="setting.step ?? 1"
+        :placeholder="setting.auto?.label"
         :disabled="off"
         :aria-label="setting.label"
+        @input="form.draft[setting.key] = valueOfField(setting, text($event))"
       />
       <input
         v-else
         :id="inputId"
         type="text"
         :disabled="off"
-        :value="textOfValue(form.draft[setting.key])"
+        :value="fieldTextOf(setting, form.draft[setting.key])"
+        :placeholder="setting.auto?.label"
         :aria-label="setting.label"
-        @input="form.draft[setting.key] = valueOfText(text($event))"
+        @input="form.draft[setting.key] = valueOfField(setting, text($event))"
       />
     </div>
     <p class="sf-note">
