@@ -8,8 +8,9 @@ import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, 
 // banner: the logo at the start - true for the plain one, a string for one with the tool's name under it
 const commands: Record<string, {args: string; description: string; json?: boolean; banner?: boolean | string}> = {
     plan: {
-        args: '[project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001] [--again] [--preview] [--retake=slot-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--review] [--until=story|cast|look] [--dry-run] [--show=story,cast,clips] [--export=mlt,openshot|all] [--gallery] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--llm-parallel=N] [--comfy=URL] [--legacy-moments] [--debug-audio]',
+        args: '[project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001] [--again] [--preview] [--retake=slot-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--review] [--until=story|cast|look] [--dry-run [--json]] [--show=story,cast,clips] [--export=mlt,openshot|all] [--gallery] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--llm-parallel=N] [--comfy=URL] [--legacy-moments] [--debug-audio]',
         description: 'Plan and render a music video; existing steps are reused.',
+        json: true,
     },
     film: {
         args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]',

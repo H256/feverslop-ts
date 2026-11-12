@@ -64,6 +64,7 @@ export const commandHelp: Record<string, Help> = {
             ['--render=song,images,videos,final|all', 'Also render: the song, the pictures, the clips, the final video. all = images, videos, final'],
             ...rendering,
             ...planning,
+            ['--json', 'With --dry-run: what it would do as JSON - the reasons, the steps made again, the beats planned again, the renders'],
             ['--show=STEP,clips', 'Print the details of these cached steps; clips = the clip prompts'],
             ['--export=mlt,openshot|all', 'Write a timeline for Shotcut/Kdenlive and/or OpenShot'],
             ['--gallery', 'Write gallery.html, an overview of the assets so far; runs nothing else'],

@@ -101,5 +101,15 @@ const runNext = toasts.guard(async () => {
     >
       Plan everything
     </button>
+    <!-- a planned project planned again, from a step or by what changed: the question says what it would do first (#836) -->
+    <button
+      v-else-if="project.plan.stage === 'plan'"
+      class="btn mini"
+      :disabled="busy"
+      title="What a plan run would make again - from a step, or by what changed - asked before it runs"
+      @click="toasts.guard(planStage)()"
+    >
+      Plan again…
+    </button>
   </div>
 </template>

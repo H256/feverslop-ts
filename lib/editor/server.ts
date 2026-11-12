@@ -19,6 +19,7 @@ import {filmRenderConfig} from '../film/pictures.ts'
 import {filmDir, filmExists, filmIds} from '../film/setup.ts'
 import {changeLibrary, readCasting, readLibrary, writeCastingEntry} from './library.ts'
 import {statsView} from './stats.ts'
+import {dryRun} from './dry-run.ts'
 import {
     clipRequestId,
     type EditorKind,
@@ -497,6 +498,11 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (id === 'drop') return json(await dropDirection(target))
                 if (id === 'restore') return json(await rebuilt(await restoreDirection(target, asked.version ?? '')))
                 return notFound()
+            }
+            // what a plan run would do, before it is asked for: the command's --dry-run --json (#836)
+            if (what === 'dry-run') {
+                const asked = await body<{redo?: string[]; until?: string; beats?: string[]}>()
+                return json({dryRun: (await dryRun(target, {type: 'plan', ...asked})) ?? null})
             }
             if (what === 'estimate') {
                 const asked = await body<{clips?: string[]; pictures?: number}>()
