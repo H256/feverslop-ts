@@ -42,6 +42,25 @@ const rendered = computed(() => props.project.clips ? props.project.rendered / p
         <span class="next" :title="status ? [status.next.command, status.next.estimate].filter(Boolean).join('\n') : undefined">{{ status ? (status.next.command ? `Next: ${status.next.why}` : 'Everything is done') : ' ' }}</span>
       </span>
     </RouterLink>
+    <RouterLink
+      v-if="project.newest && project.newest !== `${project.id}.mp4`"
+      class="pc-newest"
+      :to="{path: `${root}/postwork`, query: {play: project.newest}}"
+      title="The newest finished video - it plays on the Post-work page when you play it"
+      >{{ project.newest }}</RouterLink
+    >
     <button v-if="more" class="more" aria-expanded="false" @click="$emit('expand')">{{ plural(more, 'more take') }}</button>
   </div>
 </template>
+
+<style scoped>
+/* the newest finished video, under the card: played on the Post-work page on a click (#832) */
+.pc-newest {
+  display: block;
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

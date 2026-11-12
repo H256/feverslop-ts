@@ -220,3 +220,12 @@ export function chainSources(id: string, finals: FinalChoice[]): Record<Step, st
 
 /** What a post-work step has made: the videos of the steps, newest last, and those the timeline plays. */
 export const postworkVideos = (finals: EditorFinal[]) => finals.filter(f => f.postwork)
+
+/**
+ * The newest video a step has made, from whichever video it started (#832): a marker on the finished video and on the refinished
+ * one are both the marker - the step is made when any video of the project went through it. The YouTube text: any video with one.
+ */
+export function madeByAny(step: Step, finals: EditorFinal[]): EditorFinal | undefined {
+  const through = finals.filter(f => (step === 'description' ? f.youtube !== undefined : !f.preview && new RegExp(`-${ENDINGS[step]}(-|\\.mp4$)`).test(f.file)))
+  return through.reduce<EditorFinal | undefined>((newest, f) => (!newest || f.v > newest.v ? f : newest), undefined)
+}
