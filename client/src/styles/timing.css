@@ -1,0 +1,211 @@
+/* The timing: the vocals around one line, its words to drag. */
+/* the timing: the waveform of the vocals around one line, its words to drag, the lines below to pick one */
+.tedit-wrap {
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  background: var(--bg);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.tedit-head {
+  margin-bottom: 6px;
+}
+.tedit-head b {
+  font-weight: 600;
+}
+.tedit {
+  position: relative;
+  height: 176px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  outline: none;
+}
+.tedit:focus-visible {
+  border-color: var(--accent);
+}
+.twave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46px;
+  display: block;
+  cursor: pointer;
+}
+.tlayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tlayer > * {
+  pointer-events: auto;
+}
+.tline {
+  position: absolute;
+  top: 6px;
+  height: 18px;
+  border-radius: var(--radius-s);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+}
+.tline.changed {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.tword {
+  position: absolute;
+  top: 28px;
+  height: 94px;
+  border-radius: var(--radius-s);
+  background: light-dark(#cf3d1b22, #ff6f4d26);
+  border: 1px solid var(--accent);
+  cursor: grab;
+  min-width: 3px;
+}
+.tword.anchored {
+  border-top-width: 3px;
+}
+.tword.grouped {
+  border-bottom-style: double;
+  border-bottom-width: 3px;
+}
+.tselection {
+  position: absolute;
+  top: 146px;
+  height: 18px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--radius-s);
+  font-size: var(--text-xs);
+  padding: 0 8px;
+  cursor: grab;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tselection .grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  background: var(--accent);
+}
+.tselection .grip.l {
+  left: 0;
+}
+.tselection .grip.r {
+  right: 0;
+}
+.tword span {
+  position: absolute;
+  left: 4px;
+  right: 2px;
+  top: 1px;
+  font-size: var(--text-s);
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tword.chosen {
+  background: light-dark(#cf3d1b44, #ff6f4d4d);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.tword.crossed {
+  border-color: var(--danger);
+}
+.tword.other {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tword.off {
+  border-style: dashed;
+  opacity: 0.45;
+}
+.tword.off span {
+  text-decoration: line-through;
+}
+.tword .grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+.tword .grip.l {
+  left: -3px;
+}
+.tword .grip.r {
+  right: -3px;
+}
+.tcut {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--stale);
+  pointer-events: none;
+}
+.tcut span {
+  position: absolute;
+  left: 3px;
+  bottom: 2px;
+  font: var(--text-xs) var(--mono);
+  color: var(--stale);
+}
+.thead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--text);
+  pointer-events: none;
+}
+.tlines {
+  display: grid;
+  gap: var(--space-half);
+}
+.tline-row {
+  display: grid;
+  grid-template-columns: 56px 110px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  text-align: left;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  border-radius: var(--radius-m);
+  background: transparent;
+}
+.tline-row:hover {
+  background: var(--surface);
+}
+.tline-row.selected {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.tline-row.changed {
+  border-left-color: var(--accent);
+}
+.tline-row time {
+  font: var(--text-s) var(--mono);
+  color: var(--muted);
+}
+.tline-row > span:nth-child(2) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-s);
+}

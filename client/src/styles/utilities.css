@@ -1,0 +1,84 @@
+/* Small utilities on the scales, and the swatches of the timeline legend. */
+/* Small utilities on the scales (#838) - what an inline style said before: u- for "utility", nothing else uses the prefix */
+.u-row {
+  display: flex;
+  gap: var(--space-3);
+}
+.u-row-wide {
+  gap: var(--space-4);
+}
+.u-grow {
+  flex: 1;
+}
+.u-end {
+  justify-content: flex-end;
+}
+.u-wide {
+  width: 100%;
+}
+.u-inline {
+  display: inline-block;
+}
+.u-num {
+  width: 76px;
+}
+.u-picture {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+}
+.u-small {
+  font-size: var(--text-s);
+}
+.u-sans {
+  font-family: var(--sans);
+  font-weight: 400;
+}
+.u-plain {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.u-stale {
+  color: var(--stale);
+}
+.u-accent {
+  color: var(--accent);
+}
+.u-mt-1 {
+  margin-top: var(--space-1);
+}
+.u-mt-2 {
+  margin-top: var(--space-2);
+}
+.u-mt-3 {
+  margin-top: var(--space-3);
+}
+.u-mt-4 {
+  margin-top: var(--space-4);
+}
+.u-mb-1 {
+  margin-bottom: var(--space-1);
+}
+.u-mb-2 {
+  margin-bottom: var(--space-2);
+}
+.u-mb-3 {
+  margin-bottom: var(--space-3);
+}
+.u-ml-2 {
+  margin-left: var(--space-2);
+}
+/* the swatches of the timeline's legend */
+.legend i.lg-missing {
+  background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px);
+}
+.legend i.lg-stale {
+  background: var(--stale);
+}
+.legend i.lg-mark {
+  background: var(--danger);
+}
+.legend i.lg-goes {
+  background: var(--accent);
+  border-radius: var(--radius-round);
+}

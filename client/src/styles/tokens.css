@@ -1,0 +1,62 @@
+/* The tokens (#838): colours, the scales of space, radius and type, both themes - docs/design-system.md says what each means. */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f3f3f1, #0d0e10);
+  --surface: light-dark(#ffffff, #15171a);
+  --raised: light-dark(#ecebe8, #1e2125);
+  --hover: light-dark(#e3e2de, #272b30);
+  --line: light-dark(#dddcd7, #292d32);
+  --text: light-dark(#191a1c, #eceef1);
+  --muted: light-dark(#5f6269, #9a9fa8);
+  /* What a colour means (#838) - docs/design-system.md:
+     accent  the main action of a page, the current tab, focus; never a warning
+     plan, finish  a button that asks the language model / finishes for publishing
+     danger  something that removes or stops; a failure
+     stale   made from an older state; ok  done
+     a link is the text colour, underlined; a disabled button is grey in every variant */
+  --accent: light-dark(#2557c4, #7ea6ff);
+  --accent-text: light-dark(#ffffff, #0b1630);
+  --accent-soft: light-dark(#e3ebfb, #18264a);
+  --stale: light-dark(#8f6200, #f2bd3a);
+  --stale-soft: light-dark(#f8ecc9, #3a2d0c);
+  --danger: light-dark(#b42318, #ff7a70);
+  --danger-soft: light-dark(#fbe4e1, #3b1a18);
+  --ok: light-dark(#17693f, #5ed29a);
+  /* what a button does (#774): planning with the language model, and finishing for publishing */
+  --plan: light-dark(#6a3fc4, #b69cff);
+  --plan-soft: light-dark(#efe8fc, #2a2142);
+  --finish: light-dark(#0b6e78, #5fd0db);
+  --finish-soft: light-dark(#dff3f5, #11303a);
+  --hatch: light-dark(#d6d5d0, #24272b);
+  --sans: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  /* scales (#838): no other gap, radius or font size in a stylesheet */
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --radius-pill: 99px;
+  --radius-round: 50%;
+  --text-xxs: 9px; /* a letter in a 14 px badge, nowhere else */
+  --text-xs: 11px;
+  --text-s: 12px;
+  --text-m: 13px;
+  --text-l: 15px;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}

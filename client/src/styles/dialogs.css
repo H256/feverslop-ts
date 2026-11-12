@@ -1,0 +1,114 @@
+/* Dialogs, the viewer, the compare view, toasts and the boot screen. */
+dialog {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0;
+  max-width: min(92vw, 1200px);
+  max-height: 90vh;
+}
+dialog::backdrop {
+  background: #000a;
+}
+.viewer img {
+  display: block;
+  max-width: 100%;
+  max-height: 68vh;
+  margin: 0 auto;
+  background: #000;
+}
+.viewer .caption {
+  padding: 12px 16px;
+  max-height: 20vh;
+  overflow: auto;
+}
+.viewer .caption p {
+  color: var(--muted);
+  font-size: var(--text-s);
+  margin-top: 2px;
+}
+.viewer form {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  margin: 0;
+}
+.viewer form button {
+  border: 0;
+  border-radius: var(--radius-m);
+  background: #000a;
+  color: #fff;
+  padding: 3px 9px;
+}
+.ask {
+  width: 480px;
+  padding: 16px 18px;
+}
+.ask h2 {
+  font-size: var(--text-l);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.ask p {
+  margin-bottom: 6px;
+}
+.ask .btn.mini {
+  padding: 2px 8px;
+  font-size: var(--text-s);
+}
+.btn-row {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.compare {
+  width: min(92vw, 1200px);
+  padding: 12px;
+}
+.compare .pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.compare video {
+  width: 100%;
+  background: #000;
+  border-radius: var(--radius-m);
+  display: block;
+}
+.compare .btn.mini {
+  padding: 2px 8px;
+  font-size: var(--text-s);
+}
+.btn-row {
+  margin-top: 10px;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  translate: -50% 0;
+  background: var(--text);
+  color: var(--bg);
+  padding: 6px 14px;
+  border-radius: var(--radius-m);
+  z-index: 10;
+  max-width: 80vw;
+}
+.toast.bad {
+  background: var(--danger);
+  color: #fff;
+}
+
+.boot {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px;
+}
+.boot code {
+  font-family: var(--mono);
+  color: var(--text);
+}

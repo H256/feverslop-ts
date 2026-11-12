@@ -1,0 +1,118 @@
+/* Casting and the cast by hand. */
+/* Casting: a card per role, as many side by side as fit - the picture on top, who plays it at the bottom */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--space-3);
+}
+.role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+.role img,
+.role .noimg {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: var(--radius-m);
+  background: var(--hatch);
+  display: block;
+}
+.role .player {
+  flex: 1;
+  min-width: 0;
+}
+.role .about {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.role .warn {
+  margin: 4px 0 0;
+}
+.role .choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.role .choice select {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.role.out {
+  border-style: dashed;
+}
+.role.out img,
+.role.out .noimg,
+.role.out .player > :not(.warn) {
+  opacity: 0.4;
+}
+.castbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 12px;
+}
+/* the cast by hand: a form per member, side by side */
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-3);
+}
+.member-grid .member {
+  margin-bottom: 0;
+}
+.member {
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  margin-bottom: 8px;
+}
+.member .head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: 8px;
+}
+.member textarea,
+textarea.prose {
+  font: var(--text-m)/1.5 var(--sans);
+}
+textarea.prose {
+  width: 100%;
+}
+textarea.book {
+  width: 100%;
+  min-height: 50vh;
+  font: var(--text-l)/1.6 var(--sans);
+}
+.twocol {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.twocol h3 {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.twocol .text {
+  white-space: pre-wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
