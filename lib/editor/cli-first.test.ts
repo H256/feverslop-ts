@@ -1,60 +1,20 @@
 import {describe, expect, test} from 'bun:test'
 import {readdirSync, readFileSync} from 'node:fs'
 import {join} from 'node:path'
+import {LIBRARY_ROUTES, PROJECT_ROUTES} from './project-routes.ts'
 
 // CLI first: whatever the workspace changes, a command changes the same way. The pages either start a command (RunControl) or call
 // the very function a command calls - one place for what a change does, so that the page and the terminal cannot drift apart.
-// This reads the server's POST routes and fails on a function they call that no command (tools/*.ts, index.ts, film.ts) calls.
+// The routes say what they change a project with (lib/editor/project-routes.ts, #840); this checks that a command calls each of them.
 
 const root = join(import.meta.dir, '..', '..')
 const read = (file: string) => readFileSync(join(root, file), 'utf8')
-
-// what a POST route may call that changes nothing of a project by itself: the request, the answer, starting a command, estimates
-const NOT_A_CHANGE = new Set([
-    'body',
-    'json',
-    'refused',
-    'invalid',
-    'busy',
-    'missing',
-    'notFound',
-    'started',
-    'urlsOfChoice',
-    'estimateClips',
-    // the command itself with --dry-run: it reads only
-    'dryRun',
-    'replaceDryRun',
-    'estimatePictures',
-    'readPictureJobs',
-    'picturesFile',
-    'atLook',
-    // the plan run started with a change of the direction (#830): the command does the same after --take
-    'rebuilt',
-    // an upload checked and kept for the run that puts it in (lib/editor/upload.ts), and what is read to refuse one
-    'checkUploadSize',
-    'takePictureUpload',
-    'readReferences',
-])
-
-/** The functions the POST part of the project routes and of the library's calls. */
-function postCalls(): string[] {
-    const server = read('lib/editor/server.ts')
-    const from = server.indexOf('const started = (run: unknown) => json({run})')
-    const to = server.indexOf('const libraryApi', from)
-    expect(from).toBeGreaterThan(0)
-    expect(to).toBeGreaterThan(from)
-    // and the library's POST routes (#835): from its change on, up to the handler of all requests
-    const library = server.slice(server.indexOf("if (rest[0] === 'change')", to), server.indexOf('return async (request: Request)', to))
-    expect(library).toContain('changeLibrary')
-    const post = server.slice(from, to) + library
-    // runs.start / runs.stop start and stop a command: the command is what changes the project
-    return [...new Set([...post.matchAll(/(?<![.\w])([a-z][A-Za-z]+)\(/g)].map(m => m[1]!))].filter(
-        name =>
-            !NOT_A_CHANGE.has(name) && !['if', 'return', 'await', 'catch', 'for', 'switch', 'join', 'mkdtempSync', 'writeFileSync', 'tmpdir'].includes(name),
-    )
-}
+const routes = [...PROJECT_ROUTES, ...LIBRARY_ROUTES]
 
 describe('CLI first', () => {
+    test('every POST route says what it changes, a GET route changes nothing', () => {
+        for (const route of routes) expect({path: route.path, says: route.changes !== undefined}).toEqual({path: route.path, says: route.method === 'POST'})
+    })
     test('every function a workspace route changes a project with is one a command calls too', () => {
         const commands = [
             ...readdirSync(join(root, 'tools'))
@@ -63,8 +23,8 @@ describe('CLI first', () => {
             read('index.ts'),
             read('film.ts'),
         ].join('\n')
-        const calls = postCalls()
-        // the reading of the routes still finds them
+        const changes = [...new Set(routes.flatMap(route => (typeof route.changes === 'object' ? route.changes.map(change => change.name) : [])))]
+        // the table still names them
         for (const name of [
             'writeCast',
             'writeLook',
@@ -76,8 +36,9 @@ describe('CLI first', () => {
             'writeCastingEntry',
             'writeConfig',
         ])
-            expect(calls).toContain(name)
-        const pageOnly = calls.filter(name => !new RegExp(`\\b${name}\\(`).test(commands))
+            expect(changes).toContain(name)
+        expect(changes).toContain('changeLibrary')
+        const pageOnly = changes.filter(name => !commands.includes(`${name}(`))
         expect(pageOnly).toEqual([])
     })
     // #830: a change of the direction and the build of the prompts are one request - a page never takes, restores, drops or edits
@@ -88,13 +49,19 @@ describe('CLI first', () => {
         const walk = (dir: string) => {
             for (const entry of readdirSync(join(root, dir), {withFileTypes: true}))
                 if (entry.isDirectory()) walk(`${dir}/${entry.name}`)
-                else if (/\.(vue|ts)$/.test(entry.name)) files.push(`${dir}/${entry.name}`)
+                else if (entry.name.endsWith('.vue') || entry.name.endsWith('.ts')) files.push(`${dir}/${entry.name}`)
         }
         walk('client/src')
+        // one action: a declaration of the page's script, from its line on to the next one
+        const actionsOf = (text: string) => {
+            const actions: string[] = []
+            for (const line of text.split('\n'))
+                if (actions.length === 0 || ['const ', 'function ', 'async function '].some(start => line.startsWith(start))) actions.push(line)
+                else actions[actions.length - 1] += `\n${line}`
+            return actions
+        }
         const found = files.flatMap(file =>
-            read(file)
-                // one action: a declaration of the page's script
-                .split(/\n(?=const |function |async function )/)
+            actionsOf(read(file))
                 .filter(action => changes.some(name => action.includes(`api.${name}(`)) && action.includes("start({type: 'plan'"))
                 .map(action => `${file}: ${action.split('\n')[0]}`),
         )
