@@ -78,6 +78,7 @@ import {filmBuiltOn, FILM_STEP_NAMES, FilmStore, type FilmStepName} from './lib/
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from './lib/film/types.ts'
 import {ask, configureLlm} from './lib/llm.ts'
 import {jsonOutput, keepLogIn, log, styles} from './lib/log.ts'
+import {runEvent} from './lib/run-events.ts'
 import type {DryRun} from './shared/workspace.ts'
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from './lib/prompts.ts'
 import {validProjectId} from './lib/project-setup.ts'
@@ -905,6 +906,9 @@ if (render.has('images') || render.has('videos') || retake) {
             // a preview leaves no last frame behind - the clips after it are not affected
             if (!args.preview) warnClipsGoingOn(selected, requests)
         }
+        // what this run renders, for the workspace to count the jobs that are done (#829)
+        const folder = args.preview ? 'previews' : 'videos'
+        runEvent({type: 'jobs', kind: 'clip', ids: selected.filter(c => args.again || !existsSync(join(film.dir, folder, `${c.id}.mp4`))).map(c => c.id)})
         await renderClips(selected)
     }
 }

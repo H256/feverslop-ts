@@ -1,7 +1,8 @@
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs'
-import {dirname, join} from 'node:path'
+import {basename, dirname, join} from 'node:path'
 import {processAlive} from './lock.ts'
-import {runResult} from './log.ts'
+import {runLogFile, runResult} from './log.ts'
+import {notePastRun} from './run-queue.ts'
 import {ownProcessIdentity, sameProcess} from './process-identity.ts'
 
 // What the last run of a project did, in <project>/logs/last-run.json: the command, and how it ended. A run that is
@@ -57,7 +58,11 @@ export function startRunRecord(dir: string, command: string): RunRecord | undefi
     const record: RunRecord = {command, pid: process.pid, identity: ownProcessIdentity(), startedAt: new Date().toISOString()}
     current = record
     save(file, record)
-    process.on('exit', code => save(file, {...record, endedAt: new Date().toISOString(), exitCode: code, ...(runResult().cancelled ? {cancelled: true} : {})}))
+    process.on('exit', code => {
+        const ended: RunRecord = {...record, endedAt: new Date().toISOString(), exitCode: code, ...(runResult().cancelled ? {cancelled: true} : {})}
+        save(file, ended)
+        endInHistory(dir, ended)
+    })
     return previous
 }
 
@@ -71,4 +76,18 @@ export function noteRunFailures(failures: string[]) {
 
 export function noteRunError(message: string) {
     if (current) current.error = message
+}
+
+/** This run in the history of the project's runs (logs/runs.jsonl, lib/run-queue.ts): how it ended, and its log (#837). */
+function endInHistory(dir: string, record: RunRecord) {
+    const log = runLogFile()
+    const failure = record.failures?.[0] ?? record.error
+    notePastRun(dir, {
+        command: record.command,
+        startedAt: record.startedAt,
+        endedAt: record.endedAt,
+        state: runState(record),
+        ...(log ? {log: basename(log)} : {}),
+        ...(failure ? {failure} : {}),
+    })
 }

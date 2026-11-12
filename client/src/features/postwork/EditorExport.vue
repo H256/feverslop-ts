@@ -9,7 +9,7 @@ import {useProject} from '../project/session'
  * the song under them - and the EDL a film writes when it is assembled. The export is a plan run that reuses every step: it is only
  * offered when it has nothing to make first and every clip is rendered, so a click never plans or renders.
  */
-const {project, api, start, busy} = useProject()
+const {project, api, start} = useProject()
 const status = shallowRef<ProjectStatus>()
 onMounted(async () => {
   status.value = await api.status().catch(() => undefined)
@@ -41,7 +41,7 @@ const exportTo = (format: 'mlt' | 'openshot') => start({type: 'export', formats:
     <template v-if="project.kind === 'music'">
       <p class="muted ee-line">The rendered clips on one track, the song under them - to cut further in an editor. Nothing is rendered.</p>
       <div v-for="item in FORMATS" :key="item.format" class="ee-row">
-        <button class="btn" :disabled="busy || !status || !!blocked" @click="exportTo(item.format)">{{ item.name }}</button>
+        <button class="btn" :disabled="!status || !!blocked" @click="exportTo(item.format)">{{ item.name }}</button>
         <code v-if="fileOf(item.format)" :title="when(fileOf(item.format)!.changed)">{{ fileOf(item.format)!.file }}</code>
         <span v-else class="muted">not written yet</span>
       </div>

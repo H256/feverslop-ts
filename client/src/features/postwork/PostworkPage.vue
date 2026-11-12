@@ -165,8 +165,8 @@ const copy = toasts.guard(async (text: string) => {
             <IntroForm v-else-if="step === 'intro'" :draft="drafts.intro" :finals="sources" :found="postwork.introFound" />
             <DescriptionForm v-else :draft="drafts.description" :finals="sources" />
             <div class="pw-actions">
-              <button class="btn primary" :disabled="busy || !sources.length" @click="run(step)">{{ STEP_INFO[step].confirm }}</button>
-              <span v-if="busy" class="muted">A run is going on - wait for it, or stop it.</span>
+              <button class="btn primary" :disabled="!sources.length" @click="run(step)">{{ STEP_INFO[step].confirm }}</button>
+              <span v-if="busy" class="muted">A run is going on - this one can wait in the queue behind it.</span>
             </div>
           </div>
         </li>

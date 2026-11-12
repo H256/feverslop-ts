@@ -100,6 +100,11 @@ const commands: Record<string, {args: string; description: string; json?: boolea
     'film:gallery': {args: '', description: 'Write films/index.html with the available films.'},
     'film:migrate': {args: '<film-id> <old-film-folder> [--apply]', description: 'Preview or apply migration of compatible rendered clips.'},
     'leak-scan': {args: '<project-id> [--film]', description: 'Check rendered clips for leaked studio backdrops.'},
+    runs: {
+        args: '<project-id> [--film] [--remove=<queued id>] [--clear] [--json]',
+        description: 'The runs waiting in the queue of a project, and the ones that ended; take a queued one out.',
+        json: true,
+    },
     'texture-chains': {
         args: '<project-id> [--film] [--json]',
         description: 'Measure whether continuing clips get grittier from link to link. Only reads.',

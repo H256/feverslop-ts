@@ -6,6 +6,7 @@ import {existsSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {formatDuration, hideDetails, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
+import {runEvent} from './lib/run-events.ts'
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
@@ -1805,6 +1806,8 @@ if (render.has('images') || render.has('videos') || retake) {
         // asks for a server at once; a later clip of a chain waits for the one before it and holds nothing
         const chains = clipChains(selected)
         const videoOf = (c: {id: string}) => join(project.dir, clipFolder, `${c.id}.mp4`)
+        // what this run renders, for the workspace to count the jobs that are done (#829)
+        runEvent({type: 'jobs', kind: 'clip', ids: todoClips.map(c => c.id)})
         await renderer.announceResumes(
             chains
                 .map(chain => chain[0]!)

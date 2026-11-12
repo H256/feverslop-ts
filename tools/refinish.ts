@@ -1,4 +1,5 @@
 import {noProject} from '../lib/usage.ts'
+import {runEvent} from '../lib/run-events.ts'
 import {cli} from '../lib/cli.ts'
 import {completeDerivative} from '../lib/refinish.ts'
 // A project made before larger clips, 48 fps and the finish gets them afterwards, from the clips it has. No plan run: it reads output/clips/ and the
@@ -126,6 +127,8 @@ if (options.upscale !== 'none') {
         for (const clip of selected) archiveFiles(dir, `${clip.id}-${variant}-${stamp}`, [`${folder}/${clip.id}.mp4`, `${folder}/${clip.id}.mp4.json`])
     }
     const song = args.film ? undefined : stemFiles()
+    // what this run renders, for the workspace to count the jobs that are done (#829)
+    runEvent({type: 'jobs', kind: 'clip', ids: selected.filter(clip => !completeDerivative(fileOf(clip))).map(clip => clip.id)})
     for (const clip of selected) {
         const source = join(dir, 'videos', `${clip.id}.mp4`)
         const target = fileOf(clip)
