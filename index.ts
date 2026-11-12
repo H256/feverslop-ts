@@ -5,6 +5,7 @@ import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {formatDuration, hideDetails, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
+import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
@@ -57,7 +58,6 @@ import {
     propActivityPerBeat,
     singingPerBeat,
 } from './lib/compose.ts'
-import {parseRetake} from './lib/retake.ts'
 import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-picture.ts'
 import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
@@ -82,7 +82,7 @@ import {pictureProp, propMissing} from './lib/prop-check.ts'
 import {projectInputs, songFileOf, stepUsed, readInputFile} from './lib/inputs.ts'
 import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from './lib/render-state.ts'
 import {reviewed} from './lib/review.ts'
-import {parseUntil, stopAfter} from './lib/stages.ts'
+import {stopAfter} from './lib/stages.ts'
 import {applyLibraryText, CASTING_FILE, castFromLibrary, copyKey} from './lib/casting.ts'
 import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
@@ -124,18 +124,9 @@ const {values: args, positionals} = (() => {
             args: Bun.argv.slice(2),
             allowPositionals: true,
             options: {
+                ...RUN_OPTIONS,
                 redo: {type: 'string', default: ''},
                 beats: {type: 'string', default: ''},
-                render: {type: 'string', default: ''},
-                only: {type: 'string', default: ''},
-                again: {type: 'boolean', default: false},
-                preview: {type: 'boolean', default: false},
-                retake: {type: 'string', default: ''},
-                'new-anchor': {type: 'boolean', default: false},
-                'picture-prompt': {type: 'string', default: ''},
-                'picture-anchor': {type: 'string', default: ''},
-                'picture-description': {type: 'string', default: ''},
-                'describe-picture': {type: 'boolean', default: false},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
                 'llm-model': {type: 'string'},
@@ -144,23 +135,13 @@ const {values: args, positionals} = (() => {
                 // skips step 11b and spreads/reuses beat.moments across shots the old way - a fallback while 11b is new
                 'legacy-moments': {type: 'boolean', default: false},
                 'debug-audio': {type: 'boolean', default: false},
-                refresh: {type: 'string', default: ''},
-                strict: {type: 'boolean', default: false},
                 // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
                 debug: {type: 'boolean', default: false},
                 gallery: {type: 'boolean', default: false},
-                // says what --redo, changed inputs and --render would do, and does nothing
-                'dry-run': {type: 'boolean', default: false},
-                // with --dry-run: what it says as JSON, for the workspace (#836)
-                json: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
                 // the terminal shows a cached step as one line; -v everything, --show=story,clips the details of those
                 verbose: {type: 'boolean', short: 'v', default: false},
                 show: {type: 'string', default: ''},
-                // stop after story, cast, look and beats when they were just generated: accept, edit, again, stop
-                review: {type: 'boolean', default: false},
-                // plan up to this stage and stop - the story, the cast or the look (lib/stages.ts): looked at and changed before what is built on it
-                until: {type: 'string', default: ''},
             },
         })
     } catch (e) {
@@ -168,53 +149,19 @@ const {values: args, positionals} = (() => {
     }
 })()
 setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
-// --render=all is images, videos and the final video, in that order - "song" is never part of "all", it has to be asked for
-const render = new Set(
-    args.render
-        .split(',')
-        .filter(Boolean)
-        .flatMap(r => (r === 'all' ? ['images', 'videos', 'final'] : [r])),
-)
-const unknownRender = [...render].filter(r => !['song', 'images', 'videos', 'final'].includes(r))
-if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use song, images, videos, final or all`, usage)
-// --refresh=pictures,clips renders what was made from another request than the plan has now (lib/provenance.ts) again
-const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
-const unknownRefresh = [...refreshKinds].filter(k => k !== 'pictures' && k !== 'clips')
-if (unknownRefresh.length) log.usageError(`--refresh: unknown "${unknownRefresh.join(', ')}" - use pictures, clips`, usage)
-// --again renders the clips named in --only once more, with a new seed - the old version is put away in old/attempts/, never overwritten
-if (args.again && !render.has('videos') && !render.has('images'))
-    log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
-// --preview: cheap renders into previews/ that never replace a clip (config.json "preview"), or the video of the whole thing made of them
-if (args.preview && !render.has('videos') && !render.has('final')) log.usageError('--preview goes with --render=videos or --render=final', usage)
-if (args.preview && render.has('videos') && render.has('final'))
-    log.usageError('--preview: first the previews (--render=videos), then their video (--render=final)', usage)
-if (args.retake && render.size) log.usageError('--retake is a run of its own: it renders one part of one clip', usage)
-const retake = args.retake
-    ? (() => {
-          try {
-              return parseRetake(args.retake)
-          } catch (e) {
-              return log.usageError((e as Error).message, usage)
-          }
-      })()
-    : undefined
-if ((args['new-anchor'] || args['picture-prompt'] || args['picture-anchor']) && !(args.again && render.has('images')))
-    log.usageError('--new-anchor, --picture-prompt and --picture-anchor go with --render=images --only=... --again', usage)
-if ((args['picture-description'] || args['describe-picture']) && !args['picture-anchor'])
-    log.usageError('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture', usage)
-if (args['picture-description'] && args['describe-picture'])
-    log.usageError('--picture-description or --describe-picture: the description given by hand, or read from the picture', usage)
-if (args['picture-anchor'] && args.only.split(',').filter(Boolean).length !== 1) log.usageError('--picture-anchor goes with one picture in --only', usage)
-if (args.again && !args.only) log.usageError('--again needs --only=slot-001,... - say which clips are rendered again, every one is GPU time', usage)
-if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
-const until = (() => {
+// the options of a run both pipelines take (lib/run-options.ts) - "song" is never part of --render=all, it has to be asked for
+const {
+    render,
+    refresh: refreshKinds,
+    retake,
+    until,
+} = (() => {
     try {
-        return parseUntil(args.until)
+        return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY))
     } catch (e) {
         return log.usageError((e as Error).message, usage)
     }
 })()
-if (args.json && !args['dry-run']) log.usageError('--json goes with --dry-run: what the run would do, as data', usage)
 if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run']))
     log.usageError(
         '--until plans up to a stage and stops - it goes with no --render (but --render=images with --until=look), --retake, --gallery, --export or --dry-run',

@@ -7,6 +7,7 @@ import {cli} from './lib/cli.ts'
 import {copyFileSync, existsSync, mkdirSync, readdirSync, rmSync} from 'node:fs'
 import {join} from 'node:path'
 import {parseArgs} from 'node:util'
+import {FILM_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {languageName} from './lib/config.ts'
 import {addScore, assembleFilm, assembleSmoothFilm, SCORE_EXTENSIONS} from './lib/film/assemble.ts'
 import {finishOf} from './lib/finish.ts'
@@ -28,11 +29,10 @@ import {clipEstimate, clipFailureRisks, pictureEstimate} from './lib/render-stat
 import {keepTimingsIn, readTimings} from './lib/timings.ts'
 import {formatSlotRanges} from './lib/assemble.ts'
 import {reviewed} from './lib/review.ts'
-import {parseUntil, stopAfter} from './lib/stages.ts'
+import {stopAfter} from './lib/stages.ts'
 import {archiveClip} from './lib/film/archive.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
 import {previewSources} from './lib/assemble.ts'
-import {parseRetake} from './lib/retake.ts'
 import {clipChains, onlyClips, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
 import type {AssetKind} from './lib/asset-import.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
@@ -96,30 +96,13 @@ const {values: args, positionals} = (() => {
             args: Bun.argv.slice(2),
             allowPositionals: true,
             options: {
+                ...RUN_OPTIONS,
                 redo: {type: 'string', default: ''},
-                render: {type: 'string', default: ''},
-                only: {type: 'string', default: ''},
-                again: {type: 'boolean', default: false},
-                preview: {type: 'boolean', default: false},
-                retake: {type: 'string', default: ''},
-                'new-anchor': {type: 'boolean', default: false},
-                'picture-prompt': {type: 'string', default: ''},
-                'picture-anchor': {type: 'string', default: ''},
-                'picture-description': {type: 'string', default: ''},
-                'describe-picture': {type: 'boolean', default: false},
                 'fix-script': {type: 'boolean', default: false},
                 'allow-import-gaps': {type: 'boolean', default: false},
-                refresh: {type: 'string', default: ''},
-                strict: {type: 'boolean', default: false},
                 // read by failRun (lib/log.ts) from the raw arguments - declared here so parseArgs accepts it
                 debug: {type: 'boolean', default: false},
                 scenes: {type: 'string', default: ''},
-                review: {type: 'boolean', default: false},
-                // plan up to this stage and stop - the screenplay, the cast or the look (lib/stages.ts)
-                until: {type: 'string', default: ''},
-                'dry-run': {type: 'boolean', default: false},
-                // with --dry-run: what the run would do as data, for the workspace's question before a plan run (#836)
-                json: {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -130,45 +113,10 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
-// --render=all is everything that can be rendered so far
-const render = new Set(
-    args.render
-        .split(',')
-        .filter(Boolean)
-        .flatMap(r => (r === 'all' ? ['images', 'videos', 'final'] : [r])),
-)
-const unknownRender = [...render].filter(r => !['images', 'videos', 'final'].includes(r))
-if (unknownRender.length) log.usageError(`--render: unknown "${unknownRender.join(', ')}" - use images, videos, final or all`, usage)
-if (args.again && !render.has('videos') && !render.has('images'))
-    log.usageError('--again goes with --render=videos or --render=images: it renders the clips or pictures named in --only again, with a new seed', usage)
-// --preview: cheap renders into previews/ that never replace a clip (config.json "preview"), or the video of the whole film made of them
-if (args.preview && !render.has('videos') && !render.has('final')) log.usageError('--preview goes with --render=videos or --render=final', usage)
-if (args.preview && render.has('videos') && render.has('final'))
-    log.usageError('--preview: first the previews (--render=videos), then their video (--render=final)', usage)
-if (args.retake && render.size) log.usageError('--retake is a run of its own: it renders one part of one clip', usage)
-const retake = args.retake
-    ? (() => {
-          try {
-              return parseRetake(args.retake)
-          } catch (e) {
-              return log.usageError((e as Error).message, usage)
-          }
-      })()
-    : undefined
-if ((args['new-anchor'] || args['picture-prompt'] || args['picture-anchor']) && !(args.again && render.has('images')))
-    log.usageError('--new-anchor, --picture-prompt and --picture-anchor go with --render=images --only=... --again', usage)
-if ((args['picture-description'] || args['describe-picture']) && !args['picture-anchor'])
-    log.usageError('--picture-description and --describe-picture go with --picture-anchor: they describe your own picture', usage)
-if (args['picture-description'] && args['describe-picture'])
-    log.usageError('--picture-description or --describe-picture: the description given by hand, or read from the picture', usage)
-if (args['picture-anchor'] && args.only.split(',').filter(Boolean).length !== 1) log.usageError('--picture-anchor goes with one picture in --only', usage)
-if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
-if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
-if (args.json && !args['dry-run']) log.usageError('--json goes with --dry-run: what the run would do, as data', usage)
-if (args.review && args['dry-run']) log.usageError('--review and --dry-run do not go together: a dry run generates nothing to look at', usage)
-const until = (() => {
+// the options of a run both pipelines take (lib/run-options.ts)
+const {render, retake, until} = (() => {
     try {
-        return parseUntil(args.until)
+        return readRunOptions(args, FILM_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY))
     } catch (e) {
         return log.usageError((e as Error).message, usage)
     }
