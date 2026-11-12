@@ -11,7 +11,6 @@ import {listSteps, plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useRunDock} from '../../services/run'
 import {useToasts} from '../../services/toasts'
-import StageBar from '../plan/StageBar.vue'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import CastEditor from './CastEditor.vue'
@@ -255,7 +254,6 @@ const saveCast = toasts.guard(async () => {
 
 <template>
   <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
-    <StageBar />
     <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
     <template v-if="data">
       <div v-if="changed && !editing" class="note btn-row">
