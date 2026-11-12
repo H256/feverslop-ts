@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import {computed, onMounted, shallowRef, watch} from 'vue'
+import {computed} from 'vue'
 import {RouterLink} from 'vue-router'
-import type {ProjectStatus} from '../../../../shared/workspace'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
-import {useRunDock} from '../../services/run'
 import {useToasts} from '../../services/toasts'
 import {stageDoes, stageName} from '../plan/stages'
 import {usePlanning} from '../plan/usePlanning'
@@ -15,12 +13,10 @@ import {useProject} from './session'
  * run it is, asked first, or the page where it is done - and the estimate. Planning a stage, and the casting photos of a music video
  * planned up to the look, are next to it while the plan is not done.
  */
-const {project, api, root, start} = useProject()
+const {project, root, start, status} = useProject()
 const {planStage, renderLookPictures} = usePlanning()
 const ask = useAsk()
 const toasts = useToasts()
-const run = useRunDock()
-const status = shallowRef<ProjectStatus>()
 
 // a stage of the preproduction still to plan: story, cast or look - the shots are the plan run of the status
 const preproduction = computed(() => {
@@ -29,18 +25,6 @@ const preproduction = computed(() => {
 })
 // "22 step(s) to generate: songStyle, music, …" as "22 step(s) to generate" - the step names are in the title, asked for by pointing (#834)
 const said = (why: string) => why.replace(/: [\w-]+(, [\w-]+)+…?$/, '')
-
-const load = () =>
-  api
-    .status()
-    .then(found => {
-      status.value = found
-    })
-    .catch(() => {})
-onMounted(load)
-// a run changes what is next; so does a change on a page (the project is read again then)
-run.onEnd(() => void load())
-watch(project, () => void load())
 
 const runNext = toasts.guard(async () => {
   const next = status.value?.next

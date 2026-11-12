@@ -9,7 +9,7 @@ import {useAsk} from '../../services/ask'
 import {useRunDock} from '../../services/run'
 import {useToasts} from '../../services/toasts'
 import {useServers} from '../../services/servers'
-import {STAGE_PAGE, STAGES, stageName} from '../plan/stages'
+import {changedStages, STAGE_PAGE, STAGES, stageName} from '../plan/stages'
 import NextStep from './NextStep.vue'
 import {createProjectSession, ProjectService} from './session'
 
@@ -56,18 +56,25 @@ const groups = computed((): Group[] => {
     {name: 'Settings', tabs: [{name: 'settings', label: 'Settings', path: 'settings'}]},
   ]
 })
-// a stage's tab says where the plan stands: done, or the one a plan run makes next (what the stage bar said, #833)
-const stateOf = (tab: Tab): 'done' | 'next' | undefined => {
+// what `bun run status` says - the next-step bar and the tabs read it; a run or a change on a page can change it
+watch(project, () => void session.loadStatus(), {immediate: true})
+run.onEnd(() => void session.loadStatus())
+// a stage's tab says where the plan stands: done, done but changed since (a changed input or setting makes it again), or the
+// one a plan run makes next - what the stage bar said (#833)
+const stateOf = (tab: Tab): 'done' | 'changed' | 'next' | undefined => {
   const plan = project.value?.plan
   if (!tab.stage || !plan) return undefined
-  if (plan.stage && STAGES.indexOf(tab.stage) <= STAGES.indexOf(plan.stage)) return 'done'
+  if (plan.stage && STAGES.indexOf(tab.stage) <= STAGES.indexOf(plan.stage))
+    return changedStages(session.status.value?.steps ?? [], project.value!.kind).includes(tab.stage) ? 'changed' : 'done'
   return plan.next === tab.stage ? 'next' : undefined
 }
 const titleOf = (tab: Tab) => {
   const state = stateOf(tab)
   const kind = project.value?.kind ?? 'music'
   if (!tab.stage || !state) return undefined
-  return state === 'done' ? `${stageName(tab.stage, kind)}: planned` : `${stageName(tab.stage, kind)}: planned next`
+  const name = stageName(tab.stage, kind)
+  if (state === 'changed') return `${name}: planned, changed since - the next plan run makes it again`
+  return state === 'done' ? `${name}: planned` : `${name}: planned next`
 }
 
 // a project that is not planned yet opens on the page of its next stage, not on an empty timeline - once, as it is opened
@@ -114,6 +121,12 @@ const stopOpening = watch(project, p => {
   content: '✓';
   margin-right: 4px;
   color: var(--ok);
+}
+/* planned, but a changed input or setting makes it again with the next plan run */
+.top .tabs .pl-tab.pl-changed::before {
+  content: '⟳';
+  margin-right: 4px;
+  color: var(--stale);
 }
 .top .tabs .pl-tab.pl-next::before {
   content: '●';

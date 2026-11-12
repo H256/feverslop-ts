@@ -264,3 +264,16 @@ test('a text of the plan reads with names', async () => {
   expect(withNames('{Elias} stops; {Suzie} and {Leanne} step in')).toBe('Elias stops; Suzie and Leanne step in')
   expect(withNames('no tokens {')).toBe('no tokens {')
 })
+
+// #833: a planned stage with a step that a changed input makes again shows as changed since
+test('the stages a changed input or setting makes again', async () => {
+  const {changedStages} = await import('../../src/features/plan/stages')
+  const steps = [
+    {step: 'story', state: 'done'},
+    {step: 'lookBrief', state: 'redo'},
+    {step: 'beats', state: 'redo'},
+    {step: 'music', state: 'redo'},
+  ]
+  expect(changedStages(steps, 'music')).toEqual(['look', 'plan'])
+  expect(changedStages([{step: 'screenplay', state: 'redo'}], 'film')).toEqual(['story'])
+})
