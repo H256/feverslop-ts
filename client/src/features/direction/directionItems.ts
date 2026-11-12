@@ -1,4 +1,5 @@
 import type {DirectionEdit, DirectionRule, DirectionScope, DirectionView} from '../../../../shared/direction'
+import {SHOT_FIELDS, shotField} from '../../../../shared/direction'
 import {withNames} from '../../lib/format'
 
 // The list of the Direction page as plain functions (#839): its items from the view, the filter, the groups, and the words for a
@@ -32,30 +33,12 @@ export const describeEdit = (e: DirectionEdit, name: Name) =>
 export const shotGroup = (id: string) => (id.lastIndexOf(':shot') > 0 ? id.slice(0, id.lastIndexOf(':shot')) : id)
 export const shotNumber = (id: string) => Number(id.slice(id.lastIndexOf(':shot') + 5)) || 0
 
-const LABELS: Record<string, string> = {
-  action: 'Action',
-  framing: 'Framing',
-  camera: 'Camera',
-  view: 'Camera position',
-  hold: 'Hold still',
-  size: 'Shot size',
-  rest: 'Others',
-  hands: 'Instrument hands',
-  characters: 'Visible characters',
-  state: 'Start pose',
-  frame: 'In frame',
-  motion: 'Movement',
-  facing: 'Facing',
-  plays: 'Instrument action',
-  singing: 'Singing',
-  playing: 'Playing',
-}
 /** A shot before or after a change, readable: its fields and, for each person, theirs - pose and motion included. */
 export function describeShot(data: Record<string, unknown>, name: Name): string {
   const fields = (obj: Record<string, unknown>) =>
     Object.entries(obj)
-      .filter(([key]) => key in LABELS)
-      .map(([key, value]) => `${LABELS[key]}: ${Array.isArray(value) ? value.map(String).map(name).join(', ') : String(value)}`)
+      .filter(([key]) => key in SHOT_FIELDS)
+      .map(([key, value]) => `${shotField(key)}: ${Array.isArray(value) ? value.map(String).map(name).join(', ') : String(value)}`)
   const lines = fields(data)
   if (data.people && typeof data.people === 'object')
     for (const [id, person] of Object.entries(data.people))
@@ -140,32 +123,14 @@ export function groupItems(items: Item[], v: Pick<DirectionView, 'groups'>, name
   return [...groups.values()].sort((a, b) => a.order - b.order || a.key.localeCompare(b.key))
 }
 
-// the words of the shot dialog for a field (ShotDirector): shorter than the page's, as they stand beside the values
-const SHOT_LABELS: Record<string, string> = {
-  action: 'Action',
-  framing: 'Framing',
-  camera: 'Camera',
-  view: 'Camera position',
-  hold: 'Hold still',
-  size: 'Size',
-  rest: 'Others',
-  hands: 'Instrument hands',
-  characters: 'In the picture',
-  state: 'Start',
-  frame: 'In frame',
-  motion: 'Movement',
-  facing: 'Facing',
-  plays: 'Instrument',
-}
-export const shotLabel = (key: string) => SHOT_LABELS[key] ?? key
 /** A change of one shot, field by field - only what changed, the shot's fields first, then each person's. */
 export function shotDiff(before: Record<string, unknown>, after: Record<string, unknown>, name: Name) {
   const show = (value: unknown) =>
     Array.isArray(value) ? value.map(v => name(String(v))).join(', ') : value === undefined ? '—' : typeof value === 'string' ? withNames(value) : String(value)
   const rows: {label: string; before: string; after: string}[] = []
   const compare = (prefix: string, a: Record<string, unknown>, b: Record<string, unknown>) => {
-    for (const key of Object.keys(SHOT_LABELS))
-      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) rows.push({label: `${prefix}${SHOT_LABELS[key]}`, before: show(a[key]), after: show(b[key])})
+    for (const key of Object.keys(SHOT_FIELDS))
+      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) rows.push({label: `${prefix}${shotField(key)}`, before: show(a[key]), after: show(b[key])})
   }
   compare('', before, after)
   const bp = (before.people ?? {}) as Record<string, Record<string, unknown>>

@@ -98,3 +98,28 @@ export type DirectionView = {
     restored: boolean
     proposalStale?: boolean
 }
+
+/**
+ * The words for the fields of a shot and of each person in it (#839): one table for the Direction page, the shot dialog and
+ * `bun run direction --show`, so that the page and the terminal name a field the same. In the order a shot is read.
+ */
+export const SHOT_FIELDS = {
+    action: 'Action',
+    framing: 'Framing',
+    camera: 'Camera',
+    view: 'Camera position',
+    hold: 'Hold still',
+    size: 'Shot size',
+    characters: 'In the picture',
+    rest: 'Others',
+    hands: 'Instrument hands',
+    state: 'Start pose',
+    frame: 'In frame',
+    motion: 'Movement',
+    facing: 'Facing',
+    plays: 'Instrument action',
+    singing: 'Singing',
+    playing: 'Playing',
+} as const satisfies Record<string, string>
+/** The word for a field of a shot; a field the table does not know keeps its key. */
+export const shotField = (key: string): string => (SHOT_FIELDS as Record<string, string>)[key] ?? key

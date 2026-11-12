@@ -2,7 +2,7 @@
 import {computed, ref} from 'vue'
 import type {DirectionShot, DirectionView} from '../../../../shared/direction'
 import {withNames} from '../../lib/format'
-import {shotLabel} from './directionItems'
+import {shotField} from '../../../../shared/direction'
 
 /**
  * Who is in one shot and what each of them does (#735, #839): an instruction for one of them, several marked and taken out together
@@ -71,7 +71,7 @@ const into = async () => {
     <dl>
       <template v-for="key in ['state', 'frame', 'motion', 'facing']" :key="key">
         <template v-if="people[id]?.[key]"
-          ><dt>{{ shotLabel(key) }}</dt>
+          ><dt>{{ shotField(key) }}</dt>
           <dd>{{ shown(people[id]![key]) }}</dd></template
         >
       </template>
