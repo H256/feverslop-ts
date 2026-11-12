@@ -27,7 +27,7 @@ const change = computed(() =>
         <div class="text">{{ proposal }}</div>
       </div>
     </div>
-    <div class="btn-row" style="margin-top: 8px">
+    <div class="btn-row u-mt-2">
       <button class="btn primary" @click="$emit('take')">Take the new {{ what }}</button>
       <button class="btn" @click="$emit('drop')">Drop it</button>
     </div>

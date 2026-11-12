@@ -25,13 +25,9 @@ const choice = computed({
         <option v-for="final in finals" :key="final.file" :value="final.file">{{ final.label }} ({{ final.file }})</option>
       </select>
     </FormField>
-    <div style="display: flex; gap: var(--space-4)">
-      <label class="field" style="display: flex; gap: var(--space-2)"
-        ><input v-model="draft.opening" type="checkbox" /><span style="margin: 0">Title card before it</span></label
-      >
-      <label class="field" style="display: flex; gap: var(--space-2)"
-        ><input v-model="draft.end" type="checkbox" /><span style="margin: 0">Credits after it</span></label
-      >
+    <div class="u-row u-row-wide">
+      <label class="field field-check"><input v-model="draft.opening" type="checkbox" /><span>Title card before it</span></label>
+      <label class="field field-check"><input v-model="draft.end" type="checkbox" /><span>Credits after it</span></label>
     </div>
     <p v-if="!draft.opening && !draft.end" class="warn">Neither the title card nor the credits: there is nothing to add.</p>
     <FormField label="Title (empty: the project's)"><input v-model="draft.title" type="text" maxlength="200" /></FormField>
@@ -55,8 +51,8 @@ const choice = computed({
     <FormField v-if="draft.end" label="Lines of your own in the credits, one per line: thanks, links, a channel">
       <textarea v-model="draft.extra" rows="3" />
     </FormField>
-    <label v-if="draft.end" class="field" style="display: flex; gap: var(--space-2)"
-      ><input v-model="draft.facts" type="checkbox" /><span style="margin: 0">What it was made with: language model, models, graphics cards</span></label
+    <label v-if="draft.end" class="field field-check"
+      ><input v-model="draft.facts" type="checkbox" /><span>What it was made with: language model, models, graphics cards</span></label
     >
     <FormField v-if="draft.end" label="Hardware, in your own words (after the cards the project rendered on)"
       ><input v-model="draft.hardware" type="text" placeholder="LLM: Strix Halo, 128 GB" maxlength="200"
@@ -64,7 +60,7 @@ const choice = computed({
     <FormField v-if="draft.end" label="Sound under the credits (path; empty: silence)"
       ><input v-model="draft.sound" type="text" placeholder="input/outro.mp3"
     /></FormField>
-    <div style="display: flex; gap: var(--space-3)">
+    <div class="u-row">
       <FormField v-if="draft.opening" label="Title card (seconds)"
         ><input v-model.number="draft.openingSeconds" type="number" min="1" max="30" step="0.5" required
       /></FormField>

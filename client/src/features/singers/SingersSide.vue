@@ -44,9 +44,7 @@ const add = (event: Event) => {
 <template>
   <div>
     <h2>Singers</h2>
-    <p class="muted" style="margin-bottom: 10px">
-      The lead first. A line can be sung by several at once (a duet, a chorus), or change its singer between two words.
-    </p>
+    <p class="muted u-mb-2">The lead first. A line can be sung by several at once (a duet, a chorus), or change its singer between two words.</p>
     <div v-for="(id, n) in draft.pool.value" :key="id" class="singer" :style="{'--h': draft.hueOf(id)}">
       <MediaThumb
         :media="characterOf(id)?.picture"
@@ -59,12 +57,12 @@ const add = (event: Event) => {
         <b>{{ draft.nameOf(id) }}</b> <kbd>{{ n + 1 }}</kbd>
         <div class="muted num">{{ plural(draft.lineCount(id), 'line') }}</div>
         <div v-if="characterOf(id)?.role" class="muted about" :title="characterOf(id)?.role">{{ characterOf(id)?.role }}</div>
-        <div v-if="!draft.lineCount(id)" class="muted" style="font-size: var(--text-s)">
+        <div v-if="!draft.lineCount(id)" class="muted u-small">
           {{ view.singers.includes(id) ? 'Sings nothing now: no longer a singer once saved.' : 'Not saved: give them a line.' }}
         </div>
       </div>
     </div>
-    <select v-if="others.length" aria-label="Add a singer" style="width: 100%" @change="add">
+    <select v-if="others.length" aria-label="Add a singer" class="u-wide" @change="add">
       <option value="">Add a singer from the cast…</option>
       <option v-for="ch in others" :key="ch.id" :value="ch.id">{{ ch.role ? `${ch.name} - ${ch.role}` : ch.name }}</option>
     </select>

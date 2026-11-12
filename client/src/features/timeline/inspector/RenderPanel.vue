@@ -54,7 +54,7 @@ const compareRefined = (version: EditorClip['refined'][number]) =>
   <RetakeSection v-if="clip.video" :key="clip.id" :clip="clip" />
   <div v-if="clip.refined.length" class="section">
     <h3>Larger versions</h3>
-    <article v-for="version in clip.refined" :key="version.variant" class="version" style="grid-template-columns: minmax(0, 1fr)">
+    <article v-for="version in clip.refined" :key="version.variant" class="version version-one">
       <div>
         <div>{{ version.variant }}</div>
         <div class="muted num">

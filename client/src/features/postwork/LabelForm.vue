@@ -43,7 +43,7 @@ const presetLabel = (marker: string) => {
         <option v-for="[value, label] in LABEL_MODES" :key="value" :value="value">{{ label }}</option>
       </select>
     </FormField>
-    <div style="display: flex; gap: var(--space-3)">
+    <div class="u-row">
       <FormField v-if="draft.mode !== 'always'" label="Seconds shown"
         ><input v-model.number="draft.seconds" type="number" min="0.5" max="600" step="0.5" required
       /></FormField>
@@ -56,7 +56,7 @@ const presetLabel = (marker: string) => {
         <option v-for="[value, label] in CORNERS" :key="value" :value="value">{{ label }}</option>
       </select>
     </FormField>
-    <div style="display: flex; gap: var(--space-3)">
+    <div class="u-row">
       <FormField label="Height (% of the video)"><input v-model.number="draft.size" type="number" min="1" max="50" step="0.5" required /></FormField>
       <FormField label="Margin (% of the height)"><input v-model.number="draft.margin" type="number" min="0" max="30" step="0.5" required /></FormField>
     </div>

@@ -51,19 +51,19 @@ const move = (id: string, direction: number) => {
   <div v-if="clip.views" class="section"><button class="btn" @click="actions.addView(clip)">Add a view of this place</button></div>
   <div v-if="people.length > 1" class="section">
     <h3>References and their order</h3>
-    <div v-for="(picture, n) in people" :key="picture.id" class="btn-row" style="margin-bottom: 4px">
-      <span style="flex: 1">{{ n + 1 }}. {{ picture.name }}</span>
+    <div v-for="(picture, n) in people" :key="picture.id" class="btn-row u-mb-1">
+      <span class="u-grow">{{ n + 1 }}. {{ picture.name }}</span>
       <button class="btn" :disabled="n === 0" :aria-label="`${picture.name} up`" @click="move(picture.id, -1)">↑</button>
       <button class="btn" :disabled="n === people.length - 1" :aria-label="`${picture.name} down`" @click="move(picture.id, 1)">↓</button>
       <button class="btn" @click="save({without: [...override.without, picture.id]})">Leave out</button>
     </div>
   </div>
   <div v-if="override.without.length" class="note btn-row">
-    <span style="flex: 1">Left out: {{ override.without.join(', ') }}</span
+    <span class="u-grow">Left out: {{ override.without.join(', ') }}</span
     ><button class="btn" @click="save({without: []})">Put back</button>
   </div>
   <div v-if="clip.override" class="note">
-    <p style="margin-bottom: 6px">This clip has a choice of its own. It takes effect with the next plan run, and the clip then goes stale.</p>
+    <p class="u-mb-1">This clip has a choice of its own. It takes effect with the next plan run, and the clip then goes stale.</p>
     <div class="btn-row"><button class="btn" @click="actions.plan()">Plan now</button><button class="btn" @click="save(null)">Back to the plan</button></div>
   </div>
 </template>

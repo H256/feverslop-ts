@@ -37,13 +37,11 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
     <!-- what the clips are, in numbers -->
     <div class="grp counts">
       <span class="num">{{ clips.length - count.missing }} of {{ clips.length }} rendered</span>
-      <span v-if="count.missing"
-        ><i style="background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px)" />{{ count.missing }} missing</span
-      >
-      <span v-if="count.stale"><i style="background: var(--stale)" />{{ count.stale }} stale</span>
+      <span v-if="count.missing"><i class="lg-missing" />{{ count.missing }} missing</span>
+      <span v-if="count.stale"><i class="lg-stale" />{{ count.stale }} stale</span>
       <span v-if="count.pinned">{{ count.pinned }} pinned</span>
-      <span v-if="count.marks"><i style="background: var(--danger)" />{{ plural(count.marks, 'mark') }}</span>
-      <span v-if="clips.some(c => c.startsFrom)"><i style="background: var(--accent); border-radius: var(--radius-round)" />goes on</span>
+      <span v-if="count.marks"><i class="lg-mark" />{{ plural(count.marks, 'mark') }}</span>
+      <span v-if="clips.some(c => c.startsFrom)"><i class="lg-goes" />goes on</span>
     </div>
     <!-- the marked clips: render them, or plan their beats again (#774: grouped, coloured by what they do) -->
     <div v-if="marked.size" class="grp marked-grp">

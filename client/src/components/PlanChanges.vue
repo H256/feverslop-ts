@@ -45,6 +45,6 @@ defineEmits<{discard: []; save: []; saveAndPlan: []; plan: []}>()
       </p>
       <button v-if="unplanned.length" class="btn primary" :disabled="busy" @click="$emit('plan')">Plan now</button>
     </template>
-    <p class="muted" style="font-size: var(--text-s); margin-top: 14px">{{ keptIn }}</p>
+    <p class="muted u-small u-mt-3">{{ keptIn }}</p>
   </div>
 </template>

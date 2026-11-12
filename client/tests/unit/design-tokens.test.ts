@@ -15,3 +15,11 @@ test('no literal gap, radius or font size outside the scales', () => {
   })
   expect(found).toEqual([])
 })
+
+// #838: a page's layout is said by its classes on the scales, never by an inline style - a bound :style (a position computed) is fine
+test('no inline style attribute with a fixed value', () => {
+  const found = files
+    .filter(f => f.endsWith('.vue'))
+    .flatMap(f => [...readFileSync(`${src}${f}`, 'utf8').matchAll(/(?<![:\w-])style="[^"]*"/g)].map(m => `${f}: ${m[0]}`))
+  expect(found).toEqual([])
+})

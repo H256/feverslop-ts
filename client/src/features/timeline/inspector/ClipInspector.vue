@@ -36,7 +36,7 @@ watch(clip, () => panel.value?.scrollTo({top: 0}))
     <div class="ihead">
       <template v-if="clip && state">
         <h2>
-          {{ clip.id }}<span :class="state.cls" :title="state.title" style="font-family: var(--sans); font-weight: 400">{{ state.label }}</span>
+          {{ clip.id }}<span :class="state.cls" :title="state.title" class="u-sans">{{ state.label }}</span>
         </h2>
         <p class="num">{{ clock(clip.start) }} – {{ clock(clip.end) }} · {{ (clip.end - clip.start).toFixed(1) }}s · {{ group }}</p>
         <div v-for="mark in clip.marks" :key="mark.text" :class="['warn', {bad: mark.kind === 'failed' || mark.kind === 'backdrop'}]">{{ mark.text }}</div>

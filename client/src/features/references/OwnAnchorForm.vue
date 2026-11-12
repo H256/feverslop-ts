@@ -22,7 +22,7 @@ onBeforeUnmount(() => show(undefined))
     <FormField :label="`Picture - PNG, JPEG or WebP, at most ${OWN_ANCHOR_MAX_MB} MB`"
       ><input type="file" :accept="OWN_ANCHOR_TYPES" required aria-label="Picture" @change="picked"
     /></FormField>
-    <img v-if="preview" :src="preview" alt="The picture picked" class="section" style="max-width: 100%; max-height: 240px; display: block" />
+    <img v-if="preview" :src="preview" alt="The picture picked" class="section u-picture" />
     <FormField label="Prompt - kept with the picture as a note"><textarea v-model="draft.prompt" rows="4" aria-label="Prompt of the picture" /></FormField>
     <FormField label="Description - what the clips and the sheet say of it">
       <select v-model="draft.how" aria-label="Description">
