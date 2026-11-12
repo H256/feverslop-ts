@@ -33,7 +33,8 @@ import {
 import {picturesFile, readReferences} from './references.ts'
 import {readSinging, type SingingChange, writeSinging} from './singing.ts'
 import {writeBeatCast} from './beat-cast.ts'
-import type {BeatCastChange} from '../../shared/workspace.ts'
+import type {BeatCastChange, RunHistory} from '../../shared/workspace.ts'
+import {pastRuns, readQueue, unqueue} from '../run-queue.ts'
 import {pickVersion, writeOverride} from './choices.ts'
 import {
     type CastChange,
@@ -422,6 +423,8 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     })
                 }
                 if (what === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
+                // the runs waiting behind the one that goes on, and those that ended (#837): bun run runs
+                if (what === 'runs') return json({queue: readQueue(target.dir), past: pastRuns(target.dir)} satisfies RunHistory)
                 if (what === 'versions' && id) {
                     const current = await clipRequestId(target, id)
                     return json({
@@ -462,7 +465,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
         try {
             const started = (run: unknown) => json({run})
             if (what === 'run') {
-                const {action: wanted, servers} = await body<{action: RunAction; servers?: string[]}>()
+                const {action: wanted, servers, queue} = await body<{action: RunAction; servers?: string[]; queue?: boolean}>()
                 if (!wanted || (!RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures' && wanted.type !== 'direction'))
                     return refused(invalid('no such action'))
                 // a prompt or a picture comes in through its own route below, never as a path from the page
@@ -473,7 +476,15 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     delete wanted.describe
                     wanted.look = atLook(target)
                 }
+                // queue: while a run goes on, it waits behind it (#837)
+                if (queue) return json(runs.startOrQueue(target, wanted, await urlsOfChoice(servers)))
                 return started(runs.start(target, wanted, await urlsOfChoice(servers)))
+            }
+            // a queued run taken out: bun run runs <id> --remove=<queued id>
+            if (what === 'runs') {
+                const {remove} = await body<{remove?: string}>()
+                if (typeof remove !== 'string' || !unqueue(target.dir, remove)) throw missing('no such run in the queue - it may have started already')
+                return json({queue: readQueue(target.dir)})
             }
             if (what === 'stop') return json({stopped: await runs.stop(target)})
             if (what === 'direction') {
@@ -728,7 +739,10 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
 /** Serves on the first free port from `port` on, on this machine only. */
 export function startEditor(port: number) {
     requireClientBuild()
-    const fetch = editorHandler()
+    const runs = new RunControl()
+    const fetch = editorHandler(runs)
+    // what waits in a queue - also left by an editor before this one - is started as its project is free (#837)
+    runs.watchQueues(allTargets)
     for (let attempt = 0; ; attempt++) {
         try {
             return Bun.serve({hostname: '127.0.0.1', port: port + attempt, idleTimeout: 0, fetch})

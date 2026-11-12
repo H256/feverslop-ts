@@ -1,5 +1,5 @@
 import {computed, onScopeDispose, ref, shallowRef} from 'vue'
-import type {RunEvent, RunEvents, RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
+import type {RunEvent, RunEvents, RunHistory, RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
 import {defineService} from './service'
 import type {Toasts} from './toasts'
 
@@ -13,6 +13,9 @@ export type RunScope = {
   // how far a render of clips is (#775): asked every 2 s while a run goes on
   progress?: () => Promise<{progress: RunProgress | null}>
   said?: {done: string; failed: string}
+  // the runs waiting in the queue and those that ended (#837), and taking a waiting one out
+  history?: () => Promise<RunHistory>
+  unqueue?: (id: string) => Promise<unknown>
 }
 export type RunEnd = (current: RunInfo | null, action: RunRequest | undefined) => void
 
@@ -58,6 +61,20 @@ export function createRunDock(toasts: Toasts) {
   const progress = shallowRef<RunProgress>()
   const endedAt = ref<number>()
   const scope = shallowRef<RunScope>()
+  /** What waits behind the run and what ran before (#837): read as the scope is followed, as a run starts or ends, and while something waits. */
+  const history = shallowRef<RunHistory>({queue: [], past: []})
+  const readHistory = () => {
+    const asked = scope.value
+    void asked
+      ?.history?.()
+      .then(found => {
+        if (scope.value === asked) history.value = found
+      })
+      .catch(() => {})
+  }
+  const historyTimer = setInterval(() => {
+    if (history.value.queue.length) readHistory()
+  }, 3000)
   let progressTimer: ReturnType<typeof setInterval> | undefined
   let startedAt: string | undefined
   const pollProgress = () => {
@@ -111,6 +128,7 @@ export function createRunDock(toasts: Toasts) {
         watchProgress(false)
         if (state && endedAt.value === undefined) endedAt.value = Date.now()
       }
+      if (state?.startedAt !== current.value?.startedAt || state?.running !== current.value?.running) readHistory()
       current.value = state
       if (state) closed.value = false
       if (!state?.running) detail.value = ''
@@ -141,7 +159,9 @@ export function createRunDock(toasts: Toasts) {
     wasRunning = false
     // what was asked in another scope is not what ends here
     action = undefined
+    history.value = {queue: [], past: []}
     connect()
+    readHistory()
     onScopeDispose(() => {
       if (scope.value !== next) return
       watchProgress(false)
@@ -183,10 +203,11 @@ export function createRunDock(toasts: Toasts) {
   const running = () => !!current.value?.running
   const dispose = () => {
     clearInterval(progressTimer)
+    clearInterval(historyTimer)
     source?.close()
     ends.clear()
   }
-  return {current, log, logOpen, closed, detail, step, said, progress, endedAt, scope, follow, starter, onEnd, running, dispose}
+  return {current, log, logOpen, closed, detail, step, said, progress, endedAt, scope, history, readHistory, follow, starter, onEnd, running, dispose}
 }
 export type RunDock = ReturnType<typeof createRunDock>
 export const RunService = defineService<RunDock>('run')
