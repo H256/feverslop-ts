@@ -56,11 +56,12 @@ Shared parts live in `client/src/components/`, each with its own scoped styles a
 | `PanelCard` | a card of a page: Direction's groups and proposal, Look's whole-look card, Post-work's steps | `title`, `note` (two lines, the whole on hover), slots `head` and `foot`; `tone` = `accent` (to act on), `stale` (to decide), `quiet` (nothing to do); `bar` = `line`, `accent`, `ok`; `flush` for a card its content fills |
 | `TabBar` | tabs above a panel: the Direction side, the clip inspector | `tabs` (`id`, `label`, `count`), `v-model`; `inset` in a side panel |
 | `StateTag` | a small outlined word about a thing: edit, made, a name | `state` = `plain`, `ok`, `stale`, `bad`; muted without one |
+| `CalloutBox` | a boxed word to the reader, in place of `.note`, `.warn`, `.warn.bad` | `kind` = `note` (grey, default), `warn` (amber: check this, do it again), `error` (red: failed); `as` for the element (`p` by default). Its rules stay in `monitor.css`, where `.warn` was, so that a page's margin rules still win |
 | `SegmentedControl` | a choice of one among few, as pressed buttons | `options`, `v-model` |
 
 A page says what a card or a tag is (its tone, its state), never how it is drawn: no page has card, tab or tag styles of its own.
 
-Still to come (#838): `Callout` for `.warn`, `.note` and `.warn.bad`, `FormRow`, `SplitLayout` and the button variants as a component.
+Still to come (#838): `FormRow`, `SplitLayout` and the button variants as a component.
 
 ## Stylesheets
 

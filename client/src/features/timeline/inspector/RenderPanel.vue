@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {EditorClip} from '../../../../../shared/workspace'
 import {mediaUrl, thumbUrl} from '../../../api/urls'
@@ -46,7 +47,7 @@ const compareRefined = (version: EditorClip['refined'][number]) =>
 </script>
 
 <template>
-  <div v-if="stateOf(clip, fresh) === 'stale'" class="warn">Made from another prompt, picture or start frame than the plan has now.</div>
+  <CalloutBox v-if="stateOf(clip, fresh) === 'stale'" kind="warn" as="div">Made from another prompt, picture or start frame than the plan has now.</CalloutBox>
   <div class="section btn-row">
     <button class="btn primary" @click="actions.renderAgain(clip)">{{ clip.video ? 'Render again' : 'Render' }}</button>
     <button class="btn" @click="actions.preview([clip], clip.id)">{{ clip.preview ? 'Preview again' : 'Preview' }}</button>

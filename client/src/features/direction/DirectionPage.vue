@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, ref} from 'vue'
 import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
 import PageBar from '../../components/PageBar.vue'
@@ -142,8 +143,10 @@ const clearLeftovers = (only?: Item) =>
     <ResourceState :loading="loading" :error="error" :loaded="!!view" @retry="reload" />
     <div v-if="view" class="direction-layout">
       <main class="direction-main">
-        <p v-if="!view.shots.length" class="note">Plan the shots first. You can save instructions now and preview them once shots exist.</p>
-        <p v-if="view.restored" class="note">A saved plan version is restored. The instructions remain saved; preview again to apply them to this version.</p>
+        <CalloutBox v-if="!view.shots.length">Plan the shots first. You can save instructions now and preview them once shots exist.</CalloutBox>
+        <CalloutBox v-if="view.restored"
+          >A saved plan version is restored. The instructions remain saved; preview again to apply them to this version.</CalloutBox
+        >
 
         <!-- what to do next: the proposal to take, or the preview to ask for -->
         <ProposalCard
@@ -157,11 +160,11 @@ const clearLeftovers = (only?: Item) =>
           @drop="drop"
         />
         <div v-else class="actionbar">
-          <span v-if="writes.length" class="warn inline"
+          <CalloutBox v-if="writes.length" kind="warn" as="span" class="inline"
             >{{ writes.length }} edit{{ writes.length > 1 ? 's' : '' }} wait{{ writes.length > 1 ? '' : 's' }} for the words: <b>Preview changes</b> writes
-            them.</span
+            them.</CalloutBox
           >
-          <span v-else-if="view.pending" class="warn inline">Instructions changed: preview, then take the proposal.</span>
+          <CalloutBox v-else-if="view.pending" kind="warn" as="span" class="inline">Instructions changed: preview, then take the proposal.</CalloutBox>
           <span v-else class="muted">The language model writes the shots the instructions are about. Nothing is rendered.</span>
           <div class="spacer" />
           <button class="btn primary" :disabled="blocked || dirty || !view.rules.length || !view.shots.length || !!view.unresolved.length" @click="preview">
@@ -252,7 +255,7 @@ const clearLeftovers = (only?: Item) =>
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
 }
-.actionbar .warn.inline {
+.actionbar .ui-callout.inline {
   margin: 0;
 }
 .spacer {

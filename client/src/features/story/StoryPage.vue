@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
@@ -122,10 +123,10 @@ const drop = toasts.guard(async () => {
       <StoryProposal v-if="book.proposal" :now="book.text ?? ''" :proposal="book.proposal" :film="film" :cast="book.proposalCast" @take="take" @drop="drop" />
       <div v-if="book.text === undefined" class="empty">No {{ name.toLowerCase() }} yet - plan it with the button above.</div>
       <template v-else>
-        <div v-if="film" class="note">
+        <CalloutBox v-if="film" as="div">
           The screenplay is read here. It is changed in the script in input/, or in project.json (screenplay), and then planned again with --redo. A character
           added or taken out on the Casting page has the screenplay the pipeline wrote told anew, as a proposal here.
-        </div>
+        </CalloutBox>
         <div v-if="film && book.scriptNotes?.length" class="section sp-notes">
           <b>The script contradicts itself here</b>
           <span v-if="book.scriptFixes" class="muted"> - {{ book.scriptFixes }} repair(s) made so far</span>

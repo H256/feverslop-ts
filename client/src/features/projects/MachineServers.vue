@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {onMounted, reactive, shallowRef} from 'vue'
 import type {SetupChange, SetupView} from '../../../../shared/workspace'
 import {workspace} from '../../api/workspace'
@@ -56,7 +57,7 @@ const fromEnv = (source?: string) => source && source !== 'file' && source !== '
           ><input v-model="llm.key" type="password" autocomplete="off"
         /></FormField>
         <button type="button" class="btn" :disabled="pending || !llm.url.trim()" @click="change({command: 'llm', options: {url: llm.url, model: llm.model, ...(llm.key ? {key: llm.key} : {})}})">Save</button>
-        <p v-if="fromEnv(view.sources.llmUrl)" class="warn ms-wide">Set by {{ view.sources.llmUrl }} - it beats what is saved here.</p>
+        <CalloutBox v-if="fromEnv(view.sources.llmUrl)" kind="warn" class="ms-wide">Set by {{ view.sources.llmUrl }} - it beats what is saved here.</CalloutBox>
       </div>
       <div class="ms-row">
         <FormField label="Server that reads pictures (empty: the language model server)"><input v-model="vision.url" type="text" /></FormField>
@@ -68,7 +69,7 @@ const fromEnv = (source?: string) => source && source !== 'file' && source !== '
       </div>
       <div class="ms-comfy">
         <b>ComfyUI</b>
-        <span v-if="fromEnv(view.sources.comfy)" class="warn">Set by {{ view.sources.comfy }} - it beats what is saved here.</span>
+        <CalloutBox v-if="fromEnv(view.sources.comfy)" kind="warn" as="span">Set by {{ view.sources.comfy }} - it beats what is saved here.</CalloutBox>
         <ul>
           <li v-for="server in view.comfy" :key="server.url">
             <span>{{ server.name }}</span> <code class="muted">{{ server.url }}</code>
@@ -83,7 +84,7 @@ const fromEnv = (source?: string) => source && source !== 'file' && source !== '
       </div>
     </template>
     <p v-for="line in said" :key="line" class="muted ms-said">{{ line }}</p>
-    <p v-if="failed" class="warn">{{ failed }}</p>
+    <CalloutBox v-if="failed" kind="warn">{{ failed }}</CalloutBox>
     <p class="muted ms-said">The same as <code>bun run setup llm|vision|comfy --…</code>; saved in <code>{{ view?.file }}</code>.</p>
   </section>
 </template>

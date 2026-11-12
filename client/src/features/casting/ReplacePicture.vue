@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {shallowRef, watch} from 'vue'
 import FormField from '../../components/FormField.vue'
 import {errorText} from '../../lib/format'
@@ -51,7 +52,7 @@ watch(
       <b>What it would do</b>
       <p v-for="line in said" :key="line" class="muted">{{ line }}</p>
     </div>
-    <p v-if="failed" class="warn">{{ failed }}</p>
+    <CalloutBox v-if="failed" kind="warn">{{ failed }}</CalloutBox>
   </div>
 </template>
 

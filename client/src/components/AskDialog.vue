@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from './CalloutBox.vue'
 import {computed, ref} from 'vue'
 import {errorText} from '../lib/format'
 import type {AskRequest} from '../services/ask'
@@ -51,11 +52,11 @@ async function confirm() {
     <form :aria-busy="pending" @submit.prevent="confirm">
       <h2>{{ request.title }}</h2>
       <p v-for="line in lines" :key="line" class="muted">{{ line }}</p>
-      <div v-for="line in warnings" :key="line" class="warn">{{ line }}</div>
+      <CalloutBox v-for="line in warnings" :key="line" kind="warn" as="div">{{ line }}</CalloutBox>
       <!-- the form of the question is made by its asker, a functional component -->
       <fieldset v-if="request.body" :disabled="pending" class="plain"><component :is="request.body" /></fieldset>
       <ServerPick v-if="request.render" v-model="chosen" />
-      <div v-if="failure" role="alert" class="warn bad">{{ failure }}</div>
+      <CalloutBox v-if="failure" role="alert" kind="error" as="div">{{ failure }}</CalloutBox>
       <div class="btn-row">
         <button type="button" class="btn" :disabled="pending" @click="cancel">Cancel</button>
         <button type="submit" :class="['btn', request.danger ? 'danger' : 'primary']" :disabled="pending">{{ pending ? 'Working…' : request.confirm }}</button>

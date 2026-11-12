@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, nextTick, reactive, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import type {CastingRole, CastView} from '../../../../shared/workspace'
@@ -306,26 +307,26 @@ const saveCast = toasts.guard(async () => {
   <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
     <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
     <template v-if="data">
-      <div v-if="changed && !editing" class="note btn-row">
+      <CalloutBox v-if="changed && !editing" as="div" class="btn-row">
         <span>casting.json has changes the plan does not have yet: they take effect with the next plan run.</span>
         <button class="btn primary" :disabled="busy" @click="planNow">Plan now</button>
-      </div>
+      </CalloutBox>
       <NoticeList :errors="data.casting.errors" :warnings="data.casting.warnings" />
       <div v-if="!data.cast" class="empty">No cast yet - plan it with the button above.</div>
       <template v-else-if="draft">
-        <div class="note">
+        <CalloutBox as="div">
           {{
             film
               ? "The names and texts of the screenplay's roles and places. Who is in it is the script's: a character added or taken out on the list of roles has the screenplay told anew."
               : 'Names, roles and props, and who is in it at all - without the library. Best right after the cast is planned: then nothing is built on it yet.'
           }}
-        </div>
-        <div v-if="gone.length" class="note btn-row">
+        </CalloutBox>
+        <CalloutBox v-if="gone.length" as="div" class="btn-row">
           <span>Out of the cast when saved:</span>
           <button v-for="{kind, member} in gone" :key="member.id" class="btn" :title="`Keep ${member.name} in the cast`" @click="putBack(kind, member)">
             Put back {{ member.name }}
           </button>
-        </div>
+        </CalloutBox>
         <CastEditor :members="draft.characters" title="Characters" kind="character" :film="film" :can-add="data.cast.canAdd" data-cast="character" />
         <CastEditor :members="draft.locations" title="Places" kind="location" :film="film" :can-add="data.cast.canAdd" data-cast="location" />
         <div class="section btn-row">
@@ -350,7 +351,7 @@ const saveCast = toasts.guard(async () => {
           </button>
           <span class="muted">Or give a role a library asset with the choice next to it.</span>
         </div>
-        <div v-if="adapt?.refused" class="note">A role is added or taken out in the script: {{ adapt.refused }}.</div>
+        <CalloutBox v-if="adapt?.refused" as="div">A role is added or taken out in the script: {{ adapt.refused }}.</CalloutBox>
         <div
           v-for="[kind, title] in [
             ['character', 'Characters'],
@@ -391,7 +392,7 @@ const saveCast = toasts.guard(async () => {
           </div>
           <NewFilmRoles v-if="film && kind === 'character'" :roles="newRoles" />
         </div>
-        <div v-if="film && (out.size || newRoles.length)" class="castbar note btn-row">
+        <CalloutBox v-if="film && (out.size || newRoles.length)" as="div" class="castbar btn-row">
           <span
             >{{
               [newRoles.length && `New: ${plural(newRoles.length, 'character')}`, out.size && `out: ${plural(out.size, 'character')}`]
@@ -403,8 +404,8 @@ const saveCast = toasts.guard(async () => {
           <div class="spacer" />
           <button class="btn primary" :disabled="busy" @click="tellAnew">Tell the screenplay anew</button>
           <button class="btn" @click="discard">Discard</button>
-        </div>
-        <div v-else-if="out.size" class="castbar note btn-row">
+        </CalloutBox>
+        <CalloutBox v-else-if="out.size" as="div" class="castbar btn-row">
           <span
             >Out of the cast when saved:
             {{
@@ -416,7 +417,7 @@ const saveCast = toasts.guard(async () => {
           <div class="spacer" />
           <button class="btn primary" :disabled="busy" @click="saveCast">Save the cast</button>
           <button class="btn" @click="out.clear()">Discard</button>
-        </div>
+        </CalloutBox>
       </template>
       <p class="muted">
         For a finished project, replacing a character in what is planned is the other way: bun run {{ film ? 'film:replace-character' : 'replace-character' }}

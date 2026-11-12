@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import FormField from '../../components/FormField.vue'
 import type {CreditsDraft} from './forms'
@@ -29,7 +30,7 @@ const choice = computed({
       <label class="field field-check"><input v-model="draft.opening" type="checkbox" /><span>Title card before it</span></label>
       <label class="field field-check"><input v-model="draft.end" type="checkbox" /><span>Credits after it</span></label>
     </div>
-    <p v-if="!draft.opening && !draft.end" class="warn">Neither the title card nor the credits: there is nothing to add.</p>
+    <CalloutBox v-if="!draft.opening && !draft.end" kind="warn">Neither the title card nor the credits: there is nothing to add.</CalloutBox>
     <FormField label="Title (empty: the project's)"><input v-model="draft.title" type="text" maxlength="200" /></FormField>
     <FormField :label="kind === 'film' ? 'Directed by' : 'Artist (by …)'"><input v-model="draft.who" type="text" maxlength="200" /></FormField>
     <FormField label="Disclosure (on the card and at the end; empty: none)"

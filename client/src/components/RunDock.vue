@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from './CalloutBox.vue'
 import {computed, nextTick, onScopeDispose, ref, watch} from 'vue'
 import {useAsk} from '../services/ask'
 import {failedRun, runStateText, useRunDock} from '../services/run'
@@ -123,7 +124,7 @@ const stop = toasts.guard(async () => {
         <span :class="['rd-state', ended.state]">{{ ended.state }}</span>
         <span class="num muted">{{ when(ended.startedAt) }}</span>
         <code>{{ ended.command }}</code>
-        <span v-if="ended.failure" class="warn" :title="ended.failure">{{ ended.failure }}</span>
+        <CalloutBox v-if="ended.failure" :title="ended.failure" kind="warn" as="span">{{ ended.failure }}</CalloutBox>
         <code v-if="ended.log" class="muted">logs/{{ ended.log }}</code>
       </li>
     </ol>
@@ -159,7 +160,7 @@ const stop = toasts.guard(async () => {
   white-space: nowrap;
   min-width: 0;
 }
-.rd-past .warn {
+.rd-past .ui-callout {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

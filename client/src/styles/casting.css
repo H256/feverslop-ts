@@ -33,7 +33,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.role .warn {
+.role .ui-callout {
   margin: 4px 0 0;
 }
 .role .choice {
@@ -51,7 +51,7 @@
 }
 .role.out img,
 .role.out .noimg,
-.role.out .player > :not(.warn) {
+.role.out .player > :not(.ui-callout) {
   opacity: 0.4;
 }
 .castbar {

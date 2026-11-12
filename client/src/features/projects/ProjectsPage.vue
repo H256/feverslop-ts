@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, reactive, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {projectRoot} from '../../api/urls'
@@ -111,11 +112,11 @@ function change(next: Partial<ListFilter>, replace = false) {
       <button class="btn primary" @click="newProject">New music video</button>
     </PageBar>
     <!-- something a run needs is not there: said before a first run fails on it -->
-    <div v-if="missing.length" class="warn pp-machine">
+    <CalloutBox v-if="missing.length" kind="warn" as="div" class="pp-machine">
       <span>{{ missing[0]!.what }}: {{ missing[0]!.found }}</span>
       <code v-if="missing[0]!.fix">{{ missing[0]!.fix }}</code>
       <button class="btn mini" @click="showMachine">{{ missing.length > 1 ? `All ${missing.length}` : 'Details' }}</button>
-    </div>
+    </CalloutBox>
     <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
     <template v-if="data">
       <div class="cards">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {toRef} from 'vue'
 import {RouterLink} from 'vue-router'
 import type {EditorReference, Freshness} from '../../../../shared/workspace'
@@ -43,15 +44,15 @@ const exportable = () => props.reference.kind !== 'prop' && !!props.reference.pi
     >
       <h2>{{ reference.name }}</h2>
       <p class="muted section">{{ reference.kind }} · {{ reference.id }}{{ fresh ? ` · ${FRESH_LABEL[fresh]}` : '' }}</p>
-      <div v-if="reference.look" class="note">Another look of {{ reference.look.base }}: {{ reference.look.change }}</div>
-      <div v-if="reference.library" class="note">
+      <CalloutBox v-if="reference.look" as="div">Another look of {{ reference.look.base }}: {{ reference.look.change }}</CalloutBox>
+      <CalloutBox v-if="reference.library" as="div">
         Played by library:{{ reference.library }}. It is not rendered here: change it on the <RouterLink :to="`${root}/casting`">Casting</RouterLink> page.
-      </div>
-      <div v-if="fresh === 'pinned' && !reference.library" class="note">
+      </CalloutBox>
+      <CalloutBox v-if="fresh === 'pinned' && !reference.library" as="div">
         Pinned: your own picture, or one made before fingerprints or from an edited prompt. The pipeline leaves it alone; rendering it again here puts it away
         as an older version.
-      </div>
-      <div v-if="fresh === 'stale'" class="warn">Made from another prompt or anchor than the plan has now.</div>
+      </CalloutBox>
+      <CalloutBox v-if="fresh === 'stale'" kind="warn" as="div">Made from another prompt or anchor than the plan has now.</CalloutBox>
       <div class="section">
         <h3>Prompt</h3>
         <textarea v-model="prompt.text.value" rows="7" aria-label="Prompt" :disabled="!!reference.look" />
