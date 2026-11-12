@@ -507,7 +507,7 @@ function recording<T extends new (...args: any[]) => Renderer>(Base: T) {
         jobs: Job[] = []
         // clip ids whose next render comes out as the studio backdrop - once each
         leaky = new Set<string>()
-        protected override async render<M>(
+        override async render<M>(
             what: {kind: string},
             target: string,
             _extension: string | string[],
