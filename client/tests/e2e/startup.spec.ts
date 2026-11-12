@@ -24,7 +24,8 @@ test('production Vue assets boot through Bun, with navigation and direct project
   page.on('request', request => origins.add(new URL(request.url()).origin))
   await page.goto(base)
   await expect(page.getByRole('heading', {name: 'Projects', exact: true})).toBeVisible()
-  await expect(page.getByRole('heading', {name: 'All projects', exact: true})).toBeVisible()
+  // the start page says where you are in its crumbs, not in a heading of the top bar (#776)
+  await expect(page).toHaveTitle('Workspace')
   // the release the build belongs to, from the repository's package.json
   await expect(page.locator('.top .release')).toHaveText('v' + version)
   // the logo: the mark in the top bar and the icon of the tab
