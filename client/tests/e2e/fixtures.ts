@@ -247,7 +247,6 @@ const GETS: Record<string, unknown> = {
   freshness: fresh,
   status,
   waveform: {peaks: null},
-  progress: {progress: null},
   'versions/clip-1': {versions: []},
   'versions/clip-2': {versions: []},
   references: {

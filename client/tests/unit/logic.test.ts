@@ -224,6 +224,26 @@ test('what the events of a run say: its step, warnings, failure - only of the ru
   expect(said).toEqual({step: '3 · Beats', warnings: ['a beat without a place'], failure: {message: 'EPERM', advice: 'Close the program that holds it.'}})
 })
 
+// #829: how far a render of clips is comes from the run's job events, not from files polled
+test('the progress of a render, from its job events', async () => {
+  const {jobProgress} = await import('../../src/services/run')
+  expect(jobProgress([{at: 10, type: 'step', state: 'started', name: 'story', title: 'Story'}])).toBeUndefined()
+  const progress = jobProgress(
+    [
+      {at: 1, type: 'jobs', kind: 'clip', ids: ['old']},
+      {at: 10, type: 'jobs', kind: 'clip', ids: ['slot-001', 'slot-002', 'slot-003', 'slot-004']},
+      {at: 11, type: 'job', state: 'running', kind: 'picture', id: 'slot-001'},
+      {at: 12, type: 'job', state: 'running', kind: 'clip', id: 'slot-001', server: 'a'},
+      {at: 13, type: 'job', state: 'done', kind: 'clip', id: 'slot-001', server: 'a'},
+      {at: 14, type: 'job', state: 'running', kind: 'clip', id: 'slot-002', server: 'b'},
+      {at: 15, type: 'job', state: 'failed', kind: 'clip', id: 'slot-003', server: 'a'},
+      {at: 16, type: 'job', state: 'done', kind: 'clip', id: 'slot-099', server: 'a'},
+    ],
+    5,
+  )
+  expect(progress).toEqual({clips: {'slot-001': 'done', 'slot-002': 'rendering', 'slot-003': 'failed', 'slot-004': 'waiting'}, done: 1, total: 4})
+})
+
 // #837: the kind of a no decides how it reads
 test('an error reads by its kind', async () => {
   const {errorText} = await import('../../src/lib/format')
