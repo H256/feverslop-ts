@@ -6,7 +6,6 @@ import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {listSteps} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
-import StageBar from '../plan/StageBar.vue'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import LookElementCard from './LookElementCard.vue'
@@ -76,7 +75,6 @@ const saveLooks = toasts.guard(async () => {
 
 <template>
   <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
-    <StageBar />
     <ResourceState :loading="loading" :error="error" :loaded="!!look" @retry="reload" />
     <template v-if="look">
       <div v-if="look.lookBrief === undefined" class="empty">No look yet - plan it with the button above.</div>

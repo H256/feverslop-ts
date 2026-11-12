@@ -1,5 +1,5 @@
 import {h, reactive} from 'vue'
-import type {BeatCastResult, EditorClip, EditorOverride, LastRun, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
+import type {BeatCastResult, EditorClip, EditorOverride, LastRun, RunInfo, RunRequest} from '../../../../shared/workspace'
 import BeatCastForm, {type BeatCastDraft} from './BeatCastForm.vue'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
@@ -149,24 +149,6 @@ export function useClipActions(timeline: Timeline) {
     const yes = await ask({title: 'Run this again?', lines: [last.command], confirm: 'Run it', render: true})
     if (yes) await start({type: 'repeat', command: last.command})
   }
-  async function runNext(next: ProjectStatus['next']) {
-    if (!next.command || next.page) return
-    // a render of most of the video - after the shots were planned again every clip is stale (#782): said plainly before it starts
-    const clips = timeline.status.value?.clips
-    const many = clips && /--render=videos/.test(next.command) ? clips.missing + clips.stale : 0
-    const yes = await ask({
-      title: next.why,
-      lines: [next.command, next.estimate],
-      warnings: [
-        clips &&
-          many >= Math.max(10, clips.total / 2) &&
-          `This renders ${many} of the ${plural(clips.total, 'clip')}. After a new plan, look at the Direction page and render a few marked clips to check first.`,
-      ],
-      confirm: 'Run it',
-      render: true,
-    })
-    if (yes) await start({type: 'next', command: next.command})
-  }
   /** The shots of these beats planned again with the planner as it is now (#762): the language model only, their clips go stale. */
   async function replanBeats(beatIds: string[]) {
     const all = project.value.beats ?? []
@@ -280,7 +262,6 @@ export function useClipActions(timeline: Timeline) {
     saveOverride: guarded(saveOverride),
     addView: guarded(addView),
     repeatLast: guarded(repeatLast),
-    runNext: guarded(runNext),
     plain: guarded(plain),
     plan: guarded(plan),
     renderMarkedNow: renderMarked,

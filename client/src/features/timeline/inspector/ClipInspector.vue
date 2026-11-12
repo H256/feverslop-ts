@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {clock} from '../../../lib/format'
-import StageBar from '../../plan/StageBar.vue'
 import {STATE_CHIPS, stateOf} from '../clips'
 import {useTimeline, type TimelineContext} from '../context'
 import type {Tab} from '../useTimeline'
@@ -60,7 +59,6 @@ watch(clip, () => panel.value?.scrollTo({top: 0}))
       <template v-else>
         <div class="section">
           <h3>The plan</h3>
-          <StageBar />
         </div>
         <p class="muted">
           There are no clips yet. Plan it stage by stage, as a film is made: the story, then the cast, then the look, then the shots - each one looked at and

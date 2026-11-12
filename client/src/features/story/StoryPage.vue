@@ -7,7 +7,6 @@ import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {listSteps} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
-import StageBar from '../plan/StageBar.vue'
 import {usePageData} from '../project/usePageData'
 import {useProject} from '../project/session'
 import StoryProposal from './StoryProposal.vue'
@@ -99,7 +98,6 @@ const drop = toasts.guard(async () => {
 
 <template>
   <div class="scrollpage view">
-    <StageBar />
     <PageBar :title="name" />
     <ResourceState :loading="loading" :error="error" :loaded="!!book" @retry="reload" />
     <template v-if="book">
