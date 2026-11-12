@@ -21,6 +21,8 @@ const NOT_A_CHANGE = new Set([
     'started',
     'urlsOfChoice',
     'estimateClips',
+    // the command itself with --dry-run: it reads only
+    'dryRun',
     'estimatePictures',
     'readPictureJobs',
     'picturesFile',

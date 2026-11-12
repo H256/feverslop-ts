@@ -1,4 +1,5 @@
 import type {
+  DryRun,
   BeatCastChange,
   BeatCastResult,
   BookView,
@@ -90,6 +91,8 @@ export function projectApi(root: string) {
     stop: () => post<{stopped: boolean}>('stop', {}),
     estimateClips: (clips: string[]) => post<Estimate>('estimate', {clips}),
     estimatePictures: (pictures: number) => post<Estimate>('estimate', {pictures}),
+    /** What a plan run would do: `bun index.ts <id> --dry-run --json` (#836); null for a film. */
+    dryRun: (plan: {redo?: string[]; until?: string}) => post<{dryRun: DryRun | null}>('dry-run', plan),
     pickVersion: (clip: string, version: string) => post<unknown>(`versions/${id(clip)}/pick`, {version}),
     /** The user's own picture as its anchor: picture, prompt, description or describe, servers - as a form, the picture as it is. */
     ownAnchor: (picture: string, form: FormData) => postForm<{run: RunInfo}>(`${root}/api/references/${id(picture)}/own-anchor`, form),

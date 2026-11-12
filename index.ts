@@ -4,7 +4,7 @@ import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
 import {parseArgs} from 'node:util'
-import {formatDuration, hideDetails, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
+import {formatDuration, hideDetails, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
@@ -64,6 +64,7 @@ import {languageName, loadProjectConfig} from './lib/config.ts'
 import {alignLyrics, lowConfidence, lyricsProblems, sungLines, sungOnly, tightenStarts} from './lib/lyrics.ts'
 import {readFineWaveform} from './lib/waveform.ts'
 import {MISSING_WORD_LEAD, RATE, voiceLead} from './shared/timing-fit.ts'
+import type {DryRun} from './shared/workspace.ts'
 import {projectLyricSections} from './lib/music.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
 import {assembleFinal, previewSources, formatSlotRanges} from './lib/assemble.ts'
@@ -114,7 +115,7 @@ cli('plan')
 //              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]  (this run only)
 const usage = `bun index.ts [project-id] [--redo=story,beats] [--render=song,images,videos,final|all] [--only=slot-001,slot-002] [--again] [--preview] [--retake=slot-007:3.2-5.0]
              [--llm-url=…] [--llm-key=…] [--llm-model=…] [--llm-parallel=2] [--comfy=http://a:8188,http://b:8188] [--legacy-moments] [--debug-audio]
-             [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
+             [--refresh=pictures,clips] [--beats=beat-05,beat-07] [--strict] [--debug] [--review] [--until=story|cast|look] [--dry-run [--json]] [-v|--verbose] [--show=story,cast,clips]   (--debug: the stack trace of a failure · --review: stop after story, cast, look and beats to accept, edit or redo them · --until: plan up to this stage and stop, the next run goes on from it · --dry-run: what the run would redo and render, nothing is done · -v: every detail as before · --show: the details of these cached steps, clips = the prompts · --refresh: render stale ones again, the old ones are kept · --strict: the final video needs every clip to be current)
 bun index.ts [project-id] --export=mlt,openshot|all   (writes timeline.mlt for Shotcut/Kdenlive and/or timeline.osp for OpenShot: the rendered clips on one track, the song under them)
 bun index.ts [project-id] --gallery   (writes <project>/gallery.html, an overview of the assets generated so far - runs nothing else)`
 const {values: args, positionals} = (() => {
@@ -150,6 +151,8 @@ const {values: args, positionals} = (() => {
                 gallery: {type: 'boolean', default: false},
                 // says what --redo, changed inputs and --render would do, and does nothing
                 'dry-run': {type: 'boolean', default: false},
+                // with --dry-run: what it says as JSON, for the workspace (#836)
+                json: {type: 'boolean', default: false},
                 export: {type: 'string', default: ''},
                 // the terminal shows a cached step as one line; -v everything, --show=story,clips the details of those
                 verbose: {type: 'boolean', short: 'v', default: false},
@@ -211,6 +214,7 @@ const until = (() => {
         return log.usageError((e as Error).message, usage)
     }
 })()
+if (args.json && !args['dry-run']) log.usageError('--json goes with --dry-run: what the run would do, as data', usage)
 if (until && ([...render].some(r => r !== 'images') || args.retake || args.gallery || args.export || args['dry-run']))
     log.usageError(
         '--until plans up to a stage and stops - it goes with no --render (but --render=images with --until=look), --retake, --gallery, --export or --dry-run',
@@ -2006,47 +2010,64 @@ async function dryRun() {
     // whether a step is used is read from the project as it is once the redone steps are gone (the blocking is made when the shots are planned again)
     const after = Object.fromEntries(Object.entries(project.data).filter(([step]) => !(redone as string[]).includes(step)))
     const missing = STEP_NAMES.filter(step => project.data[step] === undefined && !redone.includes(step) && stepUsed(step, project.dir, after, config))
+    const unplanned = redone.includes('shotMoments') ? [] : [...new Set([...replanBeats, ...unplannedBeats(project.data)])]
+    const staleAfter = (project.data.mapping ?? []).filter(m => unplanned.includes(m.beatId)).map(m => m.slotId)
+    // the same as data, for the workspace's question before a plan run (--json, #836)
+    const found: DryRun = {
+        reasons: reasons.map(([why, steps]) => ({why, steps})),
+        redone,
+        plannedAgain: unplanned,
+        staleAfter,
+        generated: missing,
+        warnings: [],
+    }
+    const said = (text: string) => Bun.stripANSI(text)
 
     log.section('DRY RUN - nothing is done')
     for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
     log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
-    const unplanned = redone.includes('shotMoments') ? [] : [...new Set([...replanBeats, ...unplannedBeats(project.data)])]
     if (unplanned.length) {
         const why = replanBeats.length ? '- named by --beats or without a shot plan yet' : '- no shot plan yet'
         log.step('Planned again', `${unplanned.map(styles.name).join(', ')} ${styles.muted(`${why}, the other beats stay`)}`)
-        const stale = (project.data.mapping ?? []).filter(m => unplanned.includes(m.beatId)).map(m => m.slotId)
-        if (stale.length) log.step('Stale after', `${formatSlotRanges(stale)} ${styles.muted('- render them again with --render=videos --refresh=clips')}`)
+        if (staleAfter.length)
+            log.step('Stale after', `${formatSlotRanges(staleAfter)} ${styles.muted('- render them again with --render=videos --refresh=clips')}`)
     }
     if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
 
-    if (!render.has('images') && !render.has('videos') && !render.has('final')) return
-    const state = await renderState(project.dir, project.id, config)
-    const servers = settings.comfy.map(s => s.name)
-    if (redone.length || missing.length) log.warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
-    if (render.has('images')) {
-        const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-        log.step(
-            'Pictures',
-            state.missingPictures.length ? `${await pictureEstimate(state.missingPictures.length, config, servers)}${stale}` : styles.muted('all rendered'),
-        )
+    if (render.has('images') || render.has('videos') || render.has('final')) {
+        const state = await renderState(project.dir, project.id, config)
+        const servers = settings.comfy.map(s => s.name)
+        const warn = (text: string) => {
+            found.warnings.push(said(text))
+            log.warn(text)
+        }
+        if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
+        if (render.has('images')) {
+            const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+            const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, config, servers) : undefined
+            found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
+            log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
+        }
+        if (render.has('videos')) {
+            const only = new Set(args.only.split(',').filter(Boolean))
+            const selected = onlyClips(state.clips, only)
+            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+            for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) warn(risk)
+            const estimate = todo.length ? await clipEstimate(todo, config, servers) : undefined
+            found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
+            log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+        }
+        if (render.has('final')) {
+            found.final = {missingClips: state.missingClips.length}
+            log.step(
+                'Final video',
+                state.missingClips.length
+                    ? styles.warning(`needs every clip - ${state.missingClips.length} missing`)
+                    : styles.muted('assembled from the clips'),
+            )
+        }
     }
-    if (render.has('videos')) {
-        const only = new Set(args.only.split(',').filter(Boolean))
-        const selected = onlyClips(state.clips, only)
-        const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
-        for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) log.warn(risk)
-        log.step(
-            'Clips',
-            todo.length
-                ? `${await clipEstimate(todo, config, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}`
-                : styles.muted('all rendered'),
-        )
-    }
-    if (render.has('final'))
-        log.step(
-            'Final video',
-            state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'),
-        )
+    if (jsonOutput()) log.json(found)
 }
 
 /**

@@ -270,6 +270,22 @@ export type RunEvent = {at: number} & (
 )
 /** The events of the newest run from `from` on: `from` 0 starts a run's list anew (another run, or a page that asks again). */
 export type RunEvents = {events: RunEvent[]; from: number; next: number}
+/** What a plan run would do, said before it runs: `bun index.ts <id> --dry-run --json` (#836). */
+export type DryRun = {
+    /** what makes it redo steps - --redo, a changed input or setting - with the steps each names */
+    reasons: {why: string; steps: string[]}[]
+    /** every step made again, along what is built on what */
+    redone: string[]
+    /** beats whose shots are planned again (--beats, or none planned yet), and the clips that turn stale by it */
+    plannedAgain: string[]
+    staleAfter: string[]
+    /** steps not made yet that the run makes */
+    generated: string[]
+    pictures?: {count: number; estimate?: string}
+    clips?: {ids: string[]; estimate?: string}
+    final?: {missingClips: number}
+    warnings: string[]
+}
 export type Estimate = {estimate: string; risks?: string[]; fixedSeed?: number}
 
 ////////// VERSIONS - what was put away when something was made again
