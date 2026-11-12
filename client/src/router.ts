@@ -1,8 +1,23 @@
-import {createRouter, createWebHistory} from 'vue-router'
+import {createRouter, createWebHistory, type RouteComponent} from 'vue-router'
+import {PROJECT_PAGES, type ProjectPage} from '../../shared/workspace'
 import ProjectsPage from './features/projects/ProjectsPage.vue'
 import NotFoundPage from './components/NotFoundPage.vue'
 
-// The asset base is /workspace-assets/; the pages stay at /. A project's pages load when they are first opened.
+// A project's pages: the list is shared/workspace.ts (PROJECT_PAGES, which the server serves too), each page loads when it is first
+// opened - one for every name of the list, or this does not compile (#840).
+const PAGES: Record<ProjectPage, () => Promise<RouteComponent>> = {
+  story: () => import('./features/story/StoryPage.vue'),
+  casting: () => import('./features/casting/CastingPage.vue'),
+  singers: () => import('./features/singers/SingersPage.vue'),
+  timing: () => import('./features/timing/TimingPage.vue'),
+  look: () => import('./features/look/LookPage.vue'),
+  direction: () => import('./features/direction/DirectionPage.vue'),
+  references: () => import('./features/references/ReferencesPage.vue'),
+  postwork: () => import('./features/postwork/PostworkPage.vue'),
+  settings: () => import('./features/settings/SettingsPage.vue'),
+}
+
+// The asset base is /workspace-assets/; the pages stay at /.
 export const router = createRouter({
   history: createWebHistory('/'),
   routes: [
@@ -14,15 +29,7 @@ export const router = createRouter({
       component: () => import('./features/project/ProjectLayout.vue'),
       children: [
         {path: '', name: 'timeline', component: () => import('./features/timeline/TimelinePage.vue')},
-        {path: 'story', name: 'story', component: () => import('./features/story/StoryPage.vue')},
-        {path: 'casting', name: 'casting', component: () => import('./features/casting/CastingPage.vue')},
-        {path: 'look', name: 'look', component: () => import('./features/look/LookPage.vue')},
-        {path: 'direction', name: 'direction', component: () => import('./features/direction/DirectionPage.vue')},
-        {path: 'postwork', name: 'postwork', component: () => import('./features/postwork/PostworkPage.vue')},
-        {path: 'settings', name: 'settings', component: () => import('./features/settings/SettingsPage.vue')},
-        {path: 'references', name: 'references', component: () => import('./features/references/ReferencesPage.vue')},
-        {path: 'singers', name: 'singers', component: () => import('./features/singers/SingersPage.vue')},
-        {path: 'timing', name: 'timing', component: () => import('./features/timing/TimingPage.vue')},
+        ...PROJECT_PAGES.map(page => ({path: page, name: page, component: PAGES[page]})),
       ],
     },
     {path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundPage},
