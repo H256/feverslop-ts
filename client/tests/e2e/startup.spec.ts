@@ -132,3 +132,41 @@ test('library shows details, filters, recovers from a failed request and asks be
   await expect(page.getByRole('dialog')).toHaveCount(0)
   expect(posts).toEqual([])
 })
+
+// #831: an empty workspace shows the first steps; a music video and a film are made by their forms, each the options of its command
+test('first run: the steps, no red server, and the new-project forms send what the commands take', async ({page}) => {
+  await page.route('**/api/projects', route => route.fulfill({json: {projects: []}}))
+  await page.route('**/api/servers', route =>
+    route.fulfill({json: {servers: [{name: 'localhost:8188', reachable: false, running: 0, pending: 0, unset: true}]}}),
+  )
+  await page.route('**/api/library/assets', route => route.fulfill({json: {dir: 'library', assets: [], songs: []}}))
+  const asked: {url: string; body: unknown}[] = []
+  for (const kind of ['projects', 'films'])
+    await page.route(`**/api/${kind}/new`, async route => {
+      asked.push({url: route.request().url(), body: route.request().postDataJSON() as unknown})
+      await route.fulfill({json: {id: (route.request().postDataJSON() as {id: string}).id}})
+    })
+  await page.goto(base)
+  await expect(page.getByText('No projects here yet.')).toBeVisible()
+  // the default server, nobody set one up: a way to set it up, not "down"
+  await expect(page.getByRole('link', {name: 'No render server set up'})).toBeVisible()
+
+  await page.getByRole('button', {name: 'New film'}).first().click()
+  const film = page.locator('dialog')
+  await film.getByPlaceholder('the-last-lighthouse').fill('night')
+  await film.locator('textarea').first().fill('A lighthouse keeper')
+  await film.getByPlaceholder('90').fill('60')
+  await film.getByRole('button', {name: 'Create'}).click()
+  await expect(page).toHaveURL(/\/p\/film\/night\/story$/)
+  expect(asked.at(-1)).toEqual({url: expect.stringContaining('/api/films/new'), body: {id: 'night', idea: 'A lighthouse keeper', length: '60'}})
+
+  await page.goto(base)
+  await page.getByRole('button', {name: 'New music video'}).first().click()
+  const song = page.locator('dialog')
+  await song.getByPlaceholder('well-of-youth').fill('rain')
+  await song.getByRole('button', {name: 'A song to be made'}).click()
+  await song.locator('textarea').first().fill('A song about rain')
+  await song.getByRole('button', {name: 'Create'}).click()
+  await expect(page).toHaveURL(/\/p\/music\/rain\/story$/)
+  expect(asked.at(-1)?.body).toEqual({id: 'rain', idea: 'A song about rain'})
+})

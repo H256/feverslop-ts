@@ -105,7 +105,17 @@ export type SetupView = {
 export type SetupChange = {command: 'llm' | 'vision' | 'comfy'; options: Record<string, string | boolean>}
 /** One line of `bun run doctor`: what the machine has, and what to do about what it lacks. */
 export type MachineCheck = {what: string; state: 'ready' | 'missing' | 'note'; found: string; fix?: string}
-export type EditorServer = {name: string; reachable: boolean; running: number; pending: number; device?: string; freeGb?: number; totalGb?: number}
+// unset: no server is set up - this is the default address, tried on the chance that one runs there (#831)
+export type EditorServer = {
+    name: string
+    reachable: boolean
+    running: number
+    pending: number
+    device?: string
+    freeGb?: number
+    totalGb?: number
+    unset?: boolean
+}
 
 ////////// A PROJECT
 export type EditorPerson = {name: string; text: string}
