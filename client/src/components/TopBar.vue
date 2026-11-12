@@ -14,7 +14,7 @@ import ThemeSwitch from './ThemeSwitch.vue'
 const {title, themeChanged} = ChromeService.use()
 const version = __APP_VERSION__
 const route = useRoute()
-const workspacePage = computed(() => route.path === '/' || route.path === '/library')
+const workspacePage = computed(() => ['/', '/library', '/stats'].includes(route.path))
 </script>
 
 <template>
@@ -24,6 +24,7 @@ const workspacePage = computed(() => route.path === '/' || route.path === '/libr
       <nav class="crumbs" aria-label="Workspace">
         <RouterLink to="/" active-class="" exact-active-class="" :aria-current="$route.path === '/' ? 'page' : undefined">Projects</RouterLink>
         <RouterLink to="/library" :aria-current="$route.path === '/library' ? 'page' : undefined">Library</RouterLink>
+        <RouterLink to="/stats" :aria-current="$route.path === '/stats' ? 'page' : undefined">Stats</RouterLink>
       </nav>
       <!-- on the workspace's own pages the crumbs say where you are already -->
       <template v-if="!workspacePage">

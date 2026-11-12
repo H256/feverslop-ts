@@ -18,6 +18,7 @@ import {loadFilmConfig} from '../film/config.ts'
 import {filmRenderConfig} from '../film/pictures.ts'
 import {filmDir, filmExists, filmIds} from '../film/setup.ts'
 import {changeLibrary, readCasting, readLibrary, writeCastingEntry} from './library.ts'
+import {statsView} from './stats.ts'
 import {
     clipRequestId,
     type EditorKind,
@@ -652,7 +653,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
         try {
             const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
             if (parts[0] === 'workspace-assets') return post ? notFound() : serveClient(request, parts.slice(1).join('/'))
-            if (parts.length === 0 || (parts.length === 1 && parts[0] === 'library')) return post ? notFound() : page(request)
+            if (parts.length === 0 || (parts.length === 1 && (parts[0] === 'library' || parts[0] === 'stats'))) return post ? notFound() : page(request)
             if (parts[0] === 'api') {
                 if (parts[1] === 'projects' && !post)
                     return json({
@@ -673,6 +674,14 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 if (parts[1] === 'projects' && parts[2] === 'new' && post) {
                     try {
                         return json(await createProject((await request.json()) as NewProject))
+                    } catch (e) {
+                        return refused(e)
+                    }
+                }
+                // the measured times of this machine: bun run stats --json (#836)
+                if (parts[1] === 'stats' && !post) {
+                    try {
+                        return json(await statsView({since: url.searchParams.get('since') ?? undefined, kind: url.searchParams.get('kind') ?? undefined}))
                     } catch (e) {
                         return refused(e)
                     }

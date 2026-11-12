@@ -69,6 +69,14 @@ export type LibraryChange =
     | {action: 'rename'; kind: AssetKind | 'song'; id: string; name: string}
     | {action: 'describe'; kind: AssetKind; id: string; description: string}
     | {action: 'remove'; kind: AssetKind | 'song'; id: string}
+/** One group of measured jobs of `bun run stats` (#836): a workflow variant on a GPU, or a language model. Seconds. */
+export type StatsRow = {key: string; n: number; median: number; p90: number; cold: number; retries: number; failed: number}
+/** The Stats page: what `bun run stats --json` reports, with the fields its tables show. */
+export type StatsView = {
+    summary: {measurements: number; projects: number; successful: number; failed: number; retries: number; again: number; jobHours: number}
+    renders: StatsRow[]
+    llm: StatsRow[]
+}
 /** A new music video as the start page asks for it: the options of `bun run init` (#831). `song`: a file on this machine. */
 export type NewProject = {
     id: string

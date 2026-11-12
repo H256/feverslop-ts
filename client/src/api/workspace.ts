@@ -1,4 +1,4 @@
-import type {EditorServer, Library, LibraryChange, ListingStatus, MachineCheck, NewProject, ProjectListing, RunInfo} from '../../../shared/workspace'
+import type {EditorServer, Library, LibraryChange, ListingStatus, StatsView, MachineCheck, NewProject, ProjectListing, RunInfo} from '../../../shared/workspace'
 import {getJson, postForm, postJson} from './http'
 import {projectRoot} from './urls'
 
@@ -16,4 +16,7 @@ export const workspace = {
   changeLibrary: (change: LibraryChange) => postJson<unknown>('/api/library/change', change),
   createAsset: (form: FormData) => postForm<{run: RunInfo}>('/api/library/create', form),
   libraryEvents: '/api/library/run-events',
+  /** The measured times of this machine, as `bun run stats --json` reports them (#836). */
+  stats: (filters: {since?: string; kind?: string}, signal?: AbortSignal) =>
+    getJson<StatsView>(`/api/stats?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][])}`, signal),
 }
