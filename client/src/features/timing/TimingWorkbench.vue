@@ -55,6 +55,11 @@ const draft = useTimingDraft(toRef(props, 'view'))
 const saved = ref<string>()
 const editor = ref<InstanceType<typeof TimingEditor>>()
 const timingTools = ref<InstanceType<typeof TimingTools>>()
+// the Reset menu shuts once one of its actions is clicked; a click on its title opens and shuts it as a <details> does
+const more = ref<HTMLDetailsElement>()
+const closeMore = (event: MouseEvent) => {
+  if ((event.target as HTMLElement).closest('.tw-item') && more.value) more.value.open = false
+}
 useUnsavedChanges(() => draft.edits.value.size > 0, 'moved lines')
 watch(
   () => draft.edits.value.size,
@@ -277,72 +282,93 @@ onMounted(() => {
             >
           </template>
           <div class="spacer" />
-          <button v-if="draft.line.value" class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
-          <button
-            v-if="draft.line.value && lead >= EARLY_FROM"
-            class="btn"
-            title="Move the start of the first word to where the singing begins"
-            @click="draft.tighten(new Map([[draft.line.value.line, lead]]))"
+          <span v-if="draft.line.value" class="tw-grp">
+            <button class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
+            <button
+              v-if="draft.line.value && lead >= EARLY_FROM"
+              class="btn"
+              title="Move the start of the first word to where the singing begins"
+              @click="draft.tighten(new Map([[draft.line.value.line, lead]]))"
+            >
+              Tighten the start
+            </button>
+            <button
+              v-if="draft.line.value"
+              class="btn"
+              :disabled="draft.edits.value.size > 0"
+              :title="
+                draft.edits.value.size
+                  ? 'Save the moved lines first'
+                  : draft.line.value.off
+                    ? 'The line is sung again: the clips it falls into sing it'
+                    : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
+              "
+              @click="setOff(draft.line.value, !draft.line.value.off)"
+            >
+              {{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+            </button>
+          </span>
+          <span class="tw-grp">
+            <button
+              v-if="problems.length"
+              class="btn"
+              :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`"
+              @click="nextProblem()"
+            >
+              Next problem ({{ problems.length }})
+            </button>
+            <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
+            <button class="btn" @click="nextKind('cut')">Next cut</button>
+          </span>
+          <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
+          <details
+            v-if="draft.line.value?.byHand || byHand.length > 1 || (draft.line.value && draft.isChanged(draft.line.value))"
+            ref="more"
+            class="tw-more"
+            @click="closeMore"
           >
-            Tighten the start
-          </button>
-          <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
-          <button class="btn" @click="nextKind('cut')">Next cut</button>
-          <button
-            v-if="problems.length"
-            class="btn"
-            :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`"
-            @click="nextProblem()"
-          >
-            Next problem ({{ problems.length }})
-          </button>
-          <button
-            v-if="draft.line.value"
-            class="btn"
-            :disabled="draft.edits.value.size > 0"
-            :title="
-              draft.edits.value.size
-                ? 'Save the moved lines first'
-                : draft.line.value.off
-                  ? 'The line is sung again: the clips it falls into sing it'
-                  : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
-            "
-            @click="setOff(draft.line.value, !draft.line.value.off)"
-          >
-            {{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
-          </button>
-          <button
-            v-if="draft.line.value?.byHand"
-            class="btn"
-            :disabled="draft.edits.value.size > 0"
-            :title="
-              draft.edits.value.size ? 'Save the moved lines first' : 'Where the alignment puts it, worked out again from the transcript - your placement goes'
-            "
-            @click="reset([draft.line.value])"
-          >
-            Back to automatic
-          </button>
-          <button
-            v-if="byHand.length > 1"
-            class="btn"
-            :disabled="draft.edits.value.size > 0"
-            :title="`All ${byHand.length} lines placed by hand back to the automatic timing`"
-            @click="reset(byHand)"
-          >
-            All back to automatic
-          </button>
-          <button
-            v-if="draft.line.value && draft.isChanged(draft.line.value)"
-            class="btn"
-            title="Back to the saved times"
-            @click="draft.resetLine(draft.line.value)"
-          >
-            Reset line
-          </button>
-          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
-          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
-          <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
-          <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
+            <summary class="btn">Reset ▾</summary>
+            <div class="tw-menu" role="menu">
+              <button
+                v-if="draft.line.value?.byHand"
+                class="btn tw-item"
+                :disabled="draft.edits.value.size > 0"
+                :title="
+                  draft.edits.value.size
+                    ? 'Save the moved lines first'
+                    : 'Where the alignment puts it, worked out again from the transcript - your placement goes'
+                "
+                @click="reset([draft.line.value])"
+              >
+                Back to automatic
+              </button>
+              <button
+                v-if="byHand.length > 1"
+                class="btn tw-item"
+                :disabled="draft.edits.value.size > 0"
+                :title="`All ${byHand.length} lines placed by hand back to the automatic timing`"
+                @click="reset(byHand)"
+              >
+                All back to automatic
+              </button>
+              <button
+                v-if="draft.line.value && draft.isChanged(draft.line.value)"
+                class="btn tw-item"
+                title="Back to the saved times"
+                @click="draft.resetLine(draft.line.value)"
+              >
+                Reset line
+              </button>
+            </div>
+          </details>
+          <span class="tw-grp">
+            <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
+            <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
+          </span>
+          <span class="tw-grp">
+            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
+            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
+          </span>
         </div>
         <TimingEditor
           ref="editor"
@@ -391,6 +417,42 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* the bar's buttons in groups by what they do, a line between them (#834) */
+.tw-grp {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+.tw-more {
+  position: relative;
+}
+.tw-more > summary {
+  list-style: none;
+}
+.tw-more > summary::-webkit-details-marker {
+  display: none;
+}
+.tw-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: 6px;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+.tw-menu .btn {
+  text-align: left;
+}
 /* the side column folded away: the editor takes the whole width */
 .tw-folded {
   grid-template-columns: minmax(0, 1fr);
