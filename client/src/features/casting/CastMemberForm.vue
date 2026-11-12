@@ -16,7 +16,7 @@ defineEmits<{remove: []}>()
       <div class="spacer" />
       <button
         v-if="removable"
-        class="btn"
+        class="btn danger"
         :title="kind === 'character' ? 'Out of the cast: the beats and shots are planned without them' : 'Out of the cast: the beats are planned without it'"
         @click="$emit('remove')"
       >

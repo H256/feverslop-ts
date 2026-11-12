@@ -677,7 +677,7 @@ const editItem = (rule: DirectionRule) => {
 .direction-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: start;
 }
 .direction-side {
@@ -685,9 +685,9 @@ const editItem = (rule: DirectionRule) => {
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-4);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   padding: 12px 14px 14px;
   background: var(--surface);
   max-height: calc(100vh - 140px);
@@ -695,7 +695,7 @@ const editItem = (rule: DirectionRule) => {
 }
 .dp-tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   border-bottom: 1px solid var(--line);
 }
 .dp-tabs button {
@@ -716,12 +716,12 @@ const editItem = (rule: DirectionRule) => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .direction-form label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .direction-form select,
@@ -732,10 +732,10 @@ const editItem = (rule: DirectionRule) => {
 .dp-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .side-block h3 {
-  font-size: 12px;
+  font-size: var(--text-s);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -752,33 +752,33 @@ const editItem = (rule: DirectionRule) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 6px 0;
   border-top: 1px solid var(--line);
 }
 .cli {
-  font: 11px/1.6 var(--mono);
+  font: var(--text-xs)/1.6 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 8px 0 0;
 }
 .small {
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 
 .direction-main {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .actionbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 10px 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
 }
 .actionbar .warn.inline {
   margin: 0;
@@ -789,7 +789,7 @@ const editItem = (rule: DirectionRule) => {
 .filters {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .filters input {
   flex: 1;
@@ -797,7 +797,7 @@ const editItem = (rule: DirectionRule) => {
 }
 .dp-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   padding: 10px 14px 6px;
 }
 .dp-card.needs {
@@ -810,11 +810,11 @@ const editItem = (rule: DirectionRule) => {
 .dp-card-head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-3);
   margin-bottom: 4px;
 }
 .dp-card-head h2 {
-  font-size: 14px;
+  font-size: var(--text-l);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -824,7 +824,7 @@ const editItem = (rule: DirectionRule) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 .shot-block {
   border-top: 1px solid var(--line);
@@ -835,25 +835,23 @@ const editItem = (rule: DirectionRule) => {
 .change h3 {
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  font-size: 12px;
+  gap: var(--space-3);
+  font-size: var(--text-s);
   font-weight: 600;
   color: var(--muted);
   margin: 2px 0;
 }
 .go {
-  font-size: 12px;
+  font-size: var(--text-s);
   font-weight: normal;
-  color: var(--accent);
-  text-decoration: none;
-}
-.go:hover {
+  color: var(--text);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 6px 0;
 }
 .item + .item {
@@ -865,7 +863,7 @@ const editItem = (rule: DirectionRule) => {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
+  gap: var(--space-1) var(--space-2);
 }
 .what p {
   flex: 1 1 100%;
@@ -888,12 +886,12 @@ const editItem = (rule: DirectionRule) => {
 }
 .issue {
   color: var(--stale);
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 .dp-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 7px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line);
   color: var(--muted);
   white-space: nowrap;
@@ -903,19 +901,15 @@ const editItem = (rule: DirectionRule) => {
 }
 .acts {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   flex-shrink: 0;
-}
-.btn.mini {
-  padding: 2px 8px;
-  font-size: 12px;
 }
 .planned {
   margin: 4px 0;
 }
 .planned summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-s);
   color: var(--muted);
   padding: 4px 0;
 }
@@ -932,7 +926,7 @@ const editItem = (rule: DirectionRule) => {
 .comparison {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 .comparison pre {
   font: inherit;

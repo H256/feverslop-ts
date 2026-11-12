@@ -108,7 +108,7 @@ onMounted(() => {
     <div ref="list" class="scrollpage">
       <PageBar title="Who sings which line">
         <SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" />
-        <span class="muted" style="font-size: 12px"
+        <span class="muted" style="font-size: var(--text-s)"
           ><kbd>1</kbd>–<kbd>{{ Math.min(9, draft.pool.value.length) }}</kbd> a singer · <kbd>←</kbd><kbd>→</kbd> part · <kbd>↑</kbd><kbd>↓</kbd> line ·
           <kbd>Space</kbd> listen · click between two words: the singer changes there</span
         >
