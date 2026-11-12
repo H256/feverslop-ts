@@ -79,6 +79,7 @@ import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from './lib/
 import {ask, configureLlm} from './lib/llm.ts'
 import {jsonOutput, keepLogIn, log, styles} from './lib/log.ts'
 import {runEvent} from './lib/run-events.ts'
+import {filmStatus} from './lib/status.ts'
 import type {DryRun} from './shared/workspace.ts'
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from './lib/prompts.ts'
 import {validProjectId} from './lib/project-setup.ts'
@@ -1017,6 +1018,12 @@ if (render.has('final') && args.preview) {
         'Saved',
         `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.duration}${only.size ? ` - ${selected.length} of ${requests.length} clips (--only)` : ''}`)}`,
     )
+}
+
+// the next step, as bun run status says it - so that following only the "Next" lines leads to a film (#828)
+{
+    const {next} = await filmStatus(film.id).catch(() => ({next: undefined}))
+    if (next?.command) log.next(next.command)
 }
 
 /** --dry-run: what the run would redo and render, with an estimate - nothing is done (as in the music video). With --json the same as data. */

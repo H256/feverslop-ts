@@ -54,5 +54,8 @@ function some(ids: string[], typed: string | undefined, most = 8): string {
 export function noProject(kind: 'project' | 'film', id: string | undefined, existing: string[]): string {
     const what = id ? `No ${kind} "${id}"` : `No ${kind} id given`
     const create = kind === 'film' ? 'bun run film:init' : 'bun run init'
-    return existing.length ? `${what} - the ${kind}s here are: ${some(existing, id)}` : `${what}, and there is no ${kind} yet - create one with: ${create}`
+    // nothing here yet: the machine first, then the first one (#828)
+    return existing.length
+        ? `${what} - the ${kind}s here are: ${some(existing, id)}`
+        : `${what}, and there is no ${kind} yet - see what this machine has first: bun run doctor, then create one with: ${create}`
 }

@@ -22,8 +22,12 @@ describe('usage errors', () => {
         expect(noProject('project', undefined, ['a', 'b'])).toBe('No project id given - the projects here are: a, b')
     })
     test('no project and none there: how the first one is made', () => {
-        expect(noProject('project', undefined, [])).toBe('No project id given, and there is no project yet - create one with: bun run init')
-        expect(noProject('film', 'x', [])).toBe('No film "x", and there is no film yet - create one with: bun run film:init')
+        expect(noProject('project', undefined, [])).toBe(
+            'No project id given, and there is no project yet - see what this machine has first: bun run doctor, then create one with: bun run init',
+        )
+        expect(noProject('film', 'x', [])).toBe(
+            'No film "x", and there is no film yet - see what this machine has first: bun run doctor, then create one with: bun run film:init',
+        )
     })
     test('many projects: a line of them, the rest counted', () => {
         const ids = Array.from({length: 12}, (_, n) => `p${n}`)

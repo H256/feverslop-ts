@@ -44,7 +44,14 @@ cli('init')
         }
         log.output(`projects/${asked.id}/`)
         // the next step, whole: a song to make first, or the plan
-        log.next(asked.seed.songFile || song ? `bun index.ts ${asked.id}` : `bun index.ts ${asked.id} --render=song`)
+        // what the first run costs: a plan is the language model only, a song to make is one render first (#828)
+        log.step(
+            'First',
+            asked.seed.songFile || song
+                ? 'the plan - the language model only, nothing is rendered; --dry-run lists its steps'
+                : 'the song - one render on ComfyUI, to listen to before anything is planned',
+        )
+        log.next(asked.seed.songFile || song ? `bun run plan ${asked.id}` : `bun run plan ${asked.id} --render=song`)
         process.exit(0)
     }
 }

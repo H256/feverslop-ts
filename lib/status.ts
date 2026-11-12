@@ -95,7 +95,7 @@ export function withDirection(
 const STEP_LABELS: Record<string, string> = {music: 'beat analysis'}
 
 /** The next command, with what it costs where that is known: plan, pictures, clips, final video - the first that is not done. */
-async function nextOf(
+export async function nextOf(
     run: string,
     toPlan: string[],
     render: RenderState<{id: string; frames: number}>,
@@ -116,6 +116,13 @@ async function nextOf(
             command: `${run} --render=images`,
             why: `${missingPictures.length} picture(s) missing`,
             estimate: await estimates.pictures(missingPictures.length),
+        }
+    // not one clip rendered yet: one first, to see it before the GPU time of all of them goes (#828) - as the help advises
+    if (missingClips.length === clips.length && clips.length > 1 && !staleClips.length)
+        return {
+            command: `${run} --render=videos --only=${clips[0]!.id}`,
+            why: `no clip rendered yet - one first, to look at it before all ${clips.length}`,
+            estimate: await estimates.clips([clips[0]!]),
         }
     if (missingClips.length || staleClips.length) {
         return {

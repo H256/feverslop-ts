@@ -183,6 +183,22 @@ cached project runs without either.
 - [docs/minimax-h3-video-prompt-writing-guide.md](docs/minimax-h3-video-prompt-writing-guide.md) – the prompt format the clip requests follow
 - [docs/development.md](docs/development.md) – for working on the code: layout, adding a step, tests, principles
 
+## Your first video
+
+Each command ends with a `Next` line: following only those lines leads from an empty folder to a rendered clip and the final
+video. In order:
+
+1. `bun run doctor` - what this machine has: the language model, ComfyUI, ffmpeg, uv. Each missing part with its fix.
+2. `bun run setup` - the servers: asked, or by options (`bun run setup llm --url=http://localhost:8080/v1`, `bun run setup comfy --add=http://gpu:8188`).
+3. `bun run init my-song --song=song.mp3 --lyrics=lyrics.txt` - the project (asked, without the options).
+4. `bun run plan my-song` - the plan: the language model only, nothing is rendered (`bun run plan` is `bun index.ts`).
+5. `bun run plan my-song --render=images` - the pictures of the cast and the places.
+6. `bun run plan my-song --render=videos --only=slot-001` - one clip first: look at it before the GPU time of all of them.
+7. `bun run plan my-song --render=videos`, then `--render=final` - the rest, and the video.
+
+`bun run status my-song` says where a project stands and the next command at any time; the workspace (`bun run editor`)
+shows the same as a bar on every page.
+
 ## Creating a project
 
 ```bash
