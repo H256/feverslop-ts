@@ -1,4 +1,6 @@
 import {noProject} from '../lib/usage.ts'
+import {parseCommand, usageOf} from '../lib/command-schema.ts'
+import {creditsCommand} from '../lib/postwork/commands.ts'
 import {cli} from '../lib/cli.ts'
 // A title card before a finished video and scrolling credits after it (#609, docs/postwork.md): the title, who made it, a line
 // that it contains AI-generated content, your own lines, and what it was made with - the language model, the models of the
@@ -10,7 +12,6 @@ import {cli} from '../lib/cli.ts'
 //        [--sound=<file>] [--font=<ttf>] [--save | --save-default] [--dry-run]
 import {existsSync} from 'node:fs'
 import {basename, isAbsolute, join} from 'node:path'
-import {parseArgs} from 'node:util'
 import {versionStamp} from '../lib/archive.ts'
 import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {lockProject} from '../lib/lock.ts'
@@ -25,74 +26,42 @@ import {beginRun} from '../lib/run-record-view.ts'
 import {readSettingsFile} from '../lib/settings.ts'
 cli('credits')
 
-const usage =
-    'usage: bun run credits <id> [--film] [--from=<video>] [--title=] [--artist=] [--director=] [--disclosure=] [--marker=] [--line=TEXT]... [--hardware=] [--no-facts] [--no-opening] [--no-end] [--opening-seconds=4] [--end-seconds=0] [--sound=<file>] [--font=<ttf>] [--save | --save-default] [--dry-run]'
-const {
-    values: args,
-    positionals: [id],
-} = (() => {
+const usage = usageOf(creditsCommand)
+// the options as lib/postwork/commands.ts has them (#826) - the workspace builds its request from the same schema
+const parsed = (() => {
     try {
-        const text = {type: 'string'} as const
-        const flag = {type: 'boolean'} as const
-        return parseArgs({
-            args: Bun.argv.slice(2),
-            allowPositionals: true,
-            options: {
-                film: {type: 'boolean', default: false},
-                from: text,
-                title: text,
-                artist: text,
-                director: text,
-                disclosure: text,
-                marker: text,
-                line: {type: 'string', multiple: true},
-                'no-lines': flag,
-                hardware: text,
-                facts: flag,
-                'no-facts': flag,
-                opening: flag,
-                'no-opening': flag,
-                end: flag,
-                'no-end': flag,
-                'opening-seconds': text,
-                'end-seconds': text,
-                sound: text,
-                font: text,
-                save: {type: 'boolean', default: false},
-                'save-default': {type: 'boolean', default: false},
-                'dry-run': {type: 'boolean', default: false},
-            },
-        })
+        return parseCommand(creditsCommand, Bun.argv.slice(2))
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+const [id] = parsed.positionals
+const args = {
+    film: parsed.flag('film'),
+    from: parsed.text('from'),
+    save: parsed.flag('save'),
+    'save-default': parsed.flag('save-default'),
+    'dry-run': parsed.flag('dry-run'),
+}
 if (!id || !(args.film ? filmExists(id) : projectExists(id)))
     log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = args.film ? filmDir(id!) : projectDir(id!)
 
-const numberOf = (name: string, value: string | undefined) => {
-    if (value === undefined) return undefined
-    const n = Number(value)
-    return Number.isFinite(n) && value.trim() !== '' ? n : log.usageError(`--${name} must be a number, got "${value}"`, usage)
-}
-// --facts / --no-facts: either, or neither (the settings say it)
-const onOff = (on: boolean | undefined, off: boolean | undefined) => (off ? false : on ? true : undefined)
 const given: Partial<CreditsSettings> = {
-    title: args.title,
-    artist: args.artist,
-    director: args.director,
-    disclosure: args.disclosure,
-    marker: args.marker,
-    extra: args['no-lines'] ? [] : args.line,
-    hardware: args.hardware,
-    sound: args.sound,
-    font: args.font,
-    facts: onOff(args.facts, args['no-facts']),
-    opening: onOff(args.opening, args['no-opening']),
-    end: onOff(args.end, args['no-end']),
-    openingSeconds: numberOf('opening-seconds', args['opening-seconds']),
-    endSeconds: numberOf('end-seconds', args['end-seconds']),
+    title: parsed.text('title'),
+    artist: parsed.text('artist'),
+    director: parsed.text('director'),
+    disclosure: parsed.text('disclosure'),
+    marker: parsed.text('marker'),
+    extra: parsed.list('line'),
+    hardware: parsed.text('hardware'),
+    sound: parsed.text('sound'),
+    font: parsed.text('font'),
+    facts: parsed.switched('facts'),
+    opening: parsed.switched('opening'),
+    end: parsed.switched('end'),
+    openingSeconds: parsed.number('opening-seconds'),
+    endSeconds: parsed.number('end-seconds'),
 }
 const {credits, source, fonts, marker, sound} = await (async () => {
     try {

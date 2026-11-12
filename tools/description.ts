@@ -1,4 +1,6 @@
 import {noProject} from '../lib/usage.ts'
+import {parseCommand, usageOf} from '../lib/command-schema.ts'
+import {descriptionCommand} from '../lib/postwork/commands.ts'
 import {cli} from '../lib/cli.ts'
 // The text for publishing a finished video on YouTube (#805, docs/postwork.md): the video you choose, a teaser of its story,
 // that it is AI-generated and what FeverSlop TS is, and how it was made - the graphics cards, the models, the measured time
@@ -8,7 +10,6 @@ import {cli} from '../lib/cli.ts'
 //        [--no-lines] [--tag=TAG]... [--no-tags] [--save | --save-default] [--dry-run]
 import {existsSync, readFileSync, writeFileSync} from 'node:fs'
 import {basename, join} from 'node:path'
-import {parseArgs} from 'node:util'
 import {probeVideo} from '../lib/assemble.ts'
 import {loadProjectConfig} from '../lib/config.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
@@ -24,39 +25,24 @@ import {loadSettings, readSettingsFile} from '../lib/settings.ts'
 import {readTimings} from '../lib/timings.ts'
 cli('description')
 
-const usage =
-    'usage: bun run description <id> [--film] [--from=<video>] [--no-story] [--new-story] [--no-facts] [--hardware=] [--line=TEXT]... [--no-lines] [--tag=TAG]... [--no-tags] [--save | --save-default] [--dry-run]'
-const {
-    values: args,
-    positionals: [id],
-} = (() => {
+const usage = usageOf(descriptionCommand)
+// the options as lib/postwork/commands.ts has them (#826) - the workspace builds its request from the same schema
+const parsed = (() => {
     try {
-        const flag = {type: 'boolean'} as const
-        return parseArgs({
-            args: Bun.argv.slice(2),
-            allowPositionals: true,
-            options: {
-                film: {type: 'boolean', default: false},
-                from: {type: 'string'},
-                story: flag,
-                'no-story': flag,
-                'new-story': flag,
-                facts: flag,
-                'no-facts': flag,
-                hardware: {type: 'string'},
-                line: {type: 'string', multiple: true},
-                'no-lines': flag,
-                tag: {type: 'string', multiple: true},
-                'no-tags': flag,
-                save: {type: 'boolean', default: false},
-                'save-default': {type: 'boolean', default: false},
-                'dry-run': {type: 'boolean', default: false},
-            },
-        })
+        return parseCommand(descriptionCommand, Bun.argv.slice(2))
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+const [id] = parsed.positionals
+const args = {
+    film: parsed.flag('film'),
+    from: parsed.text('from'),
+    'new-story': parsed.flag('new-story'),
+    save: parsed.flag('save'),
+    'save-default': parsed.flag('save-default'),
+    'dry-run': parsed.flag('dry-run'),
+}
 if (!id || !(args.film ? filmExists(id) : projectExists(id)))
     log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = args.film ? filmDir(id!) : projectDir(id!)
@@ -76,13 +62,12 @@ const chosen = (() => {
 })()
 const video = join(dir, chosen.name)
 
-const onOff = (on: boolean | undefined, off: boolean | undefined) => (off ? false : on ? true : undefined)
 const given: Partial<DescriptionSettings> = {
-    story: onOff(args.story, args['no-story']),
-    facts: onOff(args.facts, args['no-facts']),
-    hardware: args.hardware,
-    extra: args['no-lines'] ? [] : args.line,
-    tags: args['no-tags'] ? [] : args.tag?.map(t => t.replace(/^#/, '')),
+    story: parsed.switched('story'),
+    facts: parsed.switched('facts'),
+    hardware: parsed.text('hardware'),
+    extra: parsed.list('line'),
+    tags: parsed.list('tag')?.map(t => t.replace(/^#/, '')),
 }
 const {settings, credits} = await (async () => {
     try {

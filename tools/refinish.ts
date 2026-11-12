@@ -1,4 +1,6 @@
 import {noProject} from '../lib/usage.ts'
+import {parseCommand, usageOf} from '../lib/command-schema.ts'
+import {refinishCommand} from '../lib/refinish-command.ts'
 import {runEvent} from '../lib/run-events.ts'
 import {cli} from '../lib/cli.ts'
 import {completeDerivative} from '../lib/refinish.ts'
@@ -9,7 +11,6 @@ import {completeDerivative} from '../lib/refinish.ts'
 //        [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001,...] [--again] [--comfy=URL]     (--only: those clips, no final video)
 import {existsSync, mkdirSync, readFileSync} from 'node:fs'
 import {join, relative} from 'node:path'
-import {parseArgs} from 'node:util'
 import {archiveFiles, versionStamp} from '../lib/archive.ts'
 import {assembleFinal, probeVideo} from '../lib/assemble.ts'
 import {onlyClips} from '../lib/batch.ts'
@@ -39,34 +40,29 @@ import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {addSubtitles} from '../lib/film/subtitles.ts'
 cli('refinish')
 
-const usage =
-    'usage: bun run refinish <id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001,...] [--again] [--comfy=URL]'
-const {
-    values: args,
-    positionals: [id],
-} = (() => {
+const usage = usageOf(refinishCommand)
+// the options as lib/refinish-command.ts has them (#826) - the workspace builds its request from the same schema
+const parsed = (() => {
     try {
-        return parseArgs({
-            args: Bun.argv.slice(2),
-            allowPositionals: true,
-            options: {
-                film: {type: 'boolean', default: false},
-                preset: {type: 'string'},
-                upscale: {type: 'string'},
-                size: {type: 'string'},
-                model: {type: 'string'},
-                denoise: {type: 'string'},
-                fps: {type: 'string'},
-                finish: {type: 'boolean', default: false},
-                only: {type: 'string', default: ''},
-                again: {type: 'boolean', default: false},
-                comfy: {type: 'string'},
-            },
-        })
+        return parseCommand(refinishCommand, Bun.argv.slice(2))
     } catch (e) {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+const [id] = parsed.positionals
+const args = {
+    film: parsed.flag('film'),
+    preset: parsed.text('preset'),
+    upscale: parsed.text('upscale'),
+    size: parsed.text('size'),
+    model: parsed.text('model'),
+    denoise: parsed.text('denoise'),
+    fps: parsed.text('fps'),
+    finish: parsed.flag('finish'),
+    only: parsed.text('only') ?? '',
+    again: parsed.flag('again'),
+    comfy: parsed.text('comfy'),
+}
 if (!id || !(args.film ? filmExists(id) : projectExists(id)))
     log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const options = (() => {

@@ -65,3 +65,32 @@ describe('a command by its schema', () => {
         expect(requestArgs(introCommand, {dryRun: true})).toEqual([])
     })
 })
+
+// #826: the post-work tools read their command line by their schema only - an option is one entry, never parsed beside it
+test('the post-work tools parse by their schema, and nothing else', async () => {
+    const {readFileSync} = await import('node:fs')
+    const {join} = await import('node:path')
+    for (const tool of ['label', 'intro', 'credits', 'description', 'refinish']) {
+        const source = readFileSync(join(import.meta.dir, '..', 'tools', `${tool}.ts`), 'utf8')
+        expect(source).toContain('parseCommand(')
+        expect(source.includes('parseArgs(')).toBe(false)
+        expect(/Bun\.argv\.(includes|find|filter)\(/.test(source)).toBe(false)
+    }
+})
+
+test('a switch and a list: on, off or not said; lines, none, or not said - parsed and asked for alike', async () => {
+    const {creditsCommand} = await import('./postwork/commands.ts')
+    const parsed = parseCommand(creditsCommand, ['demo', '--no-facts', '--line=one', '--line=two', '--opening'])
+    expect([parsed.switched('facts'), parsed.switched('opening'), parsed.switched('end'), parsed.list('line')]).toEqual([
+        false,
+        true,
+        undefined,
+        ['one', 'two'],
+    ])
+    expect(parseCommand(creditsCommand, ['demo', '--no-lines']).list('line')).toEqual([])
+    expect(() => parseCommand(creditsCommand, ['demo', '--facts', '--no-facts'])).toThrow('one of them, not both')
+    expect(() => parseCommand(creditsCommand, ['demo', '--line=x', '--no-lines'])).toThrow('one of them, not both')
+    expect(requestArgs(creditsCommand, {facts: false, opening: true, extra: []})).toEqual(['--no-lines', '--no-facts', '--opening'])
+    expect(requestArgs(creditsCommand, {extra: ['one', 'two']})).toEqual(['--line=one', '--line=two'])
+    expect(() => requestArgs(creditsCommand, {extra: ['a\nb']})).toThrow('one line of text each')
+})
