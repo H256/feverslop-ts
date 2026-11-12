@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {TimingView} from '../../../../shared/workspace'
 import FactList from '../../components/FactList.vue'
@@ -47,20 +48,20 @@ const effects = computed(() => {
       Where the words are sung, from the alignment with the transcript. A line it barely found is only spread over the line: estimated.
     </p>
     <FactList :facts="KEYS" class="u-mb-3" />
-    <div v-if="early" class="note u-mb-2">
+    <CalloutBox v-if="early" as="div" class="u-mb-2">
       {{ plural(early, 'line') }} start{{ early === 1 ? 's' : '' }} before the singing does: the box of the first word covers silence.
       <div class="btn-row u-mt-1">
         <button class="btn" @click="$emit('tighten')">{{ early === 1 ? 'Tighten the start' : `Tighten the ${early} starts` }}</button>
       </div>
-    </div>
-    <div v-if="outdated.length" class="warn u-mb-2">
+    </CalloutBox>
+    <CalloutBox v-if="outdated.length" kind="warn" as="div" class="u-mb-2">
       {{ plural(outdated.length, 'clip') }} still {{ outdated.length === 1 ? 'has' : 'have' }} the old times of a moved line in
       {{ outdated.length === 1 ? 'its' : 'their' }} prompt: {{ outdated.join(', ') }}. A plan run writes {{ outdated.length === 1 ? 'it' : 'them' }} again{{
         replanned.length
           ? `, and with it the shots of ${plural(replanned.length, 'clip')} in ${plural(view.unplanned.length, 'beat')} (the language model, no GPU) - their prompts change beyond the times`
           : ''
       }}. Rendered videos stay as they are and count as stale after it.
-    </div>
+    </CalloutBox>
     <PlanChanges
       :count="c.lines.length ? `${plural(c.lines.length, 'line')} moved` : ''"
       :effects="effects"
@@ -76,10 +77,10 @@ const effects = computed(() => {
       @plan="$emit('plan')"
     >
       <template #warning>
-        <div v-if="c.crossing.length" class="warn">
+        <CalloutBox v-if="c.crossing.length" kind="warn" as="div">
           A clip cut falls into {{ plural(c.crossing.length, 'word') }}. Saving keeps the cut; cutting the song again places the cuts around the new times, but
           plans every shot again.
-        </div>
+        </CalloutBox>
       </template>
       <template #more>
         <div class="btn-row u-mt-2">

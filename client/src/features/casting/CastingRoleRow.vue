@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {CastingRole} from '../../../../shared/workspace'
 import MediaThumb from '../../components/MediaThumb.vue'
@@ -37,8 +38,10 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
       </div>
       <div class="muted about" :title="about">{{ about }}</div>
       <div class="muted">{{ plural(role.clips.length, 'clip') }}</div>
-      <div v-if="out" class="warn">{{ project.kind === 'film' ? 'Out of the screenplay told anew.' : 'Out of the cast when saved.' }}</div>
-      <div v-else-if="role.libraryId && !role.copied" class="warn">Not copied yet: the next run takes it from the library.</div>
+      <CalloutBox v-if="out" kind="warn" as="div">{{
+        project.kind === 'film' ? 'Out of the screenplay told anew.' : 'Out of the cast when saved.'
+      }}</CalloutBox>
+      <CalloutBox v-else-if="role.libraryId && !role.copied" kind="warn" as="div">Not copied yet: the next run takes it from the library.</CalloutBox>
       <NoticeList v-if="!out" :errors="role.errors" :warnings="role.warnings" />
     </div>
     <div class="choice">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {SingingView} from '../../../../shared/workspace'
 import MediaThumb from '../../components/MediaThumb.vue'
@@ -81,7 +82,7 @@ const add = (event: Event) => {
       @plan="$emit('plan')"
     >
       <template #warning>
-        <div v-if="c.empty.length" class="warn bad">
+        <CalloutBox v-if="c.empty.length" kind="error" as="div">
           Every line and part needs a singer:
           {{
             c.empty
@@ -89,7 +90,7 @@ const add = (event: Event) => {
               .slice(0, 3)
               .join(', ')
           }}{{ c.empty.length > 3 ? ' …' : '' }}
-        </div>
+        </CalloutBox>
       </template>
     </PlanChanges>
   </div>

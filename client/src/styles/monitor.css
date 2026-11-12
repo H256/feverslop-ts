@@ -125,7 +125,7 @@ select.source {
 .ihead p {
   color: var(--muted);
 }
-.ihead .warn {
+.ihead .ui-callout {
   margin: 6px 0 0;
 }
 .panel {
@@ -331,25 +331,24 @@ select.source {
   background: var(--hover);
   color: var(--text);
 }
-.warn {
+/* CalloutBox (#838): a note, a warning, an error */
+.ui-callout {
+  padding: 6px 10px;
+  border-radius: var(--radius-m);
+  margin-bottom: 12px;
+  font-size: var(--text-s);
+}
+.ui-callout-note {
+  background: var(--raised);
+  color: var(--muted);
+}
+.ui-callout-warn {
   background: var(--stale-soft);
   color: var(--stale);
-  padding: 6px 10px;
-  border-radius: var(--radius-m);
-  margin-bottom: 12px;
-  font-size: var(--text-s);
 }
-.warn.bad {
+.ui-callout-error {
   background: var(--danger-soft);
   color: var(--danger);
-}
-.note {
-  background: var(--raised);
-  padding: 6px 10px;
-  border-radius: var(--radius-m);
-  margin-bottom: 12px;
-  font-size: var(--text-s);
-  color: var(--muted);
 }
 /* a version with no thumbnail: its text takes the row */
 .version.version-one {

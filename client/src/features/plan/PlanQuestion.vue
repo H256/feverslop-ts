@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {onMounted, shallowRef, watch} from 'vue'
 import type {DirectionView} from '../../../../shared/direction'
 import type {DryRun, ProjectKind, ProjectStatus} from '../../../../shared/workspace'
@@ -74,7 +75,7 @@ watch(
       </label>
     </fieldset>
     <p v-if="loading" class="muted">Asking what it would do…</p>
-    <p v-else-if="failed" class="warn">The dry run failed: {{ failed }}</p>
+    <CalloutBox v-else-if="failed" kind="warn">The dry run failed: {{ failed }}</CalloutBox>
     <template v-else-if="said">
       <p v-for="reason in said.reasons" :key="reason.why" class="pq-line">
         <b>{{ reason.why }}</b> <span class="muted" :title="stepNames(reason.steps)">redoes {{ listSteps(reason.steps, kind) }}</span>
@@ -90,7 +91,7 @@ watch(
         <b>{{ kind === 'film' ? 'Scenes' : 'Beats' }} planned again</b> {{ said.plannedAgain.join(', ')
         }}<template v-if="said.staleAfter.length">; {{ plural(said.staleAfter.length, 'clip') }} turn stale</template>
       </p>
-      <p v-for="warning in said.warnings" :key="warning" class="warn">{{ warning }}</p>
+      <CalloutBox v-for="warning in said.warnings" :key="warning" kind="warn">{{ warning }}</CalloutBox>
     </template>
   </div>
 </template>

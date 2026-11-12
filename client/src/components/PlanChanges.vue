@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from './CalloutBox.vue'
 /**
  * What a change on the page does when saved, and the buttons that save it: the foot of the Singers and the Timing page alike. Without
  * changes it says what a change would do, or offers the plan run that unplanned beats wait for.
@@ -19,7 +20,7 @@ defineEmits<{discard: []; save: []; saveAndPlan: []; plan: []}>()
 
 <template>
   <div class="changes">
-    <div v-if="saved" class="note">{{ saved }}</div>
+    <CalloutBox v-if="saved" as="div">{{ saved }}</CalloutBox>
     <template v-if="count">
       <b>{{ count }}</b>
       <ul>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
+import CalloutBox from '../../../components/CalloutBox.vue'
 import TabBar from '../../../components/TabBar.vue'
 import {clock} from '../../../lib/format'
 import {STATE_CHIPS, stateOf} from '../clips'
@@ -42,7 +43,9 @@ watch(clip, () => panel.value?.scrollTo({top: 0}))
           {{ clip.id }}<span :class="state.cls" :title="state.title" class="u-sans">{{ state.label }}</span>
         </h2>
         <p class="num">{{ clock(clip.start) }} – {{ clock(clip.end) }} · {{ (clip.end - clip.start).toFixed(1) }}s · {{ group }}</p>
-        <div v-for="mark in clip.marks" :key="mark.text" :class="['warn', {bad: mark.kind === 'failed' || mark.kind === 'backdrop'}]">{{ mark.text }}</div>
+        <CalloutBox v-for="mark in clip.marks" :key="mark.text" :kind="mark.kind === 'failed' || mark.kind === 'backdrop' ? 'error' : 'warn'" as="div">{{
+          mark.text
+        }}</CalloutBox>
       </template>
       <template v-else
         ><h2>No clip</h2>

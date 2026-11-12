@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, ref, watch} from 'vue'
 import type {TimingView, TimingWord} from '../../../../shared/workspace'
 import type {useSnippetPlayer} from '../../composables/useSnippetPlayer'
@@ -301,7 +302,7 @@ const clips = computed(() =>
         applied during planning.
       </p>
     </details>
-    <p v-if="error" role="alert" class="warn">{{ error }}</p>
+    <CalloutBox v-if="error" role="alert" kind="warn">{{ error }}</CalloutBox>
   </section>
 </template>
 <style scoped>

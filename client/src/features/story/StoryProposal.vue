@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 
 /** A story told anew for the cast, next to the story there is: to be taken or dropped. A film: its screenplay told anew for a role that came or went. */
@@ -14,9 +15,9 @@ const change = computed(() =>
 
 <template>
   <div class="section">
-    <div class="note">
+    <CalloutBox as="div">
       A {{ what }} told anew for the cast as it is now{{ change ? ` (${change})` : '' }}. Take it, or drop it and keep the {{ what }} there is.
-    </div>
+    </CalloutBox>
     <div class="twocol">
       <div>
         <h3>Now</h3>

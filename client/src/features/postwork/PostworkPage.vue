@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, reactive, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {EditorFinal} from '../../../../shared/workspace'
@@ -145,7 +146,7 @@ const copy = toasts.guard(async (text: string) => {
     <PageBar title="Post-work">
       <span class="muted">Optional, for publishing. Each step writes a new file next to the video it starts from - nothing is overwritten.</span>
     </PageBar>
-    <p v-if="!sources.length" class="warn">There is no final video yet: render it on the Timeline first.</p>
+    <CalloutBox v-if="!sources.length" kind="warn">There is no final video yet: render it on the Timeline first.</CalloutBox>
     <div class="pw-grid">
       <ol class="pw-steps">
         <PanelCard
@@ -165,7 +166,7 @@ const copy = toasts.guard(async (text: string) => {
           </button>
           <div v-if="open === step" class="pw-body">
             <p v-for="line in STEP_INFO[step].lines" :key="line" class="muted pw-line">{{ line }}</p>
-            <p v-for="line in warningsOf(step)" :key="line" class="warn">{{ line }}</p>
+            <CalloutBox v-for="line in warningsOf(step)" :key="line" kind="warn">{{ line }}</CalloutBox>
             <LabelForm v-if="step === 'label'" :draft="drafts.label" :finals="sources" :markers="postwork.markers" />
             <CreditsForm v-else-if="step === 'credits'" :draft="drafts.credits" :finals="sources" :markers="postwork.markers" :kind="kind" />
             <IntroForm v-else-if="step === 'intro'" :draft="drafts.intro" :finals="sources" :found="postwork.introFound" />

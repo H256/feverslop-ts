@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionView} from '../../../../shared/direction'
 import PanelCard from '../../components/PanelCard.vue'
@@ -17,9 +18,11 @@ defineEmits<{take: []; drop: []}>()
 
 <template>
   <PanelCard title="Proposed changes" :note="`${view.proposal.changes.length} shot(s)`" tone="accent">
-    <p v-if="view.proposalStale" class="warn">This proposal belongs to an older plan or set of instructions. Preview again before taking it.</p>
+    <CalloutBox v-if="view.proposalStale" kind="warn"
+      >This proposal belongs to an older plan or set of instructions. Preview again before taking it.</CalloutBox
+    >
     <p v-if="!view.proposal.changes.length" class="muted">No shot changes proposed.</p>
-    <p v-for="conflict in view.proposal.conflicts" :key="conflict" class="warn">{{ conflict }}</p>
+    <CalloutBox v-for="conflict in view.proposal.conflicts" :key="conflict" kind="warn">{{ conflict }}</CalloutBox>
     <p v-if="view.proposal.conflicts.length" class="muted small">
       A rule that contradicts another: edit the instructions or widen their scope, then preview again. A note on continuity only: read it, and take the proposal
       anyway.

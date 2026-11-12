@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, onMounted, ref, toRef, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {TimingView} from '../../../../shared/workspace'
@@ -356,7 +357,7 @@ onMounted(() => {
         />
         <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
         <div>
-          <div v-if="draft.line.value && draft.crossing(draft.line.value).length" class="warn">
+          <CalloutBox v-if="draft.line.value && draft.crossing(draft.line.value).length" kind="warn" as="div">
             A clip cut falls into
             {{
               draft
@@ -365,10 +366,10 @@ onMounted(() => {
                 .join(', ')
             }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
             after listening.
-          </div>
-          <div v-if="draft.overlaps.value.length" class="warn">
+          </CalloutBox>
+          <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
             This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.
-          </div>
+          </CalloutBox>
         </div>
       </div>
       <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />

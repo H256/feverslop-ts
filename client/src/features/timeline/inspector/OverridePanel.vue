@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CalloutBox from '../../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import type {EditorClip, EditorOverride} from '../../../../../shared/workspace'
 import MediaThumb from '../../../components/MediaThumb.vue'
@@ -58,12 +59,12 @@ const move = (id: string, direction: number) => {
       <button class="btn" @click="save({without: [...override.without, picture.id]})">Leave out</button>
     </div>
   </div>
-  <div v-if="override.without.length" class="note btn-row">
+  <CalloutBox v-if="override.without.length" as="div" class="btn-row">
     <span class="u-grow">Left out: {{ override.without.join(', ') }}</span
     ><button class="btn" @click="save({without: []})">Put back</button>
-  </div>
-  <div v-if="clip.override" class="note">
+  </CalloutBox>
+  <CalloutBox v-if="clip.override" as="div">
     <p class="u-mb-1">This clip has a choice of its own. It takes effect with the next plan run, and the clip then goes stale.</p>
     <div class="btn-row"><button class="btn" @click="actions.plan()">Plan now</button><button class="btn" @click="save(null)">Back to the plan</button></div>
-  </div>
+  </CalloutBox>
 </template>
