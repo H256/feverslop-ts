@@ -159,8 +159,8 @@ test('the workspace starts the command with the video chosen, and nothing withou
         ),
     ).toEqual({
         script: 'tools/description.ts',
-        args: ['demo', '--from=demo-48fps-finished.mp4', '--no-lines', '--tag=AIgenerated', '--story', '--no-facts', '--new-story', '--save'],
+        args: ['demo', '--from=demo-48fps-finished.mp4', '--story', '--new-story', '--no-facts', '--no-lines', '--tag=AIgenerated', '--save'],
     })
     expect(() => runCommand({id: 'demo', kind: 'music'}, {type: 'description', from: ''})).toThrow('no such from')
-    expect(() => runCommand({id: 'demo', kind: 'film'}, {type: 'description', from: 'demo.mp4', hardware: 'a\nb'})).toThrow('one line of text')
+    expect(() => runCommand({id: 'demo', kind: 'film'}, {type: 'description', from: 'demo.mp4', hardware: 'a\nb'})).toThrow('no such hardware')
 })

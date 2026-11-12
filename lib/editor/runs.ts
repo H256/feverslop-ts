@@ -12,9 +12,9 @@ import type {EditorKind, EditorTarget} from './project.ts'
 import {STEP_NAMES} from '../project.ts'
 import {UNTIL_STAGES} from '../stages.ts'
 import {FILM_STEP_NAMES} from '../film/store.ts'
-import {VIDEO_NAME} from '../postwork/video.ts'
 import {requestArgs} from '../command-schema.ts'
-import {introCommand, labelCommand} from '../postwork/commands.ts'
+import {creditsCommand, descriptionCommand, introCommand, labelCommand} from '../postwork/commands.ts'
+import {refinishCommand} from '../refinish-command.ts'
 import {EXPORT_FORMATS} from '../timeline-export.ts'
 import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
 import {newestLog, newestRunEvents} from '../run-events.ts'
@@ -183,97 +183,27 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         case 'check-joins':
             if (kind !== 'film') throw new Error('the cuts within a scene are checked in a film')
             return {script: 'tools/film-check-joins.ts', args: [id]}
-        case 'refinish': {
-            const args = [id, ...(kind === 'film' ? ['--film'] : [])]
-            const say = (name: string, value: unknown, pattern: RegExp) => {
-                if (value === undefined || value === '') return
-                if (!pattern.test(String(value))) throw new Error(`no such ${name}: ${value}`)
-                args.push(`--${name}=${value}`)
+        case 'refinish':
+            // the clips as a list in the request, one option on the command line
+            return {
+                script: refinishCommand.script,
+                args: [id, ...requestArgs(refinishCommand, {...action, only: action.only?.join(','), film: kind === 'film'})],
             }
-            say('preset', action.preset, /^[a-z-]+$/)
-            say('upscale', action.upscale, /^(none|refine|latent|model)$/)
-            say('size', action.size, /^(fullhd|2x|\d+x\d+)$/)
-            say('denoise', action.denoise, /^(0(\.\d+)?|1)$/)
-            say('fps', action.fps, /^\d+$/)
-            if (action.finish) args.push('--finish')
-            if (action.only?.length) args.push(`--only=${checked(action.only, CLIP_ID, 'clips')}`)
-            return {script: 'tools/refinish.ts', args}
-        }
         // the options of these two are their schema's (lib/postwork/commands.ts, #826): no option is checked a second time here
         case 'label':
             return {script: labelCommand.script, args: [id, ...requestArgs(labelCommand, {...action, film: kind === 'film'})]}
         case 'intro':
             return {script: introCommand.script, args: [id, ...requestArgs(introCommand, {...action, film: kind === 'film'})]}
         case 'credits': {
-            const args = [id, ...(kind === 'film' ? ['--film'] : [])]
-            if (action.from !== undefined && action.from !== '') {
-                if (!VIDEO_NAME.test(action.from)) throw new Error(`no such from: ${action.from}`)
-                args.push(`--from=${action.from}`)
-            }
-            // one line of text each - the command checks the rest, as it does in the terminal
-            const text = (name: string, value: string | undefined) => {
-                if (value === undefined) return
-                if (/[\n\r\0]/.test(value)) throw new Error(`${name}: one line of text`)
-                args.push(`--${name}=${value}`)
-            }
-            text('title', action.title)
-            text(kind === 'film' ? 'director' : 'artist', kind === 'film' ? action.director : action.artist)
-            text('disclosure', action.disclosure)
-            text('marker', action.marker)
-            text('hardware', action.hardware)
-            text('sound', action.sound)
-            if (action.extra !== undefined) {
-                if (!Array.isArray(action.extra)) throw new Error('extra: a list of lines')
-                if (!action.extra.length) args.push('--no-lines')
-                for (const line of action.extra) text('line', line)
-            }
-            for (const [name, on] of [
-                ['opening', action.opening],
-                ['end', action.end],
-                ['facts', action.facts],
-            ] as const)
-                if (on !== undefined) args.push(on ? `--${name}` : `--no-${name}`)
-            for (const [name, value] of [
-                ['opening-seconds', action.openingSeconds],
-                ['end-seconds', action.endSeconds],
-            ] as const) {
-                if (value === undefined) continue
-                if (!/^\d+(\.\d+)?$/.test(String(value))) throw new Error(`no such ${name}: ${value}`)
-                args.push(`--${name}=${value}`)
-            }
-            if (action.save) args.push('--save')
-            if (action.saveDefault) args.push('--save-default')
-            return {script: 'tools/credits.ts', args}
+            // a music video names its artist, a film its director: the other field is not this kind's
+            const {artist, director, ...rest} = action
+            const asked = {...rest, ...(kind === 'film' ? {director} : {artist}), film: kind === 'film'}
+            return {script: creditsCommand.script, args: [id, ...requestArgs(creditsCommand, asked)]}
         }
-        case 'description': {
+        case 'description':
             // the video is the user's choice: always said
-            if (!VIDEO_NAME.test(action.from ?? '')) throw new Error(`no such from: ${action.from}`)
-            const args = [id, ...(kind === 'film' ? ['--film'] : []), `--from=${action.from}`]
-            const text = (name: string, value: string) => {
-                if (/[\n\r\0]/.test(value)) throw new Error(`${name}: one line of text`)
-                args.push(`--${name}=${value}`)
-            }
-            if (action.hardware !== undefined) text('hardware', action.hardware)
-            if (action.extra !== undefined) {
-                if (!Array.isArray(action.extra)) throw new Error('extra: a list of lines')
-                if (!action.extra.length) args.push('--no-lines')
-                for (const line of action.extra) text('line', line)
-            }
-            if (action.tags !== undefined) {
-                if (!Array.isArray(action.tags)) throw new Error('tags: a list of hashtags')
-                if (!action.tags.length) args.push('--no-tags')
-                for (const tag of action.tags) text('tag', tag)
-            }
-            for (const [name, on] of [
-                ['story', action.story],
-                ['facts', action.facts],
-            ] as const)
-                if (on !== undefined) args.push(on ? `--${name}` : `--no-${name}`)
-            if (action.newStory) args.push('--new-story')
-            if (action.save) args.push('--save')
-            if (action.saveDefault) args.push('--save-default')
-            return {script: 'tools/description.ts', args}
-        }
+            if (!action.from) throw new Error(`no such from: ${action.from}`)
+            return {script: descriptionCommand.script, args: [id, ...requestArgs(descriptionCommand, {...action, film: kind === 'film'})]}
         case 'add-view':
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim())
                 throw new Error('a further view is for a place of a film, with a name and what it shows')

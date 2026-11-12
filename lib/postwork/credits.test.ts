@@ -196,9 +196,9 @@ describe('credits - a title card and the credits of a finished video (#609)', ()
                 '--artist=Klemens',
                 '--line=Thanks',
                 '--line=Links',
+                '--no-facts',
                 '--opening',
                 '--no-end',
-                '--no-facts',
                 '--opening-seconds=5',
                 '--save',
             ],
@@ -207,7 +207,7 @@ describe('credits - a title card and the credits of a finished video (#609)', ()
             script: 'tools/credits.ts',
             args: ['demo', '--film', '--director=K. W.', '--no-lines'],
         })
-        expect(() => runCommand({id: 'demo', kind: 'music'}, {type: 'credits', title: 'a\nb'})).toThrow('one line of text')
+        expect(() => runCommand({id: 'demo', kind: 'music'}, {type: 'credits', title: 'a\nb'})).toThrow('no such title')
         expect(finalLabel('demo', 'demo-labeled-credits-intro.mp4')).toMatchObject({label: 'Final + AI label + credits + intro'})
     })
 })

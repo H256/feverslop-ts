@@ -1,5 +1,6 @@
 import {usageArgs} from './command-schema.ts'
-import {introCommand, labelCommand} from './postwork/commands.ts'
+import {creditsCommand, descriptionCommand, introCommand, labelCommand} from './postwork/commands.ts'
+import {refinishCommand} from './refinish-command.ts'
 import {helpDetails} from './cli-help.ts'
 import {activeJobs, cancelJobs} from './comfy-cancel.ts'
 import {configureOutput, failRun, formatDuration, log, printBanner, runLogFile, runResult, runWarnings, setOutput, styles} from './log.ts'
@@ -146,7 +147,7 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         json: true,
     },
     refinish: {
-        args: '<id> [--film] [--preset=grade|smooth|fullhd] [--upscale=none|refine|latent|model] [--size=fullhd|2x|WxH] [--model=<file>] [--denoise=0.2] [--fps=48] [--finish] [--only=slot-001] [--again] [--comfy=URL]',
+        args: usageArgs(refinishCommand),
         description: 'Make a finished project larger, 48 fps and finished, without rendering it again. Nothing it has is overwritten.',
     },
     label: {
@@ -155,12 +156,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
             'Put the AI marker (an EU icon or a PNG of your own) over a finished video: <name>-labeled.mp4 next to it. Optional, see docs/postwork.md.',
     },
     credits: {
-        args: '<id> [--film] [--from=<video>] [--title=] [--artist=] [--director=] [--disclosure=] [--marker=] [--line=TEXT]... [--no-lines] [--hardware=] [--no-facts] [--no-opening] [--no-end] [--opening-seconds=4] [--end-seconds=0] [--sound=<file>] [--font=<ttf>] [--save | --save-default] [--dry-run]',
+        args: usageArgs(creditsCommand),
         description:
             'A title card before a finished video and scrolling credits after it - title, who made it, the AI disclosure, your lines, and the models and hardware it was made with: <name>-credits.mp4. Optional, see docs/postwork.md.',
     },
     description: {
-        args: '<id> [--film] [--from=<video>] [--no-story] [--new-story] [--no-facts] [--hardware=] [--line=TEXT]... [--no-lines] [--tag=TAG]... [--no-tags] [--save | --save-default] [--dry-run]',
+        args: usageArgs(descriptionCommand),
         description:
             'The text for publishing the finished video you choose on YouTube - a teaser of the story, that it is AI-generated, the hardware, models and measured time per phase: <name>.youtube.txt and .json next to it. Nothing is uploaded. See docs/postwork.md.',
     },

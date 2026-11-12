@@ -52,3 +52,47 @@ export const introCommand: CommandSchema = {
         ...kept,
     },
 }
+
+export const creditsCommand: CommandSchema = {
+    command: 'credits',
+    script: 'tools/credits.ts',
+    positionals: '<id>',
+    either: [['save', 'save-default']],
+    options: {
+        film: {kind: 'flag', help: 'the id is a film'},
+        from: {kind: 'text', shown: '<video>', pattern: VIDEO, help: 'the final video to start from'},
+        title: {kind: 'text', shown: '<text>', help: 'the title on the title card'},
+        artist: {kind: 'text', shown: '<text>', help: 'who made the song (a music video)'},
+        director: {kind: 'text', shown: '<text>', help: 'who directed it (a film)'},
+        disclosure: {kind: 'text', shown: '<text>', help: 'the words that say it is made with AI'},
+        marker: {kind: 'text', shown: 'generated-white|<png>', help: 'a marker on the title card'},
+        line: {kind: 'list', shown: 'TEXT', none: 'no-lines', field: 'extra', help: 'a line of your own in the credits'},
+        hardware: {kind: 'text', shown: '<text>', help: 'your words on the hardware it was made with'},
+        facts: {kind: 'switch', help: 'say what it was made with: the models and the hardware'},
+        opening: {kind: 'switch', help: 'the title card before the video'},
+        end: {kind: 'switch', help: 'the credits after it'},
+        'opening-seconds': {kind: 'number', shown: '4', help: 'how long the title card is'},
+        'end-seconds': {kind: 'number', shown: '0', help: 'how long the credits are - 0: as long as they need'},
+        sound: {kind: 'text', shown: '<file>', help: 'a sound under the credits'},
+        font: {kind: 'text', shown: '<ttf>', help: 'the font of the cards'},
+        ...kept,
+    },
+}
+
+export const descriptionCommand: CommandSchema = {
+    command: 'description',
+    script: 'tools/description.ts',
+    positionals: '<id>',
+    either: [['save', 'save-default']],
+    options: {
+        film: {kind: 'flag', help: 'the id is a film'},
+        from: {kind: 'text', shown: '<video>', pattern: VIDEO, help: 'the finished video you publish'},
+        story: {kind: 'switch', help: 'a teaser of the story'},
+        'new-story': {kind: 'flag', help: 'the teaser written anew'},
+        facts: {kind: 'switch', help: 'say how it was made: the models, the hardware, the time per phase'},
+        hardware: {kind: 'text', shown: '<text>', help: 'your words on the hardware'},
+        line: {kind: 'list', shown: 'TEXT', none: 'no-lines', field: 'extra', help: 'a line of your own'},
+        tag: {kind: 'list', shown: 'TAG', none: 'no-tags', field: 'tags', help: 'a hashtag'},
+        ...kept,
+    },
+}
