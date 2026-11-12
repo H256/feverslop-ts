@@ -157,6 +157,11 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
         }
         case 'leak-scan':
             return {script: 'tools/leak-scan.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}
+        case 'texture-chains':
+            return {script: 'tools/texture-chains.ts', args: [id, ...(kind === 'film' ? ['--film'] : [])]}
+        case 'check-joins':
+            if (kind !== 'film') throw new Error('the cuts within a scene are checked in a film')
+            return {script: 'tools/film-check-joins.ts', args: [id]}
         case 'refinish': {
             const args = [id, ...(kind === 'film' ? ['--film'] : [])]
             const say = (name: string, value: unknown, pattern: RegExp) => {
@@ -308,14 +313,7 @@ export class RunControl {
     start(target: EditorTarget, action: RunAction, servers?: string[], temporary: string[] = []): RunInfo {
         return this.dropping(temporary, () => {
             const {script, args} = runCommand(target, action)
-            return this.spawn(
-                target,
-                script,
-                args,
-                action.type !== 'export-asset' && action.type !== 'export-song' && action.type !== 'leak-scan',
-                servers,
-                temporary,
-            )
+            return this.spawn(target, script, args, !['export-asset', 'export-song', 'leak-scan', 'texture-chains'].includes(action.type), servers, temporary)
         })
     }
 

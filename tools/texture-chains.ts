@@ -3,9 +3,10 @@ import {cli} from '../lib/cli.ts'
 // Measures whether continuing clips get grittier from link to link (#478): the fine detail of every rendered clip
 // (lib/texture.ts), each chain of clips that start on the clip before shown relative to its first clip, and the change
 // at every join next to the change at an ordinary cut - the cuts are the yardstick of how much clips differ anyway.
-// Reads the raw clips in videos/ with ffmpeg only - no ComfyUI, no LLM, nothing is written.
+// Reads the raw clips in videos/ with ffmpeg only - no ComfyUI, no LLM. The continuing joins grittier than an ordinary cut are
+// kept in output/texture-chains.json, for the workspace to mark those clips (lib/clip-checks.ts).
 // usage: bun run texture-chains <project-id> [--film] [--json]
-import {existsSync, readdirSync, statSync} from 'node:fs'
+import {existsSync, mkdirSync, readdirSync, statSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {probeVideo} from '../lib/assemble.ts'
 import {clipChains} from '../lib/batch.ts'
@@ -16,6 +17,7 @@ import {median} from '../lib/predict.ts'
 import {recordedContextFrames} from '../lib/provenance.ts'
 import {clipTexture, perLink, type Texture} from '../lib/texture.ts'
 import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
+import {grittierJoins, TEXTURE_FILE, type TextureJoin, textureFindings} from '../lib/clip-checks.ts'
 cli('texture-chains')
 
 const usage = 'usage: bun run texture-chains <project-id> [--film] [--json]'
@@ -52,7 +54,7 @@ for (const clip of requests) {
 if (!jsonOutput()) process.stderr.write('\n')
 
 // every pair of neighbours: the ratio of the later one to the earlier one, by how it goes on
-const joins = requests.slice(1).map((clip, i) => {
+const joins = requests.slice(1).map((clip, i): TextureJoin => {
     const before = requests[i]!
     const kind = clip.startsFrom === before.id ? joinOf(clip) : 'cut'
     const a = textures.get(before.id)!,
@@ -75,6 +77,9 @@ const summary = (['context', 'last frame', 'cut'] as const).map(kind => {
         structure: {median: of.length ? median(of.map(j => j.structure)) : NaN, mean: geomean(of.map(j => j.structure))},
     }
 })
+
+mkdirSync(join(dir, 'output'), {recursive: true})
+writeFileSync(join(dir, TEXTURE_FILE), JSON.stringify(textureFindings(dir, joins), null, 2))
 
 if (jsonOutput()) {
     log.json({[isFilm ? 'film' : 'project']: id, clips: Object.fromEntries(textures), chains, joins, summary})
@@ -100,3 +105,9 @@ for (const s of summary)
         `${s.kind.padEnd(10)} ${String(s.joins).padStart(3)} joins   fine median ${x(s.fine.median).padEnd(8)} mean ${x(s.fine.mean).padEnd(8)}   structure median ${x(s.structure.median).padEnd(8)} mean ${x(s.structure.mean)}`,
     )
 log.info(styles.muted('a ratchet shows as continuing joins clearly above 1 while the cuts stay around it - reported elsewhere: about x1.3 per join'))
+const gritty = grittierJoins(joins)
+if (gritty.length) {
+    log.section(`GRITTIER · ${gritty.length} continuing join(s) above an ordinary cut by a fifth`)
+    for (const j of gritty) log.info(`${styles.name(`${j.from} → ${j.to}`)} fine ${x(j.fine)} ${styles.muted(`(cut median ${x(j.usual)})`)}`)
+    log.info(styles.muted(`kept in ${join(dir, TEXTURE_FILE)} - the workspace marks these clips`))
+}

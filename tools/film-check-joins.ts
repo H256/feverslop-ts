@@ -14,9 +14,10 @@ import {readClipRequests} from '../lib/render-state.ts'
 import {loadSettings} from '../lib/settings.ts'
 import type {FilmClipRequest} from '../lib/film/compose.ts'
 import {loadFilmConfig} from '../lib/film/config.ts'
-import {cutsOf, joinFingerprint, joinFrames, joinPrompt, type JoinRecord, plannedChanges, readVerdict} from '../lib/film/joins.ts'
+import {cutsOf, joinFingerprint, joinFrames, joinPrompt, plannedChanges, readVerdict} from '../lib/film/joins.ts'
 import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import {FilmStore} from '../lib/film/store.ts'
+import {type CheckedJoin, JOINS_FILE, videoStamp} from '../lib/clip-checks.ts'
 cli('film:check-joins')
 
 const usage = 'usage: bun run film:check-joins <film-id> [--only=clip-004,clip-007] [--again]'
@@ -53,8 +54,8 @@ const settings = await loadSettings({projectModel: config.llm.model})
 configureLlm(settings.llm)
 if (!(await picturesReadable())) log.usageError('this needs a model that reads pictures - bun run setup vision', usage)
 
-const file = join(dir, 'output', 'join-check.json')
-const records: Record<string, JoinRecord> = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}
+const file = join(dir, JOINS_FILE)
+const records: Record<string, CheckedJoin> = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}
 const keyOf = (cut: {from: string; to: string}) => `${cut.from}>${cut.to}`
 log.section(`JOINS · ${cuts.length} cut(s) within a scene`)
 const flagged: string[] = []
@@ -71,9 +72,16 @@ for (const cut of cuts) {
         continue
     }
     let record = records[keyOf(cut)]
+    // the files it is asked on: a finding counts in the workspace only while they are the clips there (lib/clip-checks.ts)
+    const videos: [number, number] = [videoStamp(dir, cut.from) ?? 0, videoStamp(dir, cut.to) ?? 0]
     if (args.again || record?.fingerprint !== fingerprint) {
         const images = await visionUrls(joinFrames(cut).map(f => join(dir, f)))
-        record = {...readVerdict(await askJson(joinPrompt(images, stagings[cut.sceneId] ?? '', changes))), fingerprint}
+        record = {...readVerdict(await askJson(joinPrompt(images, stagings[cut.sceneId] ?? '', changes))), fingerprint, videos}
+    } else if (record.videos?.join() !== videos.join()) {
+        // the same frames in a file written again (a refinish, a copy): the answer stands for it
+        record = {...record, videos}
+    }
+    if (records[keyOf(cut)] !== record) {
         records[keyOf(cut)] = record
         writeFileSync(file, JSON.stringify(records, null, 2) + '\n')
     }
