@@ -97,6 +97,7 @@ export const commandHelp: Record<string, Help> = {
             ['--fix-script', 'Repair a handed-in screenplay; by default its contradictions are only reported'],
             ['--allow-import-gaps', 'Go on when importing a screenplay lost a line, instead of stopping'],
             ...planning,
+            ['--json', 'With --dry-run: what it would do as JSON - the reasons, the steps made again, the scenes planned again, the renders'],
             ...servers,
         ],
         steps: [

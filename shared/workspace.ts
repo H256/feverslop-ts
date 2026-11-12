@@ -239,6 +239,8 @@ export type PostworkView = {
     description: {about: string; story: boolean; facts: boolean; hardware: string; extra: string[]; tags: string[]}
     introFound?: string // input/intro.<ext> of the project, when there is one: the intro without a file set
     markers: string[] // the presets of the marker: the EU icons in assets/eu-ai-icons/
+    /** the timelines for a video editor there are (#836): a music video's --export (Shotcut/Kdenlive, OpenShot), a film's EDL written as it is assembled */
+    edits: {format: 'mlt' | 'openshot' | 'edl'; file: string; changed: number}[]
     problem?: string // what is wrong with the settings when they cannot be read: the steps take their defaults then, and the form says it
 }
 export type EditorFreshness = {clips: Record<string, Freshness>; pictures: Record<string, Freshness>}
@@ -277,7 +279,7 @@ export type DryRun = {
     reasons: {why: string; steps: string[]}[]
     /** every step made again, along what is built on what */
     redone: string[]
-    /** beats whose shots are planned again (--beats, or none planned yet), and the clips that turn stale by it */
+    /** beats whose shots are planned again (--beats, or none planned yet) - a film: its scenes (--scenes) - and the clips that turn stale by it */
     plannedAgain: string[]
     staleAfter: string[]
     /** steps not made yet that the run makes */
@@ -493,13 +495,14 @@ export type RunRequest =
     | {type: 'look-pictures'}
     | {type: 'adapt-story'; add?: {name: string; role: string}[]; remove?: string[]} // add, remove: a film's roles (#589)
     | {type: 'final'; preview?: boolean}
-    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]} // beats: a music video's beats whose shots are planned again (#762)
+    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]; scenes?: string[]} // beats: a music video's beats whose shots are planned again (#762); scenes: a film's (#836)
     | {type: 'retake'; clip: string; range: string}
     | {type: 'repeat'; command: string}
     | {type: 'next'; command: string}
     | {type: 'leak-scan'}
     | {type: 'texture-chains'} // the fine detail along the chains of continuing clips (#836)
     | {type: 'check-joins'} // a film: the cuts within a scene, read by a model that sees pictures (#836)
+    | {type: 'export'; formats: string[]} // a music video's timeline for a video editor: --export=mlt,openshot (#836)
     | {type: 'export-asset'; asset: string; as?: string}
     | {type: 'export-song'; as?: string; name?: string}
     | {type: 'add-view'; location: string; name: string; shows: string}

@@ -327,6 +327,8 @@ test('library: an asset asked for in the library starts nothing in the project o
   await page.route('**/api/library/run-events*', route =>
     route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: 'event: state\ndata: null\n\n'}),
   )
+  // inside a project the top bar has Library only on a wide screen (#879)
+  await page.setViewportSize({width: 1800, height: 1000})
   await page.goto(`${base}/p/music/demo/`)
   await page.getByRole('navigation', {name: 'Workspace'}).getByRole('link', {name: 'Library'}).click()
   await page.getByRole('button', {name: 'New asset from a picture'}).click()

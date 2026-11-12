@@ -229,6 +229,7 @@ const RENDER_ACTIONS = new Set<RunAction['type']>([
     'leak-scan',
     'texture-chains',
     'check-joins',
+    'export',
     'export-asset',
     'export-song',
     'add-view',
@@ -503,8 +504,8 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             }
             // what a plan run would do, before it is asked for: the command's --dry-run --json (#836)
             if (what === 'dry-run') {
-                const asked = await body<{redo?: string[]; until?: string; beats?: string[]}>()
-                return json({dryRun: (await dryRun(target, {type: 'plan', ...asked})) ?? null})
+                const asked = await body<{redo?: string[]; until?: string; beats?: string[]; scenes?: string[]}>()
+                return json({dryRun: await dryRun(target, {type: 'plan', ...asked})})
             }
             if (what === 'estimate') {
                 const asked = await body<{clips?: string[]; pictures?: number}>()

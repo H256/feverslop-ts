@@ -91,6 +91,9 @@ export function withDirection(
     }
 }
 
+// steps whose name reads as something else: "music" analyses the song that is there (bpm, downbeats), it makes none (#883)
+const STEP_LABELS: Record<string, string> = {music: 'beat analysis'}
+
 /** The next command, with what it costs where that is known: plan, pictures, clips, final video - the first that is not done. */
 async function nextOf(
     run: string,
@@ -104,7 +107,10 @@ async function nextOf(
 ): Promise<Next> {
     const {missingPictures, clips, missingClips, staleClips, finalState} = render
     if (toPlan.length || !clips.length)
-        return {command: run, why: toPlan.length ? `${toPlan.length} step(s) to generate: ${toPlan.join(', ')}` : 'no clip requests yet'}
+        return {
+            command: run,
+            why: toPlan.length ? `${toPlan.length} step(s) to generate: ${toPlan.map(step => STEP_LABELS[step] ?? step).join(', ')}` : 'no clip requests yet',
+        }
     if (missingPictures.length)
         return {
             command: `${run} --render=images`,
