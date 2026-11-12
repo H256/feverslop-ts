@@ -1,5 +1,6 @@
 import {describe, expect, test} from 'bun:test'
 import {activeSpans, buildClipRequests} from './compose.ts'
+import {checkPrompt} from './prompt-check.ts'
 import type {Character, ShotPlan, StoryBeat} from './project.ts'
 
 const beat = {
@@ -293,6 +294,9 @@ describe('audio tracks of a band', () => {
         expect(second!.prompt).toContain('Its first 1.04 seconds are the end of the previous clip, given as its frames')
         expect(second!.prompt).toContain('At 00:03.042, the shot cuts to')
         expect(build(0)[1]!.prompt).toContain('At 00:02.000, the shot cuts to')
+        // the frame is a guide of the render, pinned or as context frames: the check over the prompt does not miss its name (#825)
+        expect(checkPrompt(second!)).toEqual([])
+        expect(checkPrompt(build(0)[1]!)).toEqual([])
     })
     test('a hands shot shows both hands and the instrument, never the face - and pulls in no singer', () => {
         const c = clip(['lead', 'gtr'], true, {

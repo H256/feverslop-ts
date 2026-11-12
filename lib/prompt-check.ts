@@ -6,7 +6,7 @@ export type CheckedClip = {
     id: string
     prompt: string
     duration?: number
-    assets?: {pictures?: {label: string; subject?: string}[]; audio?: {label: string}[]}
+    assets?: {pictures?: {label: string; subject?: string; kind?: string}[]; audio?: {label: string}[]}
 }
 
 /** From this many characters on a prompt is said to be long: the longest of a real project were 15,000. */
@@ -43,7 +43,11 @@ export function checkPrompt(clip: CheckedClip): string[] {
         ])
         const unknown = [...used].filter(label => !has.has(label))
         if (unknown.length) found.push(`named but not given to the clip: ${unknown.join(', ')}`)
-        const unused = [...has].filter(label => !used.has(label))
+        // the last frame of the clip before, pinned at frame 0 or given as the clip's first frames: a guide of the render, not a
+        // reference picture - the prompt says so in the composer's words and rightly never names it (README, pinStartFrame)
+        const guide = /begins on the frame the previous clip ended on|the end of the previous clip, given as its frames/.test(text)
+        const frames = new Set(guide ? (clip.assets.pictures ?? []).filter(p => p.kind === 'frame').map(p => p.label) : [])
+        const unused = [...has].filter(label => !used.has(label) && !frames.has(label))
         if (unused.length) found.push(`given to the clip but never named: ${unused.join(', ')}`)
     }
 
