@@ -4,12 +4,12 @@
 import {existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
-import {defaults, loadProjectConfig, qaRetriesNote, workflowDir} from '../config.ts'
-import {filmDefaults, loadFilmConfig} from '../film/config.ts'
+import {qaRetriesNote, workflowDir} from '../config.ts'
 import {type Finish, finishOf, MILD_FINISH} from '../finish.ts'
 import {withProjectLock} from '../lock.ts'
 import {readEditorFreshness, type EditorTarget} from './project.ts'
 import type {ConfigChange, ConfigImpact, ConfigResult, ConfigView, SettingView} from '../../shared/workspace.ts'
+import {kindOf} from './kinds.ts'
 
 export type {ConfigChange, ConfigImpact, ConfigResult, ConfigView, SettingView} from '../../shared/workspace.ts'
 
@@ -335,7 +335,7 @@ async function loadWith(target: EditorTarget, settings: Record<string, unknown>)
     const dir = mkdtempSync(join(tmpdir(), 'project-config-'))
     try {
         writeFileSync(join(dir, 'config.json'), JSON.stringify(settings))
-        return target.kind === 'film' ? await loadFilmConfig(dir) : await loadProjectConfig(dir)
+        return await kindOf(target).config(dir)
     } finally {
         rmSync(dir, {recursive: true, force: true})
     }
@@ -346,7 +346,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export async function readConfig(target: EditorTarget): Promise<ConfigView> {
     const own = ownSettings(target)
     const config = (await loadWith(target, own)) as unknown as Record<string, unknown>
-    const base = (target.kind === 'film' ? filmDefaults : defaults) as unknown as Record<string, unknown>
+    const base = kindOf(target).defaults as Record<string, unknown>
     return {
         settings: definitionsOf(target).map(({for: _, choices, ...definition}): SettingView => {
             // the finish: on or off, and each of its fields on its own - config.json has them in one object

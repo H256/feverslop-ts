@@ -5,17 +5,13 @@ import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
 import type {BeatCastChange, LibraryChange, ProjectStatus, RunHistory} from '../../shared/workspace.ts'
 import {clipVersions} from '../archive.ts'
 import type {ClipRequest} from '../compose.ts'
-import {loadProjectConfig} from '../config.ts'
 import {dropDirection, readDirection, restoreDirection, setDirectionEdits, setDirectionRules, shotPeople, takeDirection} from '../direction/service.ts'
-import {loadFilmConfig} from '../film/config.ts'
-import {filmRenderConfig} from '../film/pictures.ts'
 import {libraryIdPattern} from '../library.ts'
 import {configureLlm, picturesReadable} from '../llm.ts'
 import {clipEstimate, clipFailureRisks, pictureEstimate, readClipRequests, readPictureJobs} from '../render-state.ts'
 import {pastRuns, readQueue, unqueue} from '../run-queue.ts'
 import {busy, invalid, missing} from '../service-error.ts'
 import {loadSettings} from '../settings.ts'
-import {filmStatus, projectStatus} from '../status.ts'
 import {readTimings} from '../timings.ts'
 import {readFineWaveform} from '../waveform.ts'
 import {assetSources} from './asset-sources.ts'
@@ -23,6 +19,7 @@ import {writeBeatCast} from './beat-cast.ts'
 import {pickVersion, writeOverride} from './choices.ts'
 import {dryRun, replaceDryRun} from './dry-run.ts'
 import {json, mediaFile, readWaveform, runEvents, stripColors} from './http.ts'
+import {kindOf} from './kinds.ts'
 import {changeLibrary, readCasting, readLibrary, writeCastingEntry} from './library.ts'
 import {
     type CastChange,
@@ -126,13 +123,9 @@ export const atLook = (target: EditorTarget) => target.kind === 'music' && stage
 export async function estimateClips(target: EditorTarget, ids: string[]) {
     const requests = await readClipRequests<ClipRequest & {frames: number}>(target.dir)
     const clips = requests.filter(c => ids.includes(c.id))
-    const projectConfig = target.kind === 'film' ? filmRenderConfig(await loadFilmConfig(target.dir)) : await loadProjectConfig(target.dir)
-    const settings = await loadSettings(
-        target.kind === 'film'
-            ? {projectModel: (await loadFilmConfig(target.dir)).llm.model}
-            : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model},
-    )
-    const servers = settings.comfy.map(s => s.name)
+    const {renderConfig, llmModel} = kindOf(target)
+    const projectConfig = await renderConfig(target.dir)
+    const servers = (await loadSettings({projectModel: await llmModel(target.dir)})).comfy.map(s => s.name)
     return {
         estimate: stripColors(await clipEstimate(clips, projectConfig, servers)),
         risks: clipFailureRisks(readTimings(), clips, projectConfig.videoWorkflow, servers).map(stripColors),
@@ -145,28 +138,15 @@ export async function estimateClips(target: EditorTarget, ids: string[]) {
  * server asks no model anything else: what it connects to here is only for this question.
  */
 export async function picturesReadableFor(target: EditorTarget) {
-    const model = target.kind === 'film' ? (await loadFilmConfig(target.dir)).llm.model : (await loadProjectConfig(target.dir)).llm.model
-    configureLlm((await loadSettings({projectModel: model})).llm)
+    configureLlm((await loadSettings({projectModel: await kindOf(target).llmModel(target.dir)})).llm)
     return picturesReadable()
 }
 
 export async function estimatePictures(target: EditorTarget, count: number) {
-    const projectConfig = target.kind === 'film' ? filmRenderConfig(await loadFilmConfig(target.dir)) : await loadProjectConfig(target.dir)
-    const settings = await loadSettings(
-        target.kind === 'film'
-            ? {projectModel: (await loadFilmConfig(target.dir)).llm.model}
-            : {projectModel: (projectConfig as Awaited<ReturnType<typeof loadProjectConfig>>).llm.model},
-    )
-    return {
-        estimate: stripColors(
-            await pictureEstimate(
-                count,
-                projectConfig,
-                settings.comfy.map(s => s.name),
-            ),
-        ),
-        fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined,
-    }
+    const {renderConfig, llmModel} = kindOf(target)
+    const projectConfig = await renderConfig(target.dir)
+    const servers = (await loadSettings({projectModel: await llmModel(target.dir)})).comfy.map(s => s.name)
+    return {estimate: stripColors(await pictureEstimate(count, projectConfig, servers)), fixedSeed: projectConfig.seed !== -1 ? projectConfig.seed : undefined}
 }
 
 const started = (run: unknown) => json({run})
@@ -188,7 +168,7 @@ export const PROJECT_ROUTES: readonly Route[] = [
         method: 'GET',
         path: 'status',
         handle: async c => {
-            const {render, next, steps, changed} = await (c.target.kind === 'film' ? filmStatus(c.target.id) : projectStatus(c.target.id))
+            const {render, next, steps, changed} = await kindOf(c.target).status(c.target.id)
             return json({
                 steps,
                 changed,
