@@ -35,6 +35,12 @@ describe('the check of a composed prompt', () => {
             'given to the clip but never named: <Audio 2>',
         ])
     })
+    test('the frame of the clip before, unnamed: fine when the prompt starts on it as a guide, a finding when it is a reference', () => {
+        const withFrame = {...assets, pictures: [...assets.pictures, {label: '<Picture 3>', subject: '', kind: 'frame'}]}
+        expect(checkPrompt({id: 'a', prompt: good, assets: withFrame})).toEqual(['given to the clip but never named: <Picture 3>'])
+        const pinned = good + ' The video begins on the frame the previous clip ended on and goes on from it in one continuous take.'
+        expect(checkPrompt({id: 'a', prompt: pinned, assets: withFrame})).toEqual([])
+    })
     test('shots out of order or after the end', () => {
         expect(checkPrompt({id: 'a', prompt: good, duration: 3, assets})).toEqual(['[Shot 2] cuts in after the clip has ended'])
         const twice = good + '\n[Shot 3] At 00:02.000, the shot cuts to a wide shot of <Subject 1>.'
