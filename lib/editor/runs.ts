@@ -16,6 +16,7 @@ import {requestArgs} from '../command-schema.ts'
 import {introCommand, labelCommand} from '../postwork/commands.ts'
 import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
 import {eventsFileOf} from '../run-events.ts'
+import {busy} from '../service-error.ts'
 export type {RunInfo} from '../../shared/workspace.ts'
 
 // Everything that renders from the workspace is the CLI, started here: a run goes through the same lock as one started in the
@@ -334,12 +335,10 @@ export class RunControl {
 
     private spawn(target: EditorTarget, script: string, args: string[], locks: boolean, servers?: string[], temporary: string[] = []): RunInfo {
         const running = this.own.get(this.key(target))
-        if (running?.info.running) throw new Error(`a run is going on here: ${running.info.command}`)
+        if (running?.info.running) throw busy(`a run is going on here: ${running.info.command}`)
         const holder = locks ? lockHolder(target.dir) : undefined
         if (holder)
-            throw new Error(
-                `${target.id} is being worked on by another run (process ${holder}) - it can be followed and stopped here, a second one is not started`,
-            )
+            throw busy(`${target.id} is being worked on by another run (process ${holder}) - it can be followed and stopped here, a second one is not started`)
         // no terminal: nothing can be asked (stdin closed), no colours and no animation in the log
         const proc = Bun.spawn(['bun', join(this.root, script), ...args], {
             stdin: 'ignore',

@@ -52,11 +52,11 @@ describe('the routes of the start page', () => {
         expect(JSON.parse(readFileSync(join(root, 'projects', 'rain', 'config.json'), 'utf8'))).toEqual({singers: ['auto']})
 
         const again = await post({id: 'rain', idea: 'another'})
-        expect(again.status).toBe(409)
+        expect(again.status).toBe(400)
         expect(((await again.json()) as {error: string}).error).toContain('is there already')
 
         const wrong = await post({id: 'snow', song: 'missing.wav', lyrics: 'la'})
-        expect(wrong.status).toBe(409)
+        expect(wrong.status).toBe(400)
         expect(((await wrong.json()) as {error: string}).error).toBe('--song: no file missing.wav')
         expect(existsSync(join(root, 'projects', 'snow'))).toBe(false)
     }, 60_000)

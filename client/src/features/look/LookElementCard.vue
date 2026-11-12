@@ -61,7 +61,7 @@ const changed = computed(() => props.edits.isChanged(props.element))
   min-width: 0;
   border: 1px solid var(--line);
   border-left: 3px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   padding: 10px 12px 12px;
   background: var(--surface);
 }
@@ -71,31 +71,31 @@ const changed = computed(() => props.edits.isChanged(props.element))
 .lk-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 8px;
 }
 .lk-head b {
-  font-size: 14px;
+  font-size: var(--text-l);
 }
 .lk-lib {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 7px;
   border: 1px solid var(--line);
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
 }
 .lk-again {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: var(--space-1);
+  font-size: var(--text-s);
   color: var(--muted);
   cursor: pointer;
 }
 .lk-body {
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
   align-items: start;
 }
 .lk-body:not(:has(.lk-pic)) {
@@ -105,30 +105,30 @@ const changed = computed(() => props.edits.isChanged(props.element))
   width: 96px;
   aspect-ratio: 3 / 4;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   display: block;
   background: var(--raised);
 }
 .lk-texts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .lk-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .lk-field span {
-  font-size: 12px;
+  font-size: var(--text-s);
   color: var(--muted);
 }
 .lk-field textarea {
   width: 100%;
   min-width: 0;
-  font: 13px/1.5 var(--sans);
+  font: var(--text-m)/1.5 var(--sans);
   resize: vertical;
 }
 @media (max-width: 560px) {

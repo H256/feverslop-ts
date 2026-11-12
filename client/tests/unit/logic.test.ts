@@ -223,3 +223,24 @@ test('what the events of a run say: its step, warnings, failure - only of the ru
   )
   expect(said).toEqual({step: '3 · Beats', warnings: ['a beat without a place'], failure: {message: 'EPERM', advice: 'Close the program that holds it.'}})
 })
+
+// #837: the kind of a no decides how it reads
+test('an error reads by its kind', async () => {
+  const {errorText} = await import('../../src/lib/format')
+  const {errorOfAnswer} = await import('../../src/api/http')
+  expect(errorText(errorOfAnswer({error: 'a run is going on here: bun index.ts', kind: 'busy'}, 423))).toBe(
+    'a run is going on here: bun index.ts. Wait for the run to end, or stop it in the run dock.',
+  )
+  const bug = errorText(errorOfAnswer({error: "Cannot read properties of undefined (reading 'x')", kind: 'failed', where: 'at plan (lib/plan.ts:12:3)'}, 500))
+  expect(bug.startsWith('An error of the workspace, not of what you did:')).toBe(true)
+  expect(bug.includes('lib/plan.ts:12:3')).toBe(true)
+  expect(errorText(errorOfAnswer({error: 'change must be an object', kind: 'invalid'}, 400))).toBe('change must be an object')
+  expect(errorText(errorOfAnswer('not json', 502))).toBe('Request failed (502)')
+})
+
+// #834: the plan's {Name} tokens are shown as names; a brace that is not a token stays
+test('a text of the plan reads with names', async () => {
+  const {withNames} = await import('../../src/lib/format')
+  expect(withNames('{Elias} stops; {Suzie} and {Leanne} step in')).toBe('Elias stops; Suzie and Leanne step in')
+  expect(withNames('no tokens {')).toBe('no tokens {')
+})

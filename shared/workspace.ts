@@ -532,6 +532,8 @@ export type SettingView = {
     /** a setting that only does something while this one is on: shown, but not to be changed while it is off */
     needs?: string
     choices?: {value: unknown; label: string}[]
+    /** The value that means "not set by you" (-1: the workflow's own, a random seed): the page shows the label, the file keeps the value (#834). */
+    auto?: {value: unknown; label: string}
     note: string
     value: unknown // what the project has now: its own, else the default
     default: unknown

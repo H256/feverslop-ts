@@ -2,6 +2,7 @@ import {closeSync, openSync, readFileSync, rmSync, writeSync} from 'node:fs'
 import {join} from 'node:path'
 import {sweepPartials} from './partial-cleanup.ts'
 import {ownProcessIdentity, processAlive, processIdentity, sameProcess} from './process-identity.ts'
+import {busy} from './service-error.ts'
 
 // Every save writes the whole project.json from the state the run loaded: two runs on one project would silently drop
 // each other's steps. So a run that writes holds a lock file with its process id for as long as it lives.
@@ -50,7 +51,7 @@ function takeLock(dir: string, what: string): () => void {
             if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
             const holder = lockHolder(dir)
             if (holder !== undefined && holder !== process.pid) {
-                throw new Error(
+                throw busy(
                     `${what} is being worked on by another run (process ${holder}) - wait for it to finish; if it is not running any more, delete ${file}`,
                 )
             }
