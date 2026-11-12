@@ -1,4 +1,4 @@
-import {closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync} from 'node:fs'
+import {closeSync, openSync, readSync, rmSync, statSync} from 'node:fs'
 import {join} from 'node:path'
 import {lockHolder, verifiedLockHolder} from '../lock.ts'
 import {cancelJobs, jobsQueuedSince} from '../comfy-cancel.ts'
@@ -16,7 +16,7 @@ import {requestArgs} from '../command-schema.ts'
 import {introCommand, labelCommand} from '../postwork/commands.ts'
 import {EXPORT_FORMATS} from '../timeline-export.ts'
 import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
-import {eventsFileOf} from '../run-events.ts'
+import {newestLog, newestRunEvents} from '../run-events.ts'
 import {busy, KindError} from '../service-error.ts'
 import {hasQueue, notePastRun, queueRun, readQueue, takeFirst} from '../run-queue.ts'
 import type {QueuedRun} from '../../shared/workspace.ts'
@@ -475,20 +475,7 @@ export class RunControl {
      * names it, so that a follower sees when another run began.
      */
     events(target: EditorTarget): {file?: string; events: RunEvent[]} {
-        const log = newestLog(target.dir)
-        if (!log) return {events: []}
-        const file = eventsFileOf(log)
-        if (!existsSync(file)) return {file, events: []}
-        const events: RunEvent[] = []
-        // only whole lines: a line still being written is read when it is complete
-        for (const line of readFileSync(file, 'utf8').split('\n').slice(0, -1)) {
-            try {
-                events.push(JSON.parse(line) as RunEvent)
-            } catch {
-                // a line that is not an event is skipped, not the run
-            }
-        }
-        return {file, events}
+        return newestRunEvents(target.dir)
     }
 
     // the lines of the log being followed, per project: only the bytes appended since the last poll are read
@@ -542,13 +529,4 @@ export class RunControl {
         if (Number.isFinite(started)) await cancelJobs(await jobsQueuedSince(target.dir, started, servers ?? (await loadSettings()).comfy))
         return true
     }
-}
-
-function newestLog(dir: string): string | undefined {
-    const logs = join(dir, 'logs')
-    if (!existsSync(logs)) return undefined
-    const files = readdirSync(logs)
-        .filter(f => f.endsWith('.log'))
-        .map(f => join(logs, f))
-    return files.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]
 }

@@ -258,7 +258,7 @@ export type ProjectStatus = {
 }
 /** The overview only reads these fields of a status. */
 export type ListingStatus = Pick<ProjectStatus, 'clips' | 'pictures' | 'next'>
-export type ClipProgress = 'waiting' | 'rendering' | 'done'
+export type ClipProgress = 'waiting' | 'rendering' | 'done' | 'failed'
 export type RunProgress = {clips: Record<string, ClipProgress>; done: number; total: number}
 /**
  * What a run says as data (#829), one JSON line each in `<project>/logs/<run>.events.jsonl` next to its log - the workspace reads
@@ -270,6 +270,11 @@ export type RunEvent = {at: number} & (
     | {type: 'failed'; message: string; advice?: string}
     | {type: 'cancelled'; message: string}
     | {type: 'done'; output?: string; next?: string; warnings: number}
+    // the jobs this run is to render, said before it begins - clips by id - and each job as it goes: on which server, done or failed
+    | {type: 'jobs'; kind: string; ids: string[]}
+    | {type: 'job'; state: 'running' | 'done' | 'failed'; kind: string; id: string; server?: string}
+    // a review gate waits for an answer in the terminal (--review)
+    | {type: 'ask'; message: string}
 )
 /** The events of the newest run from `from` on: `from` 0 starts a run's list anew (another run, or a page that asks again). */
 export type RunEvents = {events: RunEvent[]; from: number; next: number}

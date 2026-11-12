@@ -1,4 +1,5 @@
 import {noProject} from '../lib/usage.ts'
+import {newestRunEvents, runSummary} from '../lib/run-events.ts'
 import {cli} from '../lib/cli.ts'
 // Where a project stands: which steps are done, which an edited input or setting will redo on the next run, which
 // pictures and clips are rendered, missing or stale, and the command that comes next. Read-only - no lock, no LLM, no
@@ -43,7 +44,8 @@ const run = lastRun(dir)
 if (args.json) {
     log.json({
         ...json,
-        lastRun: run ? {...run, state: runState(run)} : null,
+        // what the events of the newest run say: its step, warnings, failure and jobs (#829)
+        lastRun: run ? {...run, state: runState(run), said: runSummary(newestRunEvents(dir).events)} : null,
         changedInputs: changed,
         steps,
         pictures: {total: pictures.length, missing: missingPictures.map(p => p.id), stale: stalePictures.map(p => p.id)},

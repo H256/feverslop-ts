@@ -1,4 +1,5 @@
 import {mkdtempSync, rmSync} from 'node:fs'
+import {runEvent} from './run-events.ts'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import * as clack from '@clack/prompts'
@@ -27,6 +28,7 @@ export async function reviewed<D, S extends keyof D & string, K extends S>(
     show(value)
     if (!review || !project.generated.has(name)) return value
     for (;;) {
+        runEvent({type: 'ask', message: `${name}: generated just now - go on with it? (accept, edit or redo in the terminal)`})
         const choice = await clack.select({
             message: `${name}: generated just now - go on with it?`,
             options: [

@@ -20,7 +20,7 @@ const session = ProjectService.provide(
   createProjectSession(route.params.kind as ProjectKind, String(route.params.id), {run, servers: useServers(), ask: useAsk(), toasts: useToasts()}),
 )
 const {reload, error, loading} = useResource(signal => session.reload(signal))
-run.follow({events: session.api.events, stop: session.api.stop, progress: session.api.progress, history: session.api.runs, unqueue: session.api.unqueue})
+run.follow({events: session.api.events, stop: session.api.stop, history: session.api.runs, unqueue: session.api.unqueue})
 // what a run changed is read again: every page shows the folder as it is now
 run.onEnd(() => {
   void reload()

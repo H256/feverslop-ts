@@ -1,5 +1,5 @@
 import {computed, onScopeDispose, ref, shallowRef} from 'vue'
-import type {RunEvent, RunEvents, RunHistory, RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
+import type {ClipProgress, RunEvent, RunEvents, RunHistory, RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
 import {defineService} from './service'
 import type {Toasts} from './toasts'
 
@@ -10,8 +10,6 @@ const LOG_KEPT = 200_000
 export type RunScope = {
   events: string
   stop?: () => Promise<unknown>
-  // how far a render of clips is (#775): asked every 2 s while a run goes on
-  progress?: () => Promise<{progress: RunProgress | null}>
   said?: {done: string; failed: string}
   // the runs waiting in the queue and those that ended (#837), and taking a waiting one out
   history?: () => Promise<RunHistory>
@@ -34,6 +32,20 @@ export function runSaid(events: RunEvent[], since = 0): RunSaid {
     if (event.type === 'done') said.done = {output: event.output, next: event.next}
   }
   return said
+}
+/**
+ * How far a render of clips is (#775), from the run's job events (#829): the clips it said it renders, each waiting until its job
+ * runs on a server, then done or failed. Undefined for a run that renders no clips. Events from before `since` belong to another run.
+ */
+export function jobProgress(events: RunEvent[], since = 0): RunProgress | undefined {
+  const clips: Record<string, ClipProgress> = {}
+  for (const event of events) {
+    if (event.at < since) continue
+    if (event.type === 'jobs' && event.kind === 'clip') for (const id of event.ids) clips[id] ??= 'waiting'
+    if (event.type === 'job' && event.kind === 'clip' && event.id in clips) clips[event.id] = event.state === 'running' ? 'rendering' : event.state
+  }
+  const states = Object.values(clips)
+  return states.length ? {clips, done: states.filter(state => state === 'done').length, total: states.length} : undefined
 }
 export const failedRun = (run: RunInfo) => !run.running && run.code !== undefined && run.code !== 0
 export const runStateText = (run: RunInfo) =>
@@ -58,7 +70,12 @@ export function createRunDock(toasts: Toasts) {
     return runSaid(runEvents.value, Number.isNaN(start) ? 0 : start - 5000)
   })
   const step = computed(() => said.value.step)
-  const progress = shallowRef<RunProgress>()
+  // how far a render of clips is - from the job events, while the run goes on (#829)
+  const progress = computed(() => {
+    if (!current.value?.running) return undefined
+    const start = Date.parse(current.value.startedAt)
+    return jobProgress(runEvents.value, Number.isNaN(start) ? 0 : start - 5000)
+  })
   const endedAt = ref<number>()
   const scope = shallowRef<RunScope>()
   /** What waits behind the run and what ran before (#837): read as the scope is followed, as a run starts or ends, and while something waits. */
@@ -75,23 +92,7 @@ export function createRunDock(toasts: Toasts) {
   const historyTimer = setInterval(() => {
     if (history.value.queue.length) readHistory()
   }, 3000)
-  let progressTimer: ReturnType<typeof setInterval> | undefined
   let startedAt: string | undefined
-  const pollProgress = () => {
-    void scope.value
-      ?.progress?.()
-      .then(answer => {
-        progress.value = answer.progress?.total ? answer.progress : undefined
-      })
-      .catch(() => {})
-  }
-  const watchProgress = (running: boolean) => {
-    clearInterval(progressTimer)
-    progressTimer = undefined
-    if (!running || !scope.value?.progress) return
-    pollProgress()
-    progressTimer = setInterval(pollProgress, 2000)
-  }
   const ends = new Set<RunEnd>()
   let source: EventSource | undefined
   let after = 0
@@ -117,17 +118,12 @@ export function createRunDock(toasts: Toasts) {
     })
     events.addEventListener('state', event => {
       const state = JSON.parse((event as MessageEvent<string>).data) as RunInfo | null
-      // another run: its own step, progress and time
+      // another run: its own time
       if (state && state.startedAt !== startedAt) {
         startedAt = state.startedAt
         endedAt.value = undefined
-        progress.value = undefined
       }
-      if (state?.running && !progressTimer) watchProgress(true)
-      if (!state?.running) {
-        watchProgress(false)
-        if (state && endedAt.value === undefined) endedAt.value = Date.now()
-      }
+      if (!state?.running && state && endedAt.value === undefined) endedAt.value = Date.now()
       if (state?.startedAt !== current.value?.startedAt || state?.running !== current.value?.running) readHistory()
       current.value = state
       if (state) closed.value = false
@@ -147,8 +143,6 @@ export function createRunDock(toasts: Toasts) {
 
   /** Follows the runs of a scope while the caller lives. */
   const follow = (next: RunScope) => {
-    watchProgress(false)
-    progress.value = undefined
     endedAt.value = undefined
     startedAt = undefined
     scope.value = next
@@ -164,7 +158,6 @@ export function createRunDock(toasts: Toasts) {
     readHistory()
     onScopeDispose(() => {
       if (scope.value !== next) return
-      watchProgress(false)
       source?.close()
       source = undefined
       scope.value = undefined
@@ -178,7 +171,6 @@ export function createRunDock(toasts: Toasts) {
     wasRunning = true
     log.value = ''
     runEvents.value = []
-    progress.value = undefined
     endedAt.value = undefined
     after = 0
     current.value = run
@@ -202,7 +194,6 @@ export function createRunDock(toasts: Toasts) {
   }
   const running = () => !!current.value?.running
   const dispose = () => {
-    clearInterval(progressTimer)
     clearInterval(historyTimer)
     source?.close()
     ends.clear()

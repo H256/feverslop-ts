@@ -1,5 +1,5 @@
 import {computed, reactive, ref, shallowRef, watch} from 'vue'
-import type {ClipVersionView, EditorClip, EditorPicture, EditorFreshness, ProjectStatus, RunProgress} from '../../../../shared/workspace'
+import type {ClipVersionView, EditorClip, EditorPicture, EditorFreshness, ProjectStatus} from '../../../../shared/workspace'
 import {usePolling} from '../../composables/usePolling'
 import {plural} from '../../lib/format'
 import {useRunDock} from '../../services/run'
@@ -28,7 +28,7 @@ export function createTimeline() {
   const fresh = shallowRef<EditorFreshness>({clips: {}, pictures: {}})
   const status = shallowRef<ProjectStatus>()
   const peaks = shallowRef<number[]>()
-  const progress = shallowRef<RunProgress>()
+  const progress = computed(() => run.progress.value)
   const playback = usePlayback(project, fresh, roots)
   const tab = ref<Tab>('prompt')
   const marked = reactive(new Set<string>())
@@ -100,25 +100,7 @@ export function createTimeline() {
   })
   usePolling(() => session.reload(), 10_000)
 
-  // a run that renders: its clips on the timeline, waiting, rendering or done
-  const pollProgress = async () => {
-    progress.value = (await api.progress()).progress ?? undefined
-  }
-  let progressTimer: ReturnType<typeof setInterval> | undefined
-  watch(
-    () => !!run.current.value?.running,
-    running => {
-      clearInterval(progressTimer)
-      progressTimer = undefined
-      if (running) {
-        void pollProgress().catch(() => {})
-        progressTimer = setInterval(() => {
-          void pollProgress().catch(() => {})
-        }, 2000)
-      } else progress.value = undefined
-    },
-    {immediate: true},
-  )
+  // a run that renders: its clips on the timeline, waiting, rendering, done or failed - from its job events (#829)
   watch(progress, now => {
     run.detail.value = now?.total ? `${now.done} of ${plural(now.total, 'clip')} done` : ''
   })
@@ -169,7 +151,6 @@ export function createTimeline() {
   }
 
   const dispose = () => {
-    clearInterval(progressTimer)
     run.detail.value = ''
   }
   return {
