@@ -151,10 +151,13 @@ p {
   color: var(--muted);
   flex: none;
 }
+/* the project's pages; the tabs above a panel are TabBar */
 .top .tabs {
   align-self: stretch;
   margin-left: 8px;
   gap: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
 }
 .top .tabs a {
   display: flex;
@@ -570,33 +573,6 @@ select.source {
 }
 .ihead .warn {
   margin: 6px 0 0;
-}
-.tabs {
-  display: flex;
-  gap: var(--space-half);
-  padding: 0 10px;
-  border-bottom: 1px solid var(--line);
-}
-.tabs button {
-  padding: 7px 8px;
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  margin-bottom: -1px;
-}
-.tabs button:hover {
-  color: var(--text);
-}
-.tabs button[aria-selected='true'] {
-  color: var(--text);
-  border-color: var(--accent);
-  font-weight: 500;
-}
-.tabs small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  margin-left: 2px;
 }
 .panel {
   overflow-y: auto;

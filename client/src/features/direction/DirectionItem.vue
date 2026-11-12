@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
+import StateTag from '../../components/StateTag.vue'
 import {withNames} from '../../lib/format'
 import {scopeText, type Item} from './directionItems'
 
@@ -27,10 +28,10 @@ const apart = props.as === 'leftover' || props.as === 'review'
     <div class="what">
       <span v-if="apart" class="where">{{ scopeText(item.scope) }}</span>
       <RouterLink v-if="as === 'review' && item.scope.kind === 'shot' && timeline" class="go" :to="timeline">open in the timeline</RouterLink>
-      <span v-if="as === 'planned'" class="dp-tag">in the plan</span>
+      <StateTag v-if="as === 'planned'">in the plan</StateTag>
       <template v-if="as === 'active'">
-        <span v-if="item.edit" class="dp-tag">edit</span>
-        <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
+        <StateTag v-if="item.edit">edit</StateTag>
+        <StateTag v-if="item.rule?.characterId" state="plain">{{ name(item.rule.characterId) }}</StateTag>
       </template>
       <p>{{ apart && item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ withNames(item.text) }}</p>
       <template v-if="as !== 'leftover'">
@@ -92,8 +93,7 @@ const apart = props.as === 'leftover' || props.as === 'review'
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.what .dp-tag + p,
-.what .dp-tag.dp-who + p {
+.what .ui-tag + p {
   flex: 1 1 0;
 }
 .where {
@@ -102,17 +102,6 @@ const apart = props.as === 'leftover' || props.as === 'review'
 .issue {
   color: var(--stale);
   font-size: var(--text-s);
-}
-.dp-tag {
-  font-size: var(--text-xs);
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  white-space: nowrap;
-}
-.dp-tag.dp-who {
-  color: var(--text);
 }
 .acts {
   display: flex;

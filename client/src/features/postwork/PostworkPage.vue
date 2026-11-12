@@ -3,6 +3,8 @@ import {computed, reactive, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {EditorFinal} from '../../../../shared/workspace'
 import PageBar from '../../components/PageBar.vue'
+import PanelCard from '../../components/PanelCard.vue'
+import StateTag from '../../components/StateTag.vue'
 import {mediaUrl} from '../../api/urls'
 import {useToasts} from '../../services/toasts'
 import {useProject} from '../project/session'
@@ -146,13 +148,20 @@ const copy = toasts.guard(async (text: string) => {
     <p v-if="!sources.length" class="warn">There is no final video yet: render it on the Timeline first.</p>
     <div class="pw-grid">
       <ol class="pw-steps">
-        <li v-for="(step, n) in STEPS" :key="step" :class="['pw-step', {open: open === step, made: madeBy(step)}]">
+        <PanelCard
+          v-for="(step, n) in STEPS"
+          :key="step"
+          as="li"
+          flush
+          :bar="open === step ? 'accent' : madeBy(step) ? 'ok' : 'line'"
+          :class="['pw-step', {open: open === step}]"
+        >
           <button class="pw-head" :aria-expanded="open === step" @click="open = open === step ? '' : step">
             <span class="pw-num">{{ n + 1 }}</span>
             <b>{{ STEP_INFO[step].title }}</b>
             <span class="muted">{{ STEP_INFO[step].what }}</span>
             <span class="spacer" />
-            <span v-if="madeBy(step)" class="pw-done" :title="madeBy(step)!.file">made</span>
+            <StateTag v-if="madeBy(step)" :title="madeBy(step)!.file">made</StateTag>
           </button>
           <div v-if="open === step" class="pw-body">
             <p v-for="line in STEP_INFO[step].lines" :key="line" class="muted pw-line">{{ line }}</p>
@@ -166,7 +175,7 @@ const copy = toasts.guard(async (text: string) => {
               <span v-if="busy" class="muted">A run is going on - this one can wait in the queue behind it.</span>
             </div>
           </div>
-        </li>
+        </PanelCard>
       </ol>
       <aside class="pw-side">
         <h3>What the steps made</h3>
@@ -220,18 +229,6 @@ const copy = toasts.guard(async (text: string) => {
   gap: var(--space-3);
   min-width: 0;
 }
-.pw-step {
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--surface);
-}
-.pw-step.made {
-  border-left-color: var(--ok);
-}
-.pw-step.open {
-  border-left-color: var(--accent);
-}
 .pw-head {
   display: flex;
   align-items: center;
@@ -254,13 +251,6 @@ const copy = toasts.guard(async (text: string) => {
   background: var(--raised);
   font-size: var(--text-s);
   font-weight: 600;
-}
-.pw-done {
-  font-size: var(--text-xs);
-  padding: 1px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  color: var(--muted);
 }
 .pw-body {
   padding: 0 14px 14px 44px;
