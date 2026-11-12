@@ -8,6 +8,7 @@ import {namedPictures, putAwayPicture} from '../render.ts'
 import {finalStateOf} from '../render-state.ts'
 import {readCasting, readLibrary, writeCastingEntry} from './library.ts'
 import type {EditorTarget} from './project.ts'
+import {readQueue} from '../run-queue.ts'
 import {projectGroup, readEditorProject, readListing} from './project.ts'
 import {allowedOptions, RunControl, runCommand} from './runs.ts'
 import {editorHandler} from './server.ts'
@@ -380,6 +381,37 @@ describe('a run', () => {
         const refused = mkdtempSync(join(root, 'given-'))
         expect(() => runs.start(project, {type: 'pictures', ids: ['a b']}, undefined, [refused])).toThrow('no such pictures')
         expect(existsSync(refused)).toBe(false)
+    })
+    test('runs asked for while one goes on wait in the queue, and run in order - also after the editor started again (#837)', async () => {
+        const project = target('run-queue')
+        mkdirSync(project.dir, {recursive: true})
+        // as the pipeline does: the project is locked while it runs; what it was asked is written down in order
+        const lock = JSON.stringify(join(project.dir, '.lock'))
+        const order = join(project.dir, 'order.txt')
+        script(
+            'index.ts',
+            `const fs = require('node:fs'); fs.writeFileSync(${lock}, String(process.pid)); fs.appendFileSync(${JSON.stringify(order)}, process.argv.slice(2).join(' ') + '\\n'); await Bun.sleep(300); fs.rmSync(${lock})`,
+        )
+        const before = new RunControl(join(root, 'fake'))
+        expect('run' in before.startOrQueue(project, {type: 'plan'})).toBe(true)
+        await until(() => existsSync(order))
+        const second = before.startOrQueue(project, {type: 'plan', redo: ['story']})
+        const third = before.startOrQueue(project, {type: 'plan', until: 'story'})
+        expect('queued' in second && second.queued.command).toBe('bun index.ts run-queue --redo=story')
+        expect(readQueue(project.dir).map(q => q.command)).toEqual(['bun index.ts run-queue --redo=story', 'bun index.ts run-queue --until=story'])
+        // an action that cannot run at all is refused now, not queued
+        expect(() => before.startOrQueue(project, {type: 'plan', redo: ['nonsense']})).toThrow('no such steps')
+        expect('queued' in third).toBe(true)
+        // the editor goes and another starts: it finds the queue in logs/ and waits for the lock
+        const after = new RunControl(join(root, 'fake'))
+        expect(after.startQueued(project)).toBeUndefined()
+        const stop = after.watchQueues(() => [project], 50)
+        const asked = () => readFileSync(order, 'utf8').split('\n').filter(Boolean)
+        await until(() => asked().length === 3)
+        stop()
+        await until(() => after.current(project)?.running === false)
+        expect(asked()).toEqual(['run-queue', 'run-queue --redo=story', 'run-queue --until=story'])
+        expect(readQueue(project.dir)).toEqual([])
     })
     test('nothing is started while a run in the terminal holds the lock; it can be seen', () => {
         const runs = new RunControl(join(root, 'fake'))
