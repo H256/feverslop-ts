@@ -8,6 +8,7 @@ import {formatDuration, log, startSpinner, styles} from '../log.ts'
 import {type WorkflowResult} from '../../comfy/helpers.ts'
 import {specId} from '../render-spec.ts'
 import {type ComfyServer, probeComfy} from '../settings.ts'
+import {runEvent} from '../run-events.ts'
 import {trackJob, untrackJob} from '../comfy-cancel.ts'
 import {describeRejection} from '../comfy-rejection.ts'
 import {
@@ -252,10 +253,13 @@ export async function render<M>(
         )
         let failure: Error | undefined
         try {
+            runEvent({type: 'job', state: 'running', kind: what.kind, id: what.spec.id, server: home.name})
             await r.downloadResult(label, target, extension, home, initial, trace)
+            runEvent({type: 'job', state: 'done', kind: what.kind, id: what.spec.id, server: home.name})
             return initial.meta
         } catch (e) {
             failure = e instanceof Error ? e : new Error(String(e))
+            runEvent({type: 'job', state: 'failed', kind: what.kind, id: what.spec.id, server: home.name})
             throw e
         } finally {
             r.renderMs.set(target, (r.renderMs.get(target) ?? 0) + Date.now() - started)
@@ -277,7 +281,9 @@ export async function render<M>(
             pending = await r.resumeOrQueue(label, server, pendingFile, home ? initial : undefined, prepare, request)
             // a deliberate stop (Ctrl+C, the workspace's stop button) cancels it on its server - lib/comfy-cancel.ts
             trackJob({label, server, promptId: pending.promptId, pendingFile})
+            runEvent({type: 'job', state: 'running', kind: what.kind, id: what.spec.id, server: server.name})
             await r.downloadResult(label, target, extension, server, pending, trace)
+            runEvent({type: 'job', state: 'done', kind: what.kind, id: what.spec.id, server: server.name})
             return pending.meta
         } catch (e) {
             failure = e instanceof Error ? e : new Error(String(e))
@@ -295,7 +301,10 @@ export async function render<M>(
                 again = resume = true
                 log.warn(`${label}: ${failure.message.slice(0, 160)} - asking ${server.name} again (${timeouts}/2)`)
             }
-            if (!again) throw nameService(failure, `${label} on ${server.name} (${server.url})`, label)
+            if (!again) {
+                runEvent({type: 'job', state: 'failed', kind: what.kind, id: what.spec.id, server: server.name})
+                throw nameService(failure, `${label} on ${server.name} (${server.url})`, label)
+            }
         } finally {
             untrackJob(pendingFile)
             r.release(server)

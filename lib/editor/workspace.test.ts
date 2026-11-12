@@ -13,7 +13,7 @@ import {allowedOptions, RunControl, runCommand} from './runs.ts'
 import {editorHandler} from './server.ts'
 import {checkUploadSize, pictureType, takePictureUpload, UPLOAD_MAX_BYTES} from './upload.ts'
 import {loadSettings} from '../settings.ts'
-import {explainFailure, runProgress} from './progress.ts'
+import {explainFailure} from './progress.ts'
 import {chosenUrls, readServer} from './servers.ts'
 
 let root: string
@@ -491,51 +491,6 @@ describe('the render servers', () => {
     })
     test('a command with servers can be repeated: where it goes is chosen again', () => {
         expect(allowedOptions('music', 'demo', 'bun index.ts demo --render=videos --comfy=http://evil')).toEqual(['--render=videos'])
-    })
-})
-
-describe('how far a run has come', () => {
-    const clips = ['slot-001', 'slot-002', 'slot-003', 'slot-004']
-    const dir = () => target('progress').dir
-    const later = new Date(2_000_000)
-    beforeAll(() => {
-        // done in this run, on a server, there from before, not there
-        write(join(dir(), 'videos/slot-001.mp4'))
-        utimesSync(join(dir(), 'videos/slot-001.mp4'), later, later)
-        write(join(dir(), 'videos/slot-002.mp4.pending.json'), {})
-        write(join(dir(), 'videos/slot-003.mp4'))
-        utimesSync(join(dir(), 'videos/slot-003.mp4'), old, old)
-    })
-    const started = 1_500_000
-    test('what is rendered, on a server, waiting; what was there from before has nothing to do with it', () => {
-        expect(runProgress(dir(), 'bun index.ts x --render=videos', started, clips)).toEqual({
-            clips: {'slot-001': 'done', 'slot-002': 'rendering', 'slot-004': 'waiting'},
-            done: 1,
-            total: 3,
-        })
-    })
-    test('only the clips it names', () => {
-        expect(runProgress(dir(), 'bun index.ts x --render=videos --only=slot-001,slot-004', started, clips)?.clips).toEqual({
-            'slot-001': 'done',
-            'slot-004': 'waiting',
-        })
-    })
-    test('with --again a clip from before still is to come', () => {
-        expect(runProgress(dir(), 'bun index.ts x --render=videos --only=slot-003 --again', started, clips)?.clips).toEqual({'slot-003': 'waiting'})
-    })
-    test('previews are looked for in their folder', () => {
-        write(join(dir(), 'previews/slot-001.mp4.pending.json'), {})
-        expect(runProgress(dir(), 'bun index.ts x --render=videos --only=slot-001 --preview', started, clips)?.clips).toEqual({'slot-001': 'rendering'})
-    })
-    test('a part of a clip', () => {
-        expect(runProgress(dir(), 'bun index.ts x --retake=slot-002:1-2', started, clips)?.clips).toEqual({'slot-002': 'waiting'})
-        write(join(dir(), 'assets/clips/slot-002_retake.mp4.pending.json'), {})
-        expect(runProgress(dir(), 'bun index.ts x --retake=slot-002:1-2', started, clips)?.clips).toEqual({'slot-002': 'rendering'})
-    })
-    test('a run that renders no clips has no progress', () => {
-        expect(runProgress(dir(), 'bun index.ts x', started, clips)).toBeUndefined()
-        expect(runProgress(dir(), 'bun index.ts x --render=images', started, clips)).toBeUndefined()
-        expect(runProgress(dir(), 'bun index.ts x --render=final', started, clips)).toBeUndefined()
     })
 })
 

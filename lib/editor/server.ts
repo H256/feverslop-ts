@@ -51,7 +51,6 @@ import {
 } from './preproduction.ts'
 import {readTiming, type TimingChange, writeTiming} from './timing.ts'
 import {type ConfigChange, previewConfig, readConfig, writeConfig} from './projectconfig.ts'
-import {runProgress} from './progress.ts'
 import {type RunAction, RunControl} from './runs.ts'
 import {readServers, urlsOfChoice} from './servers.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
@@ -406,20 +405,6 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     if (!file) return json({peaks: null})
                     const key = `${file}:${statSync(file).mtimeMs}`
                     return json({peaks: (await waveform(key, () => readWaveform(file).catch(() => undefined))) ?? null})
-                }
-                if (what === 'progress') {
-                    const current = runs.current(target)
-                    if (!current?.running) return json({progress: null})
-                    const requests = await readClipRequests<{id: string}>(target.dir)
-                    return json({
-                        progress:
-                            runProgress(
-                                target.dir,
-                                current.command,
-                                current.startedAt ? Date.parse(current.startedAt) : 0,
-                                requests.map(clip => clip.id),
-                            ) ?? null,
-                    })
                 }
                 if (what === 'run-events') return runEvents(runs, target, request, Number(url.searchParams.get('after') ?? 0))
                 if (what === 'versions' && id) {
