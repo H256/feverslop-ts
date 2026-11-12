@@ -32,7 +32,16 @@ export function bookView(kind: EditorKind, data: Data): BookView {
     const state = planStateOf(kind, data)
     if (kind === 'film') {
         const screenplay = (data as FilmProject).screenplay
-        return {text: screenplay && screenplayToText(screenplay), editable: false, builtOn: [], keptByCast: droppedByProposal(data as FilmProject), ...state}
+        const {scriptNotes, scriptFixes} = data as FilmProject
+        return {
+            text: screenplay && screenplayToText(screenplay),
+            editable: false,
+            builtOn: [],
+            keptByCast: droppedByProposal(data as FilmProject),
+            ...(scriptNotes ? {scriptNotes} : {}),
+            ...(scriptFixes?.length ? {scriptFixes: scriptFixes.length} : {}),
+            ...state,
+        }
     }
     const story = (data as Project).story
     return {text: story, editable: story !== undefined, builtOn: builtOn(['story'], data as Project), keptByCast: droppedKeepingCast(data as Project), ...state}

@@ -90,6 +90,19 @@ const take = toasts.guard(async () => {
   toasts.show(`The new ${name.value.toLowerCase()} is taken`)
   await refresh()
 })
+// a film's script that contradicts itself: repaired by a plan run with --fix-script (#836)
+const repair = toasts.guard(async () => {
+  const yes = await ask({
+    title: 'Repair the script?',
+    lines: [
+      'The language model changes action lines and times of day where the script contradicts itself - never a line of dialogue - and reads it again, up to three rounds. The plan run then goes on as ever.',
+      'The old version is kept in old/. The cast and the looks stay; the shots are planned again.',
+    ],
+    warnings: [project.value.clips.some(c => c.video) && 'Clips made before stay, and are stale once the plan has new shots for them.'],
+    confirm: 'Repair it',
+  })
+  if (yes) await start({type: 'plan', fixScript: true})
+})
 const drop = toasts.guard(async () => {
   await api.dropStoryProposal()
   await refresh()
@@ -108,6 +121,15 @@ const drop = toasts.guard(async () => {
           The screenplay is read here. It is changed in the script in input/, or in project.json (screenplay), and then planned again with --redo. A character
           added or taken out on the Casting page has the screenplay the pipeline wrote told anew, as a proposal here.
         </div>
+        <div v-if="film && book.scriptNotes?.length" class="section sp-notes">
+          <b>The script contradicts itself here</b>
+          <span v-if="book.scriptFixes" class="muted"> - {{ book.scriptFixes }} repair(s) made so far</span>
+          <ul>
+            <li v-for="note in book.scriptNotes" :key="note">{{ note }}</li>
+          </ul>
+          <p class="muted">The film follows the script as it is. Repair it here, or change the script in input/ and plan again.</p>
+          <button class="btn" :disabled="busy" @click="repair">Repair the script…</button>
+        </div>
         <div class="section"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
         <div v-if="book.editable" class="section btn-row">
           <button class="btn primary" :disabled="!draft.dirty.value" @click="save">Save the story</button>
@@ -123,3 +145,13 @@ const drop = toasts.guard(async () => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.sp-notes ul {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-4);
+}
+.sp-notes p {
+  margin: 0 0 var(--space-2);
+}
+</style>
