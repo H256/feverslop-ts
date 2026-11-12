@@ -91,7 +91,8 @@ const DEFINITIONS: Definition[] = [
         group: 'Size',
         control: 'text',
         for: 'both',
-        note: "Megapixels like 1.2, a fixed size like 1280x720, or -1 for the workflow's own. A two-pass workflow takes it as the final size.",
+        auto: {value: -1, label: 'Workflow default'},
+        note: 'Megapixels like 1.2 or a fixed size like 1280x720; empty for the size the workflow has. A two-pass workflow takes it as the final size.',
     },
     {
         key: 'imageResolution',
@@ -99,7 +100,8 @@ const DEFINITIONS: Definition[] = [
         group: 'Size',
         control: 'text',
         for: 'both',
-        note: "As the video size, for the pictures: megapixels, WIDTHxHEIGHT, or -1 for the workflow's own.",
+        auto: {value: -1, label: 'Workflow default'},
+        note: 'As the video size, for the pictures: megapixels or WIDTHxHEIGHT; empty for the size the workflow has.',
     },
     {
         key: 'videoAspect',
@@ -115,7 +117,8 @@ const DEFINITIONS: Definition[] = [
         group: 'Sampling',
         control: 'number',
         for: 'music',
-        note: "-1 = the workflow's own (8 with the turbo LoRA, 20 of the base model, 4 of the PRISM two-pass). The one pass of a single-pass workflow, or pass 1 of a two-pass one. A change makes the rendered clips stale.",
+        auto: {value: -1, label: 'Workflow default'},
+        note: 'Empty: the workflow has its own (8 with the turbo LoRA, 20 of the base model, 4 of the PRISM two-pass). The one pass of a single-pass workflow, or pass 1 of a two-pass one. A change makes the rendered clips stale.',
     },
     {
         key: 'videoRefineSteps',
@@ -123,7 +126,8 @@ const DEFINITIONS: Definition[] = [
         group: 'Sampling',
         control: 'number',
         for: 'music',
-        note: "-1 = the workflow's own (2 with PRISM, 4 with the base model). Only a two-pass workflow has a pass 2. More steps draw more skin detail - too many make it harsh.",
+        auto: {value: -1, label: 'Workflow default'},
+        note: 'Empty: the workflow has its own (2 with PRISM, 4 with the base model). Only a two-pass workflow has a pass 2. More steps draw more skin detail - too many make it harsh.',
     },
     {
         key: 'continuity',
@@ -180,7 +184,8 @@ const DEFINITIONS: Definition[] = [
         group: 'Seed and retries',
         control: 'number',
         for: 'both',
-        note: '-1 = a new random seed with every render. A whole number from 0 is fixed: every clip gets a seed of its own from it, and rendering again gives the same clip. The retries below need -1.',
+        auto: {value: -1, label: 'Random every render'},
+        note: 'Empty: a new random seed with every render. A whole number from 0 is fixed: every clip gets a seed of its own from it, and rendering again gives the same clip. The retries below need a random seed.',
     },
     {
         key: 'leakRetries',
@@ -450,7 +455,7 @@ export async function previewConfig(target: EditorTarget, change: ConfigChange):
             ? `contextFrames ${config.contextFrames} does nothing while continuity is "never" - no clip goes on from the one before`
             : undefined,
         config.seed !== -1 && (config.leakRetries > 0 || config.qaRetries > 0)
-            ? 'a fixed seed: rendering a clip again gives the same clip, so the retries change nothing - use -1'
+            ? 'a fixed seed: rendering a clip again gives the same clip, so the retries change nothing - empty the seed for a random one'
             : undefined,
     ].filter((note): note is string => !!note)
     return {

@@ -11,6 +11,7 @@ test('run-events closes on abort and stops polling', async () => {
             return {lines: [], next: 0}
         },
         current: () => ({running: true}),
+        events: () => ({events: []}),
     } as unknown as RunControl
     const target = {id: 'test', kind: 'music', dir: '/tmp/test'} as EditorTarget
     const abort = new AbortController()

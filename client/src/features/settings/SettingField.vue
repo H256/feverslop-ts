@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import type {SettingView} from '../../../../shared/workspace'
-import {labelOf, textOfValue, valueOfText} from './settings'
+import {fieldTextOf, labelOf, textOfValue, valueOfField} from './settings'
 import type {SettingsDraft} from './useSettingsDraft'
 
 /** One setting in one row: its name and control side by side, what it does and its default small below - and the way back. */
@@ -22,28 +22,31 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
       <input
         v-else-if="setting.control === 'number'"
         :id="inputId"
-        v-model.number="form.draft[setting.key]"
+        :value="fieldTextOf(setting, form.draft[setting.key])"
         type="number"
         :step="setting.step ?? 1"
+        :placeholder="setting.auto?.label"
         :disabled="off"
         :aria-label="setting.label"
+        @input="form.draft[setting.key] = valueOfField(setting, text($event))"
       />
       <input
         v-else
         :id="inputId"
         type="text"
         :disabled="off"
-        :value="textOfValue(form.draft[setting.key])"
+        :value="fieldTextOf(setting, form.draft[setting.key])"
+        :placeholder="setting.auto?.label"
         :aria-label="setting.label"
-        @input="form.draft[setting.key] = valueOfText(text($event))"
+        @input="form.draft[setting.key] = valueOfField(setting, text($event))"
       />
     </div>
     <p class="sf-note">
       {{ setting.note }}
       <span class="sf-default"
         >Default <code>{{ labelOf(setting, setting.default) }}</code
-        ><button v-if="!off && !form.isDefault(setting)" class="btn link" @click="form.toDefault(props.setting)">Use the default</button
-        ><button v-if="form.isChanged(setting.key)" class="btn link" @click="form.undo(props.setting)">Undo</button></span
+        ><button v-if="!off && !form.isDefault(setting)" class="btn mini" @click="form.toDefault(props.setting)">Use the default</button
+        ><button v-if="form.isChanged(setting.key)" class="btn mini" @click="form.undo(props.setting)">Undo</button></span
       >
     </p>
   </div>
@@ -54,11 +57,11 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 .sf-row {
   display: grid;
   grid-template-columns: minmax(120px, 26%) minmax(0, 1fr);
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
   align-items: center;
   padding: 8px 10px;
   border-left: 3px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
 }
 .sf-row + .sf-row {
   border-top: 1px solid var(--line);
@@ -80,7 +83,7 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 }
 .sf-note {
   grid-column: 2;
-  font-size: 12px;
+  font-size: var(--text-s);
   line-height: 1.4;
   color: var(--muted);
 }
@@ -90,6 +93,9 @@ const off = computed(() => !!props.setting.needs && !props.form.draft[props.sett
 }
 .sf-default code {
   margin-left: 3px;
+}
+.sf-default .btn {
+  margin-left: var(--space-2);
 }
 @media (max-width: 640px) {
   .sf-row {
