@@ -11,11 +11,11 @@ const source = (file: string) => readFileSync(fileURLToPath(new URL(`../../src/$
 test('the router has a route for every page of a project, and no other', () => {
   const router = source('router.ts')
   // the routes are made from the list; the pages they load are a record of it, which the compiler holds to the list
-  expect(router).toContain('...PROJECT_PAGES.map(page => ({path: page, name: page, component: PAGES[page]}))')
+  expect(router.includes('...PROJECT_PAGES.map(page => ({path: page, name: page, component: PAGES[page]}))')).toBe(true)
   const pages = router.split('const PAGES')[1]!.split('\n}')[0]!
   expect([...pages.matchAll(/^ {2}([a-z]+): \(\) => import/gm)].map(m => m[1]!).sort()).toEqual([...PROJECT_PAGES].sort())
   // the timeline is the project's own address
-  expect(router).toContain("{path: '', name: 'timeline'")
+  expect(router.includes("{path: '', name: 'timeline'")).toBe(true)
 })
 
 test('the layout has a tab for every page', () => {
