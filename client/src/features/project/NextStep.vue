@@ -13,7 +13,7 @@ import {useProject} from './session'
  * run it is, asked first, or the page where it is done - and the estimate. Planning a stage, and the casting photos of a music video
  * planned up to the look, are next to it while the plan is not done.
  */
-const {project, root, start, busy, status} = useProject()
+const {project, root, start, status} = useProject()
 const {planStage, renderLookPictures} = usePlanning()
 const ask = useAsk()
 const toasts = useToasts()
@@ -58,19 +58,17 @@ const runNext = toasts.guard(async () => {
       <button
         v-else-if="preproduction"
         class="btn mini primary"
-        :disabled="busy"
         :title="stageDoes(preproduction, project.kind)"
         @click="toasts.guard(planStage)(preproduction)"
       >
         Plan the {{ stageName(preproduction, project.kind).toLowerCase() }}
       </button>
-      <button v-else class="btn mini primary" :disabled="busy" @click="runNext">Run it</button>
+      <button v-else class="btn mini primary" @click="runNext">Run it</button>
     </template>
     <span v-else class="ns-why muted">Everything is done</span>
     <button
       v-if="project.kind === 'music' && project.plan.stage === 'look'"
       class="btn mini"
-      :disabled="busy"
       title="The casting photos: the pictures of the cast and the places, before the shots are planned"
       @click="toasts.guard(renderLookPictures)()"
     >
@@ -79,7 +77,6 @@ const runNext = toasts.guard(async () => {
     <button
       v-if="project.plan.next && project.plan.next !== 'plan'"
       class="btn mini"
-      :disabled="busy"
       title="Every stage up to the shots in one run, without stopping"
       @click="toasts.guard(planStage)()"
     >
@@ -89,7 +86,6 @@ const runNext = toasts.guard(async () => {
     <button
       v-else-if="project.plan.stage === 'plan'"
       class="btn mini"
-      :disabled="busy"
       title="What a plan run would make again - from a step, or by what changed - asked before it runs"
       @click="toasts.guard(planStage)()"
     >

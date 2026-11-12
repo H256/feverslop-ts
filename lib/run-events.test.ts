@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import type {RunEvent} from '../shared/workspace.ts'
 import {RunControl} from './editor/runs.ts'
-import {stepTitle} from './run-events.ts'
+import {runSummary, stepTitle} from './run-events.ts'
 
 // #829: a run says what it does as data, next to its log - the workspace reads these, not the wording of the log.
 let dir: string
@@ -81,6 +81,28 @@ describe('the events of a run', () => {
         expect(plain(events)).toEqual([
             {type: 'warning', message: 'only this'},
             {type: 'done', warnings: 1},
+        ])
+    })
+    test('what the events of a run say, for bun run status --json: step, warnings, failure, a question, the jobs', () => {
+        const at = 1
+        expect(
+            runSummary([
+                {at, type: 'step', state: 'started', name: 'beats', title: '3 · Beats'},
+                {at, type: 'warning', message: 'one'},
+                {at, type: 'warning', message: 'two'},
+                {at, type: 'ask', message: 'beats: generated just now - go on with it?'},
+            ]),
+        ).toEqual({step: '3 · Beats', warnings: 2, firstWarnings: ['one', 'two'], asking: 'beats: generated just now - go on with it?'})
+        const rendered = runSummary([
+            {at, type: 'jobs', kind: 'clip', ids: ['slot-001', 'slot-002', 'slot-003']},
+            {at, type: 'job', state: 'done', kind: 'clip', id: 'slot-001', server: 'a'},
+            {at, type: 'job', state: 'failed', kind: 'clip', id: 'slot-002', server: 'a'},
+            {at, type: 'failed', message: 'clip slot-002: HIP out of memory', advice: 'Fewer frames'},
+        ])
+        expect([rendered.jobs, rendered.failure, rendered.asking]).toEqual([
+            {total: 3, done: 1, failed: ['slot-002']},
+            {message: 'clip slot-002: HIP out of memory', advice: 'Fewer frames'},
+            undefined,
         ])
     })
     test('a step title as a person reads it', () => {

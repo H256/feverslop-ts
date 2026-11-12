@@ -12,7 +12,7 @@ import {useProject} from '../project/session'
 import StoryProposal from './StoryProposal.vue'
 
 /** The book: a music video's story, changed here; a film's screenplay, read here. */
-const {project, api, start, busy} = useProject()
+const {project, api, start} = useProject()
 const ask = useAsk()
 const toasts = useToasts()
 const {data: book, loading, error, reload, refresh} = usePageData(signal => api.book(signal))
@@ -133,13 +133,13 @@ const drop = toasts.guard(async () => {
             <li v-for="note in book.scriptNotes" :key="note">{{ note }}</li>
           </ul>
           <p class="muted">The film follows the script as it is. Repair it here, or change the script in input/ and plan again.</p>
-          <button class="btn" :disabled="busy" @click="repair">Repair the script…</button>
+          <button class="btn" @click="repair">Repair the script…</button>
         </div>
         <div class="section"><textarea v-model="draft.text.value" class="book" rows="24" :aria-label="name" :readonly="!book.editable" /></div>
         <div v-if="book.editable" class="section btn-row">
           <button class="btn primary" :disabled="!draft.dirty.value" @click="save">Save the story</button>
-          <button class="btn" :disabled="busy" @click="writeAgain">Write it again</button>
-          <button class="btn" :disabled="busy" title="The same story with the cast as the Casting page has it now - a proposal next to this one" @click="adapt">
+          <button class="btn" @click="writeAgain">Write it again</button>
+          <button class="btn" title="The same story with the cast as the Casting page has it now - a proposal next to this one" @click="adapt">
             Tell it anew for the cast
           </button>
         </div>

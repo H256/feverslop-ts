@@ -1,4 +1,5 @@
 import {existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync} from 'node:fs'
+import {runEvent} from '../run-events.ts'
 import {basename, dirname, extname, join, relative} from 'node:path'
 import {log, styles} from '../log.ts'
 import {type InterpolationWorkflow, type PixelSize, clipSeed, type VideoWorkflowModule, type WorkflowResult} from '../../comfy/helpers.ts'
@@ -43,6 +44,8 @@ export async function retake(
     const file = `videos/${clip.id}.mp4`
     const video = join(r.projectDir, file)
     if (!existsSync(video)) throw new Error(`${clip.id} is not rendered yet - there is nothing to render part of`)
+    // what this run renders: the one part of one clip (#829)
+    runEvent({type: 'jobs', kind: 'clip', ids: [clip.id]})
     const info = await probeVideo(video)
     const fileFrames = framesOnGrid(info)
     const cuts = shotCuts(

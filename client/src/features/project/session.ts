@@ -2,7 +2,9 @@ import {computed, ref, shallowRef} from 'vue'
 import type {EditorProject, ProjectKind, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
 import {projectApi} from '../../api/project'
 import {projectRoot, rootsOf} from '../../api/urls'
+import type {Ask} from '../../services/ask'
 import type {RunDock} from '../../services/run'
+import type {Toasts} from '../../services/toasts'
 import {defineService} from '../../services/service'
 import type {Servers} from '../../services/servers'
 
@@ -10,7 +12,7 @@ import type {Servers} from '../../services/servers'
  * One project while its pages are open: its endpoints, its media roots, the snapshot of /api/project and its runs. Made by
  * ProjectLayout for one (kind, id); another project is another session.
  */
-export function createProjectSession(kind: ProjectKind, id: string, deps: {run: RunDock; servers: Servers}) {
+export function createProjectSession(kind: ProjectKind, id: string, deps: {run: RunDock; servers: Servers; ask?: Ask['ask']; toasts?: Toasts}) {
   const root = projectRoot({kind, id})
   const api = projectApi(root)
   const project = shallowRef<EditorProject>()
@@ -42,8 +44,27 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
    * an answer that comes after its pages went starts nothing in what is open by then (the run dock checks that).
    */
   const start = async (action: RunRequest) => {
-    if (deps.run.running()) throw new Error('a run is going on - wait for it, or stop it')
     const started = deps.run.starter()
+    if (deps.run.running()) {
+      // while a run goes on, this one can wait behind it (#837): a file in logs/, started by the workspace as the project is free
+      if (!deps.ask) throw new Error('a run is going on - wait for it, or stop it')
+      const yes = await deps.ask({
+        title: 'Start it after this run?',
+        lines: [
+          `A run is going on: ${deps.run.current.value?.command ?? ''}`,
+          'This one waits in the queue of the project and starts as soon as the project is free - also when the workspace was started again in between. It can be taken out in the run bar, or with bun run runs.',
+        ],
+        confirm: 'Put it in the queue',
+      })
+      if (!yes) return
+      const answer = await api.runOrQueue(action, deps.servers.take())
+      if ('run' in answer) started(answer.run, action)
+      else {
+        deps.toasts?.show(`Queued: ${answer.queued.command}`)
+        deps.run.readHistory()
+      }
+      return
+    }
     const {run} = await api.run(action, deps.servers.take())
     started(run, action)
   }
