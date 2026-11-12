@@ -25,7 +25,10 @@ const commands: Record<string, {args: string; description: string; json?: boolea
     },
     'film:init': {args: '[film-id]', description: 'Create a film project interactively.', banner: true},
     example: {args: '[--no-render]', description: 'Create an example project and optionally generate its song.'},
-    'replace-character': {args: '<project-id>', description: 'Replace a character interactively.'},
+    'replace-character': {
+        args: '<project-id> [--character=<id>] [--member=<n>] [--picture=<file>] [--description=vision|keep|<text>] [--render-sheet] [--dry-run]',
+        description: "Replace a character's picture and description - asked, or all given as options.",
+    },
     'film:replace-character': {args: '[film-id]', description: 'Replace a film character interactively.'},
     story: {
         args: '<project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<id>] | --take | --drop | --rename="Old Name=New Name"]',
@@ -77,7 +80,10 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         args: '<project-id> [--film] [--set=character:<id>=library:<asset>]...',
         description: 'Print casting.json and what the next plan run takes over, with the --redo it needs; change entries.',
     },
-    'import-asset': {args: '<project-id> [asset-id] [--from=project[:id]|library:id]', description: 'Import a character or location into a project.'},
+    'import-asset': {
+        args: '<project-id> [asset-id] [--from=project[:id]|library:id] [--description=source|vision|keep] [--dry-run]',
+        description: 'Import a character or location into a project - asked, or all given as options.',
+    },
     'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character or location to the shared library.'},
     'export-song': {
         args: '<project-id> [--as=song-id] [--name=name]',

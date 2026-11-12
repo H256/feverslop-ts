@@ -5,7 +5,8 @@ import {log} from '../lib/log.ts'
 // pipeline would otherwise consider stale (a sequence sheet's video/frames/composite, all built from the old
 // anchor image), lets you regenerate the description from the new image with a vision-capable LLM, and offers to
 // render the new sequence sheet right away.
-// usage: bun run replace-character <project-id>
+// usage: bun run replace-character <project-id> [--character=<id>] [--member=<n>] [--picture=<file>] [--description=vision|keep|<text>] [--render-sheet] [--dry-run]
+// With --character, --picture and --description given (and --member for a group) nothing is asked (#827). --dry-run says what it would do.
 import * as p from '@clack/prompts'
 import {existsSync} from 'node:fs'
 import {join} from 'node:path'
@@ -23,12 +24,17 @@ import {answer as wizardAnswer} from '../lib/wizard.ts'
 import {askDescription, clearSheetOfOldAnchor, installPicture, renderedClipsWith, replacedPictureFile} from '../lib/replace-character.ts'
 cli('replace-character')
 
-if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    log.error('This needs a terminal to ask in - usage: bun run replace-character <project-id>')
-    process.exit(1)
-}
+const usage =
+    'usage: bun run replace-character <project-id> [--character=<id>] [--member=<n>] [--picture=<file>] [--description=vision|keep|<text>] [--render-sheet] [--dry-run]'
+// in a terminal what is not given is asked; without one, what is missing is said (#827)
+const inTerminal = !!(process.stdin.isTTY && process.stdout.isTTY)
+const option = (name: string) => Bun.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
+const given = {character: option('character'), member: option('member'), picture: option('picture'), description: option('description')}
+const renderSheet = Bun.argv.includes('--render-sheet')
+const dryRun = Bun.argv.includes('--dry-run')
+const needs = (what: string): never => log.usageError(`No terminal to ask in - give ${what}`, usage)
 
-const [id] = Bun.argv.slice(2)
+const [id] = Bun.argv.slice(2).filter(a => !a.startsWith('--'))
 if (!id || !projectExists(id)) {
     log.error(`usage: bun run replace-character <project-id>${id ? `\nprojects/${id} does not exist` : ''}`)
     process.exit(1)
@@ -55,18 +61,28 @@ log.section(`feverslop-ts · replace character · ${id}`)
 const changes: string[] = []
 let sheetCleared = false
 
-const charId = answer(
-    await p.select({
-        message: 'Character to replace',
-        options: characters.map(c => ({value: c.id, label: `${c.name} ${styles.muted(`(${c.id})${c.isGroup ? ' · group' : ''}`)}`})),
-    }),
-)
+const charId = given.character
+    ? characters.some(c => c.id === given.character)
+        ? given.character
+        : log.usageError(`--character: no "${given.character}" in ${id} - ${characters.map(c => c.id).join(', ')}`, usage)
+    : !inTerminal
+      ? needs(`--character=<id> - ${characters.map(c => c.id).join(', ')}`)
+      : answer(
+            await p.select({
+                message: 'Character to replace',
+                options: characters.map(c => ({value: c.id, label: `${c.name} ${styles.muted(`(${c.id})${c.isGroup ? ' · group' : ''}`)}`})),
+            }),
+        )
 const char = characters.find(c => c.id === charId)! as Character
 
 const memberCounts = computeMemberCounts(data.beats ?? [], characters)
 const memberCount = memberCounts[char.id] ?? 1
 let member = 0
-if (memberCount > 1) {
+if (memberCount > 1 && given.member !== undefined) {
+    member = Number(given.member) - 1
+    if (!Number.isInteger(member) || member < 0 || member >= memberCount) log.usageError(`--member: 1 to ${memberCount}`, usage)
+} else if (memberCount > 1 && !inTerminal) needs(`--member=<1-${memberCount}>: ${char.name} is a group`)
+else if (memberCount > 1) {
     member = Number(
         answer(
             await p.select({
@@ -81,24 +97,49 @@ if (memberCount > 1) {
 }
 const assetId = memberCount > 1 ? groupMemberId(char.id, member) : char.id
 
-const imagePath = answer(
-    await p.text({
-        message: 'Path to the new reference image',
-        validate: value => {
-            if (!value) return 'required'
-            if (!existsSync(value)) return 'file not found'
-        },
-    }),
-)
-
+if (given.picture !== undefined && !existsSync(given.picture)) log.usageError(`--picture: no file ${given.picture}`, usage)
+if (!given.picture && !inTerminal) needs('--picture=<file>: the new reference picture')
+if (given.description === undefined && !inTerminal) needs('--description=vision|keep|<text>')
 const config = await loadProjectConfig(dir)
 const targetFile = replacedPictureFile(dir, assetId, config.sequenceSheets)
+// what it would do, nothing done
+if (dryRun) {
+    log.step('Replaces', `${targetFile} ${styles.muted(`- ${char.name}${memberCount > 1 ? `, member ${member + 1}` : ''}`)}`)
+    if (config.sequenceSheets)
+        log.step('Clears', styles.muted('the reference sheet built from the old picture - rendered again with --render=images or --render-sheet'))
+    log.step(
+        'Description',
+        given.description === undefined
+            ? styles.muted('asked')
+            : given.description === 'vision'
+              ? 'written from the new picture'
+              : given.description === 'keep'
+                ? 'kept'
+                : 'the one given',
+    )
+    const affected = await renderedClipsWith(dir, char.id)
+    if (affected.length) log.step('Not touched', `${affected.length} rendered clip(s) with ${char.name}: ${affected.join(', ')}`)
+    log.success('Dry run - nothing was changed')
+    process.exit(0)
+}
+const imagePath =
+    given.picture ??
+    answer(
+        await p.text({
+            message: 'Path to the new reference image',
+            validate: value => {
+                if (!value) return 'required'
+                if (!existsSync(value)) return 'file not found'
+            },
+        }),
+    )
+
 await installPicture(dir, assetId, targetFile, imagePath, changes)
 // everything downstream of the anchor was built from the OLD image and is now stale
 if (config.sequenceSheets) sheetCleared = clearSheetOfOldAnchor(dir, assetId, changes)
 
 const configureProjectLlm = async () => configureLlm((await loadSettings({projectModel: config.llm.model})).llm)
-const newDescription = await askDescription(targetFile, char, configureProjectLlm, answer)
+const newDescription = await askDescription(targetFile, char, configureProjectLlm, answer, given.description)
 
 if (newDescription) {
     if (memberCount > 1) {
@@ -145,7 +186,9 @@ if (affected.length) {
 }
 
 if (config.sequenceSheets) {
-    const renderNow = answer(await p.confirm({message: 'Render the new reference sheet now?', initialValue: true}))
+    const renderNow =
+        renderSheet ||
+        (inTerminal && given.description === undefined && answer(await p.confirm({message: 'Render the new reference sheet now?', initialValue: true})))
     if (renderNow) {
         const settings = await loadSettings({projectModel: config.llm.model})
         using renderer = new Renderer(id, dir, config, settings.comfy)
