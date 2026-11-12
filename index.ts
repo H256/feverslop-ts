@@ -7,6 +7,7 @@ import {parseArgs} from 'node:util'
 import {formatDuration, hideDetails, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {runEvent} from './lib/run-events.ts'
+import {projectStatus} from './lib/status.ts'
 import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
@@ -1927,6 +1928,11 @@ if (warned.size) {
         log.line(styles.warning(`   ${count > 1 ? `${count}× ` : ''}${message.length > 160 ? `${message.slice(0, 157)}…` : message}`))
 }
 log.step('Log', runLogFile() ?? '')
+// the next step, as bun run status says it - so that following only the "Next" lines leads to a video (#828)
+{
+    const {next} = await projectStatus(project.id).catch(() => ({next: undefined}))
+    if (next?.command) log.next(next.command)
+}
 
 /**
  * --dry-run: the steps the run would redo (by --redo, by changed inputs and settings, by gone stems, by changed lyrics

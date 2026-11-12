@@ -51,7 +51,7 @@ describe('init by options', () => {
             writeFileSync(join(cwd, 'lyrics.txt'), 'Verse 1\nRain on the glass\n')
             writeFileSync(join(cwd, 'song.mp3'), 'not really a song')
             const made = run(cwd, 'rain', '--song=song.mp3', '--lyrics=lyrics.txt', '--story-idea=A walk at night', '--singers=auto', '--language=de')
-            expect(made.out).toContain('bun index.ts rain')
+            expect(made.out).toContain('bun run plan rain')
             expect(made.code).toBe(0)
             const dir = join(cwd, 'projects', 'rain')
             expect(existsSync(join(dir, 'input', 'song.mp3'))).toBe(true)

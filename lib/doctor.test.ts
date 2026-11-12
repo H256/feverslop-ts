@@ -3,6 +3,7 @@ import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {doctor, firstFix, type Probes} from './doctor.ts'
+import {workflowNeeds} from './workflow-needs.ts'
 
 // #828: what the machine has and what to do about what it lacks. The servers and the PATH are stood in for: no server is asked.
 const dir = mkdtempSync(join(tmpdir(), 'doctor-'))
@@ -22,12 +23,20 @@ afterAll(() => {
     rmSync(dir, {recursive: true, force: true})
 })
 
+// a server that has every node and model the default workflows name: its /object_info, as ComfyUI gives it
+const everything = (() => {
+    const names = ['kroma-image', 'h3-sequence-to-sheet', 'h3-ref2video', 'h3-ref2video-film'].map(workflowNeeds)
+    const info: Record<string, unknown> = Object.fromEntries(names.flatMap(n => n.nodes).map(node => [node, {input: {required: {}}}]))
+    info.Loader = {input: {required: {file: [names.flatMap(n => n.models.map(m => `some/folder/${m}`))]}}}
+    return info
+})()
 const there: Probes = {
     models: async () => ['a-model'],
     pictures: async () => true,
     comfy: async () => ({device: 'cuda:0 Some GPU', freeGb: 24}),
     onPath: () => true,
     freeGb: () => 500,
+    objectInfo: async () => everything,
 }
 const state = (checks: Awaited<ReturnType<typeof doctor>>) => Object.fromEntries(checks.map(check => [check.what, check.state]))
 
@@ -88,6 +97,23 @@ describe('doctor', () => {
         settings({llm: {url: 'http://llm/v1'}})
         const several = await doctor({...there, models: async () => ['a', 'b']})
         expect(several.find(c => c.what === 'LLM model')?.found).toContain('several models and none chosen')
+    })
+
+    // #828: what a workflow needs on the server is found before a run, not minutes into it
+    test('a node or a model file a default workflow names and the server lacks: missing, with what to do', async () => {
+        settings({llm: {url: 'http://llm/v1'}, comfy: [{url: 'http://gpu:8188', name: 'gpu'}]})
+        const lacking = {...everything}
+        delete lacking.MiniMaxH3AddGuide
+        const files = (lacking.Loader as {input: {required: {file: [string[]]}}}).input.required.file[0]
+        lacking.Loader = {input: {required: {file: [files.filter(f => !f.endsWith('qwen_image_vae.safetensors'))]}}}
+        const checks = await doctor({...there, objectInfo: async () => lacking})
+        const image = checks.find(c => c.what === 'Workflow kroma-image')!
+        expect(image).toMatchObject({state: 'missing', found: 'models not there: qwen_image_vae.safetensors'})
+        expect(image.fix).toContain('the same relative path')
+        expect(checks.filter(c => c.what.startsWith('Workflow') && c.found.includes('MiniMaxH3AddGuide')).length).toBeGreaterThan(0)
+        // the node list not readable: a note, not a fault
+        const unread = await doctor({...there, objectInfo: async () => Promise.reject(new Error('timeout'))})
+        expect(unread.find(c => c.what === 'Workflows')?.state).toBe('note')
     })
 
     test('a model that takes no pictures is a note with what it is needed for', async () => {

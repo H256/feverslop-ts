@@ -2,6 +2,10 @@ import {existsSync, statfsSync} from 'node:fs'
 import {libraryDir} from './library.ts'
 import {listModels, takesPictures} from './llm.ts'
 import {loadSettings, probeComfy, type Settings, settingsPath} from './settings.ts'
+import {defaults} from './config.ts'
+import {filmDefaults} from './film/config.ts'
+import {missingOn, serverOffers, workflowNeeds} from './workflow-needs.ts'
+import {fetchNodeList} from '../comfy/node-list.ts'
 
 // What this machine has of what a video needs, and what to do about what it lacks (#828). Read only: asks the servers whether they
 // are there, looks for the programs on the PATH, renders and writes nothing. For `bun run doctor` and, as JSON, the workspace.
@@ -24,6 +28,8 @@ export type Probes = {
     comfy: (server: Settings['comfy'][number]) => Promise<{device?: string; freeGb?: number}>
     onPath: (program: string) => boolean
     freeGb: (dir: string) => number | undefined
+    // the nodes and the files a server offers: its /object_info
+    objectInfo: (server: Settings['comfy'][number]) => Promise<Record<string, unknown>>
 }
 
 const gb = (bytes: number) => Math.round((bytes / 1024 ** 3) * 10) / 10
@@ -36,6 +42,7 @@ export const realProbes: Probes = {
         return {device: device?.name, freeGb: device ? gb(device.vram_free) : undefined}
     },
     onPath: program => Bun.which(program) !== null,
+    objectInfo: server => fetchNodeList(server),
     freeGb: dir => {
         try {
             const stats = statfsSync(dir)
@@ -47,6 +54,36 @@ export const realProbes: Probes = {
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/**
+ * The nodes and model files the default workflows name, on the first server that answers (#828) - found before a run needs them, not
+ * minutes into it. All servers are to have the same, so one is asked.
+ */
+async function workflowChecks(settings: Settings, probes: Probes, ready: Settings['comfy']): Promise<Check[]> {
+    const server = ready[0]
+    if (!server) return []
+    let offers
+    try {
+        offers = serverOffers(await probes.objectInfo(server))
+    } catch (e) {
+        return [{what: 'Workflows', state: 'note', found: `the node list of ${server.name} could not be read (${message(e)})`}]
+    }
+    const workflows = [...new Set([defaults.imageWorkflow, defaults.sequenceWorkflow, defaults.videoWorkflow, filmDefaults.videoWorkflow])]
+    return workflows.map(name => {
+        const {nodes, models} = missingOn(workflowNeeds(name), offers)
+        if (!nodes.length && !models.length) return {what: `Workflow ${name}`, state: 'ready', found: `its nodes and models are on ${server.name}`} as Check
+        return {
+            what: `Workflow ${name}`,
+            state: 'missing',
+            found: [nodes.length && `nodes not on ${server.name}: ${nodes.join(', ')}`, models.length && `models not there: ${models.join(', ')}`]
+                .filter(Boolean)
+                .join(' · '),
+            fix: nodes.length
+                ? 'install the custom nodes these come with (ComfyUI Manager), then restart ComfyUI'
+                : "put the files into ComfyUI's models/ folders - the same relative path on every server (docs/comfyui.md)",
+        } as Check
+    })
+}
 
 async function llmChecks(settings: Settings, probes: Probes): Promise<Check[]> {
     const {url, apiKey, model, vision} = settings.llm
@@ -146,12 +183,15 @@ export async function doctor(probes: Probes = realProbes): Promise<Check[]> {
     const library = await libraryDir()
     const free = probes.freeGb('.')
     const [llm, comfy] = await Promise.all([llmChecks(settings, probes), comfyChecks(settings, probes)])
+    const ready = settings.comfy.filter(server => comfy.some(check => check.what === `ComfyUI ${server.name}` && check.state === 'ready'))
+    const workflows = await workflowChecks(settings, probes, ready)
     return [
         existsSync(file)
             ? {what: 'Settings file', state: 'ready', found: file}
             : {what: 'Settings file', state: 'note', found: `none yet (${file}) - the defaults and the environment count`, fix: 'bun run setup'},
         ...llm,
         ...comfy,
+        ...workflows,
         ...programChecks(probes),
         existsSync(library)
             ? {what: 'Library', state: 'ready', found: library}
