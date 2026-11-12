@@ -33,6 +33,7 @@ export type ProjectListing = {
     pictures: number
     changed: number
     final: FinalState
+    newest?: string // the newest finished video of the project, a step of the post-work or a refinished one among them (#832)
     thumb?: Media
     stage?: PlanStage // a project without clips yet: how far its plan is
     lastRun?: LastRun

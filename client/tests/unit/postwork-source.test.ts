@@ -37,3 +37,20 @@ describe('the video the post-work steps start from', () => {
     expect(defaultSource(id, [])).toBeUndefined()
   })
 })
+
+// #832: a step is made when any video of the project went through it - the newest such video is named
+test('what a post-work step has made, from whichever video it started', async () => {
+  const {madeByAny} = await import('../../src/features/postwork/forms')
+  const final = (file: string, v: number, more = {}) => ({file, v, label: file, state: 'current' as const, preview: false, ...more})
+  const finals = [
+    final('demo--original-48fps-finished.mp4', 1),
+    final('demo--original-48fps-finished-labeled.mp4', 2, {postwork: true}),
+    final('demo--original-48fps-finished-labeled-credits.mp4', 3, {postwork: true}),
+    final('demo-finished-labeled.mp4', 4, {postwork: true}),
+    final('demo-preview-labeled.mp4', 9, {preview: true}),
+  ]
+  expect(madeByAny('label', finals)?.file).toBe('demo-finished-labeled.mp4')
+  expect(madeByAny('credits', finals)?.file).toBe('demo--original-48fps-finished-labeled-credits.mp4')
+  expect(madeByAny('intro', finals)).toBeUndefined()
+  expect(madeByAny('description', [...finals, final('demo-x-intro.mp4', 5, {youtube: 'text'})])?.file).toBe('demo-x-intro.mp4')
+})

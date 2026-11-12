@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, reactive, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
 import type {EditorFinal} from '../../../../shared/workspace'
 import PageBar from '../../components/PageBar.vue'
 import {mediaUrl} from '../../api/urls'
@@ -14,13 +15,13 @@ import {
   descriptionRequest,
   introRequest,
   labelRequest,
+  madeByAny,
   newCredits,
   newDescription,
   newIntro,
   newLabel,
-  outputOf,
-  STEPS,
   type Step,
+  STEPS,
 } from './forms'
 import IntroForm from './IntroForm.vue'
 import LabelForm from './LabelForm.vue'
@@ -94,14 +95,8 @@ const STEP_INFO: Record<Step, {title: string; what: string; confirm: string; lin
   },
 }
 
-const byFile = (file: string) => finals.value.find(f => f.file === file)
-/** What a step has made from what it starts from now, if it ran. */
-const madeBy = (step: Step): EditorFinal | undefined => {
-  const from = drafts[step].from
-  if (!from) return undefined
-  if (step === 'description') return byFile(from)?.youtube !== undefined ? byFile(from) : undefined
-  return byFile(outputOf(from, step))
-}
+/** The newest video a step made, from whichever video it started (#832): made once any video of the project went through it. */
+const madeBy = (step: Step): EditorFinal | undefined => madeByAny(step, finals.value)
 // the first step not made yet is open
 const open = ref<Step | ''>(STEPS.find(step => !madeBy(step)) ?? 'label')
 
@@ -125,7 +120,9 @@ const run = toasts.guard(async (step: Step) => {
 
 // the videos the steps made, and any video with a YouTube text: one chosen plays, when you play it
 const made = computed(() => finals.value.filter(f => f.postwork || f.youtube !== undefined))
-const chosen = ref('')
+// the start page's card links the newest finished video here (?play=): chosen, played on a click only (#832)
+const route = useRoute()
+const chosen = ref(typeof route.query.play === 'string' ? route.query.play : '')
 const selected = computed(() => made.value.find(f => f.file === chosen.value) ?? made.value.at(-1))
 watch(
   () => made.value.length,

@@ -684,9 +684,17 @@ export function readListing({id, dir, kind}: EditorTarget): EditorListing {
         ),
         lastRun: lastRunOf(dir),
         changed: Math.round(statSync(existsSync(project) ? project : dir).mtimeMs),
+        ...newestFinal(dir, id),
         thumb,
         ...(stage ? {stage} : {}),
     }
+}
+
+/** The newest finished video of a project (#832): any <id>….mp4 next to project.json but a preview - the video to show for it. */
+function newestFinal(dir: string, id: string): {newest?: string} {
+    const finals = readdirSync(dir).filter(f => f.startsWith(id) && f.endsWith('.mp4') && !/preview/.test(f))
+    const newest = finals.map(f => [f, statSync(join(dir, f)).mtimeMs] as const).sort((a, b) => b[1] - a[1])[0]?.[0]
+    return newest ? {newest} : {}
 }
 
 /** What the waveform lane shows: the song, or for a film the finished video - none before that. */

@@ -584,6 +584,17 @@ describe('the start page', () => {
             thumb: {file: 'assets/clips/slot-001_ff.png'},
         })
     })
+    // #832: the newest finished video names the project's video on its card - a refinished or post-work one too, never a preview
+    test('the newest finished video of a project', () => {
+        const project = target('newest')
+        write(join(project.dir, 'output/clips/slot-001.json'), {id: 'slot-001'})
+        expect(readListing(project).newest).toBeUndefined()
+        write(join(project.dir, 'newest--original.mp4'))
+        write(join(project.dir, 'newest--original-finished-labeled.mp4'))
+        write(join(project.dir, 'newest-preview.mp4'))
+        utimesSync(join(project.dir, 'newest--original.mp4'), old, old)
+        expect(readListing(project).newest).toBe('newest--original-finished-labeled.mp4')
+    })
     test('takes of one thing fold together, from their ids alone', () => {
         const same = (...ids: string[]) => expect(new Set(ids.map(projectGroup)).size).toBe(1)
         same('schwarzer-flur-261026', 'schwarzer-flur-261026-sing', 'schwarzer-flur-261026-sing-c', 'schwarzer-flur-261028', 'schwarzer-flur-261026-b')
