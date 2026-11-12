@@ -16,6 +16,7 @@ import {usePageData} from '../project/usePageData'
 import CastEditor from './CastEditor.vue'
 import CastingRoleRow from './CastingRoleRow.vue'
 import NewFilmRoles from './NewFilmRoles.vue'
+import ReplacePicture from './ReplacePicture.vue'
 import TakeAsset from './TakeAsset.vue'
 import {castDraft, newMember, type CastDraft} from './forms'
 
@@ -91,6 +92,23 @@ const takeFrom = toasts.guard(async (role: CastingRole) => {
   if (!yes) return
   const [project, from] = draft.choice.split('/')
   await start({type: 'import-asset', asset: role.id, project: project!, from: from!, description: draft.description})
+})
+/** A picture of one's own for a character, in what is planned (#835): `bun run replace-character`, its dry run shown first. */
+const replaceIn = toasts.guard(async (role: CastingRole) => {
+  const draft = reactive({picture: '', describe: 'vision' as 'vision' | 'keep' | 'text', text: '', renderSheet: false})
+  const description = () => (draft.describe === 'text' ? draft.text.trim() : draft.describe)
+  const yes = await ask({
+    title: `Replace the picture of ${role.name}?`,
+    lines: ['The picture is put in, the reference sheet made from the old one goes. Clips already rendered stay as they are.'],
+    body: () => h(ReplacePicture, {draft, dryRun: asked => api.replaceDryRun({character: role.id, ...asked})}),
+    confirm: 'Replace it',
+    submit: async () => {
+      if (!draft.picture.trim()) throw new Error('The picture: the path of a file on this machine.')
+      if (!description()) throw new Error('The description, or another choice.')
+    },
+  })
+  if (!yes) return
+  await start({type: 'replace-character', character: role.id, picture: draft.picture.trim(), description: description(), renderSheet: draft.renderSheet})
 })
 const chooseGuarded = (role: CastingRole, value: string, select: HTMLSelectElement) => {
   choose(role, value, select).catch(toasts.fail)
@@ -367,6 +385,7 @@ const saveCast = toasts.guard(async () => {
               @choose="(value, select) => chooseGuarded(role, value, select)"
               @remove="remove(role)"
               @take="takeFrom(role)"
+              @replace="replaceIn(role)"
               @put-back="keep(role)"
             />
           </div>

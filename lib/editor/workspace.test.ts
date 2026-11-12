@@ -288,6 +288,16 @@ describe('what can be started', () => {
             '--describe-picture',
         ])
         expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
+        // a character's picture replaced in what is planned (#835): the command of the kind, with its options
+        expect(runCommand(music, {type: 'replace-character', character: 'ann', picture: ' D:/p/ann.png ', description: 'vision', renderSheet: true})).toEqual({
+            script: 'tools/replace-character.ts',
+            args: ['demo', '--character=ann', '--picture=D:/p/ann.png', '--description=vision', '--render-sheet'],
+        })
+        expect(runCommand(film, {type: 'replace-character', character: 'ann', picture: 'a.png', description: 'keep'}).script).toBe(
+            'tools/film-replace-character.ts',
+        )
+        expect(() => runCommand(music, {type: 'replace-character', character: '../x', picture: 'a.png', description: 'keep'})).toThrow('no such character')
+        expect(() => runCommand(music, {type: 'replace-character', character: 'ann', picture: '', description: 'keep'})).toThrow('picture: one line')
         // a finished asset of another music video taken over (#835)
         expect(runCommand(music, {type: 'import-asset', asset: 'ann', project: 'older', from: 'ann-2', description: 'source'})).toEqual({
             script: 'tools/import-asset.ts',

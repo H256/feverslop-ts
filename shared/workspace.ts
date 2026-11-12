@@ -536,6 +536,8 @@ export type RunRequest =
     | {type: 'check-joins'} // a film: the cuts within a scene, read by a model that sees pictures (#836)
     | {type: 'export'; formats: string[]} // a music video's timeline for a video editor: --export=mlt,openshot (#836)
     | {type: 'export-asset'; asset: string; as?: string}
+    // a character's picture replaced in what is planned (#835): bun run replace-character | film:replace-character with its options
+    | {type: 'replace-character'; character: string; picture: string; description: string; renderSheet?: boolean}
     // a finished character or place of another music video taken over (#835): bun run import-asset <id> <asset> --from=<project>:<asset>
     | {type: 'import-asset'; asset: string; project: string; from: string; description: 'source' | 'vision' | 'keep'}
     | {type: 'export-song'; as?: string; name?: string}

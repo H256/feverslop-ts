@@ -5,7 +5,8 @@
 //        bun run library describe <character|location> <id> <text>
 //        bun run library remove <character|location|song> <id>
 import {cli} from '../lib/cli.ts'
-import {describeEntry, LIBRARY_KINDS, type LibraryKind, type LibraryUse, listLibrary, removeEntry, renameEntry} from '../lib/library-admin.ts'
+import {LIBRARY_KINDS, type LibraryKind, type LibraryUse, listLibrary} from '../lib/library-admin.ts'
+import {changeLibrary} from '../lib/editor/library.ts'
 import {libraryDir} from '../lib/library.ts'
 import {log, styles} from '../lib/log.ts'
 cli('library')
@@ -54,15 +55,16 @@ const entryKind = kind as LibraryKind
 try {
     if (action === 'rename') {
         if (!words.length) log.usageError('the new name after the id', usage)
-        const {from, to} = renameEntry(dir, entryKind, id!, words.join(' '))
+        // the same function as the Library page's change (#835): one place for what a change does
+        const {from, to} = (await changeLibrary({action: 'rename', kind: entryKind, id: id!, name: words.join(' ')})).renamed!
         log.success(`${kind} "${id}": ${from} is now ${to}. Its id stays - the projects name it by that.`)
     } else if (action === 'describe') {
         if (entryKind === 'song') log.usageError('a song has no description - rename it instead', usage)
         if (!words.length) log.usageError('the new description after the id', usage)
-        await describeEntry(dir, entryKind as 'character' | 'location', id!, words.join(' '))
+        await changeLibrary({action: 'describe', kind: entryKind as 'character' | 'location', id: id!, description: words.join(' ')})
         log.success(`${kind} "${id}" is described anew. A project that took it keeps its copy until it takes it again.`)
     } else {
-        const to = removeEntry(dir, entryKind, id!)
+        const to = (await changeLibrary({action: 'remove', kind: entryKind, id: id!})).putAway!
         log.success(`${kind} "${id}" is out of the library - put away, not deleted: ${to}`)
         log.output(to)
     }

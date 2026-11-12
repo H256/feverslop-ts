@@ -12,7 +12,7 @@ import {useProject} from '../project/session'
  * the cast can shrink the role can be taken out - marked here (`out`), and saved by the page with whatever else is taken out.
  */
 const props = defineProps<{role: CastingRole; options: string[]; removable: boolean; out?: boolean}>()
-const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement]; remove: []; putBack: []; take: []}>()
+const emit = defineEmits<{choose: [value: string, select: HTMLSelectElement]; remove: []; putBack: []; take: []; replace: []}>()
 const {roots, project} = useProject()
 const viewer = useViewer()
 const own = computed(() => `project:${props.role.id}`)
@@ -63,6 +63,15 @@ const about = computed(() => (props.role.kind === 'character' ? props.role.role 
           @click="emit('take')"
         >
           From another project…
+        </button>
+        <button
+          v-if="role.kind === 'character'"
+          class="btn"
+          :aria-label="`Replace the picture of ${role.name}`"
+          title="A picture of your own for this character, in what is planned: bun run replace-character - what it would do is shown first"
+          @click="emit('replace')"
+        >
+          Replace in what is planned…
         </button>
         <button
           v-if="removable"

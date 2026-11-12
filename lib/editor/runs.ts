@@ -208,6 +208,25 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (kind !== 'film' || !PICTURE_ID.test(action.location) || !action.name?.trim() || !action.shows?.trim())
                 throw new Error('a further view is for a place of a film, with a name and what it shows')
             return {script: 'tools/add-view.ts', args: [id, action.location, `--name=${action.name.trim()}`, `--shows=${action.shows.trim()}`]}
+        case 'replace-character': {
+            if (!PICTURE_ID.test(action.character)) throw new Error(`no such character: ${action.character}`)
+            // the picture is a file on this machine - the page and the server are the same machine; one line each
+            for (const [name, value] of [
+                ['picture', action.picture],
+                ['description', action.description],
+            ] as const)
+                if (typeof value !== 'string' || !value.trim() || /[\n\r\0]/.test(value)) throw new Error(`${name}: one line of text`)
+            return {
+                script: kind === 'film' ? 'tools/film-replace-character.ts' : 'tools/replace-character.ts',
+                args: [
+                    id,
+                    `--character=${action.character}`,
+                    `--picture=${action.picture.trim()}`,
+                    `--description=${action.description.trim()}`,
+                    ...(action.renderSheet ? ['--render-sheet'] : []),
+                ],
+            }
+        }
         case 'import-asset': {
             if (kind !== 'music') throw new Error('a film takes a character or place from the library on the Casting page')
             if (![action.asset, action.from].every(a => PICTURE_ID.test(a)) || !validProjectId(action.project) || action.project === id)
