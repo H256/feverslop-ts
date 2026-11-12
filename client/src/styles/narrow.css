@@ -1,0 +1,39 @@
+/* A narrow window and motion: after the rules they change, so that they win. */
+@media (max-width: 960px) {
+  body {
+    overflow: auto;
+  }
+  .app {
+    height: auto;
+  }
+  .work,
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stage {
+    aspect-ratio: 16/9;
+  }
+  .inspector {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 60vh;
+  }
+  .chips {
+    display: none;
+  }
+  .role-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+  .member-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tbtn,
+  .clip::after,
+  .theme label {
+    transition:
+      background-color 0.12s,
+      box-shadow 0.12s;
+  }
+}

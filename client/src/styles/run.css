@@ -1,0 +1,114 @@
+/* The run dock at the foot of every page: what goes on, how far, why it failed. */
+/* the run: what goes on, at the foot of every page */
+.rundock {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.runbar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 5px 12px;
+  min-width: 0;
+}
+/* how far a run is (#775) */
+.runprogress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.runprogress .run-track {
+  width: 180px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--raised);
+  overflow: hidden;
+}
+.runprogress .run-fill {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  border-radius: var(--radius-pill);
+  transition: width 0.4s;
+}
+/* why the run failed (#797): readable with the log folded, the whole text on hover */
+/* the warnings of a run that ended well (#829): a count, the first ones above the bar on a click */
+.rd-warnings {
+  position: relative;
+  flex: none;
+  color: var(--stale);
+}
+.rd-warnings summary {
+  cursor: pointer;
+}
+.rd-warnings ul {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 5;
+  width: min(560px, 80vw);
+  margin: 0 0 6px;
+  padding: 8px 10px 8px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  box-shadow: 0 4px 16px #0004;
+}
+.runreason {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+  font-size: var(--text-s);
+}
+.runstep {
+  flex: none;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--raised);
+  font-size: var(--text-s);
+  white-space: nowrap;
+}
+.runbar code {
+  font: var(--text-s) var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--ok);
+  flex: none;
+  animation: pulse 1.4s infinite;
+}
+.dot.done {
+  animation: none;
+  background: var(--muted);
+}
+.dot.failed {
+  animation: none;
+  background: var(--danger);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.runlog {
+  height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px 12px;
+  font: var(--text-s)/1.5 var(--mono);
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,52 @@
+/* The Vue shell (the page between the top bar and the run dock) and the settings of a project. */
+/* the Vue shell: the page between the top bar and the run dock scrolls by itself */
+#app {
+  height: 100%;
+}
+.page > .view {
+  height: 100%;
+  min-height: 0;
+}
+.timeline-view {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  height: 100%;
+  min-height: 0;
+}
+/* without the player the timeline sits at the top, and the room below stays free */
+.timeline-view.no-player {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.timeline-view.no-player .work {
+  display: none;
+}
+.detail .sheet-picture {
+  width: 100%;
+  display: block;
+  background: #000;
+  border-radius: var(--radius-m);
+  margin-bottom: 10px;
+  cursor: zoom-in;
+}
+
+/* the settings of a project */
+.setting {
+  padding: 8px 0 8px 10px;
+  border-left: 2px solid transparent;
+  max-width: 760px;
+}
+.setting.changed {
+  border-left-color: var(--accent);
+}
+.setting .field select,
+.setting .field input {
+  max-width: 360px;
+}
+.setting-note {
+  font-size: var(--text-s);
+  margin-top: 2px;
+}
+.setting-default {
+  white-space: nowrap;
+  margin-left: 6px;
+}

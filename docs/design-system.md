@@ -1,6 +1,6 @@
 # Design system of the workspace
 
-The workspace's tokens live in `:root` of `client/src/styles/workspace.css`. A stylesheet or a component's `<style>` uses them and no literal values: `client/tests/unit/design-tokens.test.ts` fails on a literal gap, radius or font size. Padding and margin are not checked yet. For them, prefer a step of the space scale too.
+The workspace's tokens live in `:root` of `client/src/styles/tokens.css`. A stylesheet or a component's `<style>` uses them and no literal values: `client/tests/unit/design-tokens.test.ts` fails on a literal gap, radius or font size. Padding and margin are not checked yet. For them, prefer a step of the space scale too.
 
 ## Scales
 
@@ -47,4 +47,39 @@ A disabled button is grey in every variant: `--raised` background, `--muted` tex
 | `.btn.mini` | small actions inside a row or a note: Use the default, Undo |
 | `.link` | a button that reads as a link: an id that jumps somewhere |
 
-Shared components (`Card`, `Tabs`, `Tag`, `Callout`, `FormRow`, `SplitLayout`) and one stylesheet per component follow page by page (#838).
+## Components
+
+Shared parts live in `client/src/components/`, each with its own scoped styles and a class prefix of its own (`ui-…`). A component's class name without a prefix would take the rules of the stylesheets below: `.card` is the project card, `.item` and `.list` belong to other pages.
+
+| Component | Use | Says |
+| --- | --- | --- |
+| `PanelCard` | a card of a page: Direction's groups and proposal, Look's whole-look card, Post-work's steps | `title`, `note` (two lines, the whole on hover), slots `head` and `foot`; `tone` = `accent` (to act on), `stale` (to decide), `quiet` (nothing to do); `bar` = `line`, `accent`, `ok`; `flush` for a card its content fills |
+| `TabBar` | tabs above a panel: the Direction side, the clip inspector | `tabs` (`id`, `label`, `count`), `v-model`; `inset` in a side panel |
+| `StateTag` | a small outlined word about a thing: edit, made, a name | `state` = `plain`, `ok`, `stale`, `bad`; muted without one |
+| `SegmentedControl` | a choice of one among few, as pressed buttons | `options`, `v-model` |
+
+A page says what a card or a tag is (its tone, its state), never how it is drawn: no page has card, tab or tag styles of its own.
+
+Still to come (#838): `Callout` for `.warn`, `.note` and `.warn.bad`, `FormRow`, `SplitLayout` and the button variants as a component.
+
+## Stylesheets
+
+`client/src/styles/workspace.css` only imports the parts, in the order of the cascade: a later file wins over an earlier one.
+
+| File | Holds |
+| --- | --- |
+| `tokens.css` | the tokens above, both themes |
+| `base.css` | html, body, headings, text |
+| `shell.css` | the top bar, its tabs and machine, the chips |
+| `controls.css` | buttons and fields |
+| `monitor.css` | the player and the clip inspector |
+| `timeline.css` | the timeline's toolbar, lanes, clips and marks |
+| `cards.css` | lists of cards: start page, library, references, casting |
+| `casting.css`, `singers.css`, `timing.css` | those pages |
+| `run.css` | the run dock |
+| `dialogs.css` | dialogs, viewer, compare, toasts, boot screen |
+| `narrow.css` | a narrow window and motion, after the rules they change |
+| `app.css` | the Vue shell and a project's settings |
+| `utilities.css` | the `u-` utilities and the legend's swatches |
+
+A new page's styles go into its component's scoped `<style>`, with a prefix; a rule several pages share goes into the file of its part.
