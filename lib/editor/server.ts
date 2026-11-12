@@ -55,7 +55,8 @@ import {readServers, urlsOfChoice} from './servers.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {readPictureJobs} from '../render-state.ts'
 import {clientStatic, requireClientBuild, type EditorOptions} from './static.ts'
-import {PROJECT_PAGES, type LibraryChange, type NewProject, type ProjectStatus} from '../../shared/workspace.ts'
+import {busy, invalid, kindOf, missing, STATUS_OF} from '../service-error.ts'
+import {PROJECT_PAGES, type LibraryChange, type NewProject, type ProjectStatus, type RunEvents} from '../../shared/workspace.ts'
 import {doctor} from '../doctor.ts'
 import {createProject} from './new-project.ts'
 import type {DirectionEdit, DirectionRule} from '../../shared/direction.ts'
@@ -169,9 +170,28 @@ function limiter(atOnce: number) {
 
 const json = (value: unknown, status = 200) => Response.json(value, {status, headers: {'Cache-Control': 'no-store'}})
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
-// a run can be writing a file just as it is read: the page keeps what it has and asks again
-const failure = (e: unknown) => json({error: message(e)}, 503)
-const refused = (e: unknown) => json({error: message(e)}, 409)
+/**
+ * A no, by its kind (#837): the page shows a mistake in the input at the form, a lock with the run that holds it, and an error of the
+ * workspace as one - with where it happened, to copy into a report. A run can be writing a file just as it is read: a read that fails
+ * otherwise is `unavailable`, and the page keeps what it has and asks again.
+ */
+export function answerOf(e: unknown, writing: boolean): Response {
+    const kind = kindOf(e, writing)
+    if (kind === 'failed') {
+        console.error(e)
+        const where =
+            e instanceof Error
+                ? e.stack
+                      ?.split('\n')
+                      .find(line => line.trim().startsWith('at '))
+                      ?.trim()
+                : undefined
+        return json({error: message(e), kind, where}, STATUS_OF[kind])
+    }
+    return json({error: message(e), kind}, STATUS_OF[kind])
+}
+const failure = (e: unknown) => answerOf(e, false)
+const refused = (e: unknown) => answerOf(e, true)
 const notFound = () => new Response('Not found', {status: 404})
 const stripColors = (text: string) => Bun.stripANSI(text)
 
@@ -281,10 +301,17 @@ export function runEvents(runs: RunControl, target: EditorTarget, request: Reque
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream({
         start(controller) {
-            const send = (event: string, data: unknown, id?: number) =>
-                controller.enqueue(new TextEncoder().encode(`${id === undefined ? '' : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+            // what one tick has to say goes out as one chunk
+            let said = ''
+            const send = (event: string, data: unknown, id?: number) => {
+                said += `${id === undefined ? '' : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+            }
             let wasRunning: boolean | undefined
+            // the events of the newest run (#829): from its start for a new connection or a new run, then what was added
+            let eventsFile: string | undefined | null = null
+            let eventsSent = 0
             const tick = () => {
+                said = ''
                 try {
                     const {lines, next} = runs.lines(target, after)
                     after = next
@@ -294,6 +321,17 @@ export function runEvents(runs: RunControl, target: EditorTarget, request: Reque
                         wasRunning = current?.running ?? false
                         send('state', current ?? null)
                     }
+                    const {file, events} = runs.events(target)
+                    if (file !== eventsFile) {
+                        // another run (or the first look): its events from the start, even none - the page drops what it had
+                        eventsFile = file
+                        send('events', {events, from: 0, next: events.length} satisfies RunEvents)
+                        eventsSent = events.length
+                    } else if (events.length > eventsSent) {
+                        send('events', {events: events.slice(eventsSent), from: eventsSent, next: events.length} satisfies RunEvents)
+                        eventsSent = events.length
+                    }
+                    if (said) controller.enqueue(new TextEncoder().encode(said))
                 } catch {
                     // a log being replaced, or the page gone: the next tick sees
                 }
@@ -421,7 +459,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             if (what === 'run') {
                 const {action: wanted, servers} = await body<{action: RunAction; servers?: string[]}>()
                 if (!wanted || (!RENDER_ACTIONS.has(wanted.type) && wanted.type !== 'pictures' && wanted.type !== 'direction'))
-                    return refused(new Error('no such action'))
+                    return refused(invalid('no such action'))
                 // a prompt or a picture comes in through its own route below, never as a path from the page
                 if (wanted.type === 'pictures') {
                     delete wanted.promptFile
@@ -445,7 +483,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                     rebuild?: boolean
                     servers?: string[]
                 }>()
-                if (asked.rebuild && runs.current(target)?.running) return refused(new Error('a run is going on - wait for it, or stop it'))
+                if (asked.rebuild && runs.current(target)?.running) return refused(busy('a run is going on'))
                 const rebuilt = async <V extends object>(view: V, when = true) =>
                     asked.rebuild && when ? {...view, run: runs.start(target, {type: 'plan'}, await urlsOfChoice(asked.servers))} : view
                 if (!id) return json(await setDirectionRules(target, {rules: asked.rules ?? []}))
@@ -467,7 +505,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             if (what === 'references' && id && action === 'rerender') {
                 const {newAnchor, prompt, servers} = await body<{newAnchor?: boolean; prompt?: string; servers?: string[]}>()
                 const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
-                if (!job) return refused(new Error(`no picture ${id}`))
+                if (!job) return refused(missing(`no picture ${id}`))
                 const urls = await urlsOfChoice(servers)
                 // the edited prompt as a file of its own, for this run only: it goes when the run has ended, or is not started
                 const folder = prompt !== undefined && prompt.trim() !== job.prompt.trim() ? mkdtempSync(join(tmpdir(), 'workspace-prompt-')) : undefined
@@ -482,15 +520,15 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                 checkUploadSize(request)
                 const form = await request.formData()
                 const job = (await readPictureJobs(picturesFile(target))).find(p => p.id === id)
-                if (!job) return refused(new Error(`no picture ${id}`))
-                if (job.kind === 'prop') return refused(new Error(`${job.name} is a prop: its picture is drawn from its description only`))
+                if (!job) return refused(missing(`no picture ${id}`))
+                if (job.kind === 'prop') return refused(invalid(`${job.name} is a prop: its picture is drawn from its description only`))
                 const library = (await readReferences(target)).find(r => r.id === id)?.library
-                if (library) return refused(new Error(`${job.name} is played by library:${library} - change it on the Casting page`))
+                if (library) return refused(invalid(`${job.name} is played by library:${library} - change it on the Casting page`))
                 const prompt = String(form.get('prompt') ?? '')
                 const description = String(form.get('description') ?? '').trim()
                 const describe = form.get('describe') === 'true'
-                if (prompt.length > 8000 || description.length > 8000) return refused(new Error('the prompt and the description are at most 8000 characters'))
-                if (description && describe) return refused(new Error('a description given by hand, or read from the picture - not both'))
+                if (prompt.length > 8000 || description.length > 8000) return refused(invalid('the prompt and the description are at most 8000 characters'))
+                if (description && describe) return refused(invalid('a description given by hand, or read from the picture - not both'))
                 const upload = await takePictureUpload(form.get('picture'))
                 try {
                     const promptFile = prompt.trim() && prompt.trim() !== job.prompt.trim() ? await upload.text('prompt', prompt) : undefined
@@ -530,7 +568,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             // what a change would do, asked before it is made - or the change itself
             if (what === 'config') {
                 const {change, dryRun} = await body<{change?: ConfigChange; dryRun?: boolean}>()
-                if (!change || typeof change !== 'object' || Array.isArray(change)) return refused(new Error('change must be an object like {"seed": 7}'))
+                if (!change || typeof change !== 'object' || Array.isArray(change)) return refused(invalid('change must be an object like {"seed": 7}'))
                 return json(dryRun ? await previewConfig(target, change) : await writeConfig(target, change))
             }
             if (what === 'timing') return json(await writeTiming(target, await body<TimingChange>()))
@@ -571,7 +609,7 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
             const kind = form.get('kind')
             const id = String(form.get('id') ?? '')
             if (!(picture instanceof File) || (kind !== 'character' && kind !== 'location') || !libraryIdPattern.test(id))
-                return refused(new Error('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes'))
+                return refused(invalid('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes'))
             // checked as every upload is, and kept for the run only (lib/editor/upload.ts)
             let upload: Awaited<ReturnType<typeof takePictureUpload>>
             try {

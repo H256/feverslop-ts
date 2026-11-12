@@ -32,7 +32,7 @@ import type {
   TimingResult,
   TimingView,
 } from '../../../shared/workspace'
-import {getJson, HttpError, postForm, postJson} from './http'
+import {errorOfAnswer, getJson, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
 
 const id = (value: string) => encodeURIComponent(value)
@@ -49,11 +49,11 @@ export function projectApi(root: string) {
       const response = await fetch(`${root}/api/project`, {signal})
       const text = await response.text()
       if (!response.ok) {
-        let said = `Request failed (${response.status})`
+        let body: unknown
         try {
-          said = (JSON.parse(text) as {error?: string}).error ?? said
+          body = JSON.parse(text)
         } catch {}
-        throw new HttpError(said, response.status)
+        throw errorOfAnswer(body, response.status)
       }
       return text
     },

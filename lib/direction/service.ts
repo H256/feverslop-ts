@@ -2,6 +2,7 @@ import {createHash, randomUUID} from 'node:crypto'
 import {existsSync, readFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {withProjectLock, lockHolder} from '../lock.ts'
+import {busy} from '../service-error.ts'
 import {writeJsonFile} from '../json-file.ts'
 import type {Project} from '../project.ts'
 import type {FilmProject} from '../film/types.ts'
@@ -75,7 +76,7 @@ function state(t: DirectionTarget): State {
 const save = (t: DirectionTarget, s: State) => writeJsonFile(file(t), s)
 const active = new Set<string>()
 async function locked<T>(t: DirectionTarget, fn: () => T | Promise<T>): Promise<T> {
-    if (active.has(t.dir) || lockHolder(t.dir)) throw Error('project is being worked on by another run')
+    if (active.has(t.dir) || lockHolder(t.dir)) throw busy('project is being worked on by another run')
     active.add(t.dir)
     try {
         return await withProjectLock(t.dir, `direction ${t.id}`, fn)

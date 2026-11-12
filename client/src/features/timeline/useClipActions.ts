@@ -1,5 +1,5 @@
 import {h, reactive} from 'vue'
-import type {BeatCastResult, EditorClip, EditorOverride, LastRun, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
+import type {BeatCastResult, EditorClip, EditorOverride, LastRun, RunInfo, RunRequest} from '../../../../shared/workspace'
 import BeatCastForm, {type BeatCastDraft} from './BeatCastForm.vue'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
@@ -70,7 +70,7 @@ export function useClipActions(timeline: Timeline) {
         'Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.',
       ],
       warnings: [
-        'Not proven yet: on a 32 GB Radeon the two-pass job ran out of memory, and one try took the server down (#157).',
+        "Not proven yet: a two-pass job for a part has run out of the server's memory before, and taken the server down once.",
         to >= seconds - 0.05 &&
           clip.next &&
           `This part reaches the end of the clip: ${chain(project.value, clip).join(', ')} go on from its last frame and are marked.`,
@@ -92,7 +92,7 @@ export function useClipActions(timeline: Timeline) {
         'From the clips it has: no plan run, no new prompts. videos/ and the final video stay as they are; the clips of a variant get a folder of their own, its final videos a name of their own.',
         picked.length ? `Only the ${plural(picked.length, 'marked clip')}: larger clips, no final video.` : 'All clips, and the final videos.',
       ],
-      warnings: ['Refine is slow, about 6 s per frame on the Radeon, and can change mouths a little: try a marked clip first, and compare.'],
+      warnings: ['Refine is slow - seconds per frame - and can change mouths a little: try a marked clip first, and compare.'],
       body: () => h(RefinishForm, {draft: form, finish, settings: `${session.root}/settings`}),
       confirm: 'Start',
       render: true,
@@ -148,24 +148,6 @@ export function useClipActions(timeline: Timeline) {
   async function repeatLast(last: LastRun) {
     const yes = await ask({title: 'Run this again?', lines: [last.command], confirm: 'Run it', render: true})
     if (yes) await start({type: 'repeat', command: last.command})
-  }
-  async function runNext(next: ProjectStatus['next']) {
-    if (!next.command || next.page) return
-    // a render of most of the video - after the shots were planned again every clip is stale (#782): said plainly before it starts
-    const clips = timeline.status.value?.clips
-    const many = clips && /--render=videos/.test(next.command) ? clips.missing + clips.stale : 0
-    const yes = await ask({
-      title: next.why,
-      lines: [next.command, next.estimate],
-      warnings: [
-        clips &&
-          many >= Math.max(10, clips.total / 2) &&
-          `This renders ${many} of the ${plural(clips.total, 'clip')}. After a new plan, look at the Direction page and render a few marked clips to check first.`,
-      ],
-      confirm: 'Run it',
-      render: true,
-    })
-    if (yes) await start({type: 'next', command: next.command})
   }
   /** The shots of these beats planned again with the planner as it is now (#762): the language model only, their clips go stale. */
   async function replanBeats(beatIds: string[]) {
@@ -280,7 +262,6 @@ export function useClipActions(timeline: Timeline) {
     saveOverride: guarded(saveOverride),
     addView: guarded(addView),
     repeatLast: guarded(repeatLast),
-    runNext: guarded(runNext),
     plain: guarded(plain),
     plan: guarded(plan),
     renderMarkedNow: renderMarked,

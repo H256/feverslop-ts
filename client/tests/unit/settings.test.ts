@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test'
 import type {ConfigImpact, SettingView} from '../../../shared/workspace'
-import {changesOf, costOf, groupsOf, labelOf, textOfValue, valueOfText} from '../../src/features/settings/settings'
+import {changesOf, costOf, fieldTextOf, groupsOf, labelOf, textOfValue, valueOfField, valueOfText} from '../../src/features/settings/settings'
 
 const setting = (key: string, value: unknown, more: Partial<SettingView> = {}): SettingView => ({
   key,
@@ -74,5 +74,17 @@ describe('the settings of a project', () => {
     expect(costOf(impact(['slot-001'], ['ann']))[0]).toBe(
       '1 of 9 rendered clips and 1 of 4 rendered pictures would be made from something else then: they are stale, and nothing is rendered on its own.',
     )
+  })
+  // #834: -1 is what the file keeps; the page says what it means
+  test('a value that means "not set by you" is an empty field with its meaning as the placeholder, and back', () => {
+    const steps = setting('videoSteps', -1, {control: 'number', auto: {value: -1, label: 'Workflow default'}})
+    expect(fieldTextOf(steps, -1)).toBe('')
+    expect(labelOf(steps, -1)).toBe('Workflow default')
+    expect(valueOfField(steps, '')).toBe(-1)
+    expect(valueOfField(steps, ' ')).toBe(-1)
+    expect(valueOfField(steps, '8')).toBe(8)
+    expect(fieldTextOf(steps, 8)).toBe('8')
+    // a setting without such a value keeps -1 as a number
+    expect(valueOfField(setting('contextFrames', 0), '-1')).toBe(-1)
   })
 })

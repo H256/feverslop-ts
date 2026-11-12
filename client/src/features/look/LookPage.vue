@@ -6,7 +6,6 @@ import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
 import {listSteps} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
-import StageBar from '../plan/StageBar.vue'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import LookElementCard from './LookElementCard.vue'
@@ -76,7 +75,6 @@ const saveLooks = toasts.guard(async () => {
 
 <template>
   <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
-    <StageBar />
     <ResourceState :loading="loading" :error="error" :loaded="!!look" @retry="reload" />
     <template v-if="look">
       <div v-if="look.lookBrief === undefined" class="empty">No look yet - plan it with the button above.</div>
@@ -126,12 +124,12 @@ const saveLooks = toasts.guard(async () => {
 .lk-whole {
   border: 1px solid var(--line);
   border-left: 3px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   padding: 12px 14px;
   margin: 12px 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .lk-whole.changed {
   border-left-color: var(--accent);
@@ -139,17 +137,17 @@ const saveLooks = toasts.guard(async () => {
 .lk-whole-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 .lk-whole-head h2,
 .lk-title {
-  font-size: 14px;
+  font-size: var(--text-l);
   font-weight: 600;
 }
 .lk-whole textarea {
   width: 100%;
-  font: 13px/1.5 var(--sans);
+  font: var(--text-m)/1.5 var(--sans);
   resize: vertical;
 }
 .lk-bar {
@@ -158,11 +156,11 @@ const saveLooks = toasts.guard(async () => {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 8px 12px;
   margin-bottom: 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-m);
   background: var(--bg);
 }
 .lk-title {
@@ -175,6 +173,6 @@ const saveLooks = toasts.guard(async () => {
 .lk-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(560px, 100%), 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 </style>
