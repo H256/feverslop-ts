@@ -31,8 +31,20 @@ export function parseSince(value: string, now = Date.now()) {
     throw new Error('--since: use a positive window such as 24h, 7d or 2w, or an ISO date/time with timezone')
 }
 
-type Usage = TokenSums & {complete: number; partial: number; missing: number}
-const emptyUsage = (): Usage => ({calls: 0, complete: 0, partial: 0, missing: 0, prompt: 0, completion: 0, reasoning: 0, cached: 0})
+/** instructions: their characters summed over the instructionCalls that said how long they were (#825) */
+type Usage = TokenSums & {complete: number; partial: number; missing: number; instructions: number; instructionCalls: number}
+const emptyUsage = (): Usage => ({
+    calls: 0,
+    complete: 0,
+    partial: 0,
+    missing: 0,
+    prompt: 0,
+    completion: 0,
+    reasoning: 0,
+    cached: 0,
+    instructions: 0,
+    instructionCalls: 0,
+})
 function addUsage(sum: Usage, t: Timing) {
     sum.calls++
     const input = validNumber(t.promptTokens),
@@ -44,6 +56,10 @@ function addUsage(sum: Usage, t: Timing) {
     if (output) sum.completion += t.completionTokens!
     if (validNumber(t.reasoningTokens)) sum.reasoning += t.reasoningTokens
     if (validNumber(t.cachedTokens)) sum.cached += t.cachedTokens
+    if (validNumber(t.instructionChars)) {
+        sum.instructions += t.instructionChars
+        sum.instructionCalls++
+    }
 }
 
 export function buildReport(source: Timing[], options: ReportOptions, prices: Record<string, Price> = {}) {

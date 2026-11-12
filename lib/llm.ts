@@ -3,7 +3,7 @@ import type {ResponseCreateParamsStreaming, ResponseStreamEvent} from 'openai/re
 import {currentStep, readTimings, recordTiming} from './timings.ts'
 import {nameService} from './service-error.ts'
 import {predictLlmSeconds} from './predict.ts'
-import {countWords, failRun, formatDuration, formatRate, log, startSpinner, styles, suffix} from './log.ts'
+import {countWords, failRun, formatDuration, formatRate, log, showsDetails, startSpinner, styles, suffix} from './log.ts'
 import type {VisionSettings} from './settings.ts'
 
 export type LlmSettings = {url?: string; apiKey?: string; model?: string; parallel?: number; vision?: VisionSettings}
@@ -449,6 +449,7 @@ function keepCall(
         ...(outcome ? {outcome, reason} : {}),
         ...(host ? {endpoint: host} : {}),
         ...(usage?.input_tokens !== undefined ? {promptTokens: usage.input_tokens} : {}),
+        ...(prompt.instructions ? {instructionChars: prompt.instructions.length} : {}),
         ...(usage?.output_tokens !== undefined ? {completionTokens: usage.output_tokens} : {}),
         ...(usage?.output_tokens_details?.reasoning_tokens !== undefined ? {reasoningTokens: usage.output_tokens_details.reasoning_tokens} : {}),
         ...(usage?.input_tokens_details?.cached_tokens !== undefined ? {cachedTokens: usage.input_tokens_details.cached_tokens} : {}),
@@ -506,6 +507,9 @@ export async function ask({instructions, input, maxTokens = 8192, reasoning = 'l
     // varies a lot from run to run, and a small quant can loop in its thinking - more room at the same effort only
     // lets it loop longer. So the second try already has the prompt rewritten (think briefly, then answer) with a low
     // reasoning effort, and the last try gets even more room.
+    // how much the model is told before the input (#825): with -v or --show=<step>, per call
+    if (showsDetails(currentStep() ?? ''))
+        log.line(`  ${of}instructions ${instructions.length.toLocaleString('en')} characters, input ${input.length.toLocaleString('en')}`)
     const retryLevel: ReasoningStrength = reasoning === 'none' ? 'none' : 'low'
     const attempts = [
         {limit: maxTokens, level: reasoning, note: ''},

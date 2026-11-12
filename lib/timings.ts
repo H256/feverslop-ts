@@ -41,6 +41,8 @@ export type Timing = {
     // LLM calls - only what the endpoint reported (usage), nothing estimated
     endpoint?: string
     promptTokens?: number
+    /** the length of the instructions (the system prompt) sent, in characters - counted, not estimated (#825) */
+    instructionChars?: number
     completionTokens?: number
     reasoningTokens?: number
     cachedTokens?: number
