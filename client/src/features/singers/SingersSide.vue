@@ -59,7 +59,7 @@ const add = (event: Event) => {
         <b>{{ draft.nameOf(id) }}</b> <kbd>{{ n + 1 }}</kbd>
         <div class="muted num">{{ plural(draft.lineCount(id), 'line') }}</div>
         <div v-if="characterOf(id)?.role" class="muted about" :title="characterOf(id)?.role">{{ characterOf(id)?.role }}</div>
-        <div v-if="!draft.lineCount(id)" class="muted" style="font-size: 12px">
+        <div v-if="!draft.lineCount(id)" class="muted" style="font-size: var(--text-s)">
           {{ view.singers.includes(id) ? 'Sings nothing now: no longer a singer once saved.' : 'Not saved: give them a line.' }}
         </div>
       </div>

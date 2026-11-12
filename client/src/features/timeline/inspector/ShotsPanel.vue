@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {RouterLink} from 'vue-router'
 import type {EditorClip} from '../../../../../shared/workspace'
+import {withNames} from '../../../lib/format'
 import {useTimeline} from '../context'
 
 /** The beat or scene of the clip, its shots, and what is sung or said in it. Who sings a line is changed on a page of its own. */
@@ -11,8 +12,8 @@ const {project, session, direct} = useTimeline()
 <template>
   <div v-if="clip.context.text || clip.context.staging" class="section">
     <h3>{{ clip.context.label }}</h3>
-    <p v-if="clip.context.text">{{ clip.context.text }}</p>
-    <p v-if="clip.context.staging" class="muted" style="margin-top: 4px">{{ clip.context.staging }}</p>
+    <p v-if="clip.context.text">{{ withNames(clip.context.text) }}</p>
+    <p v-if="clip.context.staging" class="muted" style="margin-top: 4px">{{ withNames(clip.context.staging) }}</p>
   </div>
   <div class="section">
     <h3>Shots</h3>
@@ -30,9 +31,9 @@ const {project, session, direct} = useTimeline()
         Direct this shot
       </button>
       <p class="how">{{ [shot.framing, shot.camera].filter(Boolean).join(' · ') }}</p>
-      <p v-if="shot.action">{{ shot.action }}</p>
+      <p v-if="shot.action">{{ withNames(shot.action) }}</p>
       <div v-for="person in shot.people" :key="person.name" class="person">
-        <b>{{ person.name }}</b> {{ person.text }}
+        <b>{{ person.name }}</b> {{ withNames(person.text) }}
       </div>
     </article>
   </div>

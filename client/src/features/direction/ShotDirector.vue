@@ -399,11 +399,11 @@ const diff = computed(() => {
 .head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-l);
 }
 .head .btn {
   align-self: center;
@@ -414,7 +414,7 @@ const diff = computed(() => {
 .about {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin-top: 10px;
   line-height: 1.45;
 }
@@ -423,7 +423,7 @@ const diff = computed(() => {
 }
 h3 {
   margin: 22px 0 8px;
-  font-size: 12px;
+  font-size: var(--text-s);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -437,25 +437,25 @@ h3 {
 }
 .sd-person {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   padding: 10px 12px;
   margin-bottom: 8px;
 }
 .sd-person header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .sd-person .who {
-  font-size: 14px;
+  font-size: var(--text-l);
   font-weight: 600;
   margin-right: 2px;
 }
 .sd-person dl {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 14px;
+  gap: var(--space-1) var(--space-4);
   margin: 10px 0 0;
   line-height: 1.4;
 }
@@ -467,7 +467,7 @@ h3 {
 }
 .idle {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 .out-mark {
   cursor: pointer;
@@ -486,7 +486,7 @@ h3 {
 .bring {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 10px 0 4px;
 }
 .bring > .btn-row {
@@ -509,7 +509,7 @@ h3 {
 .list .row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 7px 0;
   border-top: 1px solid var(--line);
   line-height: 1.4;
@@ -533,7 +533,7 @@ h3 {
 .instruction-for {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 12px;
 }
 .sr-only {
@@ -546,12 +546,12 @@ h3 {
 .instruction {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   margin-top: 12px;
 }
 .instruction span {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: baseline;
 }
 .instruction textarea {

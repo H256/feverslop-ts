@@ -220,3 +220,10 @@ test('an error reads by its kind', async () => {
   expect(errorText(errorOfAnswer({error: 'change must be an object', kind: 'invalid'}, 400))).toBe('change must be an object')
   expect(errorText(errorOfAnswer('not json', 502))).toBe('Request failed (502)')
 })
+
+// #834: the plan's {Name} tokens are shown as names; a brace that is not a token stays
+test('a text of the plan reads with names', async () => {
+  const {withNames} = await import('../../src/lib/format')
+  expect(withNames('{Elias} stops; {Suzie} and {Leanne} step in')).toBe('Elias stops; Suzie and Leanne step in')
+  expect(withNames('no tokens {')).toBe('no tokens {')
+})

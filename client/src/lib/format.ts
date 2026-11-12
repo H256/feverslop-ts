@@ -8,6 +8,8 @@ export function clock(seconds: number, precise = true) {
 }
 export const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 export const dateOf = (ms: number) => new Date(ms).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'})
+/** A text of the plan as the person reads it: the cast's {Name} tokens as names (#834). Edited, a text keeps its tokens. */
+export const withNames = (text: string) => text.replace(/\{([^{}\n]{1,80})\}/g, '$1')
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 /** The steps a change drops, in words. */
 export const listSteps = (steps: string[]) => steps.join(', ')
