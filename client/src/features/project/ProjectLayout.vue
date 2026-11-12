@@ -134,6 +134,11 @@ const stopOpening = watch(project, p => {
     padding: 0 7px;
   }
 }
+@media (max-width: 1200px) {
+  .top .tabs .pl-tab {
+    padding: 0 5px;
+  }
+}
 .ns-label {
   font-weight: 600;
 }

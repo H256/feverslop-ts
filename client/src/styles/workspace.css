@@ -216,6 +216,23 @@ p {
   gap: var(--space-half);
   flex: none;
 }
+/* the top bar keeps every tab of a project in a narrower window. In a project the crumbs are Projects only (Library and Stats
+   are a click away from there) and the title is shorter; at 1100 px the servers are their dots - their names in the title - and
+   the release goes. The tabs themselves move closer in ProjectLayout.vue */
+@media (max-width: 1700px) {
+  .crumbs.in-project .crumb-more {
+    display: none;
+  }
+  .top h1 {
+    max-width: 10vw;
+  }
+}
+@media (max-width: 1400px) {
+  .release,
+  .servers .srv-name {
+    display: none;
+  }
+}
 .release {
   flex: none;
   color: var(--muted);

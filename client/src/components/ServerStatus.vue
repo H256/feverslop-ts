@@ -12,7 +12,7 @@ const servers = useServers()
       :class="['server', {down: !server.reachable, busy: server.reachable && (server.running || server.pending)}]"
       :title="serverTitle(server)"
     >
-      <i />{{ serverLabel(server) }}
+      <i /><span class="srv-name">{{ serverLabel(server) }}</span>
     </span>
   </div>
 </template>
