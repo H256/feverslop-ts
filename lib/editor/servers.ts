@@ -43,7 +43,11 @@ let kept: {at: number; servers: Promise<EditorServer[]>} | undefined
 /** All servers of the settings. Many pages asking at once ask the servers once. */
 export async function readServers(): Promise<EditorServer[]> {
     if (kept && Date.now() - kept.at < KEPT_MS) return kept.servers
-    const servers = loadSettings().then(settings => Promise.all(settings.comfy.map(server => readServer(server))))
+    // none set up: the default address is tried all the same, and said to be no choice of the user's (#831)
+    const servers = loadSettings().then(async settings => {
+        const read = await Promise.all(settings.comfy.map(server => readServer(server)))
+        return settings.sources.comfy === 'default' ? read.map(server => ({...server, unset: true})) : read
+    })
     kept = {at: Date.now(), servers}
     return servers
 }

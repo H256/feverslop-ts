@@ -4,7 +4,7 @@ import {RouterLink} from 'vue-router'
 import type {ListingStatus, ProjectListing} from '../../../../shared/workspace'
 import {projectRoot, rootsOf} from '../../api/urls'
 import MediaThumb from '../../components/MediaThumb.vue'
-import {plural} from '../../lib/format'
+import {dateOf, plural} from '../../lib/format'
 import {stageName} from '../plan/stages'
 
 const props = defineProps<{project: ProjectListing, status?: ListingStatus, more: number}>()
@@ -25,7 +25,9 @@ const rendered = computed(() => props.project.clips ? props.project.rendered / p
       <MediaThumb :media="project.thumb" :roots="rootsOf(root)" :width="640" />
       <span class="body">
         <span class="name" :title="project.id">{{ project.title }}</span>
-        <span class="muted num">{{ project.rendered }} of {{ plural(project.clips, 'clip') }} rendered</span>
+        <span class="muted num"
+          >{{ project.rendered }} of {{ plural(project.clips, 'clip') }} rendered<template v-if="project.changed"> · changed {{ dateOf(project.changed) }}</template></span
+        >
         <span class="bar"><i :style="{width: `${rendered}%`}" /></span>
         <span class="row">
           <span class="chip">{{ project.kind === 'film' ? 'Film' : 'Music video' }}</span>
