@@ -33,3 +33,34 @@ test('without a terminal: what is missing is named; a dry run changes nothing', 
     expect(dry.code).toBe(0)
     expect(dry.out).toContain('Dry run - nothing was changed')
 })
+
+test('a film too: what is missing is named, a narrator has no picture, a dry run changes nothing', () => {
+    const film = (...args: string[]) => {
+        const result = Bun.spawnSync([process.execPath, join(import.meta.dir, '..', 'tools', 'film-replace-character.ts'), ...args], {
+            cwd: root,
+            env: {...process.env, NO_COLOR: '1', FEVERSLOP_SETTINGS: join(root, 'no-settings.json')},
+            stdin: 'ignore',
+            stdout: 'pipe',
+            stderr: 'pipe',
+        })
+        return {code: result.exitCode, out: result.stdout.toString() + result.stderr.toString()}
+    }
+    const dir = join(root, 'films', 'night')
+    mkdirSync(join(dir, 'input'), {recursive: true})
+    writeFileSync(join(dir, 'input', 'idea.txt'), 'a lighthouse')
+    const cast = {
+        characters: [
+            {id: 'ann', name: 'Ann', role: 'keeper', appearance: '', voice: '', aliases: []},
+            {id: 'voice', name: 'Voice', role: '', appearance: '', voice: '', aliases: [], voiceOnly: true},
+        ],
+        locations: [],
+    }
+    writeFileSync(join(dir, 'project.json'), JSON.stringify({cast}))
+    writeFileSync(join(root, 'new.png'), 'not really a picture')
+    expect(film('night').out).toContain('give --character=<id> - ann')
+    expect(film('night', '--character=voice').out).toContain('--character: no "voice" with a picture')
+    expect(film('night', '--character=ann', '--picture=new.png').out).toContain('give --description=vision|keep|<text>')
+    const dry = film('night', '--character=ann', '--picture=new.png', '--description=keep', '--dry-run')
+    expect(dry.code).toBe(0)
+    expect(dry.out).toContain('Dry run - nothing was changed')
+})

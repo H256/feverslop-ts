@@ -38,7 +38,10 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         args: '<project-id> [--character=<id>] [--member=<n>] [--picture=<file>] [--description=vision|keep|<text>] [--render-sheet] [--dry-run]',
         description: "Replace a character's picture and description - asked, or all given as options.",
     },
-    'film:replace-character': {args: '[film-id]', description: 'Replace a film character interactively.'},
+    'film:replace-character': {
+        args: '[film-id] [--character=<id>] [--picture=<file>] [--description=vision|keep|<text>] [--render-sheet] [--dry-run]',
+        description: "Replace a film character's picture and description - asked, or all given as options.",
+    },
     story: {
         args: '<project-id> [--film] [--out=story.txt | --set=story.txt | --adapt [--add="Name: role"] [--remove=<id>] | --take | --drop | --rename="Old Name=New Name"]',
         description:
