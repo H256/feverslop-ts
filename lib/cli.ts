@@ -17,7 +17,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Plan and render a film.',
         json: true,
     },
-    setup: {args: '[llm|llm-model|vision|comfy|show]', description: 'Configure servers, or show the effective settings.', banner: true},
+    setup: {
+        args: '[llm|llm-model|vision|comfy|show] [llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | comfy --add=URL [--name=] [--token=] | --remove=NAME | show --json]',
+        description: 'Configure servers - asked, or by options - or show the effective settings.',
+        banner: true,
+        json: true,
+    },
     init: {
         args: '[project-id] [--song=<file> | --idea=<text|file>] [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--language=en]',
         description: 'Create a music-video project: by questions, or - with --song or --idea - by options, asking nothing.',

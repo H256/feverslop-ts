@@ -2,11 +2,14 @@ import {cli} from '../lib/cli.ts'
 import {log} from '../lib/log.ts'
 // Sets up the LLM server, the ComfyUI servers and the transcription - writes the global settings file (see the README, section "Setup").
 // usage: bun run setup [llm | llm-model | vision | comfy | whisper | show]
+//        bun run setup llm --url= [--key=] [--model=] [--parallel=] · vision --url= [--key=] [--model=] | --off · comfy --add=URL [--name=] [--token=] | --remove=NAME · show --json
+//        (by options nothing is asked, #827)
 import * as p from '@clack/prompts'
 import {existsSync} from 'node:fs'
 import {listModels, takesPictures} from '../lib/llm.ts'
 import {styles} from '../lib/log.ts'
 import {answer as wizardAnswer} from '../lib/wizard.ts'
+import {changeSettings, givesSetup, SETUP_OPTIONS, type SetupOptions, settingsView} from '../lib/setup-options.ts'
 import {
     type ComfyEntry,
     type ComfyServer,
@@ -48,9 +51,44 @@ if (!(command in commands)) {
     process.exit(1)
 }
 
+// the effective settings as data, the keys masked: for a script and the workspace
+if (command === 'show' && Bun.argv.includes('--json')) {
+    log.json(await settingsView())
+    process.exit(0)
+}
 if (command === 'show') {
     await show()
     process.exit(0)
+}
+// by options, nothing asked (#827): a script, the workspace
+{
+    const option = (name: string) => Bun.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
+    const options: SetupOptions = {
+        ...(Object.fromEntries(SETUP_OPTIONS.flatMap(name => (option(name) === undefined ? [] : [[name, option(name)!]]))) as Record<string, string>),
+        ...(Bun.argv.includes('--off') ? {off: true} : {}),
+    }
+    if (givesSetup(options)) {
+        try {
+            const {file: next, said} = changeSettings(await readSettingsFile(), command, options)
+            await saveSettings(next)
+            for (const line of said) log.step('Saved', line)
+            // what the LLM server says to it - not a reason to refuse: it may be started later
+            if (command === 'llm' && next.llm?.url) {
+                const ids = await listModels(next.llm.url, next.llm.apiKey, 15_000).catch((e: Error) => e)
+                if (ids instanceof Error) log.warn(`${next.llm.url} does not answer (${ids.message}) - saved all the same`)
+                else if (next.llm.model && !ids.includes(next.llm.model))
+                    log.warn(`${next.llm.url} has no model "${next.llm.model}" - it has ${ids.join(', ') || 'none'}`)
+                else log.step('Server', `${ids.length} model(s)`)
+            }
+            log.output(settingsPath())
+            process.exit(0)
+        } catch (e) {
+            log.usageError(
+                (e as Error).message,
+                'usage: bun run setup llm --url= [--key=] [--model=] [--parallel=] | vision --url= [--model=] | --off | comfy --add=URL [--name=] [--token=] | --remove=NAME',
+            )
+        }
+    }
 }
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
     printWithoutTerminal()
@@ -453,7 +491,7 @@ function printWithoutTerminal() {
         llm: {url: 'http://localhost:8080/v1', apiKey: '…', model: '<model id>', vision: {url: 'http://localhost:8081/v1', model: '<vision model id>'}},
         comfy: [defaultComfy, {url: 'https://gpu2.lan:8188', name: 'gpu2', token: '…'}],
     }
-    log.info(`No terminal to ask in - set the values instead:
+    log.info(`No terminal to ask in - give the values as options (bun run setup llm --url=… --model=…, comfy --add=URL), or set them instead:
 
   env vars:   FEVERSLOP_LLM_URL=http://localhost:8080/v1
               FEVERSLOP_LLM_API_KEY=…
