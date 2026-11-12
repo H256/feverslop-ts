@@ -206,3 +206,41 @@ test('the stages a plan run makes, and a clock', () => {
   expect(clock(75.25)).toBe('1:15.3')
   expect(clock(75.25, false)).toBe('1:15')
 })
+
+// #829: the run dock reads the events of a run, never its log
+test('what the events of a run say: its step, warnings, failure - only of the run followed', async () => {
+  const {runSaid} = await import('../../src/services/run')
+  const said = runSaid(
+    [
+      {at: 1, type: 'failed', message: 'an older run'},
+      {at: 10, type: 'step', state: 'cached', name: 'story', title: '2 · Story'},
+      {at: 11, type: 'step', state: 'started', name: 'beats', title: '3 · Beats'},
+      {at: 12, type: 'warning', message: 'a beat without a place'},
+      {at: 13, type: 'step', state: 'done', name: 'beats', title: '3 · Beats'},
+      {at: 14, type: 'failed', message: 'EPERM', advice: 'Close the program that holds it.'},
+    ],
+    5,
+  )
+  expect(said).toEqual({step: '3 · Beats', warnings: ['a beat without a place'], failure: {message: 'EPERM', advice: 'Close the program that holds it.'}})
+})
+
+// #837: the kind of a no decides how it reads
+test('an error reads by its kind', async () => {
+  const {errorText} = await import('../../src/lib/format')
+  const {errorOfAnswer} = await import('../../src/api/http')
+  expect(errorText(errorOfAnswer({error: 'a run is going on here: bun index.ts', kind: 'busy'}, 423))).toBe(
+    'a run is going on here: bun index.ts. Wait for the run to end, or stop it in the run dock.',
+  )
+  const bug = errorText(errorOfAnswer({error: "Cannot read properties of undefined (reading 'x')", kind: 'failed', where: 'at plan (lib/plan.ts:12:3)'}, 500))
+  expect(bug.startsWith('An error of the workspace, not of what you did:')).toBe(true)
+  expect(bug.includes('lib/plan.ts:12:3')).toBe(true)
+  expect(errorText(errorOfAnswer({error: 'change must be an object', kind: 'invalid'}, 400))).toBe('change must be an object')
+  expect(errorText(errorOfAnswer('not json', 502))).toBe('Request failed (502)')
+})
+
+// #834: the plan's {Name} tokens are shown as names; a brace that is not a token stays
+test('a text of the plan reads with names', async () => {
+  const {withNames} = await import('../../src/lib/format')
+  expect(withNames('{Elias} stops; {Suzie} and {Leanne} step in')).toBe('Elias stops; Suzie and Leanne step in')
+  expect(withNames('no tokens {')).toBe('no tokens {')
+})

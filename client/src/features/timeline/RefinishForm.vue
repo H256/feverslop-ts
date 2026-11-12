@@ -37,7 +37,7 @@ const leave = () => current.value?.answer(false)
           <option v-for="[value, label] in FPS" :key="value" :value="value">{{ label }}</option>
         </select></FormField
       >
-      <label class="field" style="display: flex; gap: 8px"
+      <label class="field" style="display: flex; gap: var(--space-2)"
         ><input v-model="draft.finish" type="checkbox" /><span style="margin: 0">Grade and sharpen</span></label
       >
     </div>
@@ -51,6 +51,6 @@ const leave = () => current.value?.answer(false)
 <style scoped>
 .rf-finish {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 </style>

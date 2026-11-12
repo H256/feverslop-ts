@@ -70,7 +70,7 @@ export function useClipActions(timeline: Timeline) {
         'Only this part, between the frames around it. The whole clip is put away first and stays selectable. The final video is not assembled on its own.',
       ],
       warnings: [
-        'Not proven yet: on a 32 GB Radeon the two-pass job ran out of memory, and one try took the server down (#157).',
+        "Not proven yet: a two-pass job for a part has run out of the server's memory before, and taken the server down once.",
         to >= seconds - 0.05 &&
           clip.next &&
           `This part reaches the end of the clip: ${chain(project.value, clip).join(', ')} go on from its last frame and are marked.`,
@@ -92,7 +92,7 @@ export function useClipActions(timeline: Timeline) {
         'From the clips it has: no plan run, no new prompts. videos/ and the final video stay as they are; the clips of a variant get a folder of their own, its final videos a name of their own.',
         picked.length ? `Only the ${plural(picked.length, 'marked clip')}: larger clips, no final video.` : 'All clips, and the final videos.',
       ],
-      warnings: ['Refine is slow, about 6 s per frame on the Radeon, and can change mouths a little: try a marked clip first, and compare.'],
+      warnings: ['Refine is slow - seconds per frame - and can change mouths a little: try a marked clip first, and compare.'],
       body: () => h(RefinishForm, {draft: form, finish, settings: `${session.root}/settings`}),
       confirm: 'Start',
       render: true,

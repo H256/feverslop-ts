@@ -63,15 +63,15 @@ test('direction rules can be saved/read through the same API in music and film w
         expect(view.rules).toEqual(rules)
         expect(readFileSync(file, 'utf8')).toBe(before)
         expect((await request(kind, '/drop', {})).status).toBe(200)
-        expect((await request(kind, '/take', {})).status).toBe(409)
-        expect((await request(kind, '/restore', {version: '../../other'})).status).toBe(409)
+        expect((await request(kind, '/take', {})).status).toBe(400)
+        expect((await request(kind, '/restore', {version: '../../other'})).status).toBe(400)
     }
 })
 
 test('workspace direction writes respect the CLI project lock', async () => {
     const release = lockProject(join(root, 'projects', 'demo'), 'test')
     try {
-        expect((await request('music', '', {rules: []})).status).toBe(409)
+        expect((await request('music', '', {rules: []})).status).toBe(423)
     } finally {
         release()
     }
@@ -121,7 +121,7 @@ test('a change with rebuild starts the plan run in the same request, and is refu
     const file = join(dir, 'direction.json')
     const before = readFileSync(file, 'utf8')
     const refused = await post('/edits', {edits: [{id: 'e1', scope: {kind: 'global'}, size: 'close'}], rebuild: true})
-    expect(refused.status).toBe(409)
+    expect(refused.status).toBe(423)
     expect((await answer(refused)).error).toContain('a run is going on')
     expect(readFileSync(file, 'utf8')).toBe(before)
     expect(started.length).toBe(1)

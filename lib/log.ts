@@ -5,6 +5,7 @@ import {dirname} from 'node:path'
 import {format, stripVTControlCharacters, styleText} from 'node:util'
 import {noteRunError} from './run-record.ts'
 import {pruneRunLogs} from './log-retention.ts'
+import {keepEventsNextTo, runEvent} from './run-events.ts'
 
 type Format = Parameters<typeof styleText>[0]
 export const style = (format: Format) => (text: string) => (process.env.NO_COLOR !== undefined || !process.stdout.isTTY ? text : styleText(format, text))
@@ -205,6 +206,7 @@ export const log = {
     },
     cancel: (message: string) => {
         result.cancelled = true
+        runEvent({type: 'cancelled', message})
         print(`${styles.warning('⊘ Cancelled')} ${message}`, true, true)
     },
     section: (title: string) => {
@@ -225,6 +227,7 @@ export const log = {
     },
     warn: (message: string) => {
         warnings.push(message)
+        runEvent({type: 'warning', message: stripVTControlCharacters(message)})
         print(`${styles.warning('▸ Warning')} ${styles.warning(message)}`, true, true)
     },
     box: (title: string, content: string) => {
@@ -246,6 +249,7 @@ export const log = {
         noteRunError(message)
         // a failure in somebody else's words (a timeout, EPERM, a server's JSON) gets ours under it: what it means, what to do (#819)
         const advice = failureAdvice(message)
+        runEvent({type: 'failed', message: stripVTControlCharacters(message), advice})
         return errorBox(' ✗ FAILED ', [{text: message, style: styles.warning}, ...(advice ? [{text: `What to do: ${advice}`, style: styles.muted}] : [])])
     },
 }
@@ -436,7 +440,10 @@ export function keepLogIn(path: string) {
             return original(chunk, ...rest)
         }) as typeof stream.write
     }
-    process.on('exit', () => {
+    keepEventsNextTo(path)
+    process.on('exit', code => {
+        // a run that ended well says so with what it made; a failure said it already (log.fatal), a cancel too
+        if (code === 0 && !result.cancelled) runEvent({type: 'done', output: result.output, next: result.next, warnings: warnings.length})
         if (logFile) closeSync(logFile.fd)
     })
     return path

@@ -5,10 +5,10 @@ defineProps<{draft: {save: boolean; saveDefault: boolean}}>()
 
 <template>
   <div>
-    <label class="field" style="display: flex; gap: 8px"
+    <label class="field" style="display: flex; gap: var(--space-2)"
       ><input v-model="draft.save" type="checkbox" /><span style="margin: 0">Keep these settings for this project (config.json)</span></label
     >
-    <label class="field" style="display: flex; gap: 8px"
+    <label class="field" style="display: flex; gap: var(--space-2)"
       ><input v-model="draft.saveDefault" type="checkbox" /><span style="margin: 0">Keep them for every project (the settings file)</span></label
     >
   </div>

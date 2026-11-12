@@ -119,7 +119,7 @@ function change(next: Partial<ListFilter>, replace = false) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 12px;
 }
 .pp-first {
@@ -131,6 +131,6 @@ function change(next: Partial<ListFilter>, replace = false) {
   margin: 8px 0 0;
   padding-left: 20px;
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
 }
 </style>

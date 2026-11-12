@@ -43,7 +43,7 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       <span v-if="count.stale"><i style="background: var(--stale)" />{{ count.stale }} stale</span>
       <span v-if="count.pinned">{{ count.pinned }} pinned</span>
       <span v-if="count.marks"><i style="background: var(--danger)" />{{ plural(count.marks, 'mark') }}</span>
-      <span v-if="clips.some(c => c.startsFrom)"><i style="background: var(--accent); border-radius: 50%" />goes on</span>
+      <span v-if="clips.some(c => c.startsFrom)"><i style="background: var(--accent); border-radius: var(--radius-round)" />goes on</span>
     </div>
     <!-- the marked clips: render them, or plan their beats again (#774: grouped, coloured by what they do) -->
     <div v-if="marked.size" class="grp marked-grp">

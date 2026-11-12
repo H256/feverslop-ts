@@ -2346,7 +2346,6 @@ export const STYLES: FilmStyle[] = [
         // Reference only (not part of text): Film analogy: The Trip (1967), psychedelic optical imagery.
         text: 'Liquid-light imagery: translucent fluid color membranes, bubbling boundaries, saturated dye overlaps and evolving organic interference.',
     },
-
 ]
 
 /** Realistic looks: filmed live action. Everything else (animation, craft, painted, found media) is artistic. */
