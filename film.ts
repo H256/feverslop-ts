@@ -77,17 +77,18 @@ import {askFilmJson as askJson} from './lib/film/json.ts'
 import {filmBuiltOn, FILM_STEP_NAMES, FilmStore, type FilmStepName} from './lib/film/store.ts'
 import type {Brief, FilmMode, LocationView, Outline, SceneCoverage} from './lib/film/types.ts'
 import {ask, configureLlm} from './lib/llm.ts'
-import {keepLogIn, log, styles} from './lib/log.ts'
+import {jsonOutput, keepLogIn, log, styles} from './lib/log.ts'
+import type {DryRun} from './shared/workspace.ts'
 import {characterDescriptionPrompt, characterLookPrompt, locationDescriptionPrompt, locationLookPrompt, lookBriefPrompt} from './lib/prompts.ts'
 import {validProjectId} from './lib/project-setup.ts'
 
 import {loadSettings} from './lib/settings.ts'
 import {shuffledStyles, stylesById} from './lib/styles.ts'
 import {readInputFile} from './lib/inputs.ts'
-import {clipRequestsIn} from './lib/previous-output.ts'
+import {clipRequestsDir, clipRequestsIn, readRequests} from './lib/previous-output.ts'
 cli('film')
 
-const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
+const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run [--json]] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
 steps: ${FILM_STEP_NAMES.join(', ')}`
 const {values: args, positionals} = (() => {
     try {
@@ -117,6 +118,8 @@ const {values: args, positionals} = (() => {
                 // plan up to this stage and stop - the screenplay, the cast or the look (lib/stages.ts)
                 until: {type: 'string', default: ''},
                 'dry-run': {type: 'boolean', default: false},
+                // with --dry-run: what the run would do as data, for the workspace's question before a plan run (#836)
+                json: {type: 'boolean', default: false},
                 comfy: {type: 'string'},
                 'llm-url': {type: 'string'},
                 'llm-key': {type: 'string'},
@@ -161,6 +164,7 @@ if (args['picture-description'] && args['describe-picture'])
 if (args['picture-anchor'] && args.only.split(',').filter(Boolean).length !== 1) log.usageError('--picture-anchor goes with one picture in --only', usage)
 if (args.again && !args.only) log.usageError('--again needs --only=clip-005,... - say which clips are rendered again, every one is GPU time', usage)
 if (args.review && !(process.stdin.isTTY && process.stdout.isTTY)) log.usageError('--review asks in the terminal - run it in one', usage)
+if (args.json && !args['dry-run']) log.usageError('--json goes with --dry-run: what the run would do, as data', usage)
 if (args.review && args['dry-run']) log.usageError('--review and --dry-run do not go together: a dry run generates nothing to look at', usage)
 const until = (() => {
     try {
@@ -1063,7 +1067,7 @@ if (render.has('final') && args.preview) {
     )
 }
 
-/** --dry-run: what the run would redo and render, with an estimate - nothing is done (as in the music video). */
+/** --dry-run: what the run would redo and render, with an estimate - nothing is done (as in the music video). With --json the same as data. */
 async function dryRun() {
     const mode = await filmMode(film.dir)
     const changed = film.changedInputs(await filmInputs(film.dir, config))
@@ -1080,42 +1084,72 @@ async function dryRun() {
             filmStepUsed(step, mode, film.data, config) &&
             (step !== 'subtitles' || render.has('final')),
     )
+    // --scenes keeps the shots of the other scenes - unless what they were planned from is made again too (coverageBasis above)
+    const scenes = film.data.screenplay?.scenes.map(s => s.id) ?? []
+    const allAgain = redone.some(step => (['screenplay', 'cast', 'lookBrief', 'locationViews'] as FilmStepName[]).includes(step))
+    const plannedAgain = redone.includes('coverage') ? (sceneIds.size && !allAgain ? scenes.filter(id => sceneIds.has(id)) : scenes) : []
+    const staleAfter = plannedAgain.length ? clipsOfScenes(new Set(plannedAgain)) : []
+    const found: DryRun = {reasons: reasons.map(([why, steps]) => ({why, steps})), redone, plannedAgain, staleAfter, generated: missing, warnings: []}
+    const said = (text: string) => Bun.stripANSI(text)
+    const warn = (text: string) => {
+        found.warnings.push(said(text))
+        log.warn(text)
+    }
 
     log.section('DRY RUN - nothing is done')
     for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
     log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
+    if (sceneIds.size && redone.includes('coverage')) {
+        if (allAgain) warn('the screenplay, cast or look is made again too - every scene is planned again, --scenes cannot keep the old shots')
+        else log.step('Planned again', `${plannedAgain.map(styles.name).join(', ')} ${styles.muted('- named by --scenes, the other scenes keep their shots')}`)
+    }
+    if (staleAfter.length)
+        log.step('Stale after', `${formatSlotRanges(staleAfter)} ${styles.muted('- render them again with --render=videos --refresh=clips')}`)
     if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
 
-    if (!render.has('images') && !render.has('videos') && !render.has('final')) return
-    const renderConfig = filmRenderConfig(config)
-    const state = await filmRenderState(film.dir, film.id, renderConfig)
-    const servers = settings.comfy.map(s => s.name)
-    const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
-    if (redone.length || missing.length) log.warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
-    if (render.has('images')) {
-        const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-        log.step(
-            'Pictures',
-            state.missingPictures.length
-                ? `${await pictureEstimate(state.missingPictures.length, renderConfig, servers)}${stale}`
-                : styles.muted('all rendered'),
-        )
+    if (render.has('images') || render.has('videos') || render.has('final')) {
+        const renderConfig = filmRenderConfig(config)
+        const state = await filmRenderState(film.dir, film.id, renderConfig)
+        const servers = settings.comfy.map(s => s.name)
+        const refreshKinds = new Set(args.refresh.split(',').filter(Boolean))
+        if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
+        if (render.has('images')) {
+            const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
+            const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, renderConfig, servers) : undefined
+            found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
+            log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
+        }
+        if (render.has('videos')) {
+            const only = new Set(args.only.split(',').filter(Boolean))
+            const selected = onlyClips(state.clips, only)
+            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
+            for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) warn(risk)
+            const estimate = todo.length ? await clipEstimate(todo, renderConfig, servers) : undefined
+            found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
+            log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
+        }
+        if (render.has('final')) {
+            found.final = {missingClips: state.missingClips.length}
+            log.step(
+                'Film',
+                state.missingClips.length
+                    ? styles.warning(`needs every clip - ${state.missingClips.length} missing`)
+                    : styles.muted('assembled from the clips'),
+            )
+        }
     }
-    if (render.has('videos')) {
-        const only = new Set(args.only.split(',').filter(Boolean))
-        const selected = onlyClips(state.clips, only)
-        const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
-        for (const risk of clipFailureRisks(readTimings(), todo, renderConfig.videoWorkflow, servers)) log.warn(risk)
-        log.step(
-            'Clips',
-            todo.length
-                ? `${await clipEstimate(todo, renderConfig, servers)} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}`
-                : styles.muted('all rendered'),
-        )
-    }
-    if (render.has('final'))
-        log.step(
-            'Film',
-            state.missingClips.length ? styles.warning(`needs every clip - ${state.missingClips.length} missing`) : styles.muted('assembled from the clips'),
-        )
+    if (jsonOutput()) log.json(found)
+}
+
+/** The clips the last plan run asked for in these scenes - the ones a new shot plan of them turns stale. */
+function clipsOfScenes(scenes: Set<string>) {
+    return [...readRequests(clipRequestsDir(film.dir))]
+        .filter(([, text]) => {
+            try {
+                return scenes.has((JSON.parse(text) as {sceneId?: string}).sceneId ?? '')
+            } catch {
+                return false
+            }
+        })
+        .map(([id]) => id)
 }

@@ -1,43 +1,59 @@
 <script setup lang="ts">
 import {onMounted, shallowRef, watch} from 'vue'
-import type {DryRun, ProjectStatus} from '../../../../shared/workspace'
+import type {DirectionView} from '../../../../shared/direction'
+import type {DryRun, ProjectKind, ProjectStatus} from '../../../../shared/workspace'
 import FormField from '../../components/FormField.vue'
 import {errorText, plural} from '../../lib/format'
+import {type PlanChoice, planAsked} from './planChoice'
 
 /**
  * The question before a plan run (#836): what it would do - `--dry-run` of the command: which steps are made again and why, beats
- * planned again and the clips that turn stale by it - and a step to plan again from (`--redo`), read again when one is picked.
+ * planned again and the clips that turn stale by it - and a step to plan again from (`--redo`), read again when one is picked. A film
+ * planning its shots again (coverage) can keep the shots of the scenes not picked (`--scenes`).
  */
 // the question is shown outside the project's pages: what it asks is handed to it
 const props = defineProps<{
-  draft: {redo: string}
+  draft: PlanChoice
   until?: string
-  api: {dryRun: (plan: {redo?: string[]; until?: string}) => Promise<{dryRun: DryRun | null}>; status: () => Promise<ProjectStatus>}
+  kind: ProjectKind
+  api: {
+    dryRun: (plan: {redo?: string[]; until?: string; scenes?: string[]}) => Promise<{dryRun: DryRun}>
+    status: () => Promise<ProjectStatus>
+    direction: () => Promise<DirectionView>
+  }
 }>()
 const api = props.api
 const steps = shallowRef<string[]>([])
+const scenes = shallowRef<string[]>([])
 const said = shallowRef<DryRun | null>()
 const failed = shallowRef('')
 const loading = shallowRef(true)
 
+// a choice changed while a dry run was asked: only the answer to the last one is shown
+let asked = 0
 const ask = async () => {
+  const mine = ++asked
   loading.value = true
   failed.value = ''
   try {
-    said.value = (await api.dryRun({...(props.draft.redo ? {redo: [props.draft.redo]} : {}), ...(props.until ? {until: props.until} : {})})).dryRun
+    const answer = (await api.dryRun(planAsked(props.draft, props.until))).dryRun
+    if (mine === asked) said.value = answer
   } catch (e) {
-    failed.value = errorText(e)
+    if (mine === asked) failed.value = errorText(e)
   } finally {
-    loading.value = false
+    if (mine === asked) loading.value = false
   }
 }
 onMounted(async () => {
   // the steps there are to plan again from: the ones made
   steps.value = (await api.status().catch(() => undefined))?.steps.filter(s => s.state === 'done').map(s => s.step) ?? []
+  // a film's scenes with shots planned - the ones that can keep them
+  if (props.kind === 'film' && steps.value.includes('coverage'))
+    scenes.value = [...new Set((await api.direction().catch(() => undefined))?.shots.map(s => s.groupId) ?? [])]
   await ask()
 })
 watch(
-  () => props.draft.redo,
+  () => [props.draft.redo, props.draft.scenes.join()],
   () => void ask(),
 )
 </script>
@@ -50,6 +66,13 @@ watch(
         <option v-for="step in steps" :key="step" :value="step">{{ step }}</option>
       </select>
     </FormField>
+    <fieldset v-if="draft.redo === 'coverage' && scenes.length > 1" class="pq-scenes">
+      <legend>Only these scenes (--scenes) - none picked plans every scene again</legend>
+      <label v-for="scene in scenes" :key="scene" class="pq-scene">
+        <input v-model="draft.scenes" type="checkbox" :value="scene" />
+        {{ scene }}
+      </label>
+    </fieldset>
     <p v-if="loading" class="muted">Asking what it would do…</p>
     <p v-else-if="failed" class="warn">The dry run failed: {{ failed }}</p>
     <template v-else-if="said">
@@ -64,7 +87,7 @@ watch(
         <b>Made for the first time</b> {{ plural(said.generated.length, 'step') }}
       </p>
       <p v-if="said.plannedAgain.length" class="pq-line">
-        <b>Shots planned again</b> {{ said.plannedAgain.join(', ')
+        <b>{{ kind === 'film' ? 'Scenes' : 'Beats' }} planned again</b> {{ said.plannedAgain.join(', ')
         }}<template v-if="said.staleAfter.length">; {{ plural(said.staleAfter.length, 'clip') }} turn stale</template>
       </p>
       <p v-for="warning in said.warnings" :key="warning" class="warn">{{ warning }}</p>
@@ -81,5 +104,22 @@ watch(
 }
 .pq-line {
   margin: 0;
+}
+.pq-scenes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.pq-scenes legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+.pq-scene {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 </style>

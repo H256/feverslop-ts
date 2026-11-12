@@ -13,8 +13,9 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         json: true,
     },
     film: {
-        args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]',
+        args: '<film-id> [--redo=steps] [--render=images,videos,final|all] [--only=clip-001] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--new-anchor] [--picture-prompt=FILE] [--picture-anchor=FILE] [--picture-description=FILE] [--describe-picture] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run [--json]] [--llm-url=URL] [--llm-key=KEY] [--llm-model=MODEL] [--comfy=URL]',
         description: 'Plan and render a film.',
+        json: true,
     },
     setup: {args: '[llm|llm-model|vision|comfy|show]', description: 'Configure servers, or show the effective settings.', banner: true},
     init: {

@@ -276,7 +276,7 @@ export type DryRun = {
     reasons: {why: string; steps: string[]}[]
     /** every step made again, along what is built on what */
     redone: string[]
-    /** beats whose shots are planned again (--beats, or none planned yet), and the clips that turn stale by it */
+    /** beats whose shots are planned again (--beats, or none planned yet) - a film: its scenes (--scenes) - and the clips that turn stale by it */
     plannedAgain: string[]
     staleAfter: string[]
     /** steps not made yet that the run makes */
@@ -492,7 +492,7 @@ export type RunRequest =
     | {type: 'look-pictures'}
     | {type: 'adapt-story'; add?: {name: string; role: string}[]; remove?: string[]} // add, remove: a film's roles (#589)
     | {type: 'final'; preview?: boolean}
-    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]} // beats: a music video's beats whose shots are planned again (#762)
+    | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]; scenes?: string[]} // beats: a music video's beats whose shots are planned again (#762); scenes: a film's (#836)
     | {type: 'retake'; clip: string; range: string}
     | {type: 'repeat'; command: string}
     | {type: 'next'; command: string}

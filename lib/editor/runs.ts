@@ -125,10 +125,17 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
             if (!Array.isArray(beats) || beats.some(b => typeof b !== 'string' || !PICTURE_ID.test(b)))
                 throw new Error(`no such beats: ${JSON.stringify(beats)}`)
             if (beats.length && kind !== 'music') throw new Error('beats are planned again in a music video; a film plans scenes again')
-            const redoSteps = beats.length && !redo.includes('shotMoments') ? [...redo, 'shotMoments'] : redo
+            // a film's: the shots of these scenes planned again, the others stay (#836)
+            const scenes = action.scenes ?? []
+            if (!Array.isArray(scenes) || scenes.some(s => typeof s !== 'string' || !PICTURE_ID.test(s)))
+                throw new Error(`no such scenes: ${JSON.stringify(scenes)}`)
+            if (scenes.length && kind !== 'film') throw new Error('scenes are planned again in a film; a music video plans beats again')
+            const again = beats.length ? 'shotMoments' : scenes.length ? 'coverage' : undefined
+            const redoSteps = again && !redo.includes(again) ? [...redo, again] : redo
             return run(
                 ...(redoSteps.length ? [`--redo=${redoSteps.join(',')}`] : []),
                 ...(beats.length ? [`--beats=${beats.join(',')}`] : []),
+                ...(scenes.length ? [`--scenes=${scenes.join(',')}`] : []),
                 ...(action.until ? [`--until=${action.until}`] : []),
             )
         }
