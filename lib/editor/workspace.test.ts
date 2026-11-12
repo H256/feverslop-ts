@@ -830,13 +830,13 @@ describe('a choice per clip of a film', () => {
         expect(JSON.parse(readFileSync(join(film.dir, 'clip-overrides/clip-001.json'), 'utf8'))).toEqual({placeView: 3})
         expect((await post('clip-001', null)).status).toBe(200)
         expect(existsSync(join(film.dir, 'clip-overrides/clip-001.json'))).toBe(false)
-        expect((await post('clip-999', {placeView: 3})).status).toBe(409)
+        expect((await post('clip-999', {placeView: 3})).status).toBe(400)
     })
 })
 
 test('malformed URL paths return a JSON error', async () => {
     const response = await editorHandler()(new Request('http://localhost/%zz'))
-    expect(response.status).toBe(503)
+    expect(response.status).toBe(400)
     expect(((await response.json()) as {error: string}).error).toBeTruthy()
 })
 test('traversal overrides cannot replace or delete project.json', async () => {
@@ -849,7 +849,7 @@ test('traversal overrides cannot replace or delete project.json', async () => {
         const response = await editorHandler()(
             new Request('http://localhost/p/film/safe-override/api/override/..%2F..%2Fproject', {method: 'POST', body: JSON.stringify(body)}),
         )
-        expect(response.status).toBe(409)
+        expect(response.status).toBe(400)
         expect(readFileSync(file, 'utf8')).toBe(original)
     }
 })
@@ -907,7 +907,7 @@ describe('a picture sent from the page', () => {
             )
             return {status: response.status, error: ((await response.json()) as {error?: string}).error}
         }
-        expect(await send('nobody', new File([png], 'a.png'))).toEqual({status: 409, error: 'no picture nobody'})
+        expect(await send('nobody', new File([png], 'a.png'))).toEqual({status: 404, error: 'no picture nobody'})
         expect((await send('cup', new File([png], 'a.png'))).error).toContain('is a prop')
         expect((await send('ann', new File(['<svg/>'], 'a.png'))).error).toContain('not a picture')
     })

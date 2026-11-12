@@ -308,7 +308,7 @@ const clips = computed(() =>
 .timing-tools {
   padding: 0.6rem 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .timing-tools input[type='number'] {
   width: 6rem;
@@ -316,7 +316,7 @@ const clips = computed(() =>
 .timing-tools label {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 .timing-tools summary {
   cursor: pointer;
@@ -329,7 +329,7 @@ const clips = computed(() =>
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-half);
 }
 .text-boundaries button {
   padding: 3px;

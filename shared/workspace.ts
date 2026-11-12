@@ -232,6 +232,19 @@ export type ProjectStatus = {
 export type ListingStatus = Pick<ProjectStatus, 'clips' | 'pictures' | 'next'>
 export type ClipProgress = 'waiting' | 'rendering' | 'done'
 export type RunProgress = {clips: Record<string, ClipProgress>; done: number; total: number}
+/**
+ * What a run says as data (#829), one JSON line each in `<project>/logs/<run>.events.jsonl` next to its log - the workspace reads
+ * these, never the wording of the log. `at`: milliseconds since 1970.
+ */
+export type RunEvent = {at: number} & (
+    | {type: 'step'; state: 'started' | 'cached' | 'done'; name: string; title: string}
+    | {type: 'warning'; message: string}
+    | {type: 'failed'; message: string; advice?: string}
+    | {type: 'cancelled'; message: string}
+    | {type: 'done'; output?: string; next?: string; warnings: number}
+)
+/** The events of the newest run from `from` on: `from` 0 starts a run's list anew (another run, or a page that asks again). */
+export type RunEvents = {events: RunEvent[]; from: number; next: number}
 export type Estimate = {estimate: string; risks?: string[]; fixedSeed?: number}
 
 ////////// VERSIONS - what was put away when something was made again
@@ -519,6 +532,8 @@ export type SettingView = {
     /** a setting that only does something while this one is on: shown, but not to be changed while it is off */
     needs?: string
     choices?: {value: unknown; label: string}[]
+    /** The value that means "not set by you" (-1: the workflow's own, a random seed): the page shows the label, the file keeps the value (#834). */
+    auto?: {value: unknown; label: string}
     note: string
     value: unknown // what the project has now: its own, else the default
     default: unknown

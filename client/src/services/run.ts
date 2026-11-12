@@ -1,5 +1,5 @@
-import {onScopeDispose, ref, shallowRef} from 'vue'
-import type {RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
+import {computed, onScopeDispose, ref, shallowRef} from 'vue'
+import type {RunEvent, RunEvents, RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
 import {defineService} from './service'
 import type {Toasts} from './toasts'
 
@@ -17,13 +17,20 @@ export type RunScope = {
 export type RunEnd = (current: RunInfo | null, action: RunRequest | undefined) => void
 
 /**
- * A step line of the CLI's log - "✔ 11a · BLOCKING THE BEATS · cached" when done, "  11b · REFINING MOMENTS PER SHOT" when it
- * starts: the step a run is at, as "11b · Refining moments per shot" (#775).
+ * What the events of a run say (#829): the step it is at - the last one begun or taken from the project -, its warnings, why it
+ * failed and what to do, and whether it ended well. Events from before `since` (the start of the run followed) belong to another.
  */
-const STEP = /^\s*(?:✔\s*)?(\d+[a-z]?) · ([A-Z][A-Z0-9 &',/()-]*[A-Z0-9)])\s*(?:·.*)?$/
-export const stepOf = (line: string) => {
-  const found = STEP.exec(line)
-  return found ? `${found[1]} · ${found[2]!.charAt(0)}${found[2]!.slice(1).toLowerCase()}` : undefined
+export type RunSaid = {step: string; warnings: string[]; failure?: {message: string; advice?: string}; done?: {output?: string; next?: string}}
+export function runSaid(events: RunEvent[], since = 0): RunSaid {
+  const said: RunSaid = {step: '', warnings: []}
+  for (const event of events) {
+    if (event.at < since) continue
+    if (event.type === 'step' && event.state !== 'done') said.step = event.title
+    if (event.type === 'warning') said.warnings.push(event.message)
+    if (event.type === 'failed') said.failure = {message: event.message, advice: event.advice}
+    if (event.type === 'done') said.done = {output: event.output, next: event.next}
+  }
+  return said
 }
 export const failedRun = (run: RunInfo) => !run.running && run.code !== undefined && run.code !== 0
 export const runStateText = (run: RunInfo) =>
@@ -40,8 +47,14 @@ export function createRunDock(toasts: Toasts) {
   const closed = ref(false)
   /** A word more on the state, as the timeline knows it: how many clips are done. */
   const detail = ref('')
-  /** The step the run is at, from its log; how far a render of clips is; when it ended (#775). */
-  const step = ref('')
+  /** The events of the run followed (#829), and what they say: its step, warnings and failure. How far a render of clips is; when it ended (#775). */
+  const runEvents = shallowRef<RunEvent[]>([])
+  // a little before the start the page knows: the clocks of the run and of the editor are the same machine's
+  const said = computed(() => {
+    const start = Date.parse(current.value?.startedAt ?? '')
+    return runSaid(runEvents.value, Number.isNaN(start) ? 0 : start - 5000)
+  })
+  const step = computed(() => said.value.step)
   const progress = shallowRef<RunProgress>()
   const endedAt = ref<number>()
   const scope = shallowRef<RunScope>()
@@ -77,12 +90,13 @@ export function createRunDock(toasts: Toasts) {
       const {lines, next} = JSON.parse((event as MessageEvent<string>).data) as RunLines
       // our own reconnect starts from this cursor, the browser's own sends the id of the last event: nothing comes twice
       after = next
-      for (const line of lines) {
-        const at = stepOf(line)
-        if (at) step.value = at
-      }
       const text = log.value + lines.join('\n') + '\n'
       log.value = text.length > LOG_MOST ? text.slice(-LOG_KEPT) : text
+    })
+    events.addEventListener('events', event => {
+      const answer = JSON.parse((event as MessageEvent<string>).data) as RunEvents
+      // from 0: another run, or the first look - what was there before is not this run's
+      runEvents.value = answer.from === 0 ? answer.events : [...runEvents.value, ...answer.events]
     })
     events.addEventListener('state', event => {
       const state = JSON.parse((event as MessageEvent<string>).data) as RunInfo | null
@@ -122,7 +136,7 @@ export function createRunDock(toasts: Toasts) {
     scope.value = next
     after = 0
     log.value = ''
-    step.value = ''
+    runEvents.value = []
     current.value = null
     wasRunning = false
     // what was asked in another scope is not what ends here
@@ -143,7 +157,7 @@ export function createRunDock(toasts: Toasts) {
     action = asked
     wasRunning = true
     log.value = ''
-    step.value = ''
+    runEvents.value = []
     progress.value = undefined
     endedAt.value = undefined
     after = 0
@@ -172,7 +186,7 @@ export function createRunDock(toasts: Toasts) {
     source?.close()
     ends.clear()
   }
-  return {current, log, logOpen, closed, detail, step, progress, endedAt, scope, follow, starter, onEnd, running, dispose}
+  return {current, log, logOpen, closed, detail, step, said, progress, endedAt, scope, follow, starter, onEnd, running, dispose}
 }
 export type RunDock = ReturnType<typeof createRunDock>
 export const RunService = defineService<RunDock>('run')

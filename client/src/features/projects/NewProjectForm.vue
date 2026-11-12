@@ -34,18 +34,18 @@ defineProps<{draft: NewProjectDraft}>()
 <style scoped>
 .np-form {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .np-seg {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .np-seg button {
   flex: 1;
   padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 .np-seg button[aria-pressed='true'] {
@@ -55,9 +55,9 @@ defineProps<{draft: NewProjectDraft}>()
 .np-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .np-note {
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 </style>

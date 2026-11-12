@@ -5,6 +5,7 @@ import {log, styles} from '../log.ts'
 import {dropPartials, keepEach} from '../partials.ts'
 import {builtOnIn, redoAfterIn} from '../project.ts'
 import type {FilmProject} from './types.ts'
+import {runEvent, stepTitle} from '../run-events.ts'
 
 export type FilmStepName = Exclude<keyof FilmProject, 'inputs' | 'partials' | 'castingCopies' | 'sheetViews' | 'shotViews' | 'clipFits' | 'roleChanges'>
 // an input file or setting a film's steps are made from (lib/film/inputs.ts): its value now, and the steps it redoes when it changes
@@ -227,9 +228,12 @@ export class FilmStore {
         const cached = this.data[name]
         if (cached !== undefined) {
             log.step('Cached', styles.muted(`from ${this.file} - use --redo=${name} to regenerate`))
+            runEvent({type: 'step', state: 'cached', name, title: stepTitle(title)})
             return cached as NonNullable<FilmProject[K]>
         }
+        runEvent({type: 'step', state: 'started', name, title: stepTitle(title)})
         const result = await run()
+        runEvent({type: 'step', state: 'done', name, title: stepTitle(title)})
         this.data[name] = result
         this.generated.add(name)
         dropPartials(this.data, name)

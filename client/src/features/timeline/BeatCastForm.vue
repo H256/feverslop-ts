@@ -58,11 +58,11 @@ const dropRow = (n: number) => props.draft.join.splice(n, 1)
 .who {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: var(--space-1) var(--space-4);
 }
 .who label {
   display: inline-flex;
-  gap: 5px;
+  gap: var(--space-1);
   align-items: center;
   white-space: nowrap;
 }
@@ -73,7 +73,7 @@ const dropRow = (n: number) => props.draft.join.splice(n, 1)
 .row {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr) auto;
-  gap: 6px;
+  gap: var(--space-2);
   margin-bottom: 6px;
 }
 textarea {
