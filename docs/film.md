@@ -220,6 +220,8 @@ is skipped: it starts on that frame. Camera angle, framing and a small movement 
 It only reports: the differences per cut, and the command to render the flagged clips again (`--render=videos --only=... --again`). A
 model's judgement on two pictures is a reason to look, not to spend a render. The answers are kept in `output/join-check.json` - a cut is
 asked again only when one of its frames or the staging changed, or with `--again`. `--only=clip-005` checks the cuts into these clips.
+In the workspace it is **Check cuts** on the timeline: a cut that does not fit marks the clip after it, as long as both clips are the
+files it was asked on.
 
 ## Replacing a character
 

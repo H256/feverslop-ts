@@ -27,6 +27,7 @@ import {INTRO_EXTENSIONS, MARKER_PRESETS, POSTWORK_DEFAULTS} from '../postwork/c
 import {loadPostwork} from '../postwork/store.ts'
 import {finalParts, POSTWORK_ENDINGS} from '../postwork/video.ts'
 import {applyDirectionOverlay} from '../direction/service.ts'
+import {clipCheckMarks, type ClipCheckMark} from '../clip-checks.ts'
 
 // What the workspace shows of one music video or film, in one shape for both: read from the project folder at every request,
 // nothing kept. The fast part (/api/project) only looks at which files are there; whether they are stale means hashing every
@@ -199,7 +200,8 @@ const lastRunOf = (dir: string): EditorProject['lastRun'] => {
     return {state: runState(run), command: run.command, startedAt: run.startedAt, failures, explained}
 }
 
-type Scan = {clips?: Record<string, {video: number; from: number; to: number; samples: number}>}
+// what the checks of rendered clips found: the backdrop scan (output/leak-scan.json), the texture chains and a film's joins (lib/clip-checks.ts)
+type Scan = {clips?: Record<string, {video: number; from: number; to: number; samples: number}>; checks?: (clip: string) => ClipCheckMark[]}
 
 /** What is known against a clip, read from what is on disk - nothing here starts a scan or asks a model. */
 function marksOf(dir: string, clip: {id: string; startsFrom?: string; dropped?: string[]}, run: EditorProject['lastRun'], scan: Scan): EditorMark[] {
@@ -224,14 +226,16 @@ function marksOf(dir: string, clip: {id: string; startsFrom?: string; dropped?: 
             marks.push({kind: 'older-start', text: `Starts on an older version of the last frame of ${clip.startsFrom}`})
     }
     if (clip.dropped?.length) marks.push({kind: 'dropped', text: `No picture for lack of room: ${clip.dropped.join(', ')}`})
+    marks.push(...(scan.checks?.(clip.id) ?? []))
     return marks
 }
 
 const readScan = (dir: string): Scan => {
+    const checks = clipCheckMarks(dir)
     try {
-        return readJson<Scan>(join(dir, 'output', 'leak-scan.json')) ?? {}
+        return {...readJson<Scan>(join(dir, 'output', 'leak-scan.json')), checks}
     } catch {
-        return {}
+        return {checks}
     }
 }
 

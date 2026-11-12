@@ -101,6 +101,19 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
         <button title="Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU" @click="actions.plain({type: 'leak-scan'})">
           Scan for backdrops
         </button>
+        <button
+          title="Measure whether clips that go on from the one before get grittier from link to link; the ones above an ordinary cut are flagged. Runs on this machine with ffmpeg, no GPU"
+          @click="actions.plain({type: 'texture-chains'})"
+        >
+          Check textures
+        </button>
+        <button
+          v-if="project.kind === 'film'"
+          title="Ask the model that reads pictures whether each cut within a scene fits: the last frame of a clip against the first of the next. The ones that do not are flagged; joins asked before are not asked again"
+          @click="actions.plain({type: 'check-joins'})"
+        >
+          Check cuts
+        </button>
       </template>
     </div>
     <div v-if="clips.length" class="grp">

@@ -121,7 +121,8 @@ export type EditorPicture = {
     exists: boolean
     v?: number
 }
-export type EditorMark = {kind: 'failed' | 'backdrop' | 'backdrop-attempt' | 'older-start' | 'dropped'; text: string}
+// grittier: texture-chains found more fine detail at a continuing join than at an ordinary cut; join: film:check-joins found the cut does not fit (#836)
+export type EditorMark = {kind: 'failed' | 'backdrop' | 'backdrop-attempt' | 'older-start' | 'dropped' | 'grittier' | 'join'; text: string}
 // a film: the views of its place the clip can be given, and the one it has
 export type EditorViews = {locationId: string; chosen?: number; options: {n: number; name: string; shows: string; file: string; v?: number}[]}
 export type EditorOverride = {placeView?: number; order?: string[]; without?: string[]}
@@ -499,6 +500,8 @@ export type RunRequest =
     | {type: 'repeat'; command: string}
     | {type: 'next'; command: string}
     | {type: 'leak-scan'}
+    | {type: 'texture-chains'} // the fine detail along the chains of continuing clips (#836)
+    | {type: 'check-joins'} // a film: the cuts within a scene, read by a model that sees pictures (#836)
     | {type: 'export'; formats: string[]} // a music video's timeline for a video editor: --export=mlt,openshot (#836)
     | {type: 'export-asset'; asset: string; as?: string}
     | {type: 'export-song'; as?: string; name?: string}

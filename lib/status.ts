@@ -107,7 +107,10 @@ async function nextOf(
 ): Promise<Next> {
     const {missingPictures, clips, missingClips, staleClips, finalState} = render
     if (toPlan.length || !clips.length)
-        return {command: run, why: toPlan.length ? `${toPlan.length} step(s) to generate: ${toPlan.map(step => STEP_LABELS[step] ?? step).join(', ')}` : 'no clip requests yet'}
+        return {
+            command: run,
+            why: toPlan.length ? `${toPlan.length} step(s) to generate: ${toPlan.map(step => STEP_LABELS[step] ?? step).join(', ')}` : 'no clip requests yet',
+        }
     if (missingPictures.length)
         return {
             command: `${run} --render=images`,

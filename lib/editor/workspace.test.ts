@@ -287,6 +287,10 @@ describe('what can be started', () => {
             '--describe-picture',
         ])
         expect(runCommand(film, {type: 'leak-scan'})).toEqual({script: 'tools/leak-scan.ts', args: ['demo', '--film']})
+        expect(runCommand(film, {type: 'texture-chains'})).toEqual({script: 'tools/texture-chains.ts', args: ['demo', '--film']})
+        expect(runCommand(music, {type: 'texture-chains'})).toEqual({script: 'tools/texture-chains.ts', args: ['demo']})
+        expect(runCommand(film, {type: 'check-joins'})).toEqual({script: 'tools/film-check-joins.ts', args: ['demo']})
+        expect(() => runCommand(music, {type: 'check-joins'})).toThrow('checked in a film')
         expect(runCommand(music, {type: 'export', formats: ['mlt', 'openshot']})).toEqual({script: 'index.ts', args: ['demo', '--export=mlt,openshot']})
         expect(() => runCommand(music, {type: 'export', formats: ['mlt --render=all']})).toThrow('no such formats')
         expect(() => runCommand(film, {type: 'export', formats: ['mlt']})).toThrow('when it is assembled')
@@ -747,6 +751,22 @@ describe('marks', () => {
         // the scan of slot-002 was of another version of the file: it says nothing about this one
         expect(kinds('slot-002')).toEqual(['older-start'])
         expect(kinds('slot-003')).toEqual(['backdrop', 'backdrop-attempt'])
+
+        // the texture chains and a film's joins mark the clip that goes on - only while it is the file they were found in
+        const stamp = (id: string) => Math.round(stat(join(dir, `videos/${id}.mp4`)).mtimeMs)
+        write(join(dir, 'output/texture-chains.json'), {
+            gritty: {'slot-003': {from: 'slot-002', fine: 1.4, usual: 1.02, videos: [stamp('slot-002'), stamp('slot-003')]}},
+        })
+        write(join(dir, 'output/join-check.json'), {
+            'slot-002>slot-003': {fits: false, differences: ['Ann holds no cup'], fingerprint: 'f', videos: [stamp('slot-002'), stamp('slot-003')]},
+            'slot-001>slot-002': {fits: false, differences: ['old'], fingerprint: 'f', videos: [1, 2]},
+        })
+        const again = (await readEditorProject(project)).clips.find(c => c.id === 'slot-003')!.marks
+        expect(again.filter(m => m.kind === 'grittier' || m.kind === 'join').map(m => m.text)).toEqual([
+            'Grittier than slot-002 it goes on from: fine detail x1.40 (at an ordinary cut x1.02)',
+            'At the cut from slot-002: Ann holds no cup',
+        ])
+        expect((await readEditorProject(project)).clips.find(c => c.id === 'slot-002')!.marks.map(m => m.kind)).toEqual(['older-start'])
     })
 })
 
