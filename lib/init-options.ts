@@ -8,12 +8,13 @@ import {projectExists, type ProjectSeed, validProjectId} from './project-setup.t
 
 export const INIT_USAGE =
     'usage: bun run init [project-id]   (asks the rest)\n' +
-    '       bun run init <project-id> --song=<file> | --idea=<text|file> [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--language=en]   (asks nothing)'
+    '       bun run init <project-id> --song=<file> | --idea=<text|file> | --library-song=<song-id> [--lyrics=<text|file>] [--story-idea=<text|file>] [--style=<text|file>] [--music-style=<text|file>] [--singers=auto|<name>,<name>] [--language=en]   (asks nothing)'
 
 /** The options that make init ask nothing: with one of them given, every answer comes from the command line. */
-const OPTIONS = ['song', 'idea', 'lyrics', 'story-idea', 'style', 'music-style', 'singers', 'language'] as const
+const OPTIONS = ['song', 'idea', 'library-song', 'lyrics', 'story-idea', 'style', 'music-style', 'singers', 'language'] as const
 
-export type InitOptions = {id: string; seed: ProjectSeed}
+// librarySong: a song of the library (lib/song-library.ts) - its audio, lyrics, stems and timing are taken over by tools/init.ts (#835)
+export type InitOptions = {id: string; seed: ProjectSeed; librarySong?: string}
 
 /** A value that names a file is the file's text, anything else is the text itself. */
 async function textOf(value: string | undefined): Promise<string | undefined> {
@@ -51,6 +52,19 @@ export async function initOptions(argv: string[]): Promise<InitOptions | undefin
         textOf(given['music-style']),
     ])
     if (given.song && idea) throw new Error('--song and --idea: a song you have, or an idea to make one from - not both')
+    // a song of the library brings its lyrics and their timing: the story is planned from them
+    const librarySong = given['library-song']?.trim()
+    if (librarySong !== undefined) {
+        if (given.song || idea) throw new Error('--library-song is the song: no --song or --idea with it')
+        if (lyrics) throw new Error('--library-song brings its own lyrics - no --lyrics with it')
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(librarySong)) throw new Error(`--library-song: a song id of the library, got "${librarySong}"`)
+        const singers = given.singers
+            ?.split(',')
+            .map(name => name.trim())
+            .filter(Boolean)
+        const config: Partial<ProjectConfig> = {...(singers?.length ? {singers} : {}), ...(given.language ? {lyricsLanguage: given.language} : {})}
+        return {id, seed: {storyIdea, style, config}, librarySong}
+    }
     // a song needs words to plan a story from; an idea writes its own lyrics
     if (!idea && !lyrics && !storyIdea)
         throw new Error(

@@ -82,6 +82,7 @@ export type NewProject = {
     id: string
     song?: string
     idea?: string
+    librarySong?: string // the id of a song of the library: its lyrics and timing come with it (#835)
     lyrics?: string
     storyIdea?: string
     style?: string

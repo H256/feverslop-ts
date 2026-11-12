@@ -25,10 +25,26 @@ cli('init')
 {
     const asked = await initOptions(Bun.argv.slice(2)).catch((e: unknown) => log.usageError(e instanceof Error ? e.message : String(e), INIT_USAGE))
     if (asked) {
-        await writeProject(asked.id, asked.seed)
+        // a song of the library: found before anything is written, its language the project's unless one is given (#835)
+        const library = await libraryDir()
+        const song = asked.librarySong ? await readLibrarySong(library, asked.librarySong) : undefined
+        if (asked.librarySong && !song)
+            log.usageError(
+                `--library-song: no song "${asked.librarySong}" in the library - the songs there: ${librarySongIds(library).join(', ') || 'none'}`,
+                INIT_USAGE,
+            )
+        const config = song ? {lyricsLanguage: song.lyricsLanguage, ...asked.seed.config, alignLyrics: true} : asked.seed.config
+        await writeProject(asked.id, {...asked.seed, config})
+        if (song) {
+            await importSong(library, song, new ProjectStore(asked.id), await loadProjectConfig(`projects/${asked.id}`))
+            log.step(
+                'Song',
+                `${song.name} ${styles.muted('from the library - the analysis, the stems and the timing are taken over, the plan starts at the story')}`,
+            )
+        }
         log.output(`projects/${asked.id}/`)
         // the next step, whole: a song to make first, or the plan
-        log.next(asked.seed.songFile ? `bun index.ts ${asked.id}` : `bun index.ts ${asked.id} --render=song`)
+        log.next(asked.seed.songFile || song ? `bun index.ts ${asked.id}` : `bun index.ts ${asked.id} --render=song`)
         process.exit(0)
     }
 }

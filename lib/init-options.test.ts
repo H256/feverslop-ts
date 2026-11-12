@@ -35,6 +35,15 @@ describe('init by options', () => {
         expect(await wrong(['p', '--style=noir'])).toContain('a song (--song with --lyrics and/or --story-idea), or an idea')
         expect(await wrong(['p', '--story-idea=a walk', '--singers=auto'])).toContain('--singers needs sung lines')
         expect(await wrong(['p', '--idea=rain', '--language=klingon'])).toContain('--language')
+        // a song of the library is the song, with its own lyrics (#835)
+        expect(await wrong(['p', '--library-song=rain', '--idea=x'])).toContain('--library-song is the song')
+        expect(await wrong(['p', '--library-song=rain', '--lyrics=la'])).toContain('brings its own lyrics')
+        expect(await wrong(['p', '--library-song=../x'])).toContain('a song id of the library')
+        expect(await initOptions(['p', '--library-song=rain', '--story-idea=a walk', '--language=de'])).toEqual({
+            id: 'p',
+            seed: {storyIdea: 'a walk', style: undefined, config: {lyricsLanguage: 'de'}},
+            librarySong: 'rain',
+        })
     })
     test('with no terminal and all it needs given, the project is written and the next command said', () => {
         const cwd = mkdtempSync(join(tmpdir(), 'init-options-'))

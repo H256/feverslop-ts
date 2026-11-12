@@ -13,6 +13,9 @@ describe('the arguments of init from the form', () => {
         ).toEqual(['rain', '--idea=A song about rain', '--story-idea=A walk\nat night', '--singers=auto', '--language=de'])
         expect(initArgs({id: 'rain', song: '  D:\\music\\song.mp3 ', lyrics: 'la la'})).toEqual(['rain', '--song=D:\\music\\song.mp3', '--lyrics=la la'])
     })
+    test('a song of the library is its id (#835)', () => {
+        expect(initArgs({id: 'rain', librarySong: 'well-of-youth'})).toEqual(['rain', '--library-song=well-of-youth'])
+    })
     test('no usable id, nothing to make it from, a value that is no text', () => {
         expect(() => initArgs({id: '../etc'})).toThrow('the id of a project')
         expect(() => initArgs({id: 'Rain Song', idea: 'x'})).toThrow('the id of a project')

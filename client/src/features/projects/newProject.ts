@@ -1,10 +1,11 @@
 import type {MachineCheck, NewProject} from '../../../../shared/workspace'
 
-/** The form of a new music video: a song there is, or one still to be made from an idea. */
+/** The form of a new music video: a song there is, one of the library, or one still to be made from an idea. */
 export type NewProjectDraft = {
   id: string
-  from: 'song' | 'idea'
+  from: 'song' | 'library' | 'idea'
   song: string
+  librarySong: string
   idea: string
   lyrics: string
   storyIdea: string
@@ -12,15 +13,16 @@ export type NewProjectDraft = {
   singers: string
   language: string
 }
-export const newProjectDraft = (): NewProjectDraft => ({id: '', from: 'song', song: '', idea: '', lyrics: '', storyIdea: '', style: '', singers: '', language: ''})
+export const newProjectDraft = (): NewProjectDraft => ({id: '', from: 'song', song: '', librarySong: '', idea: '', lyrics: '', storyIdea: '', style: '', singers: '', language: ''})
 
 /** What the server is asked for: only what the chosen way of the song has, empty fields left out. */
 export function newProjectRequest(draft: NewProjectDraft): NewProject {
   const said = (text: string) => (text.trim() ? text : undefined)
   return {
     id: draft.id.trim(),
-    ...(draft.from === 'song' ? {song: said(draft.song)} : {idea: said(draft.idea)}),
-    lyrics: said(draft.lyrics),
+    ...(draft.from === 'song' ? {song: said(draft.song)} : draft.from === 'library' ? {librarySong: said(draft.librarySong)} : {idea: said(draft.idea)}),
+    // a song of the library brings its own lyrics
+    lyrics: draft.from === 'library' ? undefined : said(draft.lyrics),
     storyIdea: said(draft.storyIdea),
     style: said(draft.style),
     singers: said(draft.singers)?.trim(),
@@ -34,6 +36,7 @@ export function newProjectProblem(draft: NewProjectDraft): string | undefined {
   if (draft.from === 'song' && !draft.song.trim()) return 'The song file, or choose "A song to be made".'
   if (draft.from === 'song' && !draft.lyrics.trim() && !draft.storyIdea.trim()) return 'A song needs its lyrics or a story idea: the story is planned from them.'
   if (draft.from === 'idea' && !draft.idea.trim()) return 'The idea the song is made from.'
+  if (draft.from === 'library' && !draft.librarySong) return 'The song of the library.'
   return undefined
 }
 
