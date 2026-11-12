@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PanelCard from '../../components/PanelCard.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useDraft} from '../../composables/useDraft'
 import {usePending} from '../../composables/usePending'
@@ -79,17 +80,18 @@ const saveLooks = toasts.guard(async () => {
     <template v-if="look">
       <div v-if="look.lookBrief === undefined" class="empty">No look yet - plan it with the button above.</div>
       <template v-else>
-        <section :class="['lk-whole', {changed: brief.dirty.value}]">
-          <header class="lk-whole-head">
-            <h2>The look of the whole</h2>
-            <span class="muted">Format, style, palette and camera language - every look below is written from it.</span>
-          </header>
+        <PanelCard
+          class="lk-whole"
+          title="The look of the whole"
+          note="Format, style, palette and camera language - every look below is written from it."
+          :bar="brief.dirty.value ? 'accent' : 'line'"
+        >
           <textarea v-model="brief.text.value" rows="5" aria-label="The look of the whole" />
-          <div class="btn-row">
+          <template #foot>
             <button class="btn" :disabled="!brief.dirty.value" @click="saveBrief">Save the look of the whole</button>
             <span v-if="brief.dirty.value" class="muted">Saving it writes every look below again.</span>
-          </div>
-        </section>
+          </template>
+        </PanelCard>
 
         <!-- one save for every look changed below, always in reach -->
         <div class="lk-bar">
@@ -121,29 +123,9 @@ const saveLooks = toasts.guard(async () => {
 </template>
 
 <style scoped>
+/* where the card stands and how its text fills it; the card itself is PanelCard */
 .lk-whole {
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--line);
-  border-radius: var(--radius-m);
-  padding: 12px 14px;
   margin: 12px 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.lk-whole.changed {
-  border-left-color: var(--accent);
-}
-.lk-whole-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-.lk-whole-head h2,
-.lk-title {
-  font-size: var(--text-l);
-  font-weight: 600;
 }
 .lk-whole textarea {
   width: 100%;
@@ -164,6 +146,8 @@ const saveLooks = toasts.guard(async () => {
   background: var(--bg);
 }
 .lk-title {
+  font-size: var(--text-l);
+  font-weight: 600;
   margin: 16px 0 8px;
 }
 .lk-title .muted {

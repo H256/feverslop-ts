@@ -3,6 +3,7 @@ import {computed} from 'vue'
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../../shared/direction'
 import {withNames} from '../../lib/format'
+import PanelCard from '../../components/PanelCard.vue'
 import DirectionItem from './DirectionItem.vue'
 import {groupItems, shotGroup, shotNumber, type Item} from './directionItems'
 
@@ -31,12 +32,11 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
 </script>
 
 <template>
-  <section v-if="leftovers.length" class="dp-card leftovers">
-    <header class="dp-card-head">
-      <h2>Left over from the old plan</h2>
+  <PanelCard v-if="leftovers.length" title="Left over from the old plan" tone="quiet">
+    <template #head>
       <div class="spacer" />
       <button class="btn primary" :disabled="blocked" @click="$emit('clear')">Clear them out</button>
-    </header>
+    </template>
     <p class="muted small">
       {{ leftoverBeats }} {{ leftoverBeats.includes(',') ? 'were' : 'was' }} planned again. These {{ leftovers.length }} were made for the shots before and no
       longer apply - the new plan has its own. Nothing to decide: clear them out.
@@ -54,13 +54,14 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
         @clear="$emit('clear', $event)"
       />
     </details>
-  </section>
+  </PanelCard>
 
-  <section v-if="review.length" class="dp-card needs">
-    <header class="dp-card-head">
-      <h2>To decide</h2>
-      <span class="muted small">These select no shot of the plan as it is now: edit them for a shot that is there, or remove them.</span>
-    </header>
+  <PanelCard
+    v-if="review.length"
+    title="To decide"
+    note="These select no shot of the plan as it is now: edit them for a shot that is there, or remove them."
+    tone="stale"
+  >
     <DirectionItem
       v-for="item in review"
       :key="item.key"
@@ -74,16 +75,12 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
       @remove="$emit('remove', $event)"
       @undo="$emit('undo', $event)"
     />
-  </section>
+  </PanelCard>
 
   <p v-if="!items.length" class="muted dp-empty">No instructions or edits yet. Write one on the right, or direct a shot on the timeline.</p>
   <p v-else-if="!shown.length" class="muted dp-empty">Nothing matches the filter.</p>
 
-  <section v-for="group in grouped" :key="group.key" class="dp-card dp-group">
-    <header class="dp-card-head">
-      <h2>{{ group.title }}</h2>
-      <span v-if="group.label" class="muted" :title="withNames(group.label)">{{ withNames(group.label) }}</span>
-    </header>
+  <PanelCard v-for="group in grouped" :key="group.key" :title="group.title" :note="group.label ? withNames(group.label) : undefined">
     <template v-for="block in [{id: '', items: group.general}, ...group.shots]" :key="block.id">
       <div :class="{'shot-block': block.id}">
         <h3 v-if="block.id">Shot {{ shotNumber(block.id) }} <RouterLink class="go" :to="timeline(block.id)">open in the timeline</RouterLink></h3>
@@ -113,20 +110,10 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
         </details>
       </div>
     </template>
-  </section>
+  </PanelCard>
 </template>
 
 <style scoped>
-.dp-card.needs {
-  border-color: var(--stale);
-}
-.dp-card.leftovers {
-  border-color: var(--line);
-  background: var(--raised);
-}
-.dp-card.leftovers .dp-card-head {
-  align-items: center;
-}
 .shot-block {
   border-top: 1px solid var(--line);
   padding-top: 6px;

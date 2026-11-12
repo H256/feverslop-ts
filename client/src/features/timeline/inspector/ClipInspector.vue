@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
+import TabBar from '../../../components/TabBar.vue'
 import {clock} from '../../../lib/format'
 import {STATE_CHIPS, stateOf} from '../clips'
 import {useTimeline, type TimelineContext} from '../context'
@@ -22,6 +23,8 @@ const TABS: {id: Tab; name: string; count: (ctx: TimelineContext['playback']['cl
   {id: 'render', name: 'Render', count: () => undefined},
   {id: 'versions', name: 'Versions', count: c => (versions.value?.clip === c?.id ? versions.value?.list.length || undefined : undefined)},
 ]
+// no clip: no tabs, the bar stays
+const tabs = computed(() => (clip.value ? TABS.map(t => ({id: t.id, label: t.name, count: t.count(clip.value)})) : []))
 const PANELS = {prompt: PromptPanel, shots: ShotsPanel, refs: RefsPanel, render: RenderPanel, versions: VersionsPanel}
 const panel = ref<HTMLElement>()
 const choose = (id: Tab) => {
@@ -46,13 +49,7 @@ watch(clip, () => panel.value?.scrollTo({top: 0}))
         <p>Nothing at the playhead</p></template
       >
     </div>
-    <div class="tabs" role="tablist">
-      <template v-if="clip">
-        <button v-for="t in TABS" :key="t.id" role="tab" :aria-selected="tab === t.id" @click="choose(t.id)">
-          {{ t.name }}<small v-if="t.count(clip)">{{ t.count(clip) }}</small>
-        </button>
-      </template>
-    </div>
+    <TabBar :model-value="tab" :tabs="tabs" inset @update:model-value="choose" />
     <div ref="panel" class="panel" role="tabpanel">
       <component :is="PANELS[tab]" v-if="clip" :key="`${clip.id}:${tab}`" :clip="clip" />
       <div v-else-if="project.clips.length" class="empty">Pick a clip on the timeline.</div>

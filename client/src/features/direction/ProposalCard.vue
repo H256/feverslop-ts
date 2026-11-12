@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionView} from '../../../../shared/direction'
+import PanelCard from '../../components/PanelCard.vue'
 import {describeShot} from './directionItems'
 
 /** What the language model proposes for the shots the instructions are about (#839): each shot before and after, taken or dropped. */
@@ -15,11 +16,7 @@ defineEmits<{take: []; drop: []}>()
 </script>
 
 <template>
-  <section class="dp-card proposal">
-    <header class="dp-card-head">
-      <h2>Proposed changes</h2>
-      <span class="muted">{{ view.proposal.changes.length }} shot(s)</span>
-    </header>
+  <PanelCard title="Proposed changes" :note="`${view.proposal.changes.length} shot(s)`" tone="accent">
     <p v-if="view.proposalStale" class="warn">This proposal belongs to an older plan or set of instructions. Preview again before taking it.</p>
     <p v-if="!view.proposal.changes.length" class="muted">No shot changes proposed.</p>
     <p v-for="conflict in view.proposal.conflicts" :key="conflict" class="warn">{{ conflict }}</p>
@@ -40,12 +37,12 @@ defineEmits<{take: []; drop: []}>()
         </div>
       </div>
     </article>
-    <div class="btn-row">
+    <template #foot>
       <button class="btn primary" :disabled="blocked || dirty || view.proposalStale || !!view.unresolved.length" @click="$emit('take')">
         {{ view.proposal.conflicts.length ? 'Take anyway' : 'Take changes' }}</button
       ><button class="btn" :disabled="blocked" @click="$emit('drop')">Drop proposal</button>
-    </div>
-  </section>
+    </template>
+  </PanelCard>
 </template>
 
 <style scoped>

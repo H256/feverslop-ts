@@ -2,6 +2,7 @@
 import {computed, ref} from 'vue'
 import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
 import PageBar from '../../components/PageBar.vue'
+import TabBar from '../../components/TabBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {usePending} from '../../composables/usePending'
 import {useAsk} from '../../services/ask'
@@ -194,12 +195,13 @@ const clearLeftovers = (only?: Item) =>
       </main>
 
       <aside class="direction-side">
-        <div class="dp-tabs" role="tablist">
-          <button role="tab" :aria-selected="tab === 'instruction'" :class="{on: tab === 'instruction'}" @click="tab = 'instruction'">
-            {{ form?.editing ? 'Edit instruction' : 'New instruction' }}
-          </button>
-          <button role="tab" :aria-selected="tab === 'edit'" :class="{on: tab === 'edit'}" @click="tab = 'edit'">Direct edit</button>
-        </div>
+        <TabBar
+          v-model="tab"
+          :tabs="[
+            {id: 'instruction', label: form?.editing ? 'Edit instruction' : 'New instruction'},
+            {id: 'edit', label: 'Direct edit'},
+          ]"
+        />
         <InstructionForm v-show="tab === 'instruction'" ref="form" v-model:dirty="dirty" :view="view" :film="film" :blocked="blocked" @save="save" />
         <EditForm v-show="tab === 'edit'" :view="view" :film="film" :blocked="blocked" @add="addEdit" />
 
@@ -238,23 +240,6 @@ const clearLeftovers = (only?: Item) =>
   background: var(--surface);
   max-height: calc(100vh - 140px);
   overflow: auto;
-}
-.dp-tabs {
-  display: flex;
-  gap: var(--space-1);
-  border-bottom: 1px solid var(--line);
-}
-.dp-tabs button {
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 6px 10px;
-  color: var(--muted);
-  cursor: pointer;
-}
-.dp-tabs button.on {
-  color: var(--text);
-  border-bottom-color: var(--accent);
 }
 .small {
   font-size: var(--text-s);
