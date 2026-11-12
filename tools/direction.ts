@@ -20,6 +20,7 @@ import {
     shotPeople,
 } from '../lib/direction/service.ts'
 import type {DirectionEdit, DirectionScope, DirectionSize, DirectionView} from '../shared/direction.ts'
+import {shotField} from '../shared/direction.ts'
 cli('direction')
 const {values: a, positionals} = parseArgs({
     args: Bun.argv.slice(2),
@@ -236,8 +237,8 @@ function showShot(view: DirectionView, id: string) {
     const time = shot.start !== undefined && shot.end !== undefined ? `  ${shot.start.toFixed(2)}-${shot.end.toFixed(2)} s` : ''
     console.log(`${shot.id}${time}`)
     console.log(`  ${[d.framing, d.size && `(${d.size})`, d.camera].filter(Boolean).join(' · ')}`)
-    if (d.view) console.log(`  view: ${d.view}`)
-    console.log(`  action: ${d.action}`)
+    if (d.view) console.log(`  ${shotField('view')}: ${d.view}`)
+    console.log(`  ${shotField('action')}: ${d.action}`)
     const people = (d.people ?? {}) as Record<string, Record<string, unknown>>
     for (const who of shot.characters) {
         const p = people[who] ?? {}
@@ -245,9 +246,9 @@ function showShot(view: DirectionView, id: string) {
             Boolean,
         )
         console.log(`  ${nameOf(who)}${flags.length ? ` [${flags.join(', ')}]` : ''}`)
-        for (const key of ['state', 'frame', 'motion', 'facing'] as const) if (p[key]) console.log(`    ${key}: ${p[key]}`)
+        for (const key of ['state', 'frame', 'motion', 'facing'] as const) if (p[key]) console.log(`    ${shotField(key)}: ${p[key]}`)
     }
-    if (d.rest) console.log(`  rest: ${d.rest}`)
+    if (d.rest) console.log(`  ${shotField('rest')}: ${d.rest}`)
     for (const r of view.rules.filter(r => r.scope.kind === 'shot' && r.scope.id === id)) console.log(`  rule ${r.id}: ${r.text}`)
     for (const e of view.edits.filter(e => e.scope.kind === 'shot' && e.scope.id === id)) console.log(`  edit ${e.id}: ${describeEdit(e, nameOf)}`)
     for (const i of view.editIssues.filter(i => i.shotId === id)) console.log(`  ! ${i.message}`)

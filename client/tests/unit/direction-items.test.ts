@@ -51,7 +51,7 @@ describe('the items of the Direction page', () => {
     expect(sameScope({kind: 'global'}, {kind: 'global'})).toBe(true)
     expect([shotGroup('beat-02:shot12'), shotNumber('beat-02:shot12'), shotGroup('beat-02')]).toEqual(['beat-02', 12, 'beat-02'])
     expect(describeShot({framing: 'close', characters: ['kael'], people: {vey: {facing: 'left'}}}, name)).toBe(
-      'Framing: close\nVisible characters: Kael\nVey\n  Facing: left',
+      'Framing: close\nIn the picture: Kael\nVey\n  Facing: left',
     )
   })
   test("a shot's change for the shot dialog: only what changed, the shot's fields, then each person's, with names", () => {
@@ -64,7 +64,7 @@ describe('the items of the Direction page', () => {
     ).toEqual([
       {label: 'Framing', before: 'wide', after: 'close'},
       {label: 'Kael · Facing', before: 'left', after: 'right'},
-      {label: 'Vey · Start', before: '—', after: 'sits'},
+      {label: 'Vey · Start pose', before: '—', after: 'sits'},
     ])
   })
 })
