@@ -100,7 +100,8 @@ function emit(id: string) {
 
     const info = objectInfo[node.class_type]
     const base = node.class_type.replace(/[^A-Za-z0-9]/g, '')
-    variables.set(id, `${base.charAt(0).toLowerCase()}${base.slice(1)}_${id}`)
+    // a node inside a subgraph has an id like "23:5" - not part of a variable name
+    variables.set(id, `${base.charAt(0).toLowerCase()}${base.slice(1)}_${id.replace(/[^A-Za-z0-9_]/g, '_')}`)
 
     const declared: string[] = []
     const extra: string[] = []
