@@ -1,104 +1,53 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue'
-import {useRoute} from 'vue-router'
-import {RouterLink} from 'vue-router'
-import type {DirectionEdit, DirectionRule, DirectionScope, DirectionSize} from '../../../../shared/direction'
-import {withNames} from '../../lib/format'
+import {computed, ref} from 'vue'
+import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
-import {useUnsavedChanges} from '../../composables/useUnsavedChanges'
+import {usePending} from '../../composables/usePending'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
+import DirectionList from './DirectionList.vue'
+import {filterItems, itemsOf, type Item} from './directionItems'
+import EditForm from './EditForm.vue'
+import InstructionForm from './InstructionForm.vue'
+import ProposalCard from './ProposalCard.vue'
+import PlanVersions from './PlanVersions.vue'
+import './direction.css'
 
+/** The direction of a planned video (#839): its instructions and edits, the proposal of the language model, and the plan versions. */
 const {api, project, busy, start, changing, root} = useProject()
 const {data: view, loading, error, reload, refresh} = usePageData(signal => api.direction(signal))
-const route = useRoute()
 const toasts = useToasts()
 const ask = useAsk()
-const saving = ref(false)
+const {pending: saving, during} = usePending()
 const blocked = computed(() => busy.value || saving.value)
-const text = ref('')
-const scopeKind = ref<DirectionScope['kind']>('global')
-const scopeId = ref('')
-const characterId = ref('')
-const from = ref(0),
-  to = ref(10)
-const editing = ref<DirectionRule>()
 const film = computed(() => project.value.kind === 'film')
 const command = computed(() => `bun run direction ${project.value.id}${film.value ? ' --film' : ''}`)
-const scope = computed<DirectionScope>(() =>
-  scopeKind.value === 'global'
-    ? {kind: 'global'}
-    : scopeKind.value === 'time'
-      ? {kind: 'time', start: Number(from.value), end: Number(to.value)}
-      : {kind: scopeKind.value, id: scopeId.value},
-)
-const dirty = computed(() =>
-  editing.value
-    ? text.value !== editing.value.text ||
-      JSON.stringify(scope.value) !== JSON.stringify(editing.value.scope) ||
-      characterId.value !== (editing.value.characterId ?? '')
-    : !!text.value,
-)
-useUnsavedChanges(() => dirty.value, 'direction instruction')
-const invalid = computed(
-  () =>
-    !text.value.trim() ||
-    (scopeKind.value !== 'global' && scopeKind.value !== 'time' && !scopeId.value) ||
-    (scopeKind.value === 'time' && (!Number.isFinite(Number(from.value)) || Number(from.value) < 0 || Number(to.value) <= Number(from.value))),
-)
+const form = ref<InstanceType<typeof InstructionForm>>()
+const dirty = ref(false)
+const tab = ref<'instruction' | 'edit'>('instruction')
 
-watch(
-  () => route.query.shot,
-  id => {
-    if (typeof id === 'string' && !dirty.value) {
-      scopeKind.value = 'shot'
-      scopeId.value = id
-    }
-  },
-  {immediate: true},
-)
-const clear = () => {
-  text.value = ''
-  editing.value = undefined
-  characterId.value = ''
-}
-const edit = (rule: DirectionRule) => {
-  editing.value = rule
-  text.value = rule.text
-  scopeKind.value = rule.scope.kind
-  characterId.value = rule.characterId ?? ''
-  if ('id' in rule.scope) scopeId.value = rule.scope.id
-  if (rule.scope.kind === 'time') {
-    from.value = rule.scope.start
-    to.value = rule.scope.end
-  }
-}
+const name = (id: string) => view.value?.characters.find(c => c.id === id)?.name ?? id
+/** A shot's place on the timeline, its dialog opened there. */
+const inTimeline = (shotId: string) => ({path: `${root}/`, query: {direct: shotId}})
+const rules = () => view.value?.rules ?? []
+const edits = () => view.value?.edits ?? []
+
+/** A change saved, then the page read again - one at a time, a failure said as a toast. */
 const change = (work: () => Promise<unknown>) =>
-  toasts.guard(async () => {
-    saving.value = true
-    try {
+  toasts.guard(() =>
+    during(async () => {
       await work()
       await refresh()
-    } finally {
-      saving.value = false
-    }
-  })()
-const save = () =>
+    }),
+  )()
+
+const save = (rule: DirectionRule) =>
   change(async () => {
-    const old = editing.value
-    const sameScope = old && JSON.stringify(old.scope) === JSON.stringify(scope.value) && old.characterId === (characterId.value || undefined)
-    const rule: DirectionRule = {
-      id: old?.id ?? crypto.randomUUID(),
-      text: text.value,
-      scope: scope.value,
-      ...(characterId.value ? {characterId: characterId.value} : {}),
-      ...(sameScope && old.binding ? {binding: old.binding} : {}),
-    }
-    await api.saveDirection([...(view.value?.rules ?? []).filter(r => r.id !== rule.id), rule])
-    clear()
+    await api.saveDirection([...rules().filter(r => r.id !== rule.id), rule])
+    form.value?.clear()
     toasts.show('Instruction saved. Preview its effect on the shots.')
   })
 const remove = (rule: DirectionRule) =>
@@ -109,8 +58,8 @@ const remove = (rule: DirectionRule) =>
       confirm: 'Remove instruction',
     })
     if (!yes) return
-    await api.saveDirection((view.value?.rules ?? []).filter(r => r.id !== rule.id))
-    if (editing.value?.id === rule.id) clear()
+    await api.saveDirection(rules().filter(r => r.id !== rule.id))
+    if (form.value?.editing?.id === rule.id) form.value.clear()
   })
 const rebind = (rule: DirectionRule) =>
   change(async () => {
@@ -123,9 +72,9 @@ const rebind = (rule: DirectionRule) =>
     })
     if (!yes) return
     await api.saveDirection(
-      (view.value?.rules ?? []).map(r => {
+      rules().map(r => {
         if (r.id !== rule.id) return r
-        const {binding, ...next} = r
+        const {binding: _binding, ...next} = r
         return next
       }),
     )
@@ -140,210 +89,46 @@ const take = () =>
 const drop = () => change(() => api.dropDirection())
 const restore = (id: string) =>
   change(async () => {
-    if (
-      await ask({
-        title: 'Restore this plan version?',
-        lines: [
-          'Accepted shot edits are replaced by this version. Instructions remain saved; rendered videos remain available. The clip prompts are built again.',
-        ],
-        confirm: 'Restore plan',
-      })
-    ) {
-      await changing(rebuild => api.restoreDirection(id, rebuild))
-    }
+    const yes = await ask({
+      title: 'Restore this plan version?',
+      lines: [
+        'Accepted shot edits are replaced by this version. Instructions remain saved; rendered videos remain available. The clip prompts are built again.',
+      ],
+      confirm: 'Restore plan',
+    })
+    if (yes) await changing(rebuild => api.restoreDirection(id, rebuild))
   })
 const plan = toasts.guard(() => start({type: 'plan'}))
-
-// direct edits over several shots (#735): a person out of the picture, or the shot size - no language model, the prompts built again
-const editScopeKind = ref<'global' | 'character' | 'beat' | 'scene' | 'time'>('character')
-const editScopeId = ref('')
-const editFrom = ref(0),
-  editTo = ref(10)
-const editKind = ref<'remove' | 'size'>('remove')
-const editWho = ref('')
-const editSize = ref<DirectionSize>('medium')
-const editScope = computed<DirectionScope>(() =>
-  editScopeKind.value === 'global'
-    ? {kind: 'global'}
-    : editScopeKind.value === 'time'
-      ? {kind: 'time', start: Number(editFrom.value), end: Number(editTo.value)}
-      : {kind: editScopeKind.value, id: editScopeId.value},
-)
-const editInvalid = computed(
-  () =>
-    (editKind.value === 'remove' && !editWho.value) ||
-    (['character', 'beat', 'scene'].includes(editScopeKind.value) && !editScopeId.value) ||
-    (editScopeKind.value === 'time' && !(Number(editTo.value) > Number(editFrom.value))),
-)
-const saveEdits = (edits: DirectionEdit[]) =>
-  change(async () => {
-    await changing(rebuild => api.saveDirectionEdits(edits, rebuild))
-  })
-const addEdit = () =>
-  saveEdits([
-    ...(view.value?.edits ?? []),
-    {id: crypto.randomUUID(), scope: editScope.value, ...(editKind.value === 'remove' ? {remove: editWho.value} : {size: editSize.value})},
-  ])
-const unedit = (e: DirectionEdit) => saveEdits((view.value?.edits ?? []).filter(x => x.id !== e.id))
-const describeEdit = (e: DirectionEdit) =>
-  e.remove ? `${name(e.remove)} is not in the picture` : e.add ? `${name(e.add)} is in the picture` : `the shot is ${e.size}`
-/** A shot's place on the timeline, its dialog opened there. */
-const inTimeline = (shotId: string) => ({path: `${root}/`, query: {direct: shotId}})
-const scopeText = (s: DirectionScope) => (s.kind === 'global' ? 'Whole project' : s.kind === 'time' ? `${s.start}–${s.end} s` : `${s.kind}: ${s.id}`)
-const name = (id: string) => view.value?.characters.find(c => c.id === id)?.name ?? id
-const ruleIssue = (id: string) => view.value?.unresolved.find(r => r.ruleId === id)?.message
-// Readable before/after, including pose and motion instead of hiding those edits behind the action sentence.
-function describe(data: Record<string, unknown>): string {
-  const labels: Record<string, string> = {
-    action: 'Action',
-    framing: 'Framing',
-    camera: 'Camera',
-    view: 'Camera position',
-    hold: 'Hold still',
-    size: 'Shot size',
-    rest: 'Others',
-    hands: 'Instrument hands',
-    characters: 'Visible characters',
-    state: 'Start pose',
-    frame: 'In frame',
-    motion: 'Movement',
-    facing: 'Facing',
-    plays: 'Instrument action',
-    singing: 'Singing',
-    playing: 'Playing',
-  }
-  const fields = (obj: Record<string, unknown>) =>
-    Object.entries(obj)
-      .filter(([key]) => key in labels)
-      .map(([key, value]) => `${labels[key]}: ${Array.isArray(value) ? value.map(String).map(name).join(', ') : String(value)}`)
-  const lines = fields(data)
-  if (data.people && typeof data.people === 'object')
-    for (const [id, person] of Object.entries(data.people))
-      lines.push(
-        `${name(id)}\n${fields(person as Record<string, unknown>)
-          .map(s => `  ${s}`)
-          .join('\n')}`,
-      )
-  return lines.join('\n')
+const saveEdits = (next: DirectionEdit[]) => change(() => changing(rebuild => api.saveDirectionEdits(next, rebuild)))
+const addEdit = (edit: DirectionEdit) => saveEdits([...edits(), edit])
+const unedit = (edit: DirectionEdit) => saveEdits(edits().filter(e => e.id !== edit.id))
+const editRule = (rule: DirectionRule) => {
+  form.value?.edit(rule)
+  tab.value = 'instruction'
 }
 
-// The list (#783): what needs a review first, then everything by what it is about - the whole video, a character, a stretch of the
-// song, then beat by beat (scene by scene) and in it shot by shot. Instructions only for the planner are folded away.
-type Item = {
-  key: string
-  rule?: DirectionRule
-  edit?: DirectionEdit
-  scope: DirectionScope
-  text: string
-  issues: string[]
-  planned: boolean
-  /** made for shots planned again since: nothing to decide but clearing it (or, for an instruction, keeping it for the new shot) */
-  leftover: boolean
-  /** left open for the preview to write: someone brought in with nothing to do, words that still name someone taken out */
-  writes: boolean
-}
-const tab = ref<'instruction' | 'edit'>('instruction')
 const filterText = ref('')
 const filterWho = ref('')
-const items = computed<Item[]>(() => {
-  const v = view.value
-  if (!v) return []
-  return [
-    ...v.rules.map(rule => ({
-      key: `r:${rule.id}`,
-      rule,
-      scope: rule.scope,
-      text: rule.text,
-      issues: [ruleIssue(rule.id)].filter((m): m is string => !!m),
-      planned: !!rule.planned,
-      leftover: !!rule.binding && !!v.unresolved.find(u => u.ruleId === rule.id)?.stale,
-      writes: false,
-    })),
-    ...v.edits.map(edit => ({
-      key: `e:${edit.id}`,
-      edit,
-      scope: edit.scope,
-      text: describeEdit(edit),
-      issues: v.editIssues.filter(i => i.editId === edit.id).map(i => i.message),
-      planned: false,
-      leftover: v.editIssues.some(i => i.editId === edit.id && i.stale),
-      writes: v.editIssues.some(i => i.editId === edit.id && i.mentions),
-    })),
-  ]
-})
-const about = (item: Item) => [item.rule?.characterId, item.edit?.remove, item.edit?.add, item.scope.kind === 'character' ? item.scope.id : undefined]
-const shown = computed(() => {
-  const words = filterText.value.trim().toLowerCase()
-  return items.value.filter(
-    item =>
-      (!words || `${item.text} ${scopeText(item.scope)}`.toLowerCase().includes(words)) &&
-      (!filterWho.value || about(item).includes(filterWho.value) || item.text.includes(name(filterWho.value))),
-  )
-})
-// three kinds of attention (#802): leftovers of an old plan are cleared in one go, what a preview writes is said at its button, and
-// only a real choice - an instruction that selects no shot any more - is to review
-const leftovers = computed(() => items.value.filter(item => item.leftover))
+const items = computed(() => (view.value ? itemsOf(view.value, name) : []))
+const shown = computed(() => filterItems(items.value, filterText.value, filterWho.value, name))
+// left open for the preview to write (#802): said at its button
 const writes = computed(() => items.value.filter(item => item.writes && !item.leftover))
-const review = computed(() => shown.value.filter(item => item.issues.length && !item.leftover && !item.writes))
-const leftoverBeats = computed(() => [...new Set(leftovers.value.flatMap(i => ('id' in i.scope ? [shotGroup(i.scope.id)] : [])))].join(', '))
-/** The leftovers gone in one save each; the clip prompts built again unless instructions still wait for a preview. */
+/** The leftovers gone, one save each; the clip prompts built again unless instructions still wait for a preview. */
 const clearLeftovers = (only?: Item) =>
   change(async () => {
-    const gone = only ? [only] : leftovers.value
-    const edits = new Set(gone.flatMap(i => (i.edit ? [i.edit.id] : [])))
-    const rules = new Set(gone.flatMap(i => (i.rule ? [i.rule.id] : [])))
-    if (rules.size) await api.saveDirection((view.value?.rules ?? []).filter(r => !rules.has(r.id)))
-    if (edits.size) {
-      // the prompts are built again by the server, unless instructions still wait for a preview
+    const gone = only ? [only] : items.value.filter(item => item.leftover)
+    const editIds = new Set(gone.flatMap(i => (i.edit ? [i.edit.id] : [])))
+    const ruleIds = new Set(gone.flatMap(i => (i.rule ? [i.rule.id] : [])))
+    if (ruleIds.size) await api.saveDirection(rules().filter(r => !ruleIds.has(r.id)))
+    if (editIds.size)
       await changing(rebuild =>
         api.saveDirectionEdits(
-          (view.value?.edits ?? []).filter(e => !edits.has(e.id)),
+          edits().filter(e => !editIds.has(e.id)),
           rebuild,
         ),
       )
-    }
     toasts.show(only ? 'Cleared.' : `Cleared ${gone.length} leftover${gone.length > 1 ? 's' : ''} of the old plan.`)
   })
-const shotGroup = (id: string) => (id.lastIndexOf(':shot') > 0 ? id.slice(0, id.lastIndexOf(':shot')) : id)
-const shotNumber = (id: string) => Number(id.slice(id.lastIndexOf(':shot') + 5)) || 0
-type Group = {key: string; title: string; label?: string; order: number; general: Item[]; shots: {id: string; items: Item[]}[]}
-const grouped = computed<Group[]>(() => {
-  const groups = new Map<string, Group>()
-  const order = new Map((view.value?.groups ?? []).map((g, n) => [g.id, n]))
-  const groupFor = (scope: DirectionScope): Group => {
-    const [key, title, label, rank] =
-      scope.kind === 'global'
-        ? ['~global', 'Whole video', undefined, -3]
-        : scope.kind === 'character'
-          ? [`~character:${scope.id}`, `${name(scope.id)}, throughout`, undefined, -2]
-          : scope.kind === 'time'
-            ? [`~time:${scope.start}-${scope.end}`, `${scope.start}–${scope.end} s of the song`, undefined, -1]
-            : (() => {
-                const id = scope.kind === 'shot' ? shotGroup(scope.id) : scope.id
-                return [id, id, view.value?.groups.find(g => g.id === id)?.label, order.get(id) ?? 9999] as const
-              })()
-    if (!groups.has(key)) groups.set(key, {key, title, label, order: rank, general: [], shots: []})
-    return groups.get(key)!
-  }
-  for (const item of shown.value.filter(item => !item.leftover && (!item.issues.length || item.writes))) {
-    const group = groupFor(item.scope)
-    if (item.scope.kind !== 'shot') group.general.push(item)
-    else {
-      const shotId = item.scope.id
-      let shot = group.shots.find(s => s.id === shotId)
-      if (!shot) group.shots.push((shot = {id: shotId, items: []}))
-      shot.items.push(item)
-    }
-  }
-  for (const group of groups.values()) group.shots.sort((a, b) => shotNumber(a.id) - shotNumber(b.id))
-  return [...groups.values()].sort((a, b) => a.order - b.order || a.key.localeCompare(b.key))
-})
-const plannedOf = (list: Item[]) => list.filter(item => item.planned)
-const activeOf = (list: Item[]) => list.filter(item => !item.planned)
-const editItem = (rule: DirectionRule) => {
-  edit(rule)
-  tab.value = 'instruction'
-}
 </script>
 
 <template>
@@ -360,37 +145,16 @@ const editItem = (rule: DirectionRule) => {
         <p v-if="view.restored" class="note">A saved plan version is restored. The instructions remain saved; preview again to apply them to this version.</p>
 
         <!-- what to do next: the proposal to take, or the preview to ask for -->
-        <section v-if="view.proposal" class="dp-card proposal">
-          <header class="dp-card-head">
-            <h2>Proposed changes</h2>
-            <span class="muted">{{ view.proposal.changes.length }} shot(s)</span>
-          </header>
-          <p v-if="view.proposalStale" class="warn">This proposal belongs to an older plan or set of instructions. Preview again before taking it.</p>
-          <p v-if="!view.proposal.changes.length" class="muted">No shot changes proposed.</p>
-          <p v-for="conflict in view.proposal.conflicts" :key="conflict" class="warn">{{ conflict }}</p>
-          <p v-if="view.proposal.conflicts.length" class="muted small">
-            A rule that contradicts another: edit the instructions or widen their scope, then preview again. A note on continuity only: read it, and take the
-            proposal anyway.
-          </p>
-          <article v-for="change in view.proposal.changes" :key="change.shotId" class="change">
-            <h3>{{ change.shotId }} <RouterLink class="go" :to="inTimeline(change.shotId)">open in the timeline</RouterLink></h3>
-            <div class="comparison">
-              <div>
-                <b>Before</b>
-                <pre>{{ describe(change.before) }}</pre>
-              </div>
-              <div>
-                <b>After</b>
-                <pre>{{ describe(change.after) }}</pre>
-              </div>
-            </div>
-          </article>
-          <div class="btn-row">
-            <button class="btn primary" :disabled="blocked || dirty || view.proposalStale || !!view.unresolved.length" @click="take">
-              {{ view.proposal.conflicts.length ? 'Take anyway' : 'Take changes' }}</button
-            ><button class="btn" :disabled="blocked" @click="drop">Drop proposal</button>
-          </div>
-        </section>
+        <ProposalCard
+          v-if="view.proposal"
+          :view="{...view, proposal: view.proposal}"
+          :blocked="blocked"
+          :dirty="dirty"
+          :name="name"
+          :timeline="inTimeline"
+          @take="take"
+          @drop="drop"
+        />
         <div v-else class="actionbar">
           <span v-if="writes.length" class="warn inline"
             >{{ writes.length }} edit{{ writes.length > 1 ? 's' : '' }} wait{{ writes.length > 1 ? '' : 's' }} for the words: <b>Preview changes</b> writes
@@ -413,258 +177,33 @@ const editItem = (rule: DirectionRule) => {
           <span class="muted small">{{ shown.length }} of {{ items.length }}</span>
         </div>
 
-        <section v-if="leftovers.length" class="dp-card leftovers">
-          <header class="dp-card-head">
-            <h2>Left over from the old plan</h2>
-            <div class="spacer" />
-            <button class="btn primary" :disabled="blocked" @click="clearLeftovers()">Clear them out</button>
-          </header>
-          <p class="muted small">
-            {{ leftoverBeats }} {{ leftoverBeats.includes(',') ? 'were' : 'was' }} planned again. These {{ leftovers.length }} were made for the shots before
-            and no longer apply - the new plan has its own. Nothing to decide: clear them out.
-          </p>
-          <details class="planned">
-            <summary>Show them</summary>
-            <div v-for="item in leftovers" :key="item.key" class="item muted-item">
-              <div class="what">
-                <span class="where">{{ scopeText(item.scope) }}</span>
-                <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ withNames(item.text) }}</p>
-              </div>
-              <div class="acts">
-                <button
-                  v-if="item.rule"
-                  class="btn mini"
-                  :disabled="blocked"
-                  title="Apply this instruction to the shot as it is now"
-                  @click="rebind(item.rule)"
-                >
-                  Keep for the new shot
-                </button>
-                <button class="btn mini" :disabled="blocked" @click="clearLeftovers(item)">Clear</button>
-              </div>
-            </div>
-          </details>
-        </section>
-
-        <section v-if="review.length" class="dp-card needs">
-          <header class="dp-card-head">
-            <h2>To decide</h2>
-            <span class="muted small">These select no shot of the plan as it is now: edit them for a shot that is there, or remove them.</span>
-          </header>
-          <div v-for="item in review" :key="item.key" class="item">
-            <div class="what">
-              <span class="where">{{ scopeText(item.scope) }}</span>
-              <RouterLink v-if="item.scope.kind === 'shot'" class="go" :to="inTimeline(item.scope.id)">open in the timeline</RouterLink>
-              <p>{{ item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ withNames(item.text) }}</p>
-              <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
-            </div>
-            <div class="acts">
-              <template v-if="item.rule">
-                <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="editItem(item.rule)">Edit</button>
-                <button class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
-              </template>
-              <button v-else-if="item.edit" class="btn mini" :disabled="blocked" aria-label="Undo edit" @click="unedit(item.edit)">Undo</button>
-            </div>
-          </div>
-        </section>
-
-        <p v-if="!items.length" class="muted dp-empty">No instructions or edits yet. Write one on the right, or direct a shot on the timeline.</p>
-        <p v-else-if="!shown.length" class="muted dp-empty">Nothing matches the filter.</p>
-
-        <section v-for="group in grouped" :key="group.key" class="dp-card dp-group">
-          <header class="dp-card-head">
-            <h2>{{ group.title }}</h2>
-            <span v-if="group.label" class="muted" :title="withNames(group.label)">{{ withNames(group.label) }}</span>
-          </header>
-          <div v-for="item in activeOf(group.general)" :key="item.key" class="item">
-            <div class="what">
-              <span v-if="item.edit" class="dp-tag">edit</span>
-              <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
-              <p>{{ withNames(item.text) }}</p>
-              <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
-            </div>
-            <div class="acts">
-              <template v-if="item.rule">
-                <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="editItem(item.rule)">Edit</button>
-                <button class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
-              </template>
-              <button v-else-if="item.edit" class="btn mini" :disabled="blocked" aria-label="Undo edit" @click="unedit(item.edit)">Undo</button>
-            </div>
-          </div>
-          <details v-if="plannedOf(group.general).length" class="planned">
-            <summary>Who is in the shot ({{ plannedOf(group.general).length }}, kept when the shots are planned again)</summary>
-            <div v-for="item in plannedOf(group.general)" :key="item.key" class="item muted-item">
-              <div class="what">
-                <span class="dp-tag">in the plan</span>
-                <p>{{ withNames(item.text) }}</p>
-                <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
-              </div>
-              <div class="acts">
-                <button v-if="item.rule" class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
-              </div>
-            </div>
-          </details>
-          <div v-for="shot in group.shots" :key="shot.id" class="shot-block">
-            <h3>Shot {{ shotNumber(shot.id) }} <RouterLink class="go" :to="inTimeline(shot.id)">open in the timeline</RouterLink></h3>
-            <div v-for="item in activeOf(shot.items)" :key="item.key" class="item">
-              <div class="what">
-                <span v-if="item.edit" class="dp-tag">edit</span>
-                <span v-if="item.rule?.characterId" class="dp-tag dp-who">{{ name(item.rule.characterId) }}</span>
-                <p>{{ withNames(item.text) }}</p>
-                <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
-              </div>
-              <div class="acts">
-                <template v-if="item.rule">
-                  <button class="btn mini" :disabled="blocked || dirty" aria-label="Edit instruction" @click="editItem(item.rule)">Edit</button>
-                  <button class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
-                </template>
-                <button v-else-if="item.edit" class="btn mini" :disabled="blocked" aria-label="Undo edit" @click="unedit(item.edit)">Undo</button>
-              </div>
-            </div>
-            <details v-if="plannedOf(shot.items).length" class="planned">
-              <summary>Who is in the shot ({{ plannedOf(shot.items).length }})</summary>
-              <div v-for="item in plannedOf(shot.items)" :key="item.key" class="item muted-item">
-                <div class="what">
-                  <span class="dp-tag">in the plan</span>
-                  <p>{{ withNames(item.text) }}</p>
-                  <p v-for="issue in item.issues" :key="issue" class="issue">{{ issue }}</p>
-                </div>
-                <div class="acts">
-                  <button v-if="item.rule" class="btn mini" :disabled="blocked" aria-label="Remove instruction" @click="remove(item.rule)">Remove</button>
-                </div>
-              </div>
-            </details>
-          </div>
-        </section>
+        <DirectionList
+          :view="view"
+          :items="items"
+          :shown="shown"
+          :name="name"
+          :blocked="blocked"
+          :dirty="dirty"
+          :timeline="inTimeline"
+          @edit="editRule"
+          @remove="remove"
+          @undo="unedit"
+          @rebind="rebind"
+          @clear="clearLeftovers"
+        />
       </main>
 
       <aside class="direction-side">
         <div class="dp-tabs" role="tablist">
           <button role="tab" :aria-selected="tab === 'instruction'" :class="{on: tab === 'instruction'}" @click="tab = 'instruction'">
-            {{ editing ? 'Edit instruction' : 'New instruction' }}
+            {{ form?.editing ? 'Edit instruction' : 'New instruction' }}
           </button>
           <button role="tab" :aria-selected="tab === 'edit'" :class="{on: tab === 'edit'}" @click="tab = 'edit'">Direct edit</button>
         </div>
-        <fieldset v-if="tab === 'instruction'" :disabled="blocked" class="direction-form">
-          <label
-            >Scope<select v-model="scopeKind" @change="scopeId = ''">
-              <option value="global">Whole project</option>
-              <option value="character">Character throughout</option>
-              <option :value="film ? 'scene' : 'beat'">{{ film ? 'Scene' : 'Beat' }}</option>
-              <option v-if="!film" value="time">Song time range</option>
-              <option value="shot">One shot</option>
-            </select></label
-          >
-          <label v-if="scopeKind === 'character'"
-            >Character<select v-model="scopeId">
-              <option value="" disabled>Choose character</option>
-              <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select></label
-          >
-          <label v-if="scopeKind === 'beat' || scopeKind === 'scene'"
-            >{{ film ? 'Scene' : 'Beat'
-            }}<select v-model="scopeId">
-              <option value="" disabled>Choose {{ film ? 'scene' : 'beat' }}</option>
-              <option v-for="g in view.groups" :key="g.id" :value="g.id">{{ g.id }} · {{ g.label }}</option>
-            </select></label
-          >
-          <label v-if="scopeKind === 'shot'"
-            >Shot<select v-model="scopeId">
-              <option value="" disabled>Choose shot</option>
-              <option v-for="shot in view.shots" :key="shot.id" :value="shot.id">{{ shot.id }} · {{ shot.data.action }}</option>
-            </select></label
-          >
-          <div v-if="scopeKind === 'time'" class="dp-pair">
-            <label>From (s)<input v-model.number="from" type="number" min="0" step="0.1" /></label>
-            <label>To (s)<input v-model.number="to" type="number" min="0" step="0.1" /></label>
-          </div>
-          <label v-if="scopeKind !== 'character'"
-            >Only for character<select v-model="characterId">
-              <option value="">Everyone in scope</option>
-              <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select></label
-          >
-          <label>Instruction<textarea v-model="text" rows="5" placeholder="Kael turns toward his own left, ending with his back to the camera." /></label>
-          <div class="btn-row">
-            <button class="btn primary" :disabled="invalid || !dirty" @click="save">Save instruction</button
-            ><button v-if="editing || text" class="btn" @click="clear">Cancel edit</button>
-          </div>
-          <p class="muted small">Saved, nothing changes yet: <b>Preview changes</b> asks the language model.</p>
-        </fieldset>
-        <fieldset v-else :disabled="blocked" class="direction-form">
-          <p class="muted small">By the code, without the language model; kept when the shots are planned again. Whoever sings, plays or speaks stays.</p>
-          <label
-            >Applies to<select v-model="editScopeKind" @change="editScopeId = ''">
-              <option value="global">Whole project</option>
-              <option value="character">Every shot with a character</option>
-              <option :value="film ? 'scene' : 'beat'">{{ film ? 'Scene' : 'Beat' }}</option>
-              <option v-if="!film" value="time">Song time range</option>
-            </select></label
-          >
-          <label v-if="editScopeKind === 'character'"
-            >With<select v-model="editScopeId">
-              <option value="" disabled>Choose character</option>
-              <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select></label
-          >
-          <label v-if="editScopeKind === 'beat' || editScopeKind === 'scene'"
-            >{{ film ? 'Scene' : 'Beat'
-            }}<select v-model="editScopeId">
-              <option value="" disabled>Choose {{ film ? 'scene' : 'beat' }}</option>
-              <option v-for="g in view.groups" :key="g.id" :value="g.id">{{ g.id }} · {{ g.label }}</option>
-            </select></label
-          >
-          <div v-if="editScopeKind === 'time'" class="dp-pair">
-            <label>From (s)<input v-model.number="editFrom" type="number" min="0" step="0.1" /></label>
-            <label>To (s)<input v-model.number="editTo" type="number" min="0" step="0.1" /></label>
-          </div>
-          <label
-            >Edit<select v-model="editKind">
-              <option value="remove">Take a person out of the picture</option>
-              <option value="size">Set the shot size</option>
-            </select></label
-          >
-          <label v-if="editKind === 'remove'"
-            >Person<select v-model="editWho">
-              <option value="" disabled>Choose character</option>
-              <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select></label
-          >
-          <label v-else
-            >Size<select v-model="editSize">
-              <option v-for="s in ['wide', 'medium', 'close', 'extreme']" :key="s" :value="s">{{ s }}</option>
-            </select></label
-          >
-          <div class="btn-row"><button class="btn primary" :disabled="editInvalid" @click="addEdit">Add edit and build the prompts</button></div>
-          <p class="muted small">Someone into one shot: <b>Direct this shot</b> on the timeline, <b>Bring in</b>.</p>
-        </fieldset>
+        <InstructionForm v-show="tab === 'instruction'" ref="form" v-model:dirty="dirty" :view="view" :film="film" :blocked="blocked" @save="save" />
+        <EditForm v-show="tab === 'edit'" :view="view" :film="film" :blocked="blocked" @add="addEdit" />
 
-        <div v-if="view.activeVersion" class="side-block">
-          <h3>Accepted plan</h3>
-          <p class="muted small">Taking or restoring builds the clip prompts again; render the affected clips on the timeline.</p>
-          <button class="btn" :disabled="blocked || view.pending" @click="plan">Build the clip prompts again</button>
-        </div>
-        <details v-if="view.versions.length" class="side-block">
-          <summary>Plan versions ({{ view.versions.length }})</summary>
-          <div v-for="version in [...view.versions].reverse()" :key="version.id" class="version-row">
-            <span class="small"
-              >{{ version.id.startsWith('baseline-') ? 'Original plan' : new Date(version.createdAt).toLocaleString() }} · {{ version.changes.length }} shot
-              edits{{ version.id === view.activeVersion ? ' · current' : '' }}</span
-            ><button class="btn mini" :disabled="blocked || version.id === view.activeVersion" @click="restore(version.id)">Restore plan</button>
-          </div>
-        </details>
-        <details class="side-block">
-          <summary>CLI</summary>
-          <pre class="cli"
-            >{{ command }} --json
-{{ command }} --show=SHOT
-{{ command }} --add="..." --scope=shot:SHOT --preview --take
-{{ command }} --with=CHARACTER --scope=shot:SHOT --preview --take
-{{ command }} --without=CHARACTER --scope=beat:BEAT
-{{ command }} --size=close --scope=shot:SHOT
-{{ command }} --take --despite-conflicts
-{{ command }} --drop</pre>
-        </details>
+        <PlanVersions :view="view" :blocked="blocked" :command="command" @plan="plan" @restore="restore" />
       </aside>
     </div>
   </div>
@@ -680,6 +219,12 @@ const editItem = (rule: DirectionRule) => {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--space-5);
   align-items: start;
+}
+.direction-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
 }
 .direction-side {
   position: sticky;
@@ -711,67 +256,8 @@ const editItem = (rule: DirectionRule) => {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
-.direction-form {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.direction-form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-.direction-form select,
-.direction-form textarea,
-.direction-form input {
-  width: 100%;
-}
-.dp-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-}
-.side-block h3 {
-  font-size: var(--text-s);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-.side-block summary {
-  cursor: pointer;
-  color: var(--muted);
-}
-.side-block p {
-  margin-bottom: 8px;
-}
-.version-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-}
-.cli {
-  font: var(--text-xs)/1.6 var(--mono);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  margin: 8px 0 0;
-}
 .small {
   font-size: var(--text-s);
-}
-
-.direction-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
 }
 .actionbar {
   display: flex;
@@ -796,146 +282,6 @@ const editItem = (rule: DirectionRule) => {
   flex: 1;
   max-width: 420px;
 }
-.dp-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  padding: 10px 14px 6px;
-}
-.dp-card.needs {
-  border-color: var(--stale);
-}
-.dp-card.proposal {
-  border-color: var(--accent);
-  padding-bottom: 12px;
-}
-.dp-card-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-bottom: 4px;
-}
-.dp-card-head h2 {
-  font-size: var(--text-l);
-  font-weight: 600;
-  white-space: nowrap;
-}
-/* the beat's story: two lines, the whole of it on hover */
-.dp-card-head > .muted {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: var(--text-s);
-}
-.shot-block {
-  border-top: 1px solid var(--line);
-  padding-top: 6px;
-  margin-top: 4px;
-}
-.shot-block h3,
-.change h3 {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  font-size: var(--text-s);
-  font-weight: 600;
-  color: var(--muted);
-  margin: 2px 0;
-}
-.go {
-  font-size: var(--text-s);
-  font-weight: normal;
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: 6px 0;
-}
-.item + .item {
-  border-top: 1px dashed var(--line);
-}
-.what {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-2);
-}
-.what p {
-  flex: 1 1 100%;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-.what .dp-tag + p,
-.what .dp-tag.dp-who + p {
-  flex: 1 1 0;
-}
-.where {
-  font-weight: 600;
-}
-.dp-card.leftovers {
-  border-color: var(--line);
-  background: var(--raised);
-}
-.dp-card.leftovers .dp-card-head {
-  align-items: center;
-}
-.issue {
-  color: var(--stale);
-  font-size: var(--text-s);
-}
-.dp-tag {
-  font-size: var(--text-xs);
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  white-space: nowrap;
-}
-.dp-tag.dp-who {
-  color: var(--text);
-}
-.acts {
-  display: flex;
-  gap: var(--space-1);
-  flex-shrink: 0;
-}
-.planned {
-  margin: 4px 0;
-}
-.planned summary {
-  cursor: pointer;
-  font-size: var(--text-s);
-  color: var(--muted);
-  padding: 4px 0;
-}
-.muted-item {
-  opacity: 0.7;
-}
-.dp-empty {
-  padding: 8px 2px;
-}
-.change {
-  border-top: 1px solid var(--line);
-  padding: 8px 0;
-}
-.comparison {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-.comparison pre {
-  font: inherit;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  margin: 4px 0 0;
-}
 @media (max-width: 1000px) {
   .direction-layout {
     grid-template-columns: 1fr;
@@ -944,11 +290,6 @@ const editItem = (rule: DirectionRule) => {
     position: static;
     max-height: none;
     order: -1;
-  }
-}
-@media (max-width: 700px) {
-  .comparison {
-    grid-template-columns: 1fr;
   }
 }
 </style>
