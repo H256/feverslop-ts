@@ -329,7 +329,7 @@ export class FilmRenderer extends Renderer {
     }
 
     // a clip with dialogue is used with every frame the model rendered (assembleFilm useRendered)
-    protected override framesUsed(clip: {frames: number}, available: number) {
+    override framesUsed(clip: {frames: number}, available: number) {
         return (clip as FilmClipRequest).dialogue.length ? available : super.framesUsed(clip, available)
     }
 }

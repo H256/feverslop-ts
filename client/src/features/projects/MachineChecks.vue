@@ -26,14 +26,14 @@ const MARK = {ready: '✔', missing: '✗', note: '·'} as const
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .mc-row {
   min-width: 0;
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
   align-items: start;
 }
 .mc-mark {
@@ -51,12 +51,12 @@ const MARK = {ready: '✔', missing: '✗', note: '·'} as const
 .mc-found {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-s);
   overflow-wrap: anywhere;
 }
 .mc-fix {
   display: inline-block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--text-s);
 }
 </style>

@@ -4,8 +4,8 @@ import {RouterLink} from 'vue-router'
 import {mediaUrl} from '../../api/urls'
 import {useTimeline} from './context'
 
-/** What the project is as a whole, in the top bar: the final video, the last run, pictures missing or stale, the next step. */
-const {project, fresh, status, session, actions} = useTimeline()
+/** What the project is as a whole, in the top bar: the final video, the last run, pictures missing or stale. The next step is a bar of every project page (NextStep.vue, #833). */
+const {project, fresh, session, actions} = useTimeline()
 const FINAL = {
   missing: ['No final video', 'chip'],
   current: ['Final video current', 'chip good'],
@@ -19,7 +19,6 @@ const run = computed(() => (last.value && last.value.state !== 'finished' ? RUN[
 const failed = computed(() => last.value?.state === 'failed' || last.value?.state === 'stopped')
 const missingPictures = computed(() => project.value.pictures.filter(p => !p.exists).length)
 const stalePictures = computed(() => project.value.pictures.filter(p => fresh.value.pictures[p.id] === 'stale').length)
-const next = computed(() => status.value?.next)
 </script>
 
 <template>
@@ -35,13 +34,4 @@ const next = computed(() => status.value?.next)
   <button v-if="failed && last" class="chip" :title="last.command" @click="actions.repeatLast(last)">Repeat</button>
   <RouterLink v-if="missingPictures" class="chip bad" :to="`${session.root}/references`">{{ missingPictures }} pictures missing</RouterLink>
   <RouterLink v-if="stalePictures" class="chip stale" :to="`${session.root}/references`">{{ stalePictures }} pictures stale</RouterLink>
-  <RouterLink v-if="next?.page" class="chip next" :title="next.why" :to="`${session.root}/${next.page}`">Next: {{ next.why }}</RouterLink>
-  <button
-    v-else-if="next?.command"
-    class="chip next"
-    :title="[next.why, next.command, next.estimate].filter(Boolean).join('\n')"
-    @click="actions.runNext(next)"
-  >
-    Next: {{ next.why }}
-  </button>
 </template>

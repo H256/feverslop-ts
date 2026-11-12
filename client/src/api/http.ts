@@ -1,11 +1,28 @@
-/** A request the server refused or could not answer: its own words when it sent some, and the status. */
+/** What kind of no the server said (#837): a mistake in the input, a run holding the project, nothing there, an error of the workspace. */
+export type ErrorKind = 'invalid' | 'busy' | 'missing' | 'failed' | 'unavailable'
+
+/** A request the server refused or could not answer: its own words when it sent some, the status, and the kind of no. */
 export class HttpError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly kind?: ErrorKind,
+    /** for an error of the workspace: the line of the code it happened in */
+    readonly where?: string,
   ) {
     super(message)
   }
+}
+
+/** The error of an answer that is not ok: its words, kind and place as the server sent them, else the status. */
+export function errorOfAnswer(body: unknown, status: number): HttpError {
+  const said = (body && typeof body === 'object' ? body : {}) as {error?: unknown; kind?: unknown; where?: unknown}
+  return new HttpError(
+    typeof said.error === 'string' ? said.error : `Request failed (${status})`,
+    status,
+    typeof said.kind === 'string' ? (said.kind as ErrorKind) : undefined,
+    typeof said.where === 'string' ? said.where : undefined,
+  )
 }
 
 /**
@@ -22,10 +39,7 @@ async function send<T>(url: string, init: RequestInit = {}): Promise<T> {
   } catch {
     readable = false
   }
-  if (!response.ok) {
-    const said = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string' ? body.error : `Request failed (${response.status})`
-    throw new HttpError(said, response.status)
-  }
+  if (!response.ok) throw errorOfAnswer(body, response.status)
   if (!readable) throw new HttpError(`The answer of ${url.split('?')[0]} is not JSON`, response.status)
   return body as T
 }

@@ -51,7 +51,24 @@ export type LibraryEntry = {
     frames: Media[]
     usedBy: {kind: ProjectKind; id: string; role: string}[]
 }
-export type Library = {dir: string; assets: LibraryEntry[]}
+/** A song of the library (bun run export-song): how long, what is worked out of it, the music videos made of it (#835). */
+export type LibrarySongEntry = {
+    id: string
+    name: string
+    seconds?: number
+    stems: number
+    lines: number
+    byHand: number
+    source?: string
+    audio?: Media
+    usedBy: {kind: ProjectKind; id: string}[]
+}
+export type Library = {dir: string; assets: LibraryEntry[]; songs: LibrarySongEntry[]}
+/** A library entry renamed, described anew or put away - what `bun run library rename|describe|remove` does (#835). */
+export type LibraryChange =
+    | {action: 'rename'; kind: AssetKind | 'song'; id: string; name: string}
+    | {action: 'describe'; kind: AssetKind; id: string; description: string}
+    | {action: 'remove'; kind: AssetKind | 'song'; id: string}
 /** One group of measured jobs of `bun run stats` (#836): a workflow variant on a GPU, or a language model. Seconds. */
 export type StatsRow = {key: string; n: number; median: number; p90: number; cold: number; retries: number; failed: number}
 /** The Stats page: what `bun run stats --json` reports, with the fields its tables show. */
@@ -240,6 +257,19 @@ export type ProjectStatus = {
 export type ListingStatus = Pick<ProjectStatus, 'clips' | 'pictures' | 'next'>
 export type ClipProgress = 'waiting' | 'rendering' | 'done'
 export type RunProgress = {clips: Record<string, ClipProgress>; done: number; total: number}
+/**
+ * What a run says as data (#829), one JSON line each in `<project>/logs/<run>.events.jsonl` next to its log - the workspace reads
+ * these, never the wording of the log. `at`: milliseconds since 1970.
+ */
+export type RunEvent = {at: number} & (
+    | {type: 'step'; state: 'started' | 'cached' | 'done'; name: string; title: string}
+    | {type: 'warning'; message: string}
+    | {type: 'failed'; message: string; advice?: string}
+    | {type: 'cancelled'; message: string}
+    | {type: 'done'; output?: string; next?: string; warnings: number}
+)
+/** The events of the newest run from `from` on: `from` 0 starts a run's list anew (another run, or a page that asks again). */
+export type RunEvents = {events: RunEvent[]; from: number; next: number}
 export type Estimate = {estimate: string; risks?: string[]; fixedSeed?: number}
 
 ////////// VERSIONS - what was put away when something was made again
@@ -527,6 +557,8 @@ export type SettingView = {
     /** a setting that only does something while this one is on: shown, but not to be changed while it is off */
     needs?: string
     choices?: {value: unknown; label: string}[]
+    /** The value that means "not set by you" (-1: the workflow's own, a random seed): the page shows the label, the file keeps the value (#834). */
+    auto?: {value: unknown; label: string}
     note: string
     value: unknown // what the project has now: its own, else the default
     default: unknown
