@@ -1,4 +1,5 @@
 import {noProject} from './lib/usage.ts'
+import {extraArgument} from './lib/command-schema.ts'
 import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
@@ -92,6 +93,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 setOutput({verbose: undefined, show: args.show.split(',').filter(Boolean)})
 // the options of a run both pipelines take (lib/run-options.ts) - "song" is never part of --render=all, it has to be asked for
 const {
@@ -101,7 +105,7 @@ const {
     until,
 } = (() => {
     try {
-        return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY))
+        return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
         return log.usageError((e as Error).message, usage)
     }

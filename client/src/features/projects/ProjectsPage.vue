@@ -55,15 +55,17 @@ const showMachine = async () => {
 /** A new music video: the form becomes the options of `bun run init`, and the page goes to the project it made. */
 const newProject = async () => {
   const draft = reactive(newProjectDraft())
+  // the ids there are: a new one is not one of them (#939)
+  const taken = projects.value.filter(p => p.kind === 'music').map(p => p.id)
   // the songs of the library a project can start from (#835) - none when the library cannot be read
   const songs = (await workspace.library().catch(() => undefined))?.songs ?? []
   const made = await ask({
     title: 'New music video',
     lines: ['Writes projects/<id>/ with what you give here. Nothing is planned or rendered yet.'],
-    body: () => h(NewProjectForm, {draft, songs}),
+    body: () => h(NewProjectForm, {draft, songs, taken}),
     confirm: 'Create',
     submit: async () => {
-      const problem = newProjectProblem(draft)
+      const problem = newProjectProblem(draft, taken)
       if (problem) throw new Error(problem)
       await workspace.createProject(newProjectRequest(draft))
     },

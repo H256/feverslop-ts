@@ -25,6 +25,7 @@ Three things hold everywhere:
 Every card shows how far a project is, when it was changed, and what would come next; a finished video made over or through post-work is named under the card and plays on **Post-work** when you play it. At the top you filter by kind (**Music videos**, **Films**) and state (**Running**, **Failed**, **Unfinished**, **Done**) and search with **Find a project**. A click on a card opens the project.
 
 - **New music video** and **New film** make a project from a form - the options of `bun run init` and `bun run film:init`. A music video starts from a song file, a song of the library or an idea; a film from a story idea or a screenplay.
+  The id of a music video is suggested from its name and can be changed; an id that is taken or is no folder name is said at the field. Its song is chosen as a file - sent to the workspace and copied into the project as it is created - or typed as a path on this machine. Who sings on screen is nobody, chosen from the song by the plan (`--singers=auto`), or the people named; the language is any code (`en`, `de`, …), named as it is typed. Nothing is planned or rendered by creating it.
 - **Machine** shows what this machine has of what a video needs (`bun run doctor`): the language model, ComfyUI and the nodes and models the workflows name, ffmpeg, uv, disk space - each missing part with its fix. Below it the servers are set: the language model, the model that reads pictures, the ComfyUI servers to add or remove (`bun run setup … --…`).
 
 ## The bar at the top
@@ -135,11 +136,11 @@ Useful keys: `Space` plays and pauses, `←` and `→` jump to the clip before o
 |---|---|
 | Counts | how many clips are rendered, missing, stale or pinned, marks, *goes on* |
 | Marked | only with marked clips: **Render marked**, **Preview marked**, **Plan … again**, **People…**, **Clear** (see [Several clips at once](#several-clips-at-once)) |
-| Render | **Render stale**, **Render missing**, **Render all**, each with the number of clips |
+| Render | **Render stale**, **Render missing**, **Render all again**, each with the number of clips |
 | Check | **Only flagged** hides all others, `‹` and `›` jump from one flagged clip to the next, **Mark flagged**, **Review**, **Scan for backdrops** (looks for grey studio backdrops, no GPU), **Check textures** (whether continuing clips get grittier from link to link, no GPU), for a film **Check cuts** (whether the cuts within a scene fit, read by a model that reads pictures). What a check finds marks the clips. |
 | Finish | **Preview all**, **Preview video**, **Refinish**, and, once there is a finished video, **Post-work** (goes to the Post-work tab) |
 
-**Render stale**, **Render missing** and **Render all** mark these clips and then ask the usual question with its estimate. **Render all** also takes clips that count as current, for example after another seed.
+**Render stale**, **Render missing** and **Render all again** mark these clips and then ask the usual question with its estimate. **Render all again** also takes clips that count as current, for example after another seed - in the terminal that is `--again` with the clips in `--only`; `--render=all` renders only what is missing.
 
 ## Rendering a clip again
 

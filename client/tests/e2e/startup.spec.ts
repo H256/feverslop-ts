@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test'
-import {readFileSync} from 'node:fs'
+import {existsSync, readFileSync} from 'node:fs'
 import {startEditor} from './editor'
 
 const {version} = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {version: string}
@@ -169,4 +169,46 @@ test('first run: the steps, no red server, and the new-project forms send what t
   await song.getByRole('button', {name: 'Create'}).click()
   await expect(page).toHaveURL(/\/p\/music\/rain\/story$/)
   expect(asked.at(-1)?.body).toEqual({id: 'rain', idea: 'A song about rain'})
+})
+
+test('a new music video: the id from its name and checked, a song chosen and sent, who sings and the language as choices (#939)', async ({page}) => {
+  await page.route('**/api/projects', route =>
+    route.fulfill({json: {projects: [{id: 'rain', kind: 'music', title: 'rain', changed: 1, clips: 0, rendered: 0, plan: {stage: 'plan'}}]}}),
+  )
+  await page.route('**/api/library/assets', route => route.fulfill({json: {dir: 'library', assets: [], songs: []}}))
+  // what the form sends is read, and the real editor makes the project: init copies the song in, its upload goes
+  let asked: Record<string, unknown> | undefined
+  await page.route('**/api/projects/new', async route => {
+    asked = route.request().postDataJSON() as Record<string, unknown>
+    await route.fallback()
+  })
+  await page.goto(base)
+  await page.getByRole('button', {name: 'New music video'}).first().click()
+  const form = page.locator('dialog')
+  // the id follows the name, until it is changed by hand
+  await form.getByPlaceholder('Well of Youth').fill('Rain')
+  const id = form.getByPlaceholder('well-of-youth')
+  await expect(id).toHaveValue('rain')
+  await expect(form).toContainText('There is a project "rain" already')
+  await id.fill('storm-song')
+  await expect(form).not.toContainText('already')
+  await form.getByPlaceholder('Well of Youth').fill('Rain at night')
+  await expect(id).toHaveValue('storm-song')
+  // a file chosen is sent at once (the real editor takes it), never a fakepath
+  const wav = Buffer.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, 1, 2, 3, 4])
+  await form.getByLabel('Choose the song file').setInputFiles({name: 'my song.wav', mimeType: 'audio/wav', buffer: wav})
+  await expect(form.getByRole('status')).toContainText('my song.wav')
+  await form.locator('textarea').first().fill('Rain falls')
+  // who sings, and the language - named as it is typed
+  await form.getByLabel('These people:').check()
+  await form.getByLabel('Who sings, by name').fill('Lira')
+  const language = form.getByRole('combobox', {name: 'Language of the lyrics'})
+  await language.fill('de')
+  await expect(form).toContainText('German')
+  await form.getByRole('button', {name: 'Create'}).click()
+  await expect(page).toHaveURL(/\/p\/music\/storm-song\/story$/)
+  expect(asked).toMatchObject({id: 'storm-song', lyrics: 'Rain falls', singers: 'Lira', language: 'de'})
+  expect(String(asked?.song)).toMatch(/workspace-song-\w+[\\/]song\.wav$/)
+  expect(String(asked?.song)).not.toContain('fakepath')
+  expect(existsSync(String(asked?.song))).toBe(false)
 })

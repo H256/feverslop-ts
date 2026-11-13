@@ -5,6 +5,7 @@ import {join} from 'node:path'
 import {filmInitArgs, initArgs, saidWrong} from './new-project.ts'
 import {editorHandler} from './server.ts'
 import {setupArgs} from './setup-run.ts'
+import {songType} from './upload.ts'
 
 // #831: a new music video from the start page is `bun run init` with the form as its options - the same command as in the terminal.
 describe('the arguments of init from the form', () => {
@@ -82,6 +83,36 @@ describe('the routes of the start page', () => {
         expect(existsSync(join(root, 'projects', 'snow'))).toBe(false)
     }, 60_000)
 
+    // #939: the page cannot say where a chosen file is - it sends the song, and init copies it from where the server put it
+    test('a song chosen in the form: sent, taken by what its bytes are, copied into the new project, and its upload gone', async () => {
+        const upload = (bytes: Uint8Array, name: string) => {
+            const form = new FormData()
+            form.set('song', new File([bytes], name))
+            return editorHandler()(new Request('http://localhost/api/uploads/song', {method: 'POST', body: form}))
+        }
+        // a WAV head - RIFF....WAVE - and a little more
+        const wav = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, 1, 2, 3, 4, 5, 6])
+        const sent = await upload(wav, 'C:\\fakepath\\my song.mp3')
+        expect(sent.status).toBe(200)
+        const taken = (await sent.json()) as {file: string; name: string; bytes: number}
+        // what the bytes are counts, not the name; the browser's fakepath is never a path here
+        expect(taken.file).toEndWith('song.wav')
+        expect(taken.file).not.toContain('fakepath')
+        expect(taken.bytes).toBe(wav.length)
+        expect(readFileSync(taken.file)).toEqual(Buffer.from(wav))
+
+        const made = await post({id: 'sent-song', song: taken.file, lyrics: 'la la'})
+        expect(await made.json()).toEqual({id: 'sent-song'})
+        expect(readFileSync(join(root, 'projects', 'sent-song', 'input', 'song.wav'))).toEqual(Buffer.from(wav))
+        expect(existsSync(taken.file)).toBe(false)
+
+        const notASong = await upload(new TextEncoder().encode('just words'), 'song.wav')
+        expect(notASong.status).toBe(400)
+        expect(((await notASong.json()) as {error: string}).error).toBe('not a song: a WAV, a FLAC or an MP3 is taken')
+        const none = await editorHandler()(new Request('http://localhost/api/uploads/song', {method: 'POST', body: new FormData()}))
+        expect(none.status).toBe(400)
+    }, 60_000)
+
     test('the servers of the machine: read as setup show --json, changed by the command (#831)', async () => {
         const handler = editorHandler()
         const change = (body: unknown) => handler(new Request('http://localhost/api/setup', {method: 'POST', body: JSON.stringify(body)}))
@@ -123,4 +154,17 @@ describe('the routes of the start page', () => {
         expect(checks.find(check => check.what === 'LLM server')).toMatchObject({state: 'missing', fix: 'bun run setup llm'})
         expect(checks.map(check => check.what)).toContain('ffmpeg')
     }, 30_000)
+})
+
+describe('what a sent song is, by its first bytes (#939)', () => {
+    test('a WAV, a FLAC, an MP3 with a tag or a frame header - nothing else', () => {
+        const bytes = (...values: number[]) => new Uint8Array([...values, ...new Array<number>(12).fill(0)])
+        expect(songType(bytes(0x66, 0x4c, 0x61, 0x43))).toBe('flac')
+        expect(songType(bytes(0x49, 0x44, 0x33, 4))).toBe('mp3')
+        expect(songType(bytes(0xff, 0xfb, 0x90))).toBe('mp3')
+        // an MPEG frame of another layer, a PNG, words
+        expect(songType(bytes(0xff, 0xfd))).toBeUndefined()
+        expect(songType(bytes(0x89, 0x50, 0x4e, 0x47))).toBeUndefined()
+        expect(songType(new TextEncoder().encode('RIFF but no wave'))).toBeUndefined()
+    })
 })

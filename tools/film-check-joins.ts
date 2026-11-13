@@ -1,4 +1,5 @@
 import {noProject} from '../lib/usage.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 import {cli} from '../lib/cli.ts'
 // The cuts within a scene, checked by a model that reads pictures: the last frame of a clip against the first of the next. It only
 // says what it finds - the clips to render again are named with the command to do it, nothing is rendered on its own.
@@ -21,10 +22,7 @@ import {type CheckedJoin, JOINS_FILE, videoStamp} from '../lib/clip-checks.ts'
 cli('film:check-joins')
 
 const usage = 'usage: bun run film:check-joins <film-id> [--only=clip-004,clip-007] [--again]'
-const {
-    values: args,
-    positionals: [id],
-} = (() => {
+const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
@@ -35,6 +33,10 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a film id'])
+if (extra) log.usageError(extra, usage)
+const [id] = positionals
 if (!id || !filmExists(id)) log.usageError(noProject('film', id, filmIds()), usage)
 const dir = filmDir(id!)
 lockProject(dir, `film ${id}`)

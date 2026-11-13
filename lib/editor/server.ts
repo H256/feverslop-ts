@@ -15,6 +15,7 @@ import {doctor} from '../doctor.ts'
 import {settingsView} from '../setup-options.ts'
 import {runSetup} from './setup-run.ts'
 import {createFilm, createProject} from './new-project.ts'
+import {SONG_MAX_BYTES, takeSongUpload, UploadRefused} from './upload.ts'
 import {failure, json, MEDIA_TYPES, mediaFile, notFound, refused} from './http.ts'
 import {findRoute, LIBRARY_ROUTES, PROJECT_ROUTES, type Route} from './project-routes.ts'
 // what the tests and the tools take from the server, from where it lives now
@@ -196,6 +197,16 @@ export function editorHandler(runs = new RunControl(), options: EditorOptions = 
                         return refused(e)
                     }
                 }
+                // a song chosen in the form of a new music video (#939): the file itself - the page cannot say where it is
+                if (parts[1] === 'uploads' && parts[2] === 'song' && post) {
+                    try {
+                        const length = Number(request.headers.get('content-length') ?? 0)
+                        if (length > SONG_MAX_BYTES + 64 * 1024) throw new UploadRefused(`the song is too large - at most ${SONG_MAX_BYTES / 1024 / 1024} MB`)
+                        return json(await takeSongUpload((await request.formData()).get('song')))
+                    } catch (e) {
+                        return refused(e)
+                    }
+                }
                 // a new film: `bun run film:init <id> …` with the form as its options (#831)
                 if (parts[1] === 'films' && parts[2] === 'new' && post) {
                     try {
@@ -251,7 +262,7 @@ export function startEditor(port: number) {
     runs.watchQueues(allTargets)
     for (let attempt = 0; ; attempt++) {
         try {
-            return Bun.serve({hostname: '127.0.0.1', port: port + attempt, idleTimeout: 0, fetch})
+            return Bun.serve({hostname: '127.0.0.1', port: port + attempt, idleTimeout: 0, maxRequestBodySize: SONG_MAX_BYTES + 1024 * 1024, fetch})
         } catch (e) {
             if ((e as NodeJS.ErrnoException).code !== 'EADDRINUSE' || attempt >= 20) throw e
         }
