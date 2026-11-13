@@ -302,7 +302,7 @@ built on it (and everything built on those):
 | `singerVoice`                 | `story` (and everything after it), `songStyle` |
 | `lyricsLanguage`              | `transcript`                        |
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
-| `clipPrompt`                          | `"full"` (default) = a clip prompt as before; `"compact"` = every movement told once - a person's entry keeps where they are and how they are framed, the movement is in the action of the shot only - and the shot sentence in its natural order ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind"). A switch to render the two against each other; a change makes every rendered clip stale |
+| `clipPrompt` | `"compact"` (what `init` writes into a new project) = every movement told once - a person's entry keeps where they are and how they are framed, the movement is in the action of the shot only - each person named once, by their label, the shot sentence in its natural order ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind") and an opening clip summed up by its first shot; `"full"` (the default of a project made before, without the key) = the prompt as before. Rendered against each other on three clips with one seed, compact lost nothing visible (#824). A change makes every rendered clip stale |
 | `fightClips`                  | `blocking` (and so `shotMoments`)   |
 | `vocalGap`                    | `timeline` (and everything after it) |
 | `locationView`, `sequenceSheets` | `shotViews`                      |
