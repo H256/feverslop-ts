@@ -68,6 +68,8 @@ const stateOf = (tab: Tab): 'done' | 'changed' | 'next' | undefined => {
     return changedStages(session.status.value?.steps ?? [], project.value!.kind).includes(tab.stage) ? 'changed' : 'done'
   return plan.next === tab.stage ? 'next' : undefined
 }
+// the state in words, for who does not see the mark before the name (#941)
+const stateText = {done: ' (planned)', changed: ' (planned, changed since)', next: ' (planned next)'} as const
 const titleOf = (tab: Tab) => {
   const state = stateOf(tab)
   const kind = project.value?.kind ?? 'music'
@@ -91,15 +93,19 @@ const stopOpening = watch(project, p => {
   <Teleport :to="TOP_NAV" defer>
     <template v-for="(group, n) in groups" :key="group.name">
       <span v-if="n" :class="['pl-gap', {'pl-apart': group.name === 'Settings'}]" aria-hidden="true" />
-      <RouterLink
-        v-for="tab in group.tabs"
-        :key="tab.name"
-        :to="`${session.root}/${tab.path}`"
-        :aria-current="route.name === tab.name ? 'page' : undefined"
-        :title="titleOf(tab)"
-        :class="['pl-tab', stateOf(tab) && `pl-${stateOf(tab)}`]"
-        >{{ tab.label }}</RouterLink
-      >
+      <!-- the phase a tab belongs to, named above its tabs (#941); the settings stand apart, their tab is their name -->
+      <div :role="group.name === 'Settings' ? undefined : 'group'" :aria-label="group.name === 'Settings' ? undefined : group.name" class="pl-group">
+        <span v-if="group.name !== 'Settings'" class="pl-group-name" aria-hidden="true">{{ group.name }}</span>
+        <RouterLink
+          v-for="tab in group.tabs"
+          :key="tab.name"
+          :to="`${session.root}/${tab.path}`"
+          :aria-current="route.name === tab.name ? 'page' : undefined"
+          :title="titleOf(tab)"
+          :class="['pl-tab', stateOf(tab) && `pl-${stateOf(tab)}`]"
+          >{{ tab.label }}<span v-if="stateOf(tab)" class="pl-state">{{ stateText[stateOf(tab)!] }}</span></RouterLink
+        >
+      </div>
     </template>
   </Teleport>
   <Teleport v-if="project" :to="TOP_CHIPS" defer><NextStep /></Teleport>
@@ -117,19 +123,50 @@ const stopOpening = watch(project, p => {
 .top .tabs .pl-apart {
   margin-left: auto;
 }
+/* a phase: its tabs side by side, its name small above them - no width of its own (#941) */
+.top .tabs .pl-group {
+  position: relative;
+  display: flex;
+  align-self: stretch;
+}
+/* the name of the phase above, the tab's name a little lower: both readable in the bar's height */
+.top .tabs .pl-tab {
+  padding-top: var(--space-2);
+}
+.top .tabs .pl-group-name {
+  position: absolute;
+  top: 2px;
+  left: 11px;
+  font-size: var(--text-xs);
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: none;
+}
+/* the state of a tab in words: read out, not shown - the mark before the name shows it */
+.top .tabs .pl-state {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .top .tabs .pl-tab.pl-done::before {
-  content: '✓';
+  /* the mark is seen; read out is the state in words (.pl-state) */
+  content: '✓' / '';
   margin-right: 4px;
   color: var(--ok);
 }
 /* planned, but a changed input or setting makes it again with the next plan run */
 .top .tabs .pl-tab.pl-changed::before {
-  content: '⟳';
+  content: '⟳' / '';
   margin-right: 4px;
   color: var(--stale);
 }
 .top .tabs .pl-tab.pl-next::before {
-  content: '●';
+  content: '●' / '';
   margin-right: 4px;
   color: var(--accent);
   transform: scale(0.6);
@@ -148,12 +185,12 @@ const stopOpening = watch(project, p => {
 /* a narrow window: the tabs closer together, so that the last one is not cut off */
 @media (max-width: 1300px) {
   .top .tabs .pl-tab {
-    padding: 0 7px;
+    padding-inline: 7px;
   }
 }
 @media (max-width: 1200px) {
   .top .tabs .pl-tab {
-    padding: 0 5px;
+    padding-inline: 5px;
   }
 }
 .ns-label {
