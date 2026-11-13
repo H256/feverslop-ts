@@ -27,8 +27,8 @@ const choice = computed({
       </select>
     </FormField>
     <div class="u-row u-row-wide">
-      <label class="field field-check"><input v-model="draft.opening" type="checkbox" /><span>Title card before it</span></label>
-      <label class="field field-check"><input v-model="draft.end" type="checkbox" /><span>Credits after it</span></label>
+      <FormField label="Title card before it" check><input v-model="draft.opening" type="checkbox" /></FormField>
+      <FormField label="Credits after it" check><input v-model="draft.end" type="checkbox" /></FormField>
     </div>
     <CalloutBox v-if="!draft.opening && !draft.end" kind="warn">Neither the title card nor the credits: there is nothing to add.</CalloutBox>
     <FormField label="Title (empty: the project's)"><input v-model="draft.title" type="text" maxlength="200" /></FormField>
@@ -52,9 +52,9 @@ const choice = computed({
     <FormField v-if="draft.end" label="Lines of your own in the credits, one per line: thanks, links, a channel">
       <textarea v-model="draft.extra" rows="3" />
     </FormField>
-    <label v-if="draft.end" class="field field-check"
-      ><input v-model="draft.facts" type="checkbox" /><span>What it was made with: language model, models, graphics cards</span></label
-    >
+    <FormField v-if="draft.end" label="What it was made with: language model, models, graphics cards" check
+      ><input v-model="draft.facts" type="checkbox"
+    /></FormField>
     <FormField v-if="draft.end" label="Hardware, in your own words (after the cards the project rendered on)"
       ><input v-model="draft.hardware" type="text" placeholder="LLM: Strix Halo, 128 GB" maxlength="200"
     /></FormField>

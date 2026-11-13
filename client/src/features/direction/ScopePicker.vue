@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FormField from '../../components/FormField.vue'
 import type {DirectionScope, DirectionView} from '../../../../shared/direction'
 
 /**
@@ -20,34 +21,31 @@ const to = defineModel<number>('to', {required: true})
 </script>
 
 <template>
-  <label
-    >{{ label
-    }}<select v-model="kind" @change="id = ''">
+  <FormField :label="label"
+    ><select v-model="kind" @change="id = ''">
       <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
-    </select></label
+    </select></FormField
   >
-  <label v-if="kind === 'character'"
-    >{{ characterLabel
-    }}<select v-model="id">
+  <FormField v-if="kind === 'character'" :label="characterLabel"
+    ><select v-model="id">
       <option value="" disabled>Choose character</option>
       <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-    </select></label
+    </select></FormField
   >
-  <label v-if="kind === 'beat' || kind === 'scene'"
-    >{{ film ? 'Scene' : 'Beat'
-    }}<select v-model="id">
+  <FormField v-if="kind === 'beat' || kind === 'scene'" :label="film ? 'Scene' : 'Beat'"
+    ><select v-model="id">
       <option value="" disabled>Choose {{ film ? 'scene' : 'beat' }}</option>
       <option v-for="g in view.groups" :key="g.id" :value="g.id">{{ g.id }} · {{ g.label }}</option>
-    </select></label
+    </select></FormField
   >
-  <label v-if="kind === 'shot'"
-    >Shot<select v-model="id">
+  <FormField v-if="kind === 'shot'" label="Shot"
+    ><select v-model="id">
       <option value="" disabled>Choose shot</option>
       <option v-for="shot in view.shots" :key="shot.id" :value="shot.id">{{ shot.id }} · {{ shot.data.action }}</option>
-    </select></label
+    </select></FormField
   >
   <div v-if="kind === 'time'" class="dp-pair">
-    <label>From (s)<input v-model.number="from" type="number" min="0" step="0.1" /></label>
-    <label>To (s)<input v-model.number="to" type="number" min="0" step="0.1" /></label>
+    <FormField label="From (s)"><input v-model.number="from" type="number" min="0" step="0.1" /></FormField>
+    <FormField label="To (s)"><input v-model.number="to" type="number" min="0" step="0.1" /></FormField>
   </div>
 </template>

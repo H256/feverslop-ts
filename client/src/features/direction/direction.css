@@ -7,16 +7,10 @@
   flex-direction: column;
   gap: var(--space-3);
 }
-.direction-form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+/* the fields are FormField's (#915); the form's gap stands between them */
+.direction-form .field {
+  margin-bottom: 0;
   min-width: 0;
-}
-.direction-form select,
-.direction-form textarea,
-.direction-form input {
-  width: 100%;
 }
 .direction-form .small {
   font-size: var(--text-s);

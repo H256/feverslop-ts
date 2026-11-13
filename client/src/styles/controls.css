@@ -68,6 +68,13 @@
   font-size: var(--text-s);
   margin-bottom: 3px;
 }
+/* what a field means, under it (FormField note) */
+.field-note {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-s);
+  margin-top: 3px;
+}
 input[type='text'],
 input[type='search'],
 input[type='number'],

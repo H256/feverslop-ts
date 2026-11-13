@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DisclosureBox from '../../components/DisclosureBox.vue'
 import type {DirectionView} from '../../../../shared/direction'
 
 /** The plan as taken (#839): the clip prompts built again, a version restored, and the same in the terminal. */
@@ -12,8 +13,7 @@ defineEmits<{plan: []; restore: [string]}>()
     <p class="muted small">Taking or restoring builds the clip prompts again; render the affected clips on the timeline.</p>
     <button class="btn" :disabled="blocked || view.pending" @click="$emit('plan')">Build the clip prompts again</button>
   </div>
-  <details v-if="view.versions.length" class="side-block">
-    <summary>Plan versions ({{ view.versions.length }})</summary>
+  <DisclosureBox v-if="view.versions.length" class="side-block" :title="`Plan versions (${view.versions.length})`" quiet>
     <div v-for="version in [...view.versions].reverse()" :key="version.id" class="version-row">
       <span class="small"
         >{{ version.id.startsWith('baseline-') ? 'Original plan' : new Date(version.createdAt).toLocaleString() }} · {{ version.changes.length }} shot edits{{
@@ -21,9 +21,8 @@ defineEmits<{plan: []; restore: [string]}>()
         }}</span
       ><button class="btn mini" :disabled="blocked || version.id === view.activeVersion" @click="$emit('restore', version.id)">Restore plan</button>
     </div>
-  </details>
-  <details class="side-block">
-    <summary>CLI</summary>
+  </DisclosureBox>
+  <DisclosureBox class="side-block" title="CLI" quiet>
     <pre class="cli"
       >{{ command }} --json
 {{ command }} --show=SHOT
@@ -33,7 +32,7 @@ defineEmits<{plan: []; restore: [string]}>()
 {{ command }} --size=close --scope=shot:SHOT
 {{ command }} --take --despite-conflicts
 {{ command }} --drop</pre>
-  </details>
+  </DisclosureBox>
 </template>
 
 <style scoped>
@@ -43,10 +42,6 @@ defineEmits<{plan: []; restore: [string]}>()
   letter-spacing: 0.05em;
   color: var(--muted);
   margin-bottom: 6px;
-}
-.side-block summary {
-  cursor: pointer;
-  color: var(--muted);
 }
 .side-block p {
   margin-bottom: 8px;
