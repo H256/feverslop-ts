@@ -20,6 +20,7 @@ function view(): DirectionView {
     characters: [{id: 'ann', name: 'Ann'}],
     groups: [{id: 'b1', label: 'Ann arrives'}],
     unresolved: [],
+    inPlan: [],
     versions: [],
     pending: false,
     restored: false,

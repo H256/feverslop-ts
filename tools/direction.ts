@@ -258,7 +258,10 @@ if (a.json) console.log(JSON.stringify(view, null, 2))
 else if (a.show) showShot(view, a.show)
 else {
     console.log(`Direction: ${target.id} (${target.kind})${view.pending ? ' - review needed' : ''}`)
-    for (const r of view.rules) console.log(`${r.id}  ${JSON.stringify(r.scope)}${r.characterId ? ` / ${r.characterId}` : ''}\n  ${r.text}`)
+    for (const r of view.rules)
+        console.log(
+            `${r.id}  ${JSON.stringify(r.scope)}${r.characterId ? ` / ${r.characterId}` : ''}${view.inPlan.includes(r.id) ? '  (planned with the shots - nothing to preview)' : ''}\n  ${r.text}`,
+        )
     for (const e of view.edits) console.log(`edit ${e.id}  ${scopeText(e.scope)}\n  ${describeEdit(e, nameOf)}`)
     for (const u of view.unresolved) console.log(`Unresolved ${u.ruleId}: ${u.message}`)
     for (const i of view.editIssues) console.log(`Edit ${i.editId}${i.shotId ? ` in ${i.shotId}` : ''}: ${i.message}`)

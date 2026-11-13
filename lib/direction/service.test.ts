@@ -9,6 +9,8 @@ import {
     setDirectionRules,
     setDirectionEdits,
     directionPlanNotes,
+    directionPlanRules,
+    recordPlannedDirection,
     previewDirection,
     takeDirection,
     dropDirection,
@@ -505,6 +507,54 @@ test('a run drops the edits made for shots planned again since, and names the in
     // the instruction is not taken: a run that only plans builds without it and names it
     expect(directionNotTaken(target, data).join('\n')).toContain('A walks in')
     expect(() => applyDirectionOverlay(target, data, {allowPending: true})).not.toThrow()
+})
+
+test('a rule the shots were planned with is taken: no preview, no warning, not unresolved (#960)', async () => {
+    const {target, data} = fixture()
+    await setDirectionRules(target, {rules: [{id: 'drums', text: 'B always sits at the drums.', scope: {kind: 'character', id: 'b'}}]})
+    expect(readDirection(target).pending).toBe(true)
+    // the plan run takes the notes before it plans, then records the beats it planned with them
+    const rules = directionPlanRules(target, data)
+    data.shotMoments.s1.shots[1] = {action: '{B} drums, seated', characters: ['b'], seconds: 4, lines: []}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    recordPlannedDirection(target, ['s1'], rules)
+    const view = readDirection(target)
+    expect(view.pending).toBe(false)
+    expect(view.inPlan).toEqual(['drums'])
+    expect(view.unresolved).toEqual([])
+    expect(directionNotTaken(target, data)).toEqual([])
+    expect(() => applyDirectionOverlay(target, data)).not.toThrow()
+    await expect(previewDirection(target, async o => answer(JSON.parse(o.input)))).rejects.toThrow('nothing to preview')
+    // other words are another rule: the shots were not planned with it
+    await setDirectionRules(target, {rules: [{id: 'drums', text: 'B always stands at the drums.', scope: {kind: 'character', id: 'b'}}]})
+    expect(readDirection(target).pending).toBe(true)
+    expect(readDirection(target).inPlan).toEqual([])
+})
+test('a beat planned again without the rule, or a rule the planner never gets, still goes through the preview (#960)', async () => {
+    const {target, data} = fixture()
+    const beatRule = {id: 'beat', text: 'They dance.', scope: {kind: 'beat' as const, id: 's1'}}
+    await setDirectionRules(target, {rules: [beatRule]})
+    recordPlannedDirection(target, ['s1'], directionPlanRules(target, data))
+    expect(readDirection(target).pending).toBe(false)
+    // the beat planned again while the rule was off: its shots were planned without it
+    recordPlannedDirection(target, ['s1'], {})
+    expect(readDirection(target).pending).toBe(true)
+    // a reviewed rule on one shot is no note of the planner: planning its beat does not take it
+    await setDirectionRules(target, {rules: [{id: 'shot', text: 'Hold on her face.', scope: {kind: 'shot', id: 's1:shot2'}}]})
+    recordPlannedDirection(target, ['s1'], directionPlanRules(target, data))
+    expect(readDirection(target).pending).toBe(true)
+    expect(readDirection(target).inPlan).toEqual([])
+})
+test('a beat rule bound to its shots is not unresolved once the beat was planned again with it (#960)', async () => {
+    const {target, data} = fixture()
+    await setDirectionRules(target, {rules: [{id: 'beat', text: 'They dance.', scope: {kind: 'beat', id: 's1'}}]})
+    const rules = directionPlanRules(target, data)
+    data.shotMoments.s1.shots[0] = {action: '{A} dances', characters: ['a'], seconds: 3, lines: [0]}
+    writeFileSync(join(target.dir, 'project.json'), JSON.stringify(data))
+    expect(readDirection(target).unresolved.length).toBe(1)
+    recordPlannedDirection(target, ['s1'], rules)
+    expect(readDirection(target).unresolved).toEqual([])
+    expect(readDirection(target).pending).toBe(false)
 })
 
 // #830: people in or out of one shot and the words for it, saved in one call that also says what follows - the page and the command

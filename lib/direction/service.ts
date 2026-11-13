@@ -96,11 +96,15 @@ type State = {
     activeVersion?: string
     appliedRules?: string
     restored?: boolean
+    /** per beat or scene, the rules (ruleKey) its shots were last planned with as notes (#960) - written by a plan run */
+    plannedWith?: Record<string, string[]>
 }
 const hash = (v: unknown): string => createHash('sha256').update(JSON.stringify(v)).digest('hex')
 // the rules a preview rewrites the shots for and a take accepts - a rule for the planner only (planned, #765) is planned with
 // when its beats are planned again and needs no review
 const reviewed = (s: State) => s.rules.filter(r => !r.planned)
+/** A rule in its present words and scope: what a plan run records it planned a beat with (#960) - another wording is another rule. */
+const ruleKey = (r: DirectionRule) => hash({text: r.text.trim(), scope: r.scope, characterId: r.characterId ?? null})
 const file = (t: DirectionTarget) => join(t.dir, 'direction.json')
 const source = (t: DirectionTarget): Data => JSON.parse(readFileSync(join(t.dir, 'project.json'), 'utf8'))
 const shots = (t: DirectionTarget, d: Data) => shapeOf(t).shots(t, d)
@@ -180,6 +184,35 @@ function validateEdit(e: DirectionEdit) {
 }
 const nameIn = (d: Data) => (id: string) => d.cast?.characters.find(c => c.id === id)?.name ?? id
 const groupIds = (t: DirectionTarget, d: Data) => (shapeOf(t).raw(d) ?? []).map(g => g.id)
+/**
+ * The beats or scenes a rule is a note of for the planner, with the note's words (#765, #767): a rule on a stretch of time, or a
+ * reviewed one on a shot, is none - it stays with the preview, which rewrites the shots that are there. A planned one on a shot of
+ * a music video is a note of its beat for that shot, which the planner numbers the same.
+ */
+function plannerNotes(t: DirectionTarget, d: Data, r: DirectionRule): {groups: string[]; note: string} {
+    const nameOf = nameIn(d)
+    const text = r.text.trim()
+    const about = r.characterId ? `for ${nameOf(r.characterId)}: ${text}` : text
+    const sc = r.scope
+    const shot = sc.kind === 'shot' && r.planned && t.kind === 'music' ? /^(.+):shot([1-9]\d*)$/.exec(sc.id) : null
+    if (shot) return {groups: [shot[1]!], note: `shot ${shot[2]}: ${about}`}
+    if (sc.kind === 'beat' || sc.kind === 'scene') return {groups: [sc.id], note: about}
+    if (sc.kind === 'global') return {groups: groupIds(t, d), note: about}
+    if (sc.kind === 'character') return {groups: shapeOf(t).groupsWith(d, sc.id), note: `for ${nameOf(sc.id)}: ${text}`}
+    return {groups: [], note: about}
+}
+/**
+ * A rule the shots it selects were all planned with, in its present words (#960): the planner wrote them with it as a note, so
+ * there is nothing for a preview to rewrite. A beat planned again without it (the rule was off then) no longer counts.
+ */
+function inPlan(t: DirectionTarget, d: Data, s: State, r: DirectionRule): boolean {
+    if (!s.plannedWith) return false
+    const key = ruleKey(r)
+    const selected = shots(t, d).filter(sh => matches(r, sh))
+    return selected.length > 0 && selected.every(sh => s.plannedWith![sh.groupId]?.includes(key) === true)
+}
+/** The rules a preview has to write and a take to accept: the reviewed ones the shots were not planned with (#960). */
+const openRules = (t: DirectionTarget, d: Data, s: State) => reviewed(s).filter(r => !inPlan(t, d, s, r))
 /** A shot edit is bound to the shot it was chosen for: after a new plan it waits for an explicit rebind, like a rule. */
 const editBinding = (t: DirectionTarget, d: Data, e: DirectionEdit) =>
     e.scope.kind === 'shot' ? binding(t, d, {id: e.id, text: 'edit', scope: e.scope}) : undefined
@@ -277,24 +310,32 @@ export function directionPlanNotes(t: DirectionTarget, d: Data): Record<string, 
     // the director's own words too, for the beats or scenes they are about: a plan made again keeps to them from the start
     // (#765) - a rule on a stretch of time, or a reviewed one on a shot, stays with the preview, which rewrites the shots that are
     // there; a planned one on a shot of a music video (#767) is a note of its beat for that shot, which the planner numbers the same
-    const add = (group: string, note: string) => {
-        ;(notes[group] ??= []).push(note)
-    }
-    const nameOf = nameIn(d)
     for (const r of s.rules) {
-        const text = r.text.trim()
-        const about = r.characterId ? `for ${nameOf(r.characterId)}: ${text}` : text
-        const sc = r.scope
-        const shot = sc.kind === 'shot' && r.planned && t.kind === 'music' ? /^(.+):shot([1-9]\d*)$/.exec(sc.id) : null
-        if (shot) add(shot[1]!, `shot ${shot[2]}: ${about}`)
-        else if (sc.kind === 'beat' || sc.kind === 'scene') add(sc.id, about)
-        else if (sc.kind === 'global') for (const group of groupIds(t, d)) add(group, about)
-        else if (sc.kind === 'character') {
-            const groups = shapeOf(t).groupsWith(d, sc.id)
-            for (const group of groups) add(group, `for ${nameOf(sc.id)}: ${text}`)
-        }
+        const {groups, note} = plannerNotes(t, d, r)
+        for (const group of groups) (notes[group] ??= []).push(note)
     }
     return notes
+}
+/** Per beat or scene, the rules directionPlanNotes makes notes of - taken with the notes, before the plan run plans (#960). */
+export function directionPlanRules(t: DirectionTarget, d: Data): Record<string, string[]> {
+    if (!existsSync(file(t))) return {}
+    const rules: Record<string, string[]> = {}
+    for (const r of state(t).rules) for (const group of plannerNotes(t, d, r).groups) (rules[group] ??= []).push(ruleKey(r))
+    return rules
+}
+/**
+ * For a plan run (#960): the beats or scenes it planned, each with the rules it was given as notes (directionPlanRules before
+ * it planned). A rule whose shots were all planned with it counts as taken - no preview, no warning. The run holds the
+ * project's lock, so this writes direction.json directly.
+ */
+export function recordPlannedDirection(t: DirectionTarget, planned: string[], rules: Record<string, string[]>) {
+    if (!planned.length || !existsSync(file(t))) return
+    const s = state(t)
+    s.plannedWith ??= {}
+    for (const group of planned) s.plannedWith[group] = rules[group] ?? []
+    // a proposal was made for the shots before
+    delete s.proposal
+    save(t, s)
 }
 export {describeEdit}
 function matches(r: DirectionRule, s: DirectionShot) {
@@ -329,7 +370,7 @@ function unresolved(t: DirectionTarget, d: Data, s: State) {
     // a rule saved for a beat or scene without shots yet ('missing') holds for the shots it is planned with (#765). The shots as the
     // direct edits leave them: a rule for someone brought into a shot (#792) selects it
     const edited = shots(t, withEdits(t, d, structuredClone(d), s))
-    return reviewed(s).flatMap(r =>
+    return openRules(t, d, s).flatMap(r =>
         r.binding !== undefined && r.binding !== 'missing' && r.binding !== binding(t, d, r)
             ? [{ruleId: r.id, stale: true, message: 'Its shots were planned again: rebind it to the shots as they are now, or remove it.'}]
             : !edited.some(sh => matches(r, sh))
@@ -358,7 +399,7 @@ export function directionReview(t: DirectionTarget): {pending: boolean; unresolv
     if (!existsSync(file(t)) || !existsSync(join(t.dir, 'project.json'))) return undefined
     const d = source(t),
         s = state(t)
-    const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
+    const pending = openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !applied(t, d, s))
     return {pending, unresolved: unresolvedLines(t, d, s)}
 }
 function applied(t: DirectionTarget, d: Data, s: State) {
@@ -393,12 +434,15 @@ export function readDirection(t: DirectionTarget): DirectionView {
         characters: cast?.characters.map(c => ({id: c.id, name: c.name})) ?? [],
         groups: (shapeOf(t).raw(d) ?? []).map(g => ({id: g.id, label: shapeOf(t).label(g)})),
         unresolved: unresolved(t, d, s),
+        inPlan: reviewed(s)
+            .filter(r => inPlan(t, d, s, r))
+            .map(r => r.id),
         proposal: s.proposal,
         versions: s.versions,
         activeVersion: accepted?.id,
-        pending: reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !accepted),
+        pending: openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !accepted),
         restored: !!s.restored,
-        proposalStale: !!s.proposal && (s.proposal.sourceFingerprint !== fingerprint(t, d) || s.proposal.rulesFingerprint !== hash(reviewed(s))),
+        proposalStale: !!s.proposal && (s.proposal.sourceFingerprint !== fingerprint(t, d) || s.proposal.rulesFingerprint !== hash(openRules(t, d, s))),
     }
 }
 /** Saves the edits (the whole list): a shot edit is bound to its current shot unless it keeps the binding it has. */
@@ -497,7 +541,7 @@ export async function setDirectionRules(
             checkScope(t, r.scope.kind)
             return {...r, ...(binding(t, d, r) !== undefined ? {binding: r.binding ?? binding(t, d, r)} : {})}
         })
-        if (!reviewed(s).length && applied(t, d, s)) s.appliedRules = hash(reviewed(s))
+        if (!openRules(t, d, s).length && applied(t, d, s)) s.appliedRules = hash(openRules(t, d, s))
         delete s.proposal
         save(t, s)
         return readDirection(t)
@@ -578,8 +622,10 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
             )
         const current = shots(t, overlay(t, d, s))
         // the rules, and for a person an edit took out of a shot whose words still name them, a rule to write it without them
-        const rules = [...reviewed(s), ...editRules(t, d, s)]
+        const rules = [...openRules(t, d, s), ...editRules(t, d, s)]
         const selected = current.filter(sh => rules.some(r => matches(r, sh)))
+        if (!selected.length && reviewed(s).length && !openRules(t, d, s).length && !editRules(t, d, s).length)
+            throw Error('nothing to preview: the shots were planned with every instruction - they are in the plan already')
         if (!selected.length) throw Error('no selected shots; restore a version to undo edits')
         const run = ask ?? (await import('../llm.ts')).askJson
         let failure = ''
@@ -638,7 +684,7 @@ export async function previewDirection(t: DirectionTarget, ask?: DirectionAsk) {
                 proposal = {
                     id: randomUUID(),
                     sourceFingerprint: initialFingerprint,
-                    rulesFingerprint: hash(reviewed(s)),
+                    rulesFingerprint: hash(openRules(t, d, s)),
                     changes,
                     conflicts: r.conflicts as string[],
                 }
@@ -665,7 +711,7 @@ export async function takeDirection(t: DirectionTarget, {despiteConflicts = fals
             s = state(t),
             p = s.proposal
         if (!p) throw Error('no proposal')
-        if (p.sourceFingerprint !== fingerprint(t, d) || p.rulesFingerprint !== hash(reviewed(s))) throw Error('stale proposal')
+        if (p.sourceFingerprint !== fingerprint(t, d) || p.rulesFingerprint !== hash(openRules(t, d, s))) throw Error('stale proposal')
         if (p.conflicts.length && !despiteConflicts)
             throw Error('the proposal reports conflicts: resolve them and preview again, or take it anyway (--despite-conflicts)')
         const all = shots(t, d)
@@ -688,7 +734,7 @@ export async function takeDirection(t: DirectionTarget, {despiteConflicts = fals
         for (const c of p.changes) merged.set(c.shotId, c)
         s.versions.push({...p, changes: [...merged.values()], createdAt: new Date().toISOString()})
         s.activeVersion = p.id
-        s.appliedRules = hash(reviewed(s))
+        s.appliedRules = hash(openRules(t, d, s))
         s.restored = false
         delete s.proposal
         save(t, s)
@@ -709,9 +755,10 @@ export async function restoreDirection(t: DirectionTarget, id: string) {
             v = s.versions.find(v => v.id === id)
         if (!v) throw Error('unknown version')
         if (v.sourceFingerprint !== fingerprint(t, source(t))) throw Error('stale version belongs to a different source plan')
-        overlay(t, source(t), {...s, activeVersion: id})
+        const d = source(t)
+        overlay(t, d, {...s, activeVersion: id})
         s.activeVersion = id
-        s.appliedRules = hash(reviewed(s))
+        s.appliedRules = hash(openRules(t, d, s))
         s.restored = true
         delete s.proposal
         save(t, s)
@@ -740,13 +787,13 @@ export function dropStaleEdits(t: DirectionTarget, d: Data): string[] {
 export function directionNotTaken(t: DirectionTarget, d: Data): string[] {
     if (!existsSync(file(t))) return []
     const s = state(t)
-    const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
+    const pending = openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !applied(t, d, s))
     if (!pending) return []
-    const open = new Set(unresolved(t, d, s).map(u => u.ruleId))
+    const stuck = new Set(unresolved(t, d, s).map(u => u.ruleId))
     return [
         ...unresolvedLines(t, d, s),
-        ...reviewed(s)
-            .filter(r => !open.has(r.id))
+        ...openRules(t, d, s)
+            .filter(r => !stuck.has(r.id))
             .map(r => `${scopeName(r)} "${shortText(r.text)}": not previewed yet`),
     ]
 }
@@ -758,7 +805,7 @@ export function applyDirectionOverlay<T extends Data>(
     } = {},
 ): T {
     const s = state(t)
-    const pending = reviewed(s).length > 0 && (s.appliedRules !== hash(reviewed(s)) || !applied(t, d, s))
+    const pending = openRules(t, d, s).length > 0 && (s.appliedRules !== hash(openRules(t, d, s)) || !applied(t, d, s))
     if (pending && !options.allowPending) {
         const open = unresolvedLines(t, d, s)
         throw Error(

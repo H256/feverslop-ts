@@ -31,6 +31,7 @@ const apart = props.as === 'leftover' || props.as === 'review'
       <StateTag v-if="as === 'planned'">in the plan</StateTag>
       <template v-if="as === 'active'">
         <StateTag v-if="item.edit">edit</StateTag>
+        <StateTag v-if="item.inPlan" title="The shots were planned with this instruction - there is nothing to preview for it">planned with the shots</StateTag>
         <StateTag v-if="item.rule?.characterId" state="plain">{{ name(item.rule.characterId) }}</StateTag>
       </template>
       <p>{{ apart && item.rule?.characterId ? `${name(item.rule.characterId)}: ` : '' }}{{ withNames(item.text) }}</p>

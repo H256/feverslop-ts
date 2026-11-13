@@ -1,5 +1,5 @@
 import {languageName} from '../config.ts'
-import {directionPlanNotes} from '../direction/service.ts'
+import {directionPlanNotes, directionPlanRules, recordPlannedDirection} from '../direction/service.ts'
 import {CoverageProblem, type RawCoverage, toCoverage} from '../film/coverage.ts'
 import {askFilmJson as askJson} from '../film/json.ts'
 import {namedByScene} from '../film/names.ts'
@@ -44,7 +44,11 @@ export async function planFilmShots(run: FilmShotsRun) {
         budgeted ? Math.max(4, Math.round((config.targetDuration * sceneWeight(scene)) / totalWeight)) : undefined
     if (budgeted) log.step('Planned length', `${config.targetDuration}s ${styles.muted('- every scene gets its share of it')}`)
     // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
-    const directionNotes = directionPlanNotes({id: film.id, dir: film.dir, kind: 'film'}, film.data)
+    const directionTarget = {id: film.id, dir: film.dir, kind: 'film' as const}
+    const directionNotes = directionPlanNotes(directionTarget, film.data)
+    // the rules each scene gets as notes: a scene planned now has them in its shots, a preview need not write them again (#960)
+    const directionRules = directionPlanRules(directionTarget, film.data)
+    const plannedNow: string[] = []
     const coverage = await film.step('coverage', '9 · PLANNING THE SHOTS', async () => {
         const result: SceneCoverage[] = []
         // what the scene before ended with, by the names of the cast - the shots of this scene start from it where the scene goes on
@@ -125,8 +129,10 @@ export async function planFilmShots(run: FilmShotsRun) {
                 directionNotes[scene.id],
             )
             result.push(await film.each('coverage', scene.id, firstAsk, planScene))
+            plannedNow.push(scene.id)
         }
         return result
     })
+    recordPlannedDirection(directionTarget, plannedNow, directionRules)
     return {coverage}
 }

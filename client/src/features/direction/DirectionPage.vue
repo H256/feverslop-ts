@@ -117,6 +117,11 @@ const items = computed(() => (view.value ? itemsOf(view.value, name) : []))
 const shown = computed(() => filterItems(items.value, filterText.value, filterWho.value, name))
 // left open for the preview to write (#802): said at its button
 const writes = computed(() => items.value.filter(item => item.writes && !item.leftover))
+// every instruction for the preview is one the shots were planned with (#960): there is nothing for it to write
+const allInPlan = computed(() => {
+  const reviewed = items.value.filter(item => item.rule && !item.planned)
+  return reviewed.length > 0 && reviewed.every(item => item.inPlan) && !writes.value.length
+})
 /** The leftovers gone, one save each; the clip prompts built again unless instructions still wait for a preview. */
 const clearLeftovers = (only?: Item) =>
   change(async () => {
@@ -166,10 +171,15 @@ const clearLeftovers = (only?: Item) =>
             >{{ writes.length }} edit{{ writes.length > 1 ? 's' : '' }} wait{{ writes.length > 1 ? '' : 's' }} for the words: <b>Preview changes</b> writes
             them.</CalloutBox
           >
+          <span v-else-if="allInPlan" class="muted">The shots were planned with these instructions - there is nothing to preview.</span>
           <CalloutBox v-else-if="view.pending" kind="warn" as="span" class="inline">Instructions changed: preview, then take the proposal.</CalloutBox>
           <span v-else class="muted">The language model writes the shots the instructions are about. Nothing is rendered.</span>
           <div class="spacer" />
-          <button class="btn primary" :disabled="blocked || dirty || !view.rules.length || !view.shots.length || !!view.unresolved.length" @click="preview">
+          <button
+            class="btn primary"
+            :disabled="blocked || dirty || !view.rules.length || !view.shots.length || !!view.unresolved.length || allInPlan"
+            @click="preview"
+          >
             Preview changes
           </button>
         </div>
