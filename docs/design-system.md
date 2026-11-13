@@ -57,11 +57,12 @@ Shared parts live in `client/src/components/`, each with its own scoped styles a
 | `TabBar` | tabs above a panel: the Direction side, the clip inspector | `tabs` (`id`, `label`, `count`), `v-model`; `inset` in a side panel |
 | `StateTag` | a small outlined word about a thing: edit, made, a name | `state` = `plain`, `ok`, `stale`, `bad`; muted without one |
 | `CalloutBox` | a boxed word to the reader, in place of `.note`, `.warn`, `.warn.bad` | `kind` = `note` (grey, default), `warn` (amber: check this, do it again), `error` (red: failed); `as` for the element (`p` by default). Its rules stay in `monitor.css`, where `.warn` was, so that a page's margin rules still win |
+| `SplitLayout` | a page in two columns, one in a narrow window: Library, References, Singers, Timing (`full`: both columns scroll, the side is a panel), Direction and Post-work (a grid in the page) | default slot and `side` slot; `side` = its width; `full`, `folded` (kept, not unmounted), `sticky`, `side-first` (narrow window), `label`; `main` exposed for a page that looks through its rows |
 | `SegmentedControl` | a choice of one among few, as pressed buttons | `options`, `v-model` |
 
 A page says what a card or a tag is (its tone, its state), never how it is drawn: no page has card, tab or tag styles of its own.
 
-Still to come (#838): `FormRow`, `SplitLayout` and the button variants as a component.
+Still to come (#915): `FormRow`, `Disclosure` and the button variants as a component.
 
 ## Stylesheets
 

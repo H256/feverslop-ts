@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SplitLayout from '../../components/SplitLayout.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
@@ -14,11 +15,8 @@ const {data, loading, error, reload, refresh} = usePageData(async signal => (awa
 
 <template>
   <SingersEditor v-if="data" :view="data" :refresh="refresh" />
-  <div v-else class="split view">
-    <div class="scrollpage">
-      <ResourceState :loading="loading" :error="error" :loaded="data !== undefined" @retry="reload" />
-      <div v-if="data === null" class="empty">Nobody sings in this project: "singers" in config.json is empty, or the plan has not chosen them yet.</div>
-    </div>
-    <aside class="detail" />
-  </div>
+  <SplitLayout v-else full>
+    <ResourceState :loading="loading" :error="error" :loaded="data !== undefined" @retry="reload" />
+    <div v-if="data === null" class="empty">Nobody sings in this project: "singers" in config.json is empty, or the plan has not chosen them yet.</div>
+  </SplitLayout>
 </template>

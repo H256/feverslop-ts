@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SplitLayout from '../../components/SplitLayout.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, onMounted, ref, toRef, watch} from 'vue'
 import {useRoute} from 'vue-router'
@@ -227,180 +228,170 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    :class="['split', 'view', {'tw-folded': sideFolded}]"
-    :inert="saving.pending.value"
-    :aria-busy="saving.pending.value"
-    @keydown.capture="timingTools?.key($event)"
-  >
-    <div class="scrollpage">
-      <PageBar title="When the lyrics are sung"
-        ><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /><button
-          class="btn mini"
-          :aria-expanded="!sideFolded"
-          title="The column with saving, the cut and the help"
-          @click="sideFolded = !sideFolded"
-        >
-          {{ sideFolded ? 'Show the side column' : 'Hide the side column' }}
-        </button></PageBar
+  <SplitLayout full :folded="sideFolded" :inert="saving.pending.value" :aria-busy="saving.pending.value" @keydown.capture="timingTools?.key($event)">
+    <PageBar title="When the lyrics are sung"
+      ><SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" /><button
+        class="btn mini"
+        :aria-expanded="!sideFolded"
+        title="The column with saving, the cut and the help"
+        @click="sideFolded = !sideFolded"
       >
-      <div class="tedit-wrap">
-        <div class="tedit-head btn-row">
-          <template v-if="draft.line.value">
-            <b>{{ draft.line.value.text }}</b>
-            <span class="muted num"
-              >{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span
-            >
-            <span
-              v-if="draft.unchecked(draft.line.value)"
-              class="chip stale"
-              title="Barely found in the transcript: the times are spread over the line, a guess"
-              >estimated</span
-            >
-            <span v-if="draft.isChanged(draft.line.value)" class="chip u-accent">moved</span>
-            <span
-              v-if="draft.line.value.adlib"
-              class="chip stale"
-              title="Heard by the transcription, but not in lyrics.txt - a repeat the song has, or something heard that nobody sings. Not sung until taken"
-              >ad-lib</span
-            >
-            <span v-else-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
-            <span v-if="draft.line.value.problem" class="chip bad" :title="`Against lyrics.txt: ${draft.line.value.problem}`">{{
-              draft.line.value.problem
-            }}</span>
-            <span
-              v-if="lead >= EARLY_FROM"
-              class="chip stale"
-              title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it."
-              >starts {{ lead.toFixed(1) }} s early</span
-            >
-            <span
-              v-if="outdated.has(draft.line.value.line)"
-              class="chip stale"
-              :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`"
-              >prompt old</span
-            >
-          </template>
-          <div class="spacer" />
-          <span v-if="draft.line.value" class="tw-grp">
-            <button class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
+        {{ sideFolded ? 'Show the side column' : 'Hide the side column' }}
+      </button></PageBar
+    >
+    <div class="tedit-wrap">
+      <div class="tedit-head btn-row">
+        <template v-if="draft.line.value">
+          <b>{{ draft.line.value.text }}</b>
+          <span class="muted num"
+            >{{ draft.line.value.section }} · {{ clock(draft.startOf(draft.line.value)) }}–{{ clock(draft.endOf(draft.line.value)) }}</span
+          >
+          <span v-if="draft.unchecked(draft.line.value)" class="chip stale" title="Barely found in the transcript: the times are spread over the line, a guess"
+            >estimated</span
+          >
+          <span v-if="draft.isChanged(draft.line.value)" class="chip u-accent">moved</span>
+          <span
+            v-if="draft.line.value.adlib"
+            class="chip stale"
+            title="Heard by the transcription, but not in lyrics.txt - a repeat the song has, or something heard that nobody sings. Not sung until taken"
+            >ad-lib</span
+          >
+          <span v-else-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
+          <span v-if="draft.line.value.problem" class="chip bad" :title="`Against lyrics.txt: ${draft.line.value.problem}`">{{
+            draft.line.value.problem
+          }}</span>
+          <span
+            v-if="lead >= EARLY_FROM"
+            class="chip stale"
+            title="The first word starts before the singing does: its box covers silence. Tighten the start, or drag it."
+            >starts {{ lead.toFixed(1) }} s early</span
+          >
+          <span
+            v-if="outdated.has(draft.line.value.line)"
+            class="chip stale"
+            :title="`The prompt of ${outdated.get(draft.line.value.line)!.join(', ')} still has this line at its old times: plan again`"
+            >prompt old</span
+          >
+        </template>
+        <div class="spacer" />
+        <span v-if="draft.line.value" class="tw-grp">
+          <button class="btn" @click="editor?.playLine(draft.line.value)">Listen</button>
+          <button
+            v-if="draft.line.value && lead >= EARLY_FROM"
+            class="btn"
+            title="Move the start of the first word to where the singing begins"
+            @click="draft.tighten(new Map([[draft.line.value.line, lead]]))"
+          >
+            Tighten the start
+          </button>
+          <button
+            v-if="draft.line.value"
+            class="btn"
+            :disabled="draft.edits.value.size > 0"
+            :title="
+              draft.edits.value.size
+                ? 'Save the moved lines first'
+                : draft.line.value.off
+                  ? 'The line is sung again: the clips it falls into sing it'
+                  : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
+            "
+            @click="setOff(draft.line.value, !draft.line.value.off)"
+          >
+            {{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+          </button>
+        </span>
+        <span class="tw-grp">
+          <button
+            v-if="problems.length"
+            class="btn"
+            :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`"
+            @click="nextProblem()"
+          >
+            Next problem ({{ problems.length }})
+          </button>
+          <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
+          <button class="btn" @click="nextKind('cut')">Next cut</button>
+        </span>
+        <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
+        <details
+          v-if="draft.line.value?.byHand || byHand.length > 1 || (draft.line.value && draft.isChanged(draft.line.value))"
+          ref="more"
+          class="tw-more"
+          @click="closeMore"
+        >
+          <summary class="btn">Reset ▾</summary>
+          <div class="tw-menu" role="menu">
             <button
-              v-if="draft.line.value && lead >= EARLY_FROM"
-              class="btn"
-              title="Move the start of the first word to where the singing begins"
-              @click="draft.tighten(new Map([[draft.line.value.line, lead]]))"
-            >
-              Tighten the start
-            </button>
-            <button
-              v-if="draft.line.value"
-              class="btn"
+              v-if="draft.line.value?.byHand"
+              class="btn tw-item"
               :disabled="draft.edits.value.size > 0"
               :title="
                 draft.edits.value.size
                   ? 'Save the moved lines first'
-                  : draft.line.value.off
-                    ? 'The line is sung again: the clips it falls into sing it'
-                    : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
+                  : 'Where the alignment puts it, worked out again from the transcript - your placement goes'
               "
-              @click="setOff(draft.line.value, !draft.line.value.off)"
+              @click="reset([draft.line.value])"
             >
-              {{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+              Back to automatic
             </button>
-          </span>
-          <span class="tw-grp">
             <button
-              v-if="problems.length"
-              class="btn"
-              :title="`${problems.length} lines want a look: cuts in words, early starts, old prompts, guessed times. Key N, Shift+N back`"
-              @click="nextProblem()"
+              v-if="byHand.length > 1"
+              class="btn tw-item"
+              :disabled="draft.edits.value.size > 0"
+              :title="`All ${byHand.length} lines placed by hand back to the automatic timing`"
+              @click="reset(byHand)"
             >
-              Next problem ({{ problems.length }})
+              All back to automatic
             </button>
-            <button class="btn" @click="nextKind('unchecked')">Next unchecked</button>
-            <button class="btn" @click="nextKind('cut')">Next cut</button>
-          </span>
-          <!-- back to the saved or the automatic times: less often, in a menu (#834) -->
-          <details
-            v-if="draft.line.value?.byHand || byHand.length > 1 || (draft.line.value && draft.isChanged(draft.line.value))"
-            ref="more"
-            class="tw-more"
-            @click="closeMore"
-          >
-            <summary class="btn">Reset ▾</summary>
-            <div class="tw-menu" role="menu">
-              <button
-                v-if="draft.line.value?.byHand"
-                class="btn tw-item"
-                :disabled="draft.edits.value.size > 0"
-                :title="
-                  draft.edits.value.size
-                    ? 'Save the moved lines first'
-                    : 'Where the alignment puts it, worked out again from the transcript - your placement goes'
-                "
-                @click="reset([draft.line.value])"
-              >
-                Back to automatic
-              </button>
-              <button
-                v-if="byHand.length > 1"
-                class="btn tw-item"
-                :disabled="draft.edits.value.size > 0"
-                :title="`All ${byHand.length} lines placed by hand back to the automatic timing`"
-                @click="reset(byHand)"
-              >
-                All back to automatic
-              </button>
-              <button
-                v-if="draft.line.value && draft.isChanged(draft.line.value)"
-                class="btn tw-item"
-                title="Back to the saved times"
-                @click="draft.resetLine(draft.line.value)"
-              >
-                Reset line
-              </button>
-            </div>
-          </details>
-          <span class="tw-grp">
-            <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
-            <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
-          </span>
-          <span class="tw-grp">
-            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
-            <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
-          </span>
-        </div>
-        <TimingEditor
-          ref="editor"
-          :view="view"
-          :draft="draft"
-          :peaks="peaks"
-          :head="player.time.value"
-          :playing="!!player.playing.value"
-          @play="play"
-          @stop="player.stop()"
-          @next="nextProblem"
-        />
-        <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
-        <div>
-          <CalloutBox v-if="draft.line.value && draft.crossing(draft.line.value).length" kind="warn" as="div">
-            A clip cut falls into
-            {{
-              draft
-                .crossing(draft.line.value)
-                .map(c => `"${c.word.text}"`)
-                .join(', ')
-            }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
-            after listening.
-          </CalloutBox>
-          <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
-            This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.
-          </CalloutBox>
-        </div>
+            <button
+              v-if="draft.line.value && draft.isChanged(draft.line.value)"
+              class="btn tw-item"
+              title="Back to the saved times"
+              @click="draft.resetLine(draft.line.value)"
+            >
+              Reset line
+            </button>
+          </div>
+        </details>
+        <span class="tw-grp">
+          <button class="btn" :disabled="!draft.history.length" title="Ctrl+Z" @click="draft.undo()">Undo</button>
+          <button class="btn" :disabled="!draft.future.length" title="Ctrl+Shift+Z" @click="draft.redo()">Redo</button>
+        </span>
+        <span class="tw-grp">
+          <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(0.8)">+</button>
+          <button class="btn" title="Ctrl+wheel, + / -" @click="draft.zoom(1.25)">−</button>
+        </span>
       </div>
-      <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
+      <TimingEditor
+        ref="editor"
+        :view="view"
+        :draft="draft"
+        :peaks="peaks"
+        :head="player.time.value"
+        :playing="!!player.playing.value"
+        @play="play"
+        @stop="player.stop()"
+        @next="nextProblem"
+      />
+      <TimingTools ref="timingTools" :draft="draft" :view="view" :player="player" />
+      <div>
+        <CalloutBox v-if="draft.line.value && draft.crossing(draft.line.value).length" kind="warn" as="div">
+          A clip cut falls into
+          {{
+            draft
+              .crossing(draft.line.value)
+              .map(c => `"${c.word.text}"`)
+              .join(', ')
+          }}: the word is then sung half in one clip, half in the next. Split the word at the cut to preserve its complete audible span, or adjust its timing
+          after listening.
+        </CalloutBox>
+        <CalloutBox v-if="draft.overlaps.value.length" kind="warn" as="div">
+          This line overlaps {{ draft.overlaps.value.map(l => `"${l.text}"`).join(' and ') }}. Fine for two singers at once - otherwise move one of them.
+        </CalloutBox>
+      </div>
     </div>
-    <aside v-show="!sideFolded" class="detail">
+    <TimingLineList :view="view" :draft="draft" :filter="filter" :leads="leads" :outdated="outdated" @choose="choose" />
+    <template #side>
       <TimingSide
         :view="view"
         :draft="draft"
@@ -412,8 +403,8 @@ onMounted(() => {
         @tighten="tightenAll"
         @plan="toasts.guard(planNow)()"
       />
-    </aside>
-  </div>
+    </template>
+  </SplitLayout>
 </template>
 
 <style scoped>
@@ -452,9 +443,5 @@ onMounted(() => {
 }
 .tw-menu .btn {
   text-align: left;
-}
-/* the side column folded away: the editor takes the whole width */
-.tw-folded {
-  grid-template-columns: minmax(0, 1fr);
 }
 </style>

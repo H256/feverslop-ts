@@ -3,6 +3,7 @@ import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, ref} from 'vue'
 import type {DirectionEdit, DirectionRule} from '../../../../shared/direction'
 import PageBar from '../../components/PageBar.vue'
+import SplitLayout from '../../components/SplitLayout.vue'
 import TabBar from '../../components/TabBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
 import {usePending} from '../../composables/usePending'
@@ -141,7 +142,7 @@ const clearLeftovers = (only?: Item) =>
       >, or a click on a cast lane); here are the instructions and edits of all shots.
     </p>
     <ResourceState :loading="loading" :error="error" :loaded="!!view" @retry="reload" />
-    <div v-if="view" class="direction-layout">
+    <SplitLayout v-if="view" side="360px" sticky side-first label="Instructions and edits">
       <main class="direction-main">
         <CalloutBox v-if="!view.shots.length">Plan the shots first. You can save instructions now and preview them once shots exist.</CalloutBox>
         <CalloutBox v-if="view.restored"
@@ -197,20 +198,22 @@ const clearLeftovers = (only?: Item) =>
         />
       </main>
 
-      <aside class="direction-side">
-        <TabBar
-          v-model="tab"
-          :tabs="[
-            {id: 'instruction', label: form?.editing ? 'Edit instruction' : 'New instruction'},
-            {id: 'edit', label: 'Direct edit'},
-          ]"
-        />
-        <InstructionForm v-show="tab === 'instruction'" ref="form" v-model:dirty="dirty" :view="view" :film="film" :blocked="blocked" @save="save" />
-        <EditForm v-show="tab === 'edit'" :view="view" :film="film" :blocked="blocked" @add="addEdit" />
+      <template #side>
+        <div class="direction-side">
+          <TabBar
+            v-model="tab"
+            :tabs="[
+              {id: 'instruction', label: form?.editing ? 'Edit instruction' : 'New instruction'},
+              {id: 'edit', label: 'Direct edit'},
+            ]"
+          />
+          <InstructionForm v-show="tab === 'instruction'" ref="form" v-model:dirty="dirty" :view="view" :film="film" :blocked="blocked" @save="save" />
+          <EditForm v-show="tab === 'edit'" :view="view" :film="film" :blocked="blocked" @add="addEdit" />
 
-        <PlanVersions :view="view" :blocked="blocked" :command="command" @plan="plan" @restore="restore" />
-      </aside>
-    </div>
+          <PlanVersions :view="view" :blocked="blocked" :command="command" @plan="plan" @restore="restore" />
+        </div>
+      </template>
+    </SplitLayout>
   </div>
 </template>
 
@@ -219,12 +222,6 @@ const clearLeftovers = (only?: Item) =>
   max-width: 110ch;
   margin-bottom: 14px;
 }
-.direction-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: var(--space-5);
-  align-items: start;
-}
 .direction-main {
   display: flex;
   flex-direction: column;
@@ -232,8 +229,6 @@ const clearLeftovers = (only?: Item) =>
   min-width: 0;
 }
 .direction-side {
-  position: sticky;
-  top: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -270,14 +265,9 @@ const clearLeftovers = (only?: Item) =>
   flex: 1;
   max-width: 420px;
 }
-@media (max-width: 1000px) {
-  .direction-layout {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 960px) {
   .direction-side {
-    position: static;
     max-height: none;
-    order: -1;
   }
 }
 </style>

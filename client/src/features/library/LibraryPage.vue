@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SplitLayout from '../../components/SplitLayout.vue'
 import {computed, h, reactive, ref} from 'vue'
 import type {AssetKind, LibraryEntry, LibrarySongEntry} from '../../../../shared/workspace'
 import {workspace} from '../../api/workspace'
@@ -62,8 +63,7 @@ const createAsset = toasts.guard(async () => {
 </script>
 
 <template>
-  <div class="split view">
-    <div class="scrollpage">
+  <SplitLayout full label="Asset details">
       <PageBar title="Library">
         <SegmentedControl v-model="kind" :options="KINDS" label="Asset kind" />
         <input v-model="text" type="search" :placeholder="kind === 'song' ? 'Find a song' : 'Find an asset'" :aria-label="kind === 'song' ? 'Find a song' : 'Find an asset'">
@@ -90,13 +90,12 @@ const createAsset = toasts.guard(async () => {
         <AssetCard v-for="asset in shown" :key="keyOf(asset)" :asset="asset" :selected="selected === asset" @select="selectedKey = keyOf(asset)" />
         <div v-if="!shown.length" class="empty">{{ assets.length ? 'Nothing fits.' : 'The library is empty. Put an asset in from the References page of a project, or make one from a picture.' }}</div>
       </div>
-    </div>
-    <aside class="detail" aria-label="Asset details">
+    <template #side>
       <SongDetail v-if="kind === 'song' && selectedSong" :key="songKey(selectedSong)" :song="selectedSong" @changed="reload" />
       <AssetDetail v-else-if="kind !== 'song' && selected" :key="keyOf(selected)" :asset="selected" @changed="reload" />
       <div v-else class="empty">{{ kind === 'song' ? 'Pick a song.' : 'Pick an asset.' }}</div>
-    </aside>
-  </div>
+    </template>
+  </SplitLayout>
 </template>
 
 <style scoped>

@@ -4,6 +4,7 @@ import {computed, reactive, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {EditorFinal} from '../../../../shared/workspace'
 import PageBar from '../../components/PageBar.vue'
+import SplitLayout from '../../components/SplitLayout.vue'
 import PanelCard from '../../components/PanelCard.vue'
 import StateTag from '../../components/StateTag.vue'
 import {mediaUrl} from '../../api/urls'
@@ -147,7 +148,7 @@ const copy = toasts.guard(async (text: string) => {
       <span class="muted">Optional, for publishing. Each step writes a new file next to the video it starts from - nothing is overwritten.</span>
     </PageBar>
     <CalloutBox v-if="!sources.length" kind="warn">There is no final video yet: render it on the Timeline first.</CalloutBox>
-    <div class="pw-grid">
+    <SplitLayout side="minmax(320px, 440px)" sticky label="What the steps made">
       <ol class="pw-steps">
         <PanelCard
           v-for="(step, n) in STEPS"
@@ -178,49 +179,45 @@ const copy = toasts.guard(async (text: string) => {
           </div>
         </PanelCard>
       </ol>
-      <aside class="pw-side">
-        <h3>What the steps made</h3>
-        <p v-if="!made.length" class="muted">Nothing yet. The videos of the steps play here, and not on the timeline.</p>
-        <template v-else>
-          <div class="pw-list" role="listbox" aria-label="What the steps made">
-            <button
-              v-for="final in made"
-              :key="final.file"
-              role="option"
-              :aria-selected="selected?.file === final.file"
-              :class="['pw-item', {on: selected?.file === final.file}]"
-              @click="chosen = final.file"
-            >
-              <span>{{ final.label }}</span>
-              <code>{{ final.file }}</code>
-            </button>
-          </div>
-          <template v-if="selected">
-            <video :key="selected.file" class="pw-video" controls preload="metadata" :src="mediaUrl(selected, roots)" />
-            <div v-if="selected.youtube !== undefined" class="pw-text">
-              <div class="pw-texthead">
-                <b>YouTube text</b>
-                <span class="spacer" />
-                <button class="btn" @click="copy(selected.youtube)">{{ copied ? 'Copied' : 'Copy' }}</button>
-              </div>
-              <pre>{{ selected.youtube }}</pre>
+      <template #side>
+        <div class="pw-side">
+          <h3>What the steps made</h3>
+          <p v-if="!made.length" class="muted">Nothing yet. The videos of the steps play here, and not on the timeline.</p>
+          <template v-else>
+            <div class="pw-list" role="listbox" aria-label="What the steps made">
+              <button
+                v-for="final in made"
+                :key="final.file"
+                role="option"
+                :aria-selected="selected?.file === final.file"
+                :class="['pw-item', {on: selected?.file === final.file}]"
+                @click="chosen = final.file"
+              >
+                <span>{{ final.label }}</span>
+                <code>{{ final.file }}</code>
+              </button>
             </div>
+            <template v-if="selected">
+              <video :key="selected.file" class="pw-video" controls preload="metadata" :src="mediaUrl(selected, roots)" />
+              <div v-if="selected.youtube !== undefined" class="pw-text">
+                <div class="pw-texthead">
+                  <b>YouTube text</b>
+                  <span class="spacer" />
+                  <button class="btn" @click="copy(selected.youtube)">{{ copied ? 'Copied' : 'Copy' }}</button>
+                </div>
+                <pre>{{ selected.youtube }}</pre>
+              </div>
+            </template>
           </template>
-        </template>
-        <EditorExport />
-      </aside>
-    </div>
+          <EditorExport />
+        </div>
+      </template>
+    </SplitLayout>
   </div>
 </template>
 
 <style scoped>
 /* class names of their own (pw-): .step, .item, .list and .text are styled for other pages in workspace.css */
-.pw-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-  gap: var(--space-4);
-  align-items: start;
-}
 .pw-steps {
   list-style: none;
   margin: 0;
@@ -267,8 +264,6 @@ const copy = toasts.guard(async (text: string) => {
   margin-top: 10px;
 }
 .pw-side {
-  position: sticky;
-  top: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
   padding: 10px 12px 12px;
@@ -339,9 +334,6 @@ const copy = toasts.guard(async (text: string) => {
   overflow-wrap: anywhere;
 }
 @media (max-width: 900px) {
-  .pw-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .pw-side {
     position: static;
   }
