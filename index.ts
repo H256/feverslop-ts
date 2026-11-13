@@ -7,34 +7,23 @@ import {parseArgs} from 'node:util'
 import {formatDuration, hideDetails, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
+import {planBeats} from './lib/pipeline/beats.ts'
+import {planLook} from './lib/pipeline/look.ts'
 import {planShots} from './lib/pipeline/plan-shots.ts'
 import {energyBar} from './lib/pipeline/energy-bar.ts'
-import {chooseSingers, performanceRules} from './lib/pipeline/singers-choice.ts'
+import {chooseSingers} from './lib/pipeline/singers-choice.ts'
 import {projectStatus} from './lib/status.ts'
 import {keepTimingsIn, readTimings, runTimings} from './lib/timings.ts'
-import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
+import {ask, askJson, configureLlm} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
-import {LOCATION_VIEWS} from './lib/sequenceSheet.ts'
-import {
-    type Character,
-    type Fact,
-    type Location,
-    type LocationLayout,
-    ProjectStore,
-    type PropStem,
-    STEP_NAMES,
-    type StepName,
-    type StoryBeat,
-} from './lib/project.ts'
+import {type Character, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
 import {onlyClips, renderAll, unknownIds, warnFixedSeed} from './lib/batch.ts'
 import {directionNotTaken} from './lib/direction/service.ts'
 import {lockProject} from './lib/lock.ts'
 import {beginRun} from './lib/run-record-view.ts'
-import {analyzeSong, buildTimeline, cutAudio, mixStems, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from './lib/music.ts'
-import {resolveUnknownTokens} from './lib/refs.ts'
-import {beatsPrompt, musicStretches} from './lib/shot-planner.ts'
-import {buildClipRequests, computeMemberCounts, groupMemberId, pictureAsset} from './lib/compose.ts'
+import {analyzeSong, cutAudio, mixStems, separateInstrumentStems, separateStems, stemActivity, transcribeVocals} from './lib/music.ts'
+import {buildClipRequests, groupMemberId, pictureAsset} from './lib/compose.ts'
 import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-picture.ts'
 import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
@@ -59,28 +48,11 @@ import {projectInputs, songFileOf, stepUsed, readInputFile} from './lib/inputs.t
 import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from './lib/render-state.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
-import {applyLibraryText, CASTING_FILE, castFromLibrary, copyKey} from './lib/casting.ts'
+import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
-import {dropBeatPlans, redoAfter, unplannedBeats} from './lib/project.ts'
-import {handsOf} from './lib/project.ts'
-import {
-    castPrompt,
-    characterDescriptionPrompt,
-    characterLookPrompt,
-    propInUsePrompt,
-    characterVariantLookPrompt,
-    locationAnchorPrompt,
-    locationDescriptionPrompt,
-    locationLayoutPrompt,
-    locationLookPrompt,
-    lookBriefPrompt,
-    songLyricsPrompt,
-    songStylePrompt,
-    storyPrompt,
-    styleShortlistPrompt,
-    summaryPrompt,
-} from './lib/prompts.ts'
+import {dropBeatPlans, unplannedBeats} from './lib/project.ts'
+import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 cli('plan')
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
@@ -693,169 +665,18 @@ if (singing) {
 
 stopAfter(until, 'cast', project.file, `bun index.ts ${projectId}`)
 
-/////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
-const lookBrief = await reviewed(
+// the look of the whole, of the cast and of the places (lib/pipeline/look.ts)
+const {lookBrief, characterLooks, characterDescriptions, locationLooks, locationDescriptions, locationAnchors, locationLayouts} = await planLook({
     project,
-    args.review,
-    'lookBrief',
-    () => project.step('lookBrief', '6 · DESIGNING THE FILM LOOK', () => ask(lookBriefPrompt(style, storySummary))),
-    look => log.box('Look brief', look),
-)
-
-////////// CRAFTING CHARACTER LOOKS
-// The video model keeps the pose of the reference picture: a prop the picture shows at rest is never used in a clip, whatever
-// the clip prompt says (tides: a bass that "rests against her waist" - the bassist stood still in every clip, #323). The LLM
-// reads the look; a prop not in use is asked for once more, then it is a warning.
-async function lookWithPropInUse(char: Character, options: AskOptions): Promise<string> {
-    const look = await ask(options)
-    const prop = pictureProp(char)
-    if (!prop) return look
-    const first = await askJson<{inUse: boolean; why: string}>(propInUsePrompt(look, prop, handsOf(char))).catch(() => undefined)
-    if (!first || first.inUse) return look
-    log.warn(`${char.id}: the look shows the ${prop} not in use (${first.why}) - asking once more`)
-    const again = await ask({
-        ...options,
-        input: `${options.input}\n\nThe last look you wrote shows the ${prop} not in use: ${first.why} Show it held in the position it has while it is used, with each of the ${handsOf(char)} where it is at work on it.`,
-    })
-    const second = await askJson<{inUse: boolean; why: string}>(propInUsePrompt(again, prop, handsOf(char))).catch(() => undefined)
-    if (second && !second.inUse)
-        log.warn(
-            `${char.id}: the look still shows the ${prop} not in use (${second.why}) - the clips will keep that pose; edit the look in ${project.file} by hand, then --redo=characterLooks`,
-        )
-    return again
-}
-
-const characterLooks = await project.step('characterLooks', '7 · CRAFTING CHARACTER LOOKS', async () => {
-    const looks: Record<string, string> = {}
-    for (const [i, char] of cast.characters.entries()) {
-        log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
-        const fromLibrary = casted('character', char.id)
-        if (fromLibrary) {
-            looks[char.id] = fromLibrary.description
-            continue
-        }
-        const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
-        const options = characterLookPrompt(lookBrief, char, otherLooks)
-        looks[char.id] = await project.each('characterLooks', char.id, options, () => lookWithPropInUse(char, options))
-    }
-    return looks
+    projectId,
+    args,
+    style,
+    storySummary,
+    cast,
+    casted,
+    castChanged,
+    castTexts,
 })
-castTexts('characterLooks', 'character', characterLooks, asset => asset.description)
-for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
-// a prop the look does not name is not in the reference picture - the clips would show the model's own idea of it
-for (const c of cast.characters) {
-    const shown = pictureProp(c)
-    if (shown && !casted('character', c.id) && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown))
-        log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
-}
-
-////////// DESCRIBING THE CHARACTERS - the look prompt without the reference sheet (pose, grey background, studio light)
-// one call per character, independent of each other - as many at once as llm.parallel allows
-const characterDescriptions = await project.step('characterDescriptions', '7b · DESCRIBING THE CHARACTERS FOR THE CLIPS', async () => {
-    const descriptions = await llmMap(cast.characters, async (char, i) => {
-        log.step(`Character ${i + 1}/${cast.characters.length}`, styles.name(char.id))
-        const fromLibrary = casted('character', char.id)
-        if (fromLibrary) return fromLibrary.description
-        const options = characterDescriptionPrompt(characterLooks[char.id] ?? '')
-        return project.each('characterDescriptions', char.id, options, () => ask(options))
-    })
-    return Object.fromEntries(cast.characters.map((char, i) => [char.id, descriptions[i]!]))
-})
-castTexts('characterDescriptions', 'character', characterDescriptions, asset => asset.description)
-for (const [id, description] of Object.entries(characterDescriptions)) log.box(id, description)
-
-////////// CRAFTING LOCATION LOOKS
-// unlike the characters, the places are not contrasted with each other - asked at once, up to llm.parallel
-const locationLooks = await project.step('locationLooks', '8 · CRAFTING LOCATION LOOKS', async () => {
-    const looks = await llmMap(cast.locations, async (location, i) => {
-        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const fromLibrary = casted('location', location.id)
-        if (fromLibrary) return fromLibrary.description
-        const options = locationLookPrompt(
-            lookBrief,
-            storySummary,
-            location.name,
-            [...new Set(cast.characters.flatMap(c => (c.prop && c.propCarried !== false ? [c.prop] : [])))],
-            [...new Set(cast.characters.flatMap(c => (c.prop && c.propCarried === false && c.propPlace === location.id ? [c.prop] : [])))],
-        )
-        return project.each('locationLooks', location.id, options, () => ask(options))
-    })
-    return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))
-})
-castTexts('locationLooks', 'location', locationLooks, asset => asset.description)
-for (const [id, look] of Object.entries(locationLooks)) log.box(id, look)
-
-////////// DESCRIBING THE LOCATIONS - the look prompt without the establishing shot (camera, "empty", medium)
-const locationDescriptions = await project.step('locationDescriptions', '8b · DESCRIBING THE LOCATIONS FOR THE CLIPS', async () => {
-    const descriptions = await llmMap(cast.locations, async (location, i) => {
-        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const fromLibrary = casted('location', location.id)
-        if (fromLibrary) return fromLibrary.description
-        const options = locationDescriptionPrompt(locationLooks[location.id] ?? '')
-        return project.each('locationDescriptions', location.id, options, () => ask(options))
-    })
-    return Object.fromEntries(cast.locations.map((location, i) => [location.id, descriptions[i]!]))
-})
-castTexts('locationDescriptions', 'location', locationDescriptions, asset => asset.description)
-for (const [id, description] of Object.entries(locationDescriptions)) log.box(id, description)
-
-////////// THE BACKGROUND OF EACH PLACE - the fixed features every shot with people in it keeps behind them
-const locationAnchors = await project.step('locationAnchors', '8c · NAMING THE BACKGROUND OF EACH PLACE', async () => {
-    const anchors = await llmMap(cast.locations, async (location, i) => {
-        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const fromLibrary = casted('location', location.id)?.anchors
-        if (fromLibrary) return fromLibrary
-        const options = locationAnchorPrompt(locationDescriptions[location.id] ?? '')
-        return (await project.each('locationAnchors', location.id, options, () => ask(options))).replace(/^["']|["'.\s]+$/g, '')
-    })
-    return Object.fromEntries(cast.locations.map((location, i) => [location.id, anchors[i]!]))
-})
-castTexts('locationAnchors', 'location', locationAnchors, asset => asset.anchors)
-for (const [id, anchor] of Object.entries(locationAnchors)) log.step(id, styles.muted(anchor))
-
-////////// THE LAYOUT OF EACH PLACE - one floor plan per place: every beat there is staged in it, not in a room of its own
-const locationLayouts = await project.step('locationLayouts', '8d · LAYING OUT EACH PLACE', async () => {
-    const answers = await llmMap(cast.locations, async (location, i) => {
-        log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
-        const fromLibrary = casted('location', location.id)?.layout
-        if (fromLibrary) return fromLibrary
-        const options = locationLayoutPrompt(location.name, locationLooks[location.id] ?? '', locationDescriptions[location.id] ?? '')
-        // an answer that cannot be read is asked once more; then the place has no layout and its beats write their own
-        // staging, as before - a broken answer for one place does not stop the run
-        let answer: {layout?: unknown; views?: unknown[]} | undefined
-        for (let attempt = 1; attempt <= 2 && !answer; attempt++) {
-            answer = await project
-                .each('locationLayouts', location.id, options, () => askJson<{layout?: unknown; views?: unknown[]}>(options))
-                .catch((e: unknown) => {
-                    log.warn(
-                        `${location.id}: the layout is unusable (${e instanceof Error ? e.message : e})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`,
-                    )
-                    return undefined
-                })
-        }
-        return answer && {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
-    })
-    const layouts: Record<string, LocationLayout> = {}
-    cast.locations.forEach((location, i) => {
-        if (answers[i]) layouts[location.id] = answers[i]
-    })
-    return layouts
-})
-castTexts('locationLayouts', 'location', locationLayouts, asset => asset.layout)
-if (castChanged.size) {
-    await project.save()
-    // a changed casting.json after the plan was made: what was made from the old texts is named, not redone (it costs)
-    // every step a library asset stands in for counts as changed: redoing one of them would only ask the LLM for what the library gives
-    const redo = redoAfter(
-        ['characterLooks', 'characterDescriptions', 'locationLooks', 'locationDescriptions', 'locationAnchors', 'locationLayouts'],
-        project.data,
-    )
-    if (redo.length)
-        log.warn(
-            `${CASTING_FILE} changed since the plan was made - it is made with the library's texts again by: bun index.ts ${projectId} --redo=${redo.join(',')}`,
-        )
-}
-for (const [id, {layout, views}] of Object.entries(locationLayouts)) log.box(`${id} · layout`, [layout, ...views.map((v, n) => `${n}: ${v}`)].join('\n'))
 
 /**
  * The pictures the requests expect, with the Krea 2 prompt to generate each one - a group character (memberCounts[c.id] > 1)
@@ -954,180 +775,24 @@ if (until === 'look') {
 }
 stopAfter(until, 'look', project.file, `bun index.ts ${projectId}`)
 
-////////// BREAKING THE STORY INTO BEATS
-// one beat per ~15 s of the song, so that no beat has to be stretched over far more clips than it has story for
-const beatCount = Math.max(6, Math.round(music.durationSec / 15))
-// where the last sung word ends - the singer is on screen until then
-const vocalsEnd = Math.max(0, ...(lyricsTiming?.lines.flatMap(l => l.words.map(w => w.end)) ?? []))
-const beats = await reviewed(
+// the beats of the story along the song, the members of a group, the clips of the song (lib/pipeline/beats.ts)
+const {beats, memberCounts, characterLookVariants, characterDescriptionVariants, timeline} = await planBeats({
     project,
-    args.review,
-    'beats',
-    () =>
-        project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
-            // what the beats must do so the singers can be lip-synced - the singers are on screen until the last sung word
-            const performance = `${singing ? performanceRules(singing, {cast, lyricSections}) : ''}
-${
-    singing && vocalsEnd
-        ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
-`
-        : ''
-}`
-            // the music along the way - loudness and whose instrument is heard - so the story's curve follows the song's
-            const players = cast.characters.flatMap(c =>
-                c.prop && c.propStem && propActivity?.[c.propStem] ? [{name: c.name, prop: c.prop, ranges: propActivity[c.propStem]!}] : [],
-            )
-            const stretches = musicStretches(music, beatCount, players)
-            const extracted = await askJson<{beats: Omit<StoryBeat, 'id' | 'order'>[]}>(
-                beatsPrompt({
-                    durationSec: music.durationSec,
-                    beatCount,
-                    characters: cast.characters,
-                    locations: cast.locations,
-                    lyrics,
-                    story: storyBase,
-                    performance,
-                    stretches,
-                }),
-            )
-
-            const BEAT_KINDS: string[] = ['establish', 'build', 'hit', 'release']
-            const characterIds = new Set(cast.characters.map(c => c.id))
-            const groupIds = new Set(cast.characters.filter(c => c.isGroup).map(c => c.id))
-            const locationIds = cast.locations.map(l => l.id)
-            const built = extracted.beats.map((beat, i) => {
-                if (!locationIds.includes(beat.locationId)) {
-                    log.warn(`beat ${i + 1} uses unknown location "${beat.locationId}" - using ${locationIds[0]}`)
-                }
-                const beatCharacterIds = (Array.isArray(beat.characterIds) ? beat.characterIds : []).filter(id => characterIds.has(id))
-                const summary = String(beat.summary ?? '')
-                const groupSize = Object.fromEntries(
-                    Object.entries(beat.groupSize ?? {})
-                        .filter(([id]) => groupIds.has(id) && beatCharacterIds.includes(id))
-                        .map(([id, count]) => [id, Math.min(20, Math.max(1, Math.round(Number(count)) || 1))]),
-                )
-                return {
-                    ...beat,
-                    // written with {Name} tokens (lib/refs.ts) - a beat from before them has plain names
-                    tokens: true,
-                    kind: BEAT_KINDS.includes(beat.kind) ? beat.kind : ('build' as const),
-                    summary,
-                    id: `beat-${String(i + 1).padStart(2, '0')}`,
-                    order: i + 1,
-                    locationId: locationIds.includes(beat.locationId) ? beat.locationId : locationIds[0]!,
-                    characterIds: beatCharacterIds,
-                    moments: Array.isArray(beat.moments) && beat.moments.length ? beat.moments.map(String) : [summary],
-                    intensity: Math.min(1, Math.max(0, Number(beat.intensity) || 0.5)),
-                    weight: Math.max(1, Number(beat.weight) || 1),
-                    continuous: beat.continuous === true,
-                    entrance: beat.entrance === true,
-                    // each fact with whether it is one of the place; a plain string (the model forgot the object) is read as written
-                    stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : [])
-                        .map((f: unknown): Fact =>
-                            f && typeof f === 'object'
-                                ? {fact: String((f as Record<string, unknown>).fact ?? ''), place: (f as Record<string, unknown>).place === true}
-                                : {fact: String(f), place: false},
-                        )
-                        .filter(f => f.fact.trim()),
-                    ...(Object.keys(groupSize).length ? {groupSize} : {}),
-                }
-            })
-            // a token that is nobody of the cast ({Aldric} for "Aldric Thorne") is mapped by one short call, not by matching words
-            const texts = built.flatMap(b => [b.summary, ...b.moments, ...b.stateAfter.map(f => f.fact)])
-            const {texts: fixed, mapped} = await resolveUnknownTokens(texts, cast.characters)
-            if (Object.keys(mapped).length)
-                log.step(
-                    'Names',
-                    Object.entries(mapped)
-                        .map(([token, name]) => `{${token}} → ${name ? `{${name}}` : 'nobody of the cast'}`)
-                        .join(', '),
-                )
-            let next = 0
-            return built.map(b => ({
-                ...b,
-                summary: fixed[next++]!,
-                moments: b.moments.map(() => fixed[next++]!),
-                stateAfter: b.stateAfter.map(f => ({...f, fact: fixed[next++]!})),
-            }))
-        }),
-    beats => {
-        for (const beat of beats) {
-            log.line(
-                `   ${styles.name(beat.id)} ${styles.muted(`${beat.kind.padEnd(9)} ${energyBar(beat.intensity)} @${beat.locationId}${beat.lyricAnchor ? ` ♪${beat.lyricAnchor}` : ''}`)}`,
-            )
-            log.line(`      ${beat.summary}`)
-            for (const moment of beat.moments) log.line(styles.muted(`        · ${moment}`))
-        }
-    },
-)
-
-////////// GENERATING GROUP MEMBER VARIANT LOOKS
-// group characters (cast.characters[].isGroup) that ever show more than one individual on screen at once (beats
-// groupSize) get one extra look prompt per member here, so they don't all render from the same shared reference
-// picture - see computeMemberCounts/groupMemberId in lib/compose.ts for how a shot picks which member to show.
-const memberCounts = computeMemberCounts(beats, cast.characters)
-const characterLookVariants = await project.step('characterLookVariants', '9c · GENERATING GROUP MEMBER VARIANTS', async () => {
-    const variants: Record<string, string[]> = {}
-    for (const char of cast.characters) {
-        const count = memberCounts[char.id] ?? 1
-        if (count <= 1) continue
-        log.step('Group', `${styles.name(char.id)} ${styles.muted(`${count} members`)}`)
-        const looks = [characterLooks[char.id] ?? '']
-        for (let i = 1; i < count; i++) {
-            log.step(`Member ${i + 1}/${count}`, styles.name(char.id))
-            const options = characterVariantLookPrompt(lookBrief, char, looks)
-            looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => ask(options)))
-        }
-        variants[char.id] = looks
-        const shown = pictureProp(char)
-        if (shown)
-            looks.forEach((look, i) => {
-                if (propMissing(look, shown)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${shown}"`)
-            })
-    }
-    return variants
+    config,
+    args,
+    maxClipSec,
+    music,
+    lyrics,
+    lyricSections,
+    lyricsTiming,
+    propActivity,
+    singing,
+    storyBase,
+    cast,
+    lookBrief,
+    characterLooks,
+    characterDescriptions,
 })
-
-////////// DESCRIBING THE GROUP MEMBER VARIANTS
-// each member has its own look image, so it needs its own description too - reusing the group's shared
-// characterDescriptions entry (derived from member 0's look alone) described every other member's anchor image
-// with member 0's text, which reads as the video model fighting itself and drifting the whole sequence toward
-// whichever member the text actually described.
-const characterDescriptionVariants = await project.step('characterDescriptionVariants', '9d · DESCRIBING THE GROUP MEMBER VARIANTS', async () => {
-    const descriptions: Record<string, string[]> = {}
-    for (const [id, looks] of Object.entries(characterLookVariants)) {
-        log.step('Group', `${styles.name(id)} ${styles.muted(`${looks.length} members`)}`)
-        descriptions[id] = [
-            characterDescriptions[id] ?? '',
-            ...(await llmMap(looks.slice(1), (look, i) => {
-                const options = characterDescriptionPrompt(look)
-                return project.each('characterDescriptionVariants', `${id}/${i + 1}`, options, () => ask(options))
-            })),
-        ]
-    }
-    return descriptions
-})
-
-////////// CUTTING THE SONG INTO CLIPS
-// switched alignLyrics on or off since the timeline was built
-if (project.data.timeline && (project.data.timeline.aligned ?? false) !== Boolean(lyricsTiming)) project.invalidate('timeline')
-const timeline = await project.step('timeline', '10 · CUTTING THE SONG INTO CLIPS', async () =>
-    buildTimeline(music, lyricSections, maxClipSec, lyricsTiming, config.vocalGap),
-)
-log.step(
-    'Clips',
-    `${timeline.slots.length} clips of ${timeline.barsPerSlot} bars (${((timeline.barsPerSlot * 240) / music.bpm).toFixed(1)}s) - max ${timeline.maxClipSec}s`,
-)
-if (timeline.aligned) {
-    log.step('Sections', styles.muted('from the lyrics timing (estimate from the audio in brackets)'))
-    timeline.sections.forEach((s, i) => {
-        const estimate = music.sections[i]
-        log.line(
-            `   ${styles.name(s.label.padEnd(12))} ${formatTime(s.start, true)} – ${formatTime(s.end, true)} ${styles.muted(estimate ? `(${formatTime(estimate.start, true)} – ${formatTime(estimate.end, true)})` : '')}`,
-        )
-    })
-    log.step('Sung in clips', `${timeline.slots.filter(s => s.vocals?.length).length} of ${timeline.slots.length}`)
-}
 
 // the shots: the story matched to the clips, blocked and planned beat by beat, the direction kept (lib/pipeline/plan-shots.ts)
 const {clipSlots, mapping, locationView, directedPlan, shotViews} = await planShots({
