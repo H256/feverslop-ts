@@ -3,9 +3,10 @@ import {cli} from './lib/cli.ts'
 import {toSlug} from './lib/slug.ts'
 import {existsSync} from 'node:fs'
 import {parseArgs} from 'node:util'
-import {formatDuration, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, styles} from './lib/log.ts'
+import {formatDuration, keepLogIn, log, runLogFile, runWarnings, setOutput, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
 import {renderAndAssemble} from './lib/pipeline/render-music.ts'
+import {dryRun, redoReasons} from './lib/pipeline/dry-run.ts'
 import {buildRequests} from './lib/pipeline/requests.ts'
 import {hearSong} from './lib/pipeline/song.ts'
 import {planBeats} from './lib/pipeline/beats.ts'
@@ -13,12 +14,12 @@ import {planLook} from './lib/pipeline/look.ts'
 import {planShots} from './lib/pipeline/plan-shots.ts'
 import {chooseSingers} from './lib/pipeline/singers-choice.ts'
 import {projectStatus} from './lib/status.ts'
-import {keepTimingsIn, readTimings, runTimings} from './lib/timings.ts'
+import {keepTimingsIn, runTimings} from './lib/timings.ts'
 import {ask, askJson, configureLlm} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
 import {type Character, type Location, ProjectStore, type PropStem, STEP_NAMES, type StepName} from './lib/project.ts'
-import {onlyClips, renderAll, unknownIds, warnFixedSeed} from './lib/batch.ts'
+import {renderAll, unknownIds, warnFixedSeed} from './lib/batch.ts'
 import {directionNotTaken} from './lib/direction/service.ts'
 import {lockProject} from './lib/lock.ts'
 import {beginRun} from './lib/run-record-view.ts'
@@ -28,10 +29,8 @@ import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-pic
 import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
 import {sungLines} from './lib/lyrics.ts'
-import type {DryRun} from './shared/workspace.ts'
 import {projectLyricSections} from './lib/music.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
-import {formatSlotRanges} from './lib/assemble.ts'
 import {clipRequestsDir, clipRequestsIn} from './lib/previous-output.ts'
 import {writeGallery} from './lib/gallery.ts'
 import {EXPORT_FORMATS} from './lib/timeline-export.ts'
@@ -41,14 +40,14 @@ import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from './lib/style
 import {listProjects, projectExists, validProjectId} from './lib/project-setup.ts'
 import * as clack from '@clack/prompts'
 import {pictureProp, propMissing} from './lib/prop-check.ts'
-import {projectInputs, songFileOf, stepUsed, readInputFile} from './lib/inputs.ts'
-import {clipEstimate, clipFailureRisks, pictureEstimate, renderState} from './lib/render-state.ts'
+import {projectInputs, songFileOf, readInputFile} from './lib/inputs.ts'
+import {pictureEstimate} from './lib/render-state.ts'
 import {reviewed} from './lib/review.ts'
 import {stopAfter} from './lib/stages.ts'
 import {applyLibraryText, castFromLibrary, copyKey} from './lib/casting.ts'
 import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
-import {dropBeatPlans, unplannedBeats} from './lib/project.ts'
+import {dropBeatPlans} from './lib/project.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 cli('plan')
 
@@ -212,7 +211,7 @@ const timelineOutdated = project.data.timeline !== undefined && project.data.tim
 // --beats keeps the other beats' shots: a run that plans every shot again anyway (a changed setting or input, --redo of a step
 // before the shots) is stopped before it changes anything, with the reason - it would not do what was asked (#762)
 if (replanBeats.length && project.data.shotMoments) {
-    const reasons = await redoReasons()
+    const reasons = await redoReasons({project, config, readInput, redoWhole, timelineOutdated})
     const sweeping = reasons.filter(([, steps]) => project.redoneBy(steps).includes('shotMoments')).map(([why]) => why)
     if (sweeping.length)
         log.usageError(
@@ -256,7 +255,7 @@ log.step(
         : styles.muted('none configured - fine while every step is cached, else run: bun run setup llm'),
 )
 if (args['dry-run']) {
-    await dryRun()
+    await dryRun({project, config, readInput, redoWhole, timelineOutdated, settings, args, render, refreshKinds, replanBeats})
     process.exit(0)
 }
 const language = languageName(config.lyricsLanguage)!
@@ -801,98 +800,6 @@ log.step('Log', runLogFile() ?? '')
 {
     const {next} = await projectStatus(project.id).catch(() => ({next: undefined}))
     if (next?.command) log.next(next.command)
-}
-
-/**
- * --dry-run: the steps the run would redo (by --redo, by changed inputs and settings, by gone stems, by changed lyrics
- * sections or clip length - along the dependencies) and the steps not generated yet, then what --render would render,
- * with the estimate from the measured timings. The renders are counted from the requests of the last plan run.
- */
-/** What makes this run redo steps, with the steps each one names: --redo, changed inputs and settings, gone stems, changed sections, clip length. */
-async function redoReasons(): Promise<[string, StepName[]][]> {
-    const changed = project.changedInputs(await projectInputs(project.dir, config))
-    const lostStems = (['stems', 'instrumentStems'] as const).filter(
-        step => project.data[step] && Object.values(project.data[step]!).some(file => !existsSync(join(project.dir, file))),
-    )
-    const labels = projectLyricSections(
-        await readInput('lyrics.txt'),
-        project.data.music?.sections.map(s => s.label),
-    ).map(s => s.label)
-    const sectionsChanged =
-        project.data.music !== undefined && labels.length > 0 && project.data.music.sections.map(s => s.label).join('|') !== labels.join('|')
-    return [
-        ...(redoWhole.length ? [['--redo', redoWhole] as [string, StepName[]]] : []),
-        ...changed.map(c => [`${c.name} changed`, c.steps] as [string, StepName[]]),
-        ...lostStems.map(step => [`a file of ${step} is gone`, [step]] as [string, StepName[]]),
-        ...(sectionsChanged ? [['the lyrics sections changed', ['music']] as [string, StepName[]]] : []),
-        ...(timelineOutdated ? [['the longest clip changed', ['timeline']] as [string, StepName[]]] : []),
-    ]
-}
-
-async function dryRun() {
-    const reasons = await redoReasons()
-    const redone = project.redoneBy(reasons.flatMap(([, steps]) => steps))
-    // whether a step is used is read from the project as it is once the redone steps are gone (the blocking is made when the shots are planned again)
-    const after = Object.fromEntries(Object.entries(project.data).filter(([step]) => !(redone as string[]).includes(step)))
-    const missing = STEP_NAMES.filter(step => project.data[step] === undefined && !redone.includes(step) && stepUsed(step, project.dir, after, config))
-    const unplanned = redone.includes('shotMoments') ? [] : [...new Set([...replanBeats, ...unplannedBeats(project.data)])]
-    const staleAfter = (project.data.mapping ?? []).filter(m => unplanned.includes(m.beatId)).map(m => m.slotId)
-    // the same as data, for the workspace's question before a plan run (--json, #836)
-    const found: DryRun = {
-        reasons: reasons.map(([why, steps]) => ({why, steps})),
-        redone,
-        plannedAgain: unplanned,
-        staleAfter,
-        generated: missing,
-        warnings: [],
-    }
-    const said = (text: string) => Bun.stripANSI(text)
-
-    log.section('DRY RUN - nothing is done')
-    for (const [why, steps] of reasons) log.step(why, styles.muted(`redoes ${steps.join(', ')}`))
-    log.step('Redone', redone.length ? redone.map(styles.name).join(', ') : styles.muted('nothing - every step is taken from project.json'))
-    if (unplanned.length) {
-        const why = replanBeats.length ? '- named by --beats or without a shot plan yet' : '- no shot plan yet'
-        log.step('Planned again', `${unplanned.map(styles.name).join(', ')} ${styles.muted(`${why}, the other beats stay`)}`)
-        if (staleAfter.length)
-            log.step('Stale after', `${formatSlotRanges(staleAfter)} ${styles.muted('- render them again with --render=videos --refresh=clips')}`)
-    }
-    if (missing.length) log.step('Generated', `${missing.map(styles.name).join(', ')} ${styles.muted('- not generated yet')}`)
-
-    if (render.has('images') || render.has('videos') || render.has('final')) {
-        const state = await renderState(project.dir, project.id, config)
-        const servers = settings.comfy.map(s => s.name)
-        const warn = (text: string) => {
-            found.warnings.push(said(text))
-            log.warn(text)
-        }
-        if (redone.length || missing.length) warn('the renders below are counted from the requests of the last plan run - the steps redone now can change them')
-        if (render.has('images')) {
-            const stale = refreshKinds.has('pictures') ? styles.muted(' (stale pictures are not counted - --refresh=pictures renders those too)') : ''
-            const estimate = state.missingPictures.length ? await pictureEstimate(state.missingPictures.length, config, servers) : undefined
-            found.pictures = {count: state.missingPictures.length, estimate: estimate && said(estimate)}
-            log.step('Pictures', estimate ? `${estimate}${stale}` : styles.muted('all rendered'))
-        }
-        if (render.has('videos')) {
-            const only = new Set(args.only.split(',').filter(Boolean))
-            const selected = onlyClips(state.clips, only)
-            const todo = selected.filter(c => args.again || state.missingClips.includes(c) || (refreshKinds.has('clips') && state.staleClips.includes(c)))
-            for (const risk of clipFailureRisks(readTimings(), todo, config.videoWorkflow, servers)) warn(risk)
-            const estimate = todo.length ? await clipEstimate(todo, config, servers) : undefined
-            found.clips = {ids: todo.map(c => c.id), estimate: estimate && said(estimate)}
-            log.step('Clips', estimate ? `${estimate} ${styles.muted(`- ${formatSlotRanges(todo.map(c => c.id))}`)}` : styles.muted('all rendered'))
-        }
-        if (render.has('final')) {
-            found.final = {missingClips: state.missingClips.length}
-            log.step(
-                'Final video',
-                state.missingClips.length
-                    ? styles.warning(`needs every clip - ${state.missingClips.length} missing`)
-                    : styles.muted('assembled from the clips'),
-            )
-        }
-    }
-    if (jsonOutput()) log.json(found)
 }
 
 // No project id given: the projects, most recently changed first, to pick one with the arrow keys - without a
