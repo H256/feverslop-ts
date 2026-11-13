@@ -1,4 +1,5 @@
 import {noProject} from '../lib/usage.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 import {newestRunEvents, runSummary} from '../lib/run-events.ts'
 import {cli} from '../lib/cli.ts'
 // Where a project stands: which steps are done, which an edited input or setting will redo on the next run, which
@@ -26,6 +27,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const id = positionals[0]
 
 if (args.film) {

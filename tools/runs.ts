@@ -1,4 +1,5 @@
 import {noProject} from '../lib/usage.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 import {cli} from '../lib/cli.ts'
 // The runs of a project (#837): the ones waiting in its queue - asked for in the workspace while another went on, started by the
 // workspace in order as the project is free - and the ones that ended, with their logs. A queued run can be taken out here.
@@ -12,10 +13,7 @@ import {pastRuns, readQueue, unqueue} from '../lib/run-queue.ts'
 cli('runs')
 
 const usage = 'usage: bun run runs <project-id> [--film] [--remove=<queued id>] [--clear] [--json]'
-const {
-    values: args,
-    positionals: [id],
-} = (() => {
+const {values: args, positionals} = (() => {
     try {
         return parseArgs({
             args: Bun.argv.slice(2),
@@ -31,6 +29,10 @@ const {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
+const [id] = positionals
 if (!id || !(args.film ? filmExists(id) : projectExists(id)))
     log.usageError(args.film ? noProject('film', id, filmIds()) : noProject('project', id, listProjects()), usage)
 const dir = args.film ? filmDir(id!) : projectDir(id!)
