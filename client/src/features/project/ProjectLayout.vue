@@ -103,7 +103,11 @@ const stopOpening = watch(project, p => {
     </template>
   </Teleport>
   <Teleport v-if="project" :to="TOP_CHIPS" defer><NextStep /></Teleport>
-  <RouterView v-if="project" />
+  <!-- a later read that failed (#936): what is shown stays, with a word that it may be old and a way to read it again -->
+  <div v-if="project" :class="['view', 'pl-body', {'pl-stale': error}]">
+    <ResourceState v-if="error" class="pl-notice" :loading="loading" :error="error" :loaded="true" @retry="reload" />
+    <RouterView />
+  </div>
   <div v-else class="scrollpage"><ResourceState :loading="loading" :error="error" :loaded="false" @retry="reload" /></div>
 </template>
 
@@ -173,5 +177,20 @@ const stopOpening = watch(project, p => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* the page of the project fills what is below the top bar; a notice that the last read failed goes above it (#936) */
+.pl-body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+.pl-body.pl-stale {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.pl-body > .view {
+  height: 100%;
+  min-height: 0;
+}
+.pl-notice {
+  margin: var(--space-2) var(--space-3) 0;
 }
 </style>
