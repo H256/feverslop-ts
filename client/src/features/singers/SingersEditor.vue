@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SplitLayout from '../../components/SplitLayout.vue'
 import {computed, nextTick, onMounted, ref, toRef, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {SingingLine, SingingView} from '../../../../shared/workspace'
@@ -58,7 +59,9 @@ const allOf = (lines: SingingLine[], id: string) => {
   return has === lines.length ? true : lines.some(l => singersOf(draft.partsOf(l)).has(id)) ? 'mixed' : false
 }
 
-const list = ref<HTMLElement>()
+// the lines' column: the layout's main column, looked through for the rows
+const listLayout = ref<InstanceType<typeof SplitLayout>>()
+const list = computed(() => listLayout.value?.main)
 /** ↑ ↓ from a line: the one before or after, as shown. */
 const move = (from: SingingLine, by: number) => {
   const rows = [...(list.value?.querySelectorAll<HTMLElement>('.sung') ?? [])]
@@ -104,48 +107,46 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="split view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
-    <div ref="list" class="scrollpage">
-      <PageBar title="Who sings which line">
-        <SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" />
-        <span class="muted u-small"
-          ><kbd>1</kbd>–<kbd>{{ Math.min(9, draft.pool.value.length) }}</kbd> a singer · <kbd>←</kbd><kbd>→</kbd> part · <kbd>↑</kbd><kbd>↓</kbd> line ·
-          <kbd>Space</kbd> listen · click between two words: the singer changes there</span
-        >
-      </PageBar>
-      <div v-for="section in sections" :key="`${section.name}:${section.lines[0]!.line}`" class="sung-section">
-        <div class="sung-head">
-          <h3>{{ section.name || 'Lines' }}</h3>
-          <span class="muted num">{{ section.lines[0]!.start !== undefined ? clock(section.lines[0]!.start, false) : '' }}</span>
-          <span v-if="draft.pool.value.length > 1" class="all"
-            >All of these:
-            <SingerChip
-              v-for="(id, n) in draft.pool.value"
-              :key="id"
-              :name="draft.nameOf(id)"
-              :number="n + 1"
-              :hue="draft.hueOf(id)"
-              :pressed="allOf(section.lines, id)"
-              :title="`${draft.nameOf(id)} sings every line of this part - or none`"
-              @toggle="draft.toggleAll(section.lines, id)"
-            />
-          </span>
-        </div>
-        <SungLine
-          v-for="line in section.lines"
-          :key="line.line"
-          :line="line"
-          :draft="draft"
-          :playing="player.playing.value"
-          :can-listen="player.available()"
-          @listen="listen"
-          @move="by => move(line, by)"
-        />
+  <SplitLayout ref="listLayout" full :inert="saving.pending.value" :aria-busy="saving.pending.value">
+    <PageBar title="Who sings which line">
+      <SegmentedControl v-model="filter" :options="FILTERS" label="Lines shown" />
+      <span class="muted u-small"
+        ><kbd>1</kbd>–<kbd>{{ Math.min(9, draft.pool.value.length) }}</kbd> a singer · <kbd>←</kbd><kbd>→</kbd> part · <kbd>↑</kbd><kbd>↓</kbd> line ·
+        <kbd>Space</kbd> listen · click between two words: the singer changes there</span
+      >
+    </PageBar>
+    <div v-for="section in sections" :key="`${section.name}:${section.lines[0]!.line}`" class="sung-section">
+      <div class="sung-head">
+        <h3>{{ section.name || 'Lines' }}</h3>
+        <span class="muted num">{{ section.lines[0]!.start !== undefined ? clock(section.lines[0]!.start, false) : '' }}</span>
+        <span v-if="draft.pool.value.length > 1" class="all"
+          >All of these:
+          <SingerChip
+            v-for="(id, n) in draft.pool.value"
+            :key="id"
+            :name="draft.nameOf(id)"
+            :number="n + 1"
+            :hue="draft.hueOf(id)"
+            :pressed="allOf(section.lines, id)"
+            :title="`${draft.nameOf(id)} sings every line of this part - or none`"
+            @toggle="draft.toggleAll(section.lines, id)"
+          />
+        </span>
       </div>
-      <div v-if="filter !== 'all' && !sections.length" class="empty">
-        {{ filter === 'changed' ? 'Nothing changed yet.' : 'No line is sung by more than one.' }}
-      </div>
+      <SungLine
+        v-for="line in section.lines"
+        :key="line.line"
+        :line="line"
+        :draft="draft"
+        :playing="player.playing.value"
+        :can-listen="player.available()"
+        @listen="listen"
+        @move="by => move(line, by)"
+      />
     </div>
-    <aside class="detail"><SingersSide :view="view" :draft="draft" :saved="saved" @save="save" @plan="toasts.guard(planNow)()" /></aside>
-  </div>
+    <div v-if="filter !== 'all' && !sections.length" class="empty">
+      {{ filter === 'changed' ? 'Nothing changed yet.' : 'No line is sung by more than one.' }}
+    </div>
+    <template #side><SingersSide :view="view" :draft="draft" :saved="saved" @save="save" @plan="toasts.guard(planNow)()" /></template>
+  </SplitLayout>
 </template>

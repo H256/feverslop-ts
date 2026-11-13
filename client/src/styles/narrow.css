@@ -6,8 +6,7 @@
   .app {
     height: auto;
   }
-  .work,
-  .split {
+  .work {
     grid-template-columns: minmax(0, 1fr);
   }
   .stage {

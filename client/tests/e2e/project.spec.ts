@@ -230,9 +230,9 @@ test('singers: while a change is saved the page cannot be changed, and what was 
   await page.getByLabel('Add a singer').selectOption('ben')
   await page.locator('#line-0').press('2')
   await page.getByRole('button', {name: 'Save', exact: true}).click()
-  await expect(page.locator('.split.view')).toHaveAttribute('inert', '')
+  await expect(page.locator('.ui-split.view')).toHaveAttribute('inert', '')
   release()
-  await expect(page.locator('.split.view')).not.toHaveAttribute('inert', '')
+  await expect(page.locator('.ui-split.view')).not.toHaveAttribute('inert', '')
   await expect(page.getByText('Saved.', {exact: false})).toBeVisible()
 })
 
