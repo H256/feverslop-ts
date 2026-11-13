@@ -16,7 +16,7 @@ defineEmits<{changed: []}>()
     <SheetMedia :item="asset" :roots="LIBRARY_ROOTS" :name="asset.name" :title="asset.name" :caption="asset.id" :text="asset.description">
       <h2>{{ asset.name }}</h2>
       <p class="muted section">{{ assetKindLabel(asset.kind) }} · {{ asset.id }}</p>
-      <LibraryActions :kind="asset.kind" :id="asset.id" :name="asset.name" :description="asset.description" @changed="$emit('changed')" />
+      <LibraryActions :id="asset.id" :kind="asset.kind" :name="asset.name" :description="asset.description" @changed="$emit('changed')" />
       <div class="section"><h3>Description</h3><p>{{ asset.description }}</p></div>
       <div v-if="asset.anchors" class="section"><h3>Background features</h3><p>{{ asset.anchors }}</p></div>
     </SheetMedia>

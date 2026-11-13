@@ -6,6 +6,7 @@ import {FPS} from './frames.ts'
 import {multiplierFor} from './interpolate.ts'
 import {type Finish, finishOf, finishProblem, MILD_FINISH} from './finish.ts'
 import {postworkProblem} from './postwork/config.ts'
+import {shownOf} from './text.ts'
 
 // projects/<id>/config.json - documented in docs/comfyui.md
 export type RenderConfig = {
@@ -143,7 +144,7 @@ export const resolutionProblem = (key: string, value: unknown): string | undefin
         : `${key} must be -1, megapixels like 1.1 or "WIDTHxHEIGHT", got ${JSON.stringify(value)}`
 export const workflowProblem = (key: string, name: unknown): string | undefined => {
     const file = workflowPath(name)
-    return file && existsSync(file) ? undefined : `${key}: no workflow comfy/workflows/${name}.ts`
+    return file && existsSync(file) ? undefined : `${key}: no workflow comfy/workflows/${shownOf(name)}.ts`
 }
 export function llmProblem(llm: unknown): string | undefined {
     if (!llm || typeof llm !== 'object' || Array.isArray(llm)) return `llm must be an object like {"model": "…"}, got ${JSON.stringify(llm)}`

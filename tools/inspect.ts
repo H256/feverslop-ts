@@ -23,6 +23,7 @@ import {filmClipFreshness} from '../lib/film/render.ts'
 import {filmDir, filmExists, filmIds} from '../lib/film/setup.ts'
 import type {FilmProject} from '../lib/film/types.ts'
 import {clipRequestsDir} from '../lib/previous-output.ts'
+import {shownOf} from '../lib/text.ts'
 cli('inspect')
 
 const usage = 'usage: bun run inspect <project-id> <clip-id> [--film]'
@@ -171,7 +172,7 @@ async function inspectFilm(id: string | undefined, clipId: string | undefined) {
         clip.id,
         `bun film.ts ${id}`,
         () => filmClipFreshness(clip, dir, renderConfig),
-        sidecar => [sidecar.contextFrames !== undefined ? `${sidecar.contextFrames} context frames` : ''],
+        sidecar => [sidecar.contextFrames !== undefined ? `${shownOf(sidecar.contextFrames)} context frames` : ''],
     )
 
     log.box('Prompt', clip.prompt)
@@ -229,7 +230,7 @@ async function showRender(
     const sidecar = existsSync(`${video}.json`) ? ((await Bun.file(`${video}.json`).json()) as Record<string, unknown>) : {}
     line(
         'Video',
-        `${video} ${styles.muted([sidecar.workflow, sidecar.size, sidecar.seed !== undefined ? `seed ${sidecar.seed}` : '', ...more(sidecar)].filter(Boolean).join(' · '))}`,
+        `${video} ${styles.muted([sidecar.workflow, sidecar.size, sidecar.seed !== undefined ? `seed ${shownOf(sidecar.seed)}` : '', ...more(sidecar)].filter(Boolean).join(' · '))}`,
     )
     line(
         'Request',

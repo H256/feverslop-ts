@@ -13,6 +13,7 @@ import type {ProjectConfig} from '../config.ts'
 import type {Character, Location, LyricSection, LyricsTiming, MusicMap, ProjectStore, PropStem, Singing} from '../project.ts'
 import {energyBar} from './energy-bar.ts'
 import {performanceRules} from './singers-choice.ts'
+import {textOf} from '../text.ts'
 
 // The beats of a music video (index.ts steps 9-10, #841): the story broken into beats along the song, the looks and descriptions of
 // the members of a group, and the song cut into clips. The steps are the project's (project.step): cached, redone by --redo, the
@@ -126,7 +127,7 @@ export async function planBeats(run: BeatsRun) {
                         stateAfter: (Array.isArray(beat.stateAfter) ? beat.stateAfter : [])
                             .map((f: unknown): Fact =>
                                 f && typeof f === 'object'
-                                    ? {fact: String((f as Record<string, unknown>).fact ?? ''), place: (f as Record<string, unknown>).place === true}
+                                    ? {fact: textOf((f as Record<string, unknown>).fact), place: (f as Record<string, unknown>).place === true}
                                     : {fact: String(f), place: false},
                             )
                             .filter(f => f.fact.trim()),

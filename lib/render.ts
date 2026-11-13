@@ -24,6 +24,7 @@ import {
 } from './sequenceSheet.ts'
 import {type ComfyServer} from './settings.ts'
 import {runProcess} from './process.ts'
+import {messageOf} from './text.ts'
 
 // the workflow default max_duration (seconds) when songDuration is -1 in config.json
 export const DEFAULT_SONG_DURATION = 360
@@ -601,7 +602,7 @@ export async function readPending<M>(file: string): Promise<PendingJob<M> | unde
     try {
         return await Bun.file(file).json()
     } catch (e) {
-        log.warn(`${basename(file)} is damaged (${e instanceof Error ? e.message : e}) - ignored, the clip is queued again`)
+        log.warn(`${basename(file)} is damaged (${messageOf(e)}) - ignored, the clip is queued again`)
         return undefined
     }
 }

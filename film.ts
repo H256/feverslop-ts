@@ -78,6 +78,7 @@ import {loadSettings} from './lib/settings.ts'
 import {shuffledStyles, stylesById} from './lib/styles.ts'
 import {readInputFile} from './lib/inputs.ts'
 import {clipRequestsDir, clipRequestsIn, readRequests} from './lib/previous-output.ts'
+import {messageOf} from './lib/text.ts'
 cli('film')
 
 const usage = `bun film.ts <film-id> [--redo=screenplay,cast] [--render=images,videos,final|all] [--only=clip-005,clip-006] [--again] [--preview] [--retake=clip-007:3.2-5.0] [--fix-script] [--allow-import-gaps] [--refresh=pictures,clips] [--strict] [--debug] [--scenes=s6,s7] [--review] [--until=story|cast|look] [--dry-run [--json]] [--llm-url=…] [--llm-key=…] [--llm-model=…] [--comfy=http://a:8188,…]
@@ -269,7 +270,7 @@ let screenplay = await reviewed(
                         brief.language,
                     ),
                 ).catch((e: unknown) => {
-                    log.warn(`the annotation is unusable (${e instanceof Error ? e.message : e}) - the script is used as written`)
+                    log.warn(`the annotation is unusable (${messageOf(e)}) - the script is used as written`)
                     return undefined
                 })
                 return toScreenplay(applyAnnotations(imported, notes), meta)

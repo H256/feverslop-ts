@@ -5,6 +5,14 @@ import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 import prettier from 'eslint-config-prettier'
 
+// the no-unsafe-* rules, for code where an any says nothing about the code (#891)
+const UNSAFE_OFF = Object.fromEntries(
+    ['no-unsafe-assignment', 'no-unsafe-member-access', 'no-unsafe-argument', 'no-unsafe-call', 'no-unsafe-return'].map(rule => [
+        `@typescript-eslint/${rule}`,
+        'off',
+    ]),
+)
+
 export default tseslint.config(
     {
         ignores: [
@@ -101,12 +109,22 @@ export default tseslint.config(
             '@typescript-eslint/await-thenable': 'off',
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+            // JSON.parse and test data as any: a test asserts what it built, an unsafe access only fails the test (#891)
+            ...UNSAFE_OFF,
         },
+    },
+    {
+        // a .vue module is resolved by vue-tsc (bun run client:check), not by the TypeScript service ESLint asks: every value of a
+        // component - a ref to it, its exposed methods - is an "error typed value" here, which says nothing about the code (#891).
+        // Types the .ts files need live in .ts files (features/timeline/beatCast.ts), so that these rules still see them there.
+        files: ['client/src/**/*.vue', 'client/src/main.ts', 'client/src/router.ts'],
+        rules: UNSAFE_OFF,
     },
     {
         // the node types are generated from a server (comfy/nodes.ts, not in git): without them the workflow helpers are any
         files: ['comfy/**/*.ts'],
-        rules: {'@typescript-eslint/no-explicit-any': 'off'},
+        // and every node call is any then: the warnings said nothing but that the file is missing (#891)
+        rules: {'@typescript-eslint/no-explicit-any': 'off', ...UNSAFE_OFF},
     },
     prettier,
 )
