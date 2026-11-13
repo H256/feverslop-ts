@@ -5,6 +5,7 @@ import {log, styles} from './log.ts'
 import {withStep} from './timings.ts'
 import {dropPartials, keepEach, keepFound, type Partials} from './partials.ts'
 import {runEvent, stepTitle} from './run-events.ts'
+import type {Prop} from './props.ts'
 
 // prop: a distinctive physical object the character carries/uses throughout the story (weapon, tool, instrument, ...)
 // propStem: only set when the prop is a musical instrument audible in the song - which stem its sound belongs to,
@@ -189,6 +190,8 @@ export type Project = {
     story?: string
     summary?: string
     cast?: {characters: Character[]; locations: Location[]}
+    // config.propPictures: the prop of each character who has one, as a thing of its own with a picture (lib/props.ts) - by character id
+    props?: Record<string, Prop>
     singing?: Singing
     lookBrief?: string
     characterLooks?: Record<string, string>
@@ -235,6 +238,7 @@ const dependsOn: Record<StepName, StepName[]> = {
     story: [],
     summary: ['story'],
     cast: ['story'],
+    props: ['cast'],
     singing: ['cast', 'summary'],
     lookBrief: ['summary'],
     characterLooks: ['cast', 'lookBrief'],

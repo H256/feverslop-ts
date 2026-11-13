@@ -33,7 +33,7 @@ export function stagesBetween(next: PlanStage | undefined, until?: PlanStage) {
 export const STAGE_STEPS: Record<ProjectKind, Record<PlanStage, string[]>> = {
   music: {
     story: ['story', 'summary'],
-    cast: ['cast', 'singing'],
+    cast: ['cast', 'props', 'singing'],
     look: [
       'lookBrief',
       'characterLooks',

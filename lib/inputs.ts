@@ -46,6 +46,8 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
         // a silent lead-in or tail cut off into a clip of its own changes the clips
         // assumed: the default - a project made before is not cut anew by the new setting alone
         vocalGap: {value: String(config.vocalGap), steps: ['timeline'], assumed: '1.5'},
+        // the props as things of their own are built when the setting is turned on - a project made before has it off
+        propPictures: {value: String(config.propPictures), steps: ['props'], assumed: 'false'},
     }
 }
 
@@ -65,6 +67,8 @@ export function stepUsed(step: StepName, dir: string, data: Project, config: Pro
             return config.alignLyrics && (['guitar', 'piano'] as const).some(name => props.has(name) && !data.stems?.[name])
         case 'propActivity':
             return config.alignLyrics && props.size > 0
+        case 'props':
+            return config.propPictures && (data.cast?.characters ?? []).some(c => c.prop)
         case 'singing':
             return config.singers.length > 0
         case 'shotViews':
