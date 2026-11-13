@@ -186,7 +186,7 @@ const DEFINITIONS: Definition[] = [
         control: 'select',
         for: 'music',
         choices: () => yesNo,
-        note: "A character's prop - a guitar, a drum kit - gets a picture of its own, laid into every clip its owner is in, so it stays the same thing from shot to shot. Each prop picture is one more reference: a clip with three of them took about twice the render time.",
+        note: "A character's prop - a guitar, a drum kit - gets a picture of its own, laid into every clip its owner is in, so it stays the same thing from shot to shot. The characters and the places are then drawn without their props. Each prop picture is one more reference: a clip with three of them took about twice the render time. A change in a planned project draws the looks again and plans anew what is built on them.",
     },
     {
         key: 'seed',

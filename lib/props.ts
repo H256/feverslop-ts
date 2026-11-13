@@ -25,6 +25,21 @@ export const propPictureJob = (prop: Prop): PictureJob => ({
     description: prop.description,
 })
 
+/** A character as its pictures draw it: with config.propPictures its prop has a picture of its own and is in none of theirs (#944). */
+export const asDrawn = <C extends Pick<Character, 'prop'>>(c: C, propPictures: boolean): C & {propPicture?: true} =>
+    propPictures && c.prop ? {...c, propPicture: true} : c
+
+/**
+ * The props a place's look names: kept - the characters' own, which come into a clip with them and so are not in the place; standing -
+ * the ones that stand in it and are used there (a drum kit), drawn into it once. With config.propPictures a standing prop comes with
+ * its player too, as a picture of its own: the place is drawn without it and stays reusable (#944).
+ */
+export function propsOfPlace(characters: Pick<Character, 'prop' | 'propCarried' | 'propPlace'>[], locationId: string, propPictures: boolean) {
+    const kept = characters.flatMap(c => (c.prop && (propPictures || c.propCarried !== false) ? [c.prop] : []))
+    const standing = propPictures ? [] : characters.flatMap(c => (c.prop && c.propCarried === false && c.propPlace === locationId ? [c.prop] : []))
+    return {kept: [...new Set(kept)], standing: [...new Set(standing)]}
+}
+
 // the article or possessive in front of a prop's words is not part of its name: "her battered bass" is "battered bass"
 const leading = /^(?:a|an|the|his|her|their|its|my|our|your)\s+/i
 
