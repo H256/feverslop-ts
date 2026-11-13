@@ -49,7 +49,7 @@ export function validProjectId(id: string) {
     return /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(id)
 }
 
-/** Writes a new project's input files and config.json (only the keys given - everything else stays default). */
+/** Writes a new project's input files and config.json (the keys given and clipPrompt: compact - everything else stays default). */
 export async function writeProject(id: string, seed: ProjectSeed) {
     const dir = projectDir(id)
     const input = (name: string) => join(dir, 'input', name)
@@ -62,8 +62,8 @@ export async function writeProject(id: string, seed: ProjectSeed) {
     if (seed.storyIdea) await Bun.write(input('story-idea.txt'), seed.storyIdea)
     if (seed.style) await Bun.write(input('style.txt'), seed.style)
     if (seed.musicStyle) await Bun.write(input('music-style.txt'), seed.musicStyle)
-    if (seed.config && Object.keys(seed.config).length) {
-        await Bun.write(join(dir, 'config.json'), JSON.stringify(seed.config, null, 2))
-    }
+    // a new project's clip prompts tell a movement once and name a person once (#824): written into its config, so that projects
+    // made before keep "full", the default, and none of their clips turns stale
+    await Bun.write(join(dir, 'config.json'), JSON.stringify({clipPrompt: 'compact', ...seed.config}, null, 2))
     return dir
 }

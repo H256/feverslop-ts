@@ -58,7 +58,7 @@ describe('init by options', () => {
             // a value that names a file is its text, anything else the text itself
             expect(readFileSync(join(dir, 'input', 'lyrics.txt'), 'utf8')).toBe('Verse 1\nRain on the glass')
             expect(readFileSync(join(dir, 'input', 'story-idea.txt'), 'utf8')).toBe('A walk at night')
-            expect(JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'))).toEqual({singers: ['auto'], lyricsLanguage: 'de'})
+            expect(JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'))).toEqual({clipPrompt: 'compact', singers: ['auto'], lyricsLanguage: 'de'})
 
             // a second one of the same id is refused, nothing overwritten
             const again = run(cwd, 'rain', '--idea=another')

@@ -70,7 +70,7 @@ describe('the routes of the start page', () => {
         const made = await post({id: 'rain', idea: 'A song about rain', singers: 'auto'})
         expect(await made.json()).toEqual({id: 'rain'})
         expect(readFileSync(join(root, 'projects', 'rain', 'input', 'idea.txt'), 'utf8')).toBe('A song about rain')
-        expect(JSON.parse(readFileSync(join(root, 'projects', 'rain', 'config.json'), 'utf8'))).toEqual({singers: ['auto']})
+        expect(JSON.parse(readFileSync(join(root, 'projects', 'rain', 'config.json'), 'utf8'))).toEqual({clipPrompt: 'compact', singers: ['auto']})
 
         const again = await post({id: 'rain', idea: 'another'})
         expect(again.status).toBe(400)
