@@ -2,7 +2,7 @@
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, nextTick, reactive, ref} from 'vue'
 import {useRouter} from 'vue-router'
-import type {CastingRole, CastView} from '../../../../shared/workspace'
+import type {CastingProp, CastingRole, CastView} from '../../../../shared/workspace'
 import NoticeList from '../../components/NoticeList.vue'
 import PageBar from '../../components/PageBar.vue'
 import ResourceState from '../../components/ResourceState.vue'
@@ -19,6 +19,8 @@ import CastingRoleRow from './CastingRoleRow.vue'
 import NewFilmRoles from './NewFilmRoles.vue'
 import ReplacePicture from './ReplacePicture.vue'
 import TakeAsset from './TakeAsset.vue'
+import CastingPropRow from './CastingPropRow.vue'
+import TakeProp from './TakeProp.vue'
 import {castDraft, newMember, type CastDraft} from './forms'
 
 /** Who plays whom: a role given a library asset, or the cast changed by hand - two ways, never at once. */
@@ -93,6 +95,28 @@ const takeFrom = toasts.guard(async (role: CastingRole) => {
   if (!yes) return
   const [project, from] = draft.choice.split('/')
   await start({type: 'import-asset', asset: role.id, project: project!, from: from!, description: draft.description})
+})
+/** A prop of the library for a character's prop (#944): `bun run import-asset … prop <id> --for=<character>`, asked first. */
+const takeProp = toasts.guard(async (prop: CastingProp) => {
+  const options = data.value?.casting.libraryProps ?? []
+  const draft = reactive({choice: ''})
+  const yes = await ask({
+    title: `A prop of the library for ${prop.characterName}?`,
+    lines: [
+      `${prop.characterName}'s ${prop.name} becomes the prop of the library: its name, its description and its picture, copied here and pinned - nothing is rendered. The shots stay as they are planned.`,
+    ],
+    body: () => h(TakeProp, {draft, options, characterName: prop.characterName}),
+    warnings: [
+      prop.clips.length > 0 &&
+        `The prop is in ${plural(prop.clips.length, 'clip')}: their requests change with the next plan run, and those rendered count as stale then.`,
+      'A changed cast builds the props from its words again - the prop of the library is taken again then.',
+    ],
+    confirm: 'Take it',
+    submit: async () => {
+      if (!draft.choice) throw new Error('Choose a prop of the library.')
+    },
+  })
+  if (yes) await start({type: 'import-prop', prop: draft.choice, character: prop.character})
 })
 /** A picture of one's own for a character, in what is planned (#835): `bun run replace-character`, its dry run shown first. */
 const replaceIn = toasts.guard(async (role: CastingRole) => {
@@ -392,6 +416,22 @@ const saveCast = toasts.guard(async () => {
           </div>
           <NewFilmRoles v-if="film && kind === 'character'" :roles="newRoles" />
         </div>
+        <div v-if="data.casting.props.length" class="section" data-props>
+          <PageBar title="Props" />
+          <p class="muted">Each prop has a picture of its own, laid into the clips its owner is in - the characters and the places are drawn without it.</p>
+          <div class="role-grid">
+            <CastingPropRow
+              v-for="prop in data.casting.props"
+              :key="prop.character"
+              :prop="prop"
+              :library="data.casting.libraryProps.length > 0"
+              @take="takeProp(prop)"
+            />
+          </div>
+        </div>
+        <p v-else-if="!film && !data.casting.propPictures && data.cast.characters.some(c => c.prop)" class="muted">
+          The props are drawn from their words in every clip. With Prop pictures on in the Settings each one gets a picture of its own.
+        </p>
         <CalloutBox v-if="film && (out.size || newRoles.length)" as="div" class="castbar btn-row">
           <span
             >{{

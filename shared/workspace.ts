@@ -415,7 +415,29 @@ export type CastingRole = {
     errors: string[]
     warnings: string[]
 }
-export type CastingView = {roles: CastingRole[]; errors: string[]; warnings: string[]; options: Record<AssetKind, string[]>}
+// A character's prop with a picture of its own (config.propPictures, #944): the cast's, or one taken from the library
+export type CastingProp = {
+    character: string // the character it belongs to
+    characterName: string
+    id: string
+    name: string
+    description: string
+    picture?: Media
+    libraryId?: string // its picture was copied from this prop of the library
+    clips: string[] // the clips that have its picture
+}
+/** A prop of the library, to take for a character's prop. */
+export type LibraryProp = {id: string; name: string; description: string}
+// propPictures: the project's setting - without it there are no props to show; props: one per character with a prop
+export type CastingView = {
+    roles: CastingRole[]
+    errors: string[]
+    warnings: string[]
+    options: Record<AssetKind, string[]>
+    propPictures: boolean
+    props: CastingProp[]
+    libraryProps: LibraryProp[]
+}
 export type CastingRedo = {
     changes: string[] // what casting.json says now that the project does not have yet, in words
     redo: string[] // the --redo that makes what was planned from the old texts again; none: nothing was planned from them
@@ -540,6 +562,8 @@ export type RunRequest =
     | {type: 'replace-character'; character: string; picture: string; description: string; renderSheet?: boolean}
     // a finished character or place of another music video taken over (#835): bun run import-asset <id> <asset> --from=<project>:<asset>
     | {type: 'import-asset'; asset: string; project: string; from: string; description: 'source' | 'vision' | 'keep'}
+    // a prop of the library for a character's prop (#944): bun run import-asset <id> prop <prop> --for=<character>
+    | {type: 'import-prop'; prop: string; character: string}
     | {type: 'export-song'; as?: string; name?: string}
     | {type: 'add-view'; location: string; name: string; shows: string}
     | {type: 'refinish'; preset?: string; upscale?: string; size?: string; denoise?: number; fps?: number; finish?: boolean; only?: string[]}

@@ -236,6 +236,10 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
                 args: [id, action.asset, `--from=${action.project}:${action.from}`, `--description=${action.description}`],
             }
         }
+        case 'import-prop':
+            if (kind !== 'music') throw new Error('a film takes its props from its screenplay')
+            if (![action.prop, action.character].every(a => PICTURE_ID.test(a))) throw new Error('no such prop or character')
+            return {script: 'tools/import-asset.ts', args: [id, 'prop', action.prop, `--for=${action.character}`]}
         case 'export-asset':
             if (!PICTURE_ID.test(action.asset.replace('--', '-')) || (action.as && !PICTURE_ID.test(action.as))) throw new Error('no such asset')
             return {
