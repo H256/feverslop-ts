@@ -22,6 +22,8 @@ const unqueue = toasts.guard(async (id: string) => {
   run.readHistory()
 })
 const state = computed(() => shown.value && runStateText(shown.value))
+// the line to the workspace lost (#935): what the dock shows is as of the last event - not a failed run
+const lostSince = computed(() => (run.updatedAt.value ? new Date(run.updatedAt.value).toLocaleTimeString() : ''))
 
 // how far the run is (#775): a render of clips as a bar, any other run by the step of its log - and the time it runs or ran
 const now = ref(Date.now())
@@ -112,6 +114,11 @@ const stop = toasts.guard(async () => {
       <button v-if="past.length" class="btn" :aria-expanded="pastOpen" title="The runs that ended: bun run runs" @click="pastOpen = !pastOpen">Runs</button>
       <button v-if="!shown.running" class="btn" aria-label="Close" @click="run.closed.value = true">✕</button>
     </div>
+    <CalloutBox v-if="run.lost.value" kind="warn" as="div" role="status" class="rd-line">
+      No connection to the workspace{{ lostSince ? ` since ${lostSince}` : '' }} - what is shown here is from then: the run may have gone on or ended meanwhile.
+      Trying again…
+    </CalloutBox>
+    <p v-if="run.historyError.value && !run.lost.value" class="rd-line muted">Could not read the queue and the runs that ended: {{ run.historyError.value }}</p>
     <ol v-if="queue.length" class="rd-queue" aria-label="Waiting">
       <li v-for="(queued, n) in queue" :key="queued.id">
         <span class="muted">{{ n === 0 ? 'Next' : `${n + 1}.` }}</span>
@@ -133,6 +140,13 @@ const stop = toasts.guard(async () => {
 </template>
 
 <style scoped>
+/* the line to the workspace and the reading of the queue (#935): a row of their own under the bar */
+.rd-line {
+  margin: 0 var(--space-3) var(--space-1);
+}
+p.rd-line {
+  font-size: var(--text-xs);
+}
 /* the queue and the runs before (#837) - rd- names: .queue and .past are not styled elsewhere, kept apart all the same */
 .rd-queue,
 .rd-past {

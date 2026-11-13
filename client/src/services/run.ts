@@ -1,5 +1,6 @@
 import {computed, onScopeDispose, ref, shallowRef} from 'vue'
 import type {ClipProgress, RunEvent, RunEvents, RunHistory, RunInfo, RunLines, RunProgress, RunRequest} from '../../../shared/workspace'
+import {errorText} from '../lib/format'
 import {defineService} from './service'
 import type {Toasts} from './toasts'
 
@@ -47,6 +48,11 @@ export function jobProgress(events: RunEvent[], since = 0): RunProgress | undefi
   const states = Object.values(clips)
   return states.length ? {clips, done: states.filter(state => state === 'done').length, total: states.length} : undefined
 }
+/** How long the events may be away before the dock says so: the browser's own reconnect after a closed stream takes about that. */
+const LOST_AFTER_MS = 2000
+/** When the browser gave up on the events (an answer that is no stream), they are asked again after this. */
+const RETRY_MS = 3000
+
 export const failedRun = (run: RunInfo) => !run.running && run.code !== undefined && run.code !== 0
 export const runStateText = (run: RunInfo) =>
   run.running ? (run.source === 'terminal' ? 'Running in the terminal' : 'Running') : failedRun(run) ? `Failed (${run.code})` : 'Finished'
@@ -80,14 +86,38 @@ export function createRunDock(toasts: Toasts) {
   const scope = shallowRef<RunScope>()
   /** What waits behind the run and what ran before (#837): read as the scope is followed, as a run starts or ends, and while something waits. */
   const history = shallowRef<RunHistory>({queue: [], past: []})
+  /** Why the queue and the runs before could not be read - empty once a read worked (#935). */
+  const historyError = ref('')
   const readHistory = () => {
     const asked = scope.value
     void asked
       ?.history?.()
       .then(found => {
-        if (scope.value === asked) history.value = found
+        if (scope.value !== asked) return
+        history.value = found
+        historyError.value = ''
       })
-      .catch(() => {})
+      .catch((cause: unknown) => {
+        if (scope.value === asked) historyError.value = errorText(cause)
+      })
+  }
+  /**
+   * The line to the workspace, apart from the run (#935): lost when the events are away for a while - what the dock shows is then
+   * from `updatedAt`, the last time an event came. A lost line says nothing about the run: it may go on, or have ended meanwhile.
+   */
+  const lost = ref(false)
+  const updatedAt = ref<number>()
+  let lostTimer: ReturnType<typeof setTimeout> | undefined
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  const heard = () => {
+    updatedAt.value = Date.now()
+    clearTimeout(lostTimer)
+    lostTimer = undefined
+    if (lost.value) {
+      lost.value = false
+      // back again: what waits and what ended may have changed while the line was away
+      readHistory()
+    }
   }
   const historyTimer = setInterval(() => {
     if (history.value.queue.length) readHistory()
@@ -99,12 +129,31 @@ export function createRunDock(toasts: Toasts) {
   let wasRunning = false
   let action: RunRequest | undefined
 
+  const forgetLine = () => {
+    clearTimeout(lostTimer)
+    clearTimeout(retryTimer)
+    lostTimer = retryTimer = undefined
+    lost.value = false
+    updatedAt.value = undefined
+    historyError.value = ''
+  }
   const connect = () => {
     source?.close()
+    clearTimeout(retryTimer)
     if (!scope.value) return
     const events = new EventSource(`${scope.value.events}?after=${after}`)
     source = events
+    events.addEventListener('open', heard)
+    events.addEventListener('error', () => {
+      if (source !== events) return
+      lostTimer ??= setTimeout(() => {
+        if (source === events) lost.value = true
+      }, LOST_AFTER_MS)
+      // the browser tries again by itself - unless the answer was no stream at all: then this asks again
+      if (events.readyState === EventSource.CLOSED) retryTimer = setTimeout(() => source === events && connect(), RETRY_MS)
+    })
     events.addEventListener('lines', event => {
+      heard()
       const {lines, next} = JSON.parse((event as MessageEvent<string>).data) as RunLines
       // our own reconnect starts from this cursor, the browser's own sends the id of the last event: nothing comes twice
       after = next
@@ -112,11 +161,13 @@ export function createRunDock(toasts: Toasts) {
       log.value = text.length > LOG_MOST ? text.slice(-LOG_KEPT) : text
     })
     events.addEventListener('events', event => {
+      heard()
       const answer = JSON.parse((event as MessageEvent<string>).data) as RunEvents
       // from 0: another run, or the first look - what was there before is not this run's
       runEvents.value = answer.from === 0 ? answer.events : [...runEvents.value, ...answer.events]
     })
     events.addEventListener('state', event => {
+      heard()
       const state = JSON.parse((event as MessageEvent<string>).data) as RunInfo | null
       // another run: its own time
       if (state && state.startedAt !== startedAt) {
@@ -154,12 +205,15 @@ export function createRunDock(toasts: Toasts) {
     // what was asked in another scope is not what ends here
     action = undefined
     history.value = {queue: [], past: []}
+    // the line of another scope is not this one's (#935)
+    forgetLine()
     connect()
     readHistory()
     onScopeDispose(() => {
       if (scope.value !== next) return
       source?.close()
       source = undefined
+      forgetLine()
       scope.value = undefined
       current.value = null
       action = undefined
@@ -194,11 +248,33 @@ export function createRunDock(toasts: Toasts) {
   }
   const running = () => !!current.value?.running
   const dispose = () => {
+    forgetLine()
     clearInterval(historyTimer)
     source?.close()
     ends.clear()
   }
-  return {current, log, logOpen, closed, detail, step, said, progress, endedAt, scope, history, readHistory, follow, starter, onEnd, running, dispose}
+  return {
+    current,
+    log,
+    logOpen,
+    closed,
+    detail,
+    step,
+    said,
+    progress,
+    endedAt,
+    scope,
+    history,
+    historyError,
+    lost,
+    updatedAt,
+    readHistory,
+    follow,
+    starter,
+    onEnd,
+    running,
+    dispose,
+  }
 }
 export type RunDock = ReturnType<typeof createRunDock>
 export const RunService = defineService<RunDock>('run')
