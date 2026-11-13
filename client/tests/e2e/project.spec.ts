@@ -821,6 +821,33 @@ test('timeline: R renders the clip at the playhead again, asked first - a key of
   await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'clips', ids: ['clip-1']}})
 })
 
+test('the tabs by phase: Plan, Shoot and Publish named, the state of a tab in words, every tab in the bar at 1100 and 1600 px (#941)', async ({page}) => {
+  for (const [kind, plan] of [
+    ['music', ['Story', 'Casting', 'Singers', 'Timing', 'Look']],
+    ['film', ['Screenplay', 'Casting', 'Look']],
+  ] as const) {
+    await stubProject(page, kind)
+    for (const width of [1100, 1600]) {
+      await page.setViewportSize({width, height: 800})
+      await page.goto(`${base}/p/${kind}/demo/story`)
+      const nav = page.getByRole('navigation', {name: 'Project'})
+      const tabs = (group: string) => nav.getByRole('group', {name: group}).getByRole('link')
+      await expect(tabs('Plan')).toHaveText(plan.map(name => new RegExp(`^${name}`)))
+      await expect(tabs('Shoot')).toHaveText([/^References/, /^Timeline/, /^Direction/])
+      await expect(tabs('Publish')).toHaveText([/^Post-work/])
+      await expect(nav.getByText('Plan', {exact: true})).toBeVisible()
+      // the state in words, not only as a mark or in a title
+      await expect(nav.getByRole('link', {name: 'Casting (planned)', exact: true})).toBeVisible()
+      // no tab cut off: the last one ends inside the bar
+      const bar = (await nav.boundingBox())!
+      const last = (await nav.getByRole('link', {name: 'Settings'}).boundingBox())!
+      expect(last.x + last.width).toBeLessThanOrEqual(bar.x + bar.width + 1)
+      // one bar of stages: the tabs carry them, no second one
+      await expect(page.locator('.stagebar, .stage-bar')).toHaveCount(0)
+    }
+  }
+})
+
 test('run dock: a lost line to the workspace is said with the time of the last word - the run is not failed - and goes when it is back (#935)', async ({
   page,
 }) => {
