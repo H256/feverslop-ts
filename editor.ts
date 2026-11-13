@@ -1,4 +1,5 @@
 import {cli} from './lib/cli.ts'
+import {extraArgument} from './lib/command-schema.ts'
 // The workspace: a page over all projects and films - the whole video on one timeline, every clip playable in place with its prompt,
 // shots and references next to it, renders started and followed from there, the library and the casting. See issue #152.
 // usage: bun editor.ts [project-id] [--film] [--port=4173]   (no id: the start page. --film: a film in films/)
@@ -24,6 +25,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project or film id'])
+if (extra) log.usageError(extra, usage)
 const id = positionals[0]
 const port = Number(args.port)
 if (!Number.isInteger(port) || port < 1 || port > 65535) log.usageError(`--port must be a port number, got "${args.port}"`, usage)

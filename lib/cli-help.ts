@@ -18,9 +18,12 @@ const rendering: [string, string][] = [
         'With --render=videos: cheap renders into previews/ (config.json "preview"), never a clip. With --render=final: a low-resolution video from them',
     ],
     ['--retake=CLIP:PART', 'Render part of a clip again, between the frames around it: slot-007:3.2-5.0 in seconds, or slot-007:shot2. The old clip is kept'],
-    ['--refresh=pictures,clips', 'Render again what was made from an older plan; the old files go to old/attempts/'],
+    ['--refresh=images,videos', 'Render again what is stale - made from an older plan; the old files go to old/attempts/. pictures, clips say the same'],
     ['--strict', 'Refuse stale clips in the final video instead of only listing them'],
 ]
+/** What a run renders and what it leaves (#937) - the same note in both helps. */
+const renderNote =
+    'What --render renders is what is missing. A stale one - made from an older plan - stays as it is until --refresh=images,videos renders it again; --again renders the ones in --only once more, with a new seed. Nothing else is rendered: GPU time only for what is asked.'
 const planning: [string, string][] = [
     ['--review', 'Stop after each main step that was just generated: accept, edit, generate again or stop'],
     [
@@ -61,7 +64,10 @@ export const commandHelp: Record<string, Help> = {
         options: [
             ['--redo=STEP,STEP', redo],
             ['--beats=beat-05,beat-07', 'With --redo=shotMoments: plan only the shots of these beats again; the other beats and their clips stay'],
-            ['--render=song,images,videos,final|all', 'Also render: the song, the pictures, the clips, the final video. all = images, videos, final'],
+            [
+                '--render=song,images,videos,final|all',
+                'Also render: the song, the pictures, the clips, the final video. all = images, videos and final - never the song: --render=song makes a new one and is asked for by name',
+            ],
             ...rendering,
             ...planning,
             ['--json', 'With --dry-run: what it would do as JSON - the reasons, the steps made again, the beats planned again, the renders'],
@@ -86,6 +92,7 @@ export const commandHelp: Record<string, Help> = {
         notes: [
             'A run reuses finished steps and rendered files. After a stopped or failed run, repeat the command without --redo: it goes on where it stopped.',
             'See what a redo reaches first: bun index.ts <id> --redo=shotMoments --dry-run',
+            renderNote,
         ],
     },
     film: {
@@ -109,6 +116,7 @@ export const commandHelp: Record<string, Help> = {
         notes: [
             'A run reuses finished steps and rendered files. After a stopped or failed run, repeat the command without --redo: it goes on where it stopped.',
             'See what a redo reaches first: bun film.ts <id> --redo=coverage --dry-run',
+            renderNote,
         ],
     },
 }

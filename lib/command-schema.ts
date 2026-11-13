@@ -45,6 +45,20 @@ export type CommandSchema = {
 
 export class UsageError extends Error {}
 
+/**
+ * What is given after the arguments a command takes (#938): said as a usage error before any work - a word meant as an option (a
+ * mistyped `dry-run` for `--dry-run`) or a second id was taken for nothing, and the run went on with the first. `takes` names the
+ * arguments in order, as the usage line does ("a project id", "a clip id").
+ */
+export function extraArgument(positionals: string[], takes: string[]): string | undefined {
+    const extra = positionals.slice(takes.length)
+    if (!extra.length) return undefined
+    const what = takes.length ? `it takes ${takes.join(' and ')}` : 'it takes no argument'
+    return `${extra.map(word => `"${word}"`).join(', ')}: ${extra.length > 1 ? 'arguments' : 'an argument'} too many - ${what}, and an option starts with -- (--dry-run, not dry-run)`
+}
+/** The arguments of a usage line's positionals ("<id>", "<film-id> <clip-id>", "[project-id]"), one name each. */
+const positionalNames = (shown: string) => shown.match(/[<[][^>\]]+[>\]]/g)?.map(name => name.slice(1, -1)) ?? []
+
 const camel = (name: string) => name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
 const fieldOf = (name: string, spec: OptionSpec) => spec.field ?? camel(name)
 const shownOf = (name: string, spec: OptionSpec) =>
@@ -114,6 +128,8 @@ export function parseCommand(schema: CommandSchema, argv: string[]): Parsed {
     } catch (e) {
         throw new UsageError(e instanceof Error ? e.message : String(e))
     }
+    const extra = extraArgument(parsed.positionals, positionalNames(schema.positionals))
+    if (extra) throw new UsageError(extra)
     const values = parsed.values as Record<string, string | string[] | boolean | undefined>
     for (const [name, spec] of Object.entries(schema.options)) {
         const value = values[name]

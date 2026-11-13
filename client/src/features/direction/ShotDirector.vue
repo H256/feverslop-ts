@@ -46,15 +46,17 @@ const otherChanges = computed(() => (view.value?.proposal?.changes.length ?? 0) 
 const SIZES: DirectionSize[] = ['wide', 'medium', 'close', 'extreme']
 
 /** A change saved, then the dialog read again; true when it went through - a failure is said as a toast. */
+// one guarded action for every change: a failure goes when the next change works (#940)
+const changeGuarded = toasts.guard((job: () => Promise<unknown>, done: () => void) =>
+  during(async () => {
+    await job()
+    await reload()
+    done()
+  }),
+)
 const work = async (job: () => Promise<unknown>) => {
   let done = false
-  await toasts.guard(() =>
-    during(async () => {
-      await job()
-      await reload()
-      done = true
-    }),
-  )()
+  await changeGuarded(job, () => (done = true))
   return done
 }
 // people brought in with nothing to do yet: a proposal writes them in, with or without an instruction

@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // A film clip's own choice, as the workspace's Render tab makes it - CLI first (#549): the view of its place it is in, the order
 // of its reference pictures, pictures left out. Kept in clip-overrides/<clip>.json (the file can be written by hand as well); it
 // applies from the next plan run on, and the clip then counts as stale. Without an option the choice there is is printed.
@@ -22,6 +23,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a film id', 'a clip id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], true)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>

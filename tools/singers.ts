@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // Who sings which line of a music video, as the workspace's Singers page has it - CLI first (#549). Without an option every sung
 // line is printed with its singers; --json gives them in the form --set takes back, --line changes single lines. The beats a
 // changed line is sung in lose their shot plan - the next plan run plans just those again. Nothing is rendered.
@@ -22,6 +23,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], false)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>

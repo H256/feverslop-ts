@@ -146,3 +146,39 @@ test('direction in the timeline: the cast lane, the shot dialog, a person taken 
   await expect(dialog.getByRole('button', {name: 'Take Bob out of the shot'})).toBeHidden()
   expect(posted.find(p => p.path === 'run')).toBeUndefined()
 })
+
+test('a failure stays until closed or until the same action works - a notice does not take it away; reached by keyboard (#940)', async ({page}) => {
+  await stubProject(page)
+  let state = view()
+  let refuse = true
+  await page.route('**/api/direction', async route => {
+    if (route.request().method() === 'POST') {
+      if (refuse) return route.fulfill({status: 500, json: {error: 'the disk is full', kind: 'failed'}})
+      state = {...state, ...route.request().postDataJSON(), pending: true}
+    }
+    await route.fulfill({json: state})
+  })
+  await page.goto(`${editor.base}/p/music/demo/direction?shot=b1%3Ashot1`)
+  await page.getByLabel('Instruction', {exact: true}).fill('Ann turns to her own left.')
+  await page.getByRole('button', {name: 'Save instruction', exact: true}).click()
+  const failure = page.getByRole('alert').filter({hasText: 'the disk is full'})
+  await expect(failure).toBeVisible()
+  // long past the time a toast used to go
+  await page.waitForTimeout(7500)
+  await expect(failure).toBeVisible()
+  await expect(failure.getByRole('button', {name: /^Close/})).toBeEnabled()
+  // tried again and it works: the failure goes, the notice of the success comes
+  refuse = false
+  await page.getByRole('button', {name: 'Save instruction', exact: true}).click()
+  await expect(page.getByRole('status').filter({hasText: 'Instruction saved'})).toBeVisible()
+  await expect(failure).toHaveCount(0)
+  // another failure: closed from the keyboard
+  refuse = true
+  await page.getByRole('button', {name: 'Edit instruction', exact: true}).click()
+  await page.getByLabel('Instruction', {exact: true}).fill('Ann turns right.')
+  await page.getByRole('button', {name: 'Save instruction', exact: true}).click()
+  await expect(failure).toBeVisible()
+  await failure.getByRole('button', {name: /^Close/}).focus()
+  await page.keyboard.press('Enter')
+  await expect(failure).toHaveCount(0)
+})

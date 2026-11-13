@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // The render settings of a music video or film - config.json - as the workspace's Settings page has them (#576): printed, or changed with
 // --set=key=value (more than once), a key taken back to its default with --unset=key. A change is checked as the loader checks it, and
 // says what it makes stale - which rendered clips and pictures; nothing is rendered or planned by it. Other keys of config.json
@@ -27,6 +28,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], args.film)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>

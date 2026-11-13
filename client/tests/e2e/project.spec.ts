@@ -448,7 +448,7 @@ test('timeline: the clips that are not rendered are marked and rendered with one
 
 test('timeline: every clip can be rendered again in one go, asked first', async ({page}) => {
   await page.goto(`${base}/p/music/demo/`)
-  await page.getByRole('button', {name: 'Render all (2)'}).click()
+  await page.getByRole('button', {name: 'Render all again (2)'}).click()
   await expect(page.getByText('2 marked')).toBeVisible()
   await dialog(page).getByRole('button', {name: 'Render them'}).click()
   await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-1', 'clip-2'], again: true}, servers: ['gpu']})
@@ -819,4 +819,52 @@ test('timeline: R renders the clip at the playhead again, asked first - a key of
   await expect(dialog(page)).toContainText('Render clip-1')
   await dialog(page).getByRole('button', {name: 'Render it'}).click()
   await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'clips', ids: ['clip-1']}})
+})
+
+test('a later read of the project that fails keeps the page and what was typed, says it may be old, and is read again (#936)', async ({page}) => {
+  // a run goes on, then ends: the page reads the project again - and that read fails
+  let connections = 0
+  const running = {source: 'terminal', command: 'bun index.ts demo', pid: 1, startedAt: '2026-11-03T00:00:00Z', running: true}
+  let ended = false
+  await page.route(/\/p\/music\/demo\/api\/run-events/, route => {
+    const state = connections++ && ended ? {...running, running: false, code: 0} : running
+    return route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: `retry: 100\nevent: state\ndata: ${JSON.stringify(state)}\n\n`})
+  })
+  let failing = false
+  await page.route(/\/p\/music\/demo\/api\/project$/, route =>
+    failing ? route.fulfill({status: 500, json: {error: 'the disk is gone', kind: 'failed'}}) : route.fallback(),
+  )
+  await page.goto(`${base}/p/music/demo/story`)
+  const text = page.getByRole('textbox', {name: 'Story'})
+  await expect(text).toHaveValue('Once upon a time')
+  await text.fill('Once upon a night')
+  failing = true
+  ended = true
+  const notice = page.getByRole('alert').filter({hasText: 'may be out of date'})
+  await expect(notice).toContainText('the disk is gone')
+  await expect(text).toHaveValue('Once upon a night')
+  failing = false
+  await notice.getByRole('button', {name: 'Retry'}).click()
+  await expect(notice).toHaveCount(0)
+  await expect(text).toHaveValue('Once upon a night')
+})
+
+test('timeline: a read at the end of a run that fails is said once, above the page - not again as a toast (#936)', async ({page}) => {
+  let connections = 0
+  const running = {source: 'terminal', command: 'bun index.ts demo', pid: 1, startedAt: '2026-11-03T00:00:00Z', running: true}
+  let ended = false
+  await page.route(/\/p\/music\/demo\/api\/run-events/, route => {
+    const state = connections++ && ended ? {...running, running: false, code: 0} : running
+    return route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: `retry: 100\nevent: state\ndata: ${JSON.stringify(state)}\n\n`})
+  })
+  let failing = false
+  await page.route(/\/p\/music\/demo\/api\/project$/, route =>
+    failing ? route.fulfill({status: 500, json: {error: 'the disk is gone', kind: 'failed'}}) : route.fallback(),
+  )
+  await page.goto(`${base}/p/music/demo/`)
+  await expect(page.getByRole('heading', {name: 'Demo song'})).toBeVisible()
+  failing = true
+  ended = true
+  await expect(page.getByRole('alert').filter({hasText: 'may be out of date'})).toContainText('the disk is gone')
+  await expect(page.getByRole('status').filter({hasText: 'the disk is gone'})).toHaveCount(0)
 })

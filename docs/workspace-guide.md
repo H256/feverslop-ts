@@ -136,11 +136,11 @@ Useful keys: `Space` plays and pauses, `←` and `→` jump to the clip before o
 |---|---|
 | Counts | how many clips are rendered, missing, stale or pinned, marks, *goes on* |
 | Marked | only with marked clips: **Render marked**, **Preview marked**, **Plan … again**, **People…**, **Clear** (see [Several clips at once](#several-clips-at-once)) |
-| Render | **Render stale**, **Render missing**, **Render all**, each with the number of clips |
+| Render | **Render stale**, **Render missing**, **Render all again**, each with the number of clips |
 | Check | **Only flagged** hides all others, `‹` and `›` jump from one flagged clip to the next, **Mark flagged**, **Review**, **Scan for backdrops** (looks for grey studio backdrops, no GPU), **Check textures** (whether continuing clips get grittier from link to link, no GPU), for a film **Check cuts** (whether the cuts within a scene fit, read by a model that reads pictures). What a check finds marks the clips. |
 | Finish | **Preview all**, **Preview video**, **Refinish**, and, once there is a finished video, **Post-work** (goes to the Post-work tab) |
 
-**Render stale**, **Render missing** and **Render all** mark these clips and then ask the usual question with its estimate. **Render all** also takes clips that count as current, for example after another seed.
+**Render stale**, **Render missing** and **Render all again** mark these clips and then ask the usual question with its estimate. **Render all again** also takes clips that count as current, for example after another seed - in the terminal that is `--again` with the clips in `--only`; `--render=all` renders only what is missing.
 
 ## Rendering a clip again
 
