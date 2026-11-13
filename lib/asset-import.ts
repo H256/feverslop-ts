@@ -10,18 +10,20 @@ import {pinnedSidecar} from './provenance.ts'
 import {SHEET_FRAMES, sequenceSheetDir} from './sequenceSheet.ts'
 
 export type AssetKind = 'character' | 'location'
+// a prop (#944) is carried over too, as one plain picture: it has no sheet
+type PictureKind = AssetKind | 'prop'
 
 /** Where an asset's files are, relative to the folder they belong to: the picture and the sheet folder. */
 export type AssetLayout = {picture: string; sheet: string}
 
 /** The files of an asset in a project. */
-export const assetPaths = (kind: AssetKind, id: string): AssetLayout => ({
+export const assetPaths = (kind: PictureKind, id: string): AssetLayout => ({
     picture: `assets/${kind}s/${id}.png`,
     sheet: sequenceSheetDir(kind, id),
 })
 
 /** The ids of a kind that have a picture or a sheet in a project folder. */
-export function assetIds(projectDir: string, kind: AssetKind): string[] {
+export function assetIds(projectDir: string, kind: PictureKind): string[] {
     const ids = new Set<string>()
     const pictures = join(projectDir, 'assets', `${kind}s`)
     if (existsSync(pictures)) for (const f of readdirSync(pictures)) if (f.endsWith('.png') && !unfinished(f)) ids.add(f.slice(0, -4))

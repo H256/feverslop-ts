@@ -2,21 +2,20 @@
 // `bun run library` and the Library page alike. Nothing is deleted: a removed entry goes to the library's .trash/ folder, and
 // an entry a project still names in its casting.json is not removed at all.
 
-import {existsSync, mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs'
+import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
-import type {AssetKind} from './asset-import.ts'
 import {filmDir, filmIds} from './film/setup.ts'
-import {libraryFolder, libraryIds, readLibraryAsset, writeLibraryAsset} from './library.ts'
+import {libraryFolder, libraryIds, type LibraryAssetKind, readLibraryAsset, writeLibraryAsset} from './library.ts'
 import {listProjects, projectDir} from './project-setup.ts'
 import {librarySongIds, readLibrarySong, songFolder, type LibrarySong} from './song-library.ts'
 import {textOf} from './text.ts'
 
-export type LibraryKind = AssetKind | 'song'
-export const LIBRARY_KINDS: readonly LibraryKind[] = ['character', 'location', 'song']
+export type LibraryKind = LibraryAssetKind | 'song'
+export const LIBRARY_KINDS: readonly LibraryKind[] = ['character', 'location', 'prop', 'song']
 
 /** A project that uses an entry: "music/tides (as Kael)". */
 export type LibraryUse = {kind: 'music' | 'film'; id: string; role?: string}
-export type LibraryItem = {kind: AssetKind; id: string; name: string; description: string; usedBy: LibraryUse[]}
+export type LibraryItem = {kind: LibraryAssetKind; id: string; name: string; description: string; usedBy: LibraryUse[]}
 export type LibrarySongItem = {
     id: string
     name: string
@@ -27,7 +26,7 @@ export type LibrarySongItem = {
     source?: string
     usedBy: LibraryUse[]
 }
-export type LibraryListing = {dir: string; characters: LibraryItem[]; locations: LibraryItem[]; songs: LibrarySongItem[]}
+export type LibraryListing = {dir: string; characters: LibraryItem[]; locations: LibraryItem[]; props: LibraryItem[]; songs: LibrarySongItem[]}
 
 const readJson = <T>(file: string): T | undefined => {
     try {
@@ -43,14 +42,27 @@ const folders = (): Folder[] => [
     ...filmIds().map(id => ({kind: 'film' as const, id, dir: filmDir(id)})),
 ]
 
-/** The projects whose casting.json gives a role this asset of the library. */
-export function assetUsers(kind: AssetKind, id: string, projects: Folder[] = folders()): LibraryUse[] {
+/** The projects whose casting.json gives a role this asset of the library - a prop: the projects that took its picture (#944). */
+export function assetUsers(kind: LibraryAssetKind, id: string, projects: Folder[] = folders()): LibraryUse[] {
+    if (kind === 'prop') return propUsers(id, projects)
     const section = kind === 'character' ? 'characters' : 'locations'
     return projects.flatMap(p => {
         const casting = readJson<Record<string, Record<string, string>>>(join(p.dir, 'casting.json'))
         return Object.entries(casting?.[section] ?? {})
             .filter(([, value]) => value === `library:${id}`)
             .map(([role]) => ({kind: p.kind, id: p.id, role}))
+    })
+}
+
+// a library prop is taken as a pinned copy of its picture (lib/prop-import.ts), whose sidecar names where it came from
+function propUsers(id: string, projects: Folder[]): LibraryUse[] {
+    const from = `copied from library/${libraryFolder('prop', id)}/picture.png`
+    return projects.flatMap(p => {
+        const folder = join(p.dir, 'assets', 'props')
+        if (!existsSync(folder)) return []
+        return readdirSync(folder)
+            .filter(f => f.endsWith('.png.json') && readJson<{note?: string}>(join(folder, f))?.note === from)
+            .map(f => ({kind: p.kind, id: p.id, role: f.slice(0, -'.png.json'.length)}))
     })
 }
 
@@ -64,7 +76,7 @@ export function songUsers(song: LibrarySong, projects: Folder[] = folders()): Li
 
 export async function listLibrary(dir: string): Promise<LibraryListing> {
     const projects = folders()
-    const items = async (kind: AssetKind) =>
+    const items = async (kind: LibraryAssetKind) =>
         (await Promise.all(libraryIds(dir, kind).map(id => readLibraryAsset(dir, kind, id))))
             .filter(a => !!a)
             .map(a => ({kind, id: a.id, name: a.name, description: a.description, usedBy: assetUsers(kind, a.id, projects)}))
@@ -80,7 +92,7 @@ export async function listLibrary(dir: string): Promise<LibraryListing> {
             source: song.source,
             usedBy: songUsers(song, projects),
         }))
-    return {dir, characters: await items('character'), locations: await items('location'), songs}
+    return {dir, characters: await items('character'), locations: await items('location'), props: await items('prop'), songs}
 }
 
 const entryFile = (dir: string, kind: LibraryKind, id: string) =>
@@ -106,7 +118,7 @@ export function renameEntry(dir: string, kind: LibraryKind, id: string, name: st
  * A character or place described anew: what the clip prompts say it looks like. A project that took it before keeps its copy
  * (lib/asset-import.ts); it gets the new text when it takes the asset again.
  */
-export async function describeEntry(dir: string, kind: AssetKind, id: string, description: string) {
+export async function describeEntry(dir: string, kind: LibraryAssetKind, id: string, description: string) {
     const clean = description.trim()
     if (!clean || clean.length > 4000) throw new Error('a description is between 1 and 4000 characters')
     const asset = await readLibraryAsset(dir, kind, id)

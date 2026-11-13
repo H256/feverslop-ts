@@ -67,9 +67,9 @@ export type LibrarySongEntry = {
 export type Library = {dir: string; assets: LibraryEntry[]; songs: LibrarySongEntry[]}
 /** A library entry renamed, described anew or put away - what `bun run library rename|describe|remove` does (#835). */
 export type LibraryChange =
-    | {action: 'rename'; kind: AssetKind | 'song'; id: string; name: string}
-    | {action: 'describe'; kind: AssetKind; id: string; description: string}
-    | {action: 'remove'; kind: AssetKind | 'song'; id: string}
+    | {action: 'rename'; kind: AssetKind | 'prop' | 'song'; id: string; name: string}
+    | {action: 'describe'; kind: AssetKind | 'prop'; id: string; description: string}
+    | {action: 'remove'; kind: AssetKind | 'prop' | 'song'; id: string}
 /** One group of measured jobs of `bun run stats` (#836): a workflow variant on a GPU, or a language model. Seconds. */
 export type StatsRow = {key: string; n: number; median: number; p90: number; cold: number; retries: number; failed: number}
 /** The Stats page: what `bun run stats --json` reports, with the fields its tables show. */

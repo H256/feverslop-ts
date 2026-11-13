@@ -1,9 +1,10 @@
-// The asset library: finished characters and places that any project can take (import-asset, casting.json) - the same
+// The asset library: finished characters, places and props that any project can take (import-asset, casting.json) - the same
 // band in every song, the same stage. Shared between projects, outside of all of them:
 //   library/<characters|locations>/<id>/asset.json   name, description, for a place its background features and floor
 //                                                    plan; where it came from
 //   library/<characters|locations>/<id>/picture.png  the picture (the reference sheet)
 //   library/<characters|locations>/<id>/sheet/       anchor.png, sequence.mp4, frames/
+//   library/props/<id>/asset.json, picture.png       a prop: name, description, one plain picture (#944)
 // A project always gets a copy (lib/asset-import.ts), so it stays complete without the library.
 
 import {closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync} from 'node:fs'
@@ -15,8 +16,11 @@ import {readSettingsFile} from './settings.ts'
 import {ownProcessIdentity, processAlive, processIdentity} from './process-identity.ts'
 import {shownOf} from './text.ts'
 
+// a prop (#944): one plain picture, no sheet - the thing alone, as a film or a music video with prop pictures draws it
+export type LibraryAssetKind = AssetKind | 'prop'
+
 export type LibraryAsset = {
-    kind: AssetKind
+    kind: LibraryAssetKind
     id: string
     name: string
     // what it looks like - the description the clip prompts use
@@ -39,16 +43,16 @@ export async function libraryDir(): Promise<string> {
 export const libraryIdPattern = /^[a-z0-9][a-z0-9-]*$/
 
 /** An asset's folder, relative to the library. */
-export const libraryFolder = (kind: AssetKind, id: string) => `${kind}s/${id}`
+export const libraryFolder = (kind: LibraryAssetKind, id: string) => `${kind}s/${id}`
 
 /** Where an asset's files are in the library, relative to it - the layout copyAsset reads and writes. */
-export const libraryLayout = (kind: AssetKind, id: string): AssetLayout => ({
+export const libraryLayout = (kind: LibraryAssetKind, id: string): AssetLayout => ({
     picture: `${libraryFolder(kind, id)}/picture.png`,
     sheet: `${libraryFolder(kind, id)}/sheet`,
 })
 
 /** The asset's record - undefined when the library has none of that id. */
-export async function readLibraryAsset(dir: string, kind: AssetKind, id: string): Promise<LibraryAsset | undefined> {
+export async function readLibraryAsset(dir: string, kind: LibraryAssetKind, id: string): Promise<LibraryAsset | undefined> {
     const file = join(dir, libraryFolder(kind, id), 'asset.json')
     if (!existsSync(file)) return undefined
     const asset = (await Bun.file(file).json()) as LibraryAsset
@@ -62,7 +66,7 @@ export function writeLibraryAsset(dir: string, asset: LibraryAsset) {
 }
 
 /** Why the library takes no new asset of this id - it has one, and an asset there is never overwritten. Undefined: the id is free. */
-export async function libraryTaken(dir: string, kind: AssetKind, id: string): Promise<string | undefined> {
+export async function libraryTaken(dir: string, kind: LibraryAssetKind, id: string): Promise<string | undefined> {
     if (await readLibraryAsset(dir, kind, id))
         return `The library already has a ${kind} "${id}" (${join(dir, libraryFolder(kind, id))}) - it is never overwritten`
 }
@@ -70,7 +74,7 @@ export async function libraryTaken(dir: string, kind: AssetKind, id: string): Pr
 const localAssetLocks = new Map<string, Promise<void>>()
 
 /** Serializes creation of one library id across this process and other CLI processes. */
-export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: string, work: () => T | Promise<T>): Promise<T> {
+export async function withNewLibraryAsset<T>(dir: string, kind: LibraryAssetKind, id: string, work: () => T | Promise<T>): Promise<T> {
     const key = `${resolve(dir)}\n${kind}\n${id}`
     const previous = localAssetLocks.get(key)
     let releaseLocal!: () => void
@@ -152,11 +156,15 @@ export function finishLibraryAsset(dir: string, asset: Omit<LibraryAsset, 'creat
     if (opts.success) log.success(message)
     else log.info(message)
     log.output(folder)
-    log.next(`bun run import-asset <project-id> <asset-id> --from=library:${asset.id}`)
+    log.next(
+        asset.kind === 'prop'
+            ? `bun run import-asset <project-id> prop ${asset.id} --for=<character id>`
+            : `bun run import-asset <project-id> <asset-id> --from=library:${asset.id}`,
+    )
 }
 
 /** The ids of a kind in the library that have their record. */
-export function libraryIds(dir: string, kind: AssetKind): string[] {
+export function libraryIds(dir: string, kind: LibraryAssetKind): string[] {
     const folder = join(dir, `${kind}s`)
     if (!existsSync(folder)) return []
     return readdirSync(folder)
