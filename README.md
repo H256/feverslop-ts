@@ -304,6 +304,7 @@ built on it (and everything built on those):
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
 | `clipPrompt` | `"compact"` (what `init` writes into a new project) = every movement told once - a person's entry keeps where they are and how they are framed, the movement is in the action of the shot only - each person named once, by their label, the shot sentence in its natural order ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind") and an opening clip summed up by its first shot; `"full"` (the default of a project made before, without the key) = the prompt as before. Rendered against each other on three clips with one seed, compact lost nothing visible (#824). A change makes every rendered clip stale |
 | `fightClips`                  | `blocking` (and so `shotMoments`)   |
+| `propPictures`                | `props`                             |
 | `vocalGap`                    | `timeline` (and everything after it) |
 | `locationView`, `sequenceSheets` | `shotViews`                      |
 

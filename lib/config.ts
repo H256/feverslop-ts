@@ -84,6 +84,9 @@ export type PlanConfig = {
     // ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind"). A switch to render the two against each
     // other: it changes every clip prompt, so the rendered clips turn stale
     clipPrompt: 'full' | 'compact'
+    // a character's prop (a guitar, a drum kit) gets a picture of its own, laid into every clip its owner is in, so it stays the same
+    // thing from shot to shot (#944). Off by default: three more reference pictures took about twice the render time in the A/B
+    propPictures: boolean
 }
 
 // a project may use another model than the settings - never another server or key
@@ -121,6 +124,7 @@ export const defaults: Omit<ProjectConfig, 'alignLyrics'> = {
     continuity: 'never',
     locationView: 'auto',
     clipPrompt: 'full',
+    propPictures: false,
     llm: {},
 }
 export const workflowDir = join(import.meta.dir, '..', 'comfy', 'workflows')
@@ -281,6 +285,7 @@ export async function loadProjectConfig(projectDir: string): Promise<ProjectConf
         fail(`locationView must be -1 (the whole sheet), the number of a view, 0 to 4, or "auto", got ${JSON.stringify(config.locationView)}`)
     if (config.clipPrompt !== 'full' && config.clipPrompt !== 'compact')
         fail(`clipPrompt must be "full" or "compact", got ${JSON.stringify(config.clipPrompt)}`)
+    if (typeof config.propPictures !== 'boolean') fail(`propPictures must be true or false, got ${JSON.stringify(config.propPictures)}`)
     if (!['auto', 'always', 'never'].includes(config.continuity))
         fail(`continuity must be "auto", "always" or "never", got ${JSON.stringify(config.continuity)}`)
     if (typeof config.alignLyrics !== 'boolean') fail(`alignLyrics must be true or false, got ${JSON.stringify(config.alignLyrics)}`)

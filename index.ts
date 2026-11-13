@@ -51,6 +51,7 @@ import {type AssetKind} from './lib/asset-import.ts'
 import {dropBeatPlans} from './lib/project.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 import {messageOf} from './lib/text.ts'
+import {castProps} from './lib/props.ts'
 cli('plan')
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
@@ -500,6 +501,13 @@ function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>
         if (applyLibraryText(values, id, value)) castChanged.add(step)
     }
 }
+
+////////// THE PROPS AS THINGS OF THEIR OWN - config.propPictures: each character's prop gets a picture, laid into the clips its owner
+// is in (#944). Built by code from the cast's prop words, no question to the language model
+const props =
+    config.propPictures && cast.characters.some(c => c.prop) ? await project.step('props', '5d · NAMING THE PROPS', async () => castProps(cast.characters)) : {}
+for (const [owner, prop] of Object.entries(props))
+    log.step(prop.id, styles.muted(`${prop.description} - of ${cast.characters.find(c => c.id === owner)?.name ?? owner}`))
 
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
