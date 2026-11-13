@@ -2,7 +2,7 @@ import {describe, expect, test} from 'bun:test'
 import {defaults, type ProjectConfig} from './config.ts'
 import {projectInputs, stepUsed} from './inputs.ts'
 import {builtOn} from './project.ts'
-import {asDrawn, castProps, propName, propPictureJob, propsOfPlace} from './props.ts'
+import {asDrawn, castProps, propName, propPictureJob, propsOfPlace, withArticle} from './props.ts'
 import {characterLookPrompt} from './prompts.ts'
 import {mkdtempSync, rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -96,4 +96,14 @@ describe('the place without the prop (#944)', () => {
     test('with it the place is drawn without any prop: the kit comes with its player', () => {
         expect(propsOfPlace(band, 'stage', true)).toEqual({kept: ['an electric guitar', 'a drum kit'], standing: []})
     })
+})
+
+test('the picture of a prop whose words have no article gets one (#944)', () => {
+    expect(propPictureJob({id: 'electric-guitar', name: 'electric guitar', description: 'electric guitar'}).prompt).toStartWith(
+        'A studio product photograph of an electric guitar. The electric guitar alone',
+    )
+    expect(withArticle('obsidian drum kit')).toBe('an obsidian drum kit')
+    expect(withArticle('two drumsticks')).toBe('two drumsticks')
+    expect(withArticle('her bass')).toBe('her bass')
+    expect(withArticle('bass guitar')).toBe('a bass guitar')
 })

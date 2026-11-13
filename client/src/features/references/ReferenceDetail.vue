@@ -28,7 +28,8 @@ const actions = useReferenceActions(toRef(props, 'reference'), async () => emit(
 const planPrompt = () => {
   prompt.text.value = props.reference.prompt
 }
-const exportable = () => props.reference.kind !== 'prop' && !!props.reference.picture
+// a prop goes in too, as its one picture (#944)
+const exportable = () => !!props.reference.picture
 </script>
 
 <template>

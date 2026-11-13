@@ -116,6 +116,9 @@ const casting: CastingView = {
   errors: [],
   warnings: [],
   options: {character: ['kael'], location: []},
+  propPictures: false,
+  props: [],
+  libraryProps: [],
 }
 const castingRedo: CastingRedo = {changes: [], redo: []}
 const reference: EditorReference = {
