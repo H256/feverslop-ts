@@ -137,11 +137,16 @@ export async function buildRequests(run: RequestsRun) {
         contextFrames: config.contextFrames,
         locationView,
         clipPrompt: config.clipPrompt,
+        props: config.propPictures ? project.data.props : undefined,
         shotViews,
     })
 
     // more people than reference pictures: whoever did not fit is in the scene without a picture - the video model invents them
     for (const clip of clips) {
+        if (clip.droppedProps?.length)
+            log.warn(
+                `${clip.id}: no reference picture left for the prop(s) ${clip.droppedProps.join(', ')} - drawn from their words in this clip, the workflow takes ${MAX_REFERENCE_IMAGES} pictures`,
+            )
         if (clip.dropped?.length)
             log.warn(
                 `${clip.id}: no reference picture left for ${clip.dropped.map(id => cast.characters.find(c => c.id === id)?.name ?? id).join(', ')} - the workflow takes ${MAX_REFERENCE_IMAGES} pictures`,

@@ -1,3 +1,4 @@
+import type {Prop} from '../props.ts'
 import type {CastingCopies} from '../casting.ts'
 import type {Partials} from '../partials.ts'
 
@@ -93,7 +94,7 @@ export type FilmCast = {characters: FilmCharacter[]; locations: FilmLocation[]}
 // A thing the story names that people handle and that comes back (an umbrella, a key, a letter) - it gets a picture of its own, so the
 // video model draws the same one in every clip instead of a new one each time. Not what someone wears all film long (that is in their
 // picture), not a fixed feature of a place (that is in the place's picture).
-export type FilmProp = {id: string; name: string; description: string}
+export type FilmProp = Prop
 
 // One shot of a scene: what the camera sees and which dialogue lines are spoken in it. A shot is the unit that is
 // never split - it lives in one clip, with its lines.

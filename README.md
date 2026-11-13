@@ -56,10 +56,10 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run override <film-id> <clip-id>` | a film clip's own view and references: `--view=2`, `--order=…`, `--without=…`, `--clear` |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
-| `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
+| `bun run export-asset <id> <asset>` | put a finished character, place or prop into the library - see [The asset library](#the-asset-library) |
 | `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
 | `bun run export-song <id>` / `import-song <id> [song]` | a song with its stems and the timing of its lyrics into the library, or from it into a project - see [The asset library](#the-asset-library) |
-| `bun run library [--json]` | what is in the library - characters, places, songs - and who uses each; `rename`, `describe` or `remove` one (put into the library's `.trash/`, refused while a project casts it) |
+| `bun run library [--json]` | what is in the library - characters, places, props, songs - and who uses each; `rename`, `describe` or `remove` one (put into the library's `.trash/`, refused while a project casts it) |
 | `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
 | `bun run texture-chains <id> [--film]` | measures whether clips that continue on the clip before get grittier from link to link, next to the change at an ordinary cut; reads the rendered clips with ffmpeg only; the continuing joins grittier than an ordinary cut by a fifth are kept in `output/texture-chains.json` and marked on the timeline (**Check textures** there; `--json` for machines) |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
@@ -304,6 +304,7 @@ built on it (and everything built on those):
 | `continuity` in `config.json` | `blocking` (and so `shotMoments`)   |
 | `clipPrompt` | `"compact"` (what `init` writes into a new project) = every movement told once - a person's entry keeps where they are and how they are framed, the movement is in the action of the shot only - each person named once, by their label, the shot sentence in its natural order ("A medium shot of <Subject 2> in <Subject 1>, three-quarter angle from behind") and an opening clip summed up by its first shot; `"full"` (the default of a project made before, without the key) = the prompt as before. Rendered against each other on three clips with one seed, compact lost nothing visible (#824). A change makes every rendered clip stale |
 | `fightClips`                  | `blocking` (and so `shotMoments`)   |
+| `propPictures`                | `props`, `characterLooks`, `locationLooks` (and everything after them) |
 | `vocalGap`                    | `timeline` (and everything after it) |
 | `locationView`, `sequenceSheets` | `shotViews`                      |
 
@@ -657,6 +658,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 | `contextFrames`                       | `0` (default) = off; `22` or `39` (5 + 17·k) = a continuing clip starts on that many of the last frames of the clip before instead of its one last frame - the movement goes on, not only the pose. The clip is rendered that much longer at the head (~0.9 / 1.6 s), the head is cut off again; replaces `pinStartFrame` for those clips. Needs `continuity` - see [Continuous scenes](#continuous-scenes) |
 | `locationView`                        | `"auto"` (default) = the shot planning chooses one of the five views of the place for every shot (step `shotViews`, 11c) and a clip gets the one of its first shot as its place picture; `-1` = the whole reference sheet (all five views side by side - the video model shows that back as a grid with a black patch in the first seconds), `0`-`4` = that one view for every clip (front, right, behind, left, wide). Needs the sequence sheets (`sequenceSheets`, on by default) - without them the picture is the plain one. The choice is made from the text of the plan and the names of the views, never from the pictures: a language model that cannot read images is enough, and it is deliberately kept that way |
 | `fightClips`                          | `false` (default) = fight beats are cut like every beat; `true` = the clips of a fight beat (a "hit" with a crowd of creatures) are cut into one-bar pieces with one shot each and only the people of the shot as references - see `docs/comfyui.md` |
+| `propPictures`                        | `false` (default) = a character's prop (a guitar, a drum kit) is drawn from its words in every clip - it can come out another guitar, another kit from shot to shot; `true` = every prop of the cast gets a plain picture of its own (`assets/props/<id>.png`, step `props`), laid into every clip its owner is in, after the characters (the props of the players heard in the clip first; one that does not fit is drawn from its words, with a warning). The characters and the places are then drawn without their props, so a character or a place taken into the library carries no guitar or drum kit into another video. Tried on four band clips with one seed (#944): the instruments stayed the same, at about twice the render time. Turning it on or off in a planned project draws the looks again and plans what is built on them anew |
 | `vocalGap`                            | `1.5` (default) = a clip whose singing starts more than 1.5 s after its start is cut where the voice comes in (on the downbeat right before it when that is within 0.3 s), one whose singing stops more than 1.5 s before its end is cut where it stops - the silence becomes a clip of its own, and two silent pieces next to each other one clip. A generation that opens on seconds of silence starts the lip movement early, whatever the prompt says. More clips: 42 instead of 33 on tides. `0` = off. Needs the lyrics timing (`alignLyrics`); a project made before keeps its clips until `--redo=timeline` |
 | `preview`                             | `{"scale": 0.25, "steps": 4}` - what `--preview` renders with: `scale` is a factor on the pixels (0.25 = half the width and height), `steps` the sampling steps of a workflow with the turbo LoRA. A two-pass workflow renders only its first pass, a workflow on the base model keeps its steps |
 | `leakRetries`                         | `0` (default) = off; `1` or more = a clip that came out as the reference pictures lined up on their grey backdrop is rendered again with another seed, that many times at most (needs `"seed": -1`). Already rendered clips: `bun run leak-scan <project-id>` - see `docs/comfyui.md` |
@@ -674,7 +676,7 @@ Settings per project, all optional - read at every run and checked field by fiel
 Characters are always portrait, locations landscape - whichever way round the size is written. Videos are landscape
 unless `videoAspect` says otherwise, and always 24 fps. Details, examples and the resulting sizes: [docs/comfyui.md](docs/comfyui.md#project-config-configjson).
 
-The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`, `vocalGap` and `sequenceSheets` (which redoes the view choice when `locationView` is `auto`) change
+The fields `singers`, `singerVoice`, `lyricsLanguage`, `alignLyrics`, `continuity`, `locationView`, `fightClips`, `vocalGap`, `propPictures` and `sequenceSheets` (which redoes the view choice when `locationView` is `auto`) change
 the plan (see the table of inputs under [Usage](#usage)); all others only change how it is rendered.
 
 ### Workflows
@@ -1049,6 +1051,21 @@ bun run export-asset witch-test leo --film                                  # a 
   where it came from), `picture.png` (the sheet) and `sheet/` (anchor, sequence video, frames).
 - `import-asset` offers the library as a source, before the projects; its description is the one in `asset.json`.
 
+**Props** (#944) - a film's props, and a music video's with [`propPictures`](#configjson): one plain picture each, no sheet.
+
+```bash
+bun run export-asset tides-of-eternal-flame-261022 electric-guitar --as=sunburst-strat   # a prop into the library
+bun run export-asset witch-test umbrella --film                                    # a film's prop
+bun run import-asset new-song prop sunburst-strat --for=kael --dry-run             # what it would do
+bun run import-asset new-song prop sunburst-strat --for=kael                       # Kael's guitar is the library's
+```
+
+- In the library: `library/props/<id>/asset.json` (name, description, where it came from) and `picture.png`.
+- `import-asset … prop <library id> --for=<character>` replaces that character's prop: its name, description and picture
+  (copied to `assets/props/<id>.png`, pinned). The shots stay as they are planned; the clips that show the character are
+  built with the new prop from the next run on, and a rendered one turns stale. It needs `"propPictures": true`. A changed
+  cast builds the props from its words again - take the library prop again then.
+
 **A new library asset from a picture** - no project needed:
 
 ```bash
@@ -1077,7 +1094,7 @@ bun run import-song new-video epa-streikt                                      #
 **What is in the library**, and who uses it - the Library page shows the same, with the songs on a tab of their own:
 
 ```bash
-bun run library                                         # characters, places and songs, each with the projects that use it
+bun run library                                         # characters, places, props and songs, each with the projects that use it
 bun run library rename song epa-streikt "EPA streikt (live)"   # another name; the id stays
 bun run library describe character kael "a tall drummer in a long coat"
 bun run library remove location old-hall                # into library/.trash/ - refused while a project casts it
@@ -1142,7 +1159,8 @@ the next run uses it:
 |---------|-------|------|
 | `bun run replace-character <project-id>` | a terminal, a planned project | your own picture (and description) for one character or group member of the project |
 | `bun run import-asset <project-id> [<id>] [--from=<project>[:<id>] \| --from=library:<id>]` | a terminal, a planned project | a finished character or place from another project or the library, copied and pinned |
-| `bun run export-asset <project-id> <id> [--as=<library id>] [--film]` | rendered pictures and a description | the character or place into the library - `--film`: of a film in `films/` |
+| `bun run import-asset <project-id> prop <library id> --for=<character>` | `propPictures`, a cast with props | a prop of the library for a character's prop, its picture copied and pinned |
+| `bun run export-asset <project-id> <id> [--as=<library id>] [--film]` | rendered pictures and a description | the character, place or prop into the library - `--film`: of a film in `films/` |
 | `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
 | `casting.json` | - | which roles of a project or a film are played by library assets, on every run |
 

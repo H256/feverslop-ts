@@ -306,6 +306,13 @@ describe('what can be started', () => {
         expect(() => runCommand(music, {type: 'import-asset', asset: 'ann', project: '../x', from: 'ann', description: 'source'})).toThrow('no such asset')
         expect(() => runCommand(music, {type: 'import-asset', asset: 'ann', project: 'demo', from: 'ann', description: 'source'})).toThrow('no such asset')
         expect(() => runCommand(film, {type: 'import-asset', asset: 'ann', project: 'older', from: 'ann', description: 'source'})).toThrow('a film takes')
+        // a prop of the library for a character's prop (#944)
+        expect(runCommand(music, {type: 'import-prop', prop: 'strat', character: 'ann'})).toEqual({
+            script: 'tools/import-asset.ts',
+            args: ['demo', 'prop', 'strat', '--for=ann'],
+        })
+        expect(() => runCommand(music, {type: 'import-prop', prop: '../x', character: 'ann'})).toThrow('no such prop')
+        expect(() => runCommand(film, {type: 'import-prop', prop: 'strat', character: 'ann'})).toThrow('a film takes its props')
         expect(runCommand(film, {type: 'texture-chains'})).toEqual({script: 'tools/texture-chains.ts', args: ['demo', '--film']})
         expect(runCommand(music, {type: 'texture-chains'})).toEqual({script: 'tools/texture-chains.ts', args: ['demo']})
         expect(runCommand(film, {type: 'check-joins'})).toEqual({script: 'tools/film-check-joins.ts', args: ['demo']})
@@ -820,6 +827,35 @@ describe('the casting', () => {
         const ann = casting.roles.find(r => r.id === 'ann')!
         expect(ann).toMatchObject({entry: 'project:ann', clips: ['slot-001'], picture: {file: 'assets/characters/ann.png'}, errors: []})
         expect(casting.roles.find(r => r.id === 'hall')!.errors[0]).toContain('library has no location "gone"')
+    })
+    test('the props with pictures of their own: only with propPictures, the library ones named (#944)', async () => {
+        expect(await readCasting(project(), [])).toMatchObject({propPictures: false, props: [], libraryProps: []})
+        const {dir} = project()
+        write(join(dir, 'project.json'), {cast: {...cast, characters: [{id: 'ann', name: 'Ann', prop: 'an electric guitar'}, cast.characters[1]]}})
+        write(join(dir, 'config.json'), {propPictures: true})
+        write(join(dir, 'assets/props/electric-guitar.png'))
+        write(join(dir, 'assets/props/electric-guitar.png.json'), {pinned: true, note: 'copied from library/props/strat/picture.png'})
+        write(join(root, 'library/props/strat/asset.json'), {name: 'sunburst Strat', description: 'a sunburst Stratocaster'})
+        try {
+            const casting = await readCasting(project(), [{id: 'slot-001', pictures: [{file: 'assets/props/electric-guitar.png'}]}])
+            expect(casting.propPictures).toBe(true)
+            expect(casting.props).toEqual([
+                {
+                    character: 'ann',
+                    characterName: 'Ann',
+                    id: 'electric-guitar',
+                    name: 'electric guitar',
+                    description: 'an electric guitar',
+                    picture: {file: 'assets/props/electric-guitar.png', v: expect.any(Number)},
+                    libraryId: 'strat',
+                    clips: ['slot-001'],
+                },
+            ])
+            expect(casting.libraryProps).toEqual([{id: 'strat', name: 'sunburst Strat', description: 'a sunburst Stratocaster'}])
+        } finally {
+            write(join(dir, 'project.json'), {cast})
+            rmSync(join(dir, 'config.json'))
+        }
     })
     test('a choice changes that one entry and nothing else', async () => {
         await writeCastingEntry(project(), 'character', 'ann', 'library:kael')

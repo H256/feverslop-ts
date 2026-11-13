@@ -93,6 +93,33 @@ test('casting: a library asset for a role, asked with what goes stale', async ({
     .toEqual({characters: [{id: 'ann', name: 'Ann', role: 'singer'}], locations: [{id: 'bar', name: 'Bar'}, {name: 'Roof'}]})
 })
 
+test('casting: the props with pictures of their own, one of the library taken for a character (#944)', async ({page}) => {
+  const role = (kind: 'character' | 'location', id: string, name: string) => ({kind, id, name, copied: false, clips: [], errors: [], warnings: []})
+  await page.route(/\/p\/music\/demo\/api\/casting$/, route =>
+    route.fulfill({
+      json: {
+        roles: [role('character', 'ann', 'Ann'), role('location', 'bar', 'Bar')],
+        errors: [],
+        warnings: [],
+        options: {character: [], location: []},
+        propPictures: true,
+        props: [{character: 'ann', characterName: 'Ann', id: 'electric-guitar', name: 'electric guitar', description: 'an electric guitar', clips: ['clip-1']}],
+        libraryProps: [{id: 'strat', name: 'sunburst Strat', description: 'a sunburst Stratocaster'}],
+      },
+    }),
+  )
+  await page.goto(`${base}/p/music/demo/casting`)
+  const props = page.locator('[data-props]')
+  await expect(props).toContainText('electric guitar')
+  await expect(props).toContainText('of Ann')
+  await props.getByRole('button', {name: 'A prop of the library for Ann'}).click()
+  await expect(dialog(page)).toContainText('The prop is in 1 clip')
+  await dialog(page).getByLabel('The prop Ann gets').selectOption('strat')
+  await expect(dialog(page)).toContainText('a sunburst Stratocaster')
+  await dialog(page).getByRole('button', {name: 'Take it'}).click()
+  await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'import-prop', prop: 'strat', character: 'ann'}})
+})
+
 test('casting: roles removed on their cards, put back, and saved together from the bar', async ({page}) => {
   await page.goto(`${base}/p/music/demo/casting`)
   await page.getByRole('button', {name: 'Remove Ann'}).click()

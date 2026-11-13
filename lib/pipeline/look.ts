@@ -13,6 +13,7 @@ import {
     propInUsePrompt,
 } from '../prompts.ts'
 import {pictureProp, propMissing} from '../prop-check.ts'
+import {asDrawn, propsOfPlace} from '../props.ts'
 import {reviewed} from '../review.ts'
 import {LOCATION_VIEWS} from '../sequenceSheet.ts'
 import type {AssetKind} from '../asset-import.ts'
@@ -35,10 +36,12 @@ export type LookRun = {
     casted: (kind: AssetKind, id: string) => LibraryAsset | undefined
     castChanged: Set<StepName>
     castTexts: <T>(step: StepName, kind: AssetKind, values: Record<string, T>, pick: (asset: LibraryAsset) => T | undefined) => void
+    // config.propPictures: every prop has a picture of its own - the characters and the places are drawn without them (#944)
+    propPictures: boolean
 }
 
 export async function planLook(run: LookRun) {
-    const {project, projectId, args, style, storySummary, cast, casted, castChanged, castTexts} = run
+    const {project, projectId, args, style, storySummary, cast, casted, castChanged, castTexts, propPictures} = run
     /////////// DESIGNING THE LOOK - invented from the story, or extending the director's style.txt
     const lookBrief = await reviewed(
         project,
@@ -54,7 +57,7 @@ export async function planLook(run: LookRun) {
     // reads the look; a prop not in use is asked for once more, then it is a warning.
     async function lookWithPropInUse(char: Character, options: AskOptions): Promise<string> {
         const look = await ask(options)
-        const prop = pictureProp(char)
+        const prop = propPictures ? undefined : pictureProp(char)
         if (!prop) return look
         const first = await askJson<{inUse: boolean; why: string}>(propInUsePrompt(look, prop, handsOf(char))).catch(() => undefined)
         if (!first || first.inUse) return look
@@ -81,7 +84,7 @@ export async function planLook(run: LookRun) {
                 continue
             }
             const otherLooks = cast.characters.filter(c => c.id !== char.id && looks[c.id]).map(c => ({name: c.name, look: looks[c.id]!}))
-            const options = characterLookPrompt(lookBrief, char, otherLooks)
+            const options = characterLookPrompt(lookBrief, asDrawn(char, propPictures), otherLooks)
             looks[char.id] = await project.each('characterLooks', char.id, options, () => lookWithPropInUse(char, options))
         }
         return looks
@@ -90,7 +93,7 @@ export async function planLook(run: LookRun) {
     for (const [id, look] of Object.entries(characterLooks)) log.box(id, look)
     // a prop the look does not name is not in the reference picture - the clips would show the model's own idea of it
     for (const c of cast.characters) {
-        const shown = pictureProp(c)
+        const shown = propPictures ? undefined : pictureProp(c)
         if (shown && !casted('character', c.id) && characterLooks[c.id] && propMissing(characterLooks[c.id]!, shown))
             log.warn(`${c.id}: the look does not show its prop "${shown}" - redo characterLooks, or edit the look in ${project.file} by hand`)
     }
@@ -117,13 +120,8 @@ export async function planLook(run: LookRun) {
             log.step(`Location ${i + 1}/${cast.locations.length}`, styles.name(location.id))
             const fromLibrary = casted('location', location.id)
             if (fromLibrary) return fromLibrary.description
-            const options = locationLookPrompt(
-                lookBrief,
-                storySummary,
-                location.name,
-                [...new Set(cast.characters.flatMap(c => (c.prop && c.propCarried !== false ? [c.prop] : [])))],
-                [...new Set(cast.characters.flatMap(c => (c.prop && c.propCarried === false && c.propPlace === location.id ? [c.prop] : [])))],
-            )
+            const {kept, standing} = propsOfPlace(cast.characters, location.id, propPictures)
+            const options = locationLookPrompt(lookBrief, storySummary, location.name, kept, standing)
             return project.each('locationLooks', location.id, options, () => ask(options))
         })
         return Object.fromEntries(cast.locations.map((location, i) => [location.id, looks[i]!]))

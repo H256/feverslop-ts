@@ -51,6 +51,7 @@ import {type AssetKind} from './lib/asset-import.ts'
 import {dropBeatPlans} from './lib/project.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
 import {messageOf} from './lib/text.ts'
+import {castProps, propPictureJob} from './lib/props.ts'
 cli('plan')
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
@@ -484,7 +485,7 @@ const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id
     // the picture fits the role? the prop the role has is named in the asset's description
     for (const entry of casting.entries.filter(e => e.kind === 'character')) {
         const role = cast.characters.find(c => c.id === entry.id)!
-        const shown = pictureProp(role)
+        const shown = config.propPictures ? undefined : pictureProp(role)
         if (shown && propMissing(casted('character', entry.id)!.description, shown))
             log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
     }
@@ -500,6 +501,13 @@ function castTexts<T>(step: StepName, kind: AssetKind, values: Record<string, T>
         if (applyLibraryText(values, id, value)) castChanged.add(step)
     }
 }
+
+////////// THE PROPS AS THINGS OF THEIR OWN - config.propPictures: each character's prop gets a picture, laid into the clips its owner
+// is in (#944). Built by code from the cast's prop words, no question to the language model
+const props =
+    config.propPictures && cast.characters.some(c => c.prop) ? await project.step('props', '5d · NAMING THE PROPS', async () => castProps(cast.characters)) : {}
+for (const [owner, prop] of Object.entries(props))
+    log.step(prop.id, styles.muted(`${prop.description} - of ${cast.characters.find(c => c.id === owner)?.name ?? owner}`))
 
 ////////// DETECTING INSTRUMENT ACTIVITY - band scenes only: needs stems and at least one character with a propStem
 const neededStems = [...new Set(cast.characters.map(c => c.propStem).filter((s): s is PropStem => Boolean(s)))]
@@ -580,6 +588,7 @@ const {lookBrief, characterLooks, characterDescriptions, locationLooks, location
     casted,
     castChanged,
     castTexts,
+    propPictures: config.propPictures,
 })
 
 /**
@@ -616,6 +625,8 @@ function pictureJobs(
                 }
             })
         }),
+        // config.propPictures: one plain picture per prop, no sheet (#944)
+        ...Object.values(props).map(propPictureJob),
     ]
 }
 
@@ -652,14 +663,16 @@ async function renderPictures(renderer: Renderer, pictures: PictureJob[]) {
             ),
         ),
     )
-    await renderAll(chosen, picture => (config.sequenceSheets ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture)))
+    await renderAll(chosen, picture =>
+        config.sequenceSheets && picture.kind !== 'prop' ? renderer.renderSequenceSheet(picture) : renderer.renderPicture(picture),
+    )
     if (edited !== undefined) pinEditedPicture(chosen[0]!, project.dir, edited)
 }
 
 if (until === 'look') {
     // the casting photos: every character and place as the look describes them, before the beats - a group's members come out
     // of the beats (how many are seen at once), so a group has its pictures with the shot plan
-    const lookPictures = pictureJobs({}, {}, {}).filter(p => p.kind === 'location' || !cast.characters.find(c => c.id === p.id)?.isGroup)
+    const lookPictures = pictureJobs({}, {}, {}).filter(p => p.kind !== 'character' || !cast.characters.find(c => c.id === p.id)?.isGroup)
     const groups = cast.characters.filter(c => c.isGroup)
     // a plan with clips has its own list, with the group members: it stays until the shots are planned again
     if (!existsSync(clipRequestsDir(project.dir)) || !readdirSync(clipRequestsDir(project.dir)).some(f => f.endsWith('.json'))) {

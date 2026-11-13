@@ -1,9 +1,9 @@
-// The library at a glance - its characters, places and songs, and the projects that use them - and one of them renamed,
+// The library at a glance - its characters, places, props and songs, and the projects that use them - and one of them renamed,
 // described anew or put away (#835). The Library page starts the same commands.
 // usage: bun run library [--json]
-//        bun run library rename <character|location|song> <id> <name>
-//        bun run library describe <character|location> <id> <text>
-//        bun run library remove <character|location|song> <id>
+//        bun run library rename <character|location|prop|song> <id> <name>
+//        bun run library describe <character|location|prop> <id> <text>
+//        bun run library remove <character|location|prop|song> <id>
 import {cli} from '../lib/cli.ts'
 import {LIBRARY_KINDS, type LibraryKind, type LibraryUse, listLibrary} from '../lib/library-admin.ts'
 import {changeLibrary} from '../lib/editor/library.ts'
@@ -12,7 +12,7 @@ import {log, styles} from '../lib/log.ts'
 cli('library')
 
 const usage =
-    'usage: bun run library [--json] | rename <character|location|song> <id> <name> | describe <character|location> <id> <text> | remove <character|location|song> <id>'
+    'usage: bun run library [--json] | rename <character|location|prop|song> <id> <name> | describe <character|location|prop> <id> <text> | remove <character|location|prop|song> <id>'
 const args = Bun.argv.slice(2)
 const json = args.includes('--json')
 const [action, kind, id, ...words] = args.filter(a => !a.startsWith('--'))
@@ -31,6 +31,7 @@ if (!action) {
     for (const [title, items] of [
         ['Characters', listing.characters],
         ['Places', listing.locations],
+        ['Props', listing.props],
     ] as const) {
         log.section(`${title} (${items.length})`)
         for (const item of items) log.info(`${styles.name(item.id.padEnd(24))} ${item.name}  ${styles.muted(users(item.usedBy))}`)
@@ -42,13 +43,13 @@ if (!action) {
                 `${song.seconds ? `${Math.round(song.seconds)} s · ` : ''}${song.stems} stems · ${song.lines} lines, ${song.byHand} by hand · ${users(song.usedBy)}`,
             )}`,
         )
-    if (!listing.characters.length && !listing.locations.length && !listing.songs.length)
+    if (!listing.characters.length && !listing.locations.length && !listing.props.length && !listing.songs.length)
         log.info(styles.muted('The library is empty - bun run create-asset, bun run export-asset or bun run export-song put something in.'))
     process.exit(0)
 }
 
 if (!['rename', 'describe', 'remove'].includes(action)) log.usageError(`no such action "${action}" - rename, describe or remove`, usage)
-if (!kind || !LIBRARY_KINDS.includes(kind as LibraryKind)) log.usageError(`a kind first: character, location or song - got "${kind ?? ''}"`, usage)
+if (!kind || !LIBRARY_KINDS.includes(kind as LibraryKind)) log.usageError(`a kind first: character, location, prop or song - got "${kind ?? ''}"`, usage)
 if (!id) log.usageError(`which ${kind}: its id`, usage)
 const entryKind = kind as LibraryKind
 
@@ -61,7 +62,7 @@ try {
     } else if (action === 'describe') {
         if (entryKind === 'song') log.usageError('a song has no description - rename it instead', usage)
         if (!words.length) log.usageError('the new description after the id', usage)
-        await changeLibrary({action: 'describe', kind: entryKind as 'character' | 'location', id: id!, description: words.join(' ')})
+        await changeLibrary({action: 'describe', kind: entryKind as 'character' | 'location' | 'prop', id: id!, description: words.join(' ')})
         log.success(`${kind} "${id}" is described anew. A project that took it keeps its copy until it takes it again.`)
     } else {
         const to = (await changeLibrary({action: 'remove', kind: entryKind, id: id!})).putAway!

@@ -273,13 +273,17 @@ ${storySummary}`,
 // what it is held with is named, at work on it - the character's own "hands" (handsOf), which need not be hands.
 const bodyRules =
     '- Head to toe: name what covers the torso, the legs and the feet (trousers, skirt, robe, boots ...) - no part of the body is left undescribed, because a video model invents whatever is missing.\n'
-type PropOf = {prop?: string; propCarried?: false; propInHand?: string; hands?: string}
-const propRule = ({prop, propCarried, propInHand, hands}: PropOf) =>
+// propPicture: the prop has a picture of its own (config.propPictures, #944) and is in no picture of the character - a character of the
+// library plays guitar in one video and works on a building site in the next
+type PropOf = {prop?: string; propCarried?: false; propInHand?: string; hands?: string; propPicture?: boolean}
+const propRule = ({prop, propCarried, propInHand, hands, propPicture}: PropOf) =>
     !prop
         ? ''
-        : propCarried === false
-          ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, in the working grip of their ${handsOf({hands})}` : `nothing is in their ${handsOf({hands})}`}.\n`
-          : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each of the ${handsOf({hands})} is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
+        : propPicture
+          ? `- The character's "${prop}" has a picture of its own and is not in this one: nothing is in their ${handsOf({hands})}, and nothing of it is near them.\n`
+          : propCarried === false
+            ? `- The character uses "${prop}", which stands in a place and is not in this picture: ${propInHand ? `they hold only "${propInHand}", the way they hold it while using it, in the working grip of their ${handsOf({hands})}` : `nothing is in their ${handsOf({hands})}`}.\n`
+            : `- The character carries "${prop}": show exactly that object, at the size such an object really has, described by the parts that kind of object has - never a different kind of object, and never stretched into a pole or staff when it is not one. It is in use in the picture: held in the position it has while it is used, and say where each of the ${handsOf({hands})} is on it, at work - never resting, hanging down, slung aside, lowered or held by one end at the side.\n`
 /**
  * Whether a finished look shows the character's prop in use - read by the LLM, not by a list of words: "rests against her
  * waist", "slung on her back" and "held by the neck at her side" are all the prop at rest, and so is the pose in the picture.
@@ -299,7 +303,8 @@ Answer as JSON: "inUse" true or false, and "why" - one short sentence on how the
 }
 
 // the prop as the character JSON of a look prompt names it: what is in the picture
-const propField = ({prop, propCarried, propInHand}: PropOf) => (!prop ? {} : propCarried === false ? (propInHand ? {inHand: propInHand} : {}) : {prop})
+const propField = ({prop, propCarried, propInHand, propPicture}: PropOf) =>
+    !prop || propPicture ? {} : propCarried === false ? (propInHand ? {inHand: propInHand} : {}) : {prop}
 
 // otherLooks: the already-designed reference prompts of the rest of the cast (built earlier in the same loop) -
 // without them, two characters with a similar role/archetype (e.g. "loyal companion") reliably converge on

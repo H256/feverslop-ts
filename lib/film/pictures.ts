@@ -3,8 +3,9 @@ import {join} from 'node:path'
 import type {FilmConfig} from './config.ts'
 import {defaults, type RenderConfig} from '../config.ts'
 import type {PictureJob} from '../render.ts'
-import type {FilmCast, FilmProject, FilmProp} from './types.ts'
+import type {FilmCast, FilmProject} from './types.ts'
 import {pictureAsset} from '../compose.ts'
+import {propPictureJob, propPicturePrompt} from '../props.ts'
 import {sequenceSheetDir, sheetAnchor, sheetFrame} from '../sequenceSheet.ts'
 
 /** One view of a location's reference sheet as a picture of its own (view 1..5 = frame 0..4 of the sheet video) - the video model gets the one view, not the grid. */
@@ -16,12 +17,8 @@ export const statePictureId = (characterId: string, stateId: string) => `${chara
 // baseId: the character this picture is another look of - drawn with the seed of the normal picture, which keeps the face
 export type FilmPictureJob = PictureJob & {baseId?: string}
 
-/**
- * The picture of a prop: the thing alone on the grey backdrop of the character pictures - a plain picture, no sheet. Nobody holds it
- * and nothing else is in it: a hand or a place in it would be drawn into every clip that has the prop.
- */
-export const propPicturePrompt = (prop: FilmProp) =>
-    `A studio product photograph of ${prop.description.replace(/[.]+$/, '')}. The ${prop.name} alone, whole and centred, on a plain seamless neutral grey backdrop, even soft light from every side, sharp focus. Nothing else in the picture: no hands, no people, no other objects, no text.`
+// the picture of a prop is the same in a film and a music video (lib/props.ts)
+export {propPicturePrompt}
 
 /** The reference pictures of a film: every location, every character who is ever seen (not a narrator's voice), and every prop. */
 export function filmPictures(
@@ -64,14 +61,7 @@ export function filmPictures(
                     description: data.characterDescriptions?.[statePictureId(c.id, s.id)] ?? '',
                 })),
             ),
-        ...(data.props ?? []).map(p => ({
-            kind: 'prop' as const,
-            id: p.id,
-            file: pictureAsset('prop', p.id),
-            name: p.name,
-            prompt: propPicturePrompt(p),
-            description: p.description,
-        })),
+        ...(data.props ?? []).map(propPictureJob),
     ]
 }
 

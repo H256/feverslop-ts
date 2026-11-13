@@ -180,6 +180,15 @@ const DEFINITIONS: Definition[] = [
         note: 'How a clip prompt is worded. Compact leaves a movement to the action of the shot instead of telling it again per person, and writes the shot sentence in its natural order. To render the two against each other: a change makes every rendered clip stale.',
     },
     {
+        key: 'propPictures',
+        label: 'Prop pictures',
+        group: 'Sampling',
+        control: 'select',
+        for: 'music',
+        choices: () => yesNo,
+        note: "A character's prop - a guitar, a drum kit - gets a picture of its own, laid into every clip its owner is in, so it stays the same thing from shot to shot. The characters and the places are then drawn without their props. Each prop picture is one more reference: a clip with three of them took about twice the render time. A change in a planned project draws the looks again and plans anew what is built on them.",
+    },
+    {
         key: 'seed',
         label: 'Seed',
         group: 'Seed and retries',

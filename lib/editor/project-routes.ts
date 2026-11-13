@@ -107,6 +107,7 @@ export const RENDER_ACTIONS = new Set<RunAction['type']>([
     'export-asset',
     'replace-character',
     'import-asset',
+    'import-prop',
     'export-song',
     'add-view',
     'refinish',

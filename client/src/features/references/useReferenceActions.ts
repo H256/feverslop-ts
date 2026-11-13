@@ -113,7 +113,11 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     const as = ref(r.id)
     await ask({
       title: `Put ${r.name} into the library?`,
-      lines: ['Its picture, its whole sheet and its texts are copied. An asset the library already has is never overwritten.'],
+      lines: [
+        r.kind === 'prop'
+          ? 'Its picture and its description are copied - a prop is one picture. A prop the library already has is never overwritten.'
+          : 'Its picture, its whole sheet and its texts are copied. An asset the library already has is never overwritten.',
+      ],
       body: () =>
         h(FormField, {label: 'Library id'}, () =>
           h('input', {

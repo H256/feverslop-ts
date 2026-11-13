@@ -7,6 +7,7 @@ import {libraryDir, libraryFolder, libraryIds, readLibraryAsset} from '../librar
 import {withProjectLock} from '../lock.ts'
 import {listProjects, projectDir} from '../project-setup.ts'
 import type {Project} from '../project.ts'
+import {castProps} from '../props.ts'
 import {filmDir, filmIds} from '../film/setup.ts'
 import type {FilmProject} from '../film/types.ts'
 import type {EditorTarget} from './project.ts'
@@ -29,7 +30,7 @@ function castingOf(dir: string): CastingFile {
 
 export type {LibraryEntry} from '../../shared/workspace.ts'
 import type {LibraryEntry} from '../../shared/workspace.ts'
-import type {CastingRole} from '../../shared/workspace.ts'
+import type {CastingProp, CastingRole, CastingView, LibraryProp} from '../../shared/workspace.ts'
 export type {CastingRole} from '../../shared/workspace.ts'
 
 /** Everything in the library, with who uses it: the library does not know that itself, every project's casting.json does. */
@@ -108,10 +109,7 @@ export async function changeLibrary(change: LibraryChange) {
 type Cast = {characters: {id: string; name: string; role?: string; isGroup?: boolean; voiceOnly?: boolean}[]; locations: {id: string; name: string}[]}
 
 /** The roles and places of the project, with what casting.json and the library say about each. */
-export async function readCasting(
-    target: EditorTarget,
-    clips: {id: string; pictures: {file: string}[]}[],
-): Promise<{roles: CastingRole[]; errors: string[]; warnings: string[]; options: {character: string[]; location: string[]}}> {
+export async function readCasting(target: EditorTarget, clips: {id: string; pictures: {file: string}[]}[]): Promise<CastingView> {
     const data: Project | FilmProject = existsSync(join(target.dir, 'project.json')) ? JSON.parse(readFileSync(join(target.dir, 'project.json'), 'utf8')) : {}
     const raw = data.cast as Cast | undefined
     const cast: Cast = {characters: (raw?.characters ?? []).filter(c => !c.voiceOnly), locations: raw?.locations ?? []}
@@ -154,7 +152,47 @@ export async function readCasting(
             line => !cast.characters.some(c => line.includes(`"${c.id}"`)) && !cast.locations.some(l => line.includes(`"${l.id}"`)),
         ),
         options,
+        ...(await castingProps(target, data, cast, clips, library)),
     }
+}
+
+// the props with pictures of their own (#944): a music video with "propPictures": true - the step's, else the ones it will build
+async function castingProps(
+    target: EditorTarget,
+    data: Project | FilmProject,
+    cast: Cast,
+    clips: {id: string; pictures: {file: string}[]}[],
+    library: string,
+): Promise<{propPictures: boolean; props: CastingProp[]; libraryProps: LibraryProp[]}> {
+    const config = existsSync(join(target.dir, 'config.json'))
+        ? (JSON.parse(readFileSync(join(target.dir, 'config.json'), 'utf8')) as {propPictures?: unknown})
+        : {}
+    const propPictures = target.kind === 'music' && config.propPictures === true
+    if (!propPictures) return {propPictures, props: [], libraryProps: []}
+    const own = (data as Project).props ?? castProps(cast.characters)
+    const props = cast.characters.flatMap(c => {
+        const prop = own[c.id]
+        if (!prop) return []
+        const picture = assetPaths('prop', prop.id).picture
+        const note = existsSync(join(target.dir, `${picture}.json`))
+            ? (JSON.parse(readFileSync(join(target.dir, `${picture}.json`), 'utf8')) as {note?: string}).note
+            : undefined
+        const libraryId = /^copied from library\/props\/([^/]+)\/picture\.png$/.exec(note ?? '')?.[1]
+        return [
+            {
+                character: c.id,
+                characterName: c.name,
+                ...prop,
+                picture: versioned(target.dir, picture),
+                ...(libraryId ? {libraryId} : {}),
+                clips: clips.filter(clip => clip.pictures.some(p => p.file === picture)).map(clip => clip.id),
+            },
+        ]
+    })
+    const libraryProps = (await Promise.all(libraryIds(library, 'prop').map(id => readLibraryAsset(library, 'prop', id))))
+        .filter(a => !!a)
+        .map(a => ({id: a.id, name: a.name, description: a.description}))
+    return {propPictures, props, libraryProps}
 }
 
 /** Changes one entry of casting.json and leaves all the others as they are. The file stays the user's: this happens only on an explicit choice, never while a run holds the lock. */

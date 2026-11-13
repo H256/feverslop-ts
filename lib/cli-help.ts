@@ -81,7 +81,7 @@ export const commandHelp: Record<string, Help> = {
         ],
         steps: [
             ['Song', 'songStyle, music, stems, instrumentStems, transcript, lyricsTiming, propActivity'],
-            ['Story', 'story, summary, cast, singing, beats'],
+            ['Story', 'story, summary, cast, props (propPictures), singing, beats'],
             [
                 'Look',
                 'lookBrief, characterLooks, characterDescriptions, characterLookVariants, characterDescriptionVariants, locationLooks, locationDescriptions, locationAnchors, locationLayouts',

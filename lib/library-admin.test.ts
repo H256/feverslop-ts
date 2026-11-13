@@ -32,6 +32,13 @@ beforeAll(() => {
     write(join(root, 'projects', 'tides', 'project.json'), {inputs: {'song.wav': 'abc'}})
     write(join(root, 'projects', 'tides', 'input', 'lyrics.txt'), 'la')
     write(join(root, 'projects', 'other', 'project.json'), {inputs: {'song.wav': 'zzz'}})
+    // a prop of the library (#944), taken by tides as the picture of its guitar
+    write(join(library, 'props', 'strat', 'asset.json'), {kind: 'prop', id: 'strat', name: 'sunburst Strat', description: 'a sunburst Stratocaster'})
+    write(join(root, 'projects', 'tides', 'assets', 'props', 'strat.png.json'), {
+        source: 'user',
+        pinned: true,
+        note: 'copied from library/props/strat/picture.png',
+    })
     write(join(root, 'projects', 'other', 'input', 'lyrics.txt'), 'la')
     process.chdir(root)
 })
@@ -41,6 +48,11 @@ afterAll(() => {
 })
 
 describe('the library', () => {
+    test('lists the props, with the projects that took their picture (#944)', async () => {
+        expect((await listLibrary(library)).props).toEqual([
+            {kind: 'prop', id: 'strat', name: 'sunburst Strat', description: 'a sunburst Stratocaster', usedBy: [{kind: 'music', id: 'tides', role: 'strat'}]},
+        ])
+    })
     test('lists characters, places and songs with the projects that use them', async () => {
         const listing = await listLibrary(library)
         expect(listing.characters).toEqual([
