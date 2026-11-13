@@ -28,6 +28,8 @@ export const workspace = {
   changeSetup: (change: SetupChange) => postJson<{said: string[]}>('/api/setup', change),
   /** A new music video, made by `bun run init` with these as its options. */
   createProject: (project: NewProject) => postJson<{id: string}>('/api/projects/new', project),
+  /** A song chosen in the form of a new music video, sent - the page cannot say where the file is (#939). `file` is where the server put it. */
+  uploadSong: (form: FormData) => postForm<{file: string; name: string; bytes: number}>('/api/uploads/song', form),
   /** A new film, made by `bun run film:init` with these as its options. */
   createFilm: (film: NewFilm) => postJson<{id: string}>('/api/films/new', film),
   library: (signal?: AbortSignal) => getJson<Library>('/api/library/assets', signal),
