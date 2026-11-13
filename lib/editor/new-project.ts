@@ -1,4 +1,6 @@
+import {rmSync} from 'node:fs'
 import {join} from 'node:path'
+import {uploadedSongFolder} from './upload.ts'
 import {validProjectId} from '../project-setup.ts'
 import type {NewFilm, NewProject} from '../../shared/workspace.ts'
 
@@ -57,6 +59,9 @@ export async function createProject(request: NewProject, root = ROOT): Promise<{
     })
     const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
     if (code !== 0) throw new Error(saidWrong(`${out}\n${err}`))
+    // a song sent from the page (#939) is in the project now: its folder goes
+    const uploaded = typeof request.song === 'string' ? uploadedSongFolder(request.song.trim()) : undefined
+    if (uploaded) rmSync(uploaded, {recursive: true, force: true})
     return {id: request.id}
 }
 
