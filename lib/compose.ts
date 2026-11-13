@@ -762,6 +762,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // (#824) - the name as the cast spells it, a whole word, the case kept, so that a name that is also a word is not hit
         const bareNames = (text: string) =>
             castSubjects.reduce((t, s) => t.replace(new RegExp(`(?<![\\w{])${escapeRegExp(s.name)}(?![\\w}])`, 'g'), s.label), text)
+        // a person as the prompt names them: "<Subject 2>, Elias," - compact says it once, the label alone (#824)
+        const named = (s: {label: string; name: string}) => (input.clipPrompt === 'compact' ? s.label : `${s.label}, ${s.name},`)
+        const namedInList = (s: {label: string; name: string}) => (input.clipPrompt === 'compact' ? s.label : `${s.label} (${s.name})`)
         const withLabels = (text: string, tokens: boolean) =>
             tokens
                 ? bareNames(replaceTokens(text, characters, c => castSubjects.find(s => s.id === c.id)?.label ?? c.name))
@@ -922,13 +925,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                               : ` - ${spans[0]!.start > start + 0.05 ? 'before and ' : ''}after that the ${s.prop} is held still`
                         return [
                             plays
-                                ? `${s.label}, ${s.name}, plays the ${s.prop} ${when}: ${withLabels(plays, planTokens)}${still}.`
-                                : `${s.label}, ${s.name}, ${spans ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`,
+                                ? `${named(s)} plays the ${s.prop} ${when}: ${withLabels(plays, planTokens)}${still}.`
+                                : `${named(s)} ${spans ? `plays the ${s.prop} ${when}${still}` : `is actively using the ${s.prop} right now`}.`,
                         ]
                     }
                     if (moment.includes(s.label)) return []
                     const poses = idlePropPoses[s.propStem!] ?? idlePropPosesDefault
-                    return [`${s.label}, ${s.name}, ${poses[shotIndex % poses.length]!(s.prop!, s.hands)}.`]
+                    return [`${named(s)} ${poses[shotIndex % poses.length]!(s.prop!, s.hands)}.`]
                 })
             return notes.length ? ` ${notes.join(' ')}` : ''
         }
@@ -951,10 +954,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // In a wide shot it names no lips either: the faces are small there, and the lips of someone seen from behind
                 // (walking away, the back to the lens - a wide shot only) turned him to the lens again, walking backwards
                 const silentSingers = shot.focus.filter(s => singing?.singers.includes(s.id) && !shot.singers.includes(s))
-                const silentWho =
-                    silentSingers.length > 1
-                        ? joinAnd(silentSingers.map(s => `${s.label} (${s.name})`))
-                        : `${silentSingers[0]?.label}, ${silentSingers[0]?.name},`
+                const silentWho = silentSingers.length > 1 ? joinAnd(silentSingers.map(namedInList)) : silentSingers[0] ? named(silentSingers[0]) : ''
                 const silentClause = !silentSingers.length
                     ? ''
                     : shot.plan?.size === 'wide'
@@ -965,14 +965,17 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // model otherwise gives the lip-sync to them too, and the singer ends up in a duet with them
                 const others = onSinger ? shot.focus.filter(s => !singing?.singers.includes(s.id)) : []
                 const othersClause = others.length
-                    ? ` ${others.length > 1 ? joinAnd(others.map(s => `${s.label} (${s.name})`)) : `${others[0]!.label}, ${others[0]!.name},`} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
+                    ? ` ${others.length > 1 ? joinAnd(others.map(namedInList)) : named(others[0]!)} ${others.length > 1 ? 'stay' : 'stays'} silent, lips together and still, while the singing goes on.`
                     : ''
                 const focusLabels = joinAnd(shot.focus.map(s => s.label))
                 // "medium shot, three-quarter angle from behind Elias" + " of <Subject 2> in <Subject 1>": the size first, then who and
                 // where, then the angle - joined as it was, the sentence read "… from behind Elias of <Subject 2>" (#824, compact only)
+                // a name in the framing ("from behind Elias") is the label of this clip - here, not in shot.framing, which the next clip
+                // goes on from with labels of its own (#824)
+                const framing = bareNames(shot.framing)
                 const framed = (rest: string) => {
-                    const cut = input.clipPrompt === 'compact' ? shot.framing.indexOf(', ') : -1
-                    return cut < 0 ? `${shot.framing}${rest}` : `${shot.framing.slice(0, cut)}${rest}${rest ? ',' : ''} ${shot.framing.slice(cut + 2)}`
+                    const cut = input.clipPrompt === 'compact' ? framing.indexOf(', ') : -1
+                    return cut < 0 ? `${framing}${rest}` : `${framing.slice(0, cut)}${rest}${rest ? ',' : ''} ${framing.slice(cut + 2)}`
                 }
                 const where = (still: boolean) => (locationSubject ? `${still ? ', still' : ''} in ${locationSubject.label}, ${the(locationSubject.name)}` : '')
                 // a shot of a player's hands: both hands at work and the instrument between them, never the face - the hands
