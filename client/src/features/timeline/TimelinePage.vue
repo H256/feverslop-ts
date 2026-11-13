@@ -34,10 +34,11 @@ onScopeDispose(timeline.dispose)
 
 // what a run made is read again; a render of clips that were there before is looked at against what was there
 run.onEnd((current, action) => {
-  void session
-    .reload()
-    .then(() => actions.afterRender(current, action))
-    .catch(toasts.fail)
+  void session.reload().then(
+    () => Promise.resolve(actions.afterRender(current, action)).catch(toasts.fail),
+    // the project read at the end of a run is the layout's too: a failure is said once, above the page (#936)
+    () => {},
+  )
 })
 
 const linked = () => project.value.clips.find(c => c.id === route.hash.slice(1))

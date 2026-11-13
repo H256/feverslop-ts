@@ -39,13 +39,14 @@ const rules = () => view.value?.rules ?? []
 const edits = () => view.value?.edits ?? []
 
 /** A change saved, then the page read again - one at a time, a failure said as a toast. */
-const change = (work: () => Promise<unknown>) =>
-  toasts.guard(() =>
-    during(async () => {
-      await work()
-      await refresh()
-    }),
-  )()
+// one guarded action for every change: a failure goes when the next change works (#940)
+const changeGuarded = toasts.guard((work: () => Promise<unknown>) =>
+  during(async () => {
+    await work()
+    await refresh()
+  }),
+)
+const change = (work: () => Promise<unknown>) => changeGuarded(work)
 
 const save = (rule: DirectionRule) =>
   change(async () => {

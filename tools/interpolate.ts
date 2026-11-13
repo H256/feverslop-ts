@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // Gives rendered clips of a project more frames with ComfyUI's frame interpolation, to compare models before the final
 // video uses it (issue #291): each clip is cut into its shots (never interpolated across a cut), every model given makes
 // its own file in videos/interpolated/ - at FPS * multiplier, and a 60 fps copy with the song under it to watch.
@@ -22,14 +23,15 @@ cli('interpolate')
 
 const usage =
     'usage: bun run interpolate <project-id> --only=slot-001,... --model=<file in models/frame_interpolation>,... [--multiplier=5] [--comfy=http://host:8188]'
-const {
-    values: args,
-    positionals: [id],
-} = parseArgs({
+const {values: args, positionals} = parseArgs({
     args: Bun.argv.slice(2),
     allowPositionals: true,
     options: {only: {type: 'string', default: ''}, model: {type: 'string', default: ''}, multiplier: {type: 'string', default: '5'}, comfy: {type: 'string'}},
 })
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
+const [id] = positionals
 const only = args.only.split(',').filter(Boolean)
 const models = args.model.split(',').filter(Boolean)
 const multiplier = Number(args.multiplier)

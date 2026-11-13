@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // The older versions of a clip or picture that were put away - rendered again, from an older plan, with a grey backdrop, before the
 // library played it - as the workspace's Versions tab and References page list them, CLI first (#549). --pick makes one the current
 // version again: what is current now is put away and stays selectable. Nothing is rendered.
@@ -17,6 +18,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id', 'a clip or picture id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], args.film)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>

@@ -1,5 +1,8 @@
 import {describe, expect, test} from 'bun:test'
-import {parseCommand, requestArgs, UsageError, usageArgs, usageOf} from './command-schema.ts'
+import {mkdirSync, mkdtempSync, readdirSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {extraArgument, parseCommand, requestArgs, UsageError, usageArgs, usageOf} from './command-schema.ts'
 import {introCommand, labelCommand} from './postwork/commands.ts'
 
 // #826: one description per option - the parser, the usage and the workspace's arguments come from it.
@@ -93,4 +96,56 @@ test('a switch and a list: on, off or not said; lines, none, or not said - parse
     expect(requestArgs(creditsCommand, {facts: false, opening: true, extra: []})).toEqual(['--no-lines', '--no-facts', '--opening'])
     expect(requestArgs(creditsCommand, {extra: ['one', 'two']})).toEqual(['--line=one', '--line=two'])
     expect(() => requestArgs(creditsCommand, {extra: ['a\nb']})).toThrow('one line of text each')
+})
+
+// #938: a word more than a command takes was taken for nothing, and the run went on with the first
+describe('arguments more than a command takes', () => {
+    test('said with the word, what the command takes and how an option is written', () => {
+        expect(extraArgument(['tides'], ['a project id'])).toBeUndefined()
+        expect(extraArgument([], ['a project id'])).toBeUndefined()
+        expect(extraArgument(['tides', 'dry-run'], ['a project id'])).toBe(
+            '"dry-run": an argument too many - it takes a project id, and an option starts with -- (--dry-run, not dry-run)',
+        )
+        expect(extraArgument(['f', 'clip-1', 'x', 'y'], ['a film id', 'a clip id'])).toStartWith(
+            '"x", "y": arguments too many - it takes a film id and a clip id',
+        )
+    })
+    test('a command by its schema: as many as its usage line names', () => {
+        expect(() => parseCommand(labelCommand, ['my-project', 'other-project'])).toThrow(
+            new UsageError(extraArgument(['my-project', 'other-project'], ['id'])!),
+        )
+    })
+})
+
+// the commands themselves: refused before the project is locked, read or built - nothing of the user's is touched
+describe('the commands refuse a word too many before any work (#938)', () => {
+    const root = join(import.meta.dir, '..')
+    const run = (cwd: string, ...args: string[]) => {
+        const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('FEVERSLOP_')))
+        const done = Bun.spawnSync(['bun', ...args], {
+            cwd,
+            env: {...env, FEVERSLOP_SETTINGS: join(cwd, 'missing.json'), NO_COLOR: '1'},
+            stdout: 'pipe',
+            stderr: 'pipe',
+        })
+        return {code: done.exitCode, text: done.stdout.toString() + done.stderr.toString()}
+    }
+    test.each([
+        ['index.ts', 'projects'],
+        ['film.ts', 'films'],
+        ['editor.ts', 'projects'],
+        ['tools/status.ts', 'projects'],
+    ])('%s', (script, folder) => {
+        const cwd = mkdtempSync(join(tmpdir(), 'extra-args-'))
+        try {
+            mkdirSync(join(cwd, folder, 'demo'), {recursive: true})
+            const said = run(cwd, join(root, script), 'demo', 'dry-run')
+            expect(said.code).not.toBe(0)
+            expect(said.text).toContain('"dry-run": an argument too many')
+            // nothing was started on the project: no lock, nothing written into it
+            expect(readdirSync(join(cwd, folder, 'demo'))).toEqual([])
+        } finally {
+            rmSync(cwd, {recursive: true, force: true})
+        }
+    })
 })

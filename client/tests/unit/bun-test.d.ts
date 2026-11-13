@@ -5,6 +5,7 @@ declare module 'bun:test' {
     toEqual(value: unknown): void
     toHaveLength(length: number): void
     toBeUndefined(): void
+    toContain(value: unknown): void
     toBeCloseTo(value: number, digits?: number): void
   }
   export function describe(name: string, body: () => void): void

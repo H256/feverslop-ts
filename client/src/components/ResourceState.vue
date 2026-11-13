@@ -8,7 +8,8 @@ defineEmits<{retry: []}>()
 <template>
   <div v-if="loading && !loaded" class="boot" role="status">Loading…</div>
   <CalloutBox v-else-if="error" role="alert" kind="error" as="div" class="btn-row">
-    <span>{{ loaded ? `Could not refresh: ${error}` : error }}</span>
-    <button class="btn" @click="$emit('retry')">Retry</button>
+    <!-- what is shown stays when a later read fails: it may be old now (#936) -->
+    <span>{{ loaded ? `Could not read it again - what you see may be out of date: ${error}` : error }}</span>
+    <button class="btn" :disabled="loading" @click="$emit('retry')">{{ loading ? 'Reading…' : 'Retry' }}</button>
   </CalloutBox>
 </template>

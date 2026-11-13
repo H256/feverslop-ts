@@ -1,6 +1,6 @@
-import {mkdtempSync, rmSync} from 'node:fs'
+import {mkdtempSync, readdirSync, rmSync, statSync} from 'node:fs'
 import {tmpdir} from 'node:os'
-import {join} from 'node:path'
+import {basename, dirname, join, resolve} from 'node:path'
 
 // A picture sent from the page: only as large as a picture is, only what its first bytes say is a PNG, a JPEG or a WebP - never
 // what its name or its type header say - written under a name of the server's own into a folder of its own, which goes again
@@ -53,4 +53,68 @@ export async function takePictureUpload(
         drop()
         throw e
     }
+}
+
+// A song chosen in the start page's form (#939): the browser never says where a file is on the machine (a "fakepath"), so the file
+// itself is sent. Like a picture: only what its first bytes say is a WAV, a FLAC or an MP3, under a name of the server's own, in a
+// folder of its own - `bun run init --song=<that file>` copies it into the project, and the folder goes again.
+
+/** The largest song taken - a 10-minute WAV in 24 bit at 48 kHz is about 170 MB. */
+export const SONG_MAX_BYTES = 400 * 1024 * 1024
+const SONG_FOLDER = 'workspace-song-'
+
+/** What the first bytes say the song is: a WAV, a FLAC or an MP3 (with an ID3 tag or a frame header) - nothing else is taken. */
+export function songType(bytes: Uint8Array): 'wav' | 'flac' | 'mp3' | undefined {
+    const at = (offset: number, ...values: number[]) => values.every((value, i) => bytes[offset + i] === value)
+    if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x41, 0x56, 0x45)) return 'wav'
+    if (at(0, 0x66, 0x4c, 0x61, 0x43)) return 'flac'
+    if (at(0, 0x49, 0x44, 0x33)) return 'mp3'
+    // an MPEG audio frame: eleven bits of sync, layer III
+    if (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe6) === 0xe2) return 'mp3'
+    return undefined
+}
+
+/** How long a song sent for a form that was never sent on is kept: the next song sent clears older ones away. */
+const SONG_KEPT_MS = 24 * 60 * 60 * 1000
+
+/** Songs sent for a form that was closed instead of created: gone after a day, when the next one comes. */
+export function sweepSongUploads(now = Date.now()) {
+    for (const name of readdirSync(tmpdir())) {
+        if (!name.startsWith(SONG_FOLDER)) continue
+        const folder = join(tmpdir(), name)
+        try {
+            if (now - statSync(folder).mtimeMs > SONG_KEPT_MS) rmSync(folder, {recursive: true, force: true})
+        } catch {
+            // gone already, or in use: the next sweep sees it
+        }
+    }
+}
+
+/** The song of a form field, put into a folder of its own: its path, the name it had, and how to drop it again. */
+export async function takeSongUpload(value: unknown): Promise<{file: string; name: string; bytes: number}> {
+    sweepSongUploads()
+    if (!(value instanceof File)) throw new UploadRefused('no song sent')
+    if (value.size === 0) throw new UploadRefused('the song file is empty')
+    if (value.size > SONG_MAX_BYTES) throw new UploadRefused(`the song is too large - at most ${SONG_MAX_BYTES / 1024 / 1024} MB`)
+    // its first bytes only - a song is too large to be read whole for that
+    const reader = value.stream().getReader()
+    const first = await reader.read()
+    await reader.cancel()
+    const type = songType(first.value ?? new Uint8Array())
+    if (!type) throw new UploadRefused('not a song: a WAV, a FLAC or an MP3 is taken')
+    const folder = mkdtempSync(join(tmpdir(), SONG_FOLDER))
+    try {
+        const file = join(folder, `song.${type}`)
+        await Bun.write(file, value)
+        return {file, name: value.name.replace(/[\/]/g, '').slice(0, 200), bytes: value.size}
+    } catch (e) {
+        rmSync(folder, {recursive: true, force: true})
+        throw e
+    }
+}
+
+/** Whether a path is a song taken by takeSongUpload - its folder goes once the project has it. */
+export function uploadedSongFolder(path: string): string | undefined {
+    const folder = dirname(resolve(path))
+    return dirname(folder) === resolve(tmpdir()) && basename(folder).startsWith(SONG_FOLDER) ? folder : undefined
 }
