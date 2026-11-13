@@ -105,7 +105,7 @@ const {
     until,
 } = (() => {
     try {
-        return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY))
+        return readRunOptions(args, MUSIC_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
         return log.usageError((e as Error).message, usage)
     }

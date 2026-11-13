@@ -70,21 +70,27 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
       <button
         v-if="count.stale"
         class="b-render"
-        title="Mark the stale clips - made from another request than the plan has now - and render them again: the old versions stay selectable"
+        title="Mark the stale clips - made from another request than the plan has now - and render them again: the old versions stay selectable. In the terminal: --render=videos --refresh=videos"
         @click="renderAll('stale')"
       >
         Render stale ({{ count.stale }})
       </button>
-      <button v-if="count.missing" class="b-render" title="Mark the clips that are not rendered yet and render them" @click="renderAll('missing')">
+      <button
+        v-if="count.missing"
+        class="b-render"
+        title="Mark the clips that are not rendered yet and render them. In the terminal: --render=videos"
+        @click="renderAll('missing')"
+      >
         Render missing ({{ count.missing }})
       </button>
       <button
         v-if="rendered"
         class="b-render"
-        title="Mark every clip and render them all again - also those that count as current, e.g. after a change the clips do not notice (a seed, a setting outside the request). The old versions stay selectable"
+        title="Mark every clip and render them all again - also those that count as current, e.g. after a change the clips do not notice (a seed, a setting outside the request). The old versions stay selectable. In the terminal: --render=videos --only=… --again"
         @click="renderAll('all')"
       >
-        Render all ({{ clips.length }})
+        <!-- "again": --render=all in the terminal renders what is missing; this renders every clip once more (#937) -->
+        Render all again ({{ clips.length }})
       </button>
     </div>
     <div v-if="count.flagged || rendered" class="grp">

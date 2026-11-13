@@ -448,7 +448,7 @@ test('timeline: the clips that are not rendered are marked and rendered with one
 
 test('timeline: every clip can be rendered again in one go, asked first', async ({page}) => {
   await page.goto(`${base}/p/music/demo/`)
-  await page.getByRole('button', {name: 'Render all (2)'}).click()
+  await page.getByRole('button', {name: 'Render all again (2)'}).click()
   await expect(page.getByText('2 marked')).toBeVisible()
   await dialog(page).getByRole('button', {name: 'Render them'}).click()
   await expect.poll(() => posted.at(-1)?.body).toEqual({action: {type: 'clips', ids: ['clip-1', 'clip-2'], again: true}, servers: ['gpu']})
