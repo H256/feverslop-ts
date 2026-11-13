@@ -2,7 +2,7 @@ import {describe, expect, test} from 'bun:test'
 import {defaults, type ProjectConfig} from './config.ts'
 import {projectInputs, stepUsed} from './inputs.ts'
 import {builtOn} from './project.ts'
-import {castProps, propName} from './props.ts'
+import {castProps, propName, propPictureJob} from './props.ts'
 import {mkdtempSync, rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
@@ -53,5 +53,14 @@ describe('the propPictures setting (#944)', () => {
 
     test('a changed cast drops the props built from it', () => {
         expect(builtOn(['cast'], {cast: withProp.cast, props: {}})).toContain('props')
+    })
+})
+
+describe('the picture of a prop (#944)', () => {
+    test('one plain picture in assets/props, drawn alone on the grey backdrop', () => {
+        const job = propPictureJob({id: 'electric-guitar', name: 'electric guitar', description: 'an electric guitar'})
+        expect(job).toMatchObject({kind: 'prop', id: 'electric-guitar', file: 'assets/props/electric-guitar.png', name: 'electric guitar'})
+        expect(job.prompt).toStartWith('A studio product photograph of an electric guitar. The electric guitar alone')
+        expect(job.prompt).toContain('no hands, no people')
     })
 })
