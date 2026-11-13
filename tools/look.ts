@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // The look of a music video or film, as the workspace's Look page has it - CLI first (#548): the look of the whole, and per character
 // and place its look, description, background and floor plan. Without an option it is printed; --json prints it in the form --set
 // takes back. A changed text is kept as written, what is written from it is written again for that one only; --again has the
@@ -22,6 +23,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], args.film)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>

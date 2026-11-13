@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // The story of a music video (a film: its screenplay), as the workspace's Story page has it - CLI first (#548). Without an option
 // it is printed. --set replaces it by a text of your own, and what was planned from the old one goes. --adapt has the language model
 // tell it anew for the cast as it is now: a proposal (output/story-proposal.json), taken with --take or dropped with --drop.
@@ -58,6 +59,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], args.film)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>
