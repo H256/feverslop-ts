@@ -758,9 +758,13 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // a character of the clip becomes its <Subject N>, anybody else their plain name: from the {Name} tokens of the text,
         // or - in a beat or plan from before them - from the name or id ("Der Mann", "der-mann") written in it
+        // a name the planner wrote without its braces ("keeping Elias centred" in a camera line) is the same person: the label too
+        // (#824) - the name as the cast spells it, a whole word, the case kept, so that a name that is also a word is not hit
+        const bareNames = (text: string) =>
+            castSubjects.reduce((t, s) => t.replace(new RegExp(`(?<![\\w{])${escapeRegExp(s.name)}(?![\\w}])`, 'g'), s.label), text)
         const withLabels = (text: string, tokens: boolean) =>
             tokens
-                ? replaceTokens(text, characters, c => castSubjects.find(s => s.id === c.id)?.label ?? c.name)
+                ? bareNames(replaceTokens(text, characters, c => castSubjects.find(s => s.id === c.id)?.label ?? c.name))
                 : castSubjects.reduce((t, s) => t.replace(legacyNames(s), s.label), text)
 
         // with vocals, a cut never falls into a sung word
@@ -994,12 +998,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 const personInFrame = (s: (typeof shot.focus)[number], n: number) => `${personAlone(s, n)}${together(s)}`
                 const personAlone = (s: (typeof shot.focus)[number], n: number) => {
                     const p = stagedPeople?.[s.id]
+                    // compact: the token only - the name next to it called one person twice in one sentence (#824)
+                    const who = input.clipPrompt === 'compact' ? s.label : `${s.label}, ${s.name}`
                     // not for a singer the plan shows from behind (#822): "three-quarter back view" and "the face clearly visible" cannot both hold
                     const face = shot.singers.includes(s) && !p?.faceHidden ? ', the face clearly visible' : ''
-                    if (!shot.plan) return `${s.label}, ${s.name}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
+                    if (!shot.plan) return `${who}, ${shot.focus.length === 1 ? 'filling the frame' : positions[n % positions.length]}${face}`
                     // somebody in the picture the planner gave no entry of their own: the shot's "rest" says what they do
-                    if (!p) return `${s.label}, ${s.name}, in the frame${face}`
-                    return `${s.label}, ${s.name}, ${
+                    if (!p) return `${who}, in the frame${face}`
+                    return `${who}, ${
                         // compact: the movement is told by the shot's action - told again here, the two differed in detail (#824)
                         [p.state, p.frame, input.clipPrompt === 'compact' && shot.plan.action ? undefined : p.motion]
                             .filter(Boolean)
@@ -1117,8 +1123,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // a clip nobody sings in does not open on a beat summary that has someone sing (#755): the intro of a verse beat got
             // "sings while walking forward", and the model turned the walker seen from behind to the lens - its first shot says it instead
             const silentOpening = opensScene && !vocals.length && castSubjects.some(s => singing?.singers.includes(s.id))
+            // compact (#824): the summary is the first shot's action - the beat's summary told the same in other words, and differed
             const sceneClause =
-                (slot.micro || silentOpening) && flatShotMoments?.[0]?.action
+                (slot.micro || silentOpening || input.clipPrompt === 'compact') && flatShotMoments?.[0]?.action
                     ? withLabels(flatShotMoments[0].action, planTokens)
                     : opensScene
                       ? withLabels(beat.summary, beatTokens)
