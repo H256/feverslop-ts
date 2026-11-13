@@ -1,5 +1,5 @@
 import {countShotsPerBeat, propActivityPerBeat, singingPerBeat} from '../compose.ts'
-import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, dropStaleEdits} from '../direction/service.ts'
+import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, directionPlanRules, dropStaleEdits, recordPlannedDirection} from '../direction/service.ts'
 import {directionViewCache} from '../direction/views.ts'
 import {formatTime} from '../frames.ts'
 import {ask, askJson, llmMap} from '../llm.ts'
@@ -114,7 +114,11 @@ export async function planShots(run: ShotRun) {
     }
     const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
     // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
-    const directionNotes = directionPlanNotes({id: project.id, dir: project.dir, kind: 'music'}, project.data)
+    const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
+    const directionNotes = directionPlanNotes(directionTarget, project.data)
+    // the rules each beat gets as notes: a beat planned now has them in its shots, a preview need not write them again (#960)
+    const directionRules = directionPlanRules(directionTarget, project.data)
+    const plannedNow: string[] = []
     const planContext: PlanContext = {
         characters: cast.characters,
         locations: cast.locations,
@@ -286,7 +290,11 @@ export async function planShots(run: ShotRun) {
                       blocking,
                   })
                   const plan = await project.eachFound('shotMoments', beat.id, {instructions, input}, () => planShots(beat, blocking, after, handover))
-                  if (plan) result[beat.id] = plan // a beat without a plan falls back to the legacy spread
+                  // a beat without a plan falls back to the legacy spread
+                  if (plan) {
+                      result[beat.id] = plan
+                      plannedNow.push(beat.id)
+                  }
               }
               const planShots = async (
                   beat: Beat,
@@ -412,7 +420,7 @@ export async function planShots(run: ShotRun) {
     // what the direction cannot apply does not stop the run (#801): edits made for shots planned again since are gone with those shots,
     // and instructions not taken yet are left out of the prompts - both said. Only a run that renders clips stops for instructions
     // not taken: it would render them without (it stops at the start already, see directionGate)
-    const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
+    recordPlannedDirection(directionTarget, plannedNow, directionRules)
     for (const dropped of dropStaleEdits(directionTarget, project.data)) log.warn(`direction: dropped an edit made for a shot planned again since - ${dropped}`)
     const notTaken = render.has('videos') ? [] : directionNotTaken(directionTarget, project.data)
     if (notTaken.length)

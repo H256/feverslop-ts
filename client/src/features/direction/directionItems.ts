@@ -15,6 +15,8 @@ export type Item = {
   text: string
   issues: string[]
   planned: boolean
+  /** a reviewed instruction the shots were planned with (#960): taken by the plan run, nothing to preview */
+  inPlan: boolean
   /** made for shots planned again since: nothing to decide but clearing it (or, for an instruction, keeping it for the new shot) */
   leftover: boolean
   /** left open for the preview to write: someone brought in with nothing to do, words that still name someone taken out */
@@ -60,6 +62,7 @@ export function itemsOf(v: DirectionView, name: Name): Item[] {
       text: rule.text,
       issues: [v.unresolved.find(r => r.ruleId === rule.id)?.message].filter((m): m is string => !!m),
       planned: !!rule.planned,
+      inPlan: (v.inPlan ?? []).includes(rule.id),
       leftover: !!rule.binding && !!v.unresolved.find(u => u.ruleId === rule.id)?.stale,
       writes: false,
     })),
@@ -70,6 +73,7 @@ export function itemsOf(v: DirectionView, name: Name): Item[] {
       text: describeEdit(edit, name),
       issues: v.editIssues.filter(i => i.editId === edit.id).map(i => i.message),
       planned: false,
+      inPlan: false,
       leftover: v.editIssues.some(i => i.editId === edit.id && i.stale),
       writes: v.editIssues.some(i => i.editId === edit.id && i.mentions),
     })),

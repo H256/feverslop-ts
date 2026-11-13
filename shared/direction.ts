@@ -91,6 +91,8 @@ export type DirectionView = {
         /** made for shots that were planned again since: a leftover of the old plan, nothing to decide (#830) */
         stale?: boolean
     }[]
+    /** the reviewed rules the shots they select were all planned with (#960): taken by the plan run, nothing to preview */
+    inPlan: string[]
     proposal?: DirectionProposal
     versions: DirectionVersion[]
     activeVersion?: string
