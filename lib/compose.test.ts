@@ -329,6 +329,31 @@ describe('{Name} tokens', () => {
             'Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: <Subject 3> sits by the fire pit.',
         )
     })
+    test('a name the planner wrote without braces is the label too, written as the cast spells it (#824)', () => {
+        const withCamera = input('{Shaman} drums.')
+        withCamera.shotMoments = {
+            b1: {tokens: true, shots: [{action: '{Shaman} drums.', camera: 'slow push in, keeping Shaman centred', characters: ['shaman']}]},
+        }
+        const clip = buildClipRequests(withCamera)[0]!
+        expect(clip.prompt).toContain('keeping <Subject 2> centred')
+        // compact: no name of a subject is left in the description at all - the composer's own "<Subject 2>, Shaman," included
+        const compact = buildClipRequests({...withCamera, clipPrompt: 'compact'})[0]!
+        expect(compact.prompt.split('detailed_description:')[1]).not.toMatch(/\bShaman\b/)
+    })
+    test('compact: the token alone where a person is in the frame, not the name next to it (#824)', () => {
+        const people = input('{Shaman} drums.')
+        people.shotMoments = {
+            b1: {
+                tokens: true,
+                shots: [{action: '{Shaman} drums.', characters: ['shaman'], people: {shaman: {state: 'kneels at the drum', frame: 'sharp, centre'}}}],
+            },
+        }
+        expect(buildClipRequests(people)[0]!.prompt).toContain('<Subject 2>, Shaman, kneels at the drum')
+        expect(buildClipRequests({...people, clipPrompt: 'compact'})[0]!.prompt).toContain('<Subject 2>, kneels at the drum')
+        // the summary: the beat's own words in full, the first shot's action in compact
+        expect(buildClipRequests(people)[0]!.prompt).toContain('<Subject 2> drums for Runa.')
+        expect(buildClipRequests({...people, clipPrompt: 'compact'})[0]!.prompt).toMatch(/clip set in <Subject 1> with <Subject 2>: <Subject 2> drums\./)
+    })
     test('a token that is nobody of the cast is left as its word, without braces', () => {
         const clip = buildClipRequests(input('{Shaman} nods to {the stranger}.'))[0]!
         expect(clip.prompt).toContain('<Subject 2> nods to the stranger.')
