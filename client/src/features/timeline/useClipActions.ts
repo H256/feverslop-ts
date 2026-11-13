@@ -1,6 +1,7 @@
 import {h, reactive} from 'vue'
 import type {BeatCastResult, EditorClip, EditorOverride, LastRun, RunInfo, RunRequest} from '../../../../shared/workspace'
-import BeatCastForm, {type BeatCastDraft} from './BeatCastForm.vue'
+import BeatCastForm from './BeatCastForm.vue'
+import type {BeatCastDraft} from './beatCast'
 import {plural} from '../../lib/format'
 import {useAsk} from '../../services/ask'
 import {useToasts} from '../../services/toasts'

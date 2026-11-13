@@ -14,6 +14,7 @@ import {blockingPrompt, filmableRules, type PlanContext, plannerCalls, planPromp
 import type {ProjectConfig} from '../config.ts'
 import type {Character, Location, LocationLayout, LyricsTiming, MusicMap, ProjectStore, PropStem, Singing, StoryBeat, Timeline} from '../project.ts'
 import {energyBar} from './energy-bar.ts'
+import {messageOf} from '../text.ts'
 
 // The shot planning of a music video (index.ts steps 11-11c, #841): the story matched to the clips of the song, the beats blocked one
 // after the other, the shots of every beat planned from its blocking, the director's edits kept, and the view of the place per shot.
@@ -309,9 +310,7 @@ export async function planShots(run: ShotRun) {
                               )
                               const idle = read
                                   ? await playingIssues(playingCases(read.plan.shots, beatProps?.[beat.id], cast.characters)).catch((e: unknown) => {
-                                        log.warn(
-                                            `${beat.id}: the check of the hand phrases failed (${e instanceof Error ? e.message : e}) - they stay unchecked`,
-                                        )
+                                        log.warn(`${beat.id}: the check of the hand phrases failed (${messageOf(e)}) - they stay unchecked`)
                                         return []
                                     })
                                   : []
@@ -332,9 +331,7 @@ export async function planShots(run: ShotRun) {
                           firstAnswer = await askBlock(block, handover, after, undefined, blocking)
                           first = await read(firstAnswer)
                       } catch (e) {
-                          log.warn(
-                              `the answer for ${beat.id} is unusable (${e instanceof Error ? e.message : e})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`,
-                          )
+                          log.warn(`the answer for ${beat.id} is unusable (${messageOf(e)})${attempt < 3 ? ' - asking again' : ' - it keeps its beat moments'}`)
                       }
                   }
                   if (!first) return undefined
@@ -348,7 +345,7 @@ export async function planShots(run: ShotRun) {
                           reads.map(r => [r.beat.id, (r.read?.issues ?? []).map(i => ({...i, message: `${r.beat.id}, ${i.message}`}))]),
                       )
                       const again = await askBlock(block, handover, after, {moments: firstAnswer!.moments, issues}, blocking).then(read, (e: unknown) => {
-                          log.warn(`the second answer is unusable (${e instanceof Error ? e.message : e}) - the first one stays`)
+                          log.warn(`the second answer is unusable (${messageOf(e)}) - the first one stays`)
                           return reads
                       })
                       reads = reads.map((r, n) => (again[n]!.read && (!r.read || again[n]!.read!.problems.length <= r.read.problems.length) ? again[n]! : r))
@@ -466,7 +463,7 @@ export async function planShots(run: ShotRun) {
                               },
                           },
                       }).catch((e: unknown) => {
-                          log.warn(`${beat.id}: the answer for the views is unusable (${e instanceof Error ? e.message : e}) - its shots are in the first view`)
+                          log.warn(`${beat.id}: the answer for the views is unusable (${messageOf(e)}) - its shots are in the first view`)
                           return undefined
                       })
                       // not stored: the beat is asked again on the next run instead of keeping the first view for good

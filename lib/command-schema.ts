@@ -181,7 +181,7 @@ export function requestArgs(schema: CommandSchema, request: Record<string, unkno
         }
         if (value === undefined || value === '' || value === false) continue
         if (spec.kind === 'flag') {
-            if (value !== true) throw new Error(`no such ${name}: ${String(value)}`)
+            if (value !== true) throw new Error(`no such ${name}: ${JSON.stringify(value)}`)
             args.push(`--${name}`)
             continue
         }

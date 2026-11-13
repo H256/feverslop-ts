@@ -9,6 +9,7 @@ import {filmDir, filmIds} from './film/setup.ts'
 import {libraryFolder, libraryIds, readLibraryAsset, writeLibraryAsset} from './library.ts'
 import {listProjects, projectDir} from './project-setup.ts'
 import {librarySongIds, readLibrarySong, songFolder, type LibrarySong} from './song-library.ts'
+import {textOf} from './text.ts'
 
 export type LibraryKind = AssetKind | 'song'
 export const LIBRARY_KINDS: readonly LibraryKind[] = ['character', 'location', 'song']
@@ -98,7 +99,7 @@ export function renameEntry(dir: string, kind: LibraryKind, id: string, name: st
     if (!clean || clean.length > 120 || /[\r\n]/.test(clean)) throw new Error('a name is one line of at most 120 characters')
     const record = entry(dir, kind, id)
     writeFileSync(entryFile(dir, kind, id), JSON.stringify({...record, name: clean}, null, 2) + '\n')
-    return {from: String(record.name ?? id), to: clean}
+    return {from: textOf(record.name) || id, to: clean}
 }
 
 /**

@@ -24,6 +24,7 @@ import {Renderer} from '../lib/render.ts'
 import {LOCATION_VIEWS, sheetAnchor} from '../lib/sequenceSheet.ts'
 import {loadSettings} from '../lib/settings.ts'
 import {answer as wizardAnswer} from '../lib/wizard.ts'
+import {textOf} from '../lib/text.ts'
 cli('create-asset')
 
 const usage = 'usage: bun run create-asset <character|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]'
@@ -104,7 +105,7 @@ if (kind === 'location') {
     say('Naming the background features and laying out the place')
     anchors = (await ask(locationAnchorPrompt(description!))).replace(/^["']|["'.\s]+$/g, '') || undefined
     const answerJson = await askJson<{layout?: unknown; views?: unknown[]}>(locationLayoutPrompt(name, description!, description!)).catch(() => undefined)
-    if (answerJson?.layout) layout = {layout: String(answerJson.layout).trim(), views: LOCATION_VIEWS.map((_, n) => String(answerJson.views?.[n] ?? '').trim())}
+    if (answerJson?.layout) layout = {layout: textOf(answerJson.layout).trim(), views: LOCATION_VIEWS.map((_, n) => textOf(answerJson.views?.[n]).trim())}
     else say('No usable floor plan - the projects lay the place out themselves')
 }
 

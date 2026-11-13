@@ -18,7 +18,7 @@ defineEmits<{changed: []}>()
     <p class="muted section">Song · {{ song.id }}</p>
     <!-- played only when asked: no autoplay -->
     <audio v-if="song.audio" class="sd-audio" controls preload="none" :src="mediaUrl(song.audio, LIBRARY_ROOTS)" />
-    <LibraryActions kind="song" :id="song.id" :name="song.name" @changed="$emit('changed')" />
+    <LibraryActions :id="song.id" kind="song" :name="song.name" @changed="$emit('changed')" />
     <FactList
       :facts="[
         {name: 'Length', value: song.seconds ? clock(song.seconds, false) : undefined},

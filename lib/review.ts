@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import * as clack from '@clack/prompts'
 import {log, styles} from './log.ts'
+import {messageOf} from './text.ts'
 
 // --review: a step everything later is built on (the story, the cast, the look, the beats - a film's screenplay, cast and
 // look) is shown when it was just generated, and the run waits - accept it, edit it in $EDITOR, generate it again, or stop.
@@ -105,7 +106,7 @@ export function checkShape(before: unknown, text: string): unknown {
     try {
         parsed = JSON.parse(text)
     } catch (e) {
-        return `not valid JSON (${e instanceof Error ? e.message : e})`
+        return `not valid JSON (${messageOf(e)})`
     }
     if (Array.isArray(before)) return Array.isArray(parsed) && parsed.length ? parsed : 'must stay a list with at least one entry'
     if (before && typeof before === 'object') {

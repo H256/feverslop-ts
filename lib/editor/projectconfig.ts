@@ -10,6 +10,7 @@ import {withProjectLock} from '../lock.ts'
 import {readEditorFreshness, type EditorTarget} from './project.ts'
 import type {ConfigChange, ConfigImpact, ConfigResult, ConfigView, SettingView} from '../../shared/workspace.ts'
 import {kindOf} from './kinds.ts'
+import {shownOf} from '../text.ts'
 
 export type {ConfigChange, ConfigImpact, ConfigResult, ConfigView, SettingView} from '../../shared/workspace.ts'
 
@@ -374,7 +375,7 @@ export async function readConfig(target: EditorTarget): Promise<ConfigView> {
                     ? {
                           choices: offered.some(c => same(c.value, value))
                               ? offered
-                              : [...offered, {value, label: typeof value === 'object' ? `custom: ${JSON.stringify(value)}` : String(value)}],
+                              : [...offered, {value, label: typeof value === 'object' ? `custom: ${JSON.stringify(value)}` : shownOf(value)}],
                       }
                     : {}),
             }
