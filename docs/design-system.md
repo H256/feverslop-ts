@@ -47,6 +47,8 @@ A disabled button is grey in every variant: `--raised` background, `--muted` tex
 | `.btn.mini` | small actions inside a row or a note: Use the default, Undo |
 | `.link` | a button that reads as a link: an id that jumps somewhere |
 
+The variants stay classes, not a `Button` component (#915): a component would only wrap `<button>` and turn a prop into the same class - the class says it as well, and a `RouterLink` or a `<label>` can carry it too.
+
 ## Components
 
 Shared parts live in `client/src/components/`, each with its own scoped styles and a class prefix of its own (`ui-…`). A component's class name without a prefix would take the rules of the stylesheets below: `.card` is the project card, `.item` and `.list` belong to other pages.
@@ -58,11 +60,26 @@ Shared parts live in `client/src/components/`, each with its own scoped styles a
 | `StateTag` | a small outlined word about a thing: edit, made, a name | `state` = `plain`, `ok`, `stale`, `bad`; muted without one |
 | `CalloutBox` | a boxed word to the reader, in place of `.note`, `.warn`, `.warn.bad` | `kind` = `note` (grey, default), `warn` (amber: check this, do it again), `error` (red: failed); `as` for the element (`p` by default). Its rules stay in `monitor.css`, where `.warn` was, so that a page's margin rules still win |
 | `SplitLayout` | a page in two columns, one in a narrow window: Library, References, Singers, Timing (`full`: both columns scroll, the side is a panel), Direction and Post-work (a grid in the page) | default slot and `side` slot; `side` = its width; `full`, `folded` (kept, not unmounted), `sticky`, `side-first` (narrow window), `label`; `main` exposed for a page that looks through its rows |
+| `DisclosureBox` | something folded away until asked for: who is in a shot, plan versions, the CLI, the tool groups of Timing | `title`, slot `summary` for more in the head, `v-model:open`; `quiet` (a muted title), `small`. Not for a menu (the run dock's warnings, Timing's Reset ▾) or for Post-work's steps, of which one is open at a time |
+| `FormField` | a labelled field in every form | `label`, the control in the slot, `note` under it; `check`: a checkbox and its words in one row |
 | `SegmentedControl` | a choice of one among few, as pressed buttons | `options`, `v-model` |
 
 A page says what a card or a tag is (its tone, its state), never how it is drawn: no page has card, tab or tag styles of its own.
 
-Still to come (#915): `FormRow`, `Disclosure` and the button variants as a component.
+### As they look
+
+| | |
+| --- | --- |
+| `PanelCard` with quiet `DisclosureBox`es | ![PanelCard](design-system/panel-card.png) |
+| `TabBar` | ![TabBar](design-system/tab-bar.png) |
+| `StateTag` "made" on a card with an `ok` bar | ![StateTag](design-system/state-tag.png) |
+| `CalloutBox` (`warn`) | ![CalloutBox](design-system/callout-box.png) |
+| `FormField`s in a form | ![FormField](design-system/form-field.png) |
+| `DisclosureBox`es | ![DisclosureBox](design-system/disclosure-box.png) |
+| `SegmentedControl` | ![SegmentedControl](design-system/segmented-control.png) |
+| `SplitLayout` (`full`, the Library) | ![SplitLayout](design-system/split-layout.png) |
+
+The pictures are taken in the light theme; `bun run editor` shows both.
 
 ## Stylesheets
 

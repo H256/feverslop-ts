@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FormField from '../../components/FormField.vue'
 import {computed, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {DirectionRule, DirectionScope, DirectionView} from '../../../../shared/direction'
@@ -106,13 +107,15 @@ defineExpose({edit, clear, editing})
       :view="view"
       :film="film"
     />
-    <label v-if="kind !== 'character'"
-      >Only for character<select v-model="characterId">
+    <FormField v-if="kind !== 'character'" label="Only for character"
+      ><select v-model="characterId">
         <option value="">Everyone in scope</option>
         <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select></label
+      </select></FormField
     >
-    <label>Instruction<textarea v-model="text" rows="5" placeholder="Kael turns toward his own left, ending with his back to the camera." /></label>
+    <FormField label="Instruction">
+      <textarea v-model="text" rows="5" placeholder="Kael turns toward his own left, ending with his back to the camera." />
+    </FormField>
     <div class="btn-row">
       <button class="btn primary" :disabled="invalid || !changed" @click="save">Save instruction</button
       ><button v-if="editing || text" class="btn" @click="clear">Cancel edit</button>

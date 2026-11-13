@@ -47,7 +47,7 @@ watch(
       </select>
     </FormField>
     <FormField v-if="draft.describe === 'text'" label="The description"><textarea v-model="draft.text" rows="3" /></FormField>
-    <label class="rp-check"><input v-model="draft.renderSheet" type="checkbox" /> Render the new reference sheet right away</label>
+    <FormField label="Render the new reference sheet right away" check><input v-model="draft.renderSheet" type="checkbox" /></FormField>
     <div v-if="said.length" class="rp-said" aria-label="What it would do">
       <b>What it would do</b>
       <p v-for="line in said" :key="line" class="muted">{{ line }}</p>
@@ -61,11 +61,6 @@ watch(
   display: grid;
   gap: var(--space-3);
   margin-top: var(--space-2);
-}
-.rp-check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 .rp-said p {
   margin: 0;

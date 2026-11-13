@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DisclosureBox from '../../components/DisclosureBox.vue'
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, ref, watch} from 'vue'
 import type {TimingView, TimingWord} from '../../../../shared/workspace'
@@ -141,8 +142,7 @@ const clips = computed(() =>
       <button v-if="group" class="btn" @click="run(() => draft.patchSelection({group: undefined}))">Ungroup</button>
       <button class="btn" :disabled="!joinable" @click="run(draft.join)">Join parts</button>
     </div>
-    <details>
-      <summary>Fit, split and shared boundary</summary>
+    <DisclosureBox title="Fit, split and shared boundary">
       <div class="btn-row">
         <label>Fit start <input v-model.number="from" aria-label="Fit start" type="number" step="0.01" /></label>
         <label>Fit end <input v-model.number="to" aria-label="Fit end" type="number" step="0.01" /></label>
@@ -223,9 +223,8 @@ const clips = computed(() =>
         Split keeps every character and the complete time span. Joining only combines parts of the same source word. Drag an edge with Shift to move a shared
         boundary; Alt bypasses snapping.
       </p>
-    </details>
-    <details>
-      <summary>Listen and mark onsets</summary>
+    </DisclosureBox>
+    <DisclosureBox title="Listen and mark onsets">
       <div class="btn-row">
         <button class="btn" :disabled="!player.available() || !selected.length" @click="startListening()">Start marking</button>
         <button class="btn" :disabled="player.time.value === undefined || !selected.length" @click="startListening(true)">Mark from cursor</button>
@@ -290,9 +289,8 @@ const clips = computed(() =>
           Restart {{ w.text }}
         </button>
       </div>
-    </details>
-    <details>
-      <summary>Clip text and windows</summary>
+    </DisclosureBox>
+    <DisclosureBox title="Clip text and windows">
       <p v-for="clip in clips" :key="clip.id">
         <b>{{ clip.id }}</b> · Saved: {{ clip.before || '(silent)' }} → Draft: {{ clip.text || '(silent)' }}
         <span v-if="clip.from !== undefined && clip.to !== undefined"> · singing {{ clip.from.toFixed(2) }}–{{ clip.to.toFixed(2) }} s</span>
@@ -301,7 +299,7 @@ const clips = computed(() =>
         Draft text follows clip start-frame assignment. Resolve crossing words before rendering. Windows include 0.2 s padding; singer-specific delivery is
         applied during planning.
       </p>
-    </details>
+    </DisclosureBox>
     <CalloutBox v-if="error" role="alert" kind="warn">{{ error }}</CalloutBox>
   </section>
 </template>
@@ -318,10 +316,6 @@ const clips = computed(() =>
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-.timing-tools summary {
-  cursor: pointer;
-  padding: 0.3rem 0;
 }
 .timing-tools p {
   margin: 0.5rem 0;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DisclosureBox from '../../components/DisclosureBox.vue'
 import {computed} from 'vue'
 import {RouterLink, type RouteLocationRaw} from 'vue-router'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../../shared/direction'
@@ -41,8 +42,7 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
       {{ leftoverBeats }} {{ leftoverBeats.includes(',') ? 'were' : 'was' }} planned again. These {{ leftovers.length }} were made for the shots before and no
       longer apply - the new plan has its own. Nothing to decide: clear them out.
     </p>
-    <details class="planned">
-      <summary>Show them</summary>
+    <DisclosureBox class="planned" title="Show them" quiet small>
       <DirectionItem
         v-for="item in leftovers"
         :key="item.key"
@@ -53,7 +53,7 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
         @rebind="$emit('rebind', $event)"
         @clear="$emit('clear', $event)"
       />
-    </details>
+    </DisclosureBox>
   </PanelCard>
 
   <PanelCard
@@ -96,8 +96,13 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
           @remove="$emit('remove', $event)"
           @undo="$emit('undo', $event)"
         />
-        <details v-if="plannedOf(block.items).length" class="planned">
-          <summary>Who is in the shot ({{ plannedOf(block.items).length }}{{ block.id ? '' : ', kept when the shots are planned again' }})</summary>
+        <DisclosureBox
+          v-if="plannedOf(block.items).length"
+          class="planned"
+          :title="`Who is in the shot (${plannedOf(block.items).length}${block.id ? '' : ', kept when the shots are planned again'})`"
+          quiet
+          small
+        >
           <DirectionItem
             v-for="item in plannedOf(block.items)"
             :key="item.key"
@@ -107,7 +112,7 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
             :blocked="blocked"
             @remove="$emit('remove', $event)"
           />
-        </details>
+        </DisclosureBox>
       </div>
     </template>
   </PanelCard>
@@ -137,12 +142,6 @@ const activeOf = (list: Item[]) => list.filter(item => !item.planned)
 }
 .planned {
   margin: 4px 0;
-}
-.planned summary {
-  cursor: pointer;
-  font-size: var(--text-s);
-  color: var(--muted);
-  padding: 4px 0;
 }
 .dp-empty {
   padding: 8px 2px;

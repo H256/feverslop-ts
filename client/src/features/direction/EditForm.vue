@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FormField from '../../components/FormField.vue'
 import {computed, ref} from 'vue'
 import type {DirectionEdit, DirectionScope, DirectionSize, DirectionView} from '../../../../shared/direction'
 import ScopePicker from './ScopePicker.vue'
@@ -52,22 +53,22 @@ const add = () => emit('add', {id: crypto.randomUUID(), scope: scope.value, ...(
       :view="view"
       :film="film"
     />
-    <label
-      >Edit<select v-model="what">
+    <FormField label="Edit"
+      ><select v-model="what">
         <option value="remove">Take a person out of the picture</option>
         <option value="size">Set the shot size</option>
-      </select></label
+      </select></FormField
     >
-    <label v-if="what === 'remove'"
-      >Person<select v-model="who">
+    <FormField v-if="what === 'remove'" label="Person"
+      ><select v-model="who">
         <option value="" disabled>Choose character</option>
         <option v-for="c in view.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select></label
+      </select></FormField
     >
-    <label v-else
-      >Size<select v-model="size">
+    <FormField v-else label="Size"
+      ><select v-model="size">
         <option v-for="s in ['wide', 'medium', 'close', 'extreme']" :key="s" :value="s">{{ s }}</option>
-      </select></label
+      </select></FormField
     >
     <div class="btn-row"><button class="btn primary" :disabled="invalid" @click="add">Add edit and build the prompts</button></div>
     <p class="muted small">Someone into one shot: <b>Direct this shot</b> on the timeline, <b>Bring in</b>.</p>
