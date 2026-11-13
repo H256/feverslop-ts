@@ -2,6 +2,88 @@
 
 One section per release. The section of a tag becomes its GitHub release (`.github/workflows/release.yml`).
 
+## v0.10.0 – a guided start, every workspace action through its command, a design system, and the pipelines in stages
+
+_2026-11-13_
+
+A new machine is set up and a first video started from the start page or the terminal, guided by `doctor` and by the next command every run ends with. Whatever the workspace does, a command does the same way: each page starts a command or calls the very function a command calls. Runs can wait in a queue, report their jobs as events, and say before a plan run what it would do. The workspace has a design system: scales for space, radius and type, a blue accent for the main action, and shared components. Clip prompts are checked, the planner is told only the rules a beat needs, and new projects write their clip prompts compact. `index.ts` and `film.ts` are split into their stages, and lint went from 1474 warnings to 115.
+
+### Getting started
+
+- `bun run doctor` says what this machine has of what a video needs - the servers, and every node and model of the workflows - and what to do about the rest (#863, #906).
+- Every run ends with the next command, as `bun run status` says it; a first video starts with one clip (#906).
+- The start page makes a new music video or film and sets up the servers, through the commands: `init` and `film:init` take everything as options and ask nothing, `setup llm|vision|comfy` sets a server, `setup show --json` (#862, #867, #900, #901, #903).
+- A new music video from a song of the library: `bun run init <id> --library-song=<id>`, also in the start page's form (#897).
+- Usage errors say the cause and where the help is, a mistyped option gets a suggestion, and the ids of `--only` and `--retake` are checked before the first step (#850, #851).
+- A failure in somebody else's words gets ours under it: what it means and what to do (#852).
+- A run ends when the language model cannot be asked, instead of reporting success on fallbacks (#844).
+
+### Workspace
+
+- The tabs of a project by phase, with the state of the plan, a stage that a changed input makes again marked as changed, and the next step on every page; the top bar keeps every tab at 1100 and 1600 px (#876, #879, #895).
+- Before a plan run the workspace says what it would do - the command's dry run - and offers a step to plan again from; a film's plan run is asked the same way, with the scenes to plan again (#882, #886).
+- Runs can wait in a queue behind the one that goes on, and the run dock lists the runs that ended (#892).
+- Runs write their events and jobs as data; the run dock and the clip progress read them instead of the log (#873, #893).
+- What a change drops is said by stage and count; the Timing page's side column folds away, and its line buttons are in groups with the resets in a menu (#896, #917).
+- A Stats page with the measured times of this machine, as `bun run stats` reports them (#878).
+- Casting: a finished character or place of another music video taken over (`import-asset`), and a character's picture replaced in what is planned, its dry run shown first (#898, #908).
+- `bun run library`: what is in the library and who uses it; rename, describe, remove - also on the Library page (#877, #908).
+- Checks on the timeline: texture chains and a film's cuts, their findings marked on the clips (#888).
+- A film's script repaired from the Screenplay page, and a project's language model on Settings (#890).
+- Pages speak the user's words: no `-1` in Settings, names instead of `{Name}` tokens, no hardware names in the client (#871).
+- Workspace answers say their kind: invalid 400, busy 423, missing 404, failed 500 (#872).
+
+### Post-work
+
+- A Post-work tab with the steps in order and a player; the timeline plays only the music video (#814).
+- The YouTube text of the finished video you choose; credits wrap long lines (#806, #810).
+- The timeline for a video editor: a music video's `--export`, a film's EDL (#889).
+- A step counts as made once any video went through it; the card names the newest finished video; a project whose finished videos are made-over ones has a final video (#866, #905).
+- Settings: the finish field by field - grade, sharpen, colour match, grain - and Refinish says what it does (#812).
+
+### Direction
+
+- After a new plan, the leftovers are cleared in one click or by the run; nothing to "rebind" (#803).
+- Taking, restoring and direct edits build the clip prompts in the same request; people into a shot and out of it are one request that also starts what follows (#864, #904).
+- The page and the shot dialog in parts, and one table of a shot's field names for the page, the dialog and `direction --show` (#881, #916).
+
+### Clip prompts and planner
+
+- A check over every composed clip prompt - a word twice in a row, a label without a picture, shots out of order, a very long prompt - as warnings of the plan run and in `bun run inspect` (#860, #919).
+- The article of a place is said once ("the the empty rooms" is gone); a singer seen from behind is not told "the face clearly visible" (#854, #855).
+- A shot is taken inside the place of its beat, said per shot and asked again when not (#856).
+- The planner is told only the rules a beat needs - props, singing, instruments, groups, several people, a continuous take, a fight cut into bars - read from the plan, never from its words: its instructions are a quarter shorter. A fact about characters says what is on them, never where they were (#934).
+- More room for the three planner steps whose answers were cut off most; the size of the instructions per step is kept with every LLM call and shown by `stats` and `-v` (#853, #918).
+- **New projects write their clip prompts compact** (`"clipPrompt": "compact"`): every movement told once, each person named once by their label, an opening clip summed up by its first shot. Projects made before stay `full`, and none of their clips turns stale. A name the planner wrote without braces becomes the subject's label in both (#859, #933, #942).
+- MiniMax H3 Image as an image workflow (`h3-image`), and visual style presets (#887, #869).
+
+### Commands
+
+- `replace-character`, `film:replace-character` and `import-asset` ask nothing when told everything, with `--dry-run` (#898, #899, #902).
+- `credits`, `description`, `refinish`, `label` and `intro` parse by one schema each, and the workspace builds their requests from it (#861, #907).
+- The run options both pipelines take are declared and checked in one module (#894).
+- A run that puts a clip or picture away asks the ComfyUI servers first (#845).
+
+### Lyrics and timing
+
+- Transcription works with faster-whisper and PyAV 19; Whisper retry excerpts can get a peak-limited gain (#858, #912).
+- Dragging compressed alignment words in the timing editor works again (#847).
+
+### Design system
+
+- Tokens: scales for space, radius and type; the accent is blue and means the main action, red means removing or stopping (#870).
+- No inline style with a fixed value; the stylesheet in parts - tokens, base, shell, controls and one file per page area (#910, #913).
+- Shared components: `PanelCard`, `TabBar`, `StateTag`, `CalloutBox`, `SplitLayout`, `DisclosureBox`, and `FormField` with a note and a checkbox form; `docs/design-system.md` shows each one (#911, #914, #931, #932).
+
+### Structure and tooling
+
+- `index.ts` and `film.ts` in stages: `lib/pipeline/` holds the song, the look, the beats, the shot planning, the requests, the rendering and assembling, the singers and the dry run; `index.ts` went from 2208 to 817 lines (#923–#928).
+- `lib/render.ts` by job and `lib/editor/preproduction.ts` in parts (#874, #875).
+- The workspace server's routes as a table, each POST route saying what it changes; one object per kind of project (music video, film); the pages of a project listed once (#868, #920, #922).
+- Lint: 1474 warnings to 115, each one an untyped value; text from outside - an LLM answer, a form field, a caught value - goes through `lib/text.ts` (#929).
+- CI runs lint, the format check and the client's checks; the checks before a pull request are in one place in `docs/development.md`, and the workspace guide is in English (#865, #909).
+- The music step shows as "beat analysis" in the status (#884).
+
 ## v0.9.0 – directing shots and cast, a rebuilt workspace layout, and lint and format
 
 _2026-11-10_
