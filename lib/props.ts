@@ -13,7 +13,7 @@ export type Prop = {id: string; name: string; description: string}
  * and nothing else is in it: a hand or a place in it would be drawn into every clip that has the prop.
  */
 export const propPicturePrompt = (prop: Prop) =>
-    `A studio product photograph of ${prop.description.replace(/[.]+$/, '')}. The ${prop.name} alone, whole and centred, on a plain seamless neutral grey backdrop, even soft light from every side, sharp focus. Nothing else in the picture: no hands, no people, no other objects, no text.`
+    `A studio product photograph of ${withArticle(prop.description.replace(/[.]+$/, ''))}. The ${prop.name} alone, whole and centred, on a plain seamless neutral grey backdrop, even soft light from every side, sharp focus. Nothing else in the picture: no hands, no people, no other objects, no text.`
 
 /** The picture job of a prop: one plain picture (assets/props/<id>.png), never a sheet - a prop has no sides worth a turnaround. */
 export const propPictureJob = (prop: Prop): PictureJob => ({
@@ -39,6 +39,10 @@ export function propsOfPlace(characters: Pick<Character, 'prop' | 'propCarried' 
     const standing = propPictures ? [] : characters.flatMap(c => (c.prop && c.propCarried === false && c.propPlace === locationId ? [c.prop] : []))
     return {kept: [...new Set(kept)], standing: [...new Set(standing)]}
 }
+
+// "a photograph of electric guitar": the cast's words often come without an article (tides: "electric guitar", "obsidian drum kit")
+const determiner = /^(?:a|an|the|his|her|their|its|my|our|your|some|one|two|three|four|\d+|this|that)\b/i
+export const withArticle = (words: string) => (determiner.test(words.trim()) ? words.trim() : `${/^[aeiou]/i.test(words.trim()) ? 'an' : 'a'} ${words.trim()}`)
 
 // the article or possessive in front of a prop's words is not part of its name: "her battered bass" is "battered bass"
 const leading = /^(?:a|an|the|his|her|their|its|my|our|your)\s+/i
