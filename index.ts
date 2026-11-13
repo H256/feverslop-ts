@@ -6,9 +6,10 @@ import {existsSync} from 'node:fs'
 import {parseArgs} from 'node:util'
 import {formatDuration, hideDetails, jsonOutput, keepLogIn, log, runLogFile, runWarnings, setOutput, showsDetails, styles} from './lib/log.ts'
 import {MUSIC_RENDER, readRunOptions, RUN_OPTIONS} from './lib/run-options.ts'
-import {runEvent} from './lib/run-events.ts'
+import {renderAndAssemble} from './lib/pipeline/render-music.ts'
+import {chooseSingers, performanceRules} from './lib/pipeline/singers-choice.ts'
 import {projectStatus} from './lib/status.ts'
-import {keepTimingsIn, readTimings, recordTiming, runTimings} from './lib/timings.ts'
+import {keepTimingsIn, readTimings, runTimings} from './lib/timings.ts'
 import {ask, askJson, type AskOptions, configureLlm, llmMap} from './lib/llm.ts'
 import {mkdirSync, readdirSync} from 'node:fs'
 import {join} from 'node:path'
@@ -22,14 +23,11 @@ import {
     type LocationLayout,
     ProjectStore,
     type PropStem,
-    type Singing,
     STEP_NAMES,
     type StepName,
     type StoryBeat,
 } from './lib/project.ts'
-import {clipChains, onlyClips, renderAll, unknownIds, warnClipsGoingOn, warnFixedSeed} from './lib/batch.ts'
-import {finishOf} from './lib/finish.ts'
-import {finishCopy, interpolateClips} from './lib/final-pass.ts'
+import {onlyClips, renderAll, unknownIds, warnFixedSeed} from './lib/batch.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, dropStaleEdits} from './lib/direction/service.ts'
 import {directionViewCache} from './lib/direction/views.ts'
 import {lockProject} from './lib/lock.ts'
@@ -50,18 +48,9 @@ import {asBeatShots, type Issue, parseShotLines, readBeatPlan} from './lib/shot-
 import {playingCases, playingIssues} from './lib/playing-check.ts'
 import {resolveUnknownTokens} from './lib/refs.ts'
 import {beatsPrompt, blockingPrompt, filmableRules, musicStretches, type PlanContext, plannerCalls, planPrompt} from './lib/shot-planner.ts'
-import {
-    boundaryFrameAsset,
-    buildClipRequests,
-    computeMemberCounts,
-    countShotsPerBeat,
-    groupMemberId,
-    pictureAsset,
-    propActivityPerBeat,
-    singingPerBeat,
-} from './lib/compose.ts'
+import {buildClipRequests, computeMemberCounts, countShotsPerBeat, groupMemberId, pictureAsset, propActivityPerBeat, singingPerBeat} from './lib/compose.ts'
 import {hasOwnAnchor, installOwnPicture, takeOwnDescription} from './lib/own-picture.ts'
-import {clipFingerprint, namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
+import {namedPictures, type PictureJob, pinEditedPicture, putAwayPicture, Renderer} from './lib/render.ts'
 import {languageName, loadProjectConfig} from './lib/config.ts'
 import {alignLyrics, lowConfidence, lyricsProblems, sungLines, sungOnly, tightenStarts} from './lib/lyrics.ts'
 import {readFineWaveform} from './lib/waveform.ts'
@@ -69,12 +58,11 @@ import {MISSING_WORD_LEAD, RATE, voiceLead} from './shared/timing-fit.ts'
 import type {DryRun} from './shared/workspace.ts'
 import {projectLyricSections} from './lib/music.ts'
 import {archiveFiles, versionStamp} from './lib/archive.ts'
-import {assembleFinal, previewSources, formatSlotRanges} from './lib/assemble.ts'
-import {freshness} from './lib/provenance.ts'
+import {formatSlotRanges} from './lib/assemble.ts'
 import {clipRequestsDir, clipRequestsIn, PREVIOUS, requestChanges, startOutput} from './lib/previous-output.ts'
 import {writeGallery} from './lib/gallery.ts'
-import {EXPORT_FORMATS, type ExportFormat, exportTimelines} from './lib/timeline-export.ts'
-import {FPS, formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from './lib/frames.ts'
+import {EXPORT_FORMATS} from './lib/timeline-export.ts'
+import {formatTime, frameAt, MAX_CLIP_SEC, maxClipFor, secondsAt} from './lib/frames.ts'
 import {loadSettings} from './lib/settings.ts'
 import {MAX_REFERENCE_IMAGES} from './comfy/helpers.ts'
 import {type FilmStyle, pickStyle, shuffledStyles, stylesById} from './lib/styles.ts'
@@ -92,7 +80,6 @@ import {dropBeatPlans, redoAfter, unplannedBeats} from './lib/project.ts'
 import {handsOf} from './lib/project.ts'
 import {
     castPrompt,
-    voiceRules,
     characterDescriptionPrompt,
     characterLookPrompt,
     propInUsePrompt,
@@ -699,7 +686,9 @@ else if (neededStems.length)
     )
 
 ////////// CHOOSING THE SINGERS - performance mode only
-const singing = config.singers.length ? await project.step('singing', '5b · CHOOSING THE SINGERS', () => chooseSingers(config.singers)) : undefined
+const singing = config.singers.length
+    ? await project.step('singing', '5b · CHOOSING THE SINGERS', () => chooseSingers(config.singers, {cast, config, lyricSections, lyrics, storySummary}))
+    : undefined
 if (singing) {
     const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
     log.step('Singers', singing.singers.map(id => styles.name(nameOf(id))).join(', '))
@@ -991,7 +980,7 @@ const beats = await reviewed(
     () =>
         project.step('beats', '9 · BREAKING THE STORY INTO BEATS', async () => {
             // what the beats must do so the singers can be lip-synced - the singers are on screen until the last sung word
-            const performance = `${singing ? performanceRules(singing) : ''}
+            const performance = `${singing ? performanceRules(singing, {cast, lyricSections}) : ''}
 ${
     singing && vocalsEnd
         ? `The singer${singing.singers.length > 1 ? 's sing' : ' sings'} on screen until ${formatTime(vocalsEnd)} of the ${formatTime(music.durationSec)} song and ${singing.singers.length > 1 ? 'are' : 'is'} visible, with the mouth in view, in every shot while singing - singing is part of what they do, not a number for the camera: a singer in a fight sings through it, at the opponent, between and over the blows. So nobody who sings leaves, vanishes, dies or is swallowed before ${formatTime(vocalsEnd)}: such an ending happens gradually while they keep singing, or only after the last vocal - the beats after that show the place without them.
@@ -1731,168 +1720,23 @@ if (changes) {
     }
 }
 
-////////// RENDERING WITH COMFYUI
-if (render.has('images') || render.has('videos') || retake) {
-    const only = new Set(args.only.split(',').filter(Boolean))
-    using renderer = new Renderer(project.id, project.dir, config, settings.comfy)
-    renderer.refresh = refreshKinds
-    log.section('13 · RENDERING WITH COMFYUI')
-    log.step(
-        'Config',
-        styles.muted(
-            `seed ${config.seed}, images ${config.imageResolution} (${config.imageWorkflow}), video ${config.videoResolution} (${config.videoWorkflow})${config.sequenceSheets ? `, sequence sheets (${config.sequenceWorkflow})` : ''}`,
-        ),
-    )
-    log.step('Servers', `${settings.comfy.map(s => `${styles.name(s.name)} ${styles.muted(s.url)}`).join(', ')} ${from(settings.sources.comfy)}`)
-    if (args.again || refreshKinds.size || retake || args['picture-anchor']) await renderer.serversFirst()
-
-    if (retake) {
-        const clip = clips.find(c => c.id === retake.clip)
-        if (!clip) throw new Error(`--retake: no clip ${retake.clip} - the clips are ${clips.map(c => c.id).join(', ')}`)
-        await renderer.renderClipRetake(clip, stemFiles, retake)
-    }
-
-    // everything at once - the renderer runs one job per server and queues the rest
-    if (render.has('images')) await renderPictures(renderer, pictures)
-    // clips need all their pictures, so they start after the pictures - free the image model's VRAM first
-    if (render.has('videos')) {
-        if (render.has('images')) await renderer.freeMemory()
-        const selected = onlyClips(clips, only)
-        log.step('Clips', `${selected.length}${only.size ? styles.muted(` of ${clips.length} (--only)`) : ''}`)
-        // on request, and only for the clips named: the old version is put away in old/attempts/, then the clip is rendered again
-        if (args.again) {
-            warnFixedSeed(config.seed)
-            const stamp = versionStamp()
-            for (const clip of selected) {
-                const keep = archiveFiles(
-                    project.dir,
-                    `${clip.id}${args.preview ? '-preview' : ''}-${stamp}`,
-                    args.preview
-                        ? [join('previews', `${clip.id}.mp4`), join('previews', `${clip.id}.mp4.json`)]
-                        : [
-                              join('videos', `${clip.id}.mp4`),
-                              join('videos', `${clip.id}.mp4.json`),
-                              boundaryFrameAsset(clip.id, 'ff'),
-                              boundaryFrameAsset(clip.id, 'lf'),
-                          ],
-                )
-                log.step('Again', `${clip.id} ${styles.muted(`- the old one is in ${keep}`)}`)
-                recordTiming({kind: 'clip', name: config.videoWorkflow, seconds: 0, outcome: 'again', reason: 'again'})
-            }
-            // a preview leaves no last frame behind - the clips after it are not affected
-            if (!args.preview) warnClipsGoingOn(selected, clips)
-        }
-        const clipFolder = args.preview ? 'previews' : 'videos'
-        const todoClips = selected.filter(c => args.again || !existsSync(join(project.dir, clipFolder, `${c.id}.mp4`)))
-        log.step(
-            'Estimate',
-            styles.muted(
-                await clipEstimate(
-                    todoClips,
-                    config,
-                    settings.comfy.map(server => server.name),
-                ),
-            ),
-        )
-        for (const risk of clipFailureRisks(
-            readTimings(),
-            todoClips,
-            config.videoWorkflow,
-            settings.comfy.map(server => server.name),
-        ))
-            log.warn(risk)
-        // a clip that starts on the last frame of the one before waits for it: those clips render one after the other,
-        // each chain next to the others
-        // the jobs an earlier run left queued on a server get it before any new clip does (#335) - the head of each chain
-        // asks for a server at once; a later clip of a chain waits for the one before it and holds nothing
-        const chains = clipChains(selected)
-        const videoOf = (c: {id: string}) => join(project.dir, clipFolder, `${c.id}.mp4`)
-        // what this run renders, for the workspace to count the jobs that are done (#829)
-        runEvent({type: 'jobs', kind: 'clip', ids: todoClips.map(c => c.id)})
-        await renderer.announceResumes(
-            chains
-                .map(chain => chain[0]!)
-                .filter(c => todoClips.includes(c))
-                .map(videoOf),
-        )
-        await renderAll(chains, async chain => {
-            try {
-                for (const clip of chain) await renderer.renderClip(clip, stemFiles, args.preview)
-            } finally {
-                // a clip that ends without asking for a server (it exists, it is skipped, it failed early) holds none
-                renderer.settle(videoOf(chain[0]!))
-            }
-        })
-    }
-}
-
-////////// ASSEMBLING THE FINAL VIDEO
-if (render.has('final') && args.preview) {
-    // a quick look at cut, timing and continuity: from the previews, without the finish or another frame rate, and never the final video
-    log.section('14 · THE PREVIEW VIDEO')
-    const target = join(project.dir, `${project.id}-preview.mp4`)
-    const result = await assembleFinal({
-        clips,
-        projectDir: project.dir,
-        songFile,
-        songAudio: config.songAudio,
-        target,
-        sources: await previewSources(project.dir, clips),
-    })
-    log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
-} else if (render.has('final')) {
-    log.section('14 · ASSEMBLING THE FINAL VIDEO')
-    log.step('Audio', config.songAudio ? 'original song' : styles.muted('the clips\' own audio ("songAudio": false)'))
-    const target = join(project.dir, `${project.id}.mp4`)
-    // a clip made from another request than the plan has now is still a clip: said here, an error only with --strict
-    const stale = clips.filter(c => freshness(join(project.dir, 'videos', `${c.id}.mp4`), clipFingerprint(c, project.dir, config)) === 'stale').map(c => c.id)
-    if (stale.length) {
-        const message = `${stale.length} clip(s) were made from another prompt, picture or start frame than the plan has now: ${formatSlotRanges(stale)} - render them again with --render=videos --refresh=clips`
-        if (args.strict) throw new Error(message)
-        log.warn(message)
-    }
-    const result = await assembleFinal({clips, projectDir: project.dir, songFile, songAudio: config.songAudio, target})
-    log.step('Saved', `${target} ${styles.muted(`${result.width}x${result.height}, ${result.frames} frames, ${result.seconds.toFixed(3)}s`)}`)
-    // the light grade and sharpen ("finish"): a copy next to each final video, which itself stays as it is
-    const finishing = finishOf(config.finish)
-    // where each clip is in the final video - the same seconds at every frame rate
-    const spans = clips.map(c => ({id: c.id, start: secondsAt(c.frameStart), end: secondsAt(c.frameStart + c.frames)}))
-    if (finishing) await finishCopy(target, finishing, spans)
-
-    // a second video at another frame rate ("finalFps"): every clip gets more frames on ComfyUI, shot by shot (lib/final-pass.ts)
-    if (config.finalFps !== FPS) {
-        using smoother = new Renderer(project.id, project.dir, config, settings.comfy)
-        const {files, multiplier} = await interpolateClips(smoother, clips, config.interpolationModel, config.finalFps)
-        const smooth = join(project.dir, `${project.id}-${config.finalFps}fps.mp4`)
-        const more = await assembleFinal({
-            clips,
-            projectDir: project.dir,
-            songFile,
-            songAudio: config.songAudio,
-            target: smooth,
-            interpolated: {files, multiplier, fps: config.finalFps},
-        })
-        log.step(
-            'Saved',
-            `${smooth} ${styles.muted(`${more.width}x${more.height}, ${more.frames} frames at ${config.finalFps} fps, ${more.seconds.toFixed(3)}s`)}`,
-        )
-        if (finishing) await finishCopy(smooth, finishing, spans)
-    }
-}
-
-////////// EXPORTING THE TIMELINE FOR A VIDEO EDITOR
-if (exportFormats.length) {
-    log.section('15 · EXPORTING THE TIMELINE')
-    const written = await exportTimelines({
-        formats: exportFormats as ExportFormat[],
-        clips,
-        projectDir: project.dir,
-        projectName: project.id,
-        songFile,
-        songAudio: config.songAudio,
-    })
-    for (const [format, file] of Object.entries(written)) log.step(format === 'mlt' ? 'Shotcut / Kdenlive' : 'OpenShot', file)
-}
+// the pictures and clips asked for, the final video, the timeline for an editor (lib/pipeline/render-music.ts)
+await renderAndAssemble({
+    project,
+    config,
+    settings,
+    args,
+    render,
+    refreshKinds,
+    retake,
+    clips,
+    pictures,
+    stemFiles,
+    songFile,
+    exportFormats,
+    from,
+    renderPictures,
+})
 
 log.section('✔ DONE')
 log.step('Clips', `${clips.length} H3 requests covering ${formatTime(clips.at(-1)?.end ?? 0)} of ${formatTime(music.durationSec)}`)
@@ -2024,164 +1868,6 @@ async function dryRun() {
         }
     }
     if (jsonOutput()) log.json(found)
-}
-
-/**
- * The singers from config.json: names or ids matched loosely against the cast, or ["auto"] - the LLM picks the lead
- * singer(s). With several singers, the LLM also decides who sings which line.
- */
-async function chooseSingers(wanted: string[]): Promise<Singing> {
-    const characters = cast.characters
-    const lines = sungLines(lyricSections)
-    const castList = JSON.stringify(characters.map(c => ({id: c.id, name: c.name, role: c.role})))
-    const known = (ids: unknown) => (Array.isArray(ids) ? ids : []).filter((id): id is string => characters.some(c => c.id === id))
-    let singers: string[]
-
-    if (wanted[0] === 'auto') {
-        const picked = await askJson<{singers: string[]}>({
-            input: `Pick the singers of this music video from the cast: the characters who sing the lyrics on screen.
-Pick the lead first, and prefer an individual character for it: the one whose story the song tells, or who calls the lines out. A group character (e.g. "Miners") sings as well when the lyrics have group parts ("we", a chorus, a shouted refrain, lines the others answer) - then pick the lead and the group both, so that the verses can be the lead's and the refrains the group's. Pick the group alone only if the whole song is clearly sung by the group as one voice and nobody in it leads. A party made of individual characters (a crew or band of named members) is no group entry: its refrains are sung by the lead together with up to two of its members, the ones with the most to do in the story - the rest of the party stays on screen. Several individual singers only if the lyrics clearly are a dialogue or duet between different characters. Three singers at most. Characters that fight, hunt or threaten the singers do not sing.
-${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": ["<character id>"]}
----
-cast: ${castList}
-lyrics:
-${lyrics}
----
-story summary:
-${storySummary}`,
-            instructions: 'You are a music video director who casts the singers of a performance video. Answer only with JSON.',
-            schema: {
-                type: 'object',
-                additionalProperties: false,
-                required: ['singers'],
-                properties: {singers: {type: 'array', minItems: 1, maxItems: 3, items: {enum: characters.map(c => c.id)}}},
-            },
-        })
-        singers = known(picked.singers)
-        if (!singers.length)
-            throw new Error(`The LLM picked no singer from the cast (${JSON.stringify(picked.singers)}) - run again, or name the singers in config.json`)
-    } else {
-        // a name the cast does not carry letter for letter (config.json in the song's language, the cast in English: "schamanin" / "Shamaness")
-        // is asked once: the LLM knows which character is meant, code does not guess
-        const unmatched = wanted.filter(name => !findCharacter(characters, name))
-        const resolved = new Map<string, string>()
-        if (unmatched.length) {
-            const mapped = await askJson<{singers: {name: string; id: string | null}[]}>({
-                input: `config.json names these singers of a music video, but not all of them are spelled like the characters of the cast (another language, a nickname, an epithet). For every name say which character of the cast it means - or null if none does.
-Mind the grammatical gender of the name (German "Schamanin" is the woman, "Schamane" the man) and take the character of that gender, even if another character has the more similar spelling.
-${voiceRules(config.singerVoice).pick}Answer only with JSON: {"singers": [{"name": "<name as given>", "id": "<character id or null>"}]}
----
-names: ${JSON.stringify(unmatched)}
-cast: ${castList}
-story summary:
-${storySummary}`,
-                instructions: 'You match names to the characters of a cast. Answer only with JSON.',
-                schema: {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['singers'],
-                    properties: {
-                        singers: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                additionalProperties: false,
-                                required: ['name', 'id'],
-                                properties: {name: {enum: unmatched}, id: {enum: [...characters.map(c => c.id), null]}},
-                            },
-                        },
-                    },
-                },
-            })
-            for (const m of mapped.singers ?? []) {
-                const [id] = known([m.id])
-                if (id) resolved.set(m.name, id)
-            }
-        }
-        singers = [
-            ...new Set(
-                wanted.flatMap(name => {
-                    const character = findCharacter(characters, name)
-                    const id = character?.id ?? resolved.get(name)
-                    if (!id) log.warn(`singers: "${name}" is not in the cast - ignored`)
-                    else if (!character) log.step('Singers', `"${name}" is ${id}`)
-                    return id ? [id] : []
-                }),
-            ),
-        ]
-
-        if (!singers.length)
-            throw new Error(
-                `singers: none of ${wanted.join(', ')} is in the cast. The characters are: ${characters.map(c => `${c.name} (${c.id})`).join(', ')}`,
-            )
-    }
-    if (singers.length === 1) return {singers, lines: lines.map(l => ({line: l.line, text: l.text, singers}))}
-
-    const assigned = await askJson<{lines: {line: number; singers: string[]}[]}>({
-        reasoning: 'medium',
-        // thinking at medium easily takes 8k tokens on its own, the long JSON comes on top
-        maxTokens: Math.max(16384, lines.length * 100),
-        input: `These characters sing the song of a music video: ${JSON.stringify(singers)}.
-Decide who sings which line. A line is sung by one singer, or by several together (duet or choir lines, e.g. a chorus).
-Follow the lyrics and the story: who would say these words? Keep a verse with one singer unless its lines answer each other. When a group, or companions of the lead, are among the singers, they sing the refrains and the shouted group lines - together with the lead, so name all of them - and the lead alone sings the verses; the group alone sings only a line that is clearly only theirs.
-Answer only with JSON: {"lines": [{"line": 0, "singers": ["<character id>"]}, ...]} - one entry for every line number below.
----
-cast: ${castList}
-lines: ${JSON.stringify(lines.map(l => ({line: l.line, section: l.section, text: l.text})))}
----
-story summary:
-${storySummary}`,
-        instructions: 'You are a music video director who splits a song between its singers. Answer only with JSON.',
-        schema: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['lines'],
-            properties: {
-                lines: {
-                    type: 'array',
-                    items: {
-                        type: 'object',
-                        additionalProperties: false,
-                        required: ['line', 'singers'],
-                        properties: {line: {enum: lines.map(l => l.line)}, singers: {type: 'array', minItems: 1, items: {enum: singers}}},
-                    },
-                },
-            },
-        },
-    })
-    // a model that loops repeats a singer in a line ("lyra, kaelen, lyra, ...") - each sings it once; uniqueItems is not
-    // in the schema, the server's grammar compiler refuses it (llama.cpp/vLLM: "Unimplemented keys")
-    const byLine = new Map((assigned.lines ?? []).map(l => [l.line, [...new Set(known(l.singers).filter(id => singers.includes(id)))]]))
-    const missing = lines.filter(l => !byLine.get(l.line)?.length)
-    if (missing.length) log.warn(`${missing.length} line(s) got no singer - sung by ${singers[0]}`)
-    return {singers, lines: lines.map(l => ({line: l.line, text: l.text, singers: byLine.get(l.line)?.length ? byLine.get(l.line)! : [singers[0]!]}))}
-}
-
-// "Thorin" finds "thorin" and "thorin-oakenshield", "miner" finds "miners"
-function findCharacter(characters: Character[], name: string) {
-    const slug = toId(name)
-    const tokens = (id: string) => id.split('-').map(t => t.replace(/s$/, ''))
-    return characters.find(c => c.id === slug || toId(c.name) === slug) ?? characters.find(c => tokens(slug).every(t => tokens(c.id).includes(t)))
-}
-
-// what the story beats must do so the singers can be lip-synced
-function performanceRules({singers, lines}: Singing) {
-    const nameOf = (id: string) => cast.characters.find(c => c.id === id)?.name ?? id
-    const sectionOf = new Map(sungLines(lyricSections).map(l => [l.line, l.section]))
-    const bySection = new Map<string, Set<string>>()
-    for (const l of lines) {
-        const section = sectionOf.get(l.line) ?? ''
-        if (!bySection.has(section)) bySection.set(section, new Set())
-        for (const id of l.singers) bySection.get(section)!.add(id)
-    }
-    return `
-This is a performance music video: ${singers.map(nameOf).join(', ')} ${singers.length > 1 ? 'sing' : 'sings'} the lyrics on screen, lip-synced, while acting out the story.
-Sections with vocals and who sings them: ${[...bySection].map(([section, ids]) => `${section} (${[...ids].join(', ')})`).join('; ')}.
-Sections without vocals have no singing - the story plays freely there.
-For every beat that plays while the song has vocals:
-- the singer(s) of that section are on screen: their ids are in "characterIds".
-- they sing while they act, e.g. "{Thorin} sings while forging the blade", "{Vael} sings through the blow she takes from the orc" - the mouth stays in view (three-quarter or profile is fine, looking at what the story has them look at), no hidden faces, no masks or objects over the mouth.
-`
 }
 
 // No project id given: the projects, most recently changed first, to pick one with the arrow keys - without a
