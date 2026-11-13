@@ -1,6 +1,16 @@
 import {describe, expect, test} from 'bun:test'
 import type {StoryBeat} from './project.ts'
-import {beatsPrompt, blockingPrompt, musicStretches, type PlanContext, plannerCalls, planPrompt} from './shot-planner.ts'
+import {
+    ALL_NEEDS,
+    beatsPrompt,
+    blockingPrompt,
+    musicStretches,
+    type PlanContext,
+    plannerCalls,
+    planInstructions,
+    planInstructionsFor,
+    planPrompt,
+} from './shot-planner.ts'
 import {PERSON_FIELDS, SHOT_FIELDS} from './shot-plan.ts'
 
 const beat = {
@@ -208,5 +218,46 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(input).toContain('the last beats are a last surge, not an aftermath')
         expect(input).toContain('nobody lowers, rests, sets down or silences an instrument that is still heard')
         expect(beatsPrompt(args).input).not.toContain('The music along the way')
+    })
+})
+
+describe('the rules a beat needs (#825)', () => {
+    const chunk = {from: 0, to: 4, total: 6, written: []}
+    test('a beat of one person, without singing, props or a group, is told none of their rules', () => {
+        const {instructions} = planPrompt(context, [beat], undefined, undefined, [], chunk)
+        for (const rule of [
+            'When a singer sings in a shot',
+            '"castProps" below lists',
+            'A cast entry with "group": true',
+            'In a shot with three or more people',
+            'A beat with "micro": true',
+        ])
+            expect(instructions).not.toContain(rule)
+        expect(instructions.length).toBeLessThan(planInstructions.length * 0.8)
+        // what every beat needs stays
+        expect(instructions).toContain('Nobody walks backwards unless the beat itself says so')
+        expect(instructions).toContain('SHOT <number>')
+    })
+    test('a beat with a singer, a group of three and a prop is told theirs', () => {
+        const crowd = {
+            ...context,
+            characters: [
+                {id: 'runa', name: 'Runa', role: 'a girl', prop: 'lute'},
+                {id: 'orcs', name: 'Orcs', role: 'orcs', isGroup: true},
+                {id: 'tom', name: 'Tom', role: 'a boy'},
+            ],
+            beatSinging: {'beat-01': {singerIds: ['runa'], singingPerShot: [true], singersPerShot: [['runa']]}},
+        }
+        const {instructions} = planPrompt(crowd, [{...beat, characterIds: ['runa', 'orcs', 'tom']}], undefined, undefined, [], chunk)
+        for (const rule of [
+            'When a singer sings in a shot',
+            '"castProps" below lists',
+            'A cast entry with "group": true',
+            'In a shot with three or more people',
+        ])
+            expect(instructions).toContain(rule)
+    })
+    test('with everything needed the rules are the whole set', () => {
+        expect(planInstructionsFor(ALL_NEEDS)).toBe(planInstructions)
     })
 })
