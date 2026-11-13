@@ -5,6 +5,7 @@ import {log} from '../lib/log.ts'
 // reported stale), the old ones go to old/attempts/. The description that goes with the picture is chosen here; what
 // the plan built on the old one is printed as a --redo, not done.
 // usage: bun run import-asset <project-id> [<character or location id>] [--from=<project-id>[:<id>] | --from=library:<id>] [--description=source|vision|keep] [--dry-run]
+//        bun run import-asset <project-id> prop <library-id> --for=<character id> [--dry-run]   a prop of the library for a character's (#944)
 // With the id, --from=…:<id> and --description given, nothing is asked (#827): a script, the workspace. --dry-run says what it would do.
 import * as p from '@clack/prompts'
 import {existsSync, readdirSync, readFileSync} from 'node:fs'
@@ -25,6 +26,7 @@ import {answer as wizardAnswer} from '../lib/wizard.ts'
 import {sheetAnchor} from '../lib/sequenceSheet.ts'
 import {clipRequestsDir} from '../lib/previous-output.ts'
 import {applyLibraryText} from '../lib/casting.ts'
+import {applyPropImport, planPropImport, propImportProblem} from '../lib/prop-import.ts'
 cli('import-asset')
 
 // what a cancel after the copy must say: the pictures are already swapped, only project.json is untouched
@@ -59,6 +61,8 @@ lockProject(dir, id)
 const store = new ProjectStore(id)
 await store.load()
 const data = store.data
+// a prop of the library for a character's prop (#944) - its own way through, nothing of the rest below
+if (wantedId === 'prop') await importProp()
 type Entry = {kind: AssetKind; id: string; name: string}
 const entries = (project: Project): Entry[] => [
     ...(project.cast?.characters ?? []).map(c => ({kind: 'character' as const, id: c.id, name: c.name})),
@@ -318,6 +322,43 @@ async function fromPicture(): Promise<string | undefined> {
     if (failed) log.warn(visionFailed(failed))
     if (description) log.info(description)
     return description
+}
+
+// bun run import-asset <project-id> prop <library-id> --for=<character id> [--dry-run]: the character's prop becomes the library's
+async function importProp() {
+    const libraryId = args.filter(a => !a.startsWith('--'))[2]
+    const characterId = args.find(a => a.startsWith('--for='))?.slice('--for='.length)
+    const propUsage = 'usage: bun run import-asset <project-id> prop <library-id> --for=<character id> [--dry-run]'
+    if (!libraryId || !characterId) log.usageError(`Give the prop of the library and the character it is for`, propUsage)
+    const problem = propImportProblem(data, (await loadProjectConfig(dir)).propPictures, characterId!, id!)
+    if (problem) fail(problem)
+    const library = await libraryDir()
+    const asset =
+        (await readLibraryAsset(library, 'prop', libraryId!)) ??
+        fail(`The library has no prop "${libraryId}": ${libraryIds(library, 'prop').join(', ') || 'none yet'}`)
+    const plan = planPropImport(dir, data, characterId!, asset)
+    log.section(`feverslop-ts · import prop · ${id}`)
+    log.step(
+        'Prop',
+        `${plan.characterName}: ${plan.old ? `${plan.old.name} ${styles.muted(`(${plan.old.id})`)} → ` : ''}${plan.prop.name} ${styles.muted(`(${plan.prop.id}, from library:${asset.id})`)}`,
+    )
+    log.step('Copies', `the picture of the library to ${assetPaths('prop', plan.prop.id).picture} ${styles.muted('- pinned, never rendered again')}`)
+    log.step('Plan', styles.muted('the shots stay as they are planned'))
+    if (plan.clips.length)
+        log.step(
+            'Clips',
+            `${plan.clips.length} show ${plan.characterName}${plan.rendered.length ? `, ${plan.rendered.length} of them rendered: they turn stale` : ''} ${styles.muted(plan.clips.join(', '))}`,
+        )
+    if (dryRun) {
+        log.success('Dry run - nothing was changed')
+        process.exit(0)
+    }
+    const done = applyPropImport(dir, data, plan, library, asset.id)
+    await store.save()
+    if (done.putAway) log.info(`The old picture is in ${done.putAway}`)
+    log.success(`${plan.characterName} has ${plan.prop.name} of the library - the next run builds the clip requests with it`)
+    if (plan.rendered.length) log.next(`bun index.ts ${id} --render=videos --refresh=clips`)
+    process.exit(0)
 }
 
 function fail(message: string): never {

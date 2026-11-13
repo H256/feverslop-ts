@@ -56,10 +56,10 @@ See [performance statistics](docs/stats.md) for the compact dashboard, filters, 
 | `bun run override <film-id> <clip-id>` | a film clip's own view and references: `--view=2`, `--order=…`, `--without=…`, `--clear` |
 | `bun run replace-character <id>` | swap a character's picture and description for your own - see [docs/comfyui.md](docs/comfyui.md#replace-character) |
 | `bun run import-asset <id>` | take a finished character or place from another project or the library - see [Taking a character or place from another project](#taking-a-character-or-place-from-another-project) |
-| `bun run export-asset <id> <asset>` | put a finished character or place into the library - see [The asset library](#the-asset-library) |
+| `bun run export-asset <id> <asset>` | put a finished character, place or prop into the library - see [The asset library](#the-asset-library) |
 | `bun run create-asset <kind> <id> --anchor=…` | a new library asset from a picture, no project needed |
 | `bun run export-song <id>` / `import-song <id> [song]` | a song with its stems and the timing of its lyrics into the library, or from it into a project - see [The asset library](#the-asset-library) |
-| `bun run library [--json]` | what is in the library - characters, places, songs - and who uses each; `rename`, `describe` or `remove` one (put into the library's `.trash/`, refused while a project casts it) |
+| `bun run library [--json]` | what is in the library - characters, places, props, songs - and who uses each; `rename`, `describe` or `remove` one (put into the library's `.trash/`, refused while a project casts it) |
 | `bun run leak-scan <id>` | finds rendered clips that came out as the reference pictures lined up, prints the command to render them again |
 | `bun run texture-chains <id> [--film]` | measures whether clips that continue on the clip before get grittier from link to link, next to the change at an ordinary cut; reads the rendered clips with ffmpeg only; the continuing joins grittier than an ordinary cut by a fifth are kept in `output/texture-chains.json` and marked on the timeline (**Check textures** there; `--json` for machines) |
 | `bun run interpolate <id> --only=… --model=…` | compares frame interpolation models on some clips - see [Measuring and comparing](#measuring-and-comparing) |
@@ -1051,6 +1051,21 @@ bun run export-asset witch-test leo --film                                  # a 
   where it came from), `picture.png` (the sheet) and `sheet/` (anchor, sequence video, frames).
 - `import-asset` offers the library as a source, before the projects; its description is the one in `asset.json`.
 
+**Props** (#944) - a film's props, and a music video's with [`propPictures`](#configjson): one plain picture each, no sheet.
+
+```bash
+bun run export-asset tides-of-eternal-flame-261022 electric-guitar --as=sunburst-strat   # a prop into the library
+bun run export-asset witch-test umbrella --film                                    # a film's prop
+bun run import-asset new-song prop sunburst-strat --for=kael --dry-run             # what it would do
+bun run import-asset new-song prop sunburst-strat --for=kael                       # Kael's guitar is the library's
+```
+
+- In the library: `library/props/<id>/asset.json` (name, description, where it came from) and `picture.png`.
+- `import-asset … prop <library id> --for=<character>` replaces that character's prop: its name, description and picture
+  (copied to `assets/props/<id>.png`, pinned). The shots stay as they are planned; the clips that show the character are
+  built with the new prop from the next run on, and a rendered one turns stale. It needs `"propPictures": true`. A changed
+  cast builds the props from its words again - take the library prop again then.
+
 **A new library asset from a picture** - no project needed:
 
 ```bash
@@ -1079,7 +1094,7 @@ bun run import-song new-video epa-streikt                                      #
 **What is in the library**, and who uses it - the Library page shows the same, with the songs on a tab of their own:
 
 ```bash
-bun run library                                         # characters, places and songs, each with the projects that use it
+bun run library                                         # characters, places, props and songs, each with the projects that use it
 bun run library rename song epa-streikt "EPA streikt (live)"   # another name; the id stays
 bun run library describe character kael "a tall drummer in a long coat"
 bun run library remove location old-hall                # into library/.trash/ - refused while a project casts it
@@ -1144,7 +1159,8 @@ the next run uses it:
 |---------|-------|------|
 | `bun run replace-character <project-id>` | a terminal, a planned project | your own picture (and description) for one character or group member of the project |
 | `bun run import-asset <project-id> [<id>] [--from=<project>[:<id>] \| --from=library:<id>]` | a terminal, a planned project | a finished character or place from another project or the library, copied and pinned |
-| `bun run export-asset <project-id> <id> [--as=<library id>] [--film]` | rendered pictures and a description | the character or place into the library - `--film`: of a film in `films/` |
+| `bun run import-asset <project-id> prop <library id> --for=<character>` | `propPictures`, a cast with props | a prop of the library for a character's prop, its picture copied and pinned |
+| `bun run export-asset <project-id> <id> [--as=<library id>] [--film]` | rendered pictures and a description | the character, place or prop into the library - `--film`: of a film in `films/` |
 | `bun run create-asset <character\|location> <library id> --anchor=<picture> [--name=…] [--role=…] [--description=…] [--like=<project>]` | ComfyUI for the sheet | a new library asset from a picture, no project needed |
 | `casting.json` | - | which roles of a project or a film are played by library assets, on every run |
 

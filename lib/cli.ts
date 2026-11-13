@@ -94,10 +94,10 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Print casting.json and what the next plan run takes over, with the --redo it needs; change entries.',
     },
     'import-asset': {
-        args: '<project-id> [asset-id] [--from=project[:id]|library:id] [--description=source|vision|keep] [--dry-run]',
-        description: 'Import a character or location into a project - asked, or all given as options.',
+        args: '<project-id> [asset-id] [--from=project[:id]|library:id] [--description=source|vision|keep] [--dry-run] | <project-id> prop <library-id> --for=<character-id> [--dry-run]',
+        description: "Import a character or location into a project - asked, or all given as options; or a prop of the library for a character's prop.",
     },
-    'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character or location to the shared library.'},
+    'export-asset': {args: '<project-id> <asset-id> [--as=library-id] [--film]', description: 'Export a character, location or prop to the shared library.'},
     'export-song': {
         args: '<project-id> [--as=song-id] [--name=name]',
         description: 'Put the song of a project into the library: audio, lyrics, stems and the timing of every word.',
