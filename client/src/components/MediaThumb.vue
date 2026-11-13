@@ -4,6 +4,7 @@ import {thumbUrl, type MediaRef, type MediaRoots} from '../api/urls'
 
 /** A small picture of a file, or the hatched place of one that is not there. Clicking it is the caller's. */
 const props = withDefaults(defineProps<{media?: MediaRef; roots: MediaRoots; width?: 320 | 640; alt?: string; cls?: string; missing?: string}>(), {
+  media: undefined,
   width: 320,
   alt: '',
   cls: 'thumb',

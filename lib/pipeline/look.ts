@@ -18,6 +18,7 @@ import {LOCATION_VIEWS} from '../sequenceSheet.ts'
 import type {AssetKind} from '../asset-import.ts'
 import type {LibraryAsset} from '../library.ts'
 import type {Location, ProjectStore, StepName} from '../project.ts'
+import {textOf, messageOf} from '../text.ts'
 
 // The look of a music video (index.ts steps 6-8d, #841): the look of the whole, the looks and descriptions of the characters and the
 // places, the background of each place and its floor plan. A library asset the casting chose stands in with its own texts. The
@@ -173,12 +174,12 @@ export async function planLook(run: LookRun) {
                     .each('locationLayouts', location.id, options, () => askJson<{layout?: unknown; views?: unknown[]}>(options))
                     .catch((e: unknown) => {
                         log.warn(
-                            `${location.id}: the layout is unusable (${e instanceof Error ? e.message : e})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`,
+                            `${location.id}: the layout is unusable (${messageOf(e)})${attempt < 2 ? ' - asking again' : ' - its beats stage the place themselves'}`,
                         )
                         return undefined
                     })
             }
-            return answer && {layout: String(answer.layout ?? '').trim(), views: LOCATION_VIEWS.map((_, n) => String(answer!.views?.[n] ?? '').trim())}
+            return answer && {layout: textOf(answer.layout).trim(), views: LOCATION_VIEWS.map((_, n) => textOf(answer!.views?.[n]).trim())}
         })
         const layouts: Record<string, LocationLayout> = {}
         cast.locations.forEach((location, i) => {

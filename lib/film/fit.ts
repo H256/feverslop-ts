@@ -11,6 +11,7 @@ import {mentions} from './names.ts'
 import {clipFitPrompt} from './prompts.ts'
 import type {FilmStore} from './store.ts'
 import type {FilmCharacter, LocationView, Shot} from './types.ts'
+import {messageOf} from '../text.ts'
 
 export type FittedShot = {view: string; camera: string; action: string; people: Record<string, {state?: string; motion?: string}>}
 type Answer = {shots?: {view?: unknown; camera?: unknown; action?: unknown; people?: unknown}[]}
@@ -133,7 +134,7 @@ export async function fitOverrides(
                 )
             } catch (e) {
                 log.warn(
-                    `${clip.id}: its shots could not be fitted to the choice made for it (${e instanceof Error ? e.message : e}) - it is planned as it was, the next run asks again`,
+                    `${clip.id}: its shots could not be fitted to the choice made for it (${messageOf(e)}) - it is planned as it was, the next run asks again`,
                 )
                 result.push(clip)
                 continue

@@ -43,6 +43,7 @@ import {urlsOfChoice} from './servers.ts'
 import {readSinging, type SingingChange, writeSinging} from './singing.ts'
 import {readTiming, type TimingChange, writeTiming} from './timing.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
+import {textOf} from '../text.ts'
 
 // The routes of a project's API (/p/<kind>/<id>/api/…) and of the library's (/api/library/…) as tables (#840): the server finds the
 // route and answers with it. A POST route says what it changes a project with - the functions, which a command calls too, or that it
@@ -412,8 +413,8 @@ export const PROJECT_ROUTES: readonly Route[] = [
             if (job.kind === 'prop') throw invalid(`${job.name} is a prop: its picture is drawn from its description only`)
             const library = (await readReferences(c.target)).find(r => r.id === c.id)?.library
             if (library) throw invalid(`${job.name} is played by library:${library} - change it on the Casting page`)
-            const prompt = String(form.get('prompt') ?? '')
-            const description = String(form.get('description') ?? '').trim()
+            const prompt = textOf(form.get('prompt'))
+            const description = textOf(form.get('description')).trim()
             const describe = form.get('describe') === 'true'
             if (prompt.length > 8000 || description.length > 8000) throw invalid('the prompt and the description are at most 8000 characters')
             if (description && describe) throw invalid('a description given by hand, or read from the picture - not both')
@@ -422,7 +423,7 @@ export const PROJECT_ROUTES: readonly Route[] = [
                 const promptFile = prompt.trim() && prompt.trim() !== job.prompt.trim() ? await upload.text('prompt', prompt) : undefined
                 const descriptionFile = description ? await upload.text('description', description) : undefined
                 const servers = form.get('servers')
-                const urls = await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined)
+                const urls = await urlsOfChoice(servers ? JSON.parse(textOf(servers)) : undefined)
                 return started(
                     c.runs.start(
                         c.target,
@@ -507,17 +508,17 @@ export const LIBRARY_ROUTES: readonly Route[] = [
             const form = await c.request.formData()
             const picture = form.get('anchor')
             const kind = form.get('kind')
-            const id = String(form.get('id') ?? '')
+            const id = textOf(form.get('id'))
             if (!(picture instanceof File) || (kind !== 'character' && kind !== 'location') || !libraryIdPattern.test(id))
                 throw invalid('a picture, a kind and a usable id are needed: lowercase letters, digits and dashes')
             const upload = await takePictureUpload(picture)
             const optional = (name: string) => {
-                const value = String(form.get(name) ?? '').trim()
+                const value = textOf(form.get(name)).trim()
                 return value ? [`--${name}=${value}`] : []
             }
             try {
                 const servers = form.get('servers')
-                const urls = await urlsOfChoice(servers ? JSON.parse(String(servers)) : undefined)
+                const urls = await urlsOfChoice(servers ? JSON.parse(textOf(servers)) : undefined)
                 return started(
                     c.runs.startTool(
                         c.target,

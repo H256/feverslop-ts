@@ -49,6 +49,7 @@ import {type LibraryAsset, libraryDir} from './lib/library.ts'
 import {type AssetKind} from './lib/asset-import.ts'
 import {dropBeatPlans} from './lib/project.ts'
 import {castPrompt, songLyricsPrompt, songStylePrompt, storyPrompt, styleShortlistPrompt, summaryPrompt} from './lib/prompts.ts'
+import {messageOf} from './lib/text.ts'
 cli('plan')
 
 // any step's rejected promise (everything here is awaited, so a thrown Error from deep in the pipeline surfaces
@@ -335,7 +336,7 @@ if (!style && project.data.lookBrief === undefined) {
             const shortlist = await askJson<{styles: string[]}>(styleShortlistPrompt(storyText, shuffledStyles(), 5))
             candidates = stylesById(shortlist.styles)
         } catch (e) {
-            log.step('Style', styles.muted(`no shortlist from the LLM (${e instanceof Error ? e.message : e}) - picking from the whole list`))
+            log.step('Style', styles.muted(`no shortlist from the LLM (${messageOf(e)}) - picking from the whole list`))
         }
     }
     const picked = pickStyle(candidates.length ? candidates : undefined)

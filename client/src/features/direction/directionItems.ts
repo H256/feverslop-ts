@@ -126,7 +126,13 @@ export function groupItems(items: Item[], v: Pick<DirectionView, 'groups'>, name
 /** A change of one shot, field by field - only what changed, the shot's fields first, then each person's. */
 export function shotDiff(before: Record<string, unknown>, after: Record<string, unknown>, name: Name) {
   const show = (value: unknown) =>
-    Array.isArray(value) ? value.map(v => name(String(v))).join(', ') : value === undefined ? '—' : typeof value === 'string' ? withNames(value) : String(value)
+    Array.isArray(value)
+      ? value.map(v => name(String(v))).join(', ')
+      : value === undefined
+        ? '—'
+        : typeof value === 'string'
+          ? withNames(value)
+          : (JSON.stringify(value) ?? '')
   const rows: {label: string; before: string; after: string}[] = []
   const compare = (prefix: string, a: Record<string, unknown>, b: Record<string, unknown>) => {
     for (const key of Object.keys(SHOT_FIELDS))

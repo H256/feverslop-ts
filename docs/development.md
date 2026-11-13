@@ -70,13 +70,18 @@ version tags only from green builds.
 ```bash
 bun run test            # the backend and the pipeline, golden snapshots included
 bun run typecheck
-bun run lint            # errors fail; warnings are listed
+bun run lint            # errors fail; warnings are listed - each one an untyped value (a JSON read) in lib/ or tools/
 bun run format:check
 bun run client:check    # the page's types
 bun run client:test     # the page's unit tests
 bun run test:workspace  # builds the page, then the real editor serving it
 bun run client:e2e      # by hand: Playwright against the built page (once: node client/node_modules/@playwright/test/cli.js install chromium)
 ```
+
+A lint warning is worth a look: the `no-unsafe-*` rules are off where an `any` says nothing about the code (`comfy/**`, whose node
+types are generated from a server; the tests; the `.vue` files, which vue-tsc checks), so what is left is data read without a
+type. Text from outside - an LLM answer, a form field, a caught value - goes into a prompt or a line through `lib/text.ts`
+(`textOf`, `shownOf`, `messageOf`), never through `String(x)` (#891).
 
 The Playwright run is the one check not in CI: the runner has no browser installed. Run it before a pull request that
 changes the page.

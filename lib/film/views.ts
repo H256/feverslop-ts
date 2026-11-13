@@ -9,6 +9,7 @@ import {sheetViewsPrompt, shotViewsPrompt, viewTurnPrompt} from './prompts.ts'
 import type {FilmStore} from './store.ts'
 import type {FilmCast, LocationView, SceneCoverage} from './types.ts'
 import {sequenceSheetDir, sheetViews} from '../sequenceSheet.ts'
+import {messageOf} from '../text.ts'
 
 // Which view of a place each shot is in, without designed views (config.locationViews). A clip was given the whole location sheet,
 // and the video model took its first view as the background whatever the shot's camera said (last-rehearsal: the rows of seats
@@ -103,9 +104,7 @@ export async function readSheetViews(film: FilmStore, cast: FilmCast, descriptio
             changed = true
             log.line(styles.muted(`        ${result[location.id]!.map((v, n) => `${n + 1}. ${v.name}`).join(' · ')}`))
         } catch (e) {
-            log.warn(
-                `the sheets of the places could not be read (${location.id}: ${e instanceof Error ? e.message : e}) - their clips get the whole sheet, the next run asks again`,
-            )
+            log.warn(`the sheets of the places could not be read (${location.id}: ${messageOf(e)}) - their clips get the whole sheet, the next run asks again`)
             // one warning, not one per place: the next ones would fail the same way
             readable = Promise.resolve(false)
         }
@@ -145,9 +144,7 @@ export async function chooseShotViews(
             await film.save()
             log.step('Views', `${styles.name(scene.sceneId)} ${styles.muted(`shots in views ${result[scene.sceneId]!.join(', ')}`)}`)
         } catch (e) {
-            log.warn(
-                `${scene.sceneId}: the views of its shots could not be chosen (${e instanceof Error ? e.message : e}) - its clips get the whole sheet, the next run asks again`,
-            )
+            log.warn(`${scene.sceneId}: the views of its shots could not be chosen (${messageOf(e)}) - its clips get the whole sheet, the next run asks again`)
         }
     }
     return result

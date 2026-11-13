@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import FormField from '../../components/FormField.vue'
-
-export type BeatCastDraft = {characters: string[]; join: {name: string; role: string}[]; without: string[]; note: string}
+import type {BeatCastDraft} from './beatCast'
 
 /**
  * Who is in the marked clips (#765, #767): people of the cast, new ones joining it, who goes out of them, and what they do there.

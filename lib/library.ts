@@ -13,6 +13,7 @@ import {log} from './log.ts'
 import type {LocationLayout} from './project.ts'
 import {readSettingsFile} from './settings.ts'
 import {ownProcessIdentity, processAlive, processIdentity} from './process-identity.ts'
+import {shownOf} from './text.ts'
 
 export type LibraryAsset = {
     kind: AssetKind
@@ -122,7 +123,7 @@ export async function withNewLibraryAsset<T>(dir: string, kind: AssetKind, id: s
             }
             if (writeError) {
                 rmSync(lockFile, {force: true})
-                throw writeError instanceof Error ? writeError : new Error(String(writeError))
+                throw writeError instanceof Error ? writeError : new Error(shownOf(writeError))
             }
             acquired = true
         }

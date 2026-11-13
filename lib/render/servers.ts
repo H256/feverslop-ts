@@ -472,7 +472,7 @@ export async function downloadResult<M>(
     if (!file) throw new Error(`${label}: the output node saved no ${extensions.join(' or ')} file (got ${files.map(f => f.filename).join(', ') || 'nothing'})`)
     // written next to the target first, so an interrupted download never looks like a finished file
     const query = new URLSearchParams({filename: file.filename, type: file.type, subfolder: file.subfolder ?? ''})
-    const response = await server.api.fetchApi(`/view?${query}`)
+    const response = await server.api.fetchApi(`/view?${query.toString()}`)
     if (!response.ok) throw new Error(`${label}: output download failed with HTTP ${response.status}`)
     await Bun.write(`${target}.download`, await response.blob())
     renameSync(`${target}.download`, target)
