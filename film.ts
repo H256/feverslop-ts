@@ -1,4 +1,5 @@
 import {planFilmShots} from './lib/pipeline/film-shots.ts'
+import {extraArgument} from './lib/command-schema.ts'
 import {renderFilm} from './lib/pipeline/render-film.ts'
 import {checkPrompts} from './lib/prompt-check.ts'
 import {noProject} from './lib/usage.ts'
@@ -106,6 +107,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a film id'])
+if (extra) log.usageError(extra, usage)
 // the options of a run both pipelines take (lib/run-options.ts)
 const {render, retake, until} = (() => {
     try {

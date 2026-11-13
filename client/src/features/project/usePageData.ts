@@ -25,17 +25,22 @@ export function usePageData<T>(load: (signal: AbortSignal) => Promise<T>, {live 
   dock.onEnd(() => {
     void resource.reload()
   })
+  // said until a read works again, then taken away (#940)
   watch(resource.error, error => {
-    if (error && resource.data.value !== undefined) toasts.show(`Could not read this page again: ${error}`, true)
+    if (error && resource.data.value !== undefined) toasts.show(`Could not read this page again: ${error}`, true, resource)
+    else if (!error) toasts.clear(resource)
   })
   /** True when the page and the project show what is in the folder now. */
   const refresh = async () => {
     const [page, project] = await Promise.all([
       resource.reload(),
       session.reload().then(
-        () => true,
+        () => {
+          toasts.clear(session)
+          return true
+        },
         cause => {
-          toasts.show(`Could not read the project again: ${errorText(cause)}`, true)
+          toasts.show(`Could not read the project again: ${errorText(cause)}`, true, session)
           return false
         },
       ),

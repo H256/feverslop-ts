@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // When each sung line and word of a music video is, as the workspace's Timing page moves them on the vocals - CLI first (#549).
 // Without an option every line is printed with its start and end; --json gives the words in the form --set takes back. A moved
 // line changes the clips it is sung in; their beats lose their shot plan, the next plan run plans just those again.
@@ -39,6 +40,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], false)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>

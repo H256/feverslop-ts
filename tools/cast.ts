@@ -1,4 +1,5 @@
 import {cli} from '../lib/cli.ts'
+import {extraArgument} from '../lib/command-schema.ts'
 // The cast of a music video or film, as the workspace's Casting page edits it - CLI first (#548). Without an option it is printed;
 // --json prints it in the form --set takes back: change names, roles and props, add a character or place (without an id), leave one
 // out to remove it. A film's script says who is in it: there names and texts change, nobody comes or goes. What was planned from
@@ -22,6 +23,9 @@ const {values: args, positionals} = (() => {
         return log.usageError(e instanceof Error ? e.message : String(e), usage)
     }
 })()
+// a word more than it takes is said before any work (#938)
+const extra = extraArgument(positionals, ['a project id'])
+if (extra) log.usageError(extra, usage)
 const target = commandTarget(positionals[0], args.film)
 if (typeof target === 'string') log.usageError(target, usage)
 const t = target as Exclude<typeof target, string>
