@@ -821,6 +821,27 @@ test('timeline: R renders the clip at the playhead again, asked first - a key of
   await expect.poll(() => posted.find(p => p.path === 'run')?.body).toMatchObject({action: {type: 'clips', ids: ['clip-1']}})
 })
 
+test('run dock: a lost line to the workspace is said with the time of the last word - the run is not failed - and goes when it is back (#935)', async ({
+  page,
+}) => {
+  const running = {source: 'terminal', command: 'bun index.ts demo', pid: 1, startedAt: '2026-11-03T00:00:00Z', running: true}
+  let away = false
+  await page.route(/\/p\/music\/demo\/api\/run-events/, route =>
+    away
+      ? route.abort('connectionrefused')
+      : route.fulfill({status: 200, headers: {'Content-Type': 'text/event-stream'}, body: `retry: 300\nevent: state\ndata: ${JSON.stringify(running)}\n\n`}),
+  )
+  await page.goto(`${base}/p/music/demo/`)
+  const dock = page.getByRole('region', {name: 'Run'})
+  await expect(dock).toContainText('Running in the terminal')
+  away = true
+  await expect(dock.getByRole('status')).toContainText(/No connection to the workspace since .* the run may have gone on or ended meanwhile/)
+  await expect(dock).toContainText('Running in the terminal')
+  await expect(dock).not.toContainText('Failed')
+  away = false
+  await expect(dock.getByRole('status')).toHaveCount(0)
+})
+
 test('a later read of the project that fails keeps the page and what was typed, says it may be old, and is read again (#936)', async ({page}) => {
   // a run goes on, then ends: the page reads the project again - and that read fails
   let connections = 0

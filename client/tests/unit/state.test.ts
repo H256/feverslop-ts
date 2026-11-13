@@ -157,3 +157,95 @@ describe('a drag', () => {
     expect(moves).toBe(1)
   })
 })
+
+/** The events of the workspace by hand: the test opens, breaks and answers each stream the dock opens. */
+function heldEvents() {
+  const streams: {url: string; readyState: number; listeners: Record<string, ((event: unknown) => void)[]>}[] = []
+  globalThis.EventSource = class {
+    static CLOSED = 2
+    readyState = 0
+    listeners: Record<string, ((event: unknown) => void)[]> = {}
+    constructor(readonly url: string) {
+      streams.push(this)
+    }
+    addEventListener(type: string, listener: (event: unknown) => void) {
+      ;(this.listeners[type] ??= []).push(listener)
+    }
+    close() {
+      this.readyState = 2
+    }
+  } as unknown as typeof EventSource
+  const send = (type: string, data?: unknown) => {
+    const stream = streams.at(-1)!
+    for (const listener of stream.listeners[type] ?? []) listener(data === undefined ? {} : {data: JSON.stringify(data)})
+  }
+  return {streams, send}
+}
+const running = {source: 'terminal' as const, command: 'bun index.ts demo', pid: 1, startedAt: '2026-11-13T10:00:00Z', running: true}
+
+describe('the line to the workspace, apart from the run (#935)', () => {
+  test('lost: said after a while, the run stays as it was - not failed; back: what happened meanwhile is taken, said once', async () => {
+    const {send} = heldEvents()
+    const said: string[] = []
+    const dock = createRunDock({show: (text: string) => said.push(text)} as unknown as Toasts)
+    let historyReads = 0
+    const ended: unknown[] = []
+    effectScope().run(() => {
+      dock.follow({events: '/p/music/demo/api/run-events', history: () => (historyReads++, Promise.resolve({queue: [], past: []}))})
+      dock.onEnd(state => ended.push(state))
+    })
+    send('open')
+    send('state', running)
+    const heard = dock.updatedAt.value
+    expect(typeof heard).toBe('number')
+    // the stream breaks; the browser tries again by itself - a short break is not said
+    send('error')
+    expect(dock.lost.value).toBe(false)
+    await new Promise(resolve => setTimeout(resolve, 2100))
+    expect(dock.lost.value).toBe(true)
+    expect(dock.current.value).toEqual(running)
+    expect(dock.updatedAt.value).toBe(heard)
+    expect(said).toEqual([])
+    // back: the run ended meanwhile - its end is said once, the queue read again
+    const reads = historyReads
+    send('open')
+    send('state', {...running, running: false, code: 0})
+    send('state', {...running, running: false, code: 0})
+    expect(dock.lost.value).toBe(false)
+    expect(historyReads > reads).toBe(true)
+    expect(ended).toHaveLength(1)
+    expect(said).toEqual(['The run is done'])
+  })
+
+  test('another scope does not take over a lost line; a failed read of the queue is said until one works', async () => {
+    const {send} = heldEvents()
+    const dock = createRunDock({show: () => {}} as unknown as Toasts)
+    let fail = true
+    const history = () => (fail ? Promise.reject(new Error('the workspace is not there')) : Promise.resolve({queue: [], past: []}))
+    const project = effectScope()
+    project.run(() => dock.follow({events: '/p/music/demo/api/run-events', history}))
+    await settle()
+    expect(dock.historyError.value).toBe('the workspace is not there')
+    send('error')
+    await new Promise(resolve => setTimeout(resolve, 2100))
+    expect(dock.lost.value).toBe(true)
+    project.stop()
+    fail = false
+    effectScope().run(() => dock.follow({events: '/api/library/run-events', history}))
+    expect(dock.lost.value).toBe(false)
+    expect(dock.updatedAt.value).toBeUndefined()
+    await settle()
+    expect(dock.historyError.value).toBe('')
+  })
+
+  test('an answer that is no stream: the browser gives up, the dock asks again - from where the log was', async () => {
+    const {streams, send} = heldEvents()
+    const dock = createRunDock({show: () => {}} as unknown as Toasts)
+    effectScope().run(() => dock.follow({events: '/p/music/demo/api/run-events'}))
+    send('lines', {lines: ['one'], next: 7})
+    streams.at(-1)!.readyState = 2
+    send('error')
+    await new Promise(resolve => setTimeout(resolve, 3100))
+    expect(streams.map(s => s.url)).toEqual(['/p/music/demo/api/run-events?after=0', '/p/music/demo/api/run-events?after=7'])
+  })
+})

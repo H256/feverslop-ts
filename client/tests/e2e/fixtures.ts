@@ -247,6 +247,8 @@ const GETS: Record<string, unknown> = {
   freshness: fresh,
   status,
   waveform: {peaks: null},
+  // nothing waits, nothing ran before: the run dock reads it as the server answers it (#837, #935)
+  runs: {queue: [], past: []},
   'versions/clip-1': {versions: []},
   'versions/clip-2': {versions: []},
   references: {
