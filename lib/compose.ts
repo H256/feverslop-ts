@@ -21,6 +21,7 @@ import {handsOf} from './project.ts'
 import {CONTEXT_SETTLE, formatTimestamp, FPS, frameAt, round} from './frames.ts'
 import {MISSING_WORD_LEAD, voiceLead} from '../shared/timing-fit.ts'
 import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from '../comfy/helpers.ts'
+import type {Prop} from './props.ts'
 import type {ProjectConfig} from './config.ts'
 import {sequenceSheetDir, sheetFrame} from './sequenceSheet.ts'
 
@@ -86,12 +87,22 @@ export type ClipRequest = {
     startsFrom?: string
     // characters of the clip's beat or shots that got no picture: more people than the workflow takes reference pictures
     dropped?: string[]
+    // props (config.propPictures) of the clip's people that got no picture - drawn from their words, as without the setting
+    droppedProps?: string[]
     shots: {label: string; at: number; framing: string; camera: string; subjects: string[]}[]
     // performance mode: what is sung on screen and by whom, times relative to the clip start
     vocals?: {at: number; end: number; line: number; text: string; singers: {id: string; subject: string; speaker: string}[]}[]
     assets: {
         // kind, id, name and description: what the prompt says about the picture - for debugging
-        pictures: {label: string; file: string; subject: string; kind: 'character' | 'location' | 'frame'; id: string; name: string; description: string}[]
+        pictures: {
+            label: string
+            file: string
+            subject: string
+            kind: 'character' | 'location' | 'prop' | 'frame'
+            id: string
+            name: string
+            description: string
+        }[]
         // stem: which isolated stem this track was cut from (always set - see the Track comment below) -
         // 'song' is the whole, unseparated song, used as the cut/blocking anchor when stems aren't available
         // mix: the stems a mixed track (stem "mix-...") is made of
@@ -142,6 +153,8 @@ export type Input = {
     shotViews?: Record<string, number[]>
     // config.clipPrompt: "compact" tells every movement once and writes the shot sentence in its natural order (#824)
     clipPrompt?: 'full' | 'compact'
+    // config.propPictures: the prop of each character who has one, with a picture of its own (step props, lib/props.ts) - by character id
+    props?: Record<string, Prop>
 }
 
 // Whether the clips of the beat go on from each other's last frame without a cut (config.continuity)
@@ -561,6 +574,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // the workflow takes MAX_REFERENCE_IMAGES pictures: whoever does not fit has no picture in this clip - said in the request
         const cast = wanted.slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
         const dropped = wanted.slice(cast.length).map(c => c.id)
+        const droppedProps: string[] = []
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -585,6 +599,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     // a prop that stands in a place (a drum kit) is not in the picture: the picture shows the player standing
                     // with what they hold of it - a model given only that drew the player twice, at the kit and standing (#327)
                     stationary: c.propCarried === false && c.prop ? c.prop : undefined,
+                    // the subject of the character's prop picture (config.propPictures), and on that one the subject of its owner
+                    propLabel: undefined as string | undefined,
+                    owner: undefined as string | undefined,
                 })),
             ].map((s, n) => {
                 const members = s.kind === 'character' ? (memberCounts[s.id] ?? 1) : 1
@@ -613,13 +630,47 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // person (#9). The text still names the group by its own subject; wherever it is in the frame, these are named with
             // it. Only the picture slots left over are used - a member of a group gives way before anybody else.
             let free = MAX_REFERENCE_IMAGES - base.length - (startsFrom && !pinStartFrame ? 1 : 0)
+            // config.propPictures: the prop of each character in the clip, after the characters and before a group's other members -
+            // the props of the players heard in this clip first. A prop that does not fit is drawn from its words, as without the setting
+            type CastSubject = Extract<(typeof base)[number], {kind: 'character'}>
+            const heardHere = (s: CastSubject) =>
+                s.propStem !== undefined && (propActivity?.[s.propStem] ?? []).some(r => r.end > slot.start && r.start < slot.end)
+            const owners = base.filter((s): s is CastSubject => s.kind === 'character' && input.props?.[s.id] !== undefined)
+            const propSubjects: (Omit<CastSubject, 'kind'> & {kind: 'prop'})[] = []
+            for (const owner of [...owners.filter(heardHere), ...owners.filter(s => !heardHere(s))]) {
+                const prop = input.props![owner.id]!
+                if (free <= 0) {
+                    droppedProps.push(prop.id)
+                    continue
+                }
+                free--
+                const n = base.length + propSubjects.length + 1
+                propSubjects.push({
+                    ...owner,
+                    kind: 'prop',
+                    id: prop.id,
+                    name: prop.name,
+                    label: `<Subject ${n}>`,
+                    picture: `<Picture ${n}>`,
+                    pictureId: prop.id,
+                    description: prop.description,
+                    prop: undefined,
+                    propStem: undefined,
+                    stationary: undefined,
+                    isGroup: undefined,
+                    count: undefined,
+                    companions: [],
+                    owner: owner.label,
+                })
+                owner.propLabel = `<Subject ${n}>`
+            }
             const companions: typeof base = []
             for (const s of base) {
                 const members = s.kind === 'character' ? (memberCounts[s.id] ?? 1) : 1
                 if (s.kind !== 'character' || !s.isGroup || s.alike || !s.count || s.count < 2 || members < 2) continue
                 const first = slot.index % members
                 for (let m = 1; m < Math.min(s.count, members) && free > 0; m++, free--) {
-                    const n = base.length + companions.length + 1
+                    const n = base.length + propSubjects.length + companions.length + 1
                     const variant = (first + m) % members
                     companions.push({
                         ...s,
@@ -633,7 +684,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     s.companions.push(`<Subject ${n}>`)
                 }
             }
-            const subjects = [...base, ...companions]
+            const subjects = [...base, ...propSubjects, ...companions]
             const locationSubject = subjects.find(s => s.kind === 'location')
             const castSubjects = base.filter(s => s.kind === 'character')
 
@@ -644,10 +695,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             const vocals = performed.map(v => ({...v, singers: singerSubjects.filter(s => v.singerIds.includes(s.id))})).filter(v => v.singers.length)
             const performing = vocals.length > 0
             const voices = joinAnd(singerSubjects.map(voice))
-            return {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices}
+            return {subjects, locationSubject, castSubjects, propSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices}
         }
 
-        const {subjects, locationSubject, castSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices} = buildSubjects()
+        const {subjects, locationSubject, castSubjects, propSubjects, singerSubjects, speakerOf, voice, vocals, performing, voices} = buildSubjects()
         // the last frame of the previous clip, after the subjects' pictures: a standalone <Picture N>, the first frame of [Shot 1]
         // Pinned: the frame is the video's real first frame, no longer a picture of its own. Given as a reference
         // picture as well, the model blended the same image in a second time, shifted - a ghost double of the
@@ -853,7 +904,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     camera,
                     plan,
                     hands: player,
-                    subjects: [...(locationSubject ? [locationSubject.label] : []), ...focus.flatMap(s => [s.label, ...s.companions])],
+                    subjects: [
+                        ...(locationSubject ? [locationSubject.label] : []),
+                        ...focus.flatMap(s => [s.label, ...s.companions, ...(s.propLabel ? [s.propLabel] : [])]),
+                    ],
                     focus,
                     singers: singersInShot,
                     moment,
@@ -1038,8 +1092,14 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                     : alone
                       ? ' No other person is in the frame.'
                       : ''
+                // config.propPictures: the prop of everybody in the frame is the one of its picture - drawn from the words alone, it came out
+                // another guitar, another kit in every clip (#944)
+                const shownProps = shot.focus.flatMap(s => propSubjects.filter(p => p.label === s.propLabel))
+                const propPictureClause = shownProps.length
+                    ? ` In the shot: ${shownProps.map(p => `${p.label}, ${the(p.name)} of ${p.owner}, exactly as in ${p.picture}`).join('; ')}.`
+                    : ''
                 const inFrame = shot.focus.length
-                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${holdClause}`
+                    ? `${viewClause} In frame: ${shot.focus.map(personInFrame).join('; ')}.${restClause}${behind}${propPictureClause}${holdClause}`
                     : `${viewClause}${holdClause}`
 
                 if (performing) {
@@ -1209,18 +1269,20 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 ...subjects.map(s =>
                     s.kind === 'location'
                         ? `${s.label} is ${the(s.name)} environment in ${s.picture}: ${s.description}`.trim()
-                        : s.companionOf
-                          ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                          : s.isGroup && s.companions.length
-                            ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                            : // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
-                              // appearance - a subject definition that says a character "plays" something reads as a
-                              // standing trait to the video model, and it keeps them miming that action even in shots
-                              // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
-                              s.isGroup
-                              ? // several individuals, not one: a group is never described as a single person
-                                `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
-                              : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}${s.kind === 'character' && s.stationary ? ` In the video ${s.label} is only ever at the ${s.stationary}, where it stands, to ${s.propStem ? 'play' : 'use'} it - one person, never also a standing figure like the one in ${s.picture}.` : ''}`.trim(),
+                        : s.kind === 'prop'
+                          ? `${s.label} is ${the(s.name)} of ${s.owner}, the object in ${s.picture}: ${s.description}`.trim()
+                          : s.companionOf
+                            ? `${s.label} is another one of ${s.name} (the group ${s.companionOf}), the individual in ${s.picture}, clearly a different person from the others of the group; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                            : s.isGroup && s.companions.length
+                              ? `${s.label} is ${s.name}, a group of ${s.count} different individuals (${s.label} is the one in ${s.picture}, ${joinAnd(s.companions.map(c => `${c} the one in ${c.replace('Subject', 'Picture')}`))}${s.count! > s.companions.length + 1 ? `; each of the others looks clearly different from these and from each other - another face, hair, build and clothing` : ''}; there are ${s.count} of them in all, never more); keep their build, skin, face, costume and colors from the pictures, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                              : // role ("plays warped rusted guitar behind the vocalist") describes behavior, not
+                                // appearance - a subject definition that says a character "plays" something reads as a
+                                // standing trait to the video model, and it keeps them miming that action even in shots
+                                // that explicitly stage them as idle. Only look/identity belongs here; role stays out.
+                                s.isGroup
+                                ? // several individuals, not one: a group is never described as a single person
+                                  `${s.label} is ${s.name}, a group of ${s.count && s.count > 1 ? `${s.count}` : 'several'}${s.alike ? '' : ' different individuals'} (${s.alike ? `every one of them looks like the one in ${s.picture}` : `${s.picture} shows one of them; each of the others looks clearly different from it and from each other - another face, hair, build and clothing - and they share only the general style of the group`}${s.count && s.count > 1 ? `; there are ${s.count} of them in all, never more` : ''}); keep their build, skin, face, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}`.trim()
+                                : `${s.label} is ${s.name}, the character in ${s.picture}; keep facial identity, build, hair, costume and colors from the picture, but let facial expression follow the action and emotion described in this shot: ${s.description}${s.kind === 'character' && s.stationary ? ` In the video ${s.label} is only ever at the ${s.stationary}, where it stands, to ${s.propStem ? 'play' : 'use'} it - one person, never also a standing figure like the one in ${s.picture}.` : ''}`.trim(),
                 ),
                 ...(framePicture
                     ? [
@@ -1238,7 +1300,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                         `${s.label} (appears in ${appearsIn(s.label)}): fully_preserved - ${
                             s.kind === 'location'
                                 ? `the layout, materials, colors and lighting of ${the(s.name)} are retained.`
-                                : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded${s.stationary ? `, and so is its standing pose - ${s.name} is only at the ${s.stationary}` : ''}, but expression is free to follow the shot's action.`
+                                : s.kind === 'prop'
+                                  ? `the shape, size, colors and material of ${the(s.name)} are retained; the plain grey backdrop of its picture is discarded - it is only where the shots put it, with ${s.owner}.`
+                                  : `the facial identity, build, hair and costume of ${s.name} are retained; the plain grey studio backdrop and the sheet layout of its picture are discarded${s.stationary ? `, and so is its standing pose - ${s.name} is only at the ${s.stationary}` : ''}, but expression is free to follow the shot's action.`
                         }`,
                 ),
                 ...(framePicture
@@ -1306,6 +1370,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             beatId: beat.id,
             ...(startsFrom ? {startsFrom} : {}),
             ...(dropped.length ? {dropped} : {}),
+            ...(droppedProps.length ? {droppedProps} : {}),
             shots: shots.map(({focus, singers, moment, starting, continuing, ...shot}) => shot),
             ...(performing
                 ? {
