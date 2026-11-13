@@ -109,7 +109,7 @@ const {values: args, positionals} = (() => {
 // the options of a run both pipelines take (lib/run-options.ts)
 const {render, retake, until} = (() => {
     try {
-        return readRunOptions(args, FILM_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY))
+        return readRunOptions(args, FILM_RENDER, !!(process.stdin.isTTY && process.stdout.isTTY), positionals[0])
     } catch (e) {
         return log.usageError((e as Error).message, usage)
     }
