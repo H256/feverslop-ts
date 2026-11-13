@@ -204,7 +204,12 @@ const lastRunOf = (dir: string): EditorProject['lastRun'] => {
 type Scan = {clips?: Record<string, {video: number; from: number; to: number; samples: number}>; checks?: (clip: string) => ClipCheckMark[]}
 
 /** What is known against a clip, read from what is on disk - nothing here starts a scan or asks a model. */
-function marksOf(dir: string, clip: {id: string; startsFrom?: string; dropped?: string[]}, run: EditorProject['lastRun'], scan: Scan): EditorMark[] {
+function marksOf(
+    dir: string,
+    clip: {id: string; startsFrom?: string; dropped?: string[]; droppedProps?: string[]},
+    run: EditorProject['lastRun'],
+    scan: Scan,
+): EditorMark[] {
     const marks: EditorMark[] = []
     const video = join(dir, 'videos', `${clip.id}.mp4`)
     const rendered = existsSync(video)
@@ -225,7 +230,8 @@ function marksOf(dir: string, clip: {id: string; startsFrom?: string; dropped?: 
         if (existsSync(frame) && statSync(frame).mtimeMs > statSync(video).mtimeMs)
             marks.push({kind: 'older-start', text: `Starts on an older version of the last frame of ${clip.startsFrom}`})
     }
-    if (clip.dropped?.length) marks.push({kind: 'dropped', text: `No picture for lack of room: ${clip.dropped.join(', ')}`})
+    if (clip.dropped?.length || clip.droppedProps?.length)
+        marks.push({kind: 'dropped', text: `No picture for lack of room: ${[...(clip.dropped ?? []), ...(clip.droppedProps ?? [])].join(', ')}`})
     marks.push(...(scan.checks?.(clip.id) ?? []))
     return marks
 }
