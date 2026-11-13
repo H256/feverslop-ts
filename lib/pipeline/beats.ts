@@ -9,6 +9,7 @@ import {pictureProp, propMissing} from '../prop-check.ts'
 import {resolveUnknownTokens} from '../refs.ts'
 import {reviewed} from '../review.ts'
 import {beatsPrompt, musicStretches} from '../shot-planner.ts'
+import {asDrawn} from '../props.ts'
 import type {ProjectConfig} from '../config.ts'
 import type {Character, Location, LyricSection, LyricsTiming, MusicMap, ProjectStore, PropStem, Singing} from '../project.ts'
 import {energyBar} from './energy-bar.ts'
@@ -177,11 +178,11 @@ export async function planBeats(run: BeatsRun) {
             const looks = [characterLooks[char.id] ?? '']
             for (let i = 1; i < count; i++) {
                 log.step(`Member ${i + 1}/${count}`, styles.name(char.id))
-                const options = characterVariantLookPrompt(lookBrief, char, looks)
+                const options = characterVariantLookPrompt(lookBrief, asDrawn(char, config.propPictures), looks)
                 looks.push(await project.each('characterLookVariants', `${char.id}/${i}`, options, () => ask(options)))
             }
             variants[char.id] = looks
-            const shown = pictureProp(char)
+            const shown = config.propPictures ? undefined : pictureProp(char)
             if (shown)
                 looks.forEach((look, i) => {
                     if (propMissing(look, shown)) log.warn(`${char.id} member ${i + 1}: the look does not show the prop "${shown}"`)

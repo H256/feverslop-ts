@@ -46,8 +46,9 @@ export async function projectInputs(dir: string, config: ProjectConfig): Promise
         // a silent lead-in or tail cut off into a clip of its own changes the clips
         // assumed: the default - a project made before is not cut anew by the new setting alone
         vocalGap: {value: String(config.vocalGap), steps: ['timeline'], assumed: '1.5'},
-        // the props as things of their own are built when the setting is turned on - a project made before has it off
-        propPictures: {value: String(config.propPictures), steps: ['props'], assumed: 'false'},
+        // the props as things of their own, and the looks of the cast and the places drawn with or without them - a project made
+        // before has it off
+        propPictures: {value: String(config.propPictures), steps: ['props', 'characterLooks', 'locationLooks'], assumed: 'false'},
     }
 }
 

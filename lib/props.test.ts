@@ -2,7 +2,8 @@ import {describe, expect, test} from 'bun:test'
 import {defaults, type ProjectConfig} from './config.ts'
 import {projectInputs, stepUsed} from './inputs.ts'
 import {builtOn} from './project.ts'
-import {castProps, propName, propPictureJob} from './props.ts'
+import {asDrawn, castProps, propName, propPictureJob, propsOfPlace} from './props.ts'
+import {characterLookPrompt} from './prompts.ts'
 import {mkdtempSync, rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
@@ -40,11 +41,11 @@ describe('the propPictures setting (#944)', () => {
         expect(stepUsed('props', '.', {cast: {characters: [{id: 'm', name: 'M', role: 'singer'}], locations: []}}, config(true))).toBe(false)
     })
 
-    test('a project made before counts as off: turning it on builds the props, nothing else', async () => {
+    test('a project made before counts as off: turning it on builds the props and draws the looks again', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'props-test-'))
         try {
             const input = (await projectInputs(dir, config(true))).propPictures!
-            expect(input).toMatchObject({value: 'true', steps: ['props'], assumed: 'false'})
+            expect(input).toMatchObject({value: 'true', steps: ['props', 'characterLooks', 'locationLooks'], assumed: 'false'})
             expect((await projectInputs(dir, config(false))).propPictures!.value).toBe(input.assumed!)
         } finally {
             rmSync(dir, {recursive: true, force: true})
@@ -62,5 +63,37 @@ describe('the picture of a prop (#944)', () => {
         expect(job).toMatchObject({kind: 'prop', id: 'electric-guitar', file: 'assets/props/electric-guitar.png', name: 'electric guitar'})
         expect(job.prompt).toStartWith('A studio product photograph of an electric guitar. The electric guitar alone')
         expect(job.prompt).toContain('no hands, no people')
+    })
+})
+
+describe('the look without the prop (#944)', () => {
+    const guitarist = {name: 'Kael', role: 'guitarist', prop: 'an electric guitar'}
+    const drummer = {name: 'Veyra', role: 'drummer', prop: 'a drum kit', propCarried: false as const, propInHand: 'drumsticks'}
+
+    test('with the setting the character is drawn with nothing in the hands, and the prop is not in the character JSON', () => {
+        for (const char of [guitarist, drummer]) {
+            const prompt = characterLookPrompt('a look', asDrawn(char, true)).input as string
+            expect(prompt).toContain(`- The character's "${char.prop}" has a picture of its own and is not in this one: nothing is in their hands`)
+            expect(prompt).not.toContain('"prop"')
+            expect(prompt).not.toContain('"inHand"')
+            expect(prompt).not.toContain('It is in use in the picture')
+        }
+    })
+
+    test('without it the look shows the prop in use, as before', () => {
+        const prompt = characterLookPrompt('a look', asDrawn(guitarist, false)).input as string
+        expect(prompt).toContain('It is in use in the picture')
+        expect(prompt).toContain('"prop":"an electric guitar"')
+    })
+})
+
+describe('the place without the prop (#944)', () => {
+    const band = [{prop: 'an electric guitar'}, {prop: 'a drum kit', propCarried: false as const, propPlace: 'stage'}]
+    test('without the setting the drum kit stands in its place, drawn into it', () => {
+        expect(propsOfPlace(band, 'stage', false)).toEqual({kept: ['an electric guitar'], standing: ['a drum kit']})
+        expect(propsOfPlace(band, 'street', false)).toEqual({kept: ['an electric guitar'], standing: []})
+    })
+    test('with it the place is drawn without any prop: the kit comes with its player', () => {
+        expect(propsOfPlace(band, 'stage', true)).toEqual({kept: ['an electric guitar', 'a drum kit'], standing: []})
     })
 })

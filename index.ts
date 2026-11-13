@@ -485,7 +485,7 @@ const casted = (kind: AssetKind, id: string) => castLibrary.get(copyKey(kind, id
     // the picture fits the role? the prop the role has is named in the asset's description
     for (const entry of casting.entries.filter(e => e.kind === 'character')) {
         const role = cast.characters.find(c => c.id === entry.id)!
-        const shown = pictureProp(role)
+        const shown = config.propPictures ? undefined : pictureProp(role)
         if (shown && propMissing(casted('character', entry.id)!.description, shown))
             log.warn(`${entry.id}: library:${entry.libraryId} does not name the role's prop "${shown}" - the clips may show the picture's prop, or none`)
     }
@@ -588,6 +588,7 @@ const {lookBrief, characterLooks, characterDescriptions, locationLooks, location
     casted,
     castChanged,
     castTexts,
+    propPictures: config.propPictures,
 })
 
 /**
