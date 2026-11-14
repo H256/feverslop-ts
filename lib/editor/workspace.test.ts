@@ -438,6 +438,42 @@ describe('a run', () => {
         expect(asked()).toEqual(['run-queue', 'run-queue --redo=story', 'run-queue --until=story'])
         expect(readQueue(project.dir)).toEqual([])
     })
+    test('a queued picture keeps what it was given (an edited prompt) until its run has ended', async () => {
+        const project = target('run-queue-files')
+        mkdirSync(project.dir, {recursive: true})
+        const lock = JSON.stringify(join(project.dir, '.lock'))
+        const seen = join(project.dir, 'seen.txt')
+        // the run reads the prompt file it is named: the queued one must still find it
+        script(
+            'index.ts',
+            `const fs = require('node:fs'); fs.writeFileSync(${lock}, String(process.pid)); const p = process.argv.find(a => a.startsWith('--picture-prompt=')); fs.appendFileSync(${JSON.stringify(seen)}, (p ? fs.readFileSync(p.slice(17), 'utf8') : 'plan') + '\\n'); await Bun.sleep(300); fs.rmSync(${lock})`,
+        )
+        const runs = new RunControl(join(root, 'fake'))
+        expect('run' in runs.startOrQueue(project, {type: 'plan'})).toBe(true)
+        await until(() => existsSync(seen))
+        const given = mkdtempSync(join(root, 'given-'))
+        write(join(given, 'mara.txt'), 'a woman in red')
+        const queued = runs.startOrQueue(project, {type: 'pictures', ids: ['mara'], again: true, promptFile: join(given, 'mara.txt')}, undefined, [given])
+        expect('queued' in queued).toBe(true)
+        expect(existsSync(given)).toBe(false)
+        const kept = 'queued' in queued ? queued.queued.files![0]! : ''
+        expect(existsSync(kept)).toBe(true)
+        const stop = runs.watchQueues(() => [project], 50)
+        const lines = () => readFileSync(seen, 'utf8').split('\n').filter(Boolean)
+        await until(() => lines().length === 2)
+        stop()
+        await until(() => runs.current(project)?.running === false && !existsSync(kept))
+        expect(lines()).toEqual(['plan', 'a woman in red'])
+        expect(existsSync(kept)).toBe(false)
+    })
+    test('a run that cannot run at all is refused, and what it was given goes', () => {
+        const runs = new RunControl(join(root, 'fake'))
+        const project = target('run-queue-refused')
+        mkdirSync(project.dir, {recursive: true})
+        const given = mkdtempSync(join(root, 'given-'))
+        expect(() => runs.startOrQueue(project, {type: 'pictures', ids: ['a b']}, undefined, [given])).toThrow('no such pictures')
+        expect(existsSync(given)).toBe(false)
+    })
     test('nothing is started while a run in the terminal holds the lock; it can be seen', () => {
         const runs = new RunControl(join(root, 'fake'))
         const project = target('run-c')

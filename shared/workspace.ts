@@ -547,6 +547,9 @@ export type RunRequest =
     | {type: 'clips'; ids: string[]; again?: boolean; preview?: boolean}
     | {type: 'direction'}
     | {type: 'look-pictures'}
+    // pictures rendered again from the plan's prompts - a new sheet from the same anchor, or a new anchor. An edited prompt or an
+    // uploaded anchor comes through a route of its own (references/:id/...), never as a path from the page
+    | {type: 'pictures'; ids: string[]; again?: boolean; newAnchor?: boolean}
     | {type: 'adapt-story'; add?: {name: string; role: string}[]; remove?: string[]} // add, remove: a film's roles (#589)
     | {type: 'final'; preview?: boolean}
     | {type: 'plan'; until?: string; redo?: string[]; beats?: string[]; scenes?: string[]; fixScript?: boolean} // beats: a music video's beats whose shots are planned again (#762); scenes: a film's (#836)
@@ -625,7 +628,8 @@ export type RunInfo = {
     code?: number
 }
 /** A run asked for while another went on, to start after it - kept in the project's logs/queue.json (#837). */
-export type QueuedRun = {id: string; request: {type: string; [field: string]: unknown}; command: string; servers?: string[]; askedAt: string}
+// files: folders of what the run is given for itself (an edited prompt, an uploaded anchor), kept in the project's logs/queued/<id> until it has run
+export type QueuedRun = {id: string; request: {type: string; [field: string]: unknown}; command: string; servers?: string[]; askedAt: string; files?: string[]}
 /** A run that ended, from the project's logs/runs.jsonl: its command, how it ended, its log in logs/ (#837). */
 export type PastRun = {
     command: string

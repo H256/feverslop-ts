@@ -383,7 +383,7 @@ export const PROJECT_ROUTES: readonly Route[] = [
         path: 'references/:id/rerender',
         changes: 'run',
         handle: async c => {
-            const {newAnchor, prompt, servers} = await c.body<{newAnchor?: boolean; prompt?: string; servers?: string[]}>()
+            const {newAnchor, prompt, servers, queue} = await c.body<{newAnchor?: boolean; prompt?: string; servers?: string[]; queue?: boolean}>()
             const job = (await readPictureJobs(picturesFile(c.target))).find(p => p.id === c.id)
             if (!job) throw missing(`no picture ${c.id}`)
             const urls = await urlsOfChoice(servers)
@@ -391,14 +391,10 @@ export const PROJECT_ROUTES: readonly Route[] = [
             const folder = prompt !== undefined && prompt.trim() !== job.prompt.trim() ? mkdtempSync(join(tmpdir(), 'workspace-prompt-')) : undefined
             const promptFile = folder && join(folder, `${c.id}.txt`)
             if (promptFile) writeFileSync(promptFile, prompt!)
-            return started(
-                c.runs.start(
-                    c.target,
-                    {type: 'pictures', ids: [c.id], again: true, newAnchor, promptFile, look: atLook(c.target)},
-                    urls,
-                    folder ? [folder] : [],
-                ),
-            )
+            const action: RunAction = {type: 'pictures', ids: [c.id], again: true, newAnchor, promptFile, look: atLook(c.target)}
+            // queue: while a run goes on, it waits behind it with its prompt file (#837)
+            if (queue) return json(c.runs.startOrQueue(c.target, action, urls, folder ? [folder] : []))
+            return started(c.runs.start(c.target, action, urls, folder ? [folder] : []))
         },
     },
     // the user's own picture as the anchor, uploaded: checked (lib/editor/upload.ts), kept for the run only, then put in by the CLI
@@ -425,14 +421,19 @@ export const PROJECT_ROUTES: readonly Route[] = [
                 const descriptionFile = description ? await upload.text('description', description) : undefined
                 const servers = form.get('servers')
                 const urls = await urlsOfChoice(servers ? JSON.parse(textOf(servers)) : undefined)
-                return started(
-                    c.runs.start(
-                        c.target,
-                        {type: 'pictures', ids: [c.id], again: true, anchorFile: upload.file, promptFile, descriptionFile, describe, look: atLook(c.target)},
-                        urls,
-                        [upload.folder],
-                    ),
-                )
+                const action: RunAction = {
+                    type: 'pictures',
+                    ids: [c.id],
+                    again: true,
+                    anchorFile: upload.file,
+                    promptFile,
+                    descriptionFile,
+                    describe,
+                    look: atLook(c.target),
+                }
+                // queue: while a run goes on, it waits behind it with the uploaded picture (#837)
+                if (form.get('queue') === 'true') return json(c.runs.startOrQueue(c.target, action, urls, [upload.folder]))
+                return started(c.runs.start(c.target, action, urls, [upload.folder]))
             } catch (e) {
                 upload.drop()
                 throw e

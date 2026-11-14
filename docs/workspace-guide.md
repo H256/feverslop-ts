@@ -262,8 +262,11 @@ The foot of the page says what runs now: for a render a bar with the clips done 
 - **Take the plan's prompt** brings the plan's prompt back. Rendered with it, the picture is no longer pinned and follows the plan again; the anchor of the changed prompt goes with it.
 - **Use my own anchor** puts a picture of your own in as the anchor, whether it was made by hand in ComfyUI or anywhere else. You upload it (PNG, JPEG or WebP, at most 50 MB), with a prompt as a note if you like. The description the clips and the sheet give of the person or place you keep, write yourself, or have the vision model read from the picture - the last only when a model is set up that reads pictures. ComfyUI then renders the sheet from your picture; what was there before is among the older versions. The uploaded picture is kept in a temporary folder of its own for the run only. In the terminal: `--render=images --only=<id> --again --picture-anchor=<picture> [--picture-description=<file> | --describe-picture]`.
 - **Make current** brings an older version back.
+- **New sheets, same anchors** above the cards, shown when pictures are stale: every stale picture gets a new sheet from the anchor it has - the same people and places, their views drawn again from the plan's prompt - in one run. A change of the prompt that changes the look itself (clothes, hair, the room) does not come in that way: that takes **New anchor** on the picture. Pictures played by the library are left out. In the terminal: `--render=images --only=<ids> --again`.
 
 A pinned picture can be rendered again too, your own as well; what is there goes to the older versions. The render buttons are only locked when a library asset plays the role. Clips that use the picture are stale afterwards but are not rendered again by themselves: that is decided on the timeline.
+
+While a run goes on, these buttons too put what they ask for in the queue (see *Following or stopping a run*). An edited prompt or an uploaded anchor waits with it in the project's `logs/queued/<id>/` and goes when the run has ended or is taken out.
 
 ## Casting and the library
 
