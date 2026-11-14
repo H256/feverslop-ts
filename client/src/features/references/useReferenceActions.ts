@@ -19,7 +19,7 @@ export const versionAbout = (version: EditorReference['versions'][number]) =>
  */
 export function useReferenceActions(reference: Ref<EditorReference>, done: () => Promise<unknown>) {
   const ask = useAsk()
-  const {api, start, starter, takeServers} = useProject()
+  const {api, start, startVia, queueLines, running, takeServers} = useProject()
   const blocked = () => !!reference.value.library
   const sideEffects = () => [
     reference.value.clips.length > 0 &&
@@ -62,10 +62,11 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
       render: true,
     })
     if (!yes) return
-    const servers = takeServers()
-    const started = starter()
-    const {run} = await api.rerender(r.id, {newAnchor, ...(edited ? {prompt} : {}), ...(servers ? {servers} : {})})
-    started(run)
+    // while a run goes on it can wait behind it, the edited prompt with it (#837)
+    await startVia(queue => {
+      const servers = takeServers()
+      return api.rerender(r.id, {newAnchor, ...(edited ? {prompt} : {}), ...(servers ? {servers} : {}), ...(queue ? {queue} : {})})
+    })
   }
   /**
    * The user's own picture as the anchor - made in ComfyUI by hand, or anywhere: uploaded, put in by the CLI (--picture-anchor), the
@@ -78,22 +79,30 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
       .then(v => v.readable)
       .catch(() => false)
     const draft = reactive<OwnAnchor>({prompt, how: 'keep', description: r.description})
+    // the form stays open until it is sent: while a run goes on, this question says itself that it waits behind it (#837)
+    const queued = running()
     await ask({
       title: `Your own anchor for ${r.name}`,
       lines: [
         'Your picture becomes the anchor: the same person or place from then on, the sheet is drawn from it. The pipeline never replaces it on its own.',
         'What is there now is put away as an older version - Make current brings it back.',
+        ...(queued ? queueLines() : []),
       ],
       warnings: [...sideEffects(), r.looks.length > 0 && `Its other looks are drawn from this anchor and go stale too: ${r.looks.join(', ')}.`],
       body: () => h(OwnAnchorForm, {draft, readable}),
-      confirm: 'Put it in',
+      confirm: queued ? 'Put it in the queue' : 'Put it in',
       render: true,
       submit: async () => {
         const problem = ownAnchorProblem(draft)
         if (problem) throw new Error(problem)
-        const servers = takeServers()
-        const started = starter()
-        started((await api.ownAnchor(r.id, ownAnchorForm(draft, servers))).run)
+        await startVia(
+          queue => {
+            const form = ownAnchorForm(draft, takeServers())
+            if (queue) form.set('queue', 'true')
+            return api.ownAnchor(r.id, form)
+          },
+          {asked: true},
+        )
       },
     })
   }
@@ -134,4 +143,37 @@ export function useReferenceActions(reference: Ref<EditorReference>, done: () =>
     })
   }
   return {blocked, rerender, putOwnAnchor, pick, putIntoLibrary}
+}
+
+/**
+ * All stale pictures at once, each a new sheet from the anchor it has: the same person or place, its views drawn again from the plan's
+ * prompt - bun index.ts <id> --render=images --only=<ids> --again. Not one played by the library: it is not rendered here.
+ */
+export function useRenderStale() {
+  const ask = useAsk()
+  const {api, start} = useProject()
+  return async function renderStale(stale: EditorReference[]) {
+    if (!stale.length) return
+    const asked = await api.estimatePictures(stale.length).catch(() => undefined)
+    const clips = new Set(stale.flatMap(r => r.clips))
+    const looks = [...new Set(stale.flatMap(r => r.looks))]
+    const yes = await ask({
+      title: `Render ${plural(stale.length, 'stale picture')} again?`,
+      lines: [
+        stale.map(r => r.name).join(', '),
+        'Each a new sheet from the anchor it has: the same person or place, other views - drawn from the prompt the plan has now.',
+        asked?.estimate,
+      ],
+      warnings: [
+        'The anchor stays: a change of the prompt that changes the look itself (clothes, hair, the room) does not come into it - New anchor on its picture does that.',
+        stale.some(r => r.ownPicture) && 'Your own pictures among them are put away as older versions and rendered anew from the prompt.',
+        clips.size > 0 && `${plural(clips.size, 'clip')} made from these pictures will go stale. They are not rendered on their own.`,
+        looks.length > 0 && `Their other looks are drawn from these anchors and go stale too: ${looks.join(', ')}.`,
+        asked?.fixedSeed !== undefined && `"seed" is fixed in config.json (${asked.fixedSeed}): the same seed gives the same picture again.`,
+      ],
+      confirm: 'Render them',
+      render: true,
+    })
+    if (yes) await start({type: 'pictures', ids: stale.map(r => r.id), again: true})
+  }
 }

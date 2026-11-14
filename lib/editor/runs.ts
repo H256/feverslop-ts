@@ -32,7 +32,7 @@ const PICTURE_ID = /^[a-z0-9][a-z0-9-]*$/
 
 // what the page may ask for is the shared contract; a picture rendered again gets its edited prompt and its stage from the server only
 export type RunAction =
-    | RunRequest
+    | Exclude<RunRequest, {type: 'pictures'}>
     // look: a music video planned up to the look - its pictures are rendered without planning the shots first (#540)
     // anchorFile: the user's own picture as its anchor (an upload), with the description given by hand (descriptionFile) or read from it (describe)
     | {
@@ -293,24 +293,31 @@ export class RunControl {
      * of the settings. `temporary`: folders of what the run is given (an upload, an edited prompt) - they go when it has ended, or
      * right away when it is not started.
      */
-    start(target: EditorTarget, action: RunAction, servers?: string[], temporary: string[] = []): RunInfo {
-        return this.dropping(temporary, () => {
+    start(target: EditorTarget, action: RunAction, servers?: string[], temporary: string[] = [], dropRefused = true): RunInfo {
+        const run = () => {
             const {script, args} = runCommand(target, action)
             return this.spawn(target, script, args, !['export-asset', 'export-song', 'leak-scan', 'texture-chains'].includes(action.type), servers, temporary)
-        })
+        }
+        return dropRefused ? this.dropping(temporary, run) : run()
     }
 
     /**
      * Starts it now, or - while this project is worked on - puts it behind the run that goes on (#837): logs/queue.json, started in
-     * order as the project is free (see startQueued). What cannot run at all is refused now, not when its turn comes.
+     * order as the project is free (see startQueued). What cannot run at all is refused now, not when its turn comes. `temporary`: as
+     * for start - queued, the folders wait with the run in logs/queued (lib/run-queue.ts) and go when it has run or is taken out.
      */
-    startOrQueue(target: EditorTarget, action: RunAction, servers?: string[]): {run: RunInfo} | {queued: QueuedRun} {
+    startOrQueue(target: EditorTarget, action: RunAction, servers?: string[], temporary: string[] = []): {run: RunInfo} | {queued: QueuedRun} {
         try {
-            return {run: this.start(target, action, servers)}
+            // start drops the folders when it refuses: a busy project keeps them for the queue
+            return {run: this.start(target, action, servers, temporary, false)}
         } catch (e) {
-            if (!(e instanceof KindError) || e.kind !== 'busy') throw e
+            if (!(e instanceof KindError) || e.kind !== 'busy') {
+                dropFolders(temporary)
+                throw e
+            }
             const {script, args} = runCommand(target, action)
-            return {queued: queueRun(target.dir, {request: action, command: ['bun', script, ...args].join(' '), ...(servers ? {servers} : {})})}
+            const request = action as unknown as QueuedRun['request']
+            return {queued: queueRun(target.dir, {request, command: ['bun', script, ...args].join(' '), ...(servers ? {servers} : {})}, temporary)}
         }
     }
 
@@ -320,7 +327,8 @@ export class RunControl {
         const next = takeFirst(target.dir)
         if (!next) return undefined
         try {
-            return this.start(target, next.request as unknown as RunAction, next.servers)
+            // the files it was given go to its run: dropped as it ends, or now when it cannot start
+            return this.start(target, next.request as unknown as RunAction, next.servers, next.files ?? [])
         } catch (e) {
             console.error(`the queued run of ${target.id} was not started: ${next.command} - ${e instanceof Error ? e.message : String(e)}`)
             return undefined

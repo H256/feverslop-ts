@@ -110,9 +110,10 @@ export function projectApi(root: string) {
     dryRun: (plan: {redo?: string[]; until?: string; scenes?: string[]}) => post<{dryRun: DryRun}>('dry-run', plan),
     pickVersion: (clip: string, version: string) => post<unknown>(`versions/${id(clip)}/pick`, {version}),
     /** The user's own picture as its anchor: picture, prompt, description or describe, servers - as a form, the picture as it is. */
-    ownAnchor: (picture: string, form: FormData) => postForm<{run: RunInfo}>(`${root}/api/references/${id(picture)}/own-anchor`, form),
-    rerender: (picture: string, body: {newAnchor: boolean; prompt?: string; servers?: string[]}) =>
-      post<{run: RunInfo}>(`references/${id(picture)}/rerender`, body),
+    // queue (a form field "queue" for the upload): while a run goes on, it waits behind it (#837)
+    ownAnchor: (picture: string, form: FormData) => postForm<{run: RunInfo} | {queued: QueuedRun}>(`${root}/api/references/${id(picture)}/own-anchor`, form),
+    rerender: (picture: string, body: {newAnchor: boolean; prompt?: string; servers?: string[]; queue?: boolean}) =>
+      post<{run: RunInfo} | {queued: QueuedRun}>(`references/${id(picture)}/rerender`, body),
     pickReference: (picture: string, version: string) => post<unknown>(`references/${id(picture)}/pick`, {version}),
     setCasting: (body: {kind: 'character' | 'location'; id: string; value: string}) => post<{written: true}>('casting', body),
     saveSinging: (change: SingingChange) => post<SingingResult>('singing', change),

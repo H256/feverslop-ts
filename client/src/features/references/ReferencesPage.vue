@@ -9,6 +9,10 @@ import {useProject} from '../project/session'
 import {usePageData} from '../project/usePageData'
 import ReferenceCard from './ReferenceCard.vue'
 import ReferenceDetail from './ReferenceDetail.vue'
+import CalloutBox from '../../components/CalloutBox.vue'
+import {plural} from '../../lib/format'
+import {useToasts} from '../../services/toasts'
+import {useRenderStale} from './useReferenceActions'
 
 /** The pictures every clip is made from: the characters, places and props of the plan, each with its sheet and versions. */
 const {api, project} = useProject()
@@ -35,6 +39,10 @@ const selected = computed(() => references.value.find(r => r.id === route.hash.s
 const select = (reference: EditorReference) => {
   void router.replace({hash: `#${reference.id}`})
 }
+// the stale ones that can be rendered here: not one played by the library
+const stale = computed(() => references.value.filter(r => data.value?.fresh.pictures[r.id] === 'stale' && !r.library))
+const toasts = useToasts()
+const renderStale = toasts.guard(useRenderStale())
 </script>
 
 <template>
@@ -42,6 +50,12 @@ const select = (reference: EditorReference) => {
     <ResourceState :loading="loading" :error="error" :loaded="!!data" @retry="reload" />
     <template v-if="data">
       <div v-if="!references.length" class="empty">No pictures planned yet - run {{ project.command }}</div>
+      <CalloutBox v-if="stale.length" kind="warn" as="div" class="refs-stale">
+        <span>{{ plural(stale.length, 'picture') }} stale: made from another prompt than the plan has now.</span>
+        <button class="btn" :title="`New sheets from their anchors: ${stale.map(r => r.name).join(', ')}`" @click="renderStale(stale)">
+          New sheets, same anchors
+        </button>
+      </CalloutBox>
       <div v-for="group in groups" :key="group.kind" class="section">
         <PageBar :title="group.title" />
         <div class="cards">
@@ -62,3 +76,14 @@ const select = (reference: EditorReference) => {
     </template>
   </SplitLayout>
 </template>
+
+<style scoped>
+/* prefixed: a class of the page must not take rules of workspace.css */
+.refs-stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+</style>

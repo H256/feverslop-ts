@@ -1,5 +1,5 @@
 import {computed, ref, shallowRef} from 'vue'
-import type {EditorProject, ProjectKind, ProjectStatus, RunInfo, RunRequest} from '../../../../shared/workspace'
+import type {EditorProject, ProjectKind, ProjectStatus, QueuedRun, RunInfo, RunRequest} from '../../../../shared/workspace'
 import {projectApi} from '../../api/project'
 import {projectRoot, rootsOf} from '../../api/urls'
 import type {Ask} from '../../services/ask'
@@ -43,31 +43,37 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
    * Starts a run for what was asked - after the question, with the servers chosen in it. Followed only while this project's runs are:
    * an answer that comes after its pages went starts nothing in what is open by then (the run dock checks that).
    */
-  const start = async (action: RunRequest) => {
+  const start = (action: RunRequest) =>
+    startVia(queue => (queue ? api.runOrQueue(action, deps.servers.take()) : api.run(action, deps.servers.take())), {action})
+  /**
+   * Starts a run - with start() for what was asked, or through a route of its own (a picture rendered again from an edited prompt, an
+   * uploaded anchor): while a run goes on, it is asked whether this one is to wait behind it (#837) - a file in logs/, started by the
+   * workspace as the project is free - and `call` is told to queue it. `asked`: the question of the caller said so already, the run is
+   * queued without another one.
+   */
+  async function startVia(
+    call: (queue: boolean) => Promise<{run: RunInfo} | {queued: QueuedRun}>,
+    {action, asked = false}: {action?: RunRequest; asked?: boolean} = {},
+  ) {
     const started = deps.run.starter()
-    if (deps.run.running()) {
-      // while a run goes on, this one can wait behind it (#837): a file in logs/, started by the workspace as the project is free
+    const queue = deps.run.running()
+    if (queue && !asked) {
       if (!deps.ask) throw new Error('a run is going on - wait for it, or stop it')
-      const yes = await deps.ask({
-        title: 'Start it after this run?',
-        lines: [
-          `A run is going on: ${deps.run.current.value?.command ?? ''}`,
-          'This one waits in the queue of the project and starts as soon as the project is free - also when the workspace was started again in between. It can be taken out in the run bar, or with bun run runs.',
-        ],
-        confirm: 'Put it in the queue',
-      })
+      const yes = await deps.ask({title: 'Start it after this run?', lines: queueLines(), confirm: 'Put it in the queue'})
       if (!yes) return
-      const answer = await api.runOrQueue(action, deps.servers.take())
-      if ('run' in answer) started(answer.run, action)
-      else {
-        deps.toasts?.show(`Queued: ${answer.queued.command}`)
-        deps.run.readHistory()
-      }
-      return
     }
-    const {run} = await api.run(action, deps.servers.take())
-    started(run, action)
+    const answer = await call(queue)
+    if ('run' in answer) started(answer.run, action)
+    else {
+      deps.toasts?.show(`Queued: ${answer.queued.command}`)
+      deps.run.readHistory()
+    }
   }
+  /** What waiting behind the run that goes on means - said by start(), and by a question that asks for a run in its own words. */
+  const queueLines = () => [
+    `A run is going on: ${deps.run.current.value?.command ?? ''}`,
+    'This one waits in the queue of the project and starts as soon as the project is free - also when the workspace was started again in between. It can be taken out in the run bar, or with bun run runs.',
+  ]
   /**
    * A change that the server follows with a run of its own - the direction taken and the clip prompts built again (#830): one request,
    * and the run it answers with is followed like one started here. `rebuild` is what the request is given to start that run with.
@@ -100,6 +106,9 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
     error,
     reload,
     start,
+    startVia,
+    queueLines,
+    running: deps.run.running,
     changing,
     starter: deps.run.starter,
     busy,
