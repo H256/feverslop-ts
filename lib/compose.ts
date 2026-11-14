@@ -556,8 +556,15 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 : []
         // the singers are always on screen, first, in the order they sing - even if the beat forgot them
         const singerIds = [...new Set(performed.flatMap(v => v.singerIds))]
-        // a piece of a fight clip has only the people of its own shot as references: fewer pictures, nobody to strike by mistake
-        const shotIds = slot.micro && flatShotMoments?.length ? new Set(flatShotMoments.flatMap(s => s.characters ?? [])) : undefined
+        // a clip has only the people of its own shots as references - a piece of a fight clip as any other: fewer pictures,
+        // nobody to strike by mistake. The whole cast of the beat gave a clip of a band's drummer and singer all four players
+        // and their instruments: the singer came out at the drum kit. A plan whose shots don't say who they show (from before
+        // shot people) keeps the beat's cast, as does one that shows nobody at all
+        const inShots =
+            flatShotMoments?.length && (slot.micro || flatShotMoments.every(s => Array.isArray(s.characters)))
+                ? new Set(flatShotMoments.flatMap(s => s.characters ?? []))
+                : undefined
+        const shotIds = inShots && (slot.micro || inShots.size > 0) ? inShots : undefined
         // a shot plan can stage a character the beat's own list forgot: named in the prompt without a picture, the video
         // model invents one - so whoever a shot shows is in the cast, with the picture made for them
         const plannedIds = flatShotMoments?.flatMap(s => s.characters ?? []) ?? []
@@ -575,6 +582,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         const cast = wanted.slice(0, MAX_REFERENCE_IMAGES - (location ? 1 : 0) - (startsFrom && !pinStartFrame ? 1 : 0))
         const dropped = wanted.slice(cast.length).map(c => c.id)
         const droppedProps: string[] = []
+        // a clip of its shots' people names nobody else: the model fills a name it has no picture for with a copy of one it has
+        const namesOnlyCast = (text: string, tokens: boolean) => !shotIds || idsIn(text, tokens).every(id => cast.some(c => c.id === id))
+        const placeLayout = location && locationLayouts?.[location.id]?.layout
 
         // Subject N is always defined by Picture N. A group character (memberCounts[id] > 1) rotates through its
         // member pictures by slot index (groupMemberId) - computed once here so the picture file (pictureId) and
@@ -1075,7 +1085,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // three people act
                 const unstaged = shot.plan ? shot.focus.filter(s => !stagedPeople?.[s.id]) : []
                 const restClause = unstaged.length
-                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, busy with something of their own`}.`
+                    ? ` ${joinAnd(unstaged.map(s => s.label))} ${unstaged.length > 1 ? 'are' : 'is'} in it as well: ${shot.plan?.rest && !slot.micro && namesOnlyCast(shot.plan.rest, planTokens) ? withLabels(shot.plan.rest, planTokens).replace(/[.\s]+$/, '') : `${unstaged.length > 1 ? 'each takes' : 'takes'} part in what happens in the shot in their own way, busy with something of their own`}.`
                     : ''
                 const viewClause = shot.plan?.view ? ` Camera position: ${withLabels(shot.plan.view, planTokens)}.` : ''
                 const holdClause = shot.plan?.hold
@@ -1187,8 +1197,9 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // "sings while walking forward", and the model turned the walker seen from behind to the lens - its first shot says it instead
             const silentOpening = opensScene && !vocals.length && castSubjects.some(s => singing?.singers.includes(s.id))
             // compact (#824): the summary is the first shot's action - the beat's summary told the same in other words, and differed
+            // a beat summary naming people the clip has no picture for is not its opening either: the first shot's action is
             const sceneClause =
-                (slot.micro || silentOpening || input.clipPrompt === 'compact') && flatShotMoments?.[0]?.action
+                (slot.micro || silentOpening || input.clipPrompt === 'compact' || !namesOnlyCast(beat.summary, beatTokens)) && flatShotMoments?.[0]?.action
                     ? withLabels(flatShotMoments[0].action, planTokens)
                     : opensScene
                       ? withLabels(beat.summary, beatTokens)
@@ -1201,9 +1212,12 @@ export function buildClipRequests(input: Input): ClipRequest[] {
             // in the same ongoing performance, with no entrance word in the summary, and still need telling that
             // frame 1 already shows everyone. Continuation clips (sceneClause above) already say this explicitly.
             // beat.entrance is the planner's own reading of the summary (a beat of an older project has none: everybody is there)
+            // with the people of the shots only, "everyone from the very first frame" put the one of [Shot 2] into [Shot 1] as well
             const alreadyPresentNote =
                 opensScene && beat.entrance !== true
-                    ? 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
+                    ? shotIds && shots.length > 1
+                        ? 'Each listed subject is already fully visible, in position and mid-action, from the first frame of the shots it appears in - unless a shot below explicitly describes it entering, arriving or emerging.'
+                        : 'Every listed subject is already fully visible, in position and mid-action, starting from the very first frame - unless a shot below explicitly describes a subject entering, arriving or emerging.'
                     : undefined
 
             // beat.summary is free story text and often describes the whole scene as an ongoing performance
@@ -1330,20 +1344,25 @@ export function buildClipRequests(input: Input): ClipRequest[] {
                 // It is where everyone is when the beat begins - said as a floor plan, not a shot: read as one, the model opened the clip
                 // on it, a wide shot of the singer walking down the corridor before [Shot 1] at the window (#740). A later clip of the beat
                 // gets the place's floor plan without people: by then they are where its shots put them.
+                // A staging that names people without a picture in this clip gives way to the place's floor plan without people, or to nothing
                 ...(staging && !slot.micro
-                    ? [layoutLine(opensScene, withLabels(staging, planTokens), location && locationLayouts?.[location.id]?.layout)]
+                    ? namesOnlyCast(staging, planTokens)
+                        ? [layoutLine(opensScene, withLabels(staging, planTokens), placeLayout)]
+                        : placeLayout
+                          ? [layoutLine(false, '', placeLayout)]
+                          : []
                     : []),
                 ...(alreadyPresentNote ? [alreadyPresentNote] : []),
-                // a fact that names somebody without a picture in this piece of a fight is left out
+                // a fact that names somebody without a picture in this clip is left out
                 ...(state.length
                     ? [
                           `Continuity from earlier scenes: ${state
-                              .filter(f => !slot.micro || idsIn(f, beatTokens).every(id => cast.some(c => c.id === id)))
+                              .filter(f => namesOnlyCast(f, beatTokens))
                               .map(f => withLabels(f, beatTokens))
                               .join('; ')}.`,
                       ]
                     : []
-                ).filter(line => !(slot.micro && line.endsWith(': .'))),
+                ).filter(line => !line.endsWith(': .')),
                 ...shotTexts,
                 '',
                 'overall_soundscape:',
