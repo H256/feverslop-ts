@@ -81,6 +81,9 @@ function clipFor(shotCharacters: string[][]) {
     return buildClipRequests(input)[0]!
 }
 
+// eight seconds of 120 bpm, a bar every two
+const bars8 = {bpm: 120, durationSec: 8, downbeats: [0, 2, 4, 6], barEnergy: [0.5, 0.5, 0.5, 0.5], sections: []}
+
 describe('buildClipRequests cast', () => {
     test('a character a shot shows gets its picture although the beat forgot it', () => {
         const pictures = clipFor([['shaman', 'runa'], ['shaman']]).assets.pictures
@@ -454,7 +457,7 @@ describe('singingPerBeat', () => {
                 {line: 1, text: 'a refrain line', singers: ['lead', 'band']},
             ],
         }
-        const result = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing})
+        const result = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], characters: [], music: bars8, singing})
         const shots = result.b1!.singersPerShot
         expect(shots.length).toBeGreaterThanOrEqual(2)
         expect(shots[0]).toEqual(['lead'])
@@ -506,14 +509,28 @@ describe('singingPerBeat', () => {
                 },
             ],
         }
-        const shots = singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing, lyricsTiming}).b1!.singersPerShot
+        const shots = singingPerBeat({
+            slots: [slot],
+            mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+            beats: [beat],
+            characters: [],
+            music: bars8,
+            singing,
+            lyricsTiming,
+        }).b1!.singersPerShot
         expect(shots[0]).toEqual(['ann'])
         expect(shots.at(-1)).toEqual(['ben'])
         // without the word times the whole line is sung by both, in every shot
-        expect(singingPerBeat({slots: [slot], mapping: [{slotId: 'slot-001', beatId: 'b1'}], beats: [beat], singing}).b1!.singersPerShot.at(-1)).toEqual([
-            'ann',
-            'ben',
-        ])
+        expect(
+            singingPerBeat({
+                slots: [slot],
+                mapping: [{slotId: 'slot-001', beatId: 'b1'}],
+                beats: [beat],
+                characters: [],
+                music: bars8,
+                singing,
+            }).b1!.singersPerShot.at(-1),
+        ).toEqual(['ann', 'ben'])
     })
 })
 

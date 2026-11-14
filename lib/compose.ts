@@ -1,5 +1,5 @@
 import {escapeRegExp} from './shot-plan.ts'
-import {asBeatShots} from './shot-plan.ts'
+import {asBeatShots, type ShotProps} from './shot-plan.ts'
 import {readTokens, replaceTokens} from './refs.ts'
 import {splitAtCuts, splitBySinger} from './singing-parts.ts'
 import type {
@@ -24,6 +24,7 @@ import {MAX_REF_AUDIOS, MAX_REFERENCE_IMAGES} from '../comfy/helpers.ts'
 import type {Prop} from './props.ts'
 import type {ProjectConfig} from './config.ts'
 import {sequenceSheetDir, sheetFrame} from './sequenceSheet.ts'
+import {bandBreaks, barCuts, shotCuts} from './shot-cuts.ts'
 
 // Builds MiniMax H3 full-reference (ref2v) requests deterministically from the project data.
 // Format: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
@@ -263,13 +264,42 @@ function* scenesOf(slots: Slot[], mapping: Assignment[], beatById: Map<string, S
     }
 }
 
-// How many shots each beat will render in total - used to size the per-shot moment lists (step 9b)
-export function countShotsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Record<string, number> {
+type CutsInput = Pick<Input, 'slots' | 'mapping' | 'beats' | 'characters' | 'music' | 'propActivity' | 'shotMoments'>
+
+/**
+ * The cuts of every clip in its own time, by slot id - before avoidWords moves them out of sung words: on the bars, and where the
+ * band of the beat breaks off or comes back inside the clip (lib/shot-cuts.ts, #968). The planner's shot windows and compose read the
+ * same cuts. A beat whose shot plan was made for another number of shots - the cuts on the bars alone, before #968 - keeps those
+ * until it is planned again: its shots are numbered through the beat, one more would shift every plan after it.
+ */
+export function clipCuts({slots, mapping, beats, characters, music, propActivity, shotMoments}: CutsInput): Map<string, number[]> {
     const beatById = new Map(beats.map(b => [b.id, b]))
-    const counts: Record<string, number> = {}
+    const out = new Map<string, number[]>()
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
-        counts[beat.id] = scene.reduce((sum, slot, k) => sum + shotCountFor(slot, beat, k === 0), 0)
+        const stems = [...new Set(characters.filter(c => beat.characterIds.includes(c.id) && c.propStem).map(c => c.propStem!))]
+        const breaks = bandBreaks(
+            stems.map(stem => propActivity?.[stem] ?? []).filter(r => r.length),
+            music.durationSec,
+        )
+        const onBars = scene.map((slot, k) => barCuts(slot, shotCountFor(slot, beat, k === 0), music.downbeats))
+        // a piece of a fight clip is one shot
+        const withBreaks = scene.map((slot, k) => (slot.micro ? onBars[k]! : shotCuts(slot, shotCountFor(slot, beat, k === 0), music.downbeats, breaks)))
+        const planned = shotMoments?.[beat.id] ? asBeatShots(shotMoments[beat.id]!).shots.length : undefined
+        const total = withBreaks.reduce((n, c) => n + c.length, 0)
+        const chosen = planned !== undefined && planned !== total ? onBars : withBreaks
+        scene.forEach((slot, k) => out.set(slot.id, chosen[k]!))
     }
+    return out
+}
+
+// How many shots each beat will render in total - used to size the per-shot moment lists (step 9b)
+export function countShotsPerBeat(input: CutsInput): Record<string, number> {
+    const cuts = clipCuts(input)
+    const counts: Record<string, number> = {}
+    input.slots.forEach((slot, i) => {
+        const beatId = input.mapping[i]!.beatId
+        counts[beatId] = (counts[beatId] ?? 0) + cuts.get(slot.id)!.length
+    })
     return counts
 }
 
@@ -277,36 +307,29 @@ export function countShotsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' |
  * The shots of each clip, numbered within its beat as the planner numbers them (shotsNeeded, "music"): a clip with cuts has
  * several (#767). In story order, per beat.
  */
-export function shotsOfClips({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Map<string, {clip: string; shots: number[]}[]> {
-    const beatById = new Map(beats.map(b => [b.id, b]))
+export function shotsOfClips(input: CutsInput): Map<string, {clip: string; shots: number[]}[]> {
+    const cuts = clipCuts(input)
     const out = new Map<string, {clip: string; shots: number[]}[]>()
-    for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
-        const clips = out.get(beat.id) ?? []
-        let next = clips.reduce((n, c) => n + c.shots.length, 0)
-        scene.forEach((slot, k) => {
-            const count = shotCountFor(slot, beat, k === 0)
-            clips.push({clip: slot.id, shots: Array.from({length: count}, () => ++next)})
-        })
-        out.set(beat.id, clips)
-    }
+    input.slots.forEach((slot, i) => {
+        const beatId = input.mapping[i]!.beatId
+        const clips = out.get(beatId) ?? []
+        const next = clips.reduce((n, c) => n + c.shots.length, 0)
+        clips.push({clip: slot.id, shots: cuts.get(slot.id)!.map((_, j) => next + j + 1)})
+        out.set(beatId, clips)
+    })
     return out
 }
 
-// Approximate real-time [start, end) window per shot of a beat, in shot order - shots are assumed evenly spread
-// across their slot's duration. buildClip refines the exact cut points later (avoiding mid-word cuts etc.), but
-// this coarse split is already enough to check a shot against detected stem activity before shot timing is final.
-function shotWindowsPerBeat({slots, mapping, beats}: Pick<Input, 'slots' | 'mapping' | 'beats'>): Record<string, {start: number; end: number}[]> {
-    const beatById = new Map(beats.map(b => [b.id, b]))
+// The real-time [start, end) window of each shot of a beat, in shot order - from the cuts compose makes (clipCuts); avoidWords
+// still moves a cut out of a sung word, by a fraction of a second.
+function shotWindowsPerBeat(input: CutsInput): Record<string, {start: number; end: number}[]> {
+    const cuts = clipCuts(input)
     const windows: Record<string, {start: number; end: number}[]> = {}
-    for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
-        windows[beat.id] = scene.flatMap((slot, k) => {
-            const shotCount = shotCountFor(slot, beat, k === 0)
-            return Array.from({length: shotCount}, (_, j) => ({
-                start: round(slot.start + ((slot.end - slot.start) * j) / shotCount),
-                end: round(slot.start + ((slot.end - slot.start) * (j + 1)) / shotCount),
-            }))
-        })
-    }
+    input.slots.forEach((slot, i) => {
+        const beatId = input.mapping[i]!.beatId
+        const at = cuts.get(slot.id)!
+        ;(windows[beatId] ??= []).push(...at.map((t, j) => ({start: round(slot.start + t), end: round(slot.start + (at[j + 1] ?? slot.end - slot.start))})))
+    })
     return windows
 }
 
@@ -341,23 +364,27 @@ export function activeSpans(window: {start: number; end: number}, ranges: {start
 // Per beat, for every on-screen character whose prop is a musical instrument the song's stems were analyzed for:
 // one active/inactive flag per shot of that beat, in shot order - grounding for step 9b so it only writes a
 // character actively playing/using their prop when that instrument is actually audible at that point in the song.
+// `heardPerShot`: when in a shot it is heard, in seconds of the shot, where that is not (nearly) the whole of it - the planner
+// writes the playing for those times only, and the stopping and coming back in (#968).
 // Characters without a stem-bound prop (a non-instrument prop, or no prop at all) never appear here.
-export function propActivityPerBeat(
-    {slots, mapping, beats, characters}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'characters'>,
-    activity: PropActivity,
-): Record<string, {characterId: string; prop: string; activePerShot: boolean[]}[]> {
-    const windows = shotWindowsPerBeat({slots, mapping, beats})
+export function propActivityPerBeat(input: CutsInput, activity: PropActivity): Record<string, ShotProps> {
+    const {beats, characters} = input
+    const windows = shotWindowsPerBeat(input)
     const propped = characters.filter((c): c is Character & {prop: string; propStem: PropStem} => Boolean(c.prop && c.propStem && activity[c.propStem]?.length))
-    const result: Record<string, {characterId: string; prop: string; activePerShot: boolean[]}[]> = {}
+    const result: Record<string, ShotProps> = {}
     for (const beat of beats) {
         const onScreen = propped.filter(c => beat.characterIds.includes(c.id))
         if (!onScreen.length) continue
         const beatWindows = windows[beat.id] ?? []
-        result[beat.id] = onScreen.map(c => ({
-            characterId: c.id,
-            prop: c.prop,
-            activePerShot: beatWindows.map(w => isActive(w, activity[c.propStem]!)),
-        }))
+        result[beat.id] = onScreen.map(c => {
+            const activePerShot = beatWindows.map(w => isActive(w, activity[c.propStem]!))
+            const heardPerShot = beatWindows.map((w, j) =>
+                activePerShot[j]
+                    ? activeSpans(w, activity[c.propStem]!)?.map(s => ({start: round(s.start - w.start), end: round(s.end - w.start)}))
+                    : undefined,
+            )
+            return {characterId: c.id, prop: c.prop, activePerShot, ...(heardPerShot.some(Boolean) ? {heardPerShot} : {})}
+        })
     }
     return result
 }
@@ -370,15 +397,10 @@ export function propActivityPerBeat(
 // singersPerShot: who of them sings in each shot - the singers of the lines sung in it (singing.lines). The beat's singers
 // alone let the planner give a verse of the lead to the whole band ("they belt the final phrases in tight harmony").
 export type BeatSinging = {singerIds: string[]; singingPerShot: boolean[]; singersPerShot: string[][]}
-export function singingPerBeat({
-    slots,
-    mapping,
-    beats,
-    singing,
-    lyricsTiming,
-}: Pick<Input, 'slots' | 'mapping' | 'beats' | 'singing' | 'lyricsTiming'>): Record<string, BeatSinging> {
+export function singingPerBeat(input: CutsInput & Pick<Input, 'singing' | 'lyricsTiming'>): Record<string, BeatSinging> {
+    const {slots, mapping, beats, singing, lyricsTiming} = input
     if (!singing) return {}
-    const windows = shotWindowsPerBeat({slots, mapping, beats})
+    const windows = shotWindowsPerBeat(input)
     const slotById = new Map(slots.map(s => [s.id, s]))
     const result: Record<string, BeatSinging> = {}
     for (const beat of beats) {
@@ -443,6 +465,8 @@ export function buildClipRequests(input: Input): ClipRequest[] {
     let lastCamera: string | undefined
     let lastFraming: string | undefined
     const cameraCursor: Record<keyof typeof cameraMoves, number> = {low: 0, mid: 0, high: 0}
+    // where every clip is cut - the planner's shots were counted from the same cuts
+    const cutsOf = clipCuts(input)
 
     for (const {beat, scene} of scenesOf(slots, mapping, beatById)) {
         const moments = beat.moments?.length ? beat.moments : splitSentences(beat.summary)
@@ -455,7 +479,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         scene.forEach((slot, k) => {
             const opensScene = k === 0
-            const shotCount = shotCountFor(slot, beat, opensScene)
+            const shotCount = cutsOf.get(slot.id)!.length
             const flatSlice = flat?.slice(shotCursor, shotCursor + shotCount)
             const view =
                 typeof input.locationView === 'number'
@@ -811,10 +835,10 @@ export function buildClipRequests(input: Input): ClipRequest[] {
         // Shots: more cuts with more energy, cut on downbeats
         // with context frames the video starts that much earlier: the frames of the clip before, then this clip's own time
         const lead = startsFrom && contextFrames ? (contextFrames + CONTEXT_SETTLE) / FPS : 0
-        const clipTime = (t: number) => formatTimestamp(t + lead)
+        // a line that starts a moment before the clip is sung from its start - never at a time before it ("-1:59.998", #968)
+        const clipTime = (t: number) => formatTimestamp(Math.max(0, t + lead))
         const duration = round(slot.end - slot.start + lead)
-        const shotCount = shotCountFor(slot, beat, opensScene)
-        const bars = music.downbeats.filter(t => t >= slot.start - 0.05 && t < slot.end - 0.05)
+        const shotCount = cutsOf.get(slot.id)!.length
         const energyLevel = slot.energy < 0.4 ? 'low' : slot.energy < 0.7 ? 'mid' : 'high'
 
         // a character of the clip becomes its <Subject N>, anybody else their plain name: from the {Name} tokens of the text,
@@ -833,9 +857,7 @@ export function buildClipRequests(input: Input): ClipRequest[] {
 
         // with vocals, a cut never falls into a sung word
         const cuts = avoidWords(
-            Array.from({length: shotCount}, (_, j) =>
-                j === 0 ? 0 : round((bars[Math.floor((j * slot.bars) / shotCount)] ?? slot.start + ((slot.end - slot.start) * j) / shotCount) - slot.start),
-            ),
+            cutsOf.get(slot.id)!,
             vocals.flatMap(v => v.words),
             120 / music.bpm,
             duration,

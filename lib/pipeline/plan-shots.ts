@@ -84,8 +84,6 @@ export async function planShots(run: ShotRun) {
     // beat.moments (2-6 sentences) is written before the beat's shot count is known, so a beat can end up covering far
     // more shots than it has moments for - the old code just reused/repeated moments across shots (--legacy-moments
     // still does). This step asks for exactly one distinct, progressing action per shot instead.
-    const beatProps = propActivity ? propActivityPerBeat({slots: clipSlots, mapping, beats, characters: cast.characters}, propActivity) : undefined
-    const beatSinging = singingPerBeat({slots: clipSlots, mapping, beats, singing, lyricsTiming})
     // One call per beat does not fit on a long song: thinking and ~100 shot sentences share max_output_tokens (see #91). So the
     // beats are blocked first, one after the other - the floor plan, where everybody starts and ends, each beat from the end
     // of the one before - and then the shots of every beat are written from its blocking, the beats at once (steps 11a and 11b).
@@ -112,7 +110,19 @@ export async function planShots(run: ShotRun) {
             project.data.shotViews = viewsKept
         }
     }
-    const shotCounts = countShotsPerBeat({slots: clipSlots, mapping, beats})
+    // the cuts of the clips (#968): a beat that keeps its plan keeps the number of shots it was planned with
+    const cutsInput = {
+        slots: clipSlots,
+        mapping,
+        beats,
+        characters: cast.characters,
+        music,
+        propActivity,
+        shotMoments: plannedBefore ?? project.data.shotMoments,
+    }
+    const beatProps = propActivity ? propActivityPerBeat(cutsInput, propActivity) : undefined
+    const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
+    const shotCounts = countShotsPerBeat(cutsInput)
     // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
     const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
     const directionNotes = directionPlanNotes(directionTarget, project.data)

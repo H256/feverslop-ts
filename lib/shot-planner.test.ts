@@ -183,6 +183,43 @@ describe('the music of a beat in the planner prompt', () => {
         expect(input).toContain('"music":[{"shot":1,"sings":["Runa"],"plays":["Kai"]},{"shot":2,"sings":["Runa","Kai"],"plays":[]}]')
         expect(input).not.toContain('activePerShot')
     })
+
+    test('an instrument heard for part of a shot: when, in seconds of the shot (#968)', () => {
+        const withMusic: PlanContext = {
+            ...context,
+            characters: [...context.characters, {id: 'kai', name: 'Kai', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}],
+            shotCounts: {'beat-01': 2},
+            beatProps: {'beat-01': [{characterId: 'kai', prop: 'guitar', activePerShot: [true, true], heardPerShot: [[{start: 0, end: 2.2}], undefined]}]},
+            beatSinging: {},
+        }
+        const {input, instructions} = planPrompt(withMusic, [{...beat, characterIds: ['runa', 'kai']}], undefined, undefined, [], {
+            from: 0,
+            to: 2,
+            total: 2,
+            written: [],
+        })
+        expect(input).toContain('"music":[{"shot":1,"sings":[],"plays":["Kai (0.0-2.2 s)"]},{"shot":2,"sings":[],"plays":["Kai"]}]')
+        expect(instructions).toContain('A time after a name in "plays"')
+    })
+
+    test('players whose instruments are silent in every shot still get the rules: they are "playing: no"', () => {
+        const silent: PlanContext = {
+            ...context,
+            characters: [...context.characters, {id: 'kai', name: 'Kai', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}],
+            shotCounts: {'beat-01': 2},
+            beatProps: {'beat-01': [{characterId: 'kai', prop: 'guitar', activePerShot: [false, false]}]},
+            beatSinging: {},
+        }
+        const {input, instructions} = planPrompt(silent, [{...beat, characterIds: ['runa', 'kai']}], undefined, undefined, [], {
+            from: 0,
+            to: 2,
+            total: 2,
+            written: [],
+        })
+        expect(input).toContain('"plays":[]')
+        expect(instructions).toContain('Everybody else with an instrument is "playing: no"')
+        expect(instructions).toContain('A beat may list "music"')
+    })
 })
 
 describe('musicStretches - the music along the way for the beats', () => {

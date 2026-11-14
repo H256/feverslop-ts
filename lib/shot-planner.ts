@@ -4,7 +4,7 @@ import {type BeatSinging, isContinuous} from './compose.ts'
 import type {ProjectConfig} from './config.ts'
 import type {AskOptions} from './llm.ts'
 import {formatTime} from './frames.ts'
-import {MAX_FOREGROUND, SHOT_ROOM} from './shot-plan.ts'
+import {MAX_FOREGROUND, SHOT_ROOM, type ShotProps} from './shot-plan.ts'
 
 // a limit of lib/shot-plan.ts as the prompt says it
 const inWords = (n: number) => ['none', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? String(n)
@@ -40,7 +40,7 @@ export type BeatNeeds = {
     people: number
     /** someone sings in it */
     sings: boolean
-    /** an instrument is heard in it */
+    /** someone in it plays an instrument of the song - heard in its shots or not */
     plays: boolean
 }
 /** Every rule, for every beat. */
@@ -162,7 +162,7 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
         when: b => b.sings || b.plays,
     },
     {
-        rule: `Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, the way it is played and the moment asks for, as a short phrase - never just "yes". Their "motion" is the rest of the body playing along (leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. Everybody else with an instrument is "playing: no" and does something else with it or with their hands.`,
+        rule: `Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, the way it is played and the moment asks for, as a short phrase - never just "yes". Their "motion" is the rest of the body playing along (leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. A time after a name in "plays" ("Kael (0.0-2.2 s)") is when in the shot the instrument is heard, in seconds from the shot's start: the player plays then only, and "motion" and "action" show the change the way a player makes it - stopping (lets the last chord ring out and lays the hand flat on the strings, lifts the sticks off the drums), holding still while it is silent (the hands quiet on the instrument, a nod to the count, a look to the others), coming back in (strikes the first chord again, brings the sticks down) - with its time ("from 2.2 s"). Everybody else with an instrument is "playing: no" and does something else with it or with their hands, the instrument silent.`,
         when: b => b.plays,
     },
     {
@@ -252,7 +252,7 @@ export type PlanContext = {
     slots: Slot[]
     mapping: Assignment[]
     shotCounts: Record<string, number>
-    beatProps?: Record<string, {characterId: string; prop: string; activePerShot: boolean[]}[]>
+    beatProps?: Record<string, ShotProps>
     beatSinging: Record<string, BeatSinging>
     // the film look (step lookBrief: style.txt word for word, then the look the LLM made of it) - its shot sizes and camera
     // language are what the framing follows. Without it "Nachtnahaufnahmen" in style.txt came out as medium shots (#333)
@@ -365,7 +365,15 @@ export function planPrompt(
         return Array.from({length: shotCounts[b.id] ?? 1}, (_, j) => ({
             shot: j + 1,
             sings: (singing?.singersPerShot[j] ?? []).map(nameOf),
-            plays: props.filter(p => p.activePerShot[j]).map(p => nameOf(p.characterId)),
+            // heard for part of the shot only: when, in seconds of the shot (#968) - "Kael (0.0-2.2 s)"
+            plays: props
+                .filter(p => p.activePerShot[j])
+                .map(p => {
+                    const spans = p.heardPerShot?.[j]
+                    return spans
+                        ? `${nameOf(p.characterId)} (${spans.map(s => `${s.start.toFixed(1)}-${s.end.toFixed(1)} s`).join(', ')})`
+                        : nameOf(p.characterId)
+                }),
         }))
     }
     // what the beats of this call have: the rules only some beats need are left out of the others (#825)
@@ -377,7 +385,8 @@ export function planPrompt(
         group: block.some(b => inBlock(b).some(c => c.isGroup)),
         people: Math.max(0, ...block.map(b => b.characterIds.length)),
         sings: block.some(b => beatSinging[b.id]?.singersPerShot.some(s => s.length) ?? false),
-        plays: block.some(b => beatProps?.[b.id]?.some(p => p.activePerShot.some(Boolean)) ?? false),
+        // a player of the call - also one whose instrument is silent in all its shots: they are "playing: no" then (#968)
+        plays: block.some(b => (beatProps?.[b.id]?.length ?? 0) > 0),
     }
     return {
         reasoning: 'medium',
@@ -544,7 +553,7 @@ Every character in "summary", "moments" and the facts of "stateAfter" is written
 - "weight": 1-5, how much screen time the beat deserves.
 - "kind": "establish" (introduces a place or character), "build" (tension rises), "hit" (a big moment for a musical accent), or "release" (tension falls).
 - "continuous": true only if the beat is ONE unbroken take that runs through all its video clips without a cut - the camera and the action simply go on from clip to clip (a long walk through a room, a slow reveal, one action that takes many seconds). Use it sparingly: false (also when omitted) for a beat that is better cut together from several shots and angles.
-- "stateAfter": short facts about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull", and never what a mirror or reflection shows), each as {"fact": "...", "place": true or false}: "place" true for a fact of the place itself, which stays there (the gate is broken open, the fire has burned down), false for a fact about characters and what they wear or carry, which goes with them to every place - every character as {Name}: {"fact": "{Thorin Oakenshield}'s hammer is broken", "place": false}. Because it goes to every place, a fact about characters says only what is on them - their body, their clothes, what they carry - and never where they are or have been, or what they did there ("{Name} has been walking in the corridor" is no fact: it is not true in the next place). A fact says what is there, never what somebody does not do ("the faded marks on the wall are untouched", not "{Name} does not touch the marks"), and a fact about a feature of the place is "place": true even when a character had to do with it. Empty array if nothing changes.
+- "stateAfter": short facts about real, physical things that are true after this beat and must stay visible later (never a figurative one like "the name is dull", and never what a mirror or reflection shows), each as {"fact": "...", "place": true or false}: "place" true for a fact of the place itself, which stays there (the gate is broken open, the fire has burned down), false for a fact about characters and what they wear or carry, which goes with them to every place - every character as {Name}: {"fact": "{Thorin Oakenshield}'s hammer is broken", "place": false}. Because it goes to every place, a fact about characters says only what is on them - their body, their clothes, what they carry - and never where they are or have been, or what they did there ("{Name} has been walking in the corridor" is no fact: it is not true in the next place). A fact says what is there, never what somebody does not do ("the faded marks on the wall are untouched", not "{Name} does not touch the marks"), and a fact about a feature of the place is "place": true even when a character had to do with it. A fact is never about sound or the music, nor about what the music does (a floor vibrating to the drums, how someone plays or holds an instrument): the song decides that anew in every shot. Empty array if nothing changes.
 - "entrance": true only if the summary has somebody arrive, appear or emerge during the beat (the beat's first clip then shows the place before them); false when everybody who is in the beat is already there when it starts.
 - "groupSize": only for a group character below marked "isGroup" that is in this beat's "characterIds" - {"<that character's id>": <count>}, roughly how many distinct individuals of that group are visible together on screen during this beat (1 if only one of them is ever shown at a time here, more for a crowd/pack/band moment). Omit entirely if no group character is in this beat.
 Whenever a beat brings the characters face to face with an antagonist, monster, spirit or other hostile presence, make it a real dramatic encounter, not a tableau: show fear (flinching, turning a shoulder to it, shielding one another), active defense or combat (striking, blocking, being struck), or flight (breaking away, running, dragging a companion clear). Characters should not simply stand and stare at the threat. In combat, name the actual weapon each side is using in every strike (matching their "prop" where they have one) - don't let a sword turn into a hammer or an axe from one moment to the next.

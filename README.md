@@ -841,7 +841,7 @@ What happens, only when at least one character has a `propStem` **and** the lyri
    other instruments in a separated stem) - no extra model, just the stems already separated in step `2a`. Projects
    from before this keep their old ranges until `--redo=propActivity` (which also redoes `shotMoments`).
 2. **Shots** (`11b`): for every beat, each on-screen character with a `propStem` gets one active/inactive flag per
-   shot, from whether that stem is active over more than half the shot's estimated duration. The LLM is told to show
+   shot, from whether that stem is heard over a fifth of the shot or 0.3 s - the shots as the clip is cut (step 3 below). The LLM is told to show
    the character actively using the prop only on an active shot - it picks the verb itself (playing, strumming,
    striking, …), nothing here is a fixed word list - and to have them hold it still, rest it or otherwise occupy
    their hands on an inactive one. On an active shot its `playing:` field says what the hands do on the instrument
@@ -854,6 +854,15 @@ What happens, only when at least one character has a `propStem` **and** the lyri
    states the playing for everyone whose stem is heard in the shot, with that phrase - also when the shot's action
    names them doing something else. Plans from before keep a generic "is actively using the …" until
    `--redo=shotMoments`.
+   An instrument heard for part of a shot only is named with its time in the shot ("Kael (0.0-2.2 s)"): the planner
+   writes the playing for that time, and how the player stops and comes back in (#968).
+3. **Breaks of the band** (`lib/shot-cuts.ts`): where every instrument of a beat's players is silent for at least
+   1.5 s inside a clip, the clip is cut where the break begins and where it ends, on the nearest downbeat (within
+   0.6 s), and a cut on the bars inside the break goes - the quiet is a shot of its own. One shot running from the
+   playing into the quiet was rendered playing all through it, whatever its prompt said of the times; with the quiet
+   in its own shot the guitar stayed still (A/B in #968). No shot is shorter than 1.2 s. Shorter pauses - hits, a
+   staccato chord between rests - stay in their shot. The planner's shots are counted from the same cuts; a beat
+   planned before keeps the cuts it was planned with until `--redo=shotMoments`.
 
 **Fixing a character's prop by hand.** If step 5 missed an instrument or bundled a costume detail into `prop` (e.g.
 a mask worn alongside a guitar), edit `cast.characters` in `project.json` directly, then:
