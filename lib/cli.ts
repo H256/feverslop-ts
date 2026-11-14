@@ -71,8 +71,8 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         json: true,
     },
     timing: {
-        args: '<project-id> [--json | --set=timing.json]',
-        description: 'Print when each sung line is, or move its words. The beats of the clips a moved line is in are planned again.',
+        args: '<project-id> [--json | --set=timing.json | --refine=de|en|fr | --apply-refinement=<proposal-id>]',
+        description: 'Print or edit sung words, or prepare and explicitly apply a local phoneme refinement. Changed clip beats need planning again.',
         json: true,
     },
     versions: {

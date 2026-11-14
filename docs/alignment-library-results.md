@@ -52,8 +52,32 @@ The next accuracy work should target phoneme coverage, localisation of gross coa
 
 Local reproducibility artifacts:
 
-- `.tmp/alignment-library-benchmark.ts`: reconstruction and model runner.
+- `tools/alignment-library-benchmark.ts`: reconstruction and model runner (set `ALIGNMENT_LIBRARY` to the library's `songs` directory).
 - `.tmp/alignment-library-benchmark/<song>/`: `baseline.json`, `reference.json`, model `input.json` / `output.json`, per-line `comparison.json`, and source hashes in `provenance.json`.
 - `.tmp/alignment-library-benchmark/summary.json`: aggregate results.
 
 The earlier twelve-line Mehr als Code result remains a valid small-sample measurement, but these full-song results provide the more representative picture of failure modes.
+
+## Actual application policy — 2026-11-14
+
+`tools/alignment-policy-report.ts` evaluates the cached original IPA output through
+`buildRefinement` and `applyRefinement` on in-memory coarse timing. No model was
+rerun, and no reference files were changed. No singer assignments are present in
+library exports: same-singer collision checks require separate service tests.
+Manual reference timing is used only for scoring, never as candidate input.
+
+| Recording | Refined / retained / omitted | Onset mean / median ms | End mean / median ms | Onsets / ends within 200 ms |
+| --- | ---: | ---: | ---: | ---: |
+| EPA | 37 / 13 / 6 | 549 / 178 | 503 / 264 | 28 / 20 |
+| Schwarzer Flur | 42 / 12 / 1 | 247 / 69 | 379 / 280 | 39 / 21 |
+| Well of Youth | 24 / 1 / 2 | 411 / 80 | 940 / 882 | 21 / 7 |
+| Mehr als Code | 28 / 4 / 4 | 534 / 66 | 1487 / 98 | 27 / 19 |
+
+Errors include retained coarse timings, but can only be calculated for the 161
+still-active lines. The 13 omitted lines were actually sung: these are failures,
+not zero-error boundaries. Across all 174 reference lines, onset hits within
+200 ms increase from 42 to 115 and endpoint hits from 27 to 67, counting omitted
+lines as misses. Do not compare the active-only means directly to all-line coarse
+means or the different paired raw-candidate subset above. After application,
+20 active onsets and 28 active ends still miss by over one second. This supports
+explicit preview and listening, not blind automatic acceptance.
