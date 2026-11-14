@@ -70,3 +70,18 @@ export function reviewList(project: EditorProject, marked: ReadonlySet<string>, 
   const flaggedOnes = clips.filter(c => flagged(c, fresh))
   return flaggedOnes.length ? flaggedOnes : clips
 }
+
+type Span = {id: string; start: number; end: number}
+const EPS = 0.001
+/** Where a review that plays on goes when the playhead leaves `left`: the next clip of its list, skipping the others - or none, it is through. */
+export function reviewNext<C extends Span>(list: C[], left: Pick<Span, 'end'>): C | undefined {
+  return list.find(c => c.start >= left.end - EPS)
+}
+/** ← → in a review: the clip of its list after the playhead, or before it - back goes first to the start of the clip it is in. */
+export function reviewStep<C extends Span>(list: C[], at: number, direction: number): C | undefined {
+  if (direction > 0) return list.find(c => c.start > at + EPS)
+  const here = list.findLast(c => c.start <= at + EPS)
+  if (!here) return list[0]
+  if (at - here.start > 0.5) return here
+  return list.findLast(c => c.start < here.start - EPS) ?? here
+}
