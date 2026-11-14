@@ -110,14 +110,24 @@ describe('buildClipRequests cast, characters the text names', () => {
         shotMoments: {b1: {staging, shots: [{action: 'The Shaman drums.', characters: ['shaman']}]}},
     })
 
-    test('the layout of the place names a character: the picture is a reference', () => {
+    // the shots say who is in the clip: the layout or a fact naming somebody else is left out, it brings no picture in
+    test('the layout of the place names a character the shots do not show: no picture, no layout', () => {
         const clip = buildClipRequests(input('Runa steps from the tree line.', [beat]))[0]!
-        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
+        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman'])
+        expect(clip.prompt).not.toContain('Layout of the place')
+        expect(clip.prompt).not.toContain('Runa')
     })
 
-    test('a continuity fact names a character: the picture is a reference', () => {
+    test('a continuity fact names a character the shots do not show: no picture, no fact', () => {
         const clip = buildClipRequests(input(undefined, [earlier, beat]))[1]!
-        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
+        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman'])
+        expect(clip.prompt).not.toContain('Runa sits at the fire')
+    })
+
+    test('a plan whose shots do not say who they show: whoever the layout names is in the clip with its picture', () => {
+        const old = input('Runa steps from the tree line.', [beat])
+        old.shotMoments = {b1: {staging: 'Runa steps from the tree line.', shots: [{action: 'The Shaman drums.'}]}}
+        expect(buildClipRequests(old)[0]!.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
     })
 
     test('nobody named, nobody added', () => {
@@ -177,19 +187,21 @@ describe('a piece of a fight clip names only the people it has pictures for', ()
         expect(text).not.toContain('Layout of the place')
         expect(text).not.toMatch(/Mira|Kael/)
     })
-    test('a normal clip of the same beat is unchanged: summary and layout name everybody', () => {
+    test('a normal clip of the same beat has the people of its shot too: no summary, layout, rest or fact naming the others', () => {
         const clip = buildClipRequests(input(false))[0]!
-        expect(clip.prompt).toContain('Seven hammers swing')
-        expect(clip.prompt).toContain('Layout of the place')
+        expect(clip.assets.pictures.map(p => p.id)).toEqual(['cave', 'greta', 'orcs'])
+        expect(clip.prompt).toContain('<Subject 2> drives her hammer into the <Subject 3>.')
+        expect(clip.prompt).not.toContain('Seven hammers')
+        expect(clip.prompt).not.toContain('Layout of the place')
+        expect(clip.prompt).not.toMatch(/Mira|Kael/)
     })
     // #755: the intro of a beat whose summary has them sing - nobody sings in the clip, so its first shot opens it
     test('a clip nobody sings in opens on its first shot, not on a summary that has them sing', () => {
         const clip = buildClipRequests({...input(false), singing: {singers: ['greta'], lines: []}})[0]!
         expect(clip.prompt).not.toContain('Seven hammers')
         expect(clip.prompt).toContain(
-            '2-second music-video clip set in <Subject 1> with <Subject 2>, <Subject 3>, <Subject 4> and <Subject 5>: <Subject 2> drives her hammer into the <Subject 5>.',
+            '2-second music-video clip set in <Subject 1> with <Subject 2> and <Subject 3>: <Subject 2> drives her hammer into the <Subject 3>.',
         )
-        expect(clip.prompt).toContain('Layout of the place')
         expect(clip.prompt).toContain('keeps their lips together and still, silent.')
         expect(clip.prompt).not.toContain('eyes and brows')
     })
@@ -322,11 +334,15 @@ describe('{Name} tokens', () => {
         expect(clip.prompt).toContain('<Subject 2> beats the drum while the shaman hums.')
         expect(clip.prompt).not.toContain('{')
     })
-    test('a character the layout names by token is in the clip with its picture', () => {
+    test('a layout that names by token somebody the shots do not show is left out', () => {
         const clip = buildClipRequests(input('{Shaman} drums.', '{Runa} sits by the fire pit.'))[0]!
-        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman', 'runa'])
+        expect(clip.assets.pictures.map(p => p.id)).toEqual(['clearing', 'shaman'])
+        expect(clip.prompt).not.toContain('Layout of the place')
+    })
+    test('a layout that names by token only the people of the shots is the label of their pictures', () => {
+        const clip = buildClipRequests(input('{Shaman} drums.', '{Shaman} kneels by the fire pit.'))[0]!
         expect(clip.prompt).toContain(
-            'Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: <Subject 3> sits by the fire pit.',
+            'Layout of the place when the scene begins - a floor plan, not a shot of its own; the clip opens on [Shot 1]: <Subject 2> kneels by the fire pit.',
         )
     })
     test('a name the planner wrote without braces is the label too, written as the cast spells it (#824)', () => {
@@ -350,8 +366,8 @@ describe('{Name} tokens', () => {
         }
         expect(buildClipRequests(people)[0]!.prompt).toContain('<Subject 2>, Shaman, kneels at the drum')
         expect(buildClipRequests({...people, clipPrompt: 'compact'})[0]!.prompt).toContain('<Subject 2>, kneels at the drum')
-        // the summary: the beat's own words in full, the first shot's action in compact
-        expect(buildClipRequests(people)[0]!.prompt).toContain('<Subject 2> drums for Runa.')
+        // the summary: the first shot's action - the beat's own words name {Runa}, who is in no shot and has no picture
+        expect(buildClipRequests(people)[0]!.prompt).toMatch(/clip set in <Subject 1> with <Subject 2>: <Subject 2> drums\./)
         expect(buildClipRequests({...people, clipPrompt: 'compact'})[0]!.prompt).toMatch(/clip set in <Subject 1> with <Subject 2>: <Subject 2> drums\./)
     })
     test('a token that is nobody of the cast is left as its word, without braces', () => {
