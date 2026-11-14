@@ -531,7 +531,14 @@ export type TimingView = {
 // words: the line's words moved; off: the line left out (true) or sung again (false) - one of the two, or both
 // reset: the line as the automatic alignment has it, worked out again from the transcript - what was placed by hand goes
 export type TimingChange = {
-    lines: {line: number; words?: (Pick<TimingWord, 'start' | 'end'> & Partial<Omit<TimingWord, 'start' | 'end'>>)[]; off?: boolean; reset?: boolean}[]
+    add?: {afterLine: number; expectedText: string; words: TimingWord[]}
+    lines: {
+        line: number
+        words?: (Pick<TimingWord, 'start' | 'end'> & Partial<Omit<TimingWord, 'start' | 'end'>>)[]
+        off?: boolean
+        reset?: boolean
+        insert?: {at: number; words: TimingWord[]; expected: TimingWord[]}
+    }[]
 }
 export type TimingResult = {
     changed: number[] // the lines that moved

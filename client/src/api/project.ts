@@ -37,6 +37,7 @@ import type {
 } from '../../../shared/workspace'
 import {errorOfAnswer, getJson, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
+import type {TimingRefinement, RefinementLanguage} from '../../../shared/timing-refinement'
 
 const id = (value: string) => encodeURIComponent(value)
 
@@ -126,6 +127,8 @@ export function projectApi(root: string) {
     previewConfig: (change: ConfigChange) => post<ConfigImpact>('config', {change, dryRun: true}),
     saveConfig: (change: ConfigChange) => post<ConfigResult>('config', {change}),
     saveTiming: (change: TimingChange) => post<TimingResult>('timing', change),
+    refineTiming: (language: RefinementLanguage) => post<TimingRefinement>('timing-refine', {language}),
+    applyTimingRefinement: (id: string) => post<TimingResult>('timing-refine-apply', {id}),
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
   }
 }

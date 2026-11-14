@@ -42,6 +42,8 @@ import type {RunAction, RunControl} from './runs.ts'
 import {urlsOfChoice} from './servers.ts'
 import {readSinging, type SingingChange, writeSinging} from './singing.ts'
 import {readTiming, type TimingChange, writeTiming} from './timing.ts'
+import {prepareTimingRefinement, applyTimingRefinement} from './timing-refinement.ts'
+import type {RefinementLanguage} from '../../shared/timing-refinement.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {textOf} from '../text.ts'
 
@@ -483,6 +485,18 @@ export const PROJECT_ROUTES: readonly Route[] = [
         },
     },
     {method: 'POST', path: 'timing', changes: [writeTiming], handle: async c => json(await writeTiming(c.target, await c.body<TimingChange>()))},
+    {
+        method: 'POST',
+        path: 'timing-refine',
+        changes: [prepareTimingRefinement],
+        handle: async c => json(await prepareTimingRefinement(c.target, (await c.body<{language: RefinementLanguage}>()).language)),
+    },
+    {
+        method: 'POST',
+        path: 'timing-refine-apply',
+        changes: [applyTimingRefinement],
+        handle: async c => json(await applyTimingRefinement(c.target, (await c.body<{id: string}>()).id)),
+    },
     {
         method: 'POST',
         path: 'override/:id',

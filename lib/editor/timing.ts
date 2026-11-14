@@ -1,5 +1,7 @@
-import {existsSync, readFileSync, statSync} from 'node:fs'
-import {writeJsonFile} from '../json-file.ts'
+import {existsSync, readFileSync, statSync, writeFileSync, mkdirSync} from 'node:fs'
+import {randomUUID} from 'node:crypto'
+import {writeJsonFile, partialOf, replaceWithPartial} from '../json-file.ts'
+import {updateInsertedLyrics} from './timing-lyrics.ts'
 import {isAbsolute, join, relative, resolve} from 'node:path'
 import type {ClipRequest} from '../compose.ts'
 import {splitBySinger} from '../singing-parts.ts'
@@ -216,6 +218,30 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
     const timing = data.lyricsTiming
     if (!timing) throw new Error('the lyrics have no timing in this project - "alignLyrics" is off, or the plan has not aligned them yet')
     if (!Array.isArray(change?.lines)) throw new Error('no lines')
+    if (change.add) {
+        const {afterLine, expectedText, words} = change.add
+        const anchor = timing.lines.find(l => l.line === afterLine)
+        if (!anchor || anchor.text !== expectedText) throw new Error('The selected lyric line changed. Reload before adding a segment.')
+        if (!Array.isArray(words) || !words.length) throw new Error('A new segment needs timed words')
+        const staged = structuredClone(data)
+        const id = Math.max(-1, ...timing.lines.map(l => l.line)) + 1
+        staged.lyricsTiming!.lines.splice(timing.lines.indexOf(anchor) + 1, 0, {
+            line: id,
+            section: anchor.section,
+            sectionIndex: anchor.sectionIndex,
+            text: words.map(w => w.text).join(' '),
+            start: words[0]!.start,
+            end: words.at(-1)!.end,
+            words,
+            confidence: 1,
+            byHand: true,
+            adlib: true,
+            off: true,
+        })
+        const result = applyTiming(staged, {lines: [...change.lines, {line: id, words, off: false}]}, requests, automatic)
+        Object.assign(data, staged)
+        return result
+    }
     const duration = data.music?.durationSec ?? Infinity
     const result: TimingResult = {changed: [], slots: [], replanned: [], staleClips: [], crossing: []}
     const singing = data.singing ? structuredClone(data.singing) : undefined
@@ -225,6 +251,7 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         if (!entry || seen.has(entry.line)) throw new Error('invalid or duplicate line')
         seen.add(entry.line)
         if (entry.off !== undefined && typeof entry.off !== 'boolean') throw new Error('invalid off')
+        if (entry.insert && entry.reset) throw new Error('Cannot insert words and reset a line together')
         const line = lines.find(l => l.line === entry.line)
         if (!line) throw new Error(`no sung line ${entry.line}`)
         const name = `line ${entry.line + 1} ("${line.text}")`
@@ -243,19 +270,29 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         }
         // left out, or sung again: the line keeps its words either way
         if (entry.off !== undefined && entry.off !== !!line.off) {
+            line.presenceByHand = true
             if (entry.off) line.off = true
             else delete line.off
             result.changed.push(line.line)
         }
-        if (entry.words === undefined) {
+        if (entry.words === undefined && !entry.insert) {
             if (entry.off === undefined) throw new Error(`${name}: neither words nor "off" given`)
             continue
         }
         const placed = wordsToPlace(line, data.music?.durationSec ?? Math.max(0, ...timing.lines.map(l => l.end)))
-        if (!Array.isArray(entry.words) || !entry.words.length) throw new Error(`${name}: no words`)
-        const structural = entry.words.some(w => w && w.text !== undefined)
-        if (!structural && entry.words.length !== placed.length) throw new Error(`${name} has ${placed.length} words, not ${entry.words.length}`)
-        const words = entry.words.map((w, n) => {
+        let incoming = entry.words
+        if (entry.insert) {
+            const {at, words: added, expected} = entry.insert
+            if (entry.words || entry.reset || !Number.isInteger(at) || at < 0 || at > placed.length || !Array.isArray(added) || !added.length)
+                throw new Error(`${name}: invalid insertion`)
+            if (JSON.stringify(placed) !== JSON.stringify(expected)) throw new Error(`${name}: timing changed; reload before inserting`)
+            if (placed[at]?.joined || added.some(w => w.joined)) throw new Error(`${name}: insert between whole words, not inside a split word`)
+            incoming = [...placed.slice(0, at), ...added, ...placed.slice(at)]
+        }
+        if (!Array.isArray(incoming) || !incoming.length) throw new Error(`${name}: no words`)
+        const structural = incoming.some(w => w && w.text !== undefined)
+        if (!structural && incoming.length !== placed.length) throw new Error(`${name} has ${placed.length} words, not ${incoming.length}`)
+        const words = incoming.map((w, n) => {
             if (!w || (structural && (typeof w.text !== 'string' || !w.text.length || /\s/.test(w.text)))) throw new Error(`${name}: invalid word text`)
             for (const key of ['joined', 'anchor', 'estimated'] as const)
                 if (w[key] !== undefined && typeof w[key] !== 'boolean') throw new Error(`${name}: invalid ${key}`)
@@ -270,9 +307,12 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
             return word
         })
         const source = (items: typeof placed) => items.map((w, i) => `${i && !w.joined ? ' ' : ''}${w.text}`).join('')
-        if (words[0]!.joined || source(words) !== source(placed)) throw new Error(`${name}: words must preserve source text`)
+        if (words[0]!.joined || (!entry.insert && source(words) !== source(placed))) throw new Error(`${name}: words must preserve source text`)
         const singerLine = singing?.lines.find(l => l.line === line.line)
-        if (structural && singerLine?.parts) {
+        if (entry.insert && singerLine?.parts) {
+            const {at, words: added} = entry.insert
+            singerLine.parts = singerLine.parts.map(p => ({...p, from: p.from === 0 ? 0 : p.from >= at ? p.from + added.length : p.from}))
+        } else if (structural && singerLine?.parts) {
             const offsets = (items: typeof placed) => {
                 let at = 0
                 return items.map((w, i) => {
@@ -317,6 +357,10 @@ export function applyTiming(data: Project, change: TimingChange, requests: Reque
         const reviewed = structural && words.every(w => w.estimated === false)
         if (!line.words.length && !placementChanged && !reviewed) throw new Error(`${name}: Place or review this line before grouping or anchoring`)
         line.words = words
+        if (entry.insert) {
+            line.text = source(words)
+            if (singerLine) singerLine.text = line.text
+        }
         line.start = words[0]!.start
         line.end = words.at(-1)!.end
         if (placementChanged || reviewed) {
@@ -375,8 +419,45 @@ export async function writeTiming(target: EditorTarget, change: TimingChange): P
         const file = join(target.dir, 'project.json')
         const data = readJson<Project>(file)
         if (!data) throw new Error('no project.json yet - run the plan first')
+        const before = structuredClone(data)
         const result = applyTiming(data, change, requests, automatic)
         if (!result.changed.length) return result
+        const inserted = change.lines.filter(l => l.insert).map(l => l.line)
+        if (change.add) inserted.push(Math.max(-1, ...before.lyricsTiming!.lines.map(l => l.line)) + 1)
+        if (inserted.length) {
+            const lyricsFile = join(target.dir, 'input', 'lyrics.txt')
+            const source = readFileSync(lyricsFile, 'utf8')
+            const updated = updateInsertedLyrics(source, before.lyricsTiming!, data, inserted)
+            result.changed = result.changed.map(id => updated.ids.get(id) ?? id)
+            result.crossing = result.crossing.map(c => ({...c, line: updated.ids.get(c.line) ?? c.line}))
+            if (updated.promoted) {
+                result.replanned = [
+                    ...new Set([
+                        ...result.replanned,
+                        ...dropBeatPlans(
+                            data,
+                            (data.beats ?? []).map(b => b.id),
+                        ),
+                    ]),
+                ]
+                result.staleClips = requests.map(r => r.id)
+            }
+            const backups = join(target.dir, '.timing-lyrics-backups')
+            mkdirSync(backups, {recursive: true})
+            writeJsonFile(join(backups, `${randomUUID()}.json`), {lyrics: source, project: before})
+            const putLyrics = (text: string) => {
+                writeFileSync(partialOf(lyricsFile), text)
+                replaceWithPartial(lyricsFile)
+            }
+            putLyrics(updated.lyrics)
+            try {
+                writeJsonFile(file, data)
+            } catch (error) {
+                putLyrics(source)
+                throw error
+            }
+            return result
+        }
         // next to it first, as the pipeline writes it: a crash mid-write never leaves half a project.json
         writeJsonFile(file, data)
         return result

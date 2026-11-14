@@ -76,6 +76,9 @@ const seen = computed(() =>
   }),
 )
 const own = (line: TimingLine) => line.line === props.draft.selected.value || props.draft.selection.value.some(s => s.line.line === line.line)
+// Omitted neighbours are context, not hit targets. They become editable when
+// deliberately selected in the line list, including before they are re-enabled.
+const ghost = (line: TimingLine) => !!line.off && line.line !== props.draft.selected.value
 const blocks = (line: TimingLine) => {
   const ws = props.draft.wordsOf(line)
   const result: {first: number; last: number; text: string; start: number; end: number; anchor?: boolean; estimated?: boolean; group?: string}[] = []
@@ -140,7 +143,7 @@ const snapTime = (time: number, event: PointerEvent, exclude: number[] = []) => 
   const threshold = ((span.value.to - span.value.from) / Math.max(1, width.value)) * 7
   const candidates = [
     ...props.view.cuts.flatMap(c => [c.start, c.end]),
-    ...props.view.lines.flatMap(l => props.draft.wordsOf(l).flatMap(w => [w.start, w.end])),
+    ...props.view.lines.filter(l => !ghost(l)).flatMap(l => props.draft.wordsOf(l).flatMap(w => [w.start, w.end])),
   ].filter(t => !exclude.some(x => Math.abs(t - x) < 0.0001))
   const nearest = candidates.sort((a, b) => Math.abs(a - time) - Math.abs(b - time))[0]
   if (nearest !== undefined && Math.abs(nearest - time) < threshold) {
@@ -302,7 +305,7 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
       <template v-for="line in seen" :key="line.line">
         <div
           v-if="own(line)"
-          :class="['tline', {changed: draft.isChanged(line)}]"
+          :class="['tline', {changed: draft.isChanged(line), ghost: ghost(line)}]"
           :style="box(draft.startOf(line), draft.endOf(line), 4)"
           title="Drag: move the whole line · ← → with the line chosen"
           @pointerdown="dragLine($event, line)"
@@ -312,7 +315,10 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
         <template v-for="w in blocks(line)" :key="w.first">
           <div
             v-if="own(line)"
-            :class="['tword', {chosen: draft.contains(line, w.first), crossed: crossed(line, w.first), off: line.off, anchored: w.anchor, grouped: w.group}]"
+            :class="[
+              'tword',
+              {chosen: draft.contains(line, w.first), crossed: crossed(line, w.first), off: line.off, ghost: ghost(line), anchored: w.anchor, grouped: w.group},
+            ]"
             :style="box(w.start, w.end, 3)"
             :title="`${w.text} · ${clock(w.start)}–${clock(w.end)}${crossed(line, w.first) ? ' · a clip cut falls into this word' : ''}`"
             @pointerdown="dragWord($event, line, w.first, undefined, w.last)"
@@ -324,7 +330,7 @@ defineExpose({focus: () => editor.value?.focus({preventScroll: true}), playLine}
           </div>
           <div
             v-else
-            :class="['tword', 'other', {off: line.off}]"
+            :class="['tword', 'other', {off: line.off, ghost: ghost(line)}]"
             :style="box(w.start, w.end, 3)"
             :title="`${w.text} · ${clock(w.start)}–${clock(w.end)}`"
             @click="draft.pickWord(line, w.first, $event.shiftKey)"
