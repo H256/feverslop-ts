@@ -83,7 +83,11 @@ function unisonChecks(j: number, people: NonNullable<ShotPlan['people']>, charac
 
 /** Who sings in shot j: the singers of the lines sung in it - all of the beat's singers for an input from before singersPerShot. */
 export type ShotSingers = {singerIds: string[]; singingPerShot: boolean[]; singersPerShot?: string[][]}
-export type ShotProps = {characterId: string; prop: string; activePerShot: boolean[]}[]
+/**
+ * Whose instrument is heard in which shot of a beat. `heardPerShot[j]`: when in shot j it is heard, in seconds of the shot - only
+ * where that is not (nearly) the whole shot (#968).
+ */
+export type ShotProps = {characterId: string; prop: string; activePerShot: boolean[]; heardPerShot?: ({start: number; end: number}[] | undefined)[]}[]
 const sungBy = (singers: ShotSingers | undefined, j: number) => singers?.singersPerShot?.[j] ?? (singers?.singingPerShot[j] ? singers.singerIds : [])
 
 /**

@@ -11,13 +11,21 @@ import type {DirectionShot} from '../../shared/direction.ts'
  * mapping, as the plan run counts them - also for a beat without a shot plan.
  */
 export function beatClips(data: Project, options: Partial<ProjectConfig> = {}): Map<string, {clip: string; shots: number[]}[]> {
-    if (!data.timeline || !data.mapping || !data.beats) return new Map()
+    if (!data.timeline || !data.mapping || !data.beats || !data.music || !data.cast) return new Map()
     const config = {...defaults, ...options}
-    const {slots, mapping} =
-        config.fightClips && data.music && data.cast
-            ? splitFightSlots(data.timeline.slots, data.mapping, data.beats, data.cast.characters, data.music)
-            : {slots: data.timeline.slots, mapping: data.mapping}
-    return shotsOfClips({slots, mapping, beats: data.beats})
+    const {slots, mapping} = config.fightClips
+        ? splitFightSlots(data.timeline.slots, data.mapping, data.beats, data.cast.characters, data.music)
+        : {slots: data.timeline.slots, mapping: data.mapping}
+    // cut as the plan run cuts them: where the band breaks off as well (#968)
+    return shotsOfClips({
+        slots,
+        mapping,
+        beats: data.beats,
+        characters: data.cast.characters,
+        music: data.music,
+        propActivity: data.propActivity,
+        shotMoments: data.shotMoments,
+    })
 }
 
 /** Actual song ranges, including downbeats, word-safe cuts and fight splits. No IO or generation. */
