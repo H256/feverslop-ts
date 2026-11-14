@@ -4,6 +4,7 @@ import CalloutBox from '../../components/CalloutBox.vue'
 import {computed, h, onMounted, ref, toRef, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import type {TimingView} from '../../../../shared/workspace'
+import type {TimingRefinement, RefinementLanguage} from '../../../../shared/timing-refinement'
 import {mediaUrl} from '../../api/urls'
 import FormField from '../../components/FormField.vue'
 import PageBar from '../../components/PageBar.vue'
@@ -108,8 +109,12 @@ const tightenAll = () => {
 // a line left out (heard, but not sung) or sung again - saved at once, as bun run timing --off / --on does it
 const setOff = toasts.guard((line: TimingView['lines'][number], off: boolean) =>
   saving.during(async () => {
-    const result = await api.saveTiming({lines: [{line: line.line, off}]})
-    await props.refresh()
+    const change = draft.request()
+    const entry = change.lines.find(l => l.line === line.line)
+    if (entry) entry.off = off
+    else change.lines.push({line: line.line, off})
+    const result = await api.saveTiming(change)
+    if (await props.refresh()) draft.discard()
     saved.value = [
       `"${line.text}" ${off ? 'is left out: no clip sings it' : 'is sung again'}.`,
       result.slots.length && `${plural(result.slots.length, 'clip')} sing${result.slots.length === 1 ? 's' : ''} something else now.`,
@@ -150,6 +155,7 @@ const FILTERS = computed(
       {value: 'all', label: 'All lines'},
       {value: 'estimated', label: `Estimated (${props.view.lines.filter(l => l.estimated).length})`},
       {value: 'changed', label: 'Moved'},
+      {value: 'adlibs', label: `Ad-libs (${props.view.lines.filter(l => l.adlib).length})`},
       ...(earlyLines.value.size ? [{value: 'early', label: `Early starts (${earlyLines.value.size})`}] : []),
       ...(outdated.value.size ? [{value: 'old', label: `Prompt old (${outdated.value.size})`}] : []),
     ] as const,
@@ -162,6 +168,125 @@ const choose = (n: number, extend = false) => {
 
 // while saving the page is not to be changed: the moved lines are let go - only once what was saved has been read again
 const saving = usePending()
+const addWords = toasts.guard(async () => {
+  const line = draft.line.value
+  if (!line || draft.edits.value.size) return
+  const expected = line.words.map(w => ({...w}))
+  const at = ref(draft.word.value ?? expected.length)
+  const text = ref('')
+  const separate = ref(false)
+  const startAt = ref(0),
+    endAt = ref(0)
+  const place = () => {
+    const left = expected[at.value - 1]?.end,
+      right = expected[at.value]?.start
+    startAt.value = left ?? Math.max(0, (right ?? 0) - 0.4)
+    endAt.value = right ?? Math.min(props.view.duration, startAt.value + 0.4)
+  }
+  place()
+  const timeField = (label: string, value: typeof startAt) =>
+    h(FormField, {label}, () =>
+      h('input', {
+        type: 'number',
+        step: '.001',
+        min: 0,
+        max: props.view.duration,
+        value: value.value,
+        onInput: (e: Event) => {
+          value.value = Number((e.target as HTMLInputElement).value)
+        },
+      }),
+    )
+  await ask({
+    title: 'Add missing sung words',
+    lines: [
+      'The existing words keep their timing. New word boxes are spread across the time range you enter; adjust their boundaries afterwards.',
+      'The lyric text is updated and backed up with the timing.',
+    ],
+    warnings: ['A new separate line, or extending an ad-lib into a regular lyric line, requires rebuilding existing shot plans.'],
+    body: () =>
+      h('div', [
+        h(FormField, {label: 'Add to'}, () =>
+          h(
+            'select',
+            {
+              value: separate.value ? 'line' : 'words',
+              onChange: (e: Event) => {
+                separate.value = (e.target as HTMLSelectElement).value === 'line'
+              },
+            },
+            [h('option', {value: 'words'}, 'Current line'), h('option', {value: 'line'}, 'New separate line in this section')],
+          ),
+        ),
+        separate.value
+          ? h('p', {class: 'muted'}, `New line in ${line.section}. Set the time range where it is sung.`)
+          : h(FormField, {label: 'Insert at'}, () =>
+              h(
+                'select',
+                {
+                  value: at.value,
+                  onChange: (e: Event) => {
+                    at.value = Number((e.target as HTMLSelectElement).value)
+                    place()
+                  },
+                },
+                [
+                  ...expected.map((w, n) => h('option', {value: n}, `Before ${n + 1}: ${w.text}`)),
+                  h('option', {value: expected.length}, 'After the last word'),
+                ],
+              ),
+            ),
+        h(FormField, {label: 'Missing words'}, () =>
+          h('input', {
+            type: 'text',
+            required: true,
+            value: text.value,
+            onInput: (e: Event) => {
+              text.value = (e.target as HTMLInputElement).value
+            },
+          }),
+        ),
+        timeField('Start (seconds)', startAt),
+        timeField('End (seconds)', endAt),
+        h('p', {class: 'muted'}, 'If there is no free interval, move the neighbouring words first. Existing words are never squeezed automatically.'),
+      ]),
+    confirm: 'Add words & save',
+    submit: async () => {
+      const texts = text.value.trim().split(/\s+/).filter(Boolean)
+      if (!texts.length || !Number.isFinite(startAt.value) || !Number.isFinite(endAt.value) || endAt.value - startAt.value < texts.length * 0.05)
+        throw new Error('Enter words and allow at least 0.05 seconds per word.')
+      const step = (endAt.value - startAt.value) / texts.length
+      const words = texts.map((text, n) => ({text, start: startAt.value + n * step, end: startAt.value + (n + 1) * step, estimated: true}))
+      const result = await api.saveTiming(
+        separate.value
+          ? {lines: [], add: {afterLine: line.line, expectedText: line.text, words}}
+          : {lines: [{line: line.line, off: false, insert: {at: at.value, expected, words}}]},
+      )
+      refinement.value = undefined
+      await props.refresh()
+      if (result.changed[0] !== undefined) choose(result.changed[0])
+      saved.value = 'Words and lyrics saved. Check the new word boundaries; affected shot plans need rebuilding.'
+    },
+  })
+})
+const refining = usePending()
+const refinement = ref<TimingRefinement>()
+const refinementLanguage = ref<RefinementLanguage>('de')
+const prepareRefinement = toasts.guard(() =>
+  refining.during(async () => {
+    refinement.value = undefined
+    refinement.value = await api.refineTiming(refinementLanguage.value)
+  }),
+)
+const takeRefinement = toasts.guard(() =>
+  saving.during(async () => {
+    if (!refinement.value || draft.edits.value.size) return
+    const result = await api.applyTimingRefinement(refinement.value.id)
+    refinement.value = undefined
+    await props.refresh()
+    saved.value = `Refined ${result.changed.length} lines. Listen to the unchecked words. ${result.replanned.length} affected beats need planning again. Original timing was backed up.`
+  }),
+)
 const save = toasts.guard((then: 'none' | 'plan' | 'cut') =>
   saving.during(async () => {
     const result = await api.saveTiming(draft.request())
@@ -239,6 +364,46 @@ onMounted(() => {
         {{ sideFolded ? 'Show the side column' : 'Hide the side column' }}
       </button></PageBar
     >
+    <details class="timing-refinement">
+      <summary>Refine timing from vocals</summary>
+      <p>Align the existing lyrics to phonemes. Hand edits and anchors stay. Check the proposal before applying; affected shot plans will need rebuilding.</p>
+      <div class="btn-row">
+        <label
+          >Lyrics language
+          <select v-model="refinementLanguage" :disabled="refining.pending.value">
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+          </select></label
+        >
+        <button class="btn" :disabled="refining.pending.value || draft.edits.value.size > 0" @click="prepareRefinement">
+          {{ refining.pending.value ? 'Aligning vocals…' : 'Prepare refinement' }}
+        </button>
+        <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
+      </div>
+      <p v-if="refining.pending.value" role="status">This can take several minutes. The first run downloads the local model. Your timing is unchanged.</p>
+      <template v-if="refinement">
+        <p>
+          {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
+          {{ refinement.entries.filter(e => e.status === 'omit').length }} proposed omissions ·
+          {{ refinement.entries.filter(e => e.status === 'review').length }} need manual review. Unheard lyrics may still be sung; check omissions.
+        </p>
+        <div style="max-height: 20rem; overflow: auto">
+          <p v-for="entry in refinement.entries" :key="entry.line">
+            <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
+            <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
+            }}<span v-if="entry.after"> → {{ entry.after.map(n => n.toFixed(2)).join('–') }}</span> — {{ entry.reason }}
+            <button v-if="entry.after" class="btn mini" @click="play(Math.max(0, entry.after[0] - 0.3), Math.min(view.duration, entry.after[1] + 0.3))">
+              Listen to proposal
+            </button>
+          </p>
+        </div>
+        <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
+          Apply proposal
+        </button>
+        <button class="btn" @click="refinement = undefined">Dismiss</button>
+      </template>
+    </details>
     <div class="tedit-wrap">
       <div class="tedit-head btn-row">
         <template v-if="draft.line.value">
@@ -253,8 +418,8 @@ onMounted(() => {
           <span
             v-if="draft.line.value.adlib"
             class="chip stale"
-            title="Heard by the transcription, but not in lyrics.txt - a repeat the song has, or something heard that nobody sings. Not sung until taken"
-            >ad-lib</span
+            :title="draft.line.value.off ? 'Heard but not enabled. Sing it includes this line in clips.' : 'Enabled: this ad-lib is included in clips.'"
+            >{{ draft.line.value.off ? 'ad-lib, off' : 'ad-lib, sung' }}</span
           >
           <span v-else-if="draft.line.value.off" class="chip bad" title="Left out: heard, but not sung - no clip sings it">left out</span>
           <span v-if="draft.line.value.problem" class="chip bad" :title="`Against lyrics.txt: ${draft.line.value.problem}`">{{
@@ -287,17 +452,25 @@ onMounted(() => {
           <button
             v-if="draft.line.value"
             class="btn"
-            :disabled="draft.edits.value.size > 0"
             :title="
               draft.edits.value.size
-                ? 'Save the moved lines first'
+                ? 'Save your pending timing changes and change whether this line is sung'
                 : draft.line.value.off
                   ? 'The line is sung again: the clips it falls into sing it'
                   : 'Heard, but not sung (a misheard ad-lib, a line on top of another): no clip sings it. It stays here, to be sung again'
             "
             @click="setOff(draft.line.value, !draft.line.value.off)"
           >
-            {{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+            {{ draft.edits.value.size ? 'Save changes & ' : ''
+            }}{{ draft.line.value.off ? (draft.line.value.adlib ? 'Sing it' : 'Sing it again') : 'Leave the line out' }}
+          </button>
+          <button
+            class="btn"
+            :disabled="draft.edits.value.size > 0"
+            :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
+            @click="addWords"
+          >
+            Add words
           </button>
         </span>
         <span class="tw-grp">

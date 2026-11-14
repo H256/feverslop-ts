@@ -19,9 +19,12 @@ import {EARLY_FROM, leadOf} from '../shared/timing-fit.ts'
 import {log, styles} from '../lib/log.ts'
 import {commandTarget} from '../lib/editor/preproduction.ts'
 import {readTiming, type TimingChange, writeTiming} from '../lib/editor/timing.ts'
+import {prepareTimingRefinement, applyTimingRefinement} from '../lib/editor/timing-refinement.ts'
+import type {RefinementLanguage} from '../shared/timing-refinement.ts'
 cli('timing')
 
-const usage = 'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all]'
+const usage =
+    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr | --apply-refinement=<proposal-id>]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
@@ -34,6 +37,8 @@ const {values: args, positionals} = (() => {
                 off: {type: 'string'},
                 on: {type: 'string'},
                 reset: {type: 'string'},
+                refine: {type: 'string'},
+                'apply-refinement': {type: 'string'},
             },
         })
     } catch (e) {
@@ -50,8 +55,36 @@ const view = await readTiming(t)
 if (!view) log.usageError(`${t.id} has no timed lyrics - they come with "alignLyrics" (or singers) and the stems: bun index.ts ${t.id} --until=story`, usage)
 const timing = view!
 
-if ([args.tighten, args.set !== undefined, args.off !== undefined || args.on !== undefined, args.reset !== undefined].filter(Boolean).length > 1)
-    log.usageError('--tighten, --set, --off/--on and --reset do not go together', usage)
+if (
+    [
+        args.tighten,
+        args.set !== undefined,
+        args.off !== undefined || args.on !== undefined,
+        args.reset !== undefined,
+        args.refine !== undefined,
+        args['apply-refinement'] !== undefined,
+    ].filter(Boolean).length > 1
+)
+    log.usageError('Choose one timing action at a time', usage)
+if (args.refine !== undefined) {
+    if (!['de', 'en', 'fr'].includes(args.refine)) log.usageError('--refine requires de, en or fr', usage)
+    const report = await prepareTimingRefinement(t, args.refine as RefinementLanguage)
+    if (args.json) console.log(JSON.stringify(report, null, 2))
+    else {
+        for (const entry of report.entries)
+            log.info(
+                `${entry.line + 1} [${entry.status}] ${entry.text}: ${entry.before.map(n => n.toFixed(2)).join('–')}${entry.after ? ` → ${entry.after.map(n => n.toFixed(2)).join('–')}` : ''}. ${entry.reason}`,
+            )
+        log.next(`bun run timing ${t.id} --apply-refinement=${report.id}`)
+        log.info('Proposal only; timing unchanged. Applying invalidates affected shot plans. Original timing is backed up.')
+    }
+    process.exit(0)
+}
+if (args['apply-refinement'] !== undefined) {
+    const result = await applyTimingRefinement(t, args['apply-refinement'])
+    console.log(JSON.stringify(result, null, 2))
+    process.exit(0)
+}
 let change: TimingChange | undefined
 // the line numbers as listed (from 1)
 const numbers = (value: string | undefined, flag: string) =>

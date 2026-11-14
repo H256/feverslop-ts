@@ -6,7 +6,7 @@ import {EARLY_FROM} from './fit'
 import type {TimingDraft} from './useTimingDraft'
 
 /** The lines of the song to pick one: when it starts, its section, and whether it is estimated, moved or cut through. */
-export type LineFilter = 'all' | 'estimated' | 'changed' | 'early' | 'old'
+export type LineFilter = 'all' | 'estimated' | 'changed' | 'early' | 'old' | 'adlibs'
 const props = defineProps<{view: TimingView; draft: TimingDraft; filter: LineFilter; leads: Map<number, number>; outdated: Map<number, string[]>}>()
 const emit = defineEmits<{choose: [line: number, extend: boolean]}>()
 const early = (line: TimingLine) => (props.leads.get(line.line) ?? 0) >= EARLY_FROM
@@ -16,6 +16,7 @@ const keep: Record<LineFilter, (line: TimingLine) => boolean> = {
   changed: line => props.draft.isChanged(line),
   early,
   old: line => props.outdated.has(line.line),
+  adlibs: line => !!line.adlib,
 }
 // the early starts with the worst first: that is where to look
 const shown = computed(() => {
@@ -31,6 +32,7 @@ const EMPTY: Record<LineFilter, string> = {
   changed: 'Nothing moved yet.',
   early: 'No first word starts before its singing.',
   old: 'Every clip has the times of the lines it sings.',
+  adlibs: 'No ad-libs were found.',
 }
 const stateOf = (line: TimingLine) =>
   line.adlib

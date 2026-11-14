@@ -130,6 +130,14 @@
   color: var(--muted);
   cursor: pointer;
 }
+.tword:not(.other) {
+  z-index: 1;
+}
+.tlayer > .ghost,
+.tlayer > .ghost * {
+  pointer-events: none;
+  z-index: 0;
+}
 .tword.off {
   border-style: dashed;
   opacity: 0.45;
