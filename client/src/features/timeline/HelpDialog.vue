@@ -24,11 +24,12 @@ const KEYS = [
   ['?', 'This page'],
 ]
 const REVIEW = [
-  ['Enter', 'Fine, next clip'],
-  ['R', 'Render again: mark it, next clip'],
-  ['←', 'Clip before'],
+  ['Space', 'Play or pause - the review plays its clips through, one after the other'],
+  ['R', 'Render the playing clip again at the end - the playback goes on; again: taken back'],
+  ['← / →', 'Clip before / next clip of the review'],
+  ['O', 'Loop the clip, to see it again'],
   ['C', 'Compare with its older version'],
-  ['Esc', 'End the review'],
+  ['Esc', 'End the review - the marked clips are offered for rendering, as at the end of the last one'],
 ]
 </script>
 

@@ -101,7 +101,13 @@ const markedBeats = computed(() => (project.value.beats ?? []).filter(b => b.cli
         <button title="Mark all flagged clips" @click="markFlagged">Mark flagged</button>
       </template>
       <template v-if="rendered">
-        <button class="b-check" title="Go through the marked clips, else the flagged ones, else all: one by one, with keys" @click="reviewNow">Review</button>
+        <button
+          class="b-check"
+          title="Play the marked clips through, else the flagged ones, else all: R marks the playing clip to render again at the end"
+          @click="reviewNow"
+        >
+          Review
+        </button>
         <button title="Look through the rendered clips for a grey studio backdrop. Runs on this machine, no GPU" @click="actions.plain({type: 'leak-scan'})">
           Scan for backdrops
         </button>

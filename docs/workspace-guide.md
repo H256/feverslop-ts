@@ -183,18 +183,18 @@ When the marked clips belong to beats, two more buttons come - both the language
 
 ![The review with its key bar under the picture](images/workspace/review.jpg)
 
-**Review** goes through the marked clips one by one, each in a loop - with nothing marked the flagged ones, else all. It plays only with `Space`; by itself only when **Play by itself** in its bar is ticked (the browser keeps that). After several clips were rendered again they are marked; you start the review yourself.
+**Review** plays the marked clips through, one after the other - with nothing marked the flagged ones, else all. Clips that are not in the review are skipped. You watch and press `R` on every clip you want rendered again; the playback does not stop. It plays only with `Space`; by itself only when **Play by itself** in its bar is ticked (the browser keeps that). After several clips were rendered again they are marked; you start the review yourself.
 
 | Key | |
 |---|---|
 | `Space` | play or pause |
-| `Enter` | fits, next clip |
-| `R` | render again: only noted, on at once - rendered at the end |
-| `←` | back |
+| `R` | the clip that is playing: render it again at the end - pressed again, taken back |
+| `←` / `→` | clip before / next clip of the review |
+| `O` | loop the clip, to see it again - `O` again ends the loop |
 | `C` | compare with the older version |
 | `Esc` | end the review |
 
-At the end exactly the clips noted with `R` stay marked, and the page asks whether to render them.
+The review ends at the end of its last clip, or with `Esc`. Then exactly the clips noted with `R` stay marked, and the page asks whether to render them.
 
 ## Changing the direction afterwards
 

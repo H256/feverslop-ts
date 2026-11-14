@@ -1,16 +1,19 @@
-import {computed, reactive, ref, shallowRef} from 'vue'
+import {computed, reactive, ref, shallowRef, watch} from 'vue'
 import type {EditorClip} from '../../../../shared/workspace'
 import {useToasts} from '../../services/toasts'
+import {reviewNext, reviewStep} from './clips'
 import type {ClipActions} from './useClipActions'
 import type {Timeline} from './useTimeline'
 
-type Review = {clips: EditorClip[]; index: number; again: Set<string>; restore: () => void}
+type Review = {clips: EditorClip[]; again: Set<string>; restore: () => void}
 
 /**
- * Going through clips one by one, with keys: each one in a loop, fine or to be rendered again. A final video would show the clips as
- * they were when it was made, so a review plays the clips; what was there before comes back after.
+ * Watching the clips through and marking the ones to render again, without stopping: Space plays, R marks the clip that is playing
+ * (again: takes it back), the playback goes on. A review of some of the clips plays them one after the other and skips the rest. At
+ * the end of the last one, or with Esc, what is marked is offered for rendering. O loops a clip when one wants to see it again.
+ * A final video would show the clips as they were when it was made, so a review plays the clips; what was there before comes back after.
  */
-// whether a review plays each clip by itself: only when the viewer ticked it - nobody wants a page to start loud videos on its own
+// whether a review starts playing by itself: only when the viewer ticked it - nobody wants a page to start loud videos on its own
 const AUTOPLAY_KEY = 'review.autoplay'
 const readAutoplay = () => {
   try {
@@ -24,7 +27,11 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
   const toasts = useToasts()
   const {playback, marked} = timeline
   const review = shallowRef<Review>()
-  const current = computed(() => review.value && review.value.clips[review.value.index])
+  const listed = (clip: EditorClip | undefined) => (clip && review.value?.clips.find(c => c.id === clip.id)) || undefined
+  /** The clip of the review at the playhead - none while the playhead is on a clip the review does not go through. */
+  const current = computed(() => listed(playback.clip.value))
+  /** Where the review stands: the clip's place in its list. */
+  const position = computed(() => (review.value && current.value ? review.value.clips.findIndex(c => c.id === current.value!.id) : -1))
   const autoplay = ref(readAutoplay())
   const setAutoplay = (on: boolean) => {
     autoplay.value = on
@@ -33,31 +40,35 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
     } catch {
       // kept for this visit only
     }
-    if (on && current.value) playback.setPlaying(true)
   }
 
-  /** The clip in a loop, from its start - played by itself only with autoplay ticked; Space plays it. */
-  function show() {
-    const clip = current.value
-    if (!clip) return
-    playback.loop.value = {from: clip.start, to: clip.end, label: clip.id}
-    playback.seek(clip.start)
-    playback.setPlaying(autoplay.value)
-  }
   function start(clips: EditorClip[]) {
     if (!clips.length) return
-    review.value = {clips, index: 0, again: reactive(new Set<string>()), restore: timeline.holdSource('clips')}
-    show()
+    review.value = {clips, again: reactive(new Set<string>()), restore: timeline.holdSource('clips')}
+    playback.loop.value = undefined
+    playback.seek(clips[0]!.start)
+    playback.setPlaying(autoplay.value)
   }
-  function step(direction: number) {
+  function goTo(clip: EditorClip | undefined) {
+    if (!clip) return
+    playback.loop.value = undefined
+    playback.seek(clip.start)
+    if (playback.playing.value) playback.setPlaying(true)
+  }
+
+  // playing on out of a clip of the review: into the next one of its list, past the clips it does not go through - or it is through
+  watch(playback.clip, (here, left) => {
     const r = review.value
-    if (!r) return
-    const next = r.index + direction
-    if (next < 0) return
-    if (next >= r.clips.length) return end()
-    review.value = {...r, index: next}
-    show()
-  }
+    if (!r || !playback.playing.value || !listed(left) || listed(here) || playback.t.value < left!.end - 0.1) return
+    const next = reviewNext(r.clips, left!)
+    if (next) goTo(next)
+    else end()
+  })
+  // the end of the whole video, played to: the review is through
+  watch(playback.playing, on => {
+    if (!on && review.value && playback.t.value >= timeline.project.value.seconds - 0.05) end()
+  })
+
   /** What was gone through is decided: what stays marked is what is to be rendered - asked for right away. */
   function end() {
     const r = review.value
@@ -73,27 +84,26 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
     actions.renderMarkedNow().catch(toasts.fail)
   }
   async function compare() {
-    const clip = current.value
+    const clip = playback.clip.value
     if (!clip) return
     const {versions} = await timeline.session.api.versions(clip.id)
     if (!versions[0] || !clip.video) return toasts.show(`${clip.id} has no older version`)
     playback.setPlaying(false)
     timeline.compared.value = {clip, version: versions[0]}
   }
-  /** The keys of a review: true when the key was its own. */
+  /** The keys of a review: true when the key was its own. Space, O and the others are the timeline's own, as outside a review. */
   function key(event: KeyboardEvent) {
     const r = review.value
-    const clip = current.value
-    if (!r || !clip) return false
+    if (!r || event.ctrlKey || event.metaKey || event.altKey) return false
     const keys: Record<string, () => void> = {
-      Enter: () => step(1),
-      ArrowRight: () => step(1),
-      ArrowLeft: () => step(-1),
-      // kept for the render at the end, and on to the next; R on a kept one (after ←) takes it back
+      ArrowRight: () => goTo(reviewStep(r.clips, playback.t.value, 1)),
+      ArrowLeft: () => goTo(reviewStep(r.clips, playback.t.value, -1)),
+      // the clip that is playing, kept for the render at the end - or taken back; the playback goes on
       r: () => {
-        if (r.again.has(clip.id)) return void r.again.delete(clip.id)
-        r.again.add(clip.id)
-        step(1)
+        const clip = playback.clip.value
+        if (!clip?.video) return
+        if (r.again.has(clip.id)) r.again.delete(clip.id)
+        else r.again.add(clip.id)
       },
       c: () => {
         compare().catch(toasts.fail)
@@ -106,6 +116,6 @@ export function useReview(timeline: Timeline, actions: ClipActions) {
     action()
     return true
   }
-  return {review, current, start, end, key, autoplay, setAutoplay}
+  return {review, current, position, start, end, key, autoplay, setAutoplay}
 }
 export type ReviewControl = ReturnType<typeof useReview>
