@@ -17,8 +17,13 @@
     border-top: 1px solid var(--line);
     max-height: 60vh;
   }
+  /* the status of the project stays: wrapped onto more lines instead of hidden (#1000) */
   .chips {
-    display: none;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .chips .chip.next {
+    white-space: normal;
   }
   .role-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
