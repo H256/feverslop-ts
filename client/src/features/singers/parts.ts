@@ -75,7 +75,6 @@ export function changesOf(view: SingingView, partsOf: (line: SingingLine) => Par
     unplaced: lines.filter(l => !l.beats.length),
   }
 }
-export type SingingChanges = ReturnType<typeof changesOf>
 
 /** The request for the changed lines: parts only where the singer changes within a line. */
 export const changeOf = (lines: SingingLine[], partsOf: (line: SingingLine) => Part[]): SingingChange => ({

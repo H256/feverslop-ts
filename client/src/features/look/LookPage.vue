@@ -34,9 +34,8 @@ const saveBrief = toasts.guard(async () => {
   if (!yes) return
   const result = await saving.during(async () => {
     const result = await api.saveLook({lookBrief: brief.text.value})
-    // a new look of the whole has every look written again: the texts changed here go with it
-    edits.clear()
-    await refresh()
+    // a new look of the whole has every look written again: the texts changed here go with it - once the page shows what was saved
+    if (await refresh()) edits.clear()
     return result
   })
   toasts.show(result.changed ? 'The look is saved' : 'Nothing changed')

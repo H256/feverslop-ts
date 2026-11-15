@@ -119,7 +119,6 @@ export function createProjectSession(kind: ProjectKind, id: string, deps: {run: 
 }
 export type ProjectSession = ReturnType<typeof createProjectSession>
 export const ProjectService = defineService<ProjectSession>('project')
-export const useProjectSession = ProjectService.use
 
 /** A page of a project: its session, with the snapshot that ProjectLayout has loaded before any page is shown. */
 export function useProject() {

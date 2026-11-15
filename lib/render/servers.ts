@@ -417,9 +417,16 @@ export async function resumeOrQueue<M>(
     if (backslashed)
         throw new Error(`${label}: a path on the server is written with \\ - ${backslashed}. A Linux ComfyUI refuses it; build it with /, not path.join`)
     for (const upload of uploads) {
+        // the song and its stems are the same for every clip: what this run already sent under that name, from that file as it is now,
+        // is not sent again (#979)
+        const file = Bun.file(upload.from)
+        const key = `${server.name}|${upload.to}`
+        const version = `${upload.from}|${file.size}|${file.lastModified}`
+        if (r.uploaded.get(key) === version) continue
         // into ComfyUI's input folder, under the same name the workflow loads - split with /, whatever system this runs on
-        const uploaded = await api.uploadImage(Bun.file(upload.from), posix.basename(upload.to), {subfolder: posix.dirname(upload.to), override: true})
+        const uploaded = await api.uploadImage(file, posix.basename(upload.to), {subfolder: posix.dirname(upload.to), override: true})
         if (!uploaded) throw new Error(`${label}: upload of ${upload.from} to ${server.name} failed`)
+        r.uploaded.set(key, version)
     }
     const queued = await api.queuePrompt(null, prompt).catch(async (error: unknown) => {
         // ComfyUI answers an invalid graph with 400 and the node errors
