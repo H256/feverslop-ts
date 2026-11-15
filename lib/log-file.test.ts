@@ -10,7 +10,7 @@ describe('the log of a run', () => {
         const file = join(dir, 'logs', 'run.log')
         try {
             const script = `
-                import {keepLogIn, log, startSpinner} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
+                import {BOARD_REDRAW_MS, keepLogIn, log, startSpinner} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
                 keepLogIn(${JSON.stringify(file)})
                 log.step('Step', 'one')
                 console.log('plain', 2)
@@ -71,13 +71,14 @@ test('concurrent TTY board stays out of the persisted log', () => {
                 'bun',
                 '-e',
                 `
-            import {keepLogIn, log, startSpinner} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
+            import {BOARD_REDRAW_MS, keepLogIn, log, startSpinner} from ${JSON.stringify(join(import.meta.dir, 'log.ts'))}
             Object.defineProperty(process.stdout, 'isTTY', {value: true})
             Object.defineProperty(process.stdout, 'columns', {value: 60})
             keepLogIn(${JSON.stringify(file)})
             const a = startSpinner(() => 'clip-one running')
             const b = startSpinner(() => 'clip-two loading')
-            await Bun.sleep(120)
+            // the board is drawn every BOARD_REDRAW_MS: a little more than one of them
+            await Bun.sleep(BOARD_REDRAW_MS * 1.5)
             log.info('persistent event')
             a(); b()
         `,
