@@ -196,6 +196,21 @@ const readHeight = () => {
 }
 const clipHeight = ref(clamp(readHeight(), 56, 240))
 const resizeDrag = usePointerDrag()
+function saveHeight() {
+  try {
+    localStorage.setItem(HEIGHT_KEY, String(clipHeight.value))
+  } catch {
+    // no storage: the height holds for this page only
+  }
+}
+/** The keys for what the drag does: up is taller, down is lower; Shift for a bigger step. */
+function resizeByKey(event: KeyboardEvent) {
+  const step = event.shiftKey ? 24 : 8
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+  event.preventDefault()
+  clipHeight.value = clamp(clipHeight.value + (event.key === 'ArrowUp' ? step : -step), 56, 240)
+  saveHeight()
+}
 function resize(event: PointerEvent) {
   const from = event.clientY
   const before = clipHeight.value
@@ -242,7 +257,19 @@ const hidePeek = () => {
 
 <template>
   <section class="timeline" aria-label="Timeline" :style="{'--clip-h': `${clipHeight}px`}">
-    <div class="tl-resize" title="Drag to make the timeline taller or lower" @pointerdown.prevent="resize" />
+    <div
+      class="tl-resize"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Height of the clips"
+      :aria-valuenow="clipHeight"
+      aria-valuemin="56"
+      aria-valuemax="240"
+      tabindex="0"
+      title="Drag to make the timeline taller or lower - or the arrow keys up and down"
+      @pointerdown.prevent="resize"
+      @keydown="resizeByKey"
+    />
     <div class="tbar">
       <TimelineLegend />
     </div>

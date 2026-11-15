@@ -49,6 +49,35 @@ describe('assembleFinal with interpolated clips', () => {
     })
 })
 
+describe('assembleFinal with very many clips (#992)', () => {
+    test('400 clips: the filter graph is more than a Windows command line holds - it goes through a file', async () => {
+        const {mkdtempSync, existsSync} = await import('node:fs')
+        const {tmpdir} = await import('node:os')
+        const {join} = await import('node:path')
+        const {assembleFinal, probeVideo} = await import('./assemble.ts')
+        const dir = mkdtempSync(join(tmpdir(), 'many-'))
+        const make = async (args: string[]) => {
+            const p = Bun.spawn(['ffmpeg', '-v', 'error', '-y', ...args], {stderr: 'pipe'})
+            if ((await p.exited) !== 0) throw new Error(await new Response(p.stderr).text())
+        }
+        await make(['-f', 'lavfi', '-i', 'testsrc=size=64x36:rate=24', '-frames:v', '8', '-pix_fmt', 'yuv420p', join(dir, 'c.mp4')])
+        await make(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=80', join(dir, 'song.wav')])
+        const count = 400
+        const clips = Array.from({length: count}, (_, i) => ({id: `c${i}`, frames: 4, frameStart: i * 4})) as never
+        const target = join(dir, 'out.mp4')
+        await assembleFinal({
+            clips,
+            projectDir: dir,
+            songFile: join(dir, 'song.wav'),
+            songAudio: true,
+            target,
+            interpolated: {files: Array.from({length: count}, () => join(dir, 'c.mp4')), multiplier: 1, fps: 24},
+        })
+        expect((await probeVideo(target)).frames).toBe(count * 4)
+        expect(existsSync(`${target}.filters.txt`)).toBe(false)
+    }, 60_000)
+})
+
 describe('trimHead', () => {
     test('cuts the first frames off a clip, the sound with them', async () => {
         const {mkdtempSync} = await import('node:fs')
