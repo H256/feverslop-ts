@@ -87,7 +87,8 @@ export function eventCursor(request: Request, after: number) {
 }
 
 /** The lines of a run as they come, as server-sent events: a page can come and go, and follow a run it did not start. */
-export function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number) {
+/** `pollMs`: how often the run is looked at - a parameter so that a test need not wait for the real interval (#1006). */
+export function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number, pollMs = 700) {
     let after = eventCursor(request, from)
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream({
@@ -128,7 +129,7 @@ export function runEvents(runs: RunControl, target: EditorTarget, request: Reque
                 }
             }
             tick()
-            timer = setInterval(tick, 700)
+            timer = setInterval(tick, pollMs)
             request.signal.addEventListener('abort', () => {
                 clearInterval(timer)
                 try {
