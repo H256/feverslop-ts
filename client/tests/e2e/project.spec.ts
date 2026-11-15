@@ -421,7 +421,7 @@ test('settings: the finish field by field - its fields are locked while it is of
   await page.getByRole('button', {name: 'Save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'config')?.body).toEqual({change: {'finish.grain': 2.5}, dryRun: true})
   await dialog(page).getByRole('button', {name: 'Cancel'}).click()
-  await page.getByLabel('Finish', {exact: true}).selectOption('off')
+  await page.getByRole('combobox', {name: 'Finish', exact: true}).selectOption('off')
   await expect(page.getByLabel('Film grain')).toBeDisabled()
   await expect(page.getByLabel('Sharpen')).toBeDisabled()
 })

@@ -351,6 +351,7 @@ const DEFINITIONS: Definition[] = [
     },
     {
         key: 'lipsyncDummy',
+        multiline: true,
         label: 'First dummy',
         group: 'Lip-sync preview',
         control: 'text',
@@ -359,6 +360,7 @@ const DEFINITIONS: Definition[] = [
     },
     {
         key: 'lipsyncDummy2',
+        multiline: true,
         label: 'Second dummy',
         group: 'Lip-sync preview',
         control: 'text',

@@ -29,6 +29,19 @@ ${source}`,
 - "language": the ISO 639-1 code of the language the characters ${dialogueLanguage ? `speak: always "${dialogueLanguage}"` : mode === 'screenplay' ? 'speak in the screenplay (the dominant one if several)' : 'will speak - the language the idea is written in'}.
 - "logline": one sentence in English: who wants what, and what stands in the way.
 - "genre", "tone", "setting": a few words each, in English. The setting is era and place.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['title', 'language', 'logline', 'genre', 'tone', 'setting'],
+            properties: {
+                title: {type: 'string'},
+                language: {type: 'string'},
+                logline: {type: 'string'},
+                genre: {type: 'string'},
+                tone: {type: 'string'},
+                setting: {type: 'string'},
+            },
+        },
     }
 }
 
@@ -68,6 +81,43 @@ Answer only with JSON:
 - "setups": for every event that has to be believable (an escape, a surprise, an object that is used), what has to be shown before it and in which scene - an escape from a rope needs the rope shown, and what makes it give way. [] if nothing needs it.
 - If the idea lists the steps of the story (an arc, beats, an ending), every step happens, in that order, in a scene of its own or inside one: none dropped, none reordered, no other ending.
 Names, headings and the story are written in English; the dialogue language only matters later, in the script.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['characters', 'scenes', 'setups'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: ['name', 'role', 'appearance', 'voice'],
+                        properties: {name: {type: 'string'}, role: {type: 'string'}, appearance: {type: 'string'}, voice: {type: 'string'}},
+                    },
+                },
+                scenes: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: ['heading', 'characters', 'summary', 'purpose', 'begins', 'changes', 'seconds'],
+                        properties: {
+                            heading: {type: 'string'},
+                            characters: {type: 'array', items: {type: 'string'}},
+                            summary: {type: 'string'},
+                            purpose: {type: 'string'},
+                            begins: {type: 'string'},
+                            changes: {type: 'string'},
+                            seconds: {type: 'number', minimum: 1},
+                        },
+                    },
+                },
+                setups: {
+                    type: 'array',
+                    items: {type: 'object', required: ['event', 'setup'], properties: {event: {type: 'string'}, setup: {type: 'string'}}},
+                },
+            },
+        },
     }
 }
 
@@ -190,6 +240,44 @@ Characters:
 - "voiceOnly": true for a character who is never seen (a narrator, a voice on the phone), else false.
 - "states": almost always []. Only if the script changes how the character LOOKS - for a stretch of the film or for the rest of it - in a way a picture has to show: wounded and bloody, in disguise, covered in mud or soot, soaked, in other clothes, much older. Each: "name" (a word or two, e.g. "wounded"), "from" (the number of the scene, as in the [Scene n] headings of the screenplay, in which the script FIRST shows this look - not earlier: a look the script gives in scene 19 is not used in scene 10) and "change" - what is different from the normal appearance, concrete and visible, one or two sentences, and only what the script itself says changes: other clothes only if the script says so, never invented to fit the mood. At most two per character. A state is how the body and clothes look - never a pose, a place or an action ("lying in a crater", "dying" are the scene, not the look), and never only a detail of one body part: it has to show in a picture of the whole person. A mood, a bruise that is barely visible or a change of a few seconds is not a state.
 Locations: the "description" is the place as the film first shows it - what stands there in every scene. Leave out what the script reveals, uncovers, builds, breaks or changes later, and every object that someone picks up, carries, uses or moves (a radio on a shelf, a weapon, a cup) - even when the script's own scene description lists it there: those belong to the shots that need them, not to the place. Each place that can be filmed as one set, in order of appearance. Sluglines name views and moments as much as places: the same place under several names, seen closer or from another side, at another time of day, is one location with all those names as aliases - a new location only where the look is clearly another (a clearing and the dense forest around it, the inside of a hut and its yard). Fewer, clearly different places are better than many that overlap. "aliases" are the names the sluglines use for it. "description": what it looks like, in one or two sentences - what is where, materials, light. No people and no action.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['characters', 'locations'],
+            properties: {
+                characters: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'aliases', 'role', 'appearance', 'voice', 'voiceOnly', 'states'],
+                        properties: {
+                            name: {type: 'string'},
+                            aliases: {type: 'array', items: {type: 'string'}},
+                            role: {type: 'string'},
+                            appearance: {type: 'string'},
+                            voice: {type: 'string'},
+                            voiceOnly: {type: 'boolean'},
+                            states: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    required: ['name', 'change'],
+                                    properties: {name: {type: 'string'}, change: {type: 'string'}, from: {type: 'integer', minimum: 1}},
+                                },
+                            },
+                        },
+                    },
+                },
+                locations: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'aliases', 'description'],
+                        properties: {name: {type: 'string'}, aliases: {type: 'array', items: {type: 'string'}}, description: {type: 'string'}},
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -213,6 +301,12 @@ export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleCha
         input: `${idea ? `Story idea the script was written from:\n${idea}${changed}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => (e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`))].join('\n')).join('\n\n')}`,
         instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.${idea ? ' Also: a step the story idea names that the script does not show, or shows in another order or with another ending.' : ''}
 Answer only with JSON: {"notes": ["s5-s7: <what contradicts what, in one sentence>"]}. Name the scenes. At most 8 notes, the ones that matter most for the picture; [] if the script is consistent.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['notes'],
+            properties: {notes: {type: 'array', maxItems: 8, items: {type: 'string'}}},
+        },
     }
 }
 
@@ -249,6 +343,27 @@ ${screenplayToText(screenplay)}`,
 - "shape", "colour", "material": what the thing itself looks like, so a picture of it can be drawn - from the script and the era of the film, a few words each, the thing alone. "shape" starts with the thing and gives its size and form ("a long umbrella with a curved crook handle, about a metre long"), "colour" its colours and finish ("black canopy, dark brown handle, worn"), "material" what it is made of ("nylon canopy, wooden handle, steel tip"). Open or closed, lit or not: as it is seen in most of its shots - an umbrella that is opened and held over someone has an open shape. What the script leaves open you decide, once and concretely, so every clip draws the same thing: one colour, one material ("wooden", never "plastic or wooden"), no light or weather on it, no pose ("leaning") - the picture shows it standing alone in even light.
 - Not what someone wears all film long (a costume, a necklace, a ring of keys on a lanyard): that is in their picture. Not a fixed part of a place (a door, a lamp on a stand, a counter): that is in the place's picture. Not food, liquids or things that are only heard.
 - At most 6, the ones that come back most. {"props": []} if the script has none.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['props'],
+            properties: {
+                props: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'used', 'shape', 'colour', 'material'],
+                        properties: {
+                            name: {type: 'string'},
+                            used: {type: 'string'},
+                            shape: {type: 'string'},
+                            colour: {type: 'string'},
+                            material: {type: 'string'},
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -267,6 +382,12 @@ film: ${brief.title} - ${brief.logline}
 Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
 summary: ${summary}`,
         instructions: 'You are a film director choosing the visual style of a short film. Answer only with the JSON.',
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['style', 'reason'],
+            properties: {style: styleList.length ? {enum: styleList.map(x => x.id)} : {type: 'string'}, reason: {type: 'string'}},
+        },
     }
 }
 
@@ -296,6 +417,19 @@ First think of the place as a floor plan: what lies on which side of the spot th
 Answer only with JSON: {"views": [{"name": "", "shows": ""}, ...five entries]}
 - "name": short - where the camera stands and what it looks toward ("from the water side, looking back toward the dunes").
 - "shows": one or two sentences - the camera position and what is seen: the features, their materials, where the light comes from, what is on the left and on the right of the frame. Same place, same time of day and weather as the hero picture, nothing that contradicts the description; features that appear in more than one view are in the same place relative to each other. No people.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['views'],
+            properties: {
+                views: {
+                    type: 'array',
+                    minItems: 5,
+                    maxItems: 5,
+                    items: {type: 'object', required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}},
+                },
+            },
+        },
     }
 }
 

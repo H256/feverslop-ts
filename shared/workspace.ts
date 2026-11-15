@@ -673,6 +673,7 @@ export type SettingView = {
     group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish' | 'Lip-sync preview'
     /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a number, whole unless `step` says otherwise */
     control: 'select' | 'text' | 'number'
+    multiline?: boolean
     step?: number
     /** a setting that only does something while this one is on: shown, but not to be changed while it is off */
     needs?: string
