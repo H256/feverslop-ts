@@ -150,8 +150,6 @@ test('direction in the timeline: the cast lane, the shot dialog, a person taken 
 
 test('a failure stays until closed or until the same action works - a notice does not take it away; reached by keyboard (#940)', async ({page}) => {
   await stubProject(page)
-  // the page's clock runs by itself until the test moves it: the timers of a toast are fired, not waited for
-  await page.clock.install()
   let state = view()
   let refuse = true
   await page.route('**/api/direction', async route => {
@@ -161,13 +159,15 @@ test('a failure stays until closed or until the same action works - a notice doe
     }
     await route.fulfill({json: state})
   })
+  // time of the page is the test's own: the seconds a toast used to last pass at once, not by waiting
+  await page.clock.install()
   await page.goto(`${editor.base}/p/music/demo/direction?shot=b1%3Ashot1`)
   await page.getByLabel('Instruction', {exact: true}).fill('Ann turns to her own left.')
   await page.getByRole('button', {name: 'Save instruction', exact: true}).click()
   const failure = page.getByRole('alert').filter({hasText: 'the disk is full'})
   await expect(failure).toBeVisible()
   // long past the time a toast used to go
-  await page.clock.runFor(7500)
+  await page.clock.fastForward(7500)
   await expect(failure).toBeVisible()
   await expect(failure.getByRole('button', {name: /^Close/})).toBeEnabled()
   // tried again and it works: the failure goes, the notice of the success comes

@@ -314,6 +314,8 @@ type BoardEntry = {status: () => string; start: number; note: boolean}
 const board = new Set<BoardEntry>()
 const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 let frame = 0
+/** How often the spinners' board is drawn again, in ms - exported so that a test waits for it by name, not by a number next to it (#1006). */
+export const BOARD_REDRAW_MS = 100
 let timer: ReturnType<typeof setInterval> | undefined
 let drawn = 0
 
@@ -357,7 +359,7 @@ function clearBoard() {
 export function startSpinner(getStatus: () => string, options: {note?: boolean} = {}) {
     const entry: BoardEntry = {status: getStatus, start: Date.now(), note: options.note ?? false}
     board.add(entry)
-    if (process.stdout.isTTY && !quiet && !json) timer ??= setInterval(drawBoard, 100)
+    if (process.stdout.isTTY && !quiet && !json) timer ??= setInterval(drawBoard, BOARD_REDRAW_MS)
     return () => {
         board.delete(entry)
         clearBoard()
