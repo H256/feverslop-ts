@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FormField from '../../components/FormField.vue'
+import {stableKeys} from '../../lib/stable-key'
 import type {BeatCastDraft} from './beatCast'
 
 /**
@@ -8,6 +9,7 @@ import type {BeatCastDraft} from './beatCast'
  * at least one of them - only they can go out.
  */
 const props = defineProps<{draft: BeatCastDraft; cast: {id: string; name: string; role?: string}[]; inAll: string[]; inSome: string[]}>()
+const keyOf = stableKeys<{name: string; role: string}>()
 const addRow = () => props.draft.join.push({name: '', role: ''})
 const dropRow = (n: number) => props.draft.join.splice(n, 1)
 </script>
@@ -23,7 +25,7 @@ const dropRow = (n: number) => props.draft.join.splice(n, 1)
       </div>
     </FormField>
     <FormField label="New people - each one their own person, with a picture of their own">
-      <div v-for="(row, n) in draft.join" :key="n" class="row">
+      <div v-for="(row, n) in draft.join" :key="keyOf(row)" class="row">
         <input v-model="row.name" type="text" placeholder="Name, e.g. Mara" maxlength="80" />
         <input
           v-model="row.role"
