@@ -145,4 +145,3 @@ export function projectApi(root: string) {
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
   }
 }
-export type ProjectApi = ReturnType<typeof projectApi>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {stableKeys} from '../../lib/stable-key'
 import FormField from '../../components/FormField.vue'
 
 /**
@@ -8,9 +9,7 @@ import FormField from '../../components/FormField.vue'
 const props = defineProps<{roles: {name: string; role: string}[]}>()
 const remove = (n: number) => props.roles.splice(n, 1)
 // a stable key for each form: removing one does not move the typing of another
-const keys = new WeakMap<object, number>()
-let next = 0
-const keyOf = (role: object) => keys.get(role) ?? keys.set(role, next++).get(role)!
+const keyOf = stableKeys<object>()
 </script>
 
 <template>
