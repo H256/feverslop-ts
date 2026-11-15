@@ -6,7 +6,7 @@ import {log} from '../lib/log.ts'
 // usage: bun run init [project-id]   (the id only pre-fills the first question)
 //        bun run init <project-id> --song=<file> | --idea=<text|file> […]   (asks nothing: lib/init-options.ts, #827)
 import * as p from '@clack/prompts'
-import {existsSync, readdirSync} from 'node:fs'
+import {existsSync, readdirSync, rmSync} from 'node:fs'
 import type {Resolution} from '../comfy/helpers.ts'
 import {type Finish, MILD_FINISH} from '../lib/finish.ts'
 import {FPS} from '../lib/frames.ts'
@@ -20,6 +20,21 @@ import {ProjectStore} from '../lib/project.ts'
 import {importSong, librarySongIds, type LibrarySong, readLibrarySong, songsLike} from '../lib/song-library.ts'
 import {loadProjectConfig} from '../lib/config.ts'
 cli('init')
+
+/** A path as a terminal pastes it: dragged in on Windows it comes in quotes (#1003). */
+function unquoted(path: string): string {
+    return path.trim().replace(/^(["'])(.*)$/, '$2')
+}
+
+/** The project is written before its song is taken over: when that fails, the half-made folder goes (#1003). */
+async function importOrRemove(id: string, work: () => Promise<unknown>) {
+    try {
+        await work()
+    } catch (error) {
+        rmSync(`projects/${id}`, {recursive: true, force: true})
+        throw error
+    }
+}
 
 // by options, nothing asked (#827): a script, or the workspace, which has no terminal to ask in
 {
@@ -36,7 +51,7 @@ cli('init')
         const config = song ? {lyricsLanguage: song.lyricsLanguage, ...asked.seed.config, alignLyrics: true} : asked.seed.config
         await writeProject(asked.id, {...asked.seed, config})
         if (song) {
-            await importSong(library, song, new ProjectStore(asked.id), await loadProjectConfig(`projects/${asked.id}`))
+            await importOrRemove(asked.id, async () => importSong(library, song, new ProjectStore(asked.id), await loadProjectConfig(`projects/${asked.id}`)))
             log.step(
                 'Song',
                 `${song.name} ${styles.muted('from the library - the analysis, the stems and the timing are taken over, the plan starts at the story')}`,
@@ -201,13 +216,15 @@ const steps: Record<string, Step> = {
                 a.songFile = answer(
                     await p.text({
                         message: 'Path to the audio file (wav, mp3 or flac)',
+                        // dragged into a Windows terminal, a path arrives in quotes
                         validate: value => {
                             if (!value) return 'required'
-                            if (!existsSync(value)) return 'file not found'
-                            if (!/\.(wav|mp3|flac)$/i.test(value)) return 'must be .wav, .mp3 or .flac'
+                            if (!existsSync(unquoted(value))) return 'file not found'
+                            if (!/\.(wav|mp3|flac)$/i.test(unquoted(value))) return 'must be .wav, .mp3 or .flac'
                         },
                     }),
                 )
+                a.songFile = unquoted(a.songFile!)
                 return
             }
             log.info(`No song yet - it will be generated with the ${defaults.songWorkflow} workflow`)
@@ -632,7 +649,8 @@ await writeProject(id, {
     config,
 })
 if (a.librarySong) {
-    await importSong(library, a.librarySong, new ProjectStore(id), await loadProjectConfig(`projects/${id}`))
+    const song = a.librarySong
+    await importOrRemove(id, async () => importSong(library, song, new ProjectStore(id), await loadProjectConfig(`projects/${id}`)))
     log.step(
         'Song',
         `${a.librarySong.name} ${styles.muted(`from the library - the analysis, ${Object.keys(a.librarySong.stems).length} stems and the timing are taken over, the plan starts at the story`)}`,
@@ -655,15 +673,15 @@ const start = answer(
     }),
 )
 if (start === 'no') {
-    log.next(`bun index.ts ${id} --render=${render}`)
+    log.next(`bun run plan ${id} --render=${render}`)
     process.exit(0)
 }
 const run = start === 'song' ? 'song' : render
-log.success(`Created - running bun index.ts ${id} --render=${run}`)
+log.success(`Created - running bun run plan ${id} --render=${run}`)
 const result = Bun.spawnSync(['bun', 'index.ts', id, `--render=${run}`], {stdio: ['inherit', 'inherit', 'inherit']})
 if (result.exitCode === 0 && start === 'song')
-    log.info(`\nSong ready - listen to projects/${id}/input/song.wav, then continue with:\n\n  bun index.ts ${id} --render=images,videos,final\n`)
-if (result.exitCode !== 0) log.info(`\nThe run stopped - start it again with:\n\n  bun index.ts ${id} --render=${run}\n`)
+    log.info(`\nSong ready - listen to projects/${id}/input/song.wav, then continue with:\n\n  bun run plan ${id} --render=images,videos,final\n`)
+if (result.exitCode !== 0) log.info(`\nThe run stopped - start it again with:\n\n  bun run plan ${id} --render=${run}\n`)
 process.exit(result.exitCode ?? 1)
 
 /** The first line of a text, cut to a few words - for the summary. */

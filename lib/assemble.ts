@@ -1,5 +1,5 @@
 import {commandStart} from './run-record.ts'
-import {existsSync, mkdirSync, renameSync} from 'node:fs'
+import {existsSync, mkdirSync, renameSync, rmSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {log, startSpinner, styles} from './log.ts'
 import {FPS, formatTime, frameAt, secondsAt} from './frames.ts'
@@ -158,6 +158,20 @@ export async function previewSources(projectDir: string, clips: {id: string; fra
 }
 
 /**
+ * The option that reads the filter graph from a file: `-/filter_complex <file>` since ffmpeg 7, before that `-filter_complex_script`
+ * (removed in 8). Taken from the version the installed ffmpeg says.
+ */
+let ffmpegMajor: number | undefined
+function filterFromFile(file: string): string[] {
+    if (ffmpegMajor === undefined) {
+        const said = new TextDecoder().decode(Bun.spawnSync(['ffmpeg', '-version']).stdout)
+        // a build named by date or commit has no number: the newest way
+        ffmpegMajor = Number(said.match(/ffmpeg version n?(\d+)\./)?.[1] ?? 99)
+    }
+    return ffmpegMajor >= 7 ? ['-/filter_complex', file] : ['-filter_complex_script', file]
+}
+
+/**
  * Builds the final video: every clip cut to exactly its own frames from frame 0 on - the frames past
  * that were only rendered because the model needs certain lengths - then all clips concatenated.
  * The clips own consecutive ranges of the song's frame grid, so every clip starts on exactly the frame
@@ -250,6 +264,9 @@ export async function assembleFinal({
     filters.push(`${concatInputs}concat=n=${clips.length}:v=1:a=${songAudio ? 0 : 1}${concatOut}`)
 
     const partial = `${target}.partial.mp4`
+    // about 170 characters of filter per clip: 150+ clips come near the 32k limit of a Windows command line - ffmpeg reads the graph from a file (#992)
+    const filterFile = `${target}.filters.txt`
+    writeFileSync(filterFile, filters.join(';'))
     const args = [
         'ffmpeg',
         '-y',
@@ -260,8 +277,7 @@ export async function assembleFinal({
         '-nostats',
         ...files.flatMap(f => ['-i', f]),
         ...(songAudio ? ['-i', songFile] : []),
-        '-filter_complex',
-        filters.join(';'),
+        ...filterFromFile(filterFile),
         '-map',
         '[v]',
         '-map',
@@ -298,6 +314,7 @@ export async function assembleFinal({
         if ((await proc.exited) !== 0) throw new Error(`ffmpeg failed:\n${await stderr}`)
     } finally {
         stopSpinner()
+        rmSync(filterFile, {force: true})
     }
     renameSync(partial, target)
 
