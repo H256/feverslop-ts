@@ -256,6 +256,16 @@ describe('musicStretches - the music along the way for the beats', () => {
         expect(input).toContain('nobody lowers, rests, sets down or silences an instrument that is still heard')
         expect(beatsPrompt(args).input).not.toContain('The music along the way')
     })
+
+    test('stateAfter keeps the music out of its facts only when a band is on screen', () => {
+        const args = {durationSec: 60, beatCount: 2, locations: [{id: 'hall', name: 'Hall'}], lyrics: '', story: 'They play.', performance: ''}
+        const rule = 'A fact is never about sound or the music'
+        const band = beatsPrompt({...args, characters: [{id: 'kael', name: 'Kael', role: 'guitarist', prop: 'guitar', propStem: 'guitar'}]}).input
+        const singers = beatsPrompt({...args, characters: [{id: 'kael', name: 'Kael', role: 'singer'}]}).input
+        expect(band).toContain(rule)
+        expect(singers).not.toContain(rule)
+        expect(singers).toContain('Empty array if nothing changes.')
+    })
 })
 
 describe('the rules a beat needs (#825)', () => {
