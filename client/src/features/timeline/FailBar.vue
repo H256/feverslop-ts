@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {RouterLink} from 'vue-router'
+import {keptThisSession} from '../../lib/browser-store'
 import {useTimeline} from './context'
 
 /** A run that did not finish, in words, with what to do - where what went wrong can be told surely. Closed, it stays closed this session. */
 const {project, session, actions} = useTimeline()
 const key = `dismissed:${session.kind}/${session.id}`
-const dismissed = ref(sessionStorage.getItem(key))
+const dismissed = ref(keptThisSession.get(key))
 const last = computed(() => project.value.lastRun)
 const said = computed(() => (last.value && (last.value.state === 'failed' || last.value.state === 'stopped') ? last.value.explained : []))
 // a failure fixed on a page of the project leads there (#782)
@@ -15,7 +16,7 @@ const pages = computed(() => [...new Set(said.value.flatMap(found => (found.page
 const shown = computed(() => said.value.length > 0 && dismissed.value !== last.value?.startedAt)
 const dismiss = () => {
   if (!last.value) return
-  sessionStorage.setItem(key, last.value.startedAt)
+  keptThisSession.set(key, last.value.startedAt)
   dismissed.value = last.value.startedAt
 }
 </script>
