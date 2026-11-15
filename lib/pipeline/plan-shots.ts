@@ -1,4 +1,4 @@
-import {countShotsPerBeat, propActivityPerBeat, singingPerBeat} from '../compose.ts'
+import {countShotsPerBeat, propActivityPerBeat, shotsOfClips, singingPerBeat} from '../compose.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, directionPlanRules, dropStaleEdits, recordPlannedDirection} from '../direction/service.ts'
 import {directionViewCache} from '../direction/views.ts'
 import {formatTime} from '../frames.ts'
@@ -127,6 +127,8 @@ export async function planShots(run: ShotRun) {
     const beatProps = propActivity ? propActivityPerBeat(cutsInput, propActivity) : undefined
     const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
     const shotCounts = countShotsPerBeat(cutsInput)
+    // the first shot of each clip of a beat
+    const clipOpens = Object.fromEntries([...shotsOfClips(cutsInput)].map(([beatId, clips]) => [beatId, clips.flatMap(c => c.shots.slice(0, 1))]))
     // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
     const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
     const directionNotes = directionPlanNotes(directionTarget, project.data)
@@ -143,6 +145,7 @@ export async function planShots(run: ShotRun) {
         slots: clipSlots,
         mapping,
         shotCounts,
+        clipOpens,
         beatProps,
         beatSinging,
         filmLook: lookBrief,
