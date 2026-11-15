@@ -230,6 +230,7 @@ test('timing: a line moved by key, undone, moved again and saved', async ({page}
 
 // what the review found: answers that come late, changes made while saving, a refusal in a question, a draft of another pick
 test('versions: a slow answer about the clip before never shows as the versions of this one', async ({page}) => {
+  const answered = page.waitForResponse(response => response.url().includes('/api/versions/clip-1'))
   await page.route('**/api/versions/clip-1', async route => {
     await new Promise(resolve => setTimeout(resolve, 600))
     await route.fulfill({json: {versions: [{id: 'old/clip-1', video: 'old/clip-1.mp4', source: 'again', made: 1, v: 1}]}})
@@ -240,7 +241,9 @@ test('versions: a slow answer about the clip before never shows as the versions 
   await page.locator('body').press('ArrowRight')
   await expect(page.locator('.ihead h2')).toContainText('clip-2')
   await expect(page.getByText('No older versions')).toBeVisible()
-  await page.waitForTimeout(800)
+  // the slow answer has come by now (not a guess at how long it takes) and is not shown
+  await answered
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve(null))))
   await expect(page.getByRole('button', {name: 'Make current'})).toHaveCount(0)
 })
 
@@ -362,6 +365,7 @@ test('library: an asset asked for in the library starts nothing in the project o
   await dialog(page)
     .getByLabel('Picture')
     .setInputFiles({name: 'kael.png', mimeType: 'image/png', buffer: Buffer.from('png')})
+  const created = page.waitForResponse(response => response.url().includes('/api/library/create'))
   await dialog(page).getByRole('button', {name: 'Render it'}).click()
   await expect(dialog(page).getByRole('button', {name: 'Working…'})).toBeVisible()
   await page.goBack()
@@ -372,7 +376,9 @@ test('library: an asset asked for in the library starts nothing in the project o
     if (request.url().includes('/p/music/demo/api/run-events')) reconnects.push(request.url())
   })
   answer()
-  await page.waitForTimeout(500)
+  // the late answer has come (not a guess at how long it takes) and was handled: one frame on
+  await created
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve(null))))
   expect(reconnects).toEqual([])
   await expect(page.getByText('bun tools/create-asset.ts kael')).toHaveCount(0)
 })
@@ -415,7 +421,7 @@ test('settings: the finish field by field - its fields are locked while it is of
   await page.getByRole('button', {name: 'Save', exact: true}).click()
   await expect.poll(() => posted.find(p => p.path === 'config')?.body).toEqual({change: {'finish.grain': 2.5}, dryRun: true})
   await dialog(page).getByRole('button', {name: 'Cancel'}).click()
-  await page.getByLabel('Finish', {exact: true}).selectOption('off')
+  await page.getByRole('combobox', {name: 'Finish', exact: true}).selectOption('off')
   await expect(page.getByLabel('Film grain')).toBeDisabled()
   await expect(page.getByLabel('Sharpen')).toBeDisabled()
 })
