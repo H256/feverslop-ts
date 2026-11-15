@@ -6,15 +6,24 @@ export const timingLocked = (line: TimedLine) => !!(line.byHand || line.words.so
 /** Presence is staged only. The original project is never changed while preparing. */
 export function passageInput(original: Project, request: ConfirmedPassage) {
     if (request?.confirmSung !== true || !Number.isInteger(request.line)) throw new Error('Confirm that the selected line is sung.')
+    if (request.mode !== undefined && request.mode !== 'line-window') throw new Error('Unknown refinement mode.')
     const data = structuredClone(original)
     const all = data.lyricsTiming?.lines ?? []
     const selected = all.find(l => l.line === request.line)
     if (!selected || selected.adlib) throw new Error('Choose a canonical lyric line for passage refinement.')
-    if (timingLocked(selected))
+    if (selected.words.some(w => w.anchor || w.joined || w.group) || (selected.byHand && request.mode !== 'line-window'))
         throw new Error('The selected line has protected manual timing, anchors or groups. Retain or reset those edits explicitly first.')
     if (!selected.words.length) throw new Error('Place the selected line roughly before retrying this passage.')
     selected.presenceByHand = true
     delete selected.off
+    if (request.mode === 'line-window') {
+        const {start, end} = selected
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > (data.music?.durationSec ?? 0) || end - start > 30)
+            throw new Error('Set a block inside the song, at most 30 seconds long, before refining its words.')
+        // An explicit retry replaces this line's provisional word boundaries, not its neighbours.
+        delete selected.byHand
+        return {data, lines: [selected], window: {start, end, targets: [selected.line], bounded: true}}
+    }
     const canonical = all.filter(l => !l.adlib).sort((a, b) => a.line - b.line)
     const at = canonical.indexOf(selected)
     const present = (l: TimedLine) => !l.off && (l.confidence > 0 || l.presenceByHand || timingLocked(l))

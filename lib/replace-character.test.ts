@@ -1,17 +1,10 @@
 import {expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync} from 'node:fs'
-import {tmpdir} from 'node:os'
+import {existsSync, mkdirSync, readdirSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
+import {inTemp as sharedInTemp} from './test-temp.ts'
 import {clearSheetOfOldAnchor, renderedClipsWith, replacedPictureFile} from './replace-character.ts'
 
-const inTemp = (run: (dir: string) => void | Promise<void>) => async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'replace-character-'))
-    try {
-        await run(dir)
-    } finally {
-        rmSync(dir, {recursive: true, force: true})
-    }
-}
+const inTemp = (run: (dir: string) => void | Promise<void>) => sharedInTemp('replace-character', run)
 const write = (file: string, text = 'x') => {
     mkdirSync(join(file, '..'), {recursive: true})
     writeFileSync(file, text)
