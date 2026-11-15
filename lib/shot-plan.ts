@@ -281,13 +281,11 @@ export function readBeatPlan(
                 problem(j, `shot ${j + 1}: hands: ${name}'s ${handsOf.prop} is not heard in this shot - a hands shot shows an instrument while it is heard`)
             if (ids.length !== 1 || ids[0] !== handsOf.id) problem(j, `shot ${j + 1}: hands: ${name} - a shot of the hands has ${name} alone in "characters"`)
         }
-        // while a line is sung, a singer is in the picture
+        // a line is sung: the singer is usually in the picture - but may be heard off screen (a shot of the room, of the one they sing to),
+        // so this is a note and no problem: a problem sends the beat to the model again, and half of such rewrites were only this
         const lineSingers = sungBy(singers, j)
         if (!handsOf && lineSingers.length && !lineSingers.some(id => ids.includes(id)))
-            problem(
-                j,
-                `shot ${j + 1}: a line of ${lineSingers.map(id => nameOfId(characters, id)).join(' and ')} is sung in it, but they are not in its characters`,
-            )
+            notes.push(`shot ${j + 1}: a line of ${lineSingers.map(id => nameOfId(characters, id)).join(' and ')} is sung in it, they are heard off screen`)
         const unison = unisonChecks(j, people, characters)
         for (const message of [...unison.problems, ...musicChecks(j, people, characters, singers, props)]) problem(j, message)
         notes.push(...unison.notes)
