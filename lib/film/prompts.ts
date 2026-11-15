@@ -396,6 +396,79 @@ Answer only with JSON:
 - "continues": true only if the shot goes on in the same take as the shot before it, the same camera setup without a cut (the camera follows on). Sparingly - false is the usual. Two shots in a row are either the same take (continues true, the camera follows on) or clearly another setup - another shot size or another side of the people; never nearly the same picture from nearly the same place, which looks like a jump in the film.
 
 ${filmableRules}`,
+        // the whole shape of the answer (#995): every field of the instructions is listed - a server that keeps the answer to a schema
+        // leaves out what the schema does not name. Only placeView (there only when the place has a sheet of views) is optional.
+        // The character names are the ones of this scene, exactly as spelled.
+        schema: {
+            type: 'object',
+            required: ['people', 'voices', 'fast', 'soundscape', 'staging', 'ends', 'shots'],
+            properties: {
+                people: {type: 'boolean'},
+                voices: {type: 'boolean'},
+                fast: {type: 'boolean'},
+                soundscape: {type: 'string'},
+                staging: {type: 'string'},
+                ends: {type: 'object', additionalProperties: {type: 'string'}},
+                shots: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                        type: 'object',
+                        required: [
+                            'framing',
+                            'view',
+                            'camera',
+                            'hold',
+                            'cutaway',
+                            'characters',
+                            'props',
+                            'people',
+                            'action',
+                            'lines',
+                            'deliveries',
+                            'states',
+                            'seconds',
+                            'continues',
+                        ],
+                        properties: {
+                            framing: {type: 'string'},
+                            view: {type: 'string'},
+                            camera: {type: 'string'},
+                            hold: {type: 'boolean'},
+                            cutaway: {type: 'boolean'},
+                            placeView: {type: 'integer', minimum: 1, maximum: 5},
+                            characters: {
+                                type: 'array',
+                                items: characters.filter(c => !c.voiceOnly).length
+                                    ? {enum: characters.filter(c => !c.voiceOnly).map(c => c.name)}
+                                    : {type: 'string'},
+                            },
+                            props: {type: 'array', items: {type: 'string'}},
+                            people: {
+                                type: 'object',
+                                additionalProperties: {
+                                    type: 'object',
+                                    required: ['state', 'frame'],
+                                    properties: {
+                                        state: {type: 'string'},
+                                        frame: {type: 'string'},
+                                        facing: {type: 'string'},
+                                        foreground: {type: 'boolean'},
+                                        motion: {type: 'string'},
+                                    },
+                                },
+                            },
+                            action: {type: 'string'},
+                            lines: {type: 'array', items: {type: 'integer', minimum: 1}},
+                            deliveries: {type: 'array', items: {type: 'string'}},
+                            states: {type: 'object', additionalProperties: {type: 'string'}},
+                            seconds: {type: 'number', minimum: 2, maximum: 8},
+                            continues: {type: 'boolean'},
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
