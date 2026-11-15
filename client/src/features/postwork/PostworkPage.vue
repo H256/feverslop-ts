@@ -8,6 +8,7 @@ import SplitLayout from '../../components/SplitLayout.vue'
 import PanelCard from '../../components/PanelCard.vue'
 import StateTag from '../../components/StateTag.vue'
 import {mediaUrl} from '../../api/urls'
+import {copyText} from '../../lib/browser-store'
 import {useToasts} from '../../services/toasts'
 import {useProject} from '../project/session'
 import CreditsForm from './CreditsForm.vue'
@@ -136,7 +137,7 @@ watch(
 )
 const copied = ref(false)
 const copy = toasts.guard(async (text: string) => {
-  await navigator.clipboard.writeText(text)
+  if (!(await copyText(text))) throw new Error('Could not copy - select the words instead')
   copied.value = true
   setTimeout(() => (copied.value = false), 1200)
 })

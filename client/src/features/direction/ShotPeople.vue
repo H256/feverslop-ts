@@ -103,6 +103,7 @@ const into = async () => {
       <textarea
         v-model="inText"
         rows="2"
+        :aria-label="`What ${inNames.join(' and ')} ${ins.size > 1 ? 'do' : 'does'} in this shot`"
         :placeholder="`What ${inNames.join(' and ')} ${ins.size > 1 ? 'do' : 'does'} here (optional) - e.g. walks in from the left and stops behind Elias`"
       />
       <div class="btn-row out-bar">
