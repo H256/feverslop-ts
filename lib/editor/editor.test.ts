@@ -1,5 +1,5 @@
 import {afterAll, beforeAll, describe, expect, test} from 'bun:test'
-import {mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync} from 'node:fs'
+import {mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {dirname, join} from 'node:path'
 import {fingerprint} from '../provenance.ts'
@@ -264,6 +264,15 @@ describe('serving', () => {
         expect(mediaFile(music(), '../outside.mp4')).toBeUndefined()
         expect(mediaFile(music(), join(root, 'film', 'x.mp4'))).toBeUndefined()
         expect(mediaFile(music(), 'videos/none.mp4')).toBeUndefined()
+    })
+    test('a link inside the project that points out of it is not served (#1002)', () => {
+        write(join(root, 'linked-outside.mp4'), 'secret')
+        try {
+            symlinkSync(join(root, 'linked-outside.mp4'), join(music(), 'videos', 'link.mp4'))
+        } catch {
+            return // a Windows account without the right to make links: nothing to test here
+        }
+        expect(mediaFile(music(), 'videos/link.mp4')).toBeUndefined()
     })
     test('a path out of the folder is not found', async () => {
         write(join(root, 'outside.mp4'), 'secret')

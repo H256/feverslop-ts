@@ -44,6 +44,8 @@ const finals = computed(() => project.value.finals)
 // what a step can start from: every finished video but the low-resolution preview
 const sources = computed(() => finals.value.filter(f => !f.preview))
 const chain = () => chainSources(project.value.id, finals.value)
+// the drafts start from what the project has when the page opens and are not read again: App.vue keys the page by route, so another project
+// builds them anew, and a change of `postwork` from outside while the page is open must not overwrite what is being typed (#988)
 const {postwork, kind} = project.value
 const first = chain()
 const drafts = {

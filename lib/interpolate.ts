@@ -45,7 +45,7 @@ export async function sceneScores(video: string): Promise<number[]> {
  * highest scene score within half a second, if that score says it is a cut - else it stays where the plan has it. A frame
  * the plan has no cut near counts as a cut when its score is clearly one.
  */
-export function shotCuts(frames: number, shotStarts: number[], scores: number[]): number[] {
+export function shotCutFrames(frames: number, shotStarts: number[], scores: number[]): number[] {
     const cuts = new Set<number>([0])
     const near = new Set<number>()
     for (const at of shotStarts) {
