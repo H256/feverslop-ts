@@ -11,7 +11,7 @@ import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt,
 import {freshness} from '../provenance.ts'
 import {type RenderSpec, specId} from '../render-spec.ts'
 import {fileFingerprint} from '../provenance.ts'
-import {sceneScores, shotCuts, shotPieces} from '../interpolate.ts'
+import {sceneScores, shotCutFrames, shotPieces} from '../interpolate.ts'
 import {archiveFiles, versionStamp} from '../archive.ts'
 import {runProcess} from '../process.ts'
 import {type Renderer, RETAKE_LEAD, GUIDE_SCALE, smallerPicture, loadWorkflow} from '../render.ts'
@@ -73,7 +73,7 @@ export async function retake(
     runEvent({type: 'jobs', kind: 'clip', ids: [clip.id]})
     const info = await probeVideo(video)
     const fileFrames = framesOnGrid(info)
-    const cuts = shotCuts(
+    const cuts = shotCutFrames(
         clip.frames,
         (clip.shots ?? []).map(s => s.at),
         await sceneScores(video),
@@ -338,7 +338,7 @@ export async function renderInterpolation(
     // the cuts as the picture has them - the model cuts near the planned time, not on it (lib/interpolate.ts)
     const pieces = shotPieces(
         clip.frames,
-        shotCuts(
+        shotCutFrames(
             clip.frames,
             (clip.shots ?? []).map(s => s.at),
             await sceneScores(video),

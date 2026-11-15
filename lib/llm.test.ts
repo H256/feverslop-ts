@@ -5,7 +5,7 @@ import {applyReasoning, ask, askJson, configureLlm, EmptyAnswerError, modelNames
 // tested with their retries - cut-off and empty answers - without a language model.
 type Reply = {text: string; outputTokens?: number; incomplete?: boolean; failed?: boolean; noEnd?: boolean}
 let replies: Reply[] = []
-const requests: {max_output_tokens: number; instructions: string}[] = []
+const requests: {max_output_tokens: number; instructions: string; temperature?: number}[] = []
 let server: ReturnType<typeof Bun.serve>
 
 const sse = (events: object[]) => events.map(e => `event: ${(e as {type: string}).type}\ndata: ${JSON.stringify(e)}\n\n`).join('')
@@ -16,8 +16,8 @@ beforeAll(() => {
         async fetch(req) {
             const path = new URL(req.url).pathname
             if (path.endsWith('/models')) return Response.json({object: 'list', data: [{id: 'fake-model', object: 'model', created: 0, owned_by: 'test'}]})
-            const body = (await req.json()) as {max_output_tokens: number; instructions: string}
-            requests.push({max_output_tokens: body.max_output_tokens, instructions: body.instructions})
+            const body = (await req.json()) as {max_output_tokens: number; instructions: string; temperature?: number}
+            requests.push({max_output_tokens: body.max_output_tokens, instructions: body.instructions, temperature: body.temperature})
             const reply = replies.shift() ?? {text: ''}
             const response = {
                 id: 'r',
@@ -61,6 +61,12 @@ const run = async <T>(list: Reply[], fn: () => Promise<T>) => {
 }
 
 describe('ask', () => {
+    test('a temperature is sent when the call has one, and not otherwise (#998)', async () => {
+        await run([{text: 'a'}], () => ask({instructions: 'i', input: 'x', maxTokens: 100, temperature: 0.2}))
+        expect(requests[0]!.temperature).toBe(0.2)
+        await run([{text: 'a'}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))
+        expect(requests[0]!.temperature).toBeUndefined()
+    })
     test('returns the answer, trimmed', async () => {
         expect(await run([{text: '  hello \n'}], () => ask({instructions: 'i', input: 'x', maxTokens: 100}))).toBe('hello')
     })

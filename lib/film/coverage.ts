@@ -115,6 +115,13 @@ export class CoverageProblem extends Error {
     }
 }
 
+/** The ids of the props a shot names, as the planning spelled them (case and spaces do not matter). */
+export function propIds(named: unknown, props: FilmProp[]): string[] {
+    if (!Array.isArray(named)) return []
+    const key = (name: string) => name.toLowerCase().replace(/\s+/g, ' ').trim()
+    return [...new Set(named.flatMap(n => (typeof n === 'string' ? props.filter(p => key(p.name) === key(n)).map(p => p.id) : [])))]
+}
+
 /**
  * Checks what the LLM planned for a scene and turns it into a SceneCoverage. Everything else is normalized: a speaker on
  * screen is always in the shot's characters, and a shot is never shorter than its lines.
@@ -123,13 +130,6 @@ export class CoverageProblem extends Error {
  * strict: what lib/film/shot-checks.ts finds (people in a scene that names none, speech without a line, too many shots) is a problem the planner is asked
  * to fix; not strict, it is only noted - a rule of thumb must never stop a film.
  */
-/** The ids of the props a shot names, as the planning spelled them (case and spaces do not matter). */
-export function propIds(named: unknown, props: FilmProp[]): string[] {
-    if (!Array.isArray(named)) return []
-    const key = (name: string) => name.toLowerCase().replace(/\s+/g, ' ').trim()
-    return [...new Set(named.flatMap(n => (typeof n === 'string' ? props.filter(p => key(p.name) === key(n)).map(p => p.id) : [])))]
-}
-
 export function toCoverage(
     raw: RawCoverage,
     scene: Scene,

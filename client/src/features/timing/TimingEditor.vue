@@ -145,7 +145,8 @@ const snapTime = (time: number, event: PointerEvent, exclude: number[] = []) => 
     ...props.view.cuts.flatMap(c => [c.start, c.end]),
     ...props.view.lines.filter(l => !ghost(l)).flatMap(l => props.draft.wordsOf(l).flatMap(w => [w.start, w.end])),
   ].filter(t => !exclude.some(x => Math.abs(t - x) < 0.0001))
-  const nearest = candidates.sort((a, b) => Math.abs(a - time) - Math.abs(b - time))[0]
+  // the nearest one, found in one pass: a sort of every cut and word edge on each pointer move is not needed
+  const nearest = candidates.reduce<number | undefined>((best, t) => (best === undefined || Math.abs(t - time) < Math.abs(best - time) ? t : best), undefined)
   if (nearest !== undefined && Math.abs(nearest - time) < threshold) {
     snapped.value = nearest
     return nearest
