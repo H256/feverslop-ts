@@ -41,6 +41,7 @@ import {picturesFile, readReferences} from './references.ts'
 import type {RunAction, RunControl} from './runs.ts'
 import {urlsOfChoice} from './servers.ts'
 import {readSinging, type SingingChange, writeSinging} from './singing.ts'
+import {readLipsync} from './lipsync.ts'
 import {readTiming, type TimingChange, writeTiming} from './timing.ts'
 import {prepareTimingRefinement, applyTimingRefinement} from './timing-refinement.ts'
 import type {RefinementLanguage} from '../../shared/timing-refinement.ts'
@@ -97,6 +98,7 @@ export function findRoute(routes: readonly Route[], method: string, parts: reado
 
 export const RENDER_ACTIONS = new Set<RunAction['type']>([
     'clips',
+    'lipsync',
     'final',
     'plan',
     'retake',
@@ -213,6 +215,7 @@ export const PROJECT_ROUTES: readonly Route[] = [
     },
     {method: 'GET', path: 'references', handle: async c => json({references: await readReferences(c.target)})},
     {method: 'GET', path: 'singing', handle: async c => json({singing: c.target.kind === 'music' ? ((await readSinging(c.target)) ?? null) : null})},
+    {method: 'GET', path: 'lipsync', handle: async c => json({lipsync: c.target.kind === 'music' ? ((await readLipsync(c.target)) ?? null) : null})},
     {method: 'GET', path: 'timing', handle: async c => json({timing: c.target.kind === 'music' ? ((await readTiming(c.target)) ?? null) : null})},
     {
         method: 'GET',

@@ -34,6 +34,7 @@ import type {
   TimingChange,
   TimingResult,
   TimingView,
+  LipsyncView,
 } from '../../../shared/workspace'
 import {errorOfAnswer, getJson, postForm, postJson} from './http'
 import type {DirectionEdit, DirectionRule, DirectionView} from '../../../shared/direction'
@@ -68,6 +69,7 @@ export function projectApi(root: string) {
     references: (signal?: AbortSignal) => get<{references: EditorReference[]}>('references', signal),
     singing: (signal?: AbortSignal) => get<{singing: SingingView | null}>('singing', signal),
     timing: (signal?: AbortSignal) => get<{timing: TimingView | null}>('timing', signal),
+    lipsync: (signal?: AbortSignal) => get<{lipsync: LipsyncView | null}>('lipsync', signal),
     timingWave: (signal?: AbortSignal) => get<{peaks: number[] | null}>('timing-wave', signal),
     casting: (signal?: AbortSignal) => get<CastingView>('casting', signal),
     /** The finished characters or places of the other music videos (#835): what import-asset can take over. */

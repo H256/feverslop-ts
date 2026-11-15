@@ -528,6 +528,20 @@ export type TimingView = {
     outdated: {clip: string; lines: number[]}[]
     audio?: Media // the vocals stem, else the song
 }
+/** The lip-sync preview (#1016): the clips of the cut as a dummy singer sings them, and whether each is made from what the project has now. */
+export type LipsyncView = {
+    clips: {
+        id: string
+        start: number
+        end: number
+        /** missing: not rendered; current: made from the prompt, cut, size and audio as they are; outdated: made from another request */
+        state: 'missing' | 'current' | 'outdated'
+        video?: Media
+        /** the dummies it shows, one per shot: 0 or 1 */
+        shots: {at: number; dummy: number}[]
+    }[]
+    settings: {scale: number; dummies: 1 | 2; size?: string}
+}
 // words: the line's words moved; off: the line left out (true) or sung again (false) - one of the two, or both
 // reset: the line as the automatic alignment has it, worked out again from the transcript - what was placed by hand goes
 export type TimingChange = {
@@ -553,6 +567,7 @@ export type TimingResult = {
 export type RunRequest =
     | {type: 'clips'; ids: string[]; again?: boolean; preview?: boolean}
     | {type: 'direction'}
+    | {type: 'lipsync'; only?: string[]; again?: boolean} // the lip-sync preview of the lyric timing (#1016): bun run lipsync
     | {type: 'look-pictures'}
     // pictures rendered again from the plan's prompts - a new sheet from the same anchor, or a new anchor. An edited prompt or an
     // uploaded anchor comes through a route of its own (references/:id/...), never as a path from the page
@@ -655,7 +670,7 @@ export type RunLines = {lines: string[]; next: number}
 export type SettingView = {
     key: string
     label: string
-    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish'
+    group: 'Workflows' | 'Size' | 'Sampling' | 'Continuing clips' | 'Seed and retries' | 'Language model' | 'Final video' | 'Finish' | 'Lip-sync preview'
     /** select: one of `choices`; text: a free value (a size, a ratio, a file name); number: a number, whole unless `step` says otherwise */
     control: 'select' | 'text' | 'number'
     step?: number

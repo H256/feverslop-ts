@@ -13,6 +13,7 @@ import {UNTIL_STAGES} from '../stages.ts'
 import {requestArgs} from '../command-schema.ts'
 import {creditsCommand, descriptionCommand, introCommand, labelCommand} from '../postwork/commands.ts'
 import {refinishCommand} from '../refinish-command.ts'
+import {lipsyncCommand} from '../lipsync-command.ts'
 import {EXPORT_FORMATS} from '../timeline-export.ts'
 import type {RunEvent, RunInfo, RunRequest} from '../../shared/workspace.ts'
 import {newestLog, newestRunEvents} from '../run-events.ts'
@@ -74,6 +75,12 @@ export function runCommand({id, kind}: Pick<EditorTarget, 'id' | 'kind'>, action
     switch (action.type) {
         case 'direction':
             return {script: 'tools/direction.ts', args: [id, ...KINDS[kind].flag, '--preview']}
+        case 'lipsync':
+            if (kind !== 'music') throw new Error('the lip-sync preview is for music videos')
+            return {
+                script: lipsyncCommand.script,
+                args: [id, ...requestArgs(lipsyncCommand, {only: action.only?.length ? action.only.join(',') : undefined, again: action.again})],
+            }
         case 'clips':
             return run(
                 '--render=videos',
@@ -494,7 +501,7 @@ export class RunControl {
             process.kill(holder)
             ended = (async () => {
                 // not forever: the race below gives up after STOP_WAIT_MS, this loop must not outlive it
-                for (const until = Date.now() + STOP_WAIT_MS; lockHolder(target.dir) === holder && Date.now() < until; ) await Bun.sleep(200)
+                for (const until = Date.now() + STOP_WAIT_MS; lockHolder(target.dir) === holder && Date.now() < until;) await Bun.sleep(200)
             })()
         }
         await Promise.race([ended, Bun.sleep(STOP_WAIT_MS)])

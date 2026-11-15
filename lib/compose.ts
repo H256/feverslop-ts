@@ -1527,7 +1527,7 @@ function spread<T>(items: T[], k: number, n: number): T[] {
 }
 
 // Basic punctuation; a continuation fragment keeps its open hyphen instead of a full stop.
-function normalizeLyric(line: string) {
+export function normalizeLyric(line: string) {
     const clean = line
         .replace(/\.{2,}|…/g, '.')
         .replace(/[~*]+/g, '')

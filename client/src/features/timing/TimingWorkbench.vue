@@ -18,6 +18,7 @@ import {useToasts} from '../../services/toasts'
 import {usePlanning} from '../plan/usePlanning'
 import {useProject} from '../project/session'
 import {EARLY_FROM, leadOf} from './fit'
+import LipsyncPreview from './LipsyncPreview.vue'
 import TimingEditor from './TimingEditor.vue'
 import TimingLineList, {type LineFilter} from './TimingLineList.vue'
 import TimingSide from './TimingSide.vue'
@@ -404,6 +405,7 @@ onMounted(() => {
         <button class="btn" @click="refinement = undefined">Dismiss</button>
       </template>
     </details>
+    <LipsyncPreview :view="view" :dirty="draft.edits.value.size > 0" />
     <div class="tedit-wrap">
       <div class="tedit-head btn-row">
         <template v-if="draft.line.value">
