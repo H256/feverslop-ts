@@ -75,6 +75,12 @@ const commands: Record<string, {args: string; description: string; json?: boolea
         description: 'Print or edit sung words, or prepare and explicitly apply a local phoneme refinement. Changed clip beats need planning again.',
         json: true,
     },
+    parts: {
+        args: '<project-id> [--json] [--no-vocals] [--min-gap=8]',
+        description:
+            'Print the stretches of the song without singing, split into parts, and how each instrument plays in them. Measured from the stems, nothing is changed.',
+        json: true,
+    },
     versions: {
         args: '<project-id> <clip-id|picture-id> [--film] [--pick=<version>]',
         description: 'List the older versions of a clip or picture, or make one the current version again.',

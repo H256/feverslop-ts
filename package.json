@@ -18,6 +18,7 @@
         "direction": "bun tools/direction.ts",
         "singers": "bun tools/singers.ts",
         "timing": "bun tools/timing.ts",
+        "parts": "bun tools/parts.ts",
         "versions": "bun tools/versions.ts",
         "override": "bun tools/override.ts",
         "import-asset": "bun tools/import-asset.ts",
