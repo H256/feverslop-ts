@@ -161,18 +161,25 @@ const ACTIVITY_HOP_SEC = 0.05
 const ACTIVITY_MARGIN_DB = 20
 const ACTIVITY_FLOOR_DB = -50
 
-export async function stemActivity(stemFile: string, bpm: number, beatsPerBar = 4): Promise<{start: number; end: number}[]> {
+/** The seconds one value of stemFramePower is the mean square of. */
+export const STEM_FRAME_SEC = ACTIVITY_HOP_SEC
+
+/** The mean square of a stem per frame of STEM_FRAME_SEC - what the activity and the instrument parts (lib/instrument-parts.ts) are made of. */
+export async function stemFramePower(stemFile: string): Promise<number[]> {
     const raw = join(tmpdir(), `activity-${process.pid}-${basename(stemFile)}.f32`)
     await runProcess(['ffmpeg', '-y', '-v', 'error', '-i', stemFile, '-ac', '1', '-ar', String(ACTIVITY_SAMPLE_RATE), '-f', 'f32le', raw], {
         timeoutMs: SHORT_PROCESS_TIMEOUT_MS,
         errorMessage: err => `ffmpeg failed to decode ${stemFile}:\n${err}`,
     })
     try {
-        const samples = new Float32Array(await Bun.file(raw).arrayBuffer())
-        return activityRanges(framePower(samples, ACTIVITY_SAMPLE_RATE, ACTIVITY_HOP_SEC), ACTIVITY_HOP_SEC, (beatsPerBar * 60) / bpm)
+        return framePower(new Float32Array(await Bun.file(raw).arrayBuffer()), ACTIVITY_SAMPLE_RATE, ACTIVITY_HOP_SEC)
     } finally {
         rmSync(raw, {force: true})
     }
+}
+
+export async function stemActivity(stemFile: string, bpm: number, beatsPerBar = 4): Promise<{start: number; end: number}[]> {
+    return activityRanges(await stemFramePower(stemFile), ACTIVITY_HOP_SEC, (beatsPerBar * 60) / bpm)
 }
 
 /** The mean square of the samples per frame of `hopSec`. */
