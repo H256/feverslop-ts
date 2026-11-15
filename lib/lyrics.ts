@@ -95,8 +95,16 @@ export function alignLyrics(
     const m = transcript.length
     if (n === 0) return {lines: []}
 
+    // a chorus repeats its words: the same pair is compared in many cells
+    const similar = new Map<string, number>()
+    const similarOf = (a: string, b: string) => {
+        const key = `${a}\u0000${b}`
+        let sim = similar.get(key)
+        if (sim === undefined) similar.set(key, (sim = similarity(a, b)))
+        return sim
+    }
     const matchScore = (i: number, j: number) => {
-        const sim = similarity(lyric[i]!.norm, transcript[j]!.norm)
+        const sim = similarOf(lyric[i]!.norm, transcript[j]!.norm)
         if (sim < MATCH_SIMILARITY) return -Infinity
         const section = sections?.[lyric[i]!.sectionIndex]
         const time = transcript[j]!.start
