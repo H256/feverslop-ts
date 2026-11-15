@@ -1,13 +1,10 @@
 <script setup lang="ts">
+import {copyText} from '../lib/browser-store'
 import {useToasts} from '../services/toasts'
 
 /** The messages at the foot of the page (#940): the failures that are not closed yet, each with its words to copy, and the newest notice. */
 const {notice, errors, dismiss, show} = useToasts()
-const copy = (text: string) =>
-  navigator.clipboard.writeText(text).then(
-    () => show('Copied'),
-    () => show('Could not copy - select the words instead'),
-  )
+const copy = async (text: string) => show((await copyText(text)) ? 'Copied' : 'Could not copy - select the words instead')
 </script>
 
 <template>

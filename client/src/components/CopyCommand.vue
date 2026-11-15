@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, onScopeDispose, ref} from 'vue'
+import {copyText} from '../lib/browser-store'
 import AppIcon from './AppIcon.vue'
 
 /** A command for the terminal, to copy. It breaks between its words, not at the dashes of an option. */
@@ -8,7 +9,7 @@ const words = computed(() => props.command.split(' '))
 const copied = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 const copy = async () => {
-  await navigator.clipboard.writeText(props.command)
+  if (!(await copyText(props.command))) return
   copied.value = true
   clearTimeout(timer)
   timer = setTimeout(() => {
