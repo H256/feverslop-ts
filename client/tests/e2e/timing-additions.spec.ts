@@ -10,6 +10,54 @@ test.afterAll(async () => {
   await editor?.stop()
 })
 
+test('a roughly moved block can save and refine its words without resetting manual placement', async ({page}) => {
+  const posted = await stubProject(page)
+  const prepared: unknown[] = []
+  await page.route('**/api/timing-refine', async route => {
+    expect(posted.some(p => p.path === 'timing')).toBe(true)
+    prepared.push(route.request().postDataJSON())
+    await route.fulfill({
+      json: {
+        id: 'block-preview',
+        language: 'de',
+        fingerprint: 'fixture',
+        model: 'fixture',
+        passage: {line: 0, start: 1, end: 3, targets: [0], mode: 'line-window'},
+        change: {
+          lines: [
+            {
+              line: 0,
+              words: [
+                {text: 'Hello', start: 1.4, end: 2},
+                {text: 'night', start: 2, end: 3},
+              ],
+            },
+          ],
+        },
+        entries: [{line: 0, text: 'Hello night', before: [1, 3], after: [1.4, 3], status: 'refined', reason: 'Listen to check.'}],
+        logFile: 'logs/timing-refinement/test.log',
+      },
+    })
+  })
+  await page.goto(`${editor.base}/p/music/demo/timing`)
+  await page.locator('.tline').first().scrollIntoViewIfNeeded()
+  const box = (await page.locator('.tline').first().boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 20, box.y + box.height / 2, {steps: 5})
+  await page.mouse.up()
+  const retry = page.getByRole('button', {name: 'Save changes & refine words', exact: true})
+  await expect(retry).toBeEnabled()
+  await retry.click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('Only the selected block')
+  await dialog.getByRole('button', {name: 'Save changes & prepare', exact: true}).click()
+  await expect.poll(() => prepared).toEqual([{language: 'de', passage: {line: 0, confirmSung: true, mode: 'line-window'}}])
+  await expect(page.getByRole('button', {name: 'Apply word refinement', exact: true})).toBeVisible()
+  await expect(page.getByText('logs/timing-refinement/test.log', {exact: true})).toBeVisible()
+  expect(posted.filter(p => p.path === 'timing')).toHaveLength(1)
+})
+
 test('confirmed passage prepares without saving and applies only its reviewed proposal', async ({page}) => {
   const posted = await stubProject(page)
   const prepared: unknown[] = [],
