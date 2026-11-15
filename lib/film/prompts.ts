@@ -17,10 +17,41 @@ const filmableRules = `The film is generated clip by clip with an AI video model
 - Write every picture and every sound as what is there, never as what is absent: the video model cannot leave out what a sentence names, so "no movement", "is not in the room" or "nobody speaks" puts the movement, the person and the voices into the clip. Say what is there instead: "locked off, static", "alone in the room", "everyone silent, lips together".
 - A hand does one simple thing in a shot: hold something out, take it, put it down, push a door. Several fiddly steps on a mechanism (opening an umbrella, unlocking a door, tying a knot, loading a gun) are not shown being done - the shot starts with it done (the umbrella is already open in his hand) or shows only the last, simple step; the video model fumbles them.
 - Weather that falls or blows (rain, snow, wind, smoke) is in the picture of every outdoor shot of a scene that has it - falling streaks of rain, drifting snow in the air - and on the people and things in it (wet hair and clothes, dripping), not only in the sound or on the ground.`
+const str = {type: 'string'} as const
+const strings = {type: 'array', items: str} as const
+const object = (properties: Record<string, unknown>) => ({type: 'object', additionalProperties: false, required: Object.keys(properties), properties})
+
+// The whole shape of a film answer (#995). Every field of the instructions is listed: a server that keeps the answer to a schema
+// leaves out what the schema does not name (see the comment on coveragePrompt).
+const briefSchema = object({title: str, language: str, logline: str, genre: str, tone: str, setting: str})
+const outlineSchema = object({
+    characters: {type: 'array', items: object({name: str, role: str, appearance: str, voice: str})},
+    scenes: {
+        type: 'array',
+        items: object({heading: str, characters: strings, summary: str, purpose: str, begins: str, changes: str, seconds: {type: 'number'}}),
+    },
+    setups: {type: 'array', items: object({event: str, setup: str})},
+})
+const castSchema = object({
+    characters: {
+        type: 'array',
+        items: object({
+            name: str,
+            aliases: strings,
+            role: str,
+            appearance: str,
+            voice: str,
+            voiceOnly: {type: 'boolean'},
+            states: {type: 'array', items: object({name: str, change: str, from: {type: 'integer'}})},
+        }),
+    },
+    locations: {type: 'array', items: object({name: str, aliases: strings, description: str})},
+})
 
 export function briefPrompt(source: string, mode: Brief['mode'], dialogueLanguage: string | undefined): AskOptions {
     return {
         maxTokens: 4096,
+        schema: briefSchema,
         input: `${mode === 'screenplay' ? 'Screenplay' : 'Story idea'}:
 ${source}`,
         instructions: `You are a script editor. You are given ${mode === 'screenplay' ? 'a screenplay' : 'a story idea for a short film'} in any language. Answer only with JSON:
@@ -40,6 +71,7 @@ export function outlinePrompt(idea: string, brief: Brief, targetSeconds: number)
     return {
         maxTokens: 8192,
         reasoning: 'medium',
+        schema: outlineSchema,
         input: `Story idea:
 ${idea}
 
@@ -158,6 +190,7 @@ export function castPrompt(screenplay: Screenplay, outline?: Outline, problems: 
     return {
         maxTokens: 12288,
         reasoning: 'medium',
+        schema: castSchema,
         input: `${setting ? `Setting (era and place): ${setting}\n\n` : ''}${problems.length ? `Your last answer left these out - every speaker cue and every slugline place of the screenplay must be covered by an alias:\n${problems.map(p => `- ${p}`).join('\n')}\n\n` : ''}${
             outline
                 ? `Planning notes (use them for appearance and voice where they cover a character):
