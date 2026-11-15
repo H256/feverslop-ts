@@ -44,7 +44,7 @@ import {readSinging, type SingingChange, writeSinging} from './singing.ts'
 import {readLipsync} from './lipsync.ts'
 import {readTiming, type TimingChange, writeTiming} from './timing.ts'
 import {prepareTimingRefinement, applyTimingRefinement} from './timing-refinement.ts'
-import type {RefinementLanguage} from '../../shared/timing-refinement.ts'
+import type {RefinementLanguage, ConfirmedPassage} from '../../shared/timing-refinement.ts'
 import {checkUploadSize, takePictureUpload} from './upload.ts'
 import {textOf} from '../text.ts'
 
@@ -492,7 +492,10 @@ export const PROJECT_ROUTES: readonly Route[] = [
         method: 'POST',
         path: 'timing-refine',
         changes: [prepareTimingRefinement],
-        handle: async c => json(await prepareTimingRefinement(c.target, (await c.body<{language: RefinementLanguage}>()).language)),
+        handle: async c => {
+            const {language, passage} = await c.body<{language: RefinementLanguage; passage?: ConfirmedPassage}>()
+            return json(await prepareTimingRefinement(c.target, language, passage))
+        },
     },
     {
         method: 'POST',

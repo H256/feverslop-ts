@@ -51,9 +51,27 @@ def windows(lines, duration):
     return result
 
 
+def alignment_windows(request):
+    if 'window' not in request:
+        return windows(request['lines'], request['duration'])
+    window = request['window']
+    start, end = window.get('start'), window.get('end')
+    finite = lambda n: type(n) in (int, float) and math.isfinite(n)
+    if not all(finite(n) for n in (start, end, request['duration'])) or not 0 <= start < end <= request['duration'] or end - start > 30:
+        raise ValueError('Passage must fit within 30 seconds of the audio')
+    ids = [line['line'] for line in request['lines']]
+    targets = window.get('targets')
+    if (len(ids) != len(set(ids)) or not isinstance(targets, list) or not targets
+            or any(type(n) is not int or n not in ids for n in targets)
+            or len(targets) != len(set(targets))):
+        raise ValueError('Passage targets must be unique lines within its context')
+    return [{'start': start, 'end': end, 'targets': targets, 'lines': request['lines']}]
+
+
 def main():
     source, destination = map(Path, sys.argv[1:])
     request = json.loads(source.read_text(encoding='utf-8'))
+    chunks = alignment_windows(request)
     language = {'de': 'de', 'en': 'en-us', 'fr': 'fr-fr'}[request['language']]
     import espeakng_loader
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
@@ -72,7 +90,6 @@ def main():
     model = AutoModelForCTC.from_pretrained(MODEL, revision=REVISION).eval()
     vocab = processor.tokenizer.get_vocab()
     results = []
-    chunks = windows(request['lines'], request['duration'])
     with tempfile.TemporaryDirectory(prefix='lyrics-refine-') as temp:
         audiofile = str(Path(temp) / 'vocals.wav')
         for index, chunk in enumerate(chunks):

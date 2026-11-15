@@ -3,7 +3,8 @@ import {mkdirSync, readFileSync, statSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {Project, TimedWord} from '../project.ts'
 import type {ClipRequest} from '../compose.ts'
-import type {TimingRefinement, RefinementLanguage} from '../../shared/timing-refinement.ts'
+import type {TimingRefinement, RefinementLanguage, ConfirmedPassage} from '../../shared/timing-refinement.ts'
+import {passageInput, timingLocked} from './timing-passage.ts'
 import {MIN_WORD_SEC} from '../lyrics.ts'
 import {applyTiming, insideProject} from './timing.ts'
 import type {EditorTarget} from './project.ts'
@@ -17,8 +18,7 @@ export const refinementFingerprint = (data: Project) =>
     createHash('sha256')
         .update(JSON.stringify([data.lyricsTiming, data.singing, data.music?.durationSec, data.stems]))
         .digest('hex')
-const protectedLine = (l: NonNullable<Project['lyricsTiming']>['lines'][number]) =>
-    !!(l.byHand || l.off || l.adlib || l.words.some(w => w.anchor || w.joined || w.group))
+const protectedLine = (l: NonNullable<Project['lyricsTiming']>['lines'][number]) => !!(l.off || l.adlib || timingLocked(l))
 
 /** Scores from forced alignment are not probabilities that a lyric was sung. Whisper supplies presence evidence. */
 export function buildRefinement(data: Project, candidates: Candidate[], language: RefinementLanguage): TimingRefinement {
@@ -137,13 +137,48 @@ export function buildRefinement(data: Project, candidates: Candidate[], language
     return report
 }
 
+export function buildPassageRefinement(data: Project, candidates: Candidate[], language: RefinementLanguage, request: ConfirmedPassage): TimingRefinement {
+    const input = passageInput(data, request)
+    const report = buildRefinement(
+        input.data,
+        candidates.filter(c => input.window.targets.includes(c.line)),
+        language,
+    )
+    report.fingerprint = refinementFingerprint(data)
+    report.passage = {line: request.line, ...input.window}
+    report.entries = report.entries.filter(e => input.window.targets.includes(e.line))
+    if (input.window.targets.some(id => !report.change.lines.some(l => l.line === id && l.words))) {
+        report.change.lines = []
+        for (const entry of report.entries) {
+            if (entry.status === 'refined') {
+                entry.status = 'review'
+                entry.reason = 'The passage could not be aligned safely as a whole. Both lines are retained.'
+                delete entry.after
+            }
+        }
+    }
+    return report
+}
+
 export function applyRefinement(data: Project, report: TimingRefinement, requests: Pick<ClipRequest, 'id' | 'beatId'>[]) {
     if (report.change.lines.some(line => line.off !== undefined))
         throw new Error('This older proposal changes lyric presence. Prepare refinement again; leave lines out manually after listening.')
     if (refinementFingerprint(data) !== report.fingerprint) throw new Error('Timing or singers changed. Prepare the refinement again.')
+    if (report.passage) {
+        const scope = passageInput(data, {line: report.passage.line, confirmSung: true})
+        if (
+            scope.window.targets.some(id => !report.change.lines.some(l => l.line === id && l.words)) ||
+            report.change.lines.some(l => !scope.window.targets.includes(l.line) || !l.words)
+        )
+            throw new Error('No usable alignment for the selected line. Prepare the passage again.')
+    }
     const old = structuredClone(data.lyricsTiming!)
-    const result = applyTiming(data, report.change, requests)
-    for (const line of data.lyricsTiming!.lines) {
+    const working = report.passage ? structuredClone(data) : data
+    const change = report.passage
+        ? {...report.change, lines: report.change.lines.map(l => (l.line === report.passage!.line ? {...l, off: false} : l))}
+        : report.change
+    const result = applyTiming(working, change, requests)
+    for (const line of working.lyricsTiming!.lines) {
         if (!result.changed.includes(line.line)) continue
         const before = old.lines.find(l => l.line === line.line)!
         line.confidence = before.confidence
@@ -151,6 +186,12 @@ export function applyRefinement(data: Project, report: TimingRefinement, request
         else line.byHand = before.byHand
         if (before.presenceByHand === undefined) delete line.presenceByHand
         else line.presenceByHand = before.presenceByHand
+    }
+    if (report.passage) {
+        const selected = working.lyricsTiming!.lines.find(l => l.line === report.passage!.line)!
+        selected.presenceByHand = true
+        if (!result.changed.includes(selected.line)) result.changed.push(selected.line)
+        Object.assign(data, working)
     }
     return result
 }
@@ -164,7 +205,7 @@ const audioStamp = (path: string) => {
 }
 
 /** The expensive stage writes a proposal only. Applying it uses the same locked save/invalidation as hand edits. */
-export async function prepareTimingRefinement(target: EditorTarget, language: RefinementLanguage): Promise<TimingRefinement> {
+export async function prepareTimingRefinement(target: EditorTarget, language: RefinementLanguage, passage?: ConfirmedPassage): Promise<TimingRefinement> {
     if (target.kind !== 'music' || !['de', 'en', 'fr'].includes(language)) throw new Error('Choose German (de), English (en) or French (fr) lyrics.')
     const key = resolve(target.dir)
     if (active.has(key)) throw new Error('A timing refinement is already running for this project.')
@@ -172,9 +213,10 @@ export async function prepareTimingRefinement(target: EditorTarget, language: Re
     try {
         const data = readProject(target)
         if (!data.lyricsTiming?.lines.length) throw new Error('Align lyrics with Whisper first.')
+        const scoped = passage === undefined ? undefined : passageInput(data, passage)
         const audio = insideProject(target.dir, data.stems?.vocals)
         if (!audio) throw new Error('The vocals stem is missing. Separate stems first.')
-        const audioPath = join(target.dir, audio.file),
+        const audioPath = resolve(target.dir, audio.file),
             stamp = audioStamp(audioPath)
         const folder = folderOf(target)
         mkdirSync(folder, {recursive: true})
@@ -182,8 +224,8 @@ export async function prepareTimingRefinement(target: EditorTarget, language: Re
         const input = join(folder, `input-${runId}.json`),
             output = join(folder, `output-${runId}.json`)
         // Include protected sung neighbours for context, but never apply their model timings.
-        const lines = data.lyricsTiming.lines.filter(l => !l.off && !l.adlib && (l.confidence > 0 || l.presenceByHand))
-        writeJsonFile(input, {audio: audioPath, language, duration: data.music?.durationSec, lines})
+        const lines = scoped?.lines ?? data.lyricsTiming.lines.filter(l => !l.off && !l.adlib && (l.confidence > 0 || l.presenceByHand))
+        writeJsonFile(input, {audio: audioPath, language, duration: data.music?.durationSec, lines, ...(scoped ? {window: scoped.window} : {})})
         let candidates: Candidate[] = []
         if (lines.some(l => !protectedLine(l))) {
             await runProcess(
@@ -212,7 +254,7 @@ export async function prepareTimingRefinement(target: EditorTarget, language: Re
             candidates = (JSON.parse(readFileSync(output, 'utf8')) as {lines: Candidate[]}).lines
             if (!Array.isArray(candidates)) throw new Error('Invalid phoneme alignment output')
         }
-        const report = buildRefinement(data, candidates, language)
+        const report = passage === undefined ? buildRefinement(data, candidates, language) : buildPassageRefinement(data, candidates, language, passage)
         if (refinementFingerprint(readProject(target)) !== report.fingerprint || audioStamp(audioPath) !== stamp)
             throw new Error('Project or vocals changed while aligning. Prepare again.')
         writeJsonFile(join(folder, 'proposal.json'), {...report, audioFile: audio.file, audioStamp: stamp})

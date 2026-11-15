@@ -273,6 +273,38 @@ const addWords = toasts.guard(async () => {
 const refining = usePending()
 const refinement = ref<TimingRefinement>()
 const refinementLanguage = ref<RefinementLanguage>('de')
+const retryPassage = toasts.guard(async () => {
+  const line = draft.line.value
+  if (!line || draft.edits.value.size || refining.pending.value || saving.pending.value) return
+  await ask({
+    title: 'Retry this sung passage',
+    lines: [
+      `Confirm that “${line.text}” is actually sung.`,
+      'A short excerpt will align this line and, if eligible, its following line together. Other lines and manual timing stay.',
+      'Nothing is saved yet. Applying the preview also enables this line if it was left out.',
+    ],
+    body: () =>
+      h('label', [
+        'Lyrics language ',
+        h(
+          'select',
+          {
+            value: refinementLanguage.value,
+            onChange: (event: Event) => {
+              refinementLanguage.value = (event.target as HTMLSelectElement).value as RefinementLanguage
+            },
+          },
+          [h('option', {value: 'de'}, 'Deutsch'), h('option', {value: 'en'}, 'English'), h('option', {value: 'fr'}, 'Français')],
+        ),
+      ]),
+    confirm: 'This line is sung — prepare',
+    submit: () =>
+      refining.during(async () => {
+        refinement.value = undefined
+        refinement.value = await api.refineTiming(refinementLanguage.value, {line: line.line, confirmSung: true})
+      }),
+  })
+})
 const prepareRefinement = toasts.guard(() =>
   refining.during(async () => {
     refinement.value = undefined
@@ -365,7 +397,7 @@ onMounted(() => {
         {{ sideFolded ? 'Show the side column' : 'Hide the side column' }}
       </button></PageBar
     >
-    <details class="timing-refinement">
+    <details class="timing-refinement" :open="refinement?.passage ? true : undefined">
       <summary>Refine timing from vocals</summary>
       <p>Align the existing lyrics to phonemes. Hand edits and anchors stay. Check the proposal before applying; affected shot plans will need rebuilding.</p>
       <div class="btn-row">
@@ -384,23 +416,29 @@ onMounted(() => {
       </div>
       <p v-if="refining.pending.value" role="status">This can take several minutes. The first run downloads the local model. Your timing is unchanged.</p>
       <template v-if="refinement">
+        <p v-if="refinement.passage">
+          Passage only: lines {{ refinement.passage.targets.map(n => n + 1).join(', ') }}. Apply the proposed changes together. This also confirms line
+          {{ refinement.passage.line + 1 }} is sung; other lines stay unchanged.
+        </p>
         <p>
           {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
-          {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review. Refinement keeps lines sung or left out
-          as they are. A missing transcript match does not mean a line was not sung.
+          {{ refinement.entries.filter(e => e.status === 'review' || e.status === 'omit').length }} need manual review.
+          <template v-if="!refinement.passage">Refinement keeps lines sung or left out as they are.</template>
+          A missing transcript match does not mean a line was not sung.
         </p>
         <div style="max-height: 20rem; overflow: auto">
           <p v-for="entry in refinement.entries" :key="entry.line">
             <button class="btn mini" @click="choose(entry.line)">{{ entry.line + 1 }}</button>
             <b>{{ entry.text }}</b> [{{ entry.status }}] {{ entry.before.map(n => n.toFixed(2)).join('–')
             }}<span v-if="entry.after"> → {{ entry.after.map(n => n.toFixed(2)).join('–') }}</span> — {{ entry.reason }}
+            <button class="btn mini" @click="play(Math.max(0, entry.before[0] - 0.3), Math.min(view.duration, entry.before[1] + 0.3))">Listen before</button>
             <button v-if="entry.after" class="btn mini" @click="play(Math.max(0, entry.after[0] - 0.3), Math.min(view.duration, entry.after[1] + 0.3))">
               Listen to proposal
             </button>
           </p>
         </div>
         <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
-          Apply proposal
+          {{ refinement.passage ? 'Apply passage' : 'Apply proposal' }}
         </button>
         <button class="btn" @click="refinement = undefined">Dismiss</button>
       </template>
@@ -473,6 +511,14 @@ onMounted(() => {
             @click="addWords"
           >
             Add words
+          </button>
+          <button
+            class="btn"
+            :disabled="!draft.line.value || draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
+            title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
+            @click="retryPassage"
+          >
+            Retry sung passage
           </button>
         </span>
         <span class="tw-grp">

@@ -1,8 +1,27 @@
 import unittest
-from refine_lyrics import windows, word_phones, phone_tokens
+from refine_lyrics import windows, word_phones, phone_tokens, alignment_windows
 
 
 class RefinementTests(unittest.TestCase):
+    def test_confirmed_passage_is_one_exact_window(self):
+        lines = [{'line': n, 'start': n * 3, 'end': n * 3 + 2} for n in range(6)]
+        request = {'lines': lines, 'duration': 60, 'window': {'start': 0, 'end': 20, 'targets': [3, 4]}}
+        self.assertEqual(alignment_windows(request), [{**request['window'], 'lines': lines}])
+        del request['window']
+        self.assertEqual(alignment_windows(request), windows(lines, 60))
+
+    def test_invalid_passage_fails_instead_of_clipping_or_repartitioning(self):
+        for window in [
+            {'start': 0, 'end': 31, 'targets': [0]},
+            {'start': 0, 'end': 5, 'targets': [1]},
+            {'start': 0, 'end': 5, 'targets': []},
+            {'start': 0, 'end': 5, 'targets': [0, 0]},
+            {'start': float('nan'), 'end': 5, 'targets': [0]},
+            {'start': 0, 'end': 61, 'targets': [0]},
+        ]:
+            with self.subTest(window=window), self.assertRaises(ValueError):
+                alignment_windows({'lines': [{'line': 0}], 'duration': 60, 'window': window})
+
     def test_composite_uses_exact_existing_tokens(self):
         self.assertEqual(phone_tokens('ʊɐ', {'ʊ': 7, 'ɐ': 9}), [7, 9])
 
