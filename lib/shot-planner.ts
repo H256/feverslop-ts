@@ -585,11 +585,12 @@ ${story}`,
                         required: ['summary', 'moments', 'locationId', 'characterIds', 'intensity', 'weight', 'kind', 'continuous', 'stateAfter', 'entrance'],
                         properties: {
                             summary: {type: 'string'},
-                            moments: {type: 'array', items: {type: 'string'}},
+                            moments: {type: 'array', minItems: 1, items: {type: 'string'}},
                             locationId: {enum: locations.map(l => l.id)},
                             characterIds: {type: 'array', items: {enum: characters.map(c => c.id)}},
-                            intensity: {type: 'number'},
-                            weight: {type: 'integer'},
+                            // the ranges the prompt names: the code clamps them today, the server can keep the answer to them
+                            intensity: {type: 'number', minimum: 0, maximum: 1},
+                            weight: {type: 'integer', minimum: 1, maximum: 5},
                             kind: {enum: ['establish', 'build', 'hit', 'release']},
                             continuous: {type: 'boolean'},
                             stateAfter: {
