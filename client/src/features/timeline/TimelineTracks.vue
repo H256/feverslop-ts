@@ -11,11 +11,12 @@ import ClipPeek from './ClipPeek.vue'
 import {stateOf} from './clips'
 import {useTimeline} from './context'
 import TimelineLegend from './TimelineLegend.vue'
-import {lanes, type LaneKey} from './lanes'
+import {lanesService, type LaneKey} from './lanes'
 
 /** The timeline: a ruler, the sections or scenes, the sound, the clips and what is sung or said - zoomed, scrolled and scrubbed. */
 const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct, review} = useTimeline()
 const {theme} = ChromeService.use()
+const lanes = lanesService.use()
 const MAX_PPS = 160
 const scroller = ref<HTMLElement>()
 const ruler = ref<HTMLCanvasElement>()
@@ -118,13 +119,13 @@ const hues = computed(() => {
 // sing, play or speak. Neighbouring shots that show the same are one stretch. A click directs the shot under it.
 type CastStretch = {key: string; start: number; length: number; does: string[]; shot?: string; title: string}
 const castLanes = computed(() => {
-  const lanes = new Map<string, {id: string; name: string; stretches: CastStretch[]}>()
+  const byId = new Map<string, {id: string; name: string; stretches: CastStretch[]}>()
   for (const clip of project.value.clips) {
     clip.shots.forEach((shot, n) => {
       const start = clip.start + shot.at
       const end = clip.start + (clip.shots[n + 1]?.at ?? clip.end - clip.start)
       for (const who of shot.cast ?? []) {
-        const lane = lanes.get(who.id) ?? lanes.set(who.id, {id: who.id, name: who.name, stretches: []}).get(who.id)!
+        const lane = byId.get(who.id) ?? byId.set(who.id, {id: who.id, name: who.name, stretches: []}).get(who.id)!
         const last = lane.stretches.at(-1)
         const does = [...who.does]
         if (last && Math.abs(last.start + last.length - start) < 0.05 && last.does.join() === does.join()) {
@@ -142,7 +143,7 @@ const castLanes = computed(() => {
       }
     })
   }
-  return [...lanes.values()]
+  return [...byId.values()]
 })
 // what can be hidden, for room (#772) - the clips always stay; kept per browser (lanes.ts)
 const shownLanes = computed(

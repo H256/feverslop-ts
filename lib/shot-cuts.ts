@@ -41,11 +41,10 @@ export function barCuts(slot: Span & {bars: number}, count: number, downbeats: n
 }
 
 /**
- * The cuts of a clip, in its own time: those on the bars (barCuts), and one where a break of the band begins or ends inside it -
- * on the nearest downbeat. A cut on the bars inside a break goes: the quiet is one shot. No shot is shorter than MIN_SHOT.
+ * The cuts that belong to a break of the band: where one begins or ends inside the clip, on the nearest downbeat, in the clip's own time.
+ * Nothing else may move them (#982): a sung word that crosses one is no reason to cut the quiet away from its break.
  */
-export function shotCuts(slot: Span & {bars: number}, count: number, downbeats: number[], breaks: Span[]): number[] {
-    const onBars = barCuts(slot, count, downbeats)
+export function breakChanges(slot: Span, downbeats: number[], breaks: Span[]): number[] {
     const duration = slot.end - slot.start
     const inside = (t: number) => t >= MIN_SHOT && t <= duration - MIN_SHOT
     const snap = (t: number) => {
@@ -55,11 +54,20 @@ export function shotCuts(slot: Span & {bars: number}, count: number, downbeats: 
         )
         return round((near ?? t) - slot.start)
     }
-    const changes = breaks
+    return breaks
         .filter(b => b.end > slot.start && b.start < slot.end)
         .flatMap(b => [b.start, b.end])
         .map(snap)
         .filter(inside)
+}
+
+/**
+ * The cuts of a clip, in its own time: those on the bars (barCuts), and one where a break of the band begins or ends inside it -
+ * on the nearest downbeat. A cut on the bars inside a break goes: the quiet is one shot. No shot is shorter than MIN_SHOT.
+ */
+export function shotCuts(slot: Span & {bars: number}, count: number, downbeats: number[], breaks: Span[]): number[] {
+    const onBars = barCuts(slot, count, downbeats)
+    const changes = breakChanges(slot, downbeats, breaks)
     if (!changes.length) return onBars
     const quiet = (t: number) => breaks.some(b => slot.start + t > b.start && slot.start + t < b.end)
     const kept = onBars.filter(t => t > 0 && !quiet(t) && changes.every(c => Math.abs(c - t) >= MIN_SHOT))

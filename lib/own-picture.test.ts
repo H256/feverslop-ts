@@ -1,19 +1,12 @@
 import {describe, expect, test} from 'bun:test'
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
-import {tmpdir} from 'node:os'
+import {existsSync, readFileSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
+import {inTemp as sharedInTemp} from './test-temp.ts'
 import {descriptionSlot, hasOwnAnchor, installOwnPicture, ownPictureTarget, takeOwnDescription} from './own-picture.ts'
 import {runProcess} from './process.ts'
 import {isOwnFile} from './provenance.ts'
 
-const inTemp = (run: (dir: string) => void | Promise<void>) => async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'own-picture-'))
-    try {
-        await run(dir)
-    } finally {
-        rmSync(dir, {recursive: true, force: true})
-    }
-}
+const inTemp = (run: (dir: string) => void | Promise<void>) => sharedInTemp('own-picture', run)
 const anna = {kind: 'character' as const, id: 'anna', file: 'assets/characters/anna.png', name: 'Anna', prompt: 'p', description: 'd'}
 
 describe('where the own picture goes', () => {

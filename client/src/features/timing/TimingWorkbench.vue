@@ -273,15 +273,19 @@ const addWords = toasts.guard(async () => {
 const refining = usePending()
 const refinement = ref<TimingRefinement>()
 const refinementLanguage = ref<RefinementLanguage>('de')
-const retryPassage = toasts.guard(async () => {
+const retryPassage = toasts.guard(async (mode?: 'line-window') => {
   const line = draft.line.value
-  if (!line || draft.edits.value.size || refining.pending.value || saving.pending.value) return
+  if (!line || (!mode && draft.edits.value.size) || refining.pending.value || saving.pending.value) return
+  const saveFirst = !!draft.edits.value.size
   await ask({
-    title: 'Retry this sung passage',
+    title: mode ? 'Refine words within this block' : 'Retry this sung passage',
     lines: [
       `Confirm that “${line.text}” is actually sung.`,
-      'A short excerpt will align this line and, if eligible, its following line together. Other lines and manual timing stay.',
-      'Nothing is saved yet. Applying the preview also enables this line if it was left out.',
+      mode
+        ? `Only the selected block (${draft.startOf(line).toFixed(3)}–${draft.endOf(line).toFixed(3)} s) is aligned. Its words may move within these bounds; neighbours stay unchanged.`
+        : 'A short excerpt will align this line and, if eligible, its following line together. Other lines and manual timing stay.',
+      saveFirst ? 'Your pending timing edits are saved first. If alignment fails, that rough placement remains saved.' : 'Preparing saves no timing changes.',
+      'Apply the preview to replace the selected word boundaries and enable this line if it was left out.',
     ],
     body: () =>
       h('label', [
@@ -297,11 +301,17 @@ const retryPassage = toasts.guard(async () => {
           [h('option', {value: 'de'}, 'Deutsch'), h('option', {value: 'en'}, 'English'), h('option', {value: 'fr'}, 'Français')],
         ),
       ]),
-    confirm: 'This line is sung — prepare',
+    confirm: saveFirst ? 'Save changes & prepare' : 'This line is sung — prepare',
     submit: () =>
       refining.during(async () => {
         refinement.value = undefined
-        refinement.value = await api.refineTiming(refinementLanguage.value, {line: line.line, confirmSung: true})
+        if (saveFirst) {
+          await saving.during(() => api.saveTiming(draft.request()))
+          if (!(await props.refresh())) throw new Error('Placement saved, but reload failed. Reload before refining.')
+          draft.discard()
+          saved.value = 'Rough placement saved. Word refinement is a separate proposal.'
+        }
+        refinement.value = await api.refineTiming(refinementLanguage.value, {line: line.line, confirmSung: true, ...(mode ? {mode} : {})})
       }),
   })
 })
@@ -414,11 +424,18 @@ onMounted(() => {
         </button>
         <span v-if="draft.edits.value.size" class="muted">Save or discard your edits first.</span>
       </div>
-      <p v-if="refining.pending.value" role="status">This can take several minutes. The first run downloads the local model. Your timing is unchanged.</p>
+      <p v-if="refining.pending.value" role="status">This can take several minutes. The first run downloads the local model. The proposal is not applied automatically.</p>
       <template v-if="refinement">
-        <p v-if="refinement.passage">
+        <p v-if="refinement.passage?.mode === 'line-window'">
+          Words within block {{ refinement.passage.line + 1 }}: {{ refinement.passage.start.toFixed(3) }}–{{ refinement.passage.end.toFixed(3) }} s. Neighbours
+          stay unchanged. Listen before applying the new word boundaries.
+        </p>
+        <p v-else-if="refinement.passage">
           Passage only: lines {{ refinement.passage.targets.map(n => n + 1).join(', ') }}. Apply the proposed changes together. This also confirms line
           {{ refinement.passage.line + 1 }} is sung; other lines stay unchanged.
+        </p>
+        <p v-if="refinement.logFile" class="muted">
+          Alignment log: <code>{{ refinement.logFile }}</code>
         </p>
         <p>
           {{ refinement.entries.filter(e => e.status === 'refined').length }} refined ·
@@ -438,7 +455,7 @@ onMounted(() => {
           </p>
         </div>
         <button class="btn" :disabled="!refinement.change.lines.length || draft.edits.value.size > 0 || refining.pending.value" @click="takeRefinement">
-          {{ refinement.passage ? 'Apply passage' : 'Apply proposal' }}
+          {{ refinement.passage?.mode === 'line-window' ? 'Apply word refinement' : refinement.passage ? 'Apply passage' : 'Apply proposal' }}
         </button>
         <button class="btn" @click="refinement = undefined">Dismiss</button>
       </template>
@@ -506,6 +523,14 @@ onMounted(() => {
           </button>
           <button
             class="btn"
+            :disabled="refining.pending.value || saving.pending.value"
+            title="Use this block as the audio window; replace only its word boundaries after preview, even after moving it by hand"
+            @click="retryPassage('line-window')"
+          >
+            {{ draft.edits.value.size ? 'Save changes & refine words' : 'Refine words in block' }}
+          </button>
+          <button
+            class="btn"
             :disabled="draft.edits.value.size > 0"
             :title="draft.edits.value.size ? 'Save your moved words before adding new words' : 'Insert missing sung words and extend the lyrics'"
             @click="addWords"
@@ -516,7 +541,7 @@ onMounted(() => {
             class="btn"
             :disabled="!draft.line.value || draft.edits.value.size > 0 || refining.pending.value || saving.pending.value"
             title="Confirm this lyric is sung, then preview a local alignment with its neighbour"
-            @click="retryPassage"
+            @click="retryPassage()"
           >
             Retry sung passage
           </button>

@@ -1,5 +1,5 @@
 import {createHash, randomUUID} from 'node:crypto'
-import {mkdirSync, readFileSync, statSync} from 'node:fs'
+import {mkdirSync, readFileSync, statSync, appendFileSync} from 'node:fs'
 import {join, resolve} from 'node:path'
 import type {Project, TimedWord} from '../project.ts'
 import type {ClipRequest} from '../compose.ts'
@@ -12,6 +12,7 @@ import {writeJsonFile} from '../json-file.ts'
 import {withProjectLock} from '../lock.ts'
 import {readClipRequests} from '../render-state.ts'
 import {runProcess} from '../process.ts'
+import {pruneRunLogs} from '../log-retention.ts'
 
 type Candidate = {line: number; words?: TimedWord[]; error?: string}
 export const refinementFingerprint = (data: Project) =>
@@ -139,13 +140,22 @@ export function buildRefinement(data: Project, candidates: Candidate[], language
 
 export function buildPassageRefinement(data: Project, candidates: Candidate[], language: RefinementLanguage, request: ConfirmedPassage): TimingRefinement {
     const input = passageInput(data, request)
-    const report = buildRefinement(
-        input.data,
-        candidates.filter(c => input.window.targets.includes(c.line)),
-        language,
-    )
+    const scopedCandidates = candidates
+        .filter(c => input.window.targets.includes(c.line))
+        .map(c => {
+            if (request.mode === 'line-window' && c.words?.some(w => w.start < input.window.start - 0.000001 || w.end > input.window.end + 0.000001))
+                return {line: c.line, error: 'Alignment exceeds your block. Original word boundaries retained.'}
+            return c
+        })
+    const report = buildRefinement(input.data, scopedCandidates, language)
     report.fingerprint = refinementFingerprint(data)
-    report.passage = {line: request.line, ...input.window}
+    report.passage = {
+        line: request.line,
+        start: input.window.start,
+        end: input.window.end,
+        targets: input.window.targets,
+        ...(request.mode ? {mode: request.mode} : {}),
+    }
     report.entries = report.entries.filter(e => input.window.targets.includes(e.line))
     if (input.window.targets.some(id => !report.change.lines.some(l => l.line === id && l.words))) {
         report.change.lines = []
@@ -165,12 +175,17 @@ export function applyRefinement(data: Project, report: TimingRefinement, request
         throw new Error('This older proposal changes lyric presence. Prepare refinement again; leave lines out manually after listening.')
     if (refinementFingerprint(data) !== report.fingerprint) throw new Error('Timing or singers changed. Prepare the refinement again.')
     if (report.passage) {
-        const scope = passageInput(data, {line: report.passage.line, confirmSung: true})
+        const scope = passageInput(data, {line: report.passage.line, confirmSung: true, mode: report.passage.mode})
         if (
             scope.window.targets.some(id => !report.change.lines.some(l => l.line === id && l.words)) ||
             report.change.lines.some(l => !scope.window.targets.includes(l.line) || !l.words)
         )
             throw new Error('No usable alignment for the selected line. Prepare the passage again.')
+        if (
+            report.passage.mode === 'line-window' &&
+            report.change.lines.some(l => l.words!.some(w => w.start < scope.window.start || w.end > scope.window.end))
+        )
+            throw new Error('Alignment exceeds your block. Prepare the refinement again.')
     }
     const old = structuredClone(data.lyricsTiming!)
     const working = report.passage ? structuredClone(data) : data
@@ -221,6 +236,11 @@ export async function prepareTimingRefinement(target: EditorTarget, language: Re
         const folder = folderOf(target)
         mkdirSync(folder, {recursive: true})
         const runId = randomUUID()
+        const logFile = `logs/timing-refinement/${runId}.log`
+        const logPath = join(target.dir, logFile)
+        mkdirSync(join(target.dir, 'logs', 'timing-refinement'), {recursive: true})
+        appendFileSync(logPath, `Timing refinement ${language}${passage ? `, line ${passage.line + 1}, ${passage.mode ?? 'passage'}` : ', whole song'}\n`)
+        pruneRunLogs(join(target.dir, 'logs', 'timing-refinement'), 20, logPath)
         const input = join(folder, `input-${runId}.json`),
             output = join(folder, `output-${runId}.json`)
         // Include protected sung neighbours for context, but never apply their model timings.
@@ -249,12 +269,18 @@ export async function prepareTimingRefinement(target: EditorTarget, language: Re
                     input,
                     output,
                 ],
-                {stderr: 'tee', timeoutMs: 30 * 60 * 1000, errorMessage: e => `Phoneme refinement failed; original timing unchanged. ${e.slice(-3000)}`},
+                {
+                    stderrFile: logPath,
+                    timeoutMs: 30 * 60 * 1000,
+                    errorMessage: e => `Phoneme refinement failed; original timing unchanged. Log: ${logFile}\n${e.slice(-3000)}`,
+                },
             )
             candidates = (JSON.parse(readFileSync(output, 'utf8')) as {lines: Candidate[]}).lines
             if (!Array.isArray(candidates)) throw new Error('Invalid phoneme alignment output')
         }
         const report = passage === undefined ? buildRefinement(data, candidates, language) : buildPassageRefinement(data, candidates, language, passage)
+        report.logFile = logFile
+        appendFileSync(logPath, `Prepared ${report.change.lines.length} line(s); timing unchanged until apply.\n`)
         if (refinementFingerprint(readProject(target)) !== report.fingerprint || audioStamp(audioPath) !== stamp)
             throw new Error('Project or vocals changed while aligning. Prepare again.')
         writeJsonFile(join(folder, 'proposal.json'), {...report, audioFile: audio.file, audioStamp: stamp})
