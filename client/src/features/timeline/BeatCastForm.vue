@@ -26,10 +26,11 @@ const dropRow = (n: number) => props.draft.join.splice(n, 1)
     </FormField>
     <FormField label="New people - each one their own person, with a picture of their own">
       <div v-for="(row, n) in draft.join" :key="keyOf(row)" class="row">
-        <input v-model="row.name" type="text" placeholder="Name, e.g. Mara" maxlength="80" />
+        <input v-model="row.name" type="text" aria-label="Name of the new person" placeholder="Name, e.g. Mara" maxlength="80" />
         <input
           v-model="row.role"
           type="text"
+          aria-label="Who the new person is and what they look like"
           placeholder="Who she is and what she looks like: a dancer in her twenties, long black hair, a dark red velvet dress"
         />
         <button type="button" class="btn" title="Leave this one out" @click="dropRow(n)">×</button>
