@@ -309,3 +309,13 @@ describe('alignLyrics - the lines of the lyrics, exactly', () => {
         expect(lyricsProblems({lines: lines.map(l => (l.line === 0 ? {...l, words: []} : l))}, sections).map(p => p.problem)).toEqual(['not placed'])
     })
 })
+
+describe('lyrics without spaces (#977)', () => {
+    test('a Japanese line is several words, a spaced line stays as it was', async () => {
+        const {sungLines, splitWords} = await import('./lyrics.ts')
+        expect(splitWords('夜空に輝く星')).toEqual(['夜空', 'に', '輝く', '星'])
+        expect(splitWords('Black stone walls')).toEqual(['Black', 'stone', 'walls'])
+        expect(splitWords('hello 世界')).toEqual(['hello', '世界'])
+        expect(sungLines([{label: 'Verse', lines: ['夜空に輝く星']}])[0]!.words.length).toBe(4)
+    })
+})
