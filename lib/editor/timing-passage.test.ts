@@ -2,6 +2,7 @@ import {expect, test} from 'bun:test'
 import type {Project, TimedLine} from '../project.ts'
 import {passageInput} from './timing-passage.ts'
 import {applyRefinement, buildPassageRefinement} from './timing-refinement.ts'
+import {applyTiming} from './timing.ts'
 const line = (n: number, extra: Partial<TimedLine> = {}): TimedLine => ({
     line: n,
     text: `word${n}`,
@@ -15,6 +16,26 @@ const line = (n: number, extra: Partial<TimedLine> = {}): TimedLine => ({
 })
 const fixture = (): Project => ({music: {durationSec: 60} as Project['music'], lyricsTiming: {lines: Array.from({length: 10}, (_, n) => line(n))}})
 const candidate = (n: number, start = n * 3 + 0.1) => ({line: n, words: [{text: `word${n}`, start, end: start + 2}]})
+
+test('move, save, then refine words inside the saved block without touching neighbours', () => {
+    const data = fixture()
+    applyTiming(data, {lines: [{line: 4, words: [{start: 12.5, end: 14.8}]}]}, [])
+    expect(data.lyricsTiming!.lines[4]!.byHand).toBe(true)
+    const before = structuredClone(data)
+    const request = {line: 4, confirmSung: true, mode: 'line-window'} as const
+    const input = passageInput(data, request)
+    expect(input.window).toMatchObject({start: 12.5, end: 14.8, targets: [4], bounded: true})
+    expect(input.lines.map(l => l.line)).toEqual([4])
+    const report = buildPassageRefinement(data, [candidate(4, 12.6), candidate(5)], 'de', request)
+    expect(report.change.lines.map(l => l.line)).toEqual([4])
+    expect(data).toEqual(before)
+    applyRefinement(data, report, [])
+    expect(data.lyricsTiming!.lines[4]!.start).toBe(12.6)
+    expect(data.lyricsTiming!.lines[4]!.byHand).toBe(true)
+    expect(data.lyricsTiming!.lines[5]).toEqual(before.lyricsTiming!.lines[5])
+    const outside = buildPassageRefinement(before, [candidate(4, 12.4)], 'de', request)
+    expect(outside.change.lines).toEqual([])
+})
 
 test('confirmed missing line joins a single bounded context, only target and following line are editable', () => {
     const data = fixture()
