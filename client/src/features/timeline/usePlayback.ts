@@ -239,7 +239,9 @@ export function usePlayback(project: Ref<EditorProject>, fresh: Ref<EditorFreshn
   function step(direction: number) {
     const clips = project.value.clips
     if (!clips.length) return
-    const index = clip.value ? clips.indexOf(clip.value) : clips.findIndex(c => c.start > t.value) - (direction > 0 ? 1 : 0)
+    // in a gap: the first clip after the playhead; behind the last clip that is "the end" (-1 would send a step to the first clip)
+    const after = clips.findIndex(c => c.start > t.value)
+    const index = clip.value ? clips.indexOf(clip.value) : (after < 0 ? clips.length : after) - (direction > 0 ? 1 : 0)
     const target = direction < 0 && clip.value && t.value - clip.value.start > 0.5 ? index : clamp(index + direction, 0, clips.length - 1)
     seek(clips[target]!.start)
   }
