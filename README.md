@@ -191,7 +191,7 @@ Each command ends with a `Next` line: following only those lines leads from an e
 video. In order:
 
 1. `bun run doctor` - what this machine has: the language model, ComfyUI, ffmpeg, uv. Each missing part with its fix.
-2. `bun run setup` - the servers: asked, or by options (`bun run setup llm --url=http://localhost:8080/v1`, `bun run setup comfy --add=http://gpu:8188`).
+2. `bun run setup` - the servers: asked, or by options (`bun run setup llm --url=http://localhost:8080/v1`, `bun run setup comfy --add=http://gpu:8188`). A key or token that should stay out of the shell history: `--key-file=PATH` or `--key-env=NAME` (and `--token-file=`, `--token-env=`) instead of `--key=`.
 3. `bun run init my-song --song=song.mp3 --lyrics=lyrics.txt` - the project (asked, without the options).
 4. `bun run plan my-song` - the plan: the language model only, nothing is rendered (`bun run plan` is `bun index.ts`).
 5. `bun run plan my-song --render=images` - the pictures of the cast and the places.

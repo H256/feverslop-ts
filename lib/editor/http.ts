@@ -1,4 +1,4 @@
-import {existsSync, statSync} from 'node:fs'
+import {existsSync, realpathSync, statSync} from 'node:fs'
 import {extname, isAbsolute, relative, resolve, sep} from 'node:path'
 import type {RunEvents} from '../../shared/workspace.ts'
 import {kindOf, STATUS_OF} from '../service-error.ts'
@@ -29,7 +29,11 @@ export function mediaFile(dir: string, path: string): string | undefined {
     const inside = relative(resolve(dir), file)
     // another drive on Windows: relative() gives an absolute path
     if (inside === '' || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) return undefined
-    return existsSync(file) && statSync(file).isFile() ? file : undefined
+    if (!existsSync(file) || !statSync(file).isFile()) return undefined
+    // a link inside the folder may point out of it: the real place has to be inside as well
+    const real = relative(realpathSync(dir), realpathSync(file))
+    if (real === '' || real === '..' || real.startsWith(`..${sep}`) || isAbsolute(real)) return undefined
+    return file
 }
 
 const WAVEFORM_BUCKETS = 4000
@@ -83,7 +87,8 @@ export function eventCursor(request: Request, after: number) {
 }
 
 /** The lines of a run as they come, as server-sent events: a page can come and go, and follow a run it did not start. */
-export function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number) {
+/** `pollMs`: how often the run is looked at - a parameter so that a test need not wait for the real interval (#1006). */
+export function runEvents(runs: RunControl, target: EditorTarget, request: Request, from: number, pollMs = 700) {
     let after = eventCursor(request, from)
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream({
@@ -124,7 +129,7 @@ export function runEvents(runs: RunControl, target: EditorTarget, request: Reque
                 }
             }
             tick()
-            timer = setInterval(tick, 700)
+            timer = setInterval(tick, pollMs)
             request.signal.addEventListener('abort', () => {
                 clearInterval(timer)
                 try {

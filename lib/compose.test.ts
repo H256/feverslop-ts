@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {buildClipRequests, type Input, layoutLine, singingPerBeat} from './compose.ts'
+import {avoidWords, buildClipRequests, type Input, layoutLine, singingPerBeat, splitSentences} from './compose.ts'
 import type {BeatShots, Character, StoryBeat} from './project.ts'
 import {slotVocals} from './lyrics.ts'
 
@@ -548,5 +548,31 @@ describe('the layout of the place', () => {
         expect(layoutLine(false, 'Elias walks down the corridor.', undefined)).toContain(
             'as the scene began - a floor plan, not a shot of its own; everyone is now where the shots below put them',
         )
+    })
+})
+
+describe('avoidWords and the cuts of a band break (#982)', () => {
+    const word = {text: 'x', start: 3.5, end: 4.5}
+    test('a cut inside a sung word moves out of it', () => {
+        expect(avoidWords([0, 4], [word], 2, 10)[1]).not.toBe(4)
+    })
+    test('the cut of a break stays where it is', () => {
+        expect(avoidWords([0, 4], [word], 2, 10, [4])).toEqual([0, 4])
+    })
+    test('a move that would leave a shot under 1.2 s is not made', () => {
+        const cuts = avoidWords([0, 4.7, 5.6], [{text: 'x', start: 4.0, end: 4.9}], 2, 10)
+        const lengths = cuts.map((c, i) => (cuts[i + 1] ?? 10) - c)
+        expect(Math.min(...lengths)).toBeGreaterThanOrEqual(1.2)
+    })
+})
+
+describe('splitSentences (#1004)', () => {
+    test('a full stop after an abbreviation does not end the sentence', () => {
+        expect(splitSentences('Warm light, e.g. candles. A second sentence. Dr. Who stays.')).toEqual([
+            'Warm light, e.g. candles.',
+            'A second sentence.',
+            'Dr. Who stays.',
+        ])
+        expect(splitSentences('Plain. Two!  Three?')).toEqual(['Plain.', 'Two!', 'Three?'])
     })
 })

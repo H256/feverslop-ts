@@ -846,6 +846,8 @@ describe('the casting', () => {
         locations: [{id: 'hall', name: 'Hall'}],
     }
     const project = () => target('cast')
+    // what the library variable was before: put back after the tests, not deleted (#1006)
+    const libraryBefore = process.env.FEVERSLOP_LIBRARY
     const save = async () => {
         write(join(root, 'library/characters/kael/asset.json'), {name: 'Kael', description: 'a man', source: 'x/y'})
         write(join(root, 'library/characters/kael/picture.png'))
@@ -860,7 +862,8 @@ describe('the casting', () => {
         write(join(dir, 'casting.json'), JSON.stringify({characters: {ann: 'project:ann', band: 'project:band'}, locations: {hall: 'library:gone'}}, null, 2))
     })
     afterAll(() => {
-        delete process.env.FEVERSLOP_LIBRARY
+        if (libraryBefore === undefined) delete process.env.FEVERSLOP_LIBRARY
+        else process.env.FEVERSLOP_LIBRARY = libraryBefore
     })
     test('every role with its entry, the clips that use it and what is wrong', async () => {
         const casting = await readCasting(project(), [

@@ -39,7 +39,7 @@ describe('readBeatPlan', () => {
         expect(r.plan.shots[0]!.people!.cael!.frame).toBe('left')
         expect(r.plan.ends).toEqual({cael: 'stands at the shaft'})
     })
-    test('asks again for an unknown name, a stranger in the text and a singing shot without a singer', () => {
+    test('asks again for an unknown name and a stranger in the text; a singer heard off screen is a note, not a question', () => {
         const r = readBeatPlan({shots: [{action: '{Maren} swings', characters: ['Cael', 'Nobody']}]}, beat, [cael, maren], 1, {
             singerIds: ['cael'],
             singingPerShot: [true],
@@ -50,7 +50,8 @@ describe('readBeatPlan', () => {
         expect(q.problems[0]).toContain('Maren')
         expect(readBeatPlan({shots: [{action: 'Maren swings', characters: ['Cael']}]}, beat, [cael, maren], 1)!.problems).toEqual([])
         const none = readBeatPlan({shots: [{action: 'x', characters: ['Maren']}]}, beat, [cael, maren], 1, {singerIds: ['cael'], singingPerShot: [true]})!
-        expect(none.problems[0]).toContain('sung')
+        expect(none.problems).toEqual([])
+        expect(none.notes.join(' ')).toContain('heard off screen')
     })
     test('a token that is nobody of the cast is asked again, braces in the characters list are read', () => {
         const r = readBeatPlan({staging: '{Ghost} by the door', shots: [{action: '{Cael} turns to {Bob}', characters: ['{Cael}']}]}, beat, [cael, maren], 1)!

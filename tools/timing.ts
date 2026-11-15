@@ -24,7 +24,7 @@ import type {RefinementLanguage} from '../shared/timing-refinement.ts'
 cli('timing')
 
 const usage =
-    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr [--refine-line=N --confirm-sung] | --apply-refinement=<proposal-id>]'
+    'usage: bun run timing <project-id> [--json | --set=timing.json | --tighten | --off=12,40 | --on=12 | --reset=12,40|all | --refine=de|en|fr [--refine-line=N --confirm-sung [--within-block]] | --apply-refinement=<proposal-id>]'
 const {values: args, positionals} = (() => {
     try {
         return parseArgs({
@@ -39,6 +39,7 @@ const {values: args, positionals} = (() => {
                 reset: {type: 'string'},
                 refine: {type: 'string'},
                 'refine-line': {type: 'string'},
+                'within-block': {type: 'boolean'},
                 'confirm-sung': {type: 'boolean'},
                 'apply-refinement': {type: 'string'},
             },
@@ -51,7 +52,7 @@ const {values: args, positionals} = (() => {
 const extra = extraArgument(positionals, ['a project id'])
 if (extra) log.usageError(extra, usage)
 const refineLine = args['refine-line']
-if (refineLine !== undefined || args['confirm-sung']) {
+if (refineLine !== undefined || args['confirm-sung'] || args['within-block']) {
     if (
         !args.refine ||
         !args['confirm-sung'] ||
@@ -85,10 +86,13 @@ if (args.refine !== undefined) {
     const report = await prepareTimingRefinement(
         t,
         args.refine as RefinementLanguage,
-        refineLine === undefined ? undefined : {line: Number(refineLine) - 1, confirmSung: true},
+        refineLine === undefined
+            ? undefined
+            : {line: Number(refineLine) - 1, confirmSung: true, ...(args['within-block'] ? {mode: 'line-window' as const} : {})},
     )
     if (args.json) console.log(JSON.stringify(report, null, 2))
     else {
+        if (report.logFile) log.info(`Alignment log: ${report.logFile}`)
         if (report.passage)
             log.info(
                 `Passage only: lines ${report.passage.targets.map(n => n + 1).join(', ')}. Applying also confirms line ${report.passage.line + 1} is sung.`,

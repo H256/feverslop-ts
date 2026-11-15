@@ -13,7 +13,7 @@ import ClipInspector from './inspector/ClipInspector.vue'
 import PlayerMonitor from './PlayerMonitor.vue'
 import SummaryChips from './SummaryChips.vue'
 import TimelineTracks from './TimelineTracks.vue'
-import {lanes} from './lanes'
+import {lanesService, makeLanes} from './lanes'
 import {useClipActions} from './useClipActions'
 import {useReview} from './useReview'
 import {createTimeline} from './useTimeline'
@@ -23,6 +23,7 @@ const timeline = createTimeline()
 const actions = useClipActions(timeline)
 const review = useReview(timeline, actions)
 TimelineService.provide(timelineContext(timeline, actions, review))
+const lanes = lanesService.provide(makeLanes())
 // the page keeps the whole timeline; its parts get the narrower context
 const {project, playback, session} = timeline
 const run = useRunDock()

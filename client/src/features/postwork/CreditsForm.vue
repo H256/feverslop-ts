@@ -2,7 +2,7 @@
 import CalloutBox from '../../components/CalloutBox.vue'
 import {computed} from 'vue'
 import FormField from '../../components/FormField.vue'
-import type {CreditsDraft} from './forms'
+import {type CreditsDraft, OWN} from './forms'
 import KeepSettings from './KeepSettings.vue'
 
 /** The fields of the title card and the credits, filled into the caller's reactive draft - the question reads it when it is answered. */
@@ -10,7 +10,6 @@ const props = defineProps<{draft: CreditsDraft; finals: {file: string; label: st
 
 // the marker on the title card: none, a preset, or the path of a PNG of one's own
 const NONE = ''
-const OWN = '__own__'
 const choice = computed({
   get: () => (props.draft.marker === NONE ? NONE : props.markers.includes(props.draft.marker) ? props.draft.marker : OWN),
   set: value => {

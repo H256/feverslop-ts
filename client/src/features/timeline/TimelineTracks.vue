@@ -11,11 +11,12 @@ import ClipPeek from './ClipPeek.vue'
 import {stateOf} from './clips'
 import {useTimeline} from './context'
 import TimelineLegend from './TimelineLegend.vue'
-import {lanes, type LaneKey} from './lanes'
+import {lanesService, type LaneKey} from './lanes'
 
 /** The timeline: a ruler, the sections or scenes, the sound, the clips and what is sung or said - zoomed, scrolled and scrubbed. */
 const {project, fresh, peaks, progress, playback, marked, onlyFlagged, clickClip, isFlagged, peek, session, direct, review} = useTimeline()
 const {theme} = ChromeService.use()
+const lanes = lanesService.use()
 const MAX_PPS = 160
 const scroller = ref<HTMLElement>()
 const ruler = ref<HTMLCanvasElement>()
@@ -118,13 +119,13 @@ const hues = computed(() => {
 // sing, play or speak. Neighbouring shots that show the same are one stretch. A click directs the shot under it.
 type CastStretch = {key: string; start: number; length: number; does: string[]; shot?: string; title: string}
 const castLanes = computed(() => {
-  const lanes = new Map<string, {id: string; name: string; stretches: CastStretch[]}>()
+  const byId = new Map<string, {id: string; name: string; stretches: CastStretch[]}>()
   for (const clip of project.value.clips) {
     clip.shots.forEach((shot, n) => {
       const start = clip.start + shot.at
       const end = clip.start + (clip.shots[n + 1]?.at ?? clip.end - clip.start)
       for (const who of shot.cast ?? []) {
-        const lane = lanes.get(who.id) ?? lanes.set(who.id, {id: who.id, name: who.name, stretches: []}).get(who.id)!
+        const lane = byId.get(who.id) ?? byId.set(who.id, {id: who.id, name: who.name, stretches: []}).get(who.id)!
         const last = lane.stretches.at(-1)
         const does = [...who.does]
         if (last && Math.abs(last.start + last.length - start) < 0.05 && last.does.join() === does.join()) {
@@ -142,7 +143,7 @@ const castLanes = computed(() => {
       }
     })
   }
-  return [...lanes.values()]
+  return [...byId.values()]
 })
 // what can be hidden, for room (#772) - the clips always stay; kept per browser (lanes.ts)
 const shownLanes = computed(
@@ -196,6 +197,21 @@ const readHeight = () => {
 }
 const clipHeight = ref(clamp(readHeight(), 56, 240))
 const resizeDrag = usePointerDrag()
+function saveHeight() {
+  try {
+    localStorage.setItem(HEIGHT_KEY, String(clipHeight.value))
+  } catch {
+    // no storage: the height holds for this page only
+  }
+}
+/** The keys for what the drag does: up is taller, down is lower; Shift for a bigger step. */
+function resizeByKey(event: KeyboardEvent) {
+  const step = event.shiftKey ? 24 : 8
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+  event.preventDefault()
+  clipHeight.value = clamp(clipHeight.value + (event.key === 'ArrowUp' ? step : -step), 56, 240)
+  saveHeight()
+}
 function resize(event: PointerEvent) {
   const from = event.clientY
   const before = clipHeight.value
@@ -242,7 +258,19 @@ const hidePeek = () => {
 
 <template>
   <section class="timeline" aria-label="Timeline" :style="{'--clip-h': `${clipHeight}px`}">
-    <div class="tl-resize" title="Drag to make the timeline taller or lower" @pointerdown.prevent="resize" />
+    <div
+      class="tl-resize"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Height of the clips"
+      :aria-valuenow="clipHeight"
+      aria-valuemin="56"
+      aria-valuemax="240"
+      tabindex="0"
+      title="Drag to make the timeline taller or lower - or the arrow keys up and down"
+      @pointerdown.prevent="resize"
+      @keydown="resizeByKey"
+    />
     <div class="tbar">
       <TimelineLegend />
     </div>

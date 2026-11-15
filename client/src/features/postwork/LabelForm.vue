@@ -2,13 +2,12 @@
 import {computed} from 'vue'
 import FormField from '../../components/FormField.vue'
 import KeepSettings from './KeepSettings.vue'
-import {CORNERS, LABEL_MODES, type LabelDraft} from './forms'
+import {CORNERS, LABEL_MODES, type LabelDraft, OWN} from './forms'
 
 /** The fields of the AI marker, filled into the caller's reactive draft - the question reads it when it is answered. */
 const props = defineProps<{draft: LabelDraft; finals: {file: string; label: string}[]; markers: string[]}>()
 
 // a preset is chosen from the list; anything else is the path of a PNG of one's own
-const OWN = '__own__'
 const choice = computed({
   get: () => (props.markers.includes(props.draft.marker) ? props.draft.marker : OWN),
   set: value => {

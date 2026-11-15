@@ -1,4 +1,4 @@
-import {countShotsPerBeat, propActivityPerBeat, singingPerBeat} from '../compose.ts'
+import {countShotsPerBeat, propActivityPerBeat, shotsOfClips, singingPerBeat} from '../compose.ts'
 import {applyDirectionOverlay, directionNotTaken, directionPlanNotes, directionPlanRules, dropStaleEdits, recordPlannedDirection} from '../direction/service.ts'
 import {directionViewCache} from '../direction/views.ts'
 import {formatTime} from '../frames.ts'
@@ -127,6 +127,8 @@ export async function planShots(run: ShotRun) {
     const beatProps = propActivity ? propActivityPerBeat(cutsInput, propActivity) : undefined
     const beatSinging = singingPerBeat({...cutsInput, singing, lyricsTiming})
     const shotCounts = countShotsPerBeat(cutsInput)
+    // the first shot of each clip of a beat
+    const clipOpens = Object.fromEntries([...shotsOfClips(cutsInput)].map(([beatId, clips]) => [beatId, clips.flatMap(c => c.shots.slice(0, 1))]))
     // the director's edits (direction.json): a plan made again keeps to them - the code enforces them on it as well (applyDirectionOverlay)
     const directionTarget = {id: project.id, dir: project.dir, kind: 'music' as const}
     const directionNotes = directionPlanNotes(directionTarget, project.data)
@@ -143,6 +145,7 @@ export async function planShots(run: ShotRun) {
         slots: clipSlots,
         mapping,
         shotCounts,
+        clipOpens,
         beatProps,
         beatSinging,
         filmLook: lookBrief,
@@ -405,12 +408,22 @@ export async function planShots(run: ShotRun) {
                           properties: {moments: {type: 'array', minItems: risky.length, maxItems: risky.length, items: {type: 'string'}}},
                       },
                   })
-                  if (rewritten.moments?.length === risky.length)
+                  if (rewritten.moments?.length === risky.length) {
+                      // a name the rewrite wrote differently is mapped as in the planning steps; a name it dropped is a character gone from
+                      // the clip (the braces attach the picture) - that moment keeps its text (#983)
+                      const {texts: fixed} = await resolveUnknownTokens(rewritten.moments.map(String), cast.characters)
+                      const namesOf = (text: string) => new Set([...text.matchAll(/\{([^{}\n]+)\}/g)].map(m => m[1]!))
                       risky.forEach((r, k) => {
+                          const kept = namesOf(r.moment)
+                          const now = namesOf(fixed[k]!)
+                          if ([...kept].some(name => !now.has(name))) {
+                              log.warn(`${r.beatId}: the rewrite of a flagged moment lost a name in braces - the moment stays as it is`)
+                              return
+                          }
                           const {risky: _flag, ...shot} = result[r.beatId]!.shots[r.j]!
-                          result[r.beatId]!.shots[r.j] = {...shot, action: String(rewritten.moments[k])}
+                          result[r.beatId]!.shots[r.j] = {...shot, action: fixed[k]!}
                       })
-                  else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
+                  } else log.warn('the rewrite did not come back with one entry per moment - the moments stay as they are')
               }
               return result
           })

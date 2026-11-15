@@ -34,6 +34,8 @@ export const LABEL_MODES = [
   ['interval', 'At the start and again at an interval'],
   ['always', 'The whole time'],
 ] as const
+/** The choice in a list of marker presets that means "a PNG of my own" (its path is typed): one value for the label and the credits form. */
+export const OWN = '__own__'
 export const CORNERS = [
   ['top-right', "Top right (the code's example)"],
   ['top-left', 'Top left'],
@@ -219,7 +221,6 @@ export function chainSources(id: string, finals: FinalChoice[]): Record<Step, st
 }
 
 /** What a post-work step has made: the videos of the steps, newest last, and those the timeline plays. */
-export const postworkVideos = (finals: EditorFinal[]) => finals.filter(f => f.postwork)
 
 /**
  * The newest video a step has made, from whichever video it started (#832): a marker on the finished video and on the refinished

@@ -10,7 +10,10 @@ defineEmits<{view: []}>()
 
 <template>
   <article class="version">
-    <MediaThumb :media="picture" :roots="roots" cls="" :style="picture ? {cursor: 'zoom-in'} : undefined" @click="picture && $emit('view')" />
+    <button v-if="picture" type="button" class="version-pic" aria-label="View this version bigger" title="View bigger" @click="$emit('view')">
+      <MediaThumb :media="picture" :roots="roots" cls="" />
+    </button>
+    <MediaThumb v-else :media="picture" :roots="roots" cls="" />
     <div>
       <div>{{ dateOf(made) }}</div>
       <div class="muted">{{ about }}</div>

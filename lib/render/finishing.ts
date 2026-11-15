@@ -11,12 +11,37 @@ import {planRetake, type RetakeAsk, type RetakePlan, retakeFrames, retakePrompt,
 import {freshness} from '../provenance.ts'
 import {type RenderSpec, specId} from '../render-spec.ts'
 import {fileFingerprint} from '../provenance.ts'
-import {sceneScores, shotCuts, shotPieces} from '../interpolate.ts'
+import {sceneScores, shotCutFrames, shotPieces} from '../interpolate.ts'
 import {archiveFiles, versionStamp} from '../archive.ts'
 import {runProcess} from '../process.ts'
 import {type Renderer, RETAKE_LEAD, GUIDE_SCALE, smallerPicture, loadWorkflow} from '../render.ts'
 
 // The work of a Renderer (lib/render.ts, #841): a clip made over: a part rendered again (retake), refined, upscaled, interpolated. The renderer keeps the state; these take it as `r`.
+
+/** Where a clip's source is put on the server while it is worked on: next to where the result goes, by its relative name. */
+function remoteSourceOf(r: Renderer, target: string) {
+    return `${r.remoteDir}/${relative(r.projectDir, target)
+        .replace(/\\/g, '/')
+        .replace(/\.mp4$/, '.source.mp4')}`
+}
+
+/** The record next to a finished clip that says it is complete and what it was made from; `fields` are what the work adds (#1008). */
+async function writeCompleteRecord(r: Renderer, target: string, source: string, fields: Record<string, unknown>) {
+    await Bun.write(
+        `${target}.json`,
+        JSON.stringify(
+            {
+                complete: true,
+                bytes: statSync(target).size,
+                ...fields,
+                source: relative(r.projectDir, source).replace(/\\/g, '/'),
+                sourceFingerprint: fileFingerprint(source),
+            },
+            null,
+            2,
+        ),
+    )
+}
 
 /**
  * Renders part of a clip again and puts it into the clip (--retake). The whole old clip goes to old/attempts first, so it stays a version
@@ -48,7 +73,7 @@ export async function retake(
     runEvent({type: 'jobs', kind: 'clip', ids: [clip.id]})
     const info = await probeVideo(video)
     const fileFrames = framesOnGrid(info)
-    const cuts = shotCuts(
+    const cuts = shotCutFrames(
         clip.frames,
         (clip.shots ?? []).map(s => s.at),
         await sceneScores(video),
@@ -172,9 +197,7 @@ export async function renderRefined(
     const work = `${target.replace(/\.mp4$/, '')}`
     const clipFile = length === frames ? source : `${work}.padded.mp4`
     if (length !== frames) await paddedClip(source, clipFile, length - frames)
-    const remoteClip = `${r.remoteDir}/${relative(r.projectDir, target)
-        .replace(/\\/g, '/')
-        .replace(/\.mp4$/, '.source.mp4')}`
+    const remoteClip = remoteSourceOf(r, target)
     const rendered = `${work}.rendered.mp4`
     const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['refine', fileFingerprint(source), clip.prompt, size, denoise]}
     const songRemote = song ? `${r.remoteDir}/stems/song${extname(song.song!)}` : undefined
@@ -215,24 +238,7 @@ export async function renderRefined(
     await withOriginalSound(rendered, source, frames, length !== frames, target)
     rmSync(rendered, {force: true})
     if (clipFile !== source) rmSync(clipFile, {force: true})
-    await Bun.write(
-        `${target}.json`,
-        JSON.stringify(
-            {
-                complete: true,
-                bytes: statSync(target).size,
-                workflow: 'h3-refine',
-                seed,
-                denoise,
-                size: `${size.width}x${size.height}`,
-                frames,
-                source: relative(r.projectDir, source).replace(/\\/g, '/'),
-                sourceFingerprint: fileFingerprint(source),
-            },
-            null,
-            2,
-        ),
-    )
+    await writeCompleteRecord(r, target, source, {workflow: 'h3-refine', seed, denoise, size: `${size.width}x${size.height}`, frames})
     log.step('Saved', `${relative(r.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height} · ${r.took(rendered)}`)}`)
 }
 
@@ -244,9 +250,7 @@ export async function renderLatentUpscaled(r: Renderer, clipId: string, source: 
     const length = renderFrames(frames)
     const clipFile = length === frames ? source : target.replace(/\.mp4$/, '.padded.mp4')
     if (length !== frames) await paddedClip(source, clipFile, length - frames)
-    const remoteClip = `${r.remoteDir}/${relative(r.projectDir, target)
-        .replace(/\\/g, '/')
-        .replace(/\.mp4$/, '.source.mp4')}`
+    const remoteClip = remoteSourceOf(r, target)
     const rendered = target.replace(/\.mp4$/, '.rendered.mp4')
     const spec: RenderSpec = {kind: 'clip', id: clipId, parts: ['latent', fileFingerprint(source), size]}
     await r.render(
@@ -262,31 +266,14 @@ export async function renderLatentUpscaled(r: Renderer, clipId: string, source: 
     await withOriginalSound(rendered, source, frames, length !== frames, target)
     rmSync(rendered, {force: true})
     if (clipFile !== source) rmSync(clipFile, {force: true})
-    await Bun.write(
-        `${target}.json`,
-        JSON.stringify(
-            {
-                complete: true,
-                bytes: statSync(target).size,
-                workflow: 'h3-latent-upscale',
-                size: `${size.width}x${size.height}`,
-                frames,
-                source: relative(r.projectDir, source).replace(/\\/g, '/'),
-                sourceFingerprint: fileFingerprint(source),
-            },
-            null,
-            2,
-        ),
-    )
+    await writeCompleteRecord(r, target, source, {workflow: 'h3-latent-upscale', size: `${size.width}x${size.height}`, frames})
     log.step('Saved', `${relative(r.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height}`)}`)
 }
 
 /** A finished clip made larger with an upscale model on ComfyUI, frame by frame (comfy/workflows/video-upscale.ts). It keeps its own sound. */
 export async function renderUpscaled(r: Renderer, clipId: string, source: string, target: string, model: string, size: PixelSize) {
     const {default: upscale} = await loadWorkflow<typeof import('../../comfy/workflows/video-upscale.ts')>('video-upscale')
-    const remoteClip = `${r.remoteDir}/${relative(r.projectDir, target)
-        .replace(/\\/g, '/')
-        .replace(/\.mp4$/, '.source.mp4')}`
+    const remoteClip = remoteSourceOf(r, target)
     const rendered = target.replace(/\.mp4$/, '.rendered.mp4')
     const spec: RenderSpec = {kind: 'clip', id: clipId, parts: ['upscale', fileFingerprint(source), model, size]}
     await r.render(
@@ -301,22 +288,7 @@ export async function renderUpscaled(r: Renderer, clipId: string, source: string
     )
     await withOriginalSound(rendered, source, 0, false, target)
     rmSync(rendered, {force: true})
-    await Bun.write(
-        `${target}.json`,
-        JSON.stringify(
-            {
-                complete: true,
-                bytes: statSync(target).size,
-                workflow: 'video-upscale',
-                model,
-                size: `${size.width}x${size.height}`,
-                source: relative(r.projectDir, source).replace(/\\/g, '/'),
-                sourceFingerprint: fileFingerprint(source),
-            },
-            null,
-            2,
-        ),
-    )
+    await writeCompleteRecord(r, target, source, {workflow: 'video-upscale', model, size: `${size.width}x${size.height}`})
     log.step('Saved', `${relative(r.projectDir, target).replace(/\\/g, '/')} ${styles.muted(`${size.width}x${size.height}`)}`)
 }
 
@@ -366,7 +338,7 @@ export async function renderInterpolation(
     // the cuts as the picture has them - the model cuts near the planned time, not on it (lib/interpolate.ts)
     const pieces = shotPieces(
         clip.frames,
-        shotCuts(
+        shotCutFrames(
             clip.frames,
             (clip.shots ?? []).map(s => s.at),
             await sceneScores(video),
