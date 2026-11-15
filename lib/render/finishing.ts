@@ -134,18 +134,22 @@ export async function retake(
     const rendered = join(r.projectDir, `${work}.mp4`)
     const seed = clipSeed(r.config.seed, clip.id)
     const spec: RenderSpec = {kind: 'clip', id: clip.id, parts: ['retake', plan.first, plan.end, prompt, r.config.videoWorkflow, fileFingerprint(video)]}
-    await r.render<{seed: number}>(
-        {label: `part of ${clip.id}`, spec, kind: 'clip', workflow: r.config.videoWorkflow, resolution: r.config.videoResolution},
-        rendered,
-        '.mp4',
-        () => job(plan, {...guides, prompt, uploads, seed, filenamePrefix: `${r.remoteDir}/videos/${clip.id}-retake`}),
-    )
-    // The server has consumed these local inputs; they are guide media, not project assets.
-    for (const upload of uploads) {
-        try {
-            rmSync(upload.from, {force: true})
-        } catch {
-            /* a guide that cannot be removed must not lose the retake */
+    try {
+        await r.render<{seed: number}>(
+            {label: `part of ${clip.id}`, spec, kind: 'clip', workflow: r.config.videoWorkflow, resolution: r.config.videoResolution},
+            rendered,
+            '.mp4',
+            () => job(plan, {...guides, prompt, uploads, seed, filenamePrefix: `${r.remoteDir}/videos/${clip.id}-retake`}),
+        )
+    } finally {
+        // These local inputs are guide media, not project assets: the server has them once the job is queued, a retake that failed or
+        // was stopped does not leave them in assets/clips (a new try makes them again, #1008).
+        for (const upload of uploads) {
+            try {
+                rmSync(upload.from, {force: true})
+            } catch {
+                /* a guide that cannot be removed must not lose the retake */
+            }
         }
     }
 
