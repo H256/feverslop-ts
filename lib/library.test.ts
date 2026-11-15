@@ -120,3 +120,10 @@ describe('the library', () => {
         }
     })
 })
+
+test('libraryFolder refuses an id that would leave the library (#1002)', async () => {
+    const {libraryFolder} = await import('./library.ts')
+    expect(libraryFolder('character', 'kael-1')).toBe('characters/kael-1')
+    expect(() => libraryFolder('character', '../x')).toThrow('not a library id')
+    expect(() => libraryFolder('prop', 'a/b')).toThrow('not a library id')
+})

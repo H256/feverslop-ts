@@ -43,7 +43,11 @@ export async function libraryDir(): Promise<string> {
 export const libraryIdPattern = /^[a-z0-9][a-z0-9-]*$/
 
 /** An asset's folder, relative to the library. */
-export const libraryFolder = (kind: LibraryAssetKind, id: string) => `${kind}s/${id}`
+export function libraryFolder(kind: LibraryAssetKind, id: string): string {
+    // where the path is built, not only at the routes: an id with a slash or dots would leave the library (#1002)
+    if (!libraryIdPattern.test(id)) throw new Error(`"${id}" is not a library id - lower case letters, digits and dashes`)
+    return `${kind}s/${id}`
+}
 
 /** Where an asset's files are in the library, relative to it - the layout copyAsset reads and writes. */
 export const libraryLayout = (kind: LibraryAssetKind, id: string): AssetLayout => ({

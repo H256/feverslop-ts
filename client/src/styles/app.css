@@ -29,24 +29,3 @@
   cursor: zoom-in;
 }
 
-/* the settings of a project */
-.setting {
-  padding: 8px 0 8px 10px;
-  border-left: 2px solid transparent;
-  max-width: 760px;
-}
-.setting.changed {
-  border-left-color: var(--accent);
-}
-.setting .field select,
-.setting .field input {
-  max-width: 360px;
-}
-.setting-note {
-  font-size: var(--text-s);
-  margin-top: 2px;
-}
-.setting-default {
-  white-space: nowrap;
-  margin-left: 6px;
-}

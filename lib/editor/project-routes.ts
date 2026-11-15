@@ -299,9 +299,9 @@ export const PROJECT_ROUTES: readonly Route[] = [
         path: 'direction',
         changes: [setDirectionRules],
         handle: async c => {
-            const asked = await c.body<{rules?: DirectionRule[]} & Rebuild>()
+            const asked = await c.body<{rules?: DirectionRule[]; basedOn?: string} & Rebuild>()
             refuseWhileRunning(c, asked)
-            return json(await setDirectionRules(c.target, {rules: asked.rules ?? []}))
+            return json(await setDirectionRules(c.target, {rules: asked.rules ?? [], basedOn: asked.basedOn}))
         },
     },
     {
@@ -309,10 +309,10 @@ export const PROJECT_ROUTES: readonly Route[] = [
         path: 'direction/edits',
         changes: [setDirectionEdits],
         handle: async c => {
-            const asked = await c.body<{edits?: DirectionEdit[]} & Rebuild>()
+            const asked = await c.body<{edits?: DirectionEdit[]; basedOn?: string} & Rebuild>()
             refuseWhileRunning(c, asked)
             // edits that still wait for their words (a preview writes them) build nothing yet
-            const view = await setDirectionEdits(c.target, {edits: asked.edits ?? []})
+            const view = await setDirectionEdits(c.target, {edits: asked.edits ?? [], basedOn: asked.basedOn})
             return json(await rebuilt(c, asked, view, !view.pending && !view.unresolved.length))
         },
     },

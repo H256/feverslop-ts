@@ -12,7 +12,12 @@ export const labelOf = (setting: SettingView, value: unknown) =>
 /** A field's text: empty where the value means "not set by you" (-1) - the field shows that as its placeholder (#834). */
 export const fieldTextOf = (setting: SettingView, value: unknown) => (setting.auto && same(setting.auto.value, value) ? '' : textOfValue(value))
 /** A field's text as the setting: an empty field is the value that means "not set by you". */
-export const valueOfField = (setting: SettingView, text: string): unknown => (setting.auto && text.trim() === '' ? setting.auto.value : valueOfText(text))
+export const valueOfField = (setting: SettingView, text: string): unknown => {
+  if (setting.auto && text.trim() === '') return setting.auto.value
+  // a text setting that is a string stays one: "007" is not 7
+  if (setting.control === 'text' && typeof setting.default === 'string') return text
+  return valueOfText(text)
+}
 
 /**
  * What to send for the settings as they are in the form: only what differs from what the project has. A value that is the default
