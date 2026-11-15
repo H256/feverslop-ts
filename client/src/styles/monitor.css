@@ -133,7 +133,7 @@ select.source {
   padding: 12px 14px 20px;
   min-height: 0;
 }
-.empty {
+.empty:not(.sung, .part) {
   color: var(--muted);
   padding: 32px 16px;
   text-align: center;
@@ -388,6 +388,6 @@ select.source {
   padding: 2px 8px;
   font-size: var(--text-s);
 }
-.btn-row {
+.version .btn-row {
   margin-top: 5px;
 }
