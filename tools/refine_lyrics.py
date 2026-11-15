@@ -65,7 +65,10 @@ def alignment_windows(request):
             or any(type(n) is not int or n not in ids for n in targets)
             or len(targets) != len(set(targets))):
         raise ValueError('Passage targets must be unique lines within its context')
-    return [{'start': start, 'end': end, 'targets': targets, 'lines': request['lines']}]
+    bounded = window.get('bounded', False)
+    if type(bounded) is not bool or (bounded and (len(ids) != 1 or targets != ids)):
+        raise ValueError('A block window contains only its selected lyric line')
+    return [{'start': start, 'end': end, 'targets': targets, 'lines': request['lines'], **({'bounded': True} if bounded else {})}]
 
 
 def main():
@@ -120,7 +123,8 @@ def main():
                     word.update(start=own[0]['start'], end=own[-1]['end'])
                 for line_id in chunk['targets']:
                     own = [{k: w[k] for k in ('text', 'start', 'end')} for w in words if w['line'] == line_id]
-                    if not own or own[0]['start'] <= chunk['start'] + .04 or own[-1]['end'] >= chunk['end'] - .06:
+                    # User-supplied block edges are intentional bounds, not accidental context truncation.
+                    if not own or (not chunk.get('bounded') and (own[0]['start'] <= chunk['start'] + .04 or own[-1]['end'] >= chunk['end'] - .06)):
                         results.append({'line': line_id, 'error': 'Alignment touches excerpt boundary; needs a wider or corrected coarse alignment.'})
                     else:
                         results.append({'line': line_id, 'words': own})

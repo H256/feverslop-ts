@@ -1,13 +1,14 @@
-import {writeSync} from 'node:fs'
+import {writeSync, openSync, closeSync} from 'node:fs'
 
 // How long a quick helper call (ffprobe, one frame, one short cut) may take before it counts as hung - the long
 // ones (stem separation, transcription, the final encode) have no limit, they legitimately run for minutes.
 export const SHORT_PROCESS_TIMEOUT_MS = 2 * 60 * 1000
 
-type CaptureOptions = {stdout?: 'pipe' | 'ignore'; stderr?: 'pipe' | 'inherit' | 'tee'; timeoutMs?: number}
+type CaptureOptions = {stdout?: 'pipe' | 'ignore'; stderr?: 'pipe' | 'inherit' | 'tee'; stderrFile?: string; timeoutMs?: number}
 
 // Runs a child process to completion, capturing stdout and stderr.
 async function capture(cmd: string[], opts: CaptureOptions = {}) {
+    if (opts.stderrFile && opts.stderr && opts.stderr !== 'pipe') throw new Error('Choose a stderr log file or terminal output, not both.')
     const tool = cmd[0]!
     let proc: Bun.Subprocess<'ignore', 'pipe' | 'ignore', 'pipe' | 'inherit'>
     try {
@@ -30,17 +31,38 @@ async function capture(cmd: string[], opts: CaptureOptions = {}) {
     try {
         const [stdout, stderr, code] = await Promise.all([
             opts.stdout === 'ignore' ? Promise.resolve('') : new Response(proc.stdout as ReadableStream).text(),
-            opts.stderr === 'inherit'
-                ? Promise.resolve('')
-                : opts.stderr === 'tee'
-                  ? teeToTerminal(proc.stderr as ReadableStream<Uint8Array>)
-                  : new Response(proc.stderr as ReadableStream).text(),
+            opts.stderrFile
+                ? captureToFile(proc.stderr as ReadableStream<Uint8Array>, opts.stderrFile)
+                : opts.stderr === 'inherit'
+                  ? Promise.resolve('')
+                  : opts.stderr === 'tee'
+                    ? teeToTerminal(proc.stderr as ReadableStream<Uint8Array>)
+                    : new Response(proc.stderr as ReadableStream).text(),
             proc.exited,
         ])
         if (timedOut) throw new Error(`${tool} did not finish within ${opts.timeoutMs! / 1000} s and was stopped (${cmd.slice(1).join(' ')})`)
         return {stdout, stderr, code}
+    } catch (error) {
+        proc.kill()
+        throw error
     } finally {
         clearTimeout(timer)
+    }
+}
+
+/** Stream diagnostics to a per-operation log; keep a bounded tail for actionable errors. */
+async function captureToFile(stream: ReadableStream<Uint8Array>, file: string) {
+    const fd = openSync(file, 'a')
+    const decoder = new TextDecoder()
+    let tail = ''
+    try {
+        for await (const chunk of stream) {
+            writeSync(fd, chunk)
+            tail = (tail + decoder.decode(chunk, {stream: true})).slice(-64 * 1024)
+        }
+        return tail + decoder.decode()
+    } finally {
+        closeSync(fd)
     }
 }
 
