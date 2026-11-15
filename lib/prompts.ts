@@ -20,7 +20,7 @@ ${durationSec ? `Target length: around ${Math.round(durationSec)} seconds - shap
 Rules:
 - Section labels in square brackets on their own line: [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Interlude], [Outro]. Blank line between sections.
 - Start with a verse or chorus, never a lyric-filled intro.
-- 4-6 lines per section, about 30 seconds of singing each.
+- 4-6 lines per section.
 - Write every repeated chorus out in full - never shorthand like "(repeat chorus)".
 - Keep the syllable count identical when a line repeats.
 - Nothing but section tags and sung words - no production notes like "(drums build)", no title, no hyphenated syllable forcing.
