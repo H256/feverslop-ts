@@ -60,10 +60,44 @@ test('the preview follows a line left out on the Timing page', () => {
     expect(lipsyncRequests(data, settings)[0]!.vocals.map(v => v.text)).toEqual(['Hello there'])
 })
 
-test('a clip nobody sings in still has the vocals stem: the preview is made to show a mouth that moves on what is not a lyric', () => {
-    const clips = lipsyncRequests({...project(), lyricsTiming: {lines: [line(0, [word('Hello', 0.5, 1)])]}}, settings)
+test('a clip nobody sings in gets the drums, as a real clip does - the vocals stem only where somebody sings', () => {
+    const clips = lipsyncRequests(
+        {...project(), lyricsTiming: {lines: [line(0, [word('Hello', 0.5, 1)])]}, stems: {vocals: 'v', drums: 'd', bass: 'b', other: 'o'}},
+        settings,
+    )
+    expect(clips.map(c => c.track)).toEqual(['vocals', 'drums'])
     expect(clips[1]!.prompt).toContain('nobody sings in this clip')
-    expect(clips[1]!.prompt).toContain('<Audio 1> is the isolated vocal stem')
+    expect(clips[1]!.prompt).toContain('<Audio 1> is the isolated drum layer')
+    expect(clips[1]!.prompt).not.toContain('isolated lead vocal')
+    // without the stems it is the song
+    expect(lipsyncRequests({...project(), lyricsTiming: {lines: [line(0, [word('Hello', 0.5, 1)])]}}, settings)[1]!.track).toBe('song')
+})
+
+test('the clip is cut as the real one: on the bars, and a cut never falls into a sung word', () => {
+    const music = {bpm: 120, durationSec: 14, downbeats: [0, 2, 4, 6, 8, 10, 12], barEnergy: [], sections: []}
+    // 4 bars of 2 s at energy 0.5: two shots, the second on the third bar line - 4 s
+    expect(lipsyncRequests({...project(), music}, settings)[0]!.shots.map(s => s.at)).toEqual([0, 4])
+    // a word sung over the cut: the cut moves out of it (to just before the word)
+    const data = {...project(), music}
+    data.lyricsTiming!.lines[1] = line(1, [word('Good', 3.7, 4.2), word('night', 4.4, 6)])
+    const [first] = lipsyncRequests(data, settings)
+    expect(first!.shots).toHaveLength(2)
+    expect(first!.shots[1]!.at).not.toBe(4)
+    // each shot has its own words: the line is split at the cut
+    expect(first!.prompt).toContain('[Shot 2] At ')
+})
+
+test('singing heard before the first word counts as heard, as in a real clip request', () => {
+    // sound from 1.0 s on, the first word of the line is timed at 2.0 s
+    const data = project()
+    data.lyricsTiming!.lines[0] = line(0, [word('Hello', 2, 2.5), word('there', 2.6, 3)])
+    const peaks = Array.from({length: 1400}, (_, t) => (t >= 100 && t < 300 ? 1 : 0))
+    const [plain] = lipsyncRequests(data, settings)
+    expect(plain!.vocals[0]!.heard).toBe(2)
+    const [heard] = lipsyncRequests(data, settings, peaks)
+    expect(heard!.vocals[0]!.heard).toBeLessThan(1.5)
+    expect(heard!.prompt).toContain('From 00:01.')
+    expect(heard!.prompt).toContain('Until 00:01.')
 })
 
 test('with two dummies the clip cuts where the singer changes, halfway through the pause', () => {
@@ -103,7 +137,7 @@ test('the dummy of a singer: the order they are first named, one dummy for every
 test('the dummy is the settings text, and the preview is outdated by another size, workflow, audio or prompt', () => {
     const clip = lipsyncRequests(project(), {...settings, lipsyncDummy: 'a mannequin'})[0]!
     expect(clip.prompt).toContain('<Subject 1> is a dummy singer, a mannequin;')
-    const audio = {vocals: 'a', song: 'b'}
+    const audio = {vocals: 'a', drums: 'd', song: 'b'}
     const base = JSON.stringify(lipsyncFingerprint(clip, {...defaults, lipsyncScale: 0.125}, audio))
     expect(JSON.stringify(lipsyncFingerprint(clip, {...defaults, lipsyncScale: 0.25}, audio))).not.toBe(base)
     expect(JSON.stringify(lipsyncFingerprint(clip, {...defaults, lipsyncScale: 0.125, videoWorkflow: 'other'}, audio))).not.toBe(base)

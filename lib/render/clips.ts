@@ -5,7 +5,7 @@ import {log, styles} from '../log.ts'
 import {type AudioWorkflow, clipSeed, resolveSeed, type VideoWorkflowModule, type WorkflowResult} from '../../comfy/helpers.ts'
 import {boundaryFrameAsset, type ClipRequest, CONTEXT_SETTLE} from '../compose.ts'
 import {secondsAt} from '../frames.ts'
-import {LIPSYNC_DIR, type LipsyncClip, lipsyncFile, lipsyncFingerprint, recordedLipsync} from '../lipsync.ts'
+import {type AudioPrints, LIPSYNC_DIR, type LipsyncClip, lipsyncFile, lipsyncFingerprint, recordedLipsync} from '../lipsync.ts'
 import {fingerprint} from '../provenance.ts'
 import {extractFrame, framesOnGrid, probeVideo, trimHead} from '../assemble.ts'
 import {backdropSeconds, hasBackdropRun} from '../leak.ts'
@@ -498,7 +498,7 @@ export async function renderLipsync(
     r: Renderer,
     clip: LipsyncClip,
     stemFiles: Record<string, string>,
-    prints: {vocals: string; song: string},
+    prints: AudioPrints,
     {scale, again = false}: {scale: number; again?: boolean},
 ) {
     const file = lipsyncFile(clip.id)
@@ -506,7 +506,8 @@ export async function renderLipsync(
     const request = fingerprint(...lipsyncFingerprint(clip, {...r.config, lipsyncScale: scale}, prints))
     const made = recordedLipsync(target)
     if (!again && made?.fingerprint === request) return log.step('Exists', styles.muted(file))
-    if (!(stemFiles.vocals && existsSync(stemFiles.vocals))) return log.warn(`${clip.id}: no lip-sync preview - missing the vocals stem`)
+    if (!(stemFiles[clip.track] && existsSync(stemFiles[clip.track]!)))
+        return log.warn(`${clip.id}: no lip-sync preview - missing the ${clip.track === 'song' ? 'full song' : `${clip.track} stem`}`)
     if (!(stemFiles.song && existsSync(stemFiles.song))) return log.warn(`${clip.id}: no lip-sync preview - missing the full song`)
     if (existsSync(target)) {
         const keep = archiveFiles(r.projectDir, `${clip.id}-lipsync-${versionStamp()}`, [file, `${file}.json`])
@@ -523,7 +524,7 @@ export async function renderLipsync(
     mkdirSync(dirname(target), {recursive: true})
     // what clipJob takes of a clip: the audio tracks to upload - the dummy has no picture
     const asClip = {
-        assets: {pictures: [], audio: [{label: '<Audio 1>', file: '', songStart: clip.start, songEnd: clip.end, stem: 'vocals' as const}]},
+        assets: {pictures: [], audio: [{label: '<Audio 1>', file: '', songStart: clip.start, songEnd: clip.end, stem: clip.track}]},
     } as unknown as ClipRequest
     const {seed} = await r.render(what, target, '.mp4', async () => {
         const workflow = await loadWorkflow<VideoWorkflowModule>(r.config.videoWorkflow)
