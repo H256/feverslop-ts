@@ -450,10 +450,14 @@ export async function setDirectionEdits(
     t: DirectionTarget,
     input: {
         edits: DirectionEdit[]
+        /** The edits as the sender read them (JSON): refused when they are not the saved ones any more (#990). */
+        basedOn?: string
     },
 ) {
     return locked(t, () => {
         if (!input || !Array.isArray(input.edits)) throw Error('expected {edits: [...]}')
+        if (input.basedOn !== undefined && input.basedOn !== JSON.stringify(state(t).edits ?? []))
+            throw Error('The edits were changed elsewhere (another tab?) since this page read them - reload the page, so that nothing saved there is replaced')
         const d = source(t),
             s = state(t)
         // a person brought in whose place in the shot was taken is in the accepted plan now: undoing the edit cannot take them
@@ -527,10 +531,14 @@ export async function setDirectionRules(
     t: DirectionTarget,
     input: {
         rules: DirectionRule[]
+        /** The rules as the sender read them (JSON): refused when they are not the saved ones any more (#990). */
+        basedOn?: string
     },
 ) {
     return locked(t, () => {
         if (!input || !Array.isArray(input.rules)) throw Error('expected {rules: [...]}')
+        if (input.basedOn !== undefined && input.basedOn !== JSON.stringify(state(t).rules))
+            throw Error('The rules were changed elsewhere (another tab?) since this page read them - reload the page, so that nothing saved there is replaced')
         const d = source(t),
             s = state(t)
         const ids = new Set<string>()

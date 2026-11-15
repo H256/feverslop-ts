@@ -17,8 +17,31 @@
     border-top: 1px solid var(--line);
     max-height: 60vh;
   }
+  /* the top bar: the project's pages get a row of their own, scrolling sideways, and the machine block wraps (#1000) */
+  .top {
+    flex-wrap: wrap;
+    row-gap: 0;
+    padding-top: 4px;
+  }
+  .top .tabs {
+    order: 5;
+    flex: 1 0 100%;
+    margin-left: 0;
+    min-width: 0;
+    overflow-x: auto;
+    min-height: 36px;
+  }
+  .machine {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  /* the status of the project stays: wrapped onto more lines instead of hidden (#1000) */
   .chips {
-    display: none;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .chips .chip.next {
+    white-space: normal;
   }
   .role-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

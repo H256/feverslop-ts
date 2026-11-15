@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {ref, watch} from 'vue'
+import {viewerStore} from '../lib/browser-store'
 import AppIcon, {type IconName} from './AppIcon.vue'
 
 /** The system's theme, or a choice kept in this browser. index.html sets it before the first paint. */
@@ -13,8 +14,8 @@ const emit = defineEmits<{changed: []}>()
 const theme = ref<Theme>((document.documentElement.dataset.theme as Theme | undefined) ?? 'system')
 watch(theme, value => {
   document.documentElement.dataset.theme = value
-  if (value === 'system') localStorage.removeItem('theme')
-  else localStorage.setItem('theme', value)
+  if (value === 'system') viewerStore.remove('theme')
+  else viewerStore.set('theme', value)
   emit('changed')
 })
 </script>

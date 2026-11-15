@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {avoidWords, buildClipRequests, type Input, layoutLine, singingPerBeat} from './compose.ts'
+import {avoidWords, buildClipRequests, type Input, layoutLine, singingPerBeat, splitSentences} from './compose.ts'
 import type {BeatShots, Character, StoryBeat} from './project.ts'
 import {slotVocals} from './lyrics.ts'
 
@@ -563,5 +563,16 @@ describe('avoidWords and the cuts of a band break (#982)', () => {
         const cuts = avoidWords([0, 4.7, 5.6], [{text: 'x', start: 4.0, end: 4.9}], 2, 10)
         const lengths = cuts.map((c, i) => (cuts[i + 1] ?? 10) - c)
         expect(Math.min(...lengths)).toBeGreaterThanOrEqual(1.2)
+    })
+})
+
+describe('splitSentences (#1004)', () => {
+    test('a full stop after an abbreviation does not end the sentence', () => {
+        expect(splitSentences('Warm light, e.g. candles. A second sentence. Dr. Who stays.')).toEqual([
+            'Warm light, e.g. candles.',
+            'A second sentence.',
+            'Dr. Who stays.',
+        ])
+        expect(splitSentences('Plain. Two!  Three?')).toEqual(['Plain.', 'Two!', 'Three?'])
     })
 })
