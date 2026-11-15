@@ -575,3 +575,22 @@ test('people into one shot and out of it: one call, and whether the shot is to b
     expect(back.view.rules.map(r => [r.text, r.characterId])).toEqual([['B leans on the door', 'b']])
     expect(back.propose).toBe(true)
 })
+
+test('a save made from an older read is refused, nothing another tab saved is replaced (#990)', async () => {
+    const {target} = fixture()
+    const rule = (id: string) => ({id, text: `Rule ${id}`, scope: {kind: 'global' as const}, characterId: 'a'})
+    // tab A reads the (empty) rules; tab B saves a rule; tab A saves its own from what it read
+    const readByA = JSON.stringify(readDirection(target).rules)
+    await setDirectionRules(target, {rules: [rule('b')]})
+    await expect(setDirectionRules(target, {rules: [rule('a')], basedOn: readByA})).rejects.toThrow('changed elsewhere')
+    expect(readDirection(target).rules.map(r => r.id)).toEqual(['b'])
+    // from the current read the save goes through; without basedOn (the CLI) there is no check
+    await setDirectionRules(target, {rules: [rule('b'), rule('a')], basedOn: JSON.stringify(readDirection(target).rules)})
+    expect(readDirection(target).rules.map(r => r.id)).toEqual(['b', 'a'])
+    await setDirectionRules(target, {rules: [rule('c')]})
+    expect(readDirection(target).rules.map(r => r.id)).toEqual(['c'])
+    // the edits the same way
+    const staleEdits = JSON.stringify(readDirection(target).edits)
+    await setDirectionEdits(target, {edits: []})
+    await setDirectionEdits(target, {edits: [], basedOn: staleEdits})
+})

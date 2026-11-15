@@ -170,6 +170,9 @@
   cursor: ns-resize;
   z-index: 3;
 }
+.tl-resize:focus-visible {
+  outline: 2px solid var(--accent);
+}
 .tl-resize:hover {
   background: color-mix(in oklab, var(--accent) 35%, transparent);
 }

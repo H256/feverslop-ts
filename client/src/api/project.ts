@@ -46,6 +46,15 @@ const id = (value: string) => encodeURIComponent(value)
 export function projectApi(root: string) {
   const get = <T>(path: string, signal?: AbortSignal) => getJson<T>(`${root}/api/${path}`, signal)
   const post = <T>(path: string, body: unknown) => postJson<T>(`${root}/api/${path}`, body)
+  // The rules and edits as last read or saved (#990): a save says what it was made from, and the server refuses it when another tab or
+  // an older view changed them since - nothing another one saved is replaced without notice.
+  let seenRules: string | undefined
+  let seenEdits: string | undefined
+  const remember = <V extends DirectionView>(view: V): V => {
+    seenRules = JSON.stringify(view.rules)
+    seenEdits = JSON.stringify(view.edits)
+    return view
+  }
   return {
     root,
     events: `${root}/api/run-events`,
@@ -79,21 +88,22 @@ export function projectApi(root: string) {
     castingRedo: (signal?: AbortSignal) => get<CastingRedo>('casting-redo', signal),
     cast: (signal?: AbortSignal) => get<{cast: CastView | null}>('cast', signal),
     book: (signal?: AbortSignal) => get<BookView>('book', signal),
-    direction: (signal?: AbortSignal) => get<DirectionView>('direction', signal),
-    saveDirection: (rules: DirectionRule[]) => post<DirectionView>('direction', {rules}),
+    direction: async (signal?: AbortSignal) => remember(await get<DirectionView>('direction', signal)),
+    saveDirection: async (rules: DirectionRule[]) => remember(await post<DirectionView>('direction', {rules, basedOn: seenRules})),
     // rebuild: the server builds the clip prompts again in the same request and answers with the run it started (#830) - for the
     // edits only when none of them waits for its words
-    saveDirectionEdits: (edits: DirectionEdit[], rebuild?: {servers?: string[]}) =>
-      post<DirectionView & {run?: RunInfo}>('direction/edits', {edits, ...(rebuild ? {rebuild: true, ...rebuild} : {})}),
-    takeDirection: (despiteConflicts: boolean, rebuild: {servers?: string[]}) =>
-      post<DirectionView & {run?: RunInfo}>('direction/take', {despiteConflicts, rebuild: true, ...rebuild}),
+    saveDirectionEdits: async (edits: DirectionEdit[], rebuild?: {servers?: string[]}) =>
+      remember(await post<DirectionView & {run?: RunInfo}>('direction/edits', {edits, basedOn: seenEdits, ...(rebuild ? {rebuild: true, ...rebuild} : {})})),
+    takeDirection: async (despiteConflicts: boolean, rebuild: {servers?: string[]}) =>
+      remember(await post<DirectionView & {run?: RunInfo}>('direction/take', {despiteConflicts, rebuild: true, ...rebuild})),
     // rebuild: given when people were taken out for the proposal to write - dropped, the prompts are built now (#830)
-    dropDirection: (rebuild?: {servers?: string[]}) => post<DirectionView & {run?: RunInfo}>('direction/drop', rebuild ? {rebuild: true, ...rebuild} : {}),
+    dropDirection: async (rebuild?: {servers?: string[]}) =>
+      remember(await post<DirectionView & {run?: RunInfo}>('direction/drop', rebuild ? {rebuild: true, ...rebuild} : {})),
     // people into one shot or out of it, and the run that follows - the proposal that writes the shot, or the prompts built (#830)
-    shotPeople: (change: {shotId: string; add?: string[]; remove?: string[]; words?: string}, rebuild: {servers?: string[]}) =>
-      post<DirectionView & {run: RunInfo; proposing: boolean}>('direction/people', {...change, ...rebuild}),
-    restoreDirection: (version: string, rebuild: {servers?: string[]}) =>
-      post<DirectionView & {run?: RunInfo}>('direction/restore', {version, rebuild: true, ...rebuild}),
+    shotPeople: async (change: {shotId: string; add?: string[]; remove?: string[]; words?: string}, rebuild: {servers?: string[]}) =>
+      remember(await post<DirectionView & {run: RunInfo; proposing: boolean}>('direction/people', {...change, ...rebuild})),
+    restoreDirection: async (version: string, rebuild: {servers?: string[]}) =>
+      remember(await post<DirectionView & {run?: RunInfo}>('direction/restore', {version, rebuild: true, ...rebuild})),
     look: (signal?: AbortSignal) => get<LookView>('look', signal),
     config: (signal?: AbortSignal) => get<ConfigView>('config', signal),
     /** Can the project's language model read a picture: a description from an uploaded picture is offered only then. */
@@ -135,4 +145,3 @@ export function projectApi(root: string) {
     override: (clip: string, override: EditorOverride | null) => post<{written: true}>(`override/${id(clip)}`, override),
   }
 }
-export type ProjectApi = ReturnType<typeof projectApi>

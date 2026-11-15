@@ -88,3 +88,8 @@ describe('the settings of a project', () => {
     expect(valueOfField(setting('contextFrames', 0), '-1')).toBe(-1)
   })
 })
+
+test('a text setting that is a string stays a string: "007" is not 7 (#1004)', () => {
+  expect(valueOfField(setting('name', 'x'), '007')).toBe('007')
+  expect(valueOfField(setting('n', 3, {control: 'number'}), '7')).toBe(7)
+})

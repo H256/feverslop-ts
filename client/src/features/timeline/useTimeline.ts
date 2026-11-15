@@ -3,6 +3,7 @@ import type {ClipVersionView, EditorClip, EditorPicture, EditorFreshness, Projec
 import {usePolling} from '../../composables/usePolling'
 import {plural} from '../../lib/format'
 import {useRunDock} from '../../services/run'
+import {viewerStore} from '../../lib/browser-store'
 import {useProject} from '../project/session'
 import {bestSource, flagged, sourceOptions, stateOf, type Source} from './clips'
 import {usePlayback} from './usePlayback'
@@ -58,7 +59,7 @@ export function createTimeline() {
   let sourceChosen = false
   function chooseSource() {
     const known = (value: string | null) => !!value && sourceOptions(project.value).some(o => o.value === value)
-    const kept = localStorage.getItem(sourceKey)
+    const kept = viewerStore.get(sourceKey)
     if (!sourceChosen && known(kept)) {
       playback.source.value = kept!
       sourceChosen = true
@@ -67,13 +68,13 @@ export function createTimeline() {
   }
   const pickSource = (value: Source) => {
     sourceChosen = true
-    localStorage.setItem(sourceKey, value)
+    viewerStore.set(sourceKey, value)
     playback.setSource(value)
   }
   /** What was just made current is to be seen: not a final video without it. */
   const forgetSource = () => {
     sourceChosen = false
-    localStorage.removeItem(sourceKey)
+    viewerStore.remove(sourceKey)
     chooseSource()
   }
   /** For a review: the clips themselves, the choice before kept to go back to. */

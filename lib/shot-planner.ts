@@ -390,8 +390,9 @@ export function planPrompt(
     }
     return {
         reasoning: 'medium',
-        // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top
-        maxTokens: 16384,
+        // thinking at medium easily takes 12k+ tokens on its own, the staged shots come on top: of 84 real runs (14 beats, 3 repeats,
+        // low and medium) 3 reached 16384 and were asked again at twice the limit, 5 more ended within 1.4k of it (#981) - starting above it saves those calls
+        maxTokens: 24576,
         input: `${
             filmLook
                 ? `film look (the director's style - the shot sizes, the camera and the light of the shots follow it): ${filmLook}
