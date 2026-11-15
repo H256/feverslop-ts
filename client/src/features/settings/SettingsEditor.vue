@@ -61,14 +61,17 @@ const save = toasts.guard(async () => {
 
 <template>
   <div class="scrollpage view" :inert="saving.pending.value" :aria-busy="saving.pending.value">
-    <PageBar title="Settings">
-      <span class="muted">How this project renders. The rest of config.json (singers, language) is changed where it belongs, or by hand.</span>
+    <PageBar title="Settings" class="se-header">
+      <span class="muted">Rendering and preview settings. Review the effects before saving.</span>
       <div class="spacer" />
       <button class="btn primary" :disabled="!form.dirty.value" @click="save">Save</button>
     </PageBar>
+    <nav class="se-nav" aria-label="Settings sections">
+      <a v-for="(group, index) in groups" :key="group.name" :href="`#settings-group-${index}`" class="btn">{{ group.name }}</a>
+    </nav>
     <div class="se-grid">
-      <section v-for="group in groups" :key="group.name" class="se-group">
-        <h2>{{ group.name }}</h2>
+      <section v-for="(group, index) in groups" :id="`settings-group-${index}`" :key="group.name" class="se-group" :aria-labelledby="`settings-title-${index}`">
+        <h2 :id="`settings-title-${index}`">{{ group.name }}</h2>
         <SettingField v-for="setting in group.settings" :key="setting.key" :setting="setting" :form="form" />
       </section>
     </div>
@@ -80,27 +83,42 @@ const save = toasts.guard(async () => {
 </template>
 
 <style scoped>
-/* the groups side by side as cards, as many as the width holds */
+.se-header {
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  background: var(--bg);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.se-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
 .se-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(520px, 100%), 1fr));
-  gap: var(--space-4);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 72rem;
+  gap: 24px;
 }
 .se-group {
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  padding: 10px 6px 6px;
+  min-width: 0;
+  scroll-margin-top: 8rem;
 }
 .se-group h2 {
-  font-size: var(--text-s);
+  font-size: var(--text-m);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  padding: 0 10px 6px;
+  padding: 16px 23px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
 }
 .se-foot {
   margin-top: 14px;
+  max-width: 72rem;
+  overflow-wrap: anywhere;
 }
 </style>
