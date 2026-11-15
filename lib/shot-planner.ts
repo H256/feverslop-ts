@@ -162,11 +162,19 @@ const PLAN_RULES: {rule: string; when?: (b: BeatNeeds) => boolean}[] = [
         when: b => b.sings || b.plays,
     },
     {
-        rule: `Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, the way it is played and the moment asks for, as a short phrase - never just "yes". Their "motion" is the rest of the body playing along (leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. A time after a name in "plays" ("Kael (0.0-2.2 s)") is when in the shot the instrument is heard, in seconds from the shot's start: the player plays then only, and "motion" and "action" show the change the way a player makes it - stopping (lets the last chord ring out and lays the hand flat on the strings, lifts the sticks off the drums), holding still while it is silent (the hands quiet on the instrument, a nod to the count, a look to the others), coming back in (strikes the first chord again, brings the sticks down) - with its time ("from 2.2 s"). Everybody else with an instrument is "playing: no" and does something else with it or with their hands, the instrument silent.`,
+        rule: `Everybody of a shot's "plays" who is in the shot plays their instrument through the whole shot, and their "playing" says how: what the hands (or what the cast gives the player instead) do on that instrument in this shot, as ONE calm, steady action in the way a player of this song's genre plays this instrument at this loudness (the film look and the loudness of the music are in the input) - a short, tight, repeated stroke near the bridge with the palm resting on the strings, a held chord, a slow slide up the neck, a steady pluck - never a fast run, a sweep, an arpeggio, a flurry or "raking" across the strings: the video model cannot resolve fast hands and draws them as constant strumming. Where an instrument is heard only in single hits with silence between, "playing" is the form of one hit: one tight strike, the hand damps the strings or lifts off, stillness until the next hit - and the shot may leave the hands out of the frame (the face, the shoulders, the place reacting). The instrument is in the player's hands from the first frame of any shot that shows them with it: it is never lifted, swung up, picked up or drawn in the shot, and nobody gets ready to play - the player stands with it already in position. Their "motion" is the rest of the body playing along (nodding with the beat, leaning into a riff, turning to another player, stepping forward, lifting it at a peak) and never sets the instrument aside, rests it, stills the hands or takes them off it. A time after a name in "plays" ("Kael (0.0-2.2 s)") is when in the shot the instrument is heard, in seconds from the shot's start: the player plays then only, and "motion" and "action" show the change the way a player makes it - stopping (lets the last chord ring out and lays the hand flat on the strings, lifts the sticks off the drums), holding still while it is silent (the hands quiet on the instrument, a nod to the count, a look to the others), coming back in (strikes the first chord again, brings the sticks down) - with its time ("from 2.2 s"). Everybody else with an instrument is "playing: no" and does something else with it or with their hands, the instrument silent.`,
         when: b => b.plays,
     },
     {
-        rule: `A shot can be about a player's hands instead of a face: "hands" names that one player, whose instrument is heard in the shot, and they are alone in "characters" - a close view of both hands at work and the instrument between them: the hand that strikes, picks or strums, the hand that holds, frets or presses, and the body of the instrument, the face out of the frame. Use it where the story idea asks for close views of the playing, or where the music is about one instrument (a solo, a riff, a fill) - never for someone who only holds an instrument. Every other shot is "hands: no".`,
+        rule: `A shot can be about a player's hands instead of a face: "hands" names that one player, whose instrument is heard in the shot, and they are alone in "characters" - a medium close view of the hand that strikes, picks or presses, with the body of the instrument and the player's torso, the face out of the frame. Never an extreme close-up, and never a view along the neck of the fingers that fret or press: the video model draws fingers on a neck slowly and wrongly, however they are described. A solo or a riff is not a reason for it - a solo is cut from the player's face and body, the place reacting to the notes (mist, embers, light, water) and the other players listening or playing on; "hands" only where the story idea asks for close views of the playing - never for someone who only holds an instrument. Every other shot is "hands: no".`,
+        when: b => b.plays,
+    },
+    {
+        rule: `A beat may list "opensClip": the numbers of its shots that open a clip. Every clip is rendered on its own and begins on the picture of the place: a shot that opens a clip is a wide or medium shot with the place behind the people, and every person it shows is already standing in the frame with their instrument in their hands - never a close-up, never an extreme close-up, never a shot in which a person comes into the frame. A close-up comes in a shot that follows a cut inside the clip.`,
+        when: b => b.plays,
+    },
+    {
+        rule: `The camera of a shot with players never takes its speed from a hand or an instrument ("tracks along the neck at the speed of the fingers", "whips with every strike"): it makes one slow, steady move, named with its direction, and the person it follows is in the frame from the first frame of the shot.`,
         when: b => b.plays,
     },
     {
@@ -252,6 +260,8 @@ export type PlanContext = {
     slots: Slot[]
     mapping: Assignment[]
     shotCounts: Record<string, number>
+    // the numbers of the shots of each beat that open a clip (shotsOfClips) - a clip begins on the picture of the place
+    clipOpens?: Record<string, number[]>
     beatProps?: Record<string, ShotProps>
     beatSinging: Record<string, BeatSinging>
     // the film look (step lookBrief: style.txt word for word, then the look the LLM made of it) - its shot sizes and camera
@@ -344,6 +354,7 @@ export function planPrompt(
         slots: clipSlots,
         mapping,
         shotCounts,
+        clipOpens,
         beatProps,
         beatSinging,
         filmLook,
@@ -432,6 +443,8 @@ ${JSON.stringify(
         ...(b.groupSize && Object.keys(b.groupSize).length ? {groupSize: b.groupSize} : {}),
         ...(clipSlots.some(sl => sl.micro && mapping[sl.index]?.beatId === b.id) ? {micro: true} : {}),
         shotsNeeded: shotCounts[b.id] ?? 1,
+        // only with players: the first frames of a clip follow the picture of the place, a close-up there makes the person pop up (#1024)
+        ...(clipOpens?.[b.id]?.length && (beatProps?.[b.id]?.length ?? 0) > 0 ? {opensClip: clipOpens[b.id]} : {}),
         ...(musicOf(b) ? {music: musicOf(b)} : {}),
         // fixed by the director: whatever else the beat says, every shot keeps to it
         ...(direction?.[b.id]?.length ? {director: direction[b.id]} : {}),
