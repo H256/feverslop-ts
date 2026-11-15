@@ -29,6 +29,19 @@ ${source}`,
 - "language": the ISO 639-1 code of the language the characters ${dialogueLanguage ? `speak: always "${dialogueLanguage}"` : mode === 'screenplay' ? 'speak in the screenplay (the dominant one if several)' : 'will speak - the language the idea is written in'}.
 - "logline": one sentence in English: who wants what, and what stands in the way.
 - "genre", "tone", "setting": a few words each, in English. The setting is era and place.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['title', 'language', 'logline', 'genre', 'tone', 'setting'],
+            properties: {
+                title: {type: 'string'},
+                language: {type: 'string'},
+                logline: {type: 'string'},
+                genre: {type: 'string'},
+                tone: {type: 'string'},
+                setting: {type: 'string'},
+            },
+        },
     }
 }
 
@@ -213,6 +226,12 @@ export function scriptNotesPrompt(screenplay: Screenplay, idea?: string, roleCha
         input: `${idea ? `Story idea the script was written from:\n${idea}${changed}\n\nScreenplay:\n` : ''}${screenplay.scenes.map(scene => [`## ${scene.id} · ${scene.setting}. ${scene.location} - ${scene.time}`, ...scene.elements.map(e => (e.type === 'action' ? e.text : `${e.speaker}: ${e.text}`))].join('\n')).join('\n\n')}`,
         instructions: `You are a script supervisor reading a screenplay in the order of its scenes. List what contradicts itself or does not follow, as it would show on screen: a person who is bound, free, bound again without anything happening in between; who is where (in the hut in one scene, outdoors in the next, with no way there); an object that is somewhere, then somewhere else, or is used before it is picked up; clothing or injuries that appear and vanish; time of day that jumps back; a character who knows or has what they could not. Only real contradictions - not style, and not what the story leaves open on purpose.${idea ? ' Also: a step the story idea names that the script does not show, or shows in another order or with another ending.' : ''}
 Answer only with JSON: {"notes": ["s5-s7: <what contradicts what, in one sentence>"]}. Name the scenes. At most 8 notes, the ones that matter most for the picture; [] if the script is consistent.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['notes'],
+            properties: {notes: {type: 'array', maxItems: 8, items: {type: 'string'}}},
+        },
     }
 }
 
@@ -249,6 +268,27 @@ ${screenplayToText(screenplay)}`,
 - "shape", "colour", "material": what the thing itself looks like, so a picture of it can be drawn - from the script and the era of the film, a few words each, the thing alone. "shape" starts with the thing and gives its size and form ("a long umbrella with a curved crook handle, about a metre long"), "colour" its colours and finish ("black canopy, dark brown handle, worn"), "material" what it is made of ("nylon canopy, wooden handle, steel tip"). Open or closed, lit or not: as it is seen in most of its shots - an umbrella that is opened and held over someone has an open shape. What the script leaves open you decide, once and concretely, so every clip draws the same thing: one colour, one material ("wooden", never "plastic or wooden"), no light or weather on it, no pose ("leaning") - the picture shows it standing alone in even light.
 - Not what someone wears all film long (a costume, a necklace, a ring of keys on a lanyard): that is in their picture. Not a fixed part of a place (a door, a lamp on a stand, a counter): that is in the place's picture. Not food, liquids or things that are only heard.
 - At most 6, the ones that come back most. {"props": []} if the script has none.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['props'],
+            properties: {
+                props: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['name', 'used', 'shape', 'colour', 'material'],
+                        properties: {
+                            name: {type: 'string'},
+                            used: {type: 'string'},
+                            shape: {type: 'string'},
+                            colour: {type: 'string'},
+                            material: {type: 'string'},
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -267,6 +307,12 @@ film: ${brief.title} - ${brief.logline}
 Genre: ${brief.genre} · Tone: ${brief.tone} · Setting: ${brief.setting}
 summary: ${summary}`,
         instructions: 'You are a film director choosing the visual style of a short film. Answer only with the JSON.',
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['style', 'reason'],
+            properties: {style: styleList.length ? {enum: styleList.map(x => x.id)} : {type: 'string'}, reason: {type: 'string'}},
+        },
     }
 }
 
@@ -296,6 +342,19 @@ First think of the place as a floor plan: what lies on which side of the spot th
 Answer only with JSON: {"views": [{"name": "", "shows": ""}, ...five entries]}
 - "name": short - where the camera stands and what it looks toward ("from the water side, looking back toward the dunes").
 - "shows": one or two sentences - the camera position and what is seen: the features, their materials, where the light comes from, what is on the left and on the right of the frame. Same place, same time of day and weather as the hero picture, nothing that contradicts the description; features that appear in more than one view are in the same place relative to each other. No people.`,
+        // the shape of the answer, every field named (#995): the server keeps the answer to it
+        schema: {
+            type: 'object',
+            required: ['views'],
+            properties: {
+                views: {
+                    type: 'array',
+                    minItems: 5,
+                    maxItems: 5,
+                    items: {type: 'object', required: ['name', 'shows'], properties: {name: {type: 'string'}, shows: {type: 'string'}}},
+                },
+            },
+        },
     }
 }
 
